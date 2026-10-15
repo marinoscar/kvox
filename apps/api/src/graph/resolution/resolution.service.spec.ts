@@ -1,8 +1,8 @@
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../preferences/graph-preferences.defaults';
 import type { ProposalStageContext } from '../extraction/proposal-stage';
 import type { RawCandidate } from './candidate.service';
 import { decide, ResolutionService, type MentionOutcome } from './resolution.service';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const PROPOSAL = '22222222-2222-4222-8222-222222222222';

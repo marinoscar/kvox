@@ -83,6 +83,9 @@ describe('POST /api/graph/entities/:id/forget (integration)', () => {
     entities = [];
     jobs = [];
 
+    // The purge job runs in an organization: the enqueue resolves the default one.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' } as never);
+
     prismaMock.kgEntity.findUnique.mockImplementation(async ({ where }: { where: Row }) =>
       entities.find((e) => e.id === where.id) ?? null,
     );

@@ -50,7 +50,7 @@ You write documentation for developers of this application. Every fact has one h
 | `docs/DEVELOPMENT.md`, `docs/TESTING.md`, `docs/SECURITY-ARCHITECTURE.md` | Dev loop; testing; security design |
 | `docs/specs/<feature>.md` | Design and rationale |
 | `docs/runbooks/<task>.md`, `docs/deployment/` | Operator procedures |
-| `apps/api/src/jobs/handlers/README.md`, `apps/cli/README.md` | Developer recipes, CLI reference |
+| `.claude/skills/add-job-type/SKILL.md`, `apps/cli/README.md` | Developer recipes, CLI reference |
 
 ## Rules
 

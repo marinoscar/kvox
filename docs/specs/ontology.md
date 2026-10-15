@@ -2244,7 +2244,7 @@ undeclared property.
 
 **A `key` is permanent once rows exist**, the identical discipline
 `Job.type` already carries in this codebase (the Adding a job type
-recipe in [`apps/api/src/jobs/handlers/README.md`](../../apps/api/src/jobs/handlers/README.md)): renaming `WORKS_FOR` after real relations of that type exist would
+recipe in [`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)): renaming `WORKS_FOR` after real relations of that type exist would
 either orphan every existing row's `type` string or require a data migration
 indistinguishable from adding a new type and retiring the old one — §17.4
 states the retirement path (deprecate, never delete) this constraint forces.
@@ -2278,7 +2278,7 @@ is not something to depend on. `index.ts` imports each domain module and
 passes it to `buildOntologyRegistry([coreDomain, workDomain, ...], ...)`
 directly — one import and one array entry is the whole cost of adding a
 domain, with the same "one registry entry" simplicity the Adding a
-job type ([handlers README](../../apps/api/src/jobs/handlers/README.md)) and Adding a notification ([notifications README](../../apps/api/src/notifications/README.md)) recipes give their own registries, just
+job type ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and Adding a notification ([notifications README](../../apps/api/src/notifications/README.md)) recipes give their own registries, just
 without the runtime self-registration mechanism those use:
 
 - **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,

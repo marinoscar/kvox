@@ -56,9 +56,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Note, NoteExport, Prisma } from '@prisma/client';
 
-import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../../jobs/jobs.service';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
+import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashExportRequest, type ExportOptions } from '../../export/export-options';
 import { NoteAccessService } from '../access/note-access.service';
@@ -72,6 +70,7 @@ import {
   type NoteExportSource,
 } from './note-export-document';
 import { NoteExporterRegistry, type NoteExporter } from './note-exporter.registry';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Spec §8.4: an export is a reproducible artifact with a bounded life. */
 export const NOTE_EXPORT_TTL_DAYS = 7;
@@ -243,6 +242,8 @@ export class NoteExportService {
       // claim the job descends from an upload — which an export of a five-day
       // old note plainly does not.
       reason: 'rerun',
+      // The render writes the file as a `storage_objects` row, so it runs in an organization.
+      orgId: await resolveOrgId(this.prisma, null, `note.export enqueue for export ${row.id}`),
       subjectType: NOTE_SUBJECT_TYPE,
       subjectId: noteId,
       payload: { exportId: row.id, noteId },

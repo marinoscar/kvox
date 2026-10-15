@@ -107,6 +107,7 @@ describe('GraphExtractionService.request (#363)', () => {
     expect(jobs.enqueueWithin).toHaveBeenCalledWith(tx, {
       type: 'kg.extract',
       reason: 'rerun',
+      orgId: null,
       subjectType: 'note',
       subjectId: IDS.note,
       priority: KG_EXTRACT_PRIORITY,

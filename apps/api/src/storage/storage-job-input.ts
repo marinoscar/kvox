@@ -73,9 +73,9 @@
 // HTTP — is the one place that maps it to a status.
 // =============================================================================
 
-import { Job, StorageObject } from '@prisma/client';
+import type { Job } from '@marinoscar/platform-api/jobs';
+import type { PrismaClient, StorageObject } from '@prisma/client';
 
-import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * The `Job.subjectType` a job carries when its subject is a stored object.
@@ -131,8 +131,8 @@ export class JobInputResolutionError extends Error {
  * label. What it checks is what it actually needs: an id, a row, and a key.
  */
 export async function resolveStorageObjectInput(
-  prisma: PrismaService,
-  job: Job
+  prisma: Pick<PrismaClient, 'storageObject'>,
+  job: Pick<Job, 'id' | 'type' | 'subjectId'>
 ): Promise<StorageObject> {
   if (!job.subjectId) {
     throw new JobInputResolutionError(

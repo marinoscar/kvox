@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { GraphModule } from '../graph/graph.module';
-import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AskAccessService } from './ask-access.service';
 import { AskConversationsController } from './ask-conversations.controller';
@@ -36,7 +35,6 @@ import { AskToolsModule } from './tools/ask-tools.module';
     PrismaModule,
     GraphModule,
     AskToolsModule,
-    JobsModule,
     AiModule,
   ],
   providers: [

@@ -29,14 +29,6 @@ import type {
   AiProviderContext,
 } from '../../ai/providers/ai-provider.interface';
 import { OPENAI_PROVIDER_ID, OpenAiProvider } from '../../ai/providers/openai.provider';
-import {
-  resolveJobProfile,
-  resolveMaxAttempts,
-} from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { NOTE_GENERATE_JOB_TYPE, aiProviderThrottleKey } from '../job-types';
 import {
   NOTE_GENERATE_MAX_RUNTIME_MS,
@@ -45,6 +37,7 @@ import {
   describe as describeError,
   readAllowedModelEntries,
 } from './note-generate.handler';
+import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError, resolveJobProfile, resolveMaxAttempts } from '@marinoscar/platform-api/jobs';
 
 // -----------------------------------------------------------------------------
 // Fixtures

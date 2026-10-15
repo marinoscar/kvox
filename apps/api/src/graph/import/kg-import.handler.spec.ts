@@ -2,12 +2,12 @@ import { Readable } from 'node:stream';
 
 import { ONTOLOGY, ONTOLOGY_VERSION } from '@app/shared/ontology';
 
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { importFixtureStream, type ImportFixture } from '../../../test/graph/rdf/import-fixtures';
 import type { KgMigrateDefinition } from '../migrate/kg-migrate.plan';
 import { KgImportHandler, KG_IMPORT_MAX_RUNTIME_MS } from './kg-import.handler';
 import type { ShaclEngine, ShaclEngineReport } from './shacl-engine';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // kg.import — the pipeline with every collaborator faked (#387)

@@ -321,7 +321,7 @@ describe('base code does not import domain code (issue #459)', () => {
     const base = deriveBaseDirs();
 
     // The directories the rule exists for are covered...
-    expect(base).toEqual(expect.arrayContaining(['ai', 'common', 'settings', 'jobs', 'onboarding', 'user-data']));
+    expect(base).toEqual(expect.arrayContaining(['ai', 'common', 'settings', 'onboarding', 'user-data']));
     // ...none of the product directories is mistaken for base...
     for (const domain of DOMAIN_DIRS) expect(base).not.toContain(domain);
     // ...and a renamed or deleted domain directory fails here instead of

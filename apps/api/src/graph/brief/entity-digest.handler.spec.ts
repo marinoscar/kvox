@@ -1,12 +1,12 @@
 import { ConflictException } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { KG_ENTITY_DIGEST_JOB_TYPE } from '../job-types';
 import * as queries from './brief-queries';
 import { DigestCitationError } from './citation-validation';
 import { EntityDigestHandler, ENTITY_DIGEST_MAX_RUNTIME_MS } from './entity-digest.handler';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 jest.mock('./brief-queries', () => ({
   ...jest.requireActual('./brief-queries'),

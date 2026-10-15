@@ -1,4 +1,3 @@
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { KG_GRAPH_LAYOUT_JOB_TYPE } from '../job-types';
 import {
@@ -8,6 +7,7 @@ import {
   readGraphLayoutPayload,
 } from './graph-layout.handler';
 import { storedClustersSchema, storedPositionsSchema } from './layout-snapshot';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `kg.graph_layout` handler (#371) — Prisma mocked: what it reads, what it writes

@@ -32,9 +32,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, type Job } from '@prisma/client';
 import { z } from 'zod';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_RESOLVE_JOB_TYPE } from '../job-types';
 import { GraphPreferencesService } from '../preferences/graph-preferences.service';
@@ -44,6 +41,7 @@ import { AdjudicationService, type AdjudicationResult } from '../resolution/adju
 import type { ResolutionContext } from '../resolution/context-features.service';
 import { orderPair } from '../resolution/distinct-pair.service';
 import { decide, ResolutionService, type MentionOutcome, type MentionToRank } from '../resolution/resolution.service';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 export const KG_RESOLVE_MAX_RUNTIME_MS = 20 * 60_000;
 export const KG_RESOLVE_MAX_ENTITIES = 2_000;
@@ -79,6 +77,8 @@ export class KgResolveHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgResolveHandler.name);
 
   readonly type = KG_RESOLVE_JOB_TYPE;
+
+  readonly label = 'Knowledge graph resolution';
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_RESOLVE_MAX_RUNTIME_MS, maxAttempts: 1 };
 
   constructor(

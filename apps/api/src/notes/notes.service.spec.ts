@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import type { Note } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../jobs/jobs.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
@@ -15,6 +14,7 @@ import { NoteGenerationRequestService } from './generation/note-generation-reque
 import { NoteSourceService } from './generation/note-source.service';
 import { NOTE_RETITLE_JOB_TYPE, NOTE_SUBJECT_TYPE } from './job-types';
 import { detailShape, NOTE_RETITLE_JOB_PRIORITY, NotesService } from './notes.service';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // NotesService — title provenance (`titleSource`, issue #180, epic #163)

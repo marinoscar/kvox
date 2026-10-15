@@ -18,10 +18,6 @@ import type {
   AiProviderContext,
 } from '../../ai/providers/ai-provider.interface';
 import { OPENAI_PROVIDER_ID } from '../../ai/providers/openai.provider';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';
 import {
   TRANSCRIPT_NAME_CHECK_MAX_RUNTIME_MS,
@@ -31,6 +27,7 @@ import {
   readNameCheckPayload,
   readTerms,
 } from './transcript-name-check.handler';
+import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // -----------------------------------------------------------------------------
 // Fixtures

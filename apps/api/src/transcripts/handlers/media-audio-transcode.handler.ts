@@ -69,16 +69,16 @@ import {
   type MediaAudioTranscodeResult,
   mediaAudioTranscodeResultSchema,
 } from '../contracts/media-audio-transcode.contract';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { jobTempPath } from '../../jobs/job-temp';
+import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
   type StorageProvider,
 } from '../../storage/providers/storage-provider.interface';
-import { resolveStorageObjectInput } from '../../storage/storage-job-input';
+import {
+  JobInputResolutionError,
+  STORAGE_OBJECT_SUBJECT_TYPE,
+} from '../../storage/storage-job-input';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
 import {
   planTranscode,
@@ -95,6 +95,13 @@ import {
   TranscriptPipelineService,
 } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import {
+  type JobExecutionProfile,
+  JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  jobTempPath,
+} from '@marinoscar/platform-api/jobs';
 
 /**
  * Three hours.
@@ -138,6 +145,8 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCODE_JOB_TYPE;
 
+  readonly label = 'Audio transcode';
+
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: TRANSCODE_MAX_RUNTIME_MS,
     maxAttempts: TRANSCODE_MAX_ATTEMPTS,
@@ -160,6 +169,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
     private readonly pipeline: TranscriptPipelineService,
     private readonly runtime: TranscriptionRuntimeService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    private readonly jobScope: JobScope,
   ) {}
 
   onModuleInit(): void {
@@ -218,11 +228,57 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
     }
   }
 
+  /**
+   * The job's input `storage_objects` row, read inside the job's organization
+   * scope (`JobScope.run`) and failing with the same named errors as
+   * `resolveStorageObjectInput`.
+   */
+  private async resolveSourceObject(job: Job) {
+    if (!job.subjectId) {
+      throw new JobInputResolutionError(
+        'missing_subject_id',
+        `Job ${job.id} (${job.type}) names no subjectId, so it has no input object to read. ` +
+          `A job of this type must be enqueued with subjectType "${STORAGE_OBJECT_SUBJECT_TYPE}" ` +
+          `and the StorageObject's id as subjectId.`,
+        job.id,
+        null,
+      );
+    }
+
+    const subjectId = job.subjectId;
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
+      tx.storageObject.findUnique({ where: { id: subjectId } }),
+    );
+
+    if (!object) {
+      throw new JobInputResolutionError(
+        'input_object_not_found',
+        `Job ${job.id} (${job.type}) names storage object ${subjectId}, which does not ` +
+          `exist. It was most likely deleted after this job was enqueued; this job cannot ` +
+          `succeed on any retry.`,
+        job.id,
+        subjectId,
+      );
+    }
+
+    if (!object.storageKey || object.storageKey.trim().length === 0) {
+      throw new JobInputResolutionError(
+        'input_object_has_no_storage_key',
+        `Job ${job.id} (${job.type}) names storage object ${subjectId}, which has no ` +
+          `storageKey, so there is nothing to read.`,
+        job.id,
+        subjectId,
+      );
+    }
+
+    return object;
+  }
+
   /** The actual conversion. Separated so `process` owns only the failure policy. */
   private async runServerTranscode(job: Job, transcript: Transcript): Promise<void> {
     // Named failures, never an empty path — `storage-job-input.ts`'s header
     // records the production incident this resolver exists to prevent.
-    const source = await resolveStorageObjectInput(this.prisma, job);
+    const source = await this.resolveSourceObject(job);
 
     // SIGNED WHEN THE JOB RUNS, not when it was enqueued: a job can sit
     // `pending` behind other work for minutes, and every one of those minutes

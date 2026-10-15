@@ -80,6 +80,13 @@ import { Prisma, type AskErrorClass, type AskFinishReason, type Job } from '@pri
 import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai/ai-errors';
 import { AiTaskModelResolver, type AiModelResolution } from '../../ai/ai-task-model-resolver.service';
 import {
+  type JobExecutionProfile,
+  type JobHandler,
+  JobHandlerRegistry,
+  ProviderThrottleService,
+  RateLimitError,
+} from '@marinoscar/platform-api/jobs';
+import {
   createProviderContext,
   type AiChatMessage,
   type AiChatRequest,
@@ -97,11 +104,6 @@ import {
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { resolveServiceName } from '../../common/otel/service-name';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { StreamFlusher } from '../../notes/generation/stream-flusher';
 import { budgetRefusalMessage, computeTokenBudget } from '../../ai/ai-token-budget';
 import { aiProviderThrottleKey } from '../../notes/job-types';
@@ -204,6 +206,8 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(AskRespondHandler.name);
 
   readonly type = ASK_RESPOND_JOB_TYPE;
+
+  readonly label = 'Ask answer';
 
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = { maxRuntimeMs: ASK_RESPOND_MAX_RUNTIME_MS, maxAttempts: 1 };

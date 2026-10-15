@@ -53,15 +53,13 @@ import type { Job, Prisma } from '@prisma/client';
 import { ONTOLOGY_VERSION } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_GRAPH_LAYOUT_JOB_TYPE } from '../job-types';
 import { computeLayout } from './compute-layout';
 import { readLayoutInput, readSourceUpdatedAt } from './layout-source';
 import { toStoredClusters, toStoredPositions } from './layout-snapshot';
 import { layoutSeed } from './seeded-rng';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 export const KG_GRAPH_LAYOUT_PROFILE: JobExecutionProfile = {
   maxRuntimeMs: 15 * 60_000,
@@ -83,6 +81,8 @@ export class KgGraphLayoutHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgGraphLayoutHandler.name);
 
   readonly type = KG_GRAPH_LAYOUT_JOB_TYPE;
+
+  readonly label = 'Knowledge graph layout';
 
   readonly profile: JobExecutionProfile = KG_GRAPH_LAYOUT_PROFILE;
 

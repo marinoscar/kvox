@@ -5,7 +5,7 @@ node can run needs **two** things, and they live in two different places:
 
 | Half | Where | What it decides |
 |---|---|---|
-| Handler | `apps/api/src/jobs/handlers/` | Whether the type may be enqueued, what a result must look like (`nodeResultSchema`), and how to persist one (`persistNodeResult`) |
+| Handler | the owning module's `handlers/` folder in `apps/api/src/` (the queue itself is `@marinoscar/platform-api/jobs`) | Whether the type may be enqueued, what a result must look like (`nodeResultSchema`), and how to persist one (`persistNodeResult`) |
 | Executor | here | Whether *this machine* can run it, and how |
 
 Both are self-registering, and neither knows about the other.

@@ -19,6 +19,9 @@ import { dirname, join } from 'node:path';
 
 // MUST stay first: registers the settings namespaces the composers read.
 import '../src/kvox.manifest';
+// The jobs slice registers its own `retention` namespace when `JobsModule.forRoot` runs (#468);
+// the conformance suite sees it through AppModule, so the catalog must render with it too.
+import '../src/platform/jobs/jobs.config';
 import { renderSystemSettingsCatalog } from '@marinoscar/platform-api/settings';
 
 const CATALOG_PATH = join(

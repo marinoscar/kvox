@@ -1,9 +1,9 @@
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { buildMigrationTestDefinition } from '../../../test/ontology/fixtures/migration-fixtures';
 import { KG_MIGRATE_JOB_TYPE } from '../job-types';
 import { KG_MIGRATE_BATCH_SIZE, KgMigrateHandler } from './kg-migrate.handler';
 import { DEFAULT_KG_MIGRATE_DEFINITION, type KgMigrateDefinition, type KgMigrateTable } from './kg-migrate.plan';
 import type { KgMigrateRepository, KgMigrateRow, KgMigrateUpdate } from './kg-migrate.repository';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `kg.migrate` handler (#384) — profile, server-only, batching, the

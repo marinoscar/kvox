@@ -19,13 +19,12 @@
 // the server still will.
 // =============================================================================
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { DB_RESTORE_RUN_TYPE, type DatabaseRestoreService } from '../database-restore.service';
 import {
   DatabaseRestoreRunHandler,
   RESTORE_JOB_MAX_RUNTIME_MS,
 } from './db-restore-run.handler';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 function makeHandler() {
   const registry = new JobHandlerRegistry();

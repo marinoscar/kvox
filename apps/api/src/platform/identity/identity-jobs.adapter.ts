@@ -2,21 +2,18 @@ import { Injectable } from '@nestjs/common';
 import type { IdentityJobHandler, IdentityJobsPort } from '@marinoscar/platform-api/identity';
 import type { Logger } from '@nestjs/common';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { enqueueHousekeepingJob, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
- * Identity's `IDENTITY_JOBS` over this app's CURRENT job queue
- * (PLATFORM-ADOPTION-SHIM(#470): #470 moves the queue into the platform and
- * changes only the binding in `identity-host.module.ts`).
+ * Identity's `IDENTITY_JOBS` over the platform job queue (`JobsService` and
+ * `JobHandlerRegistry` from `@marinoscar/platform-api/jobs`, since #468).
  *
  * The two identity job types keep this app's type strings, because rows outlive
  * handlers and a renamed type would orphan the history:
  * `auth.token.cleanup` and `device-auth.code.cleanup`. Both are SERVER-ONLY
  * (they delete credential rows, a privilege a worker node must never hold), so
- * the handlers declare no `nodeResultSchema` / `persistNodeResult`, and this app's
+ * the handlers declare no `nodeResultSchema` / `persistNodeResult`, and the platform's
  * derived node eligibility treats them as such.
  *
  * The crons that enqueue them live in the platform and ONLY enqueue (root rule

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
-import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
@@ -109,7 +108,6 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
 @Module({
   imports: [
     PrismaModule,
-    JobsModule,
     TranscriptionModule,
     CredentialsModule,
     StorageModule,

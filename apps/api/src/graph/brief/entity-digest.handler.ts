@@ -57,11 +57,6 @@ import { AiInputError, AiAuthError } from '../../ai/ai-errors';
 import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { READABLE_ENTITY_STATUSES } from '../read/readable';
@@ -85,6 +80,7 @@ import {
 import { digestItems, digestRelations, evidenceIdsFor, newestChange, ownedEvidenceIds } from './brief-queries';
 import { exclusiveRelationTypes } from './brief-sections';
 import { readDigestStatements, validateDigestCitations } from './citation-validation';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 export const ENTITY_DIGEST_MAX_RUNTIME_MS = 5 * 60_000;
 
@@ -106,6 +102,8 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(EntityDigestHandler.name);
 
   readonly type = KG_ENTITY_DIGEST_JOB_TYPE;
+
+  readonly label = 'Knowledge graph entity digest';
 
   readonly profile: JobExecutionProfile = { maxRuntimeMs: ENTITY_DIGEST_MAX_RUNTIME_MS, maxAttempts: 1 };
 

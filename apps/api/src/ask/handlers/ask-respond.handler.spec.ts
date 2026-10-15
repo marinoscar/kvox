@@ -3,7 +3,6 @@ import type { Job } from '@prisma/client';
 
 import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai/ai-errors';
 import type { AiChatEvent, AiChatRequest } from '../../ai/providers/ai-provider.interface';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import {
   ASK_ANSWER_HOLD_CHARS,
@@ -16,6 +15,7 @@ import { ASK_FORCED_ANSWER_LINE } from '../ask-prompt';
 import { ASK_RESPOND_JOB_TYPE, type AskRespondPayload } from '../job-types';
 import { HandleRegistry } from '../tools/handle-registry';
 import { AskRespondHandler, recordedArguments, TOO_MANY_TOOL_CALLS_ERROR } from './ask-respond.handler';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `ask.respond` with every collaborator mocked and a SCRIPTED `chat()`: each

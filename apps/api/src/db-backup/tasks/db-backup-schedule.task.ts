@@ -2,8 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
@@ -16,6 +14,7 @@ import {
   InvalidTimezoneError,
   previousFireBoundary,
 } from '../schedule.util';
+import { enqueueHousekeepingJob, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The backup scheduler (issue #282, converted by #353, epic #345)

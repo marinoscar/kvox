@@ -1,8 +1,8 @@
-import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { KG_GRAPH_LAYOUT_JOB_TYPE } from '../job-types';
 import { GRAPH_LAYOUT_COALESCE_MS, GraphLayoutEnqueuer } from './graph-layout.enqueuer';
 import { GraphLayoutListener, isMaterialChange } from './graph-layout.listener';
+import { type JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // GraphLayoutListener (#371) — the ≥ 20 % material-change trigger, enqueue only

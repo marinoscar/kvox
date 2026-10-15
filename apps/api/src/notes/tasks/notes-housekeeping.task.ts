@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // ⚠ THIS FILE ENQUEUES. IT DOES NOT WORK. That is CLAUDE.md rule 1, and
-// `test/jobs/cron-enqueue-only.spec.ts` reads the body of every `@Cron` method
-// under `apps/api/src` and fails the build if one of them queries, updates,
+// the platform `cron-enqueue-only` conformance suite (`test/conformance.spec.ts`)
+// reads the body of every `@Cron` method under `apps/api/src` and fails the build if one of them queries, updates,
 // deletes, or touches a storage provider. The work lives in
 // `handlers/notes-housekeeping.handler.ts`; this is the timer.
 //
@@ -34,10 +34,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTES_HOUSEKEEPING_JOB_TYPE } from '../job-types';
+import { enqueueHousekeepingJob, JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class NotesHousekeepingTask {

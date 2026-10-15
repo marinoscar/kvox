@@ -5,12 +5,12 @@ import { AiProviderRegistry } from '../../ai/ai-provider.registry';
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MAX_TITLE_CHARS } from '../dto/note.dto';
 import { aiProviderThrottleKey, NOTE_GENERATE_JOB_TYPE } from '../job-types';
 import { readAllowedModelEntries } from './allowed-models';
 import { deriveTitleFromBody, truncateTitle } from './title-derivation';
+import { ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // Naming a generated note (issue #182, epic #163)

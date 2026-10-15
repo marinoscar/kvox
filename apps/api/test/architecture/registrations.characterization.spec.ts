@@ -11,18 +11,17 @@ import {
   createMockAdminUser,
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
-import { JobsService } from '../../src/jobs/jobs.service';
 import {
   ADMIN_ONBOARDING_STEPS,
   USER_ONBOARDING_STEPS,
 } from '../../src/onboarding/onboarding-steps';
 import { NOTIFICATION_EVENTS } from '../../src/notifications/notification-events';
 import { EMAIL_TEMPLATES } from '../../src/email/templates';
-import { JOB_TYPE_LABELS } from '../../src/jobs/job-type-labels';
 import {
   USER_DATA_SCOPES,
   scopeIncludes,
 } from '../../src/user-data/job-types';
+import { JobHandlerRegistry, JobsService, jobTypeLabels } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // Domain-registration characterization (issue #460, step 2)
@@ -138,10 +137,6 @@ describe('Domain registrations characterization', () => {
 
     it('Object.keys(EMAIL_TEMPLATES), in registration order', () => {
       expect(Object.keys(EMAIL_TEMPLATES)).toMatchSnapshot();
-    });
-
-    it('JOB_TYPE_LABELS, in declared order', () => {
-      expect(Object.entries(JOB_TYPE_LABELS)).toMatchSnapshot();
     });
 
     it('USER_DATA_SCOPES, in declared order', () => {
@@ -308,6 +303,24 @@ describe('Domain registrations characterization', () => {
         .expect(200);
 
       expect(stableBody(response.body)).toMatchSnapshot();
+    });
+
+    it('every registered job handler has a registry label, and the retired example types keep theirs', () => {
+      // Since #468 a handler declares its own `label` and the platform registry
+      // records it on registration, so there is no per-domain label map to pin
+      // (the map was snapshotted here before the port). `test/jobs/job-type-snapshot.spec.ts`
+      // pins WHICH types must register; this pins that each of them reads as a
+      // phrase, and that the two retired types still do.
+      const registry = context.module.get(JobHandlerRegistry, { strict: false });
+      const labels = jobTypeLabels();
+
+      const unlabelled = registry
+        .types()
+        .filter((type) => !labels.get(type) || labels.get(type) === type);
+      expect(unlabelled).toEqual([]);
+
+      expect(labels.get('example.echo')).toBeTruthy();
+      expect(labels.get('example.checksum')).toBeTruthy();
     });
 
     it('GET /api/admin/jobs/stats labels after enqueueing one job of each of three types', async () => {

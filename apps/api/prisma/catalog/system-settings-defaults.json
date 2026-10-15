@@ -74,5 +74,23 @@
     "maxDocumentBytes": 26214400,
     "taskModels": {},
     "graphEnabled": false
+  },
+  "retention": {
+    "notifications": {
+      "enabled": true,
+      "days": 180
+    },
+    "notificationDeliveries": {
+      "enabled": true,
+      "days": 90
+    },
+    "auditEvents": {
+      "enabled": false,
+      "days": 365
+    },
+    "aiRuns": {
+      "enabled": true,
+      "days": 90
+    }
   }
 }

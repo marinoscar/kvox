@@ -1,11 +1,11 @@
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTES_HOUSEKEEPING_JOB_TYPE, NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotesService } from '../notes.service';
 import { NotesHousekeepingHandler } from './notes-housekeeping.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `notes.housekeeping` (issue #53, epic #45)

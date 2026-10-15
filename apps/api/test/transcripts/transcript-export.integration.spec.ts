@@ -136,6 +136,9 @@ describe('Transcript exports integration', () => {
     setupBaseMocks();
     jest.clearAllMocks();
 
+    // `resolveOrgId` reads the default organization for the export job's `orgId`.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: 'org-1' } as never);
+
     mockStorage.getBucket.mockReturnValue('test-bucket');
     mockStorage.getSignedDownloadUrl.mockResolvedValue('https://signed/get');
 

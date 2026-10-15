@@ -1,3 +1,4 @@
+import { JobHandler, JobHandlerRegistry, JobsService, type Job } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // Broadcast chunk: one cursor-paged page of the fan-out (issue #323, epic #319)
 // =============================================================================
@@ -139,12 +140,9 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Job, NotificationBroadcast } from '@prisma/client';
+import { NotificationBroadcast } from '@prisma/client';
 
 import type { BroadcastEmailData } from '../../../email/templates/broadcast.email';
-import { JobHandler } from '../../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../../jobs/job-handler.registry';
-import { JobsService } from '../../../jobs/jobs.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { NotificationChannel } from '../../notification-events';
 import type { NotifyOptions } from '../../notification.types';
@@ -207,6 +205,7 @@ export class BroadcastChunkHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(BroadcastChunkHandler.name);
 
   readonly type = BROADCAST_CHUNK_TYPE;
+  readonly label = 'Broadcast delivery';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -407,6 +406,7 @@ export class BroadcastChunkHandler implements JobHandler, OnModuleInit {
       // is a Prisma enum with three values and adding a fourth is a migration
       // plus web and OpenAPI churn for a display string.
       reason: 'backfill',
+      orgId: null,
       subjectType: BROADCAST_SUBJECT_TYPE,
       subjectId: broadcast.id,
       // ⚠ LOAD-BEARING. Without it this enqueue returns the job that is

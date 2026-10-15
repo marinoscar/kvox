@@ -35,19 +35,12 @@ import { ConfigService } from '@nestjs/config';
 import { Job } from '@prisma/client';
 import { z } from 'zod';
 
-import {
-  resolveJobProfile,
-  resolveMaxAttempts,
-} from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { LEASE_GRACE_MS, resolveJobLeaseMs } from '../../jobs/job.worker';
-import { JOB_TYPE_LABELS } from '../../jobs/job-type-labels';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { BACKUP_JOB_TYPE } from '../db-backup-runner.service';
 import type { DatabaseBackupRunnerService } from '../db-backup-runner.service';
 import { PG_JOB_ROLE_KIND, PgJobRoleBroker } from '../pg-job-role.broker';
 import { BACKUP_JOB_MAX_RUNTIME_MS, DatabaseBackupRunHandler } from './db-backup-run.handler';
+import { type JobHandler, JobHandlerRegistry, LEASE_GRACE_MS, resolveJobLeaseMs, resolveJobProfile, resolveMaxAttempts } from '@marinoscar/platform-api/jobs';
 
 describe('DatabaseBackupRunHandler', () => {
   const job = { id: 'job-1', type: BACKUP_JOB_TYPE } as Job;
@@ -122,7 +115,7 @@ describe('DatabaseBackupRunHandler', () => {
   });
 
   it('has a dashboard label, so a 2am reader sees a phrase and not a dotted key', () => {
-    expect(JOB_TYPE_LABELS[BACKUP_JOB_TYPE]).toBe('Database backup');
+    expect(handler.label).toBe('Database backup');
   });
 
   describe('the profile the queue actually reads', () => {

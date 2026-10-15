@@ -8,10 +8,10 @@
 // resolve there.
 //
 //   IDENTITY_NOTIFIER         -> NotificationsService     (moves in #468)
-//   IDENTITY_JOBS             -> JobsService + registry   (moves in #470)
+//   IDENTITY_JOBS             -> JobsService + registry   (the platform's, #468)
 //   USER_DEFAULTS             -> DEFAULT_USER_SETTINGS    (moves in #466)
 //   IDENTITY_PROFILE_IMAGES   -> common/profile-image     (moves in #466/#469)
-//   IDENTITY_NODE_CREDENTIALS -> NodeCredentialService    (moves in #470)
+//   IDENTITY_NODE_CREDENTIALS -> NodeCredentialService    (the platform's, #468)
 //
 // IDENTITY_METRICS is deliberately UNBOUND: this app has no metrics service, and
 // the port is optional (identity then records nothing). IDENTITY_EVENT_BUS and
@@ -31,8 +31,8 @@ import {
   USER_DEFAULTS,
 } from '@marinoscar/platform-api/identity';
 
-import { JobsModule } from '../../jobs/jobs.module';
-import { NodeCredentialService } from '../../nodes/node-credential.service';
+import { NodeCredentialService } from '@marinoscar/platform-api/nodes';
+
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { IdentityJobsAdapter } from './identity-jobs.adapter';
 import { IdentityNotifierAdapter } from './identity-notifier.adapter';
@@ -40,9 +40,10 @@ import { KvoxProfileImages, KvoxUserDefaults } from './identity-user.adapters';
 
 @Global()
 @Module({
-  // `NodeCredentialModule` is itself @Global, so `NodeCredentialService`
-  // resolves here without an import.
-  imports: [NotificationsModule, JobsModule],
+  // `NodeCredentialModule` and the jobs slice are themselves @Global, so
+  // `NodeCredentialService`, `JobsService` and `JobHandlerRegistry` resolve here
+  // without an import.
+  imports: [NotificationsModule],
   providers: [
     { provide: IDENTITY_NOTIFIER, useClass: IdentityNotifierAdapter },
     { provide: IDENTITY_JOBS, useClass: IdentityJobsAdapter },

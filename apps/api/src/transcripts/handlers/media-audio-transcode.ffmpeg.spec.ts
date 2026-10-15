@@ -9,7 +9,6 @@ import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
@@ -19,6 +18,7 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider } from './__fixtures__/fake-provider';
 import { MediaAudioTranscodeHandler } from './media-audio-transcode.handler';
+import { JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `media.audio.transcode` end to end, WITH A REAL ffmpeg (issue #26)
@@ -168,6 +168,7 @@ describe('media.audio.transcode with a real ffmpeg', () => {
       attempts: 1,
       subjectType: 'storage_object',
       subjectId: 'obj-1',
+      orgId: 'org-1',
       payload: { transcriptId: TRANSCRIPT_ID, bitrateKbps: 64 },
     }) as unknown as Job;
 
@@ -203,6 +204,14 @@ describe('media.audio.transcode with a real ffmpeg', () => {
               ),
             },
           },
+        },
+        // The scoped transaction client is the Prisma stub itself.
+        {
+          provide: JobScope,
+          useFactory: (prisma: unknown) => ({
+            run: (_job: unknown, fn: (tx: unknown) => unknown) => fn(prisma),
+          }),
+          inject: [PrismaService],
         },
         { provide: TranscriptObjectsService, useValue: { recordUploaded: recorded } },
         {

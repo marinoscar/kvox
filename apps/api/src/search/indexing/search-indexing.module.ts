@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../../ai/ai.module';
-import { JobsModule } from '../../jobs/jobs.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SearchIndexController } from './search-index.controller';
 import { SearchIndexStatusService } from './search-index-status.service';
@@ -50,7 +49,7 @@ import { SearchIndexService } from './search-index.service';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, JobsModule, AiModule],
+  imports: [PrismaModule, AiModule],
   // ⚠ THE CONTROLLER LIVES HERE, NOT IN `SearchModule` (issue #191). Its two
   // routes are an INDEXING surface — they read the AI policy, the caller's
   // credential and the job queue — while `SearchModule` is a query surface that

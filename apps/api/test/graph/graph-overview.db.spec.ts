@@ -24,8 +24,6 @@
 
 import type { PrismaClient } from '@prisma/client';
 
-import { JobsService } from '../../src/jobs/jobs.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { KG_GRAPH_LAYOUT_JOB_TYPE } from '../../src/graph/job-types';
 import { GraphLayoutEnqueuer } from '../../src/graph/layout/graph-layout.enqueuer';
 import { KgGraphLayoutHandler } from '../../src/graph/layout/graph-layout.handler';
@@ -36,6 +34,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, NO_EXPORT_FILES, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-overview.db.spec');
 

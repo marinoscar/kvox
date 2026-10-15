@@ -31,8 +31,6 @@ import type {
   AiGenerateRequest,
   AiProvider,
 } from '../../src/ai/providers/ai-provider.interface';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
@@ -40,6 +38,7 @@ import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-e
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import { EXTRACTION_METADATA_KEY } from '../../src/notes/source-metadata';
 import { MARKDOWN_BODY, markdownFile, scannedPdf } from '../fixtures/documents.fixture';
+import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 const OWNER = 'owner-1';
 const NOTE_ID = 'note-1';
@@ -324,6 +323,8 @@ function harness(world: World) {
     new JobHandlerRegistry(),
     prisma as never,
     objects,
+    // The handler's `storage_objects` access runs through the job's organization scope.
+    { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) } as never,
     storage as never,
   );
 

@@ -20,6 +20,7 @@ describe('SpeakerIdentifiedListener', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: KG_SPEAKER_LINK_JOB_TYPE,
       reason: 'rerun',
+      orgId: null,
       subjectType: KG_SUBJECT_TRANSCRIPT,
       subjectId: 't-1',
       payload: { transcriptId: 't-1', actorUserId: 'u-1' },

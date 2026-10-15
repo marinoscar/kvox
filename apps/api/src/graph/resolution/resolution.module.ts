@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../../ai/ai.module';
-import { JobsModule } from '../../jobs/jobs.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SearchModule } from '../../search/search.module';
 import { GraphExtractionModule } from '../extraction/extraction.module';
@@ -39,7 +38,7 @@ import { ResolutionStage } from './resolution.stage';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, JobsModule, AiModule, SearchModule, GraphModule, GraphExtractionModule],
+  imports: [PrismaModule, AiModule, SearchModule, GraphModule, GraphExtractionModule],
   controllers: [GraphResolutionController],
   providers: [
     GraphEmbedder,

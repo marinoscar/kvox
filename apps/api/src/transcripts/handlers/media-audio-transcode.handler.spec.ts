@@ -5,9 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { mediaAudioTranscodeResultSchema } from '../contracts/media-audio-transcode.contract';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import * as jobTemp from '../../jobs/job-temp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
@@ -18,6 +15,19 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { MediaAudioTranscodeHandler } from './media-audio-transcode.handler';
+import {
+  type JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  jobTempPath,
+} from '@marinoscar/platform-api/jobs';
+
+// `jobTempPath` is a re-export getter on the package, which `jest.spyOn` cannot
+// replace; mock the one function and keep the rest of the package real.
+jest.mock('@marinoscar/platform-api/jobs', () => ({
+  ...jest.requireActual('@marinoscar/platform-api/jobs'),
+  jobTempPath: jest.fn(),
+}));
 
 // =============================================================================
 // `media.audio.transcode` — the acceptance criteria (issue #26)
@@ -45,6 +55,7 @@ const job = (overrides: Partial<Job> = {}): Job =>
     attempts: 1,
     subjectType: 'storage_object',
     subjectId: 'obj-1',
+    orgId: 'org-1',
     payload: { transcriptId: TRANSCRIPT_ID, bitrateKbps: 96 },
     ...overrides,
   }) as unknown as Job;
@@ -78,7 +89,9 @@ describe('MediaAudioTranscodeHandler', () => {
   let prisma: {
     transcript: { update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
     storageObject: { findUnique: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
+  let scopeRun: jest.Mock;
   let ffmpeg: { probe: jest.Mock; transcode: jest.Mock };
   let objects: { recordUploaded: jest.Mock };
   let pipeline: { loadForJob: jest.Mock; markFailed: jest.Mock; enqueueSubmit: jest.Mock };
@@ -94,9 +107,9 @@ describe('MediaAudioTranscodeHandler', () => {
     // never creates it either — ffmpeg does — so the mocked transcode has to,
     // and this directory is where.
     tempDir = mkdtempSync(join(tmpdir(), 'transcode-spec-'));
-    jest
-      .spyOn(jobTemp, 'jobTempPath')
-      .mockImplementation((suffix = '') => join(tempDir, `out${suffix}`));
+    (jobTempPath as jest.Mock).mockImplementation(
+      (suffix = '') => join(tempDir, `out${suffix}`),
+    );
 
     prisma = {
       transcript: {
@@ -115,7 +128,10 @@ describe('MediaAudioTranscodeHandler', () => {
           mimeType: 'audio/wav',
         }),
       },
+      // The default organization, for a job queued before it carried an `orgId`.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-default' }) },
     };
+    scopeRun = jest.fn((_job, fn) => fn(prisma));
 
     ffmpeg = {
       probe: jest.fn().mockResolvedValue({
@@ -165,6 +181,8 @@ describe('MediaAudioTranscodeHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: TranscriptionRuntimeService, useValue: runtime },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        // The scoped transaction client is the Prisma stub itself.
+        { provide: JobScope, useValue: { run: scopeRun } },
       ],
     }).compile();
 
@@ -261,6 +279,18 @@ describe('MediaAudioTranscodeHandler', () => {
         }),
       }),
     );
+  });
+
+  it('runs a job queued before it carried an orgId, in the default organization', async () => {
+    await handler.process(job({ orgId: null }));
+
+    // `JobScope.run` refuses a null org, so the handler names one for it.
+    expect(scopeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ id: JOB_ID, orgId: 'org-default' }),
+      expect.any(Function),
+    );
+    expect(ffmpeg.transcode).toHaveBeenCalled();
+    expect(objects.recordUploaded).toHaveBeenCalled();
   });
 
   it('takes the target bitrate from the JOB, not from the current setting', async () => {

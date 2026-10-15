@@ -40,12 +40,12 @@ import { GraphPreferencesService } from '../../src/graph/preferences/graph-prefe
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-respond.db.spec');
 

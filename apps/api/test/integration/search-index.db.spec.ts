@@ -34,7 +34,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { EMBEDDING_DIMENSIONS } from '../../src/ai/providers/ai-provider.interface';
 import {
   SEARCH_DOC_TRANSCRIPT,
@@ -44,6 +43,7 @@ import { SearchIndexHandler } from '../../src/search/indexing/search-index.handl
 import { SearchIndexService } from '../../src/search/indexing/search-index.service';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('search-index.db.spec');
 

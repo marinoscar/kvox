@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { NoteGenerationRequestService } from './generation/note-generation-request.service';
@@ -15,6 +14,7 @@ import type {
   PreviewNoteTemplateResponse,
 } from './dto/note-template.dto';
 import type { PayloadTemplateSnapshot } from './generation/note-generation.service';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // NoteTemplatePreviewService (issue #50, epic #45)
@@ -206,6 +206,7 @@ export class NoteTemplatePreviewService {
       const job = await this.jobs.enqueueWithin(tx, {
         type: NOTE_GENERATE_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: NOTE_SUBJECT_TYPE,
         subjectId: generation.id,
         payload: {

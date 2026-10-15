@@ -3,8 +3,6 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { hashExportRequest } from '../../export/export-options';
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NoteAccessService } from '../access/note-access.service';
 import { NOTE_EXPORT_JOB_TYPE } from '../job-types';
@@ -14,6 +12,7 @@ import { NoteExportService, NOTE_EXPORT_JOB_PRIORITY } from './note-export.servi
 import { NoteExporterRegistry } from './note-exporter.registry';
 import { PdfNoteExporter } from './pdf.exporter';
 import { WordNoteExporter } from './word.exporter';
+import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // NoteExportService (issue #54, docs/specs/notes.md §8.4)
@@ -27,6 +26,7 @@ import { WordNoteExporter } from './word.exporter';
 // =============================================================================
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
+const ORG_ID = '22222222-2222-4222-8222-222222222222';
 const USER: RequestUser = {
   id: 'owner-1',
   email: 'owner@example.test',
@@ -48,6 +48,7 @@ describe('NoteExportService', () => {
     noteVersion: { findUnique: jest.Mock };
     transcript: { findUnique: jest.Mock };
     auditEvent: { create: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
   let access: { require: jest.Mock };
   let objects: { signedUrlFor: jest.Mock };
@@ -95,6 +96,7 @@ describe('NoteExportService', () => {
       noteVersion: { findUnique: jest.fn().mockResolvedValue(null) },
       transcript: { findUnique: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: ORG_ID }) },
     };
 
     access = { require: jest.fn().mockResolvedValue({ note, role: 'owner' }) };
@@ -141,6 +143,8 @@ describe('NoteExportService', () => {
         expect.objectContaining({
           type: NOTE_EXPORT_JOB_TYPE,
           subjectId: NOTE_ID,
+          // The render writes a `storage_objects` row, so the job runs in an organization.
+          orgId: ORG_ID,
           priority: NOTE_EXPORT_JOB_PRIORITY,
           // ⚠ Three formats of one note are legitimately distinct work; the
           // queue's subject-scoped dedup key would collapse them into one.

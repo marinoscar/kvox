@@ -4,7 +4,7 @@
 //
 // A transcription job talks to a third-party API over a network, so it fails in
 // ways that want completely different responses. The queue already knows how to
-// tell a bug from a throttle (`jobs/rate-limit.error.ts`); this file adds the
+// tell a bug from a throttle (`@marinoscar/platform-api/jobs`); this file adds the
 // two distinctions that are specific to a provider integration, and states the
 // default for everything else.
 //
@@ -25,7 +25,7 @@
 //      useless but actively harmful — each attempt is a full upload and a full
 //      provider charge for a result that is already known.
 //
-//   3. `RateLimitError` — REUSED FROM `jobs/rate-limit.error.ts`, deliberately
+//   3. `RateLimitError` — REUSED FROM `@marinoscar/platform-api/jobs`, deliberately
 //      not redefined here. The queue's deferral path keys off
 //      `err instanceof RateLimitError`, and a second class with the same name in
 //      a different module would satisfy no such check: the job would be
@@ -47,7 +47,7 @@
 // is already understood by `JobTerminalService`; anything else retries.
 // =============================================================================
 
-export { RateLimitError } from '../jobs/rate-limit.error';
+export { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 /**
  * The provider refused the credential.

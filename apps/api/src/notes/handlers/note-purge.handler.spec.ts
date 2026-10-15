@@ -1,11 +1,11 @@
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotePurgeHandler, readNoteId } from './note-purge.handler';
+import { JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `note.purge` (issue #53, epic #45)
@@ -27,6 +27,7 @@ import { NotePurgeHandler, readNoteId } from './note-purge.handler';
 
 const NOTE_ID = 'note-1';
 const JOB_ID = 'job-1';
+const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const SOURCE_OBJECT = 'object-source';
 const EXTRACTED_OBJECT = 'object-extracted';
 const EXPORT_OBJECT = 'object-export';
@@ -39,7 +40,7 @@ describe('NotePurgeHandler', () => {
   let searchIndex: { forget: jest.Mock };
 
   const job = (payload: unknown = { noteId: NOTE_ID }) =>
-    ({ id: JOB_ID, payload }) as never;
+    ({ id: JOB_ID, payload, orgId: ORG_ID }) as never;
 
   beforeEach(async () => {
     prisma = {
@@ -73,6 +74,7 @@ describe('NotePurgeHandler', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: NoteObjectsService, useValue: objects },
         { provide: SearchIndexService, useValue: searchIndex },
+        { provide: JobScope, useValue: { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) } },
       ],
     }).compile();
 

@@ -8,11 +8,11 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
-import { JobWorker } from '../../src/jobs/job.worker';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { prismaMock } from '../mocks/prisma.mock';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 import { createFakeOwnershipStore } from './fake-ownership-store.helper';
+import { JobWorker } from '@marinoscar/platform-api/jobs';
 
 export interface TestContext {
   app: NestFastifyApplication;

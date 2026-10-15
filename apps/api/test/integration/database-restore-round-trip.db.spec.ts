@@ -68,7 +68,6 @@ import {
   type AdminConnection,
 } from '../../src/db-backup/admin-connection.util';
 import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { DB_RESTORE_RUN_TYPE } from '../../src/db-backup/database-restore.service';
 import { ACTIVE_STORAGE_PROVIDER_ID, BACKUP_ARCHIVE_FORMAT } from '../../src/db-backup/db-backup-storage';
 import {
@@ -96,6 +95,7 @@ import {
   prismaClientFor,
   sleep,
 } from '../helpers/scratch-database.helper';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 import { resolveDbSuite } from '../jobs/db-test-support';
 
 const { describeWithDb } = resolveDbSuite('database-restore-round-trip.db.spec');

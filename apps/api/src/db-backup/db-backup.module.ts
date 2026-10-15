@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { DatabaseRestoreService } from './database-restore.service';
@@ -262,7 +261,6 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
   imports: [
     StorageProvidersModule,
     NotificationsModule,
-    JobsModule,
   ],
   controllers: [DatabaseBackupController],
   providers: [

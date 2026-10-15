@@ -9,11 +9,13 @@
  * one would be discovered the way the first would have been — by a dashboard
  * left open overnight, months later, in somebody's database load graph.
  *
- * `hooks/useJobs.ts` and `hooks/useWorkerNodes.ts` both RE-EXPORT this so each
- * page keeps importing its polling from the hook module it already depends on
- * (and so a page test that mocks that module still intercepts the poll). The
- * re-exports are aliases of this one function; there is exactly one
- * implementation, and this is it.
+ * The hook modules of the app's other polling pages (`useDbBackup`,
+ * `useBroadcasts`, `useTranscripts`) RE-EXPORT this so each page keeps importing
+ * its polling from the hook module it already depends on (and so a page test
+ * that mocks that module still intercepts the poll). The re-exports are aliases
+ * of this one function; there is exactly one implementation in this app, and
+ * this is it. The Jobs and Worker Nodes pages are the platform's since #468 and
+ * poll through the packaged copy.
  *
  * =============================================================================
  * WHY THE INTERVAL STOPS WITH THE TAB

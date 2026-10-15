@@ -48,14 +48,12 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Job, Prisma } from '@prisma/client';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CHANGED_EVENT, type GraphChangedEvent } from '../graph-events';
 import { KG_PURGE_JOB_TYPE, KG_SUBJECT_ENTITY, KG_SUBJECT_USER } from '../job-types';
 import { readKgPurgePayload } from '../purge/kg-purge.payload';
 import { KgPurgeService, type KgPurgeCounts } from '../purge/kg-purge.service';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 export const GRAPH_PERSON_FORGOTTEN_ACTION = 'graph.person_forgotten';
 export const GRAPH_PURGED_ACTION = 'graph.purged';
@@ -83,6 +81,8 @@ export class KgPurgeHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgPurgeHandler.name);
 
   readonly type = KG_PURGE_JOB_TYPE;
+
+  readonly label = 'Knowledge graph deletion';
 
   readonly profile: JobExecutionProfile = KG_PURGE_PROFILE;
 

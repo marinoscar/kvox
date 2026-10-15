@@ -1,4 +1,3 @@
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import {
   ADJUDICATION_PROMPT_HEADINGS,
   ADJUDICATION_SCHEMA_NAME,
@@ -8,6 +7,7 @@ import {
   type AdjudicationPair,
 } from './adjudication-prompt';
 import { AdjudicationService } from './adjudication.service';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 const USER = '11111111-1111-4111-8111-111111111111';
 

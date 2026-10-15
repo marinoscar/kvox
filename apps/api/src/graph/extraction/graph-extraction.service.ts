@@ -33,7 +33,6 @@ import { AiSettingsService } from '../../ai/ai-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { activeUserHoldsPermission } from '../../common/auth/principal-permissions';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { JobsService } from '../../jobs/jobs.service';
 import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService } from '../../notes/access/note-access.service';
 import {
   budgetRefusalMessage,
@@ -58,6 +57,7 @@ import { ExtractionInputLoader } from './extraction-input.loader';
 import { buildExtractionOutputSchema } from './output-schema';
 import { assembleExtractionPrompt, type ExtractionPrompt } from './prompt';
 import { extractionRowCaps, type ExtractionRowCaps } from './row-caps';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Queue priority (§11): ahead of housekeeping, behind a watched export. */
 export const KG_EXTRACT_PRIORITY = -5;
@@ -412,6 +412,7 @@ export class GraphExtractionService {
         const job = await this.jobs.enqueueWithin(tx, {
           type: KG_EXTRACT_JOB_TYPE,
           reason: reason === 'note_ready' ? 'upload' : 'rerun',
+          orgId: null,
           subjectType: KG_SUBJECT_NOTE,
           subjectId: note.id,
           priority: KG_EXTRACT_PRIORITY,

@@ -42,10 +42,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
+import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
@@ -64,6 +61,13 @@ import {
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { selectTranscriptionInput } from '../transcription-input';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import {
+  type JobExecutionProfile,
+  JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  ProviderThrottleService,
+} from '@marinoscar/platform-api/jobs';
 
 /**
  * Two hours.
@@ -83,6 +87,8 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPTION_SUBMIT_JOB_TYPE;
 
+  readonly label = 'Transcription submit';
+
   /**
    * Three attempts, on the deployment default, because the failures worth
    * retrying here are network-shaped. Everything that is NOT worth retrying —
@@ -101,6 +107,7 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
     private readonly pipeline: TranscriptPipelineService,
     private readonly throttle: ProviderThrottleService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    private readonly jobScope: JobScope,
   ) {}
 
   onModuleInit(): void {
@@ -179,12 +186,14 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
     // have waited while a rendition finished, and pointing the provider at a
     // decision made minutes ago is a decision made against stale state.
     // -------------------------------------------------------------------------
-    const [source, rendition] = await Promise.all([
-      this.prisma.storageObject.findUnique({ where: { id: transcript.sourceObjectId } }),
-      transcript.playbackObjectId
-        ? this.prisma.storageObject.findUnique({ where: { id: transcript.playbackObjectId } })
-        : Promise.resolve(null),
-    ]);
+    const [source, rendition] = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
+      Promise.all([
+        tx.storageObject.findUnique({ where: { id: transcript.sourceObjectId } }),
+        transcript.playbackObjectId
+          ? tx.storageObject.findUnique({ where: { id: transcript.playbackObjectId } })
+          : Promise.resolve(null),
+      ]),
+    );
 
     if (!source) {
       await this.pipeline.markFailed({

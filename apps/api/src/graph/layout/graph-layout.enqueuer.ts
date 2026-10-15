@@ -20,9 +20,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_GRAPH_LAYOUT_JOB_TYPE, KG_SUBJECT_USER } from '../job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** How long an automatic layout waits, so bursts coalesce. */
 export const GRAPH_LAYOUT_COALESCE_MS = 120_000;
@@ -63,6 +63,7 @@ export class GraphLayoutEnqueuer {
     const job = await this.jobs.enqueue({
       type: KG_GRAPH_LAYOUT_JOB_TYPE,
       reason: 'rerun',
+      orgId: null,
       subjectType: KG_SUBJECT_USER,
       subjectId: ownerId,
       payload: { ownerId },
@@ -84,6 +85,7 @@ export class GraphLayoutEnqueuer {
     return this.jobs.enqueue({
       type: KG_GRAPH_LAYOUT_JOB_TYPE,
       reason: 'backfill',
+      orgId: null,
       subjectType: KG_SUBJECT_USER,
       subjectId: ownerId,
       payload: { ownerId },

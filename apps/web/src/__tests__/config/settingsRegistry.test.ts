@@ -560,12 +560,17 @@ describe('the Operations group (#266)', () => {
       resolve(API_SRC, '../prisma/catalog/permissions.json'),
       'utf8',
     );
+    // The jobs and nodes controllers are the platform's (#468), read from the installed package.
+    const PLATFORM_API_DIST = resolve(
+      API_SRC,
+      '../../../node_modules/@marinoscar/platform-api/dist',
+    );
     const jobsController = readFileSync(
-      resolve(API_SRC, 'jobs/job-admin.controller.ts'),
+      resolve(PLATFORM_API_DIST, 'jobs/job-admin.controller.js'),
       'utf8',
     );
     const nodesAdminController = readFileSync(
-      resolve(API_SRC, 'nodes/nodes-admin.controller.ts'),
+      resolve(PLATFORM_API_DIST, 'nodes/nodes-admin.controller.js'),
       'utf8',
     );
     const broadcastsController = readFileSync(

@@ -1,11 +1,10 @@
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobHandler } from '../../jobs/job-handler.interface';
 import { NOTE_RETITLE_JOB_TYPE } from '../job-types';
 import {
   NOTE_RETITLE_MAX_RUNTIME_MS,
   NoteRetitleHandler,
   readForce,
 } from './note-retitle.handler';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `note.retitle` (issue #184, epic #163)

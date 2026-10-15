@@ -18,8 +18,8 @@ import type { Job } from '@prisma/client';
 import { StorageCleanupHandler } from './storage-cleanup.handler';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { StorageProvider } from '../providers';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date('2026-09-14T12:00:00.000Z');

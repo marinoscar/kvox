@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../../ai/ai.module';
-import { JobsModule } from '../../jobs/jobs.module';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { NoteOriginService } from '../../notes/note-origin.service';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -33,7 +32,7 @@ import { ProposalWriter } from './proposal-writer.service';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, JobsModule, AiModule, GraphModule],
+  imports: [PrismaModule, AiModule, GraphModule],
   controllers: [GraphExtractionController],
   providers: [
     NoteAccessService,

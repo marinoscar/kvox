@@ -1,17 +1,16 @@
 import { Test } from '@nestjs/testing';
 
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTES_HOUSEKEEPING_JOB_TYPE } from '../job-types';
 import { NotesHousekeepingTask } from './notes-housekeeping.task';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The note housekeeping cron (issue #53, epic #45)
 // =============================================================================
 //
-// `test/jobs/cron-enqueue-only.spec.ts` already reads this file's `@Cron` body
-// and fails the build if it does work inline — and it does so WITHOUT a new
+// the platform `cron-enqueue-only` conformance suite (`test/conformance.spec.ts`)
+// already reads this file's `@Cron` body and fails the build if it does work inline — and it does so WITHOUT a new
 // exemption, which is the acceptance criterion. This spec pins the other half:
 // that it queues the RIGHT type, at the housekeeping priority, and that a sweep
 // already in flight is not queued behind itself.
@@ -45,6 +44,8 @@ describe('NotesHousekeepingTask', () => {
         type: NOTES_HOUSEKEEPING_JOB_TYPE,
         reason: 'backfill',
         priority: HOUSEKEEPING_PRIORITY,
+        // A system job: housekeeping is deployment-wide work, never an organization's.
+        orgId: null,
       }),
     );
   });

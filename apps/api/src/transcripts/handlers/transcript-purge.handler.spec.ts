@@ -1,14 +1,13 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { TranscriptPurgeHandler } from './transcript-purge.handler';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcript.purge` — everything goes (issue #25, spec §1.5.7 and §10)

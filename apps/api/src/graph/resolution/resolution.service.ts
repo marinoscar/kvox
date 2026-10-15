@@ -35,8 +35,6 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/editing/speaker-identity';
@@ -64,6 +62,7 @@ import {
   type Band,
   type RankedCandidate,
 } from './score';
+import { ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 export const RESOLUTION_STAGE_NAME = 'resolution';
 export const RESOLUTION_STAGE_ORDER = 100;

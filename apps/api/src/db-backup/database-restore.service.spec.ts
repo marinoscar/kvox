@@ -38,9 +38,7 @@ import type { ConfigService } from '@nestjs/config';
 
 import type { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
-import { JOB_TEMP_PREFIX } from '../jobs/job-temp';
 import type { NotificationsService } from '../notifications/notifications.service';
-import type { JobsService } from '../jobs/jobs.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '../storage/providers/storage-provider.interface';
@@ -62,6 +60,7 @@ import type {
   DatabaseRestorePreflightService,
   RestorePreflightResult,
 } from './restore-preflight.service';
+import { JOB_TEMP_PREFIX, type JobsService } from '@marinoscar/platform-api/jobs';
 
 // ---------------------------------------------------------------------------
 // Fixtures

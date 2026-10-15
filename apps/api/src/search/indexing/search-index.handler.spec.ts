@@ -29,8 +29,6 @@
 import { Job } from '@prisma/client';
 
 import { AiAuthError, RateLimitError } from '../../ai/ai-errors';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { chunkNote, fingerprintDocument, type Chunk } from '../chunking';
 import {
   SEARCH_INDEX_JOB_TYPE,
@@ -41,6 +39,7 @@ import {
   SEARCH_REASON_NOT_CONFIGURED,
 } from './job-types';
 import { SearchIndexHandler } from './search-index.handler';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const NOTE_ID = '22222222-2222-4222-8222-222222222222';

@@ -170,6 +170,8 @@ describe('Notes API (#53)', () => {
     prismaMock.note.count.mockResolvedValue(0);
     prismaMock.noteVersion.findMany.mockResolvedValue([]);
     prismaMock.job.create.mockResolvedValue({ id: JOB_ID });
+    // The job runs in an organization: the enqueue resolves the default one.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' } as never);
     prismaMock.noteGeneration.create.mockResolvedValue({ id: GENERATION_ID });
     prismaMock.noteGeneration.update.mockResolvedValue({ id: GENERATION_ID });
   });

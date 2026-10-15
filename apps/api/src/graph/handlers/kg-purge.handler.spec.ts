@@ -1,6 +1,5 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { KG_PURGE_JOB_TYPE } from '../job-types';
 import { emptyKgPurgeCounts, type KgPurgeService } from '../purge/kg-purge.service';
@@ -9,6 +8,7 @@ import {
   GRAPH_PURGED_ACTION,
   KgPurgeHandler,
 } from './kg-purge.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `kg.purge` handler (#357) — profile, server-only, payload handling, audit

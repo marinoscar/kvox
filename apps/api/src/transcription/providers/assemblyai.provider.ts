@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, Optional, OnModuleInit } from '@nestjs/common';
 import type { Readable } from 'node:stream';
 
-import { parseRetryAfterMs, RateLimitError } from '../../jobs/rate-limit.error';
 import { ProviderAuthError, ProviderInputError } from '../errors';
 import {
   collectSpeakers,
@@ -28,6 +27,7 @@ import type {
   TranscriptionSubmitResult,
   TranscriptionResult,
 } from './transcription-provider.interface';
+import { parseRetryAfterMs, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // AssemblyAI transcription provider (issue #23, epic #19)
