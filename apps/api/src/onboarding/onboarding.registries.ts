@@ -32,7 +32,7 @@
 // introduces a fact nobody else uses.
 //
 // A fact is `{ id, inject, resolve(instance, ctx) }`. EAB's fact is
-// `resolve(ctx)` over an `OnboardingDataPort`; KVox has no such port, so a fact
+// `resolve(ctx)` over an `OnboardingDataPort`; this app has no such port, so a fact
 // names the provider it reads from (`inject`, a class token or a string token)
 // and the service looks it up with `ModuleRef.get(inject, { strict: false })`,
 // the same pattern the user-data hooks use. A provider that cannot be resolved

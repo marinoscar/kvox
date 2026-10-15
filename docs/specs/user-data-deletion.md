@@ -425,7 +425,7 @@ EnterpriseAppBase so a later swap changes an import path):
 
 - `registerUserDataCategory(def)` — `id`, `label`, `description`, `content`
   (does the `content` scope reach it), `order` (the summary key order) and two
-  KVox hooks: `summary` (`key`, response `schema`, `inject`, `run`) and `purge`
+  app-specific hooks: `summary` (`key`, response `schema`, `inject`, `run`) and `purge`
   (`order`, `inject`, `run`).
 - `registerUserDataScope(def)` — `id`, `label`, `description`, `categories`
   (a list, or `'content'` / `'all'`), `confirmation` (validated to equal

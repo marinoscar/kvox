@@ -13,8 +13,8 @@
 //
 // Field names (`id`, `label`, `description`, `content`, `order`, `categories`,
 // `confirmation`, `layer`) match the platform's so a later swap changes the import
-// path and nothing else. The two hooks (`summary`, `purge`) are KVox's own: the
-// platform drives its categories from Prisma model hints, KVox's are hand-written
+// path and nothing else. The two hooks (`summary`, `purge`) are this app's own: the
+// platform drives its categories from Prisma model hints, this app's are hand-written
 // and ordered (see below).
 //
 // -----------------------------------------------------------------------------
