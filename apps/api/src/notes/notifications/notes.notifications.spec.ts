@@ -14,15 +14,17 @@
 // ships quietly and is discovered by a user who never got their email.
 // =============================================================================
 
-import { EMAIL_TEMPLATES, type EmailTemplateName } from '../email/templates';
-import { EVENT_BROWSER_TEMPLATES } from './channels/browser-notification.channel';
-import { EVENT_EMAIL_TEMPLATES } from './channels/email-notification.channel';
+import { EMAIL_TEMPLATES, type EmailTemplateName } from '../../email/templates';
 import {
   NOTIFICATION_EVENTS,
   channelsFor,
   findEvent,
   isMandatory,
-} from './notification-events';
+} from '../../notifications/notification-events';
+import {
+  browserTemplateFor,
+  emailTemplateNameFor,
+} from '../../notifications/notification-registry';
 
 const READY = 'notes.note_ready';
 const FAILED = 'notes.note_failed';
@@ -64,21 +66,21 @@ describe('both channels can actually render them', () => {
     [READY, 'note-ready'],
     [FAILED, 'note-failed'],
   ])('%s maps to the %s email template, which is registered', (key, templateName) => {
-    expect(EVENT_EMAIL_TEMPLATES[key]).toBe(templateName);
+    expect(emailTemplateNameFor(key)).toBe(templateName);
     expect(EMAIL_TEMPLATES[templateName as EmailTemplateName]).toBeDefined();
   });
 
   it.each([READY, FAILED])('%s has a browser template', (key) => {
-    expect(EVENT_BROWSER_TEMPLATES[key]).toBeDefined();
+    expect(browserTemplateFor(key)).toBeDefined();
   });
 
   it('the browser rows link to the note, root-relative', () => {
-    const ready = EVENT_BROWSER_TEMPLATES[READY] as (data: unknown) => {
+    const ready = browserTemplateFor(READY) as (data: unknown) => {
       title: string;
       body: string;
       link?: string;
     };
-    const failed = EVENT_BROWSER_TEMPLATES[FAILED] as (data: unknown) => {
+    const failed = browserTemplateFor(FAILED) as (data: unknown) => {
       title: string;
       body: string;
       link?: string;

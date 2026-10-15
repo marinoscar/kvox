@@ -40,6 +40,8 @@ import { ShareLookupThrottleService } from './share-lookup-throttle.service';
 import { TranscriptionRuntimeService } from './transcription-runtime.service';
 import { TranscriptsController } from './transcripts.controller';
 import { TranscriptsService } from './transcripts.service';
+import { TRANSCRIPTS_USER_DATA_HOOKS } from './transcripts.user-data';
+import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
 
 // =============================================================================
 // TranscriptsModule (issue #25, epic #19)
@@ -129,6 +131,8 @@ import { TranscriptsService } from './transcripts.service';
   controllers: [TranscriptsController, TranscriptNameChecksController],
   providers: [
     TranscriptsService,
+    // #460 — the `transcripts` user-data category's hooks (registered by `kvox.manifest.ts`).
+    { provide: TRANSCRIPTS_USER_DATA_HOOKS, useClass: TranscriptsUserDataHooks },
     TranscriptAccessService,
     TranscriptEditingService,
     TranscriptExportService,

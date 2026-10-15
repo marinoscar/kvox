@@ -49,6 +49,8 @@ import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listen
 import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler';
 import { EvidenceValidator } from './write/evidence-validator.service';
 import { GraphWriteService } from './write/graph-write.service';
+import { GRAPH_USER_DATA_HOOKS } from './graph.user-data';
+import { GraphUserDataHooks } from './graph.user-data.hooks';
 
 // =============================================================================
 // GraphModule (#354, epic #344, docs/specs/ontology.md)
@@ -84,6 +86,8 @@ import { GraphWriteService } from './write/graph-write.service';
   imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, SearchModule, StorageModule, StorageProvidersModule],
   providers: [
     GraphAccessService,
+    // #460 — the `graph` user-data category's hooks (registered by `kvox.manifest.ts`).
+    { provide: GRAPH_USER_DATA_HOOKS, useClass: GraphUserDataHooks },
     NoteAccessService,
     // #369 — the `graph` user-settings namespace, resolved with defaults.
     GraphPreferencesService,

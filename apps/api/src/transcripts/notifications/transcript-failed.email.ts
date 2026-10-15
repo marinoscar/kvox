@@ -1,8 +1,12 @@
-import { APP_NAME, SafeHtml, html, plainText, renderLayout } from './layout';
 import {
+  APP_NAME,
+  SafeHtml,
+  html,
+  plainText,
+  renderLayout,
   TRANSACTIONAL_EMAIL_HEADERS,
   type RenderedEmail,
-} from './email-template.types';
+} from '../../email/templates';
 
 // =============================================================================
 // `transcripts.transcript_failed` (issue #25, epic #19)
@@ -49,6 +53,14 @@ export interface TranscriptFailedEmailData {
   retryable: boolean;
   /** Absolute URL of the application root, for the CTA. Optional. */
   appUrl?: string;
+}
+
+// Typed registration (issue #460): this domain declares its own template key,
+// so the base `EmailTemplateDataMap` names no domain payload.
+declare module '../../email/templates' {
+  interface EmailTemplateDataMap {
+    'transcript-failed': TranscriptFailedEmailData;
+  }
 }
 
 /** Where the CTA points, appended to `appUrl`. */

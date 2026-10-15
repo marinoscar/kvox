@@ -2,14 +2,21 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
-import { NotesModule } from '../notes/notes.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
-import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
 import { UserDataController } from './user-data.controller';
+import {
+  CREDENTIALS_USER_DATA_HOOKS,
+  FILES_USER_DATA_HOOKS,
+  ONBOARDING_USER_DATA_HOOKS,
+} from './user-data.base';
+import {
+  CredentialsUserDataHooks,
+  FilesUserDataHooks,
+  OnboardingUserDataHooks,
+} from './user-data.base.hooks';
 import { UserDataService } from './user-data.service';
 
 // =============================================================================
@@ -21,16 +28,12 @@ import { UserDataService } from './user-data.service';
 //
 // WHAT IT IMPORTS, AND WHY EACH ONE:
 //
-//   • `PrismaModule` — every count and aggregate in the summary, the audit
-//     rows, and the batched soft-deletes and link-clearing `user.data.purge`
-//     performs.
+//   • `PrismaModule` — the audit rows, the base categories' counts and the
+//     batched deletes of the plain-uploads step.
 //   • `JobsModule` — `JobHandlerRegistry` for the handler to register itself
 //     with, and `JobsService` to enqueue `user.data.purge`, whose partial
 //     unique dedup index is the REAL enforcement of "one deletion at a time
 //     per user" (see `UserDataService`'s header).
-//   • `NotesModule` — `NotesService.enqueuePurge` and
-//     `NoteTemplatesService.remove`. The handler deletes no note bytes itself.
-//   • `TranscriptsModule` — `TranscriptPipelineService.enqueuePurge`, likewise.
 //   • `StorageModule` — `ObjectsService.delete` for the caller's plain uploads.
 //   • `AiModule` — `UserAiCredentialsService.removeAll`. Deliberately NOT
 //     `@Global()`, so it has to be imported by name, which is the point: a
@@ -49,41 +52,47 @@ import { UserDataService } from './user-data.service';
 // injected: that module is `@Global()`, so importing it again would be a second
 // declaration of a provider Nest already resolves everywhere.
 //
-// ⚠ NO `forwardRef` ANYWHERE, and that is a property of the dependency
-// direction rather than luck: this module imports the feature modules, and none
-// of them imports it. `SettingsModule` is the newest and the cheapest check of
-// all: it declares NO `imports` at all (its two services reach Prisma through
-// the global `PrismaModule`), so it cannot reach back here even transitively. Nothing in `notes`, `transcripts`, `storage`, `ai` or
-// `pat` needs to know a bulk-deletion surface exists — it reuses their public
-// services and registers no callback into itself. If a future change makes one
-// of them depend on this module, the fix is to move the shared piece down, not
-// to add a `forwardRef` that hides a cycle the runtime still has to resolve.
+// ⚠ IT IMPORTS NO DOMAIN MODULE (issue #460). The transcripts, notes, note
+// templates, knowledge graph and Ask categories are declared by their own
+// modules (`<domain>/<domain>.user-data.ts`), each hook class is PROVIDED by
+// exactly one domain module under a string token
+// (`{ provide: NOTES_USER_DATA_HOOKS, useClass: NotesUserDataHooks }`), and this
+// module resolves them at run time with `ModuleRef.get(token, { strict: false })`
+// — they are in the application graph through `AppModule`. `ModuleRef` returns
+// the first instance it finds, which is why a token must be provided in one
+// module only. A hook that cannot be resolved fails the job; it is never
+// skipped. See `docs/specs/user-data-deletion.md` §8.
 //
-// ⚠ REGISTERED LAST IN `app.module.ts`, after every module it imports. Nest
-// resolves providers regardless of order, but the list reads as a dependency
-// order and this module genuinely sits at the bottom of it.
+// ⚠ NO `forwardRef` ANYWHERE, and that is a property of the dependency
+// direction rather than luck: nothing here imports a feature module, and no
+// feature module imports this one.
+//
+// ⚠ REGISTERED LAST IN `app.module.ts`, after every module it resolves hooks
+// from. Nest resolves providers regardless of order, but the list reads as a
+// dependency order and this module genuinely sits at the bottom of it.
 // =============================================================================
 
 @Module({
   imports: [
     PrismaModule,
     JobsModule,
-    NotesModule,
-    TranscriptsModule,
     StorageModule,
     AiModule,
     // Epic #271 — `UserSettingsService.patchSettings`, so the `everything`
     // scope can clear the `onboarding` namespace through the path that already
     // knows how an emptied namespace collapses back to absent.
     SettingsModule,
-    // #188, epic #165 — `SearchIndexService.forgetOwnerDocuments`. A bulk
-    // deletion clears the semantic index for every category it destroys rather
-    // than trusting the per-item purge jobs it queued to get there; see the
-    // handler's `forgetFromSearchIndex`.
-    SearchIndexingModule,
   ],
   controllers: [UserDataController],
-  providers: [UserDataService, UserDataPurgeHandler],
+  providers: [
+    UserDataService,
+    UserDataPurgeHandler,
+    // The base categories' hooks (`user-data.base.ts`). The domain categories'
+    // hooks are provided by their own modules.
+    { provide: FILES_USER_DATA_HOOKS, useClass: FilesUserDataHooks },
+    { provide: CREDENTIALS_USER_DATA_HOOKS, useClass: CredentialsUserDataHooks },
+    { provide: ONBOARDING_USER_DATA_HOOKS, useClass: OnboardingUserDataHooks },
+  ],
   exports: [UserDataService],
 })
 export class UserDataModule {}

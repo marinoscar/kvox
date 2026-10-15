@@ -13,7 +13,7 @@
 // raw dotted key the day one of those issues lands.
 // =============================================================================
 
-import { jobTypeLabel } from '../jobs/job-type-labels';
+import { jobTypeLabel } from '../jobs/job-type-label';
 import {
   NOTES_HOUSEKEEPING_JOB_TYPE,
   NOTES_MANAGED_BY,

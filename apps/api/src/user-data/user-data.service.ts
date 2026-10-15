@@ -45,12 +45,11 @@
 // =============================================================================
 
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
 import { JobsService } from '../jobs/jobs.service';
-import { NOTES_MANAGED_BY } from '../notes/job-types';
-import { readExtractedObjectId } from '../notes/source-metadata';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   confirmationFor,
@@ -64,6 +63,8 @@ import type {
   UserDataDeletionResponse,
   UserDataSummary,
 } from './dto/user-data.dto';
+import { userDataCategories } from './user-data.registries';
+import { resolveUserDataHook } from './user-data.support';
 
 /** The job statuses that mean "a deletion is in flight for this user". */
 const ACTIVE_JOB_STATUSES = ['pending', 'running'] as const;
@@ -75,6 +76,7 @@ export class UserDataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   /**
@@ -91,66 +93,46 @@ export class UserDataService {
    * independent, and a summary that costs one round trip instead of nine is the
    * whole reason this endpoint exists rather than the client assembling it from
    * the list endpoints.
+   *
+   * ⚠ THE RESPONSE IS ASSEMBLED FROM THE CATEGORY REGISTRY (issue #460): each
+   * category that declares a `summary` contributes one key, in category order,
+   * then `activeDeletion` last — the wire key order the Danger Zone has always
+   * had. The count and byte queries moved, verbatim, into the declaring
+   * domain's `*.user-data.ts`; a hook that cannot be resolved fails the request
+   * rather than reporting a category as absent.
    */
   async summary(userId: string): Promise<UserDataSummary> {
-    const [
-      transcripts,
-      transcriptBytes,
-      notes,
-      noteBytes,
-      files,
-      noteTemplates,
-      aiKeys,
-      accessTokens,
-      graphEntities,
-      graphItems,
-      askConversations,
-      activeDeletion,
-    ] = await Promise.all([
-      this.prisma.transcript.count({ where: { ownerId: userId, deletedAt: null } }),
-      this.transcriptBytes(userId),
-      this.prisma.note.count({ where: { ownerId: userId, deletedAt: null } }),
-      this.noteBytes(userId),
-      this.prisma.storageObject.aggregate({
-        // ⚠ `managedBy: null` IS THE WHOLE DEFINITION OF "a file" HERE. A
-        // transcript's source audio and a note's rendered export are also rows
-        // this user uploaded, and they belong to the transcript and the note —
-        // deleting them under `files` would gut content the user did not ask to
-        // touch. Issue #21 built `managed_by` for exactly this distinction and
-        // the generic storage endpoints already draw the same line.
-        where: { uploadedById: userId, managedBy: null },
-        _count: { _all: true },
-        _sum: { size: true },
-      }),
-      // `ownerId: userId`, never `ownerId: null` as well: a built-in template
-      // belongs to the deployment, is in every account's catalogue, and no
-      // permission any role holds can delete one. Counting them here would
-      // promise a deletion this application will refuse.
-      this.prisma.noteTemplate.count({ where: { ownerId: userId } }),
-      this.prisma.userAiCredential.count({ where: { userId } }),
-      this.prisma.personalAccessToken.count({ where: { userId, revokedAt: null } }),
-      // #357: merge tombstones are the same human as their survivor, so
-      // counting them would show one person twice.
-      this.prisma.kgEntity.count({ where: { ownerId: userId, reviewStatus: { not: 'merged' } } }),
-      this.prisma.kgItem.count({ where: { ownerId: userId } }),
-      // #376: saved Ask conversations (their messages go with them).
-      this.prisma.askConversation.count({ where: { ownerId: userId } }),
+    const categories = userDataCategories().filter((category) => category.summary);
+
+    // Resolved before any query is issued, so a missing hook fails fast.
+    const resolved = categories.map((category) => ({
+      category,
+      instance: resolveUserDataHook(
+        this.moduleRef,
+        (category.summary as NonNullable<typeof category.summary>).inject,
+        category.id,
+        'summary',
+      ),
+    }));
+
+    const [values, activeDeletion] = await Promise.all([
+      Promise.all(
+        resolved.map(({ category, instance }) =>
+          (category.summary as NonNullable<typeof category.summary>).run(instance, userId),
+        ),
+      ),
       this.findActiveDeletion(userId),
     ]);
 
-    return {
-      transcripts: { count: transcripts, bytes: transcriptBytes },
-      notes: { count: notes, bytes: noteBytes },
-      files: {
-        count: files._count._all,
-        bytes: (files._sum.size ?? BigInt(0)).toString(),
-      },
-      noteTemplates: { count: noteTemplates },
-      credentials: { aiKeys, accessTokens },
-      graph: { entities: graphEntities, items: graphItems },
-      askConversations: { count: askConversations },
-      activeDeletion,
-    };
+    const summary: Record<string, unknown> = {};
+
+    resolved.forEach(({ category }, index) => {
+      summary[(category.summary as NonNullable<typeof category.summary>).key] = values[index];
+    });
+
+    summary.activeDeletion = activeDeletion;
+
+    return summary as UserDataSummary;
   }
 
   /**
@@ -269,86 +251,6 @@ export class UserDataService {
         : 'A deletion of your data is already in progress. Wait for it to finish before ' +
           'starting another.',
     );
-  }
-
-  /**
-   * Bytes of every storage object the caller's live transcripts own.
-   *
-   * ⚠ ONE AGGREGATE OVER RELATION FILTERS, not five id lists summed in
-   * JavaScript. A transcript owns up to five kinds of object and the same row
-   * can legitimately be reachable twice (a version snapshot of the version an
-   * export was rendered from); summing per-relation totals would double-count
-   * it, where a single `OR` over `storage_objects` counts each matching row
-   * exactly once because it is one row either way.
-   */
-  private async transcriptBytes(userId: string): Promise<string> {
-    const owned = { ownerId: userId, deletedAt: null };
-
-    const { _sum } = await this.prisma.storageObject.aggregate({
-      where: {
-        OR: [
-          { transcriptsAsSource: { some: owned } },
-          { transcriptsAsPlayback: { some: owned } },
-          { transcriptsAsRawResult: { some: owned } },
-          { transcriptVersionSnapshots: { some: { transcript: owned } } },
-          { transcriptExportFiles: { some: { transcript: owned } } },
-        ],
-      },
-      _sum: { size: true },
-    });
-
-    return (_sum.size ?? BigInt(0)).toString();
-  }
-
-  /**
-   * Bytes of every storage object the caller's live notes own.
-   *
-   * Two reachability rules, not one, and the second is the reason this method
-   * is not a single `aggregate` call like {@link transcriptBytes}:
-   *
-   *   • the uploaded SOURCE DOCUMENT and every rendered EXPORT hang off real
-   *     foreign keys, so a relation filter finds them;
-   *   • the EXTRACTED-TEXT object `note.source.extract` writes beside a source
-   *     document hangs off `storage_objects.metadata.extractedObjectId` (#51's
-   *     `source-metadata.ts`), which is JSONB with no foreign key and therefore
-   *     no relation to filter on.
-   *
-   * Leaving the sidecar out would understate the figure by exactly the text of
-   * every PDF the user ever uploaded — small per note, and wrong in a dialog
-   * whose entire job is to tell the truth about what is about to go. So its ids
-   * are collected first and folded into the same `OR`, which keeps the
-   * de-duplication property the single aggregate has.
-   */
-  private async noteBytes(userId: string): Promise<string> {
-    const owned = { ownerId: userId, deletedAt: null };
-
-    const sources = await this.prisma.note.findMany({
-      where: { ...owned, sourceObjectId: { not: null } },
-      select: { sourceObject: { select: { metadata: true } } },
-    });
-
-    const extractedIds = sources
-      .map((row) => readExtractedObjectId(row.sourceObject?.metadata))
-      .filter((id): id is string => id !== null);
-
-    const { _sum } = await this.prisma.storageObject.aggregate({
-      where: {
-        OR: [
-          { notesAsSourceObject: { some: owned } },
-          { noteExportFiles: { some: { note: owned } } },
-          // ⚠ GUARDED, because an empty `in` list is `WHERE id IN ()` — which
-          // Prisma renders as a clause matching nothing, but which sits inside
-          // an `OR` where a mistake would instead match everything. Omitting
-          // the branch entirely is unambiguous.
-          ...(extractedIds.length > 0
-            ? [{ id: { in: extractedIds }, managedBy: NOTES_MANAGED_BY }]
-            : []),
-        ],
-      },
-      _sum: { size: true },
-    });
-
-    return (_sum.size ?? BigInt(0)).toString();
   }
 
   /**

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AiConfigService } from '../ai/ai-config.service';
@@ -6,28 +7,32 @@ import { EmailSettingsService } from '../email/email-settings.service';
 import { PushConfigService } from '../notifications/push-config.service';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
 import { UserSettingsService } from '../settings/user-settings/user-settings.service';
-import { TranscriptionConfigService } from '../transcription/transcription-config.service';
 import {
   toRequestUser,
   type AuthenticatedUser,
   type RequestUser,
 } from '../auth/interfaces/authenticated-user.interface';
 import {
-  ADMIN_ONBOARDING_STEPS,
-  USER_ONBOARDING_STEPS,
   type OnboardingAdminContext,
   type OnboardingAudience,
   type OnboardingContext,
   type OnboardingStep,
   type OnboardingUserContext,
 } from './onboarding-steps';
+import {
+  onboardingFactRegistry,
+  onboardingStepsFor,
+  type OnboardingFactValues,
+} from './onboarding.registries';
 import type { OnboardingState, OnboardingStepState } from './dto/onboarding-state.dto';
 
 // =============================================================================
 // OnboardingService (issue #274, epic #271)
 // =============================================================================
 //
-// Evaluates the registry in `onboarding-steps.ts` against one caller. Three
+// Evaluates the step registry (`onboarding.registries.ts`; the types and the base
+// steps are in `onboarding-steps.ts`, the domain steps beside their modules)
+// against one caller. Three
 // properties are the whole point of this file, and each of them is a thing that
 // would be easy to break from a neighbouring file:
 //
@@ -37,9 +42,16 @@ import type { OnboardingState, OnboardingStepState } from './dto/onboarding-stat
 //
 // `buildUserContext` and `buildAdminContext` each issue a fixed set of reads in
 // a single `Promise.all`, and every step then evaluates against the SAME frozen
-// object. Adding a step to either array changes the number of reads this
-// endpoint performs by ZERO, and `onboarding.service.spec.ts` asserts exactly
-// that by adding a step at test time and re-counting.
+// object. Adding a step to the registry changes the number of reads this
+// endpoint performs by ZERO unless it declares a fact nobody else uses, and
+// `onboarding.service.spec.ts` asserts exactly that by adding a step at test
+// time and re-counting.
+//
+// Since #460 the domain-owned reads (transcription availability, transcript and
+// note counts) are FACTS: the steps of the audience name them in `facts`, and
+// `resolveFacts` below resolves each distinct fact ONCE, inside the same
+// `Promise.all` as the base reads and before any step runs. The values reach
+// steps as `ctx.facts[id]`.
 //
 // The alternative — a step that reads what it needs — makes the endpoint's cost
 // a function of the registry's length, and does so invisibly: nothing at the
@@ -120,12 +132,12 @@ function normalizeCaller(user: OnboardingCaller): RequestUser {
 export class OnboardingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly transcriptionConfig: TranscriptionConfigService,
     private readonly aiConfig: AiConfigService,
     private readonly userSettings: UserSettingsService,
     private readonly systemSettings: SystemSettingsService,
     private readonly emailSettings: EmailSettingsService,
     private readonly pushConfig: PushConfigService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -137,7 +149,7 @@ export class OnboardingService {
     const caller = normalizeCaller(user);
     const snapshot = await this.buildUserContext(caller.id);
 
-    return this.render('user', USER_ONBOARDING_STEPS, snapshot, caller.permissions);
+    return this.render('user', onboardingStepsFor<OnboardingUserContext>('user'), snapshot, caller.permissions);
   }
 
   /** `GET /api/admin/onboarding` — this deployment's setup checklist. */
@@ -145,7 +157,7 @@ export class OnboardingService {
     const caller = normalizeCaller(user);
     const snapshot = await this.buildAdminContext(caller.id);
 
-    return this.render('admin', ADMIN_ONBOARDING_STEPS, snapshot, caller.permissions);
+    return this.render('admin', onboardingStepsFor<OnboardingAdminContext>('admin'), snapshot, caller.permissions);
   }
 
   // ---------------------------------------------------------------------------
@@ -153,7 +165,7 @@ export class OnboardingService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Everything the four user steps read, gathered once.
+   * Everything the user steps read, gathered once.
    *
    * ⚠ ADDING A READ HERE IS A DECISION, NOT A DETAIL. Every entry in this
    * `Promise.all` is paid for by every authenticated user on every load of the
@@ -169,9 +181,9 @@ export class OnboardingService {
   async buildUserContext(
     userId: string,
   ): Promise<OnboardingSnapshot<OnboardingUserContext>> {
-    const [transcription, ai, settings, ownTranscriptCount, ownNoteCount] =
+    const [facts, ai, settings] =
       await Promise.all([
-        this.transcriptionConfig.getConfig(),
+        this.resolveFacts('user', userId),
         this.aiConfig.getConfig(userId),
         // Two facts from one read: `profile.displayName` for `user.profile`,
         // and the caller's `onboarding.skipped[]` (#272).
@@ -186,28 +198,19 @@ export class OnboardingService {
         // the row directly to avoid the insert would mean a second
         // implementation of that normalisation; it is not worth it.
         this.userSettings.getSettings(userId),
-        // ⚠ `deletedAt: null`, the same visibility filter
-        // `transcripts.service.ts` and `notes.service.ts` use for their own
-        // lists. A count that included soft-deleted rows would tell a user who
-        // deleted their only recording that they are still activated, and the
-        // checklist would never come back.
-        this.prisma.transcript.count({ where: { ownerId: userId, deletedAt: null } }),
-        this.prisma.note.count({ where: { ownerId: userId, deletedAt: null } }),
       ]);
 
     return {
       context: {
         audience: 'user',
         userId,
-        transcription: { available: transcription.available },
+        facts,
         ai: {
           available: ai.available,
           provider: ai.provider,
           providerLabel: ai.providerLabel,
           keyConfigured: ai.keyConfigured,
         },
-        ownTranscriptCount,
-        ownNoteCount,
         displayName: settings.profile?.displayName ?? null,
       },
       skipped: this.skippedKeys(settings),
@@ -215,7 +218,7 @@ export class OnboardingService {
   }
 
   /**
-   * Everything the seven admin steps read, gathered once.
+   * Everything the admin steps read, gathered once.
    *
    * ⚠ REACHABLE ONLY FROM THE ADMIN ROUTE. See this file's header, section 3.
    * If this function ever acquires a second caller, that caller's gate becomes
@@ -225,17 +228,16 @@ export class OnboardingService {
     userId: string,
   ): Promise<OnboardingSnapshot<OnboardingAdminContext>> {
     const [
-      transcription,
+      facts,
       aiPolicy,
       backup,
       email,
       push,
       settings,
-      ownReadyTranscriptCount,
       userCount,
       allowedEmailCount,
     ] = await Promise.all([
-      this.transcriptionConfig.getConfig(),
+      this.resolveFacts('admin', userId),
       // The POLICY, not `AiConfigService`'s per-caller projection — see
       // `OnboardingAdminContext.aiPolicy` for why the two answer different
       // questions and why an administrator's step is about the first one.
@@ -244,9 +246,6 @@ export class OnboardingService {
       this.emailSettings.describeForAdmin(),
       this.pushConfig.describeForAdmin(),
       this.userSettings.getSettings(userId),
-      this.prisma.transcript.count({
-        where: { ownerId: userId, deletedAt: null, status: 'ready' },
-      }),
       this.prisma.user.count(),
       this.prisma.allowedEmail.count(),
     ]);
@@ -255,7 +254,7 @@ export class OnboardingService {
       context: {
         audience: 'admin',
         userId,
-        transcription: { available: transcription.available },
+        facts,
         aiPolicy: {
           enabled: aiPolicy.enabled,
           provider: aiPolicy.provider,
@@ -266,7 +265,6 @@ export class OnboardingService {
             ? (aiPolicy.providers[aiPolicy.provider]?.allowedModels.length ?? 0)
             : 0,
         },
-        ownReadyTranscriptCount,
         // A provider chosen AND the feature switched on. Either alone sends no
         // mail, and reporting it configured would make a silently undelivered
         // invitation look like a working one.
@@ -281,11 +279,47 @@ export class OnboardingService {
   }
 
   // ---------------------------------------------------------------------------
+  // Facts
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve, once each and in parallel, every fact the audience's registered
+   * steps declare — and no others, so a Viewer's request never computes a fact
+   * only an administrator's step names.
+   *
+   * Called from inside each builder's `Promise.all`, so the facts are part of
+   * the same single read pass and exist before any step runs. A provider that
+   * cannot be resolved, or a resolver that rejects, rejects the request: a
+   * step is never silently dropped, which would be the stored-completion lie
+   * arriving by another door.
+   */
+  private async resolveFacts(
+    audience: OnboardingAudience,
+    callerId: string,
+  ): Promise<Readonly<OnboardingFactValues>> {
+    const ids = new Set<string>();
+    for (const step of onboardingStepsFor(audience)) {
+      for (const id of step.facts) ids.add(id);
+    }
+
+    const entries = await Promise.all(
+      [...ids].map(async (id) => {
+        const fact = onboardingFactRegistry.require(id);
+        const instance = this.moduleRef.get(fact.inject, { strict: false });
+        return [id, await fact.resolve(instance, { callerId, audience })] as const;
+      }),
+    );
+
+    return Object.freeze(Object.fromEntries(entries)) as Readonly<OnboardingFactValues>;
+  }
+
+  // ---------------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------------
 
   /**
-   * Turn a registry and a snapshot into the wire shape.
+   * Turn a registry's steps (already in `(order, key)` order) and a snapshot
+   * into the wire shape.
    *
    * ⚠ NO STEP KEY APPEARS IN THIS FUNCTION, and none ever may. The moment a
    * `switch (step.key)` lands here, adding a step stops costing one registry

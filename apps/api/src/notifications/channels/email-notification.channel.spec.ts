@@ -1,7 +1,5 @@
-import {
-  EVENT_EMAIL_TEMPLATES,
-  EmailNotificationChannel,
-} from './email-notification.channel';
+import { EmailNotificationChannel } from './email-notification.channel';
+import { emailTemplateNameFor } from '../notification-registry';
 import { NOTIFICATION_EVENTS } from '../notification-events';
 import type { NotificationEventDef } from '../notification-events';
 import type {
@@ -59,7 +57,7 @@ describe('EmailNotificationChannel', () => {
     jest.clearAllMocks();
   });
 
-  describe('EVENT_EMAIL_TEMPLATES agrees with the registry (#128)', () => {
+  describe('the email bindings agree with the registry (#128)', () => {
     it('registers a template for every event that declares the email channel', () => {
       const emailEvents = NOTIFICATION_EVENTS.filter((event) =>
         event.channels.includes('email'),
@@ -68,7 +66,7 @@ describe('EmailNotificationChannel', () => {
       expect(emailEvents.length).toBeGreaterThan(0);
 
       for (const key of emailEvents) {
-        expect(EVENT_EMAIL_TEMPLATES[key]).toBeDefined();
+        expect(emailTemplateNameFor(key)).toBeDefined();
       }
     });
 
@@ -80,7 +78,7 @@ describe('EmailNotificationChannel', () => {
       ).map((event) => event.key);
 
       for (const key of nonEmailEvents) {
-        expect(EVENT_EMAIL_TEMPLATES[key]).toBeUndefined();
+        expect(emailTemplateNameFor(key)).toBeUndefined();
       }
     });
   });

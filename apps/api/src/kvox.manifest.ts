@@ -32,33 +32,138 @@
 // `DUPLICATE_ID` error.
 // =============================================================================
 
-import { AI_SYSTEM_SETTINGS } from './ai/ai.system-settings';
-import { GRAPH_USER_SETTINGS } from './graph/preferences/graph.user-settings';
+// MUST stay the FIRST import: it registers the settings namespaces, and every
+// domain module imported below can pull in a DTO that is COMPOSED FROM THEM AT
+// IMPORT TIME (`settings/dto/*`). ES imports evaluate in order, so this file's
+// side effect has to run before any of them is loaded. See that file's header.
+import './kvox.settings-manifest';
+import { ASK_USER_DATA_CATEGORY } from './ask/ask.user-data';
+import { GRAPH_USER_DATA_CATEGORY } from './graph/graph.user-data';
+import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE } from './notes/notes.user-data';
 import {
-  registerSystemSettingsNamespaces,
-  registerUserSettingsNamespaces,
-} from './settings/registry';
-import { CORE_SYSTEM_NAMESPACES } from './settings/registry/core-system-namespaces';
-import { CORE_USER_NAMESPACES } from './settings/registry/core-user-namespaces';
-import { TRANSCRIPTION_SYSTEM_SETTINGS } from './transcription/transcription.system-settings';
+  TRANSCRIPTS_USER_DATA_CATEGORY,
+  TRANSCRIPTS_USER_DATA_SCOPE,
+} from './transcripts/transcripts.user-data';
+import { BASE_USER_DATA_CATEGORIES, BASE_USER_DATA_SCOPES } from './user-data/user-data.base';
+import {
+  registerUserDataCategory,
+  registerUserDataScope,
+} from './user-data/user-data.registries';
+
+import { ASK_JOB_TYPE_LABELS } from './ask/job-type-labels';
+import { GRAPH_JOB_TYPE_LABELS } from './graph/job-type-labels';
+import { registerJobTypeLabels } from './jobs/job-type-label';
+import {
+  BASE_JOB_TYPE_LABELS,
+  USER_DATA_JOB_TYPE_LABELS,
+} from './jobs/job-type-labels';
+import { NOTES_JOB_TYPE_LABELS } from './notes/job-type-labels';
+import { SEARCH_JOB_TYPE_LABELS } from './search/job-type-labels';
+import { TRANSCRIPTS_JOB_TYPE_LABELS } from './transcripts/job-type-labels';
+
+import {
+  BASE_ADMIN_ONBOARDING_STEPS,
+  BASE_USER_ONBOARDING_STEPS,
+} from './onboarding/onboarding-steps';
+import {
+  registerOnboardingFact,
+  registerOnboardingStep,
+} from './onboarding/onboarding.registries';
+import {
+  NOTES_ONBOARDING_FACTS,
+  NOTES_ONBOARDING_STEPS,
+} from './notes/notes.onboarding';
+import {
+  TRANSCRIPTION_ONBOARDING_FACTS,
+  TRANSCRIPTION_ONBOARDING_STEPS,
+} from './transcription/transcription.onboarding';
+import {
+  TRANSCRIPTS_ONBOARDING_FACTS,
+  TRANSCRIPTS_ONBOARDING_STEPS,
+} from './transcripts/transcripts.onboarding';
+
+import { BASE_EMAIL_TEMPLATES, registerEmailTemplates } from './email/templates';
+import { BASE_NOTIFICATIONS } from './notifications/notification-events';
+import { registerNotifications } from './notifications/notification-registry';
+import { NOTES_EMAIL_TEMPLATES, NOTES_NOTIFICATIONS } from './notes/notifications/notes.notifications';
+import {
+  TRANSCRIPTS_EMAIL_TEMPLATES,
+  TRANSCRIPTS_NOTIFICATIONS,
+} from './transcripts/notifications/transcripts.notifications';
 
 let registered = false;
 
 if (!registered) {
   registered = true;
 
-  registerSystemSettingsNamespaces([
-    ...CORE_SYSTEM_NAMESPACES,
-    TRANSCRIPTION_SYSTEM_SETTINGS,
-    AI_SYSTEM_SETTINGS,
-  ]);
-  registerUserSettingsNamespaces([...CORE_USER_NAMESPACES, GRAPH_USER_SETTINGS]);
-
   // ---- issue #460: domain registrations, in dependency order ---------------
   // Each section is owned by one registry; append your calls under your marker.
   // [registry:job-labels]
+  // Enumeration order reproduces the pre-registry map: base, transcripts, notes,
+  // `user.data.purge`, search, graph, ask.
+  registerJobTypeLabels(BASE_JOB_TYPE_LABELS);
+  registerJobTypeLabels(TRANSCRIPTS_JOB_TYPE_LABELS);
+  registerJobTypeLabels(NOTES_JOB_TYPE_LABELS);
+  registerJobTypeLabels(USER_DATA_JOB_TYPE_LABELS);
+  registerJobTypeLabels(SEARCH_JOB_TYPE_LABELS);
+  registerJobTypeLabels(GRAPH_JOB_TYPE_LABELS);
+  registerJobTypeLabels(ASK_JOB_TYPE_LABELS);
   // [registry:email-templates]
+  // Base templates, then each domain's; notifications (next) may only bind a
+  // template that is already registered. Order = `Object.keys(EMAIL_TEMPLATES)`.
+  registerEmailTemplates(BASE_EMAIL_TEMPLATES);
+  registerEmailTemplates(TRANSCRIPTS_EMAIL_TEMPLATES);
+  registerEmailTemplates(NOTES_EMAIL_TEMPLATES);
   // [registry:notifications]
+  // Base events through `db_backup.restore_completed`, then `transcripts.*`,
+  // then `notes.*`: the order the preferences matrix and
+  // `GET /api/notifications/events` have always shown.
+  registerNotifications([
+    ...BASE_NOTIFICATIONS,
+    ...TRANSCRIPTS_NOTIFICATIONS,
+    ...NOTES_NOTIFICATIONS,
+  ]);
   // [registry:onboarding]
+  // Facts first (a step is refused if a fact it names is unknown), then steps.
+  // `order` (10, 20, 30, ... per audience) fixes the rendered sequence, so the
+  // registration order below is not load-bearing; `admin.email` (40) before
+  // `admin.access` (50) is pinned by onboarding.service.spec.ts.
+  registerOnboardingFact(
+    ...TRANSCRIPTION_ONBOARDING_FACTS,
+    ...TRANSCRIPTS_ONBOARDING_FACTS,
+    ...NOTES_ONBOARDING_FACTS,
+  );
+  registerOnboardingStep(
+    ...BASE_ADMIN_ONBOARDING_STEPS,
+    ...TRANSCRIPTION_ONBOARDING_STEPS,
+    ...BASE_USER_ONBOARDING_STEPS,
+    ...TRANSCRIPTS_ONBOARDING_STEPS,
+    ...NOTES_ONBOARDING_STEPS,
+  );
   // [registry:user-data]
+  // Category order is the summary's key order (each declares its own `order`:
+  // transcripts 10, notes 20, files 30, noteTemplates 40, credentials 50,
+  // graph 60, ask 70) and the scope order is the UI's narrowest-first order
+  // (transcripts 10, notes 20, files 30, content 40, everything 50); neither
+  // depends on the order of these calls. The PURGE order (ask 10, graph 20,
+  // credentials 30, notes 40, transcripts 50, noteTemplates 60, files 70,
+  // onboarding 80) is the `purge.order` of each category: it is load-bearing
+  // (FK clearing, docs/specs/user-data-deletion.md §4) — never edit one without
+  // the call-order spec in `user-data-purge.handler.spec.ts`.
+  for (const category of [
+    TRANSCRIPTS_USER_DATA_CATEGORY,
+    ...NOTES_USER_DATA_CATEGORIES,
+    ...BASE_USER_DATA_CATEGORIES,
+    GRAPH_USER_DATA_CATEGORY,
+    ASK_USER_DATA_CATEGORY,
+  ]) {
+    registerUserDataCategory(category);
+  }
+  for (const scope of [
+    TRANSCRIPTS_USER_DATA_SCOPE,
+    NOTES_USER_DATA_SCOPE,
+    ...BASE_USER_DATA_SCOPES,
+  ]) {
+    registerUserDataScope(scope);
+  }
 }

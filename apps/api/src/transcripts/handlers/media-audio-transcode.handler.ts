@@ -68,7 +68,7 @@ import { rm, stat } from 'node:fs/promises';
 import {
   type MediaAudioTranscodeResult,
   mediaAudioTranscodeResultSchema,
-} from '../../jobs/contracts/media-audio-transcode.contract';
+} from '../contracts/media-audio-transcode.contract';
 import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
@@ -146,7 +146,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
   /**
    * THE FIRST OF THE TWO MEMBERS THAT MAKE THIS TYPE NODE-ELIGIBLE.
    *
-   * In `jobs/contracts/` rather than inline because a second reader needs it:
+   * In `transcripts/contracts/` rather than inline because a second reader needs it:
    * `GET /api/nodes/job-types` publishes it as JSON Schema so `kvox`
    * validates a result against the SERVER's definition rather than a copy.
    */
