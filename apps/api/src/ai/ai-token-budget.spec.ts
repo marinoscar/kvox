@@ -9,7 +9,7 @@
 // could only say "too large" would satisfy the type and defeat the requirement.
 // =============================================================================
 
-import { AiBudgetError } from '../../ai/ai-errors';
+import { AiBudgetError } from './ai-errors';
 import {
   OUTPUT_RESERVE_TOKENS,
   REASONING_HEADROOM_TOKENS,
@@ -18,7 +18,7 @@ import {
   budgetRefusalMessage,
   computeTokenBudget,
   outputTokensForPrompt,
-} from './token-budget';
+} from './ai-token-budget';
 
 describe('computeTokenBudget', () => {
   it('subtracts the output allowance and the safety margin from the context window', () => {

@@ -60,6 +60,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
+| [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines |
 | [personal-access-tokens.md](personal-access-tokens.md) | Creating and using `pat_` tokens for scripts and CI |
 | [RENAMING.md](RENAMING.md) | Renaming or rebranding the application |
 | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Authentication, authorization, transport and data protection |

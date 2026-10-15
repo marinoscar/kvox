@@ -56,7 +56,7 @@ import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
-import { assertWithinBudget } from '../../notes/generation/token-budget';
+import { assertWithinBudget } from '../../ai/ai-token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildExtractionContext } from '../extraction/extraction-context';
 import { ExtractionInputLoader } from '../extraction/extraction-input.loader';
