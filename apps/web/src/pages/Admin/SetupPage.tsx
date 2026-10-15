@@ -43,8 +43,9 @@
  *     tab and then its Add button is three clicks to do the one thing this page
  *     is about.
  *
- * So it reuses `components/admin/AddEmailDialog.tsx` UNCHANGED — the same
- * dialog `AllowlistTable` mounts, with the same validation and the same
+ * So it reuses `components/admin/AddEmailDialog.tsx` UNCHANGED — the dialog the
+ * packaged Users & Allowlist page also draws (#465 kept KVox's copy because the
+ * package does not export it), with the same validation and the same
  * endpoint — and calls `refresh()` afterwards so `admin.access` flips without a
  * reload. Gated on `allowlist:write`, the string `allowlist.controller.ts`
  * enforces on its POST; an administrator without it never sees the control,
@@ -91,7 +92,7 @@ import { AddEmailDialog } from '../../components/admin/AddEmailDialog';
 import { SetupChecklist } from '../../components/onboarding/SetupChecklist';
 import { withSetupReturn } from '../../components/onboarding/onboardingPaths';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { addToAllowlist } from '../../services/api';
 import type { OnboardingState, OnboardingStepState } from '../../services/onboarding';
 

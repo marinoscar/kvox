@@ -31,7 +31,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import { useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 export interface NewTranscriptButtonProps {
   /**

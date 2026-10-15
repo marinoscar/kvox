@@ -54,7 +54,7 @@ import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useGraphOntology } from '../../../hooks/useGraphOntology';
 import { useGraphProposal } from '../../../hooks/useGraphProposal';
 import type { GraphProposalSource, UseGraphProposalReturn } from '../../../hooks/useGraphProposal';
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSourceAudio } from '../../../hooks/useSourceAudio';
 import { ApiError } from '../../../services/api';
 import { getProposal, graphConflictReason } from '../../../services/graph';

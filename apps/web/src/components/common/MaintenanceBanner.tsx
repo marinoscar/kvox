@@ -42,7 +42,7 @@
 
 import { Alert, AlertTitle, Box, Button } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { MAINTENANCE_POLL_INTERVAL_MS, useMaintenance } from '../../hooks/useMaintenance';
 import { MAINTENANCE_ADMIN_PATH } from '../../services/maintenance';
 

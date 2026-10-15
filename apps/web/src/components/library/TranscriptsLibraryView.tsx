@@ -72,7 +72,7 @@ import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSearch } from '../../hooks/useSearch';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';

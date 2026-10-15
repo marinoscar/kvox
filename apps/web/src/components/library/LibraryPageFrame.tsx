@@ -56,7 +56,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 export interface LibraryPageFrameProps {
   /** The page's one `h1`. */

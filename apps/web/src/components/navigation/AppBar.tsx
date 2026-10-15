@@ -14,7 +14,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { DESTINATIONS, isDestinationVisible } from '../../config/destinations';
 import { APP_NAME } from '@app/shared';
 import { useThemeContext } from '../../contexts/ThemeContext';

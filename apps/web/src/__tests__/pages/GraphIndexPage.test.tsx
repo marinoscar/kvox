@@ -13,7 +13,7 @@ import { graphReader, graphWriter, noGraphUser } from '../utils/graphTestUsers';
 import { proposalSummaryRow } from '../mocks/graphData';
 import { graphEntitySummaries } from '../mocks/graphData';
 import GraphIndexPage, { typesFromQuery } from '../../pages/GraphIndexPage';
-import { RequirePermission } from '../../components/common/RequirePermission';
+import { RequirePermission } from '@marinoscar/platform-web/identity/headless';
 import type { MockUser } from '../utils/test-utils';
 
 /**

@@ -82,7 +82,7 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { DataTable } from '../../components/datatable';
 import type { DataTableFilterModel, DataTableRowAction } from '../../components/datatable';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   JOBS_POLL_INTERVAL_MS,
   useJobActions,

@@ -25,12 +25,13 @@ vi.mock('../../../hooks/useTranscriptionSettings', () => ({
   useTranscriptionSettings: vi.fn(),
 }));
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
 import { useTranscriptionSettings } from '../../../hooks/useTranscriptionSettings';
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import TranscriptionSettingsPage from '../../../pages/Admin/TranscriptionSettingsPage';
 
 const mockHook = vi.mocked(useTranscriptionSettings);

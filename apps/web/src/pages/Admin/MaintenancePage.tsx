@@ -71,7 +71,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Navigate } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useMaintenance } from '../../hooks/useMaintenance';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { isDecidingLayer } from '../../services/maintenance';

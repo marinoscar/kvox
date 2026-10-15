@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 interface AdminOnlyProps {
   children: ReactNode;

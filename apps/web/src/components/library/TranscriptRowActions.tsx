@@ -66,7 +66,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 import { ExportDialog } from '../transcripts/ExportDialog';
 import { ShareDialog } from '../transcripts/ShareDialog';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 import { ApiError } from '../../services/api';
 import { deleteTranscript } from '../../services/transcripts';
 import type { TranscriptListItem } from '../../services/transcripts';

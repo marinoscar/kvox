@@ -45,7 +45,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
 import { visibleSettingsSections } from '../../config/adminSections';
 import type { SettingsSectionDef } from '../../config/adminSections';

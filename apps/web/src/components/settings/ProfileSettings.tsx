@@ -22,7 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import { DeleteOutlined as DeleteIcon } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 import {
   ApiError,
   deleteProfileImage,

@@ -15,7 +15,7 @@ import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
 import { useGraphEntities } from '../../hooks/useGraphEntities';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { EntityTypeIcon } from './entityTypeIcon';
 import { entityPath } from './EntityListRow';
 

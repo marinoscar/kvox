@@ -52,7 +52,7 @@ import { useGraphBrief } from '../hooks/useGraphBrief';
 import { useGraphEntity } from '../hooks/useGraphEntity';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { useAiConfig } from '../hooks/useAiConfig';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { entityTypeLabel } from '../utils/graphDisplay';
 import type { GraphIndexLocationState } from './GraphIndexPage';
 

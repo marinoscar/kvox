@@ -69,7 +69,7 @@ import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { SearchResultsView } from '../search/SearchResultsView';
 import { EntitySearchHits } from '../graph/EntitySearchHits';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useSearch } from '../../hooks/useSearch';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';

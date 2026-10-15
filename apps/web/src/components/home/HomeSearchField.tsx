@@ -123,7 +123,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 /**
  * The submitted term as a path, or `null` when there is nothing to search for.

@@ -42,7 +42,7 @@ import { EntityTypeIcon } from '../graph/entityTypeIcon';
 import { entityPath } from '../graph/EntityListRow';
 import { useAiConfig } from '../../hooks/useAiConfig';
 import { useGraphEntities } from '../../hooks/useGraphEntities';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { initials } from '../../utils/graphDisplay';
 import { formatRelativeTime } from '../../utils/relativeTime';
 

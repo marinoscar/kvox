@@ -5,9 +5,12 @@ import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
 
 // Import AuthContext and ThemeContextProvider
-import { AuthContext } from '../../contexts/AuthContext';
+import { AuthContext } from '@marinoscar/platform-web/identity/headless';
+import type {
+  AuthContextValue,
+  AuthProviderInfo as AuthProviderType,
+} from '@marinoscar/platform-web/identity/headless';
 import { ThemeContextProvider } from '../../contexts/ThemeContext';
-import type { AuthProvider as AuthProviderType } from '../../types';
 
 interface WrapperOptions {
   route?: string;
@@ -132,14 +135,22 @@ function MockAuthProvider({
   isLoading = false,
   providers = defaultMockProviders,
 }: MockAuthProviderProps) {
-  const contextValue = {
+  // The packaged `AuthContextValue` (issue #465): beyond the session and the
+  // actions KVox's own context had, it carries the expiry flag, the token setter
+  // the callback page uses and the single-org organization fields.
+  const contextValue: AuthContextValue = {
     user: authenticated ? user : null,
     isLoading,
     isAuthenticated: authenticated,
     providers,
+    sessionExpired: false,
     login: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     refreshUser: vi.fn().mockResolvedValue(undefined),
+    setAccessToken: vi.fn(),
+    activeOrg: null,
+    memberships: [],
+    switchOrg: vi.fn().mockResolvedValue(undefined),
   };
 
   return (

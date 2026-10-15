@@ -38,7 +38,7 @@ import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
-import PeopleIcon from '@mui/icons-material/People';
+import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 // Operations (#266, epic #254). One icon per card, including the two cards
 // whose pages land in later issues — the card is declared now, so its icon is
 // declared now; see the `Operations` section's own header.
@@ -324,15 +324,14 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
   },
   {
     label: 'Access',
-    cards: [
-      {
-        title: 'Users & Allowlist',
-        description: 'Manage user accounts and roles, and control who may sign in at all.',
-        Icon: PeopleIcon,
-        path: '/admin/settings/users',
-        permission: 'users:read',
-      },
-    ],
+    // Issue #465, epic #462. The card is the identity slice's own registry
+    // entry (`Users & Allowlist`, `/admin/settings/users`, `users:read`), spread
+    // where the literal card was, so the hub, the Console rail and the AppBar
+    // title resolver see exactly what they saw before. The platform's
+    // Organization and Organizations cards (`identityAdminSections.organizations`)
+    // are deliberately NOT spread: they are `feature: 'orgs'` cards of
+    // multi-organization deployments, and this one runs single-org.
+    cards: [...identityAdminSections.access],
   },
   /**
    * Operations — the deployment's moving parts (issue #266, epic #254).

@@ -56,7 +56,7 @@ import { ImportGraphDialog } from '../components/graph/ImportGraphDialog';
 import { EntityTypeFilter } from '../components/graph/EntityTypeFilter';
 import { useGraphEntities } from '../hooks/useGraphEntities';
 import { useRecentGraphImports } from '../hooks/useGraphImport';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { PROPOSAL_STATUS_LABELS } from '../components/graph/review/ProposalHeader';
 import type { ProposalStatus, ProposalSummary } from '../services/graph';
