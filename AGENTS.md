@@ -61,7 +61,7 @@ The main checkout stays on `main`. Every feature or fix is developed in a Git wo
 
 Create clean, frequent commits, then land the work through a pull request. Assume the branch already exists and is checked out; subagents never create branches.
 
-**Every change ships as a PR. Never merge to `main` by pushing to it.** Every change, however small, and whether or not the request mentions one, is a PR against `main`; do not wait to be asked. The order is fixed:
+**Every change ships as a PR. Never merge to `main` by pushing to it** (`main` is only written by a merge). Every change, however small, and whether or not the request mentions one, is a PR against `main`; do not wait to be asked (the ask is standing). The order is fixed:
 
 1. Commit the work in slices.
 2. Push the branch (`git push -u origin <branch>`).
@@ -71,6 +71,7 @@ Create clean, frequent commits, then land the work through a pull request. Assum
 - **Green first, merge second.** Merge when checks pass and review threads are answered, never by disabling, skipping or quarantining a check. If a check is red for a reason this diff did not cause, say so on the PR.
 - **A merged PR is finished.** Follow-up work is a fresh branch off the updated `main` and a new PR; never push onto a merged branch.
 - **Commit early, commit often**: small, coherent, one intent per commit. No unrelated refactors, repo-wide formatting or dependency upgrades. If the diff feels big, split it sooner.
+- **Include** the code and tests of one feature area, the minimal config to run/build/test, and small related refactors. **Mixed changes**: revert accidental unrelated edits before committing, or split them into their own commit.
 - **A behaviour change carries its tests** in the same commit or the next one.
 - **Format** (Conventional Commits): `<type>(<scope>): <short imperative summary>`. Types: `feat`, `fix`, `refactor` (no behaviour change), `test`, `docs`, `chore`. Scopes: `api` `web` `db` `infra` `auth` `chat` `ui` `core` `jobs` `docs` `tests` `ai` `cli`.
 - **Cadence**: scaffold, core slice, edge cases and validation, tests, cleanup, docs (only if the task needs it).
@@ -120,7 +121,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - **`notify()` runs after the triggering write commits, outside any `$transaction`** ([recipe](apps/api/src/notifications/README.md)).
 - **A job `type` string is permanent** once jobs of that type exist.
 - **`apps/api/src/transcripts/editing/` stays pure** (no `PrismaService`, no `@Injectable`, no `randomUUID()` in a reducer), so `materialize()` replays through the same functions as live edits ([transcription §4](docs/specs/transcription.md)).
-- **Every graph write goes through `GraphWriteService`** (`apps/api/src/graph/write/`); the sole exception is `kg.migrate`. The deferred `kg_assert_has_evidence` trigger refuses an accepted/edited row with no evidence at `COMMIT` (no orphans) ([ontology](docs/specs/ontology.md)).
+- **Every graph write goes through `GraphWriteService`** (`apps/api/src/graph/write/`); the sole exception is `kg.migrate`. The deferred `kg_assert_has_evidence` trigger refuses an accepted/edited row with no evidence at `COMMIT` (no orphans) ([ontology](docs/specs/ontology.md)) Nothing enters the graph except through a reviewed proposal's commit (named exceptions: speaker naming, manual entity edit); retrieval never answers from the graph alone.
 - **A `sensitive` PersonFact never leaves the deployment**, for any purpose or setting; it is never bulk-accepted, bulk-imported or exported.
 - **AI keys are per user** in `user_ai_credentials` (cascade on user delete), never in `credentials`, never a deployment-wide fallback. **AI jobs** (`note.generate`, `kg.*`, `ask.respond`, `transcript.name_check`) are **server-only** permanently: no vendor offers a job-scoped sub-key to broker.
 - **There is no `*:read_any` for transcripts, notes or the graph**; no access answers **404, never 403**.
