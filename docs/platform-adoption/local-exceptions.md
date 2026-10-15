@@ -30,6 +30,7 @@ The extensions `vector` and `pg_trgm` are part of `kvox:domain-schema`. `CREATE 
 | Default organization (`StorageObject.orgId`) | `apps/api/src/prisma/default-org.ts`, and every `storageObject.create` | The platform column `storage_objects.org_id` is required. The helper resolves `organizations WHERE is_default` once and caches it. | #469, with the storage slice |
 | `Job.reason` as a string | `apps/api/src/jobs/jobs.service.ts` | Platform `0034_open_job_reason` turned the Prisma enum into a string. The file types `reason` locally as `'upload' \| 'rerun' \| 'backfill'`. | #468 deletes the file |
 | `UserAiCredential` fragment | `apps/api/prisma/fragments/ai-credentials.prisma`, `extend model User { aiCredentials ... }` | KVox keeps its own per-user AI key table, `user_ai_credentials`. The platform stores user AI keys in `user_ai_keys`. | #472 migrates the data and removes the fragment |
+| Escaped `Unsupported("vector(1536)")` | `apps/api/prisma/fragments/graph.prisma` and `search.prisma`: the three embedding fields (`KgEntity`, `KgItem`, `SearchEmbedding`) | The composer in `@marinoscar/platform-db` `0.1.0-next.5` cannot read the literal `Unsupported("vector(1536)")`. The fragments write the quotes escaped so the composed schema is valid. | The platform release that fixes the composer. Then write the plain literal and re-run `db:compose` |
 
 Any other compile error that a platform model change causes is fixed the same way. Add its row to this table.
 

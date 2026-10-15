@@ -39,11 +39,15 @@ Facts that follow from the code, and that the older notes get wrong:
 - Work in the feature worktree for #463. The rehearsal commits the installed directories and `platform.lock`.
 - You need a recent production backup (section 3) and a scratch Postgres server you may break. The role needs to create databases (the shadow database), or pass `--shadow-database-url`.
 - `CREATE EXTENSION vector` and `pg_trgm` need a superuser, or a trusted-extension setup. KVox still runs as `postgres` until #471, so this holds today. Do not move to a non-superuser role before #471. The `pg_restore` into the scratch database, a fresh `prisma:migrate` and `prisma migrate dev` (shadow database) all create these extensions.
-- Every `db:baseline` command below carries `--allow-rls`. Platform `0025` to `0029` enable row-level security and sit above `--through 14`, so the tool refuses with `RLS_OPT_IN_REQUIRED` without it. The flag is your statement that the application role is `NOSUPERUSER NOBYPASSRLS`. KVox runs as superuser, so the policies are inert (section 9). Passing the flag is deliberate. Record that in the PR.
+- Every `db:baseline --through 14` command below carries `--allow-rls`. Platform `0025` to `0029` enable row-level security and sit above `--through 14`, so the tool refuses with `RLS_OPT_IN_REQUIRED` without it (the first rehearsal dry run showed exactly that refusal).
+  - The flag asserts that the application role is `NOSUPERUSER NOBYPASSRLS`. **That is not true for KVox**: it runs as `postgres`, a superuser, until #471. The policies are therefore inert (section 10).
+  - Passing the flag is a deliberate, known deviation. State it in the PR description and keep this paragraph in the runbook. Do not pass it for any other reason.
 - **Check `POSTGRES_*` twice** before any `--apply`. `scripts/platform-env.js` builds `DATABASE_URL` from them and `--apply` writes to whatever they name.
 - No secrets belong in the lock or in a report. The report prints SQL only.
 
 ## 3. Rehearse on a restored copy
+
+**Status of the rehearsal in section 12.** No production backup was available when #463 was built. The "restored copy" was a `pg_dump` of a database migrated with KVox's 36 migrations and seeded. It proves the tooling and the numbers. It does not prove anything about production data. **Repeat this section on a real production backup before the production window.** Compare that run with section 12; a difference means production is not the database the rehearsal assumed.
 
 1. Take the newest production backup. Download it as in `docs/runbooks/database-restore.md` section 4.1, or use any recent `pg_dump -Fc` archive.
 2. Restore it into a scratch database.
@@ -80,11 +84,11 @@ First dry run, before any deviation is declared:
 | Unmatched lines | 23 lines ending `(no local directory)`, `platform:0015_...` to `platform:0037_...` |
 | App-only lines | 22 lines, `20260914120000_...` to `20260927050000_...` |
 | `B2 ledger` | `managed by Prisma Migrate; 0 problem(s)` |
-| `B3 diff` | `<N> blocking, 0 declared` |
+| `B3 diff` | `260 blocking, 0 declared` |
 | `B4 raw-SQL indexes` | `0 problem(s)` |
 | `B4 row-level security` | `0 problem(s)` |
 | `B5 act` | `0 to resolve, 23 to install only` |
-| Last line | `REFUSED: ... DIFF_BLOCKING` |
+| Last line | `REFUSED: 1 reason(s); nothing was written`, then `DIFF_BLOCKING`. Without `--allow-rls` there are two reasons: `RLS_OPT_IN_REQUIRED` too |
 
 Any `[normalised]` or `[map]` match is a surprise. Read its note before going on. Fewer than 14 `[sha256]` matches means a KVox directory was edited or renamed. Restore it from Git.
 
@@ -110,14 +114,18 @@ A blocking statement has three possible fixes: a forward migration, a declared d
 `scripts/baseline-deviations.mjs` does the declaring. It reads the `BLOCKING:` lines of a saved report and checks that each one names a table or type created or altered by one of the 22 app-only migrations. It exits 1 on any statement that does not. It prints three `deviations` entries for `platform.lock`.
 
 ```bash
-node scripts/baseline-deviations.mjs ~/baseline-dry-run-1.txt
+cd apps/api
+node scripts/baseline-deviations.mjs ~/baseline-dry-run-1.txt                                # prove, print the entries as JSON
+node scripts/baseline-deviations.mjs ~/baseline-dry-run-1.txt --lock prisma/platform.lock --write   # merge them into the lock
 ```
+
+Options: `--migrations <dir>` (default `prisma/migrations`). With `--write`, entries with the same id are replaced and the other keys are kept. Exit codes: 0 all proven, 1 a statement refused, 2 usage error.
 
 | Deviation id | Statements | Removed by |
 |---|---|---|
-| `kvox:storage-managed-by-part-size` | the two `ALTER TABLE "storage_objects" ADD COLUMN` statements | #469 |
-| `kvox:allowlist-reminders` | the two `ALTER TABLE "allowed_emails" ADD COLUMN` statements | #465 |
-| `kvox:domain-schema` | every other statement. Reason: "KVox domain tables created by app-only migrations; not a change to a platform table" | stays as a record (see `local-exceptions.md`) |
+| `kvox:storage-managed-by-part-size` | 1 statement: the `ALTER TABLE "storage_objects" ADD COLUMN` that adds `managed_by` and `part_size` | #469 |
+| `kvox:allowlist-reminders` | 1 statement: the `ALTER TABLE "allowed_emails" ADD COLUMN` that adds `reminder_count` and `last_reminder_at` | #465 |
+| `kvox:domain-schema` | every other statement (258 in the rehearsal). Reason: "KVox domain tables created by app-only migrations; not a change to a platform table" | stays as a record (see `local-exceptions.md`) |
 
 Rules:
 
@@ -127,7 +135,7 @@ Rules:
 
   `dry run clean: re-run with --apply to write the lock and resolve`
 
-  At that point `B3 diff` reads `0 blocking, <M> declared`. Record `<M>` in section 12.
+  At that point `B3 diff` reads `0 blocking, 260 declared` (1 + 1 + 258). The count must match section 12.
 
 Statements are matched after normalisation. A deviation whose statement the diff no longer prints produces a `note:` telling you to remove it. Keep that note in mind when #465 and #469 land.
 
@@ -138,20 +146,34 @@ Check `POSTGRES_HOST` and `POSTGRES_DB` again, then run the sequence.
 ```bash
 cd apps/api
 npm run db:baseline -- --through 14 --allow-rls --apply     # installs 23 directories, writes platform.lock, B6 verify
-npm run db:baseline -- --through 14 --allow-rls             # must end "nothing to do"
 npm run prisma:migrate                                      # applies the 23 installed migrations, 0015 to 0037
 npm run prisma:seed
 npm run db:check:database
+npm run db:baseline -- --through 37                         # the post-migrate check (see below)
 ```
 
-Run the "nothing to do" check **before** `prisma:migrate`. Afterwards the live database holds platform `0015` to `0037`, so a `--through 14` diff would block on every new platform table. If you want a post-migrate check, use `--through 37` and read the result as new information, not as a gate.
+Which `--through` to use, and when:
+
+- **Before `prisma:migrate`**, the database equals platform `0014`. Use `--through 14 --allow-rls`. This is the gate.
+- **After `prisma:migrate`**, the database holds `0015` to `0037`. A `--through 14` run now fails: the rehearsal printed 137 blocking statements and 20 `POLICY_UNLISTED` row-level-security problems. That is expected and is not a failure of the migration. Run it **without `--through`** (it defaults to the newest), or with `--through 37`. Both read the whole history and need no `--allow-rls`.
+- The post-migrate run ends in one of two clean ways. `nothing to do: platform.lock maps every package migration and the database records them` means the lock equals the recomputed plan. `dry run clean: every package migration is mapped and recorded; --apply writes platform.lock only` means B1 to B4 are clean and the recomputed lock differs from the committed one (the note says so). Either is a pass. Do not run `--apply` to "fix" the second form (section 6.1).
 
 Expected:
 
-- `--apply` ends with `baseline applied and verified`.
-- The `B1 map` of the second run reads `37 matched, 0 unmatched, 22 app-only`.
-- `prisma:migrate` reports 23 migrations applied.
-- `db:check` and `db:check:database` exit 0.
+- `--apply` ends with `B6 verify: ok` and `baseline applied and verified`.
+- The post-migrate `B1 map` reads `37 matched, 0 unmatched, 22 app-only`, `B3 diff` reads `0 blocking, 260 declared`, and both `B4` lines read `0 problem(s)`.
+- `prisma:migrate` reports `All migrations have been successfully applied` for 23 migrations.
+- `db:check:database` reports `ok (59 ledger row(s) match the files)`: 14 platform + 22 KVox + 23 installed.
+- `db:check` exits 0.
+
+### 6.1 The `appMigrations` list in the lock
+
+`platform.lock` records the KVox-only directories in `appMigrations` (22 entries). `db:check` and `db:sync` use it to refuse an app migration that sorts before the last installed platform migration but was not there at the last sync (`APP_MIGRATION_OUT_OF_ORDER`).
+
+- `platform db baseline` does **not** write `appMigrations`. In the rehearsal the 22 entries were added to the lock by a script after the baseline wrote it.
+- `platform db sync` writes the list only when it installs something. A new KVox migration therefore does not touch the list until the next platform release is synced.
+- Do not hand-edit the list after the first commit. Let `db:sync` maintain it on the next platform bump, and review the diff of `platform.lock` in that PR. A new KVox directory with a timestamp later than every installed one needs no entry.
+- `platform.lock` carries `platformVersion` `1.0.0` after `--apply`: the baseline writes the package's own version field. Do not change it by hand.
 
 Copy the 23 new `prisma/migrations/<timestamp>_<slug>/` directories and the written `platform.lock` into the worktree. They are byte copies. Run `npm run db:check` there. Commit them with the PR. Never edit or rename them, comments included: the lock hashes the raw bytes.
 
@@ -163,7 +185,7 @@ POSTGRES_DB=kvox_fresh npm run prisma:seed
 POSTGRES_DB=kvox_fresh npm run db:drift:kvox
 ```
 
-This builds the whole history from nothing: the 14 platform directories, KVox's 22, then the 23 installed ones. Drop the rehearsal and fresh databases when the PR is merged.
+This builds the whole history from nothing: the 14 platform directories, KVox's 22, then the 23 installed ones (59 directories). The rehearsal passed with `db:drift:kvox ok (15 statements excused)`. The unfiltered `db:drift` prints SQL for the objects Prisma cannot declare, so it fails by design. Drop the rehearsal and fresh databases when the PR is merged.
 
 ## 7. The production window
 
@@ -180,7 +202,7 @@ Platform `0024_split_system_org_roles` changes who holds `contributor` and `view
    docker compose exec api npm run db:baseline -- --through 14 --allow-rls | tee ~/baseline-dry-run-prod.txt
    ```
 
-   The committed `platform.lock` and the 23 installed directories are already in the image, so the numbers differ from the rehearsal. Expected: `37 matched, 0 unmatched, 22 app-only`, `0 blocking, <M> declared` with the same `<M>` as section 12, zero index and RLS problems, `0 to resolve, 0 to install only`, and the last line `nothing to do`. Compare line by line with the rehearsal record. Any difference means production is not the database you rehearsed: stop, and do not apply.
+   The committed `platform.lock` and the 23 installed directories are already in the image, so the numbers differ from the rehearsal. Production is still at `0014` here, so use `--through 14 --allow-rls`. Expected: `37 matched, 0 unmatched, 22 app-only`, `0 blocking, 260 declared`, zero index and RLS problems, `0 to resolve, 0 to install only`, and the last line `nothing to do` (or `dry run clean ... --apply writes platform.lock only`). Compare line by line with the rehearsal record. Any difference means production is not the database you rehearsed: stop, and do not apply.
 5. **Apply.** The lock is already committed, so the tool refuses without `--force-remap` (`LOCK_NOT_EMPTY`).
 
    ```bash
@@ -188,7 +210,7 @@ Platform `0024_split_system_org_roles` changes who holds `contributor` and `view
    ```
 
    On production this resolves nothing and rewrites an identical lock. Its value is the B6 verification. Confirm `git diff` shows no change to `platform.lock` if the container's tree is a checkout; otherwise confirm the output ends `baseline applied and verified`.
-6. **Migrate.** `docker compose exec api npm run prisma:migrate` applies 23 migrations.
+6. **Migrate.** `docker compose exec api npm run prisma:migrate` applies 23 migrations. From here on, run the baseline tool without `--through 14` (section 6).
 7. **Seed.** `docker compose exec api npm run prisma:seed`.
 8. **Check.** `docker compose exec api npm run db:check:database`.
 9. **Deploy the 1.1 to 1.4 train** in order with `kvox deploy update`. Its migrate step finds nothing pending. Its seed step is idempotent.
@@ -245,22 +267,48 @@ Platform `0025_org_scoped_rls` forces row-level security on `storage_objects` an
 
 ## 12. Rehearsal record
 
-Filled in during #463. The production dry run in section 7 is compared with it.
+Run during #463 on 2026-10-15 by database-dev. The production dry run in section 7 is compared with it.
 
-| Item | Value |
+**Stand-in, not a production backup.** No production backup was available. The restored copy was a `pg_dump` of a database migrated with KVox's 36 migrations and seeded. **The rehearsal must be repeated on a real production backup before the window.** Replace or extend this record then.
+
+| Item | Result |
 |---|---|
-| Date and operator | `<<REHEARSAL-DATE>>` |
-| Backup used | `<<REHEARSAL-BACKUP>>` |
-| `@marinoscar/platform-db` version | `<<REHEARSAL-VERSION>>` |
-| First dry run (before deviations) | see below |
-| Dry run after declaring deviations | see below |
-| `--apply` | see below |
-| `prisma:migrate` | see below |
-| Second dry run (`nothing to do`) | see below |
-| Fresh database proof (`db:drift:kvox`) | see below |
+| Source database | pg_dump of a freshly migrated and seeded dev database (36 migrations) |
+| `@marinoscar/platform-db` | `0.1.0-next.5` (`platform.lock` `platformVersion` is written as `1.0.0` by `--apply`) |
+| First dry run, `--through 14` without `--allow-rls` | `REFUSED`: `RLS_OPT_IN_REQUIRED` and `DIFF_BLOCKING` |
+| First dry run, with `--allow-rls`, before deviations | B1 `14 matched [sha256], 23 unmatched (no local directory), 22 app-only`; B2 0 problems; B3 `260 blocking, 0 declared`; B4 indexes 0, RLS 0; B5 `0 to resolve, 23 to install only` |
+| Blocking statements by deviation | `kvox:storage-managed-by-part-size` 1, `kvox:allowlist-reminders` 1, `kvox:domain-schema` 258 |
+| Dry run after declaring | B3 `0 blocking, 260 declared`; B4 indexes 0, RLS 0; `dry run clean: re-run with --apply to write the lock and resolve` |
+| `--apply` | `B6 verify: ok`, `baseline applied and verified`; 23 directories installed; `platform.lock` has 37 `migrations` entries |
+| `prisma:migrate` | 23 migrations applied |
+| `prisma:seed` | ok |
+| `db:check:database` | `ok (59 ledger row(s) match the files)` |
+| `--through 14` after migrate | 137 blocking statements and 20 `POLICY_UNLISTED` RLS problems (expected, section 6) |
+| `--through 37` after migrate | `37 matched, 0 unmatched, 22 app-only`; `0 blocking, 260 declared`; `nothing to do` |
+| No `--through` after migrate | same counts; `dry run clean ... --apply writes platform.lock only` (the recomputed lock differed from the committed one) |
+| Fresh database | 59 directories migrate; seed ok; `db:drift:kvox ok (15 statements excused)` |
+
+Reports: the saved dry runs, the `--apply` output, the migrate output and the fresh-database drift output are attached to #463. The report header and counts of the clean dry run:
 
 ```text
-<<REHEARSAL-REPORT>>
+platform db baseline: DRY RUN (nothing was written), through platform:0014_add_backup_run_pg_dump_version
+
+B1 map: 14 matched, 23 unmatched, 22 app-only
+  (14 lines "platform:NNNN_slug -> <dir>  [sha256]")
+  (23 lines "platform:0015_add_job_claim_token ... platform:0037_open_sharing_vocabularies -> (no local directory)")
+  (22 lines "app-only: 20260914120000_add_storage_part_size_and_managed_by ... 20260927050000_ai_token_limits_follow_model")
+
+B2 ledger: managed by Prisma Migrate; 0 problem(s)
+
+B3 diff (package history to platform:0014_add_backup_run_pg_dump_version -> live database): 0 blocking, 260 declared
+
+B4 raw-SQL indexes: 0 problem(s)
+
+B4 row-level security: 0 problem(s)
+
+B5 act: 0 to resolve, 23 to install only
+
+dry run clean: re-run with --apply to write the lock and resolve
 ```
 
 ## 13. Related
