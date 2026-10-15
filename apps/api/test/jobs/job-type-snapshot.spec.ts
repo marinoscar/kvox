@@ -38,7 +38,7 @@ function registeredTypes(context: TestContext): string[] {
 
 /** Every `type -> label` pair the app has registered. */
 function registeredLabels(): Record<string, string> {
-  return jobTypeLabels();
+  return Object.fromEntries(jobTypeLabels());
 }
 
 /**
