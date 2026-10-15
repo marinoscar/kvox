@@ -18,7 +18,7 @@
 import { HttpStatus } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { identitiesFingerprint } from './editing/speaker-identity';
 import type { TranscriptEditingService } from './transcript-editing.service';
 import type { TranscriptSharingService } from './transcript-sharing.service';

@@ -4,6 +4,7 @@
 // the deferred trigger, cascades) is `test/graph/kg-speaker-link.db.spec.ts`.
 // =============================================================================
 
+import { memberHolding } from '../../../test/fixtures/principal-user.fixture';
 import {
   SPEAKER_LINKED_ACTION,
   SPEAKER_UNLINKED_ACTION,
@@ -49,7 +50,15 @@ function setup(opts: {
           : opts.transcript,
       ),
     },
-    user: { findFirst: jest.fn().mockResolvedValue(opts.canWrite === false ? null : { id: OWNER }) },
+    // The owner as the platform's principal graph loads them (#465): `graph:write`
+    // is held through the membership's org role.
+    user: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(
+          opts.canWrite === false ? memberHolding(['graph:read'], { id: OWNER }) : memberHolding(['graph:write'], { id: OWNER }),
+        ),
+    },
     transcriptSpeaker: {
       findMany: jest.fn().mockResolvedValue(
         (opts.speakers ?? [SPEAKER_A, SPEAKER_B]).map((id) => ({
@@ -153,8 +162,8 @@ describe('SpeakerLinkReconciler', () => {
           where: expect.objectContaining({
             id: OWNER,
             isActive: true,
-            userRoles: { some: { role: { rolePermissions: { some: { permission: { name: 'graph:write' } } } } } },
           }),
+          include: expect.objectContaining({ userRoles: expect.anything(), memberships: expect.anything() }),
         }),
       );
       noWrites(s);

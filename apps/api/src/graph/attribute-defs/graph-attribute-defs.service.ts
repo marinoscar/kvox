@@ -27,7 +27,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { USER_ATTRIBUTE_KEY_PREFIX, type AttributeOptions, type EffectiveSchema } from '@app/shared/ontology';
 import { Prisma, type KgAttributeDef } from '@prisma/client';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
 import type {

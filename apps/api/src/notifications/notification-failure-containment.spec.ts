@@ -13,7 +13,7 @@ import {
   createMockPrismaService,
   MockPrismaService,
 } from '../../test/mocks/prisma.mock';
-import { UsersService } from '../users/users.service';
+import { IdentityNotifierAdapter } from '../platform/identity/identity-notifier.adapter';
 import { EmailNotificationChannel } from './channels/email-notification.channel';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { DEFAULT_NOTIFICATION_POLICY } from './notification-policy';
@@ -36,15 +36,17 @@ import {
 // It is asserted at the REAL SEAM rather than in isolation. The dispatcher,
 // the delivery-record service and the email channel are all the real classes
 // here, wired to a mail provider that is forced to fail, and the trigger is
-// the real `UsersService.updateUserRoles`. A test that mocked
+// the real `IdentityNotifierAdapter.roleChanged`: the port the platform's
+// identity slice calls AFTER a role change committed (#465; the role-replacing
+// transaction itself is the platform's and is covered by its own suite). A test that mocked
 // `NotificationsService` would prove only that a mock resolves — it would pass
 // just as happily against an implementation that awaited the send inside the
 // caller's transaction.
 //
-// Prisma is mocked, so "commits" here means what it can mean at this layer:
-// the role-replacing transaction ran to completion, its writes were issued,
-// the audit row was written, and the method RETURNED THE NEW ROLES instead of
-// rejecting — while every channel underneath it was failing as hard as it can.
+// Prisma is mocked, so the guarantee is stated at the layer that is ours: the
+// port RESOLVES instead of rejecting — identity awaits it after its own write
+// committed, so a rejection here would fail a role change that already
+// happened — while every channel underneath it is failing as hard as it can.
 // The complementary end-to-end assertion against a real database belongs with
 // the integration suite.
 // =============================================================================
@@ -54,8 +56,6 @@ const RECIPIENT = {
   email: 'target@example.com',
 };
 
-const ADMIN_USER_ID = 'admin-user-id';
-
 /** Settings that make the email channel actually attempt a send. */
 const WORKING_EMAIL_SETTINGS: EmailSettings = {
   enabled: true,
@@ -64,13 +64,8 @@ const WORKING_EMAIL_SETTINGS: EmailSettings = {
   fromName: 'Enterprise App Foundation',
 };
 
-const ROLES = {
-  admin: { id: 'admin-role-id', name: 'admin' },
-  viewer: { id: 'viewer-role-id', name: 'viewer' },
-};
-
 describe('a notification send failure never fails or rolls back its trigger', () => {
-  let users: UsersService;
+  let notifier: IdentityNotifierAdapter;
   let notifications: NotificationsService;
   let prisma: MockPrismaService;
   let ses: { send: jest.Mock };
@@ -86,48 +81,17 @@ describe('a notification send failure never fails or rolls back its trigger', ()
     // is deliberately detached, so when its read lands relative to the
     // trigger's is not something this test should be asserting on.
     // ---------------------------------------------------------------------
-    prisma.user.findUnique.mockImplementation((args: any) => {
-      // The dispatcher's `loadRecipient` — a `select`, not an `include`.
-      if (args?.select) {
-        return Promise.resolve({
-          id: RECIPIENT.id,
-          email: RECIPIENT.email,
-          // No stored preferences. Irrelevant either way for a `mandatory`
-          // event, which ignores them — but stated so the test does not
-          // accidentally depend on the absent-key contract.
-          userSettings: null,
-        }) as any;
-      }
-
-      // `getUserById`, at the end of `updateUserRoles`.
-      if (args?.include?.identities) {
-        return Promise.resolve({
-          ...RECIPIENT,
-          displayName: null,
-          providerDisplayName: null,
-          profileImageUrl: null,
-          providerProfileImageUrl: null,
-          isActive: true,
-          userRoles: [{ role: ROLES.viewer }],
-          identities: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }) as any;
-      }
-
-      // The validation lookup at the top of `updateUserRoles`, which also
-      // carries the BEFORE state of the roles.
-      return Promise.resolve({
-        ...RECIPIENT,
-        isActive: true,
-        userRoles: [{ role: ROLES.admin }],
-      }) as any;
-    });
-
-    prisma.role.findMany.mockResolvedValue([ROLES.viewer] as any);
-    prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-    prisma.userRole.deleteMany.mockResolvedValue({ count: 1 } as any);
-    prisma.userRole.createMany.mockResolvedValue({ count: 1 } as any);
+    prisma.user.findUnique.mockImplementation(() =>
+      // The dispatcher's `loadRecipient`.
+      Promise.resolve({
+        id: RECIPIENT.id,
+        email: RECIPIENT.email,
+        // No stored preferences. Irrelevant either way for a `mandatory`
+        // event, which ignores them — but stated so the test does not
+        // accidentally depend on the absent-key contract.
+        userSettings: null,
+      }) as any,
+    );
     prisma.auditEvent.create.mockResolvedValue({} as any);
     prisma.notificationDelivery.create.mockResolvedValue({
       id: 'delivery-id',
@@ -154,7 +118,7 @@ describe('a notification send failure never fails or rolls back its trigger', ()
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        UsersService,
+        IdentityNotifierAdapter,
         NotificationsService,
         NotificationDeliveryService,
         EmailNotificationChannel,
@@ -188,7 +152,7 @@ describe('a notification send failure never fails or rolls back its trigger', ()
       ],
     }).compile();
 
-    users = module.get(UsersService);
+    notifier = module.get(IdentityNotifierAdapter);
     notifications = module.get(NotificationsService);
   });
 
@@ -196,27 +160,19 @@ describe('a notification send failure never fails or rolls back its trigger', ()
     jest.clearAllMocks();
   });
 
-  it('the role change commits and returns normally while every channel fails', async () => {
-    const result = await users.updateUserRoles(
-      RECIPIENT.id,
-      { roleNames: ['viewer'] },
-      ADMIN_USER_ID,
-    );
+  const NOTICE = {
+    recipientEmail: RECIPIENT.email,
+    previousRoles: ['admin'],
+    currentRoles: ['viewer'],
+    changedAt: new Date('2026-09-01T00:00:00Z'),
+  };
 
-    // 1. THE ACTION SUCCEEDED. No rejection reached the caller.
-    expect(result.roles).toEqual(['viewer']);
+  it('the notification port returns normally while every channel fails', async () => {
+    // 1. THE PORT RESOLVED. No rejection reached the caller (identity), whose
+    //    own write had already committed.
+    await expect(notifier.roleChanged(RECIPIENT.id, NOTICE)).resolves.toBeUndefined();
 
-    // 2. THE WRITES HAPPENED, inside the transaction and not rolled back.
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.userRole.deleteMany).toHaveBeenCalledWith({
-      where: { userId: RECIPIENT.id },
-    });
-    expect(prisma.userRole.createMany).toHaveBeenCalledWith({
-      data: [{ userId: RECIPIENT.id, roleId: ROLES.viewer.id }],
-    });
-    expect(prisma.auditEvent.create).toHaveBeenCalled();
-
-    // 3. The dispatch had not even run yet when the action returned — that is
+    // 2. The dispatch had not even run yet when the port returned — that is
     //    what "detached" means, and it is why the send cannot be inside the
     //    caller's transaction or on its latency budget.
     expect(ses.send).not.toHaveBeenCalled();
@@ -224,12 +180,12 @@ describe('a notification send failure never fails or rolls back its trigger', ()
     // Drain the fire-and-forget dispatch, the same way `onModuleDestroy` does.
     await notifications.flush();
 
-    // 4. Both channels were attempted and both failed — the failure was real,
+    // 3. Both channels were attempted and both failed — the failure was real,
     //    not a test that quietly never sent anything.
     expect(ses.send).toHaveBeenCalledTimes(1);
     expect(browserSender.deliver).toHaveBeenCalledTimes(1);
 
-    // 5. And the failures were RECORDED rather than thrown: two delivery rows,
+    // 4. And the failures were RECORDED rather than thrown: two delivery rows,
     //    both moved to `failed` with the reason. This is the operator's
     //    answer to "did the user get it?", which is the only thing that should
     //    change when a send fails.
@@ -247,18 +203,12 @@ describe('a notification send failure never fails or rolls back its trigger', ()
     // never-throw contract from inside `send`.
     ses.send.mockRejectedValue(new Error('socket hang up'));
 
-    await expect(
-      users.updateUserRoles(
-        RECIPIENT.id,
-        { roleNames: ['viewer'] },
-        ADMIN_USER_ID,
-      ),
-    ).resolves.toBeDefined();
+    await expect(notifier.roleChanged(RECIPIENT.id, NOTICE)).resolves.toBeUndefined();
 
     // The dispatch itself must also settle rather than leaving an unhandled
     // rejection behind — `flush` resolving is the assertion.
     await expect(notifications.flush()).resolves.toBeUndefined();
 
-    expect(prisma.userRole.createMany).toHaveBeenCalled();
+    expect(ses.send).toHaveBeenCalledTimes(1);
   });
 });

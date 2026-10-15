@@ -79,7 +79,7 @@ import {
 } from '../../ai/ai-task-model-resolver.service';
 import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 import type { SystemAiValue } from '../../common/schemas/settings.schema';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LegacyObjectOwnershipStore } from '../../storage/legacy-object-ownership.store';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';

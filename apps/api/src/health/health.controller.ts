@@ -9,7 +9,7 @@ import {
   HealthCheckService,
   HealthCheckResult,
 } from '@nestjs/terminus';
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from '@marinoscar/platform-api/identity';
 import { DatabaseHealthIndicator } from './indicators/database.indicator';
 import { AllowDuringMaintenance } from '../common/maintenance/allow-during-maintenance.decorator';
 import { MaintenanceModeService } from '../common/maintenance/maintenance-mode.service';

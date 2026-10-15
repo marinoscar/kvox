@@ -43,7 +43,7 @@ import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { JobsService } from '../../src/jobs/jobs.service';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';

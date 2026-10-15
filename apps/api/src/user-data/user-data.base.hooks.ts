@@ -11,7 +11,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { UserAiCredentialsService } from '../ai/user-ai-credentials.service';
-import { PatService } from '../pat/pat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserSettingsService } from '../settings/user-settings/user-settings.service';
 import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
@@ -134,6 +133,34 @@ export class FilesUserDataHooks {
 // credentials — `everything` only
 // =============================================================================
 
+/**
+ * Revokes every active personal access token of a user.
+ *
+ * PLATFORM-ADOPTION-SHIM(#465): KVox's own `PatService.revokeAllForUser` went
+ * with the identity module, and the platform's `PatService` has no revoke-all
+ * (its `revokeToken` is per token, per caller). This is the same one
+ * `updateMany` the old method ran: it REVOKES (stamps `revoked_at`) rather than
+ * deletes, so the audit trail of a token's existence survives. The platform's
+ * user-data slice replaces it.
+ */
+@Injectable()
+export class PatRevoker {
+  private readonly logger = new Logger(PatRevoker.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async revokeAllForUser(userId: string): Promise<number> {
+    const { count } = await this.prisma.personalAccessToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    this.logger.log(`Revoked all ${count} active PAT(s) for user: ${userId}`);
+
+    return count;
+  }
+}
+
 @Injectable()
 export class CredentialsUserDataHooks {
   private readonly logger = new Logger(CredentialsUserDataHooks.name);
@@ -141,7 +168,7 @@ export class CredentialsUserDataHooks {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiCredentials: UserAiCredentialsService,
-    private readonly pat: PatService,
+    private readonly pat: PatRevoker,
   ) {}
 
   /** `credentials` in `GET /api/user-data/summary`. */

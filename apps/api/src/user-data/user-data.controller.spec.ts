@@ -1,7 +1,6 @@
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 
-import { PERMISSIONS_KEY } from '../auth/decorators/permissions.decorator';
-import { ROLES_KEY } from '../auth/decorators/roles.decorator';
+import { PERMISSIONS_KEY, ROLES_KEY } from '@marinoscar/platform-api/identity';
 import { UserDataController } from './user-data.controller';
 import { UserDataService } from './user-data.service';
 

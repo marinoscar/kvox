@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { NoteGeneration } from '@prisma/client';
 
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { NoteAccessService } from './access/note-access.service';
 import type { NoteGenerationContextResponse } from './dto/note.dto';
 import { assemblePrompt, CONTEXT_HEADING, parseTemplateStructure, SOURCE_HEADING } from './generation/prompt';

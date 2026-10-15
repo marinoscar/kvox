@@ -15,7 +15,7 @@
 
 import { BadRequestException, Injectable } from '@nestjs/common';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
 import { KG_SUBJECT_ENTITY } from '../job-types';

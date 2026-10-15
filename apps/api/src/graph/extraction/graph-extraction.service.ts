@@ -30,7 +30,8 @@ import { Prisma, type Note } from '@prisma/client';
 import type { AiModelResolution } from '../../ai/ai-task-model-resolver.service';
 import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
 import { AiSettingsService } from '../../ai/ai-settings.service';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
+import { activeUserHoldsPermission } from '../../common/auth/principal-permissions';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { JobsService } from '../../jobs/jobs.service';
 import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService } from '../../notes/access/note-access.service';
@@ -270,16 +271,14 @@ export class GraphExtractionService {
     const policy = await this.aiSettings.get();
     if (!policy.graphEnabled) return null;
 
-    const holder = await this.prisma.user.findFirst({
-      where: {
-        id: ownerId,
-        isActive: true,
-        userRoles: {
-          some: { role: { rolePermissions: { some: { permission: { name: PERMISSIONS.GRAPH_WRITE } } } } },
-        },
-      },
-      select: { id: true },
-    });
+    // The owner's EFFECTIVE permissions (system grants plus their membership's
+    // org role), through the platform principal: a Contributor or Viewer holds
+    // `graph:write` through the membership, not through `user_roles` (#465).
+    const holder = await activeUserHoldsPermission(
+      this.prisma,
+      ownerId,
+      PERMISSIONS.GRAPH_WRITE,
+    );
     if (!holder) return null;
 
     const prefs = await this.preferences.get(ownerId);

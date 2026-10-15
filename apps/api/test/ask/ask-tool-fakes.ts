@@ -2,7 +2,7 @@
 // Shared fakes for the Ask tool specs (#377)
 // =============================================================================
 
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { AskToolContext } from '../../src/ask/tools/ask-tool';
 import { HandleRegistry } from '../../src/ask/tools/handle-registry';
 
