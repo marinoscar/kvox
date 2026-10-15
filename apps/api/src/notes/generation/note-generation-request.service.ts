@@ -85,7 +85,7 @@ import { TranscriptAccessService } from '../../transcripts/transcript-access.ser
 import { NoteAccessService } from '../access/note-access.service';
 import type { NoteSourceDto } from '../dto/note.dto';
 import { NOTES_MANAGED_BY } from '../job-types';
-import { assertWithinBudget, computeTokenBudget } from './token-budget';
+import { assertWithinBudget, computeTokenBudget } from '../../ai/ai-token-budget';
 import type { SourceSelector } from './note-source.service';
 
 /** Which of the two entry points is asking. Shapes the refusal sentences only. */

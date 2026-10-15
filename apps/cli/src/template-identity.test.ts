@@ -308,7 +308,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   //
   // WHAT THIS COSTS, STATED PLAINLY: `findOffenders` below skips an
   // allowlisted file ENTIRELY — for all four patterns at once, not just
-  // `repoName`. So these 17 files are not merely exempt from matching
+  // `repoName`. So these 23 files are not merely exempt from matching
   // `kvox`; `productName` (`KVox`), `repoSlug` (`marinoscar/kvox`) and
   // `owner` (`marinoscar`) are unguarded in them too, and nothing here would
   // catch any of the four going stale. If a future fork renames the product
@@ -328,13 +328,21 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // the same reason `apps/cli/src/tui/tty.ts` is allowlisted above: it would
   // make the documentation worse, not the code safer.
   // ---------------------------------------------------------------------
+  '.claude/skills/add-job-type/SKILL.md',
+  '.claude/skills/add-settings-page/SKILL.md',
   '.claude/skills/rename-app/SKILL.md',
   '.claude/skills/rename-app/references/do-not-rename.md',
   '.github/workflows/ci.yml',
+  // Assistant instructions (issue #456): they name the `kvox` binary and the
+  // product the same way CLAUDE.md always did, and are its direct successors.
+  'AGENTS.md',
   'CLAUDE.md',
+  'apps/cli/AGENTS.md',
   'apps/api/src/jobs/contracts/README.md',
   'docs/ARCHITECTURE.md',
+  'docs/DEVELOPMENT.md',
   'docs/DEVICE-AUTH.md',
+  'docs/README.md',
   'docs/RENAMING.md',
   'docs/deployment/vps.md',
   'docs/deployment/worker-nodes.md',
@@ -350,6 +358,17 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/specs/vps-deploy.md',
   'docs/specs/worker-nodes.md',
   'packages/shared/README.md',
+  // Platform-adoption baseline (issue #458): generated drift reports and the
+  // hand-written module classification describe this repository by name (they
+  // compare `kvox` against EnterpriseAppBase) and are frozen data, not rebrand
+  // targets.
+  'docs/platform-adoption/README.md',
+  'docs/platform-adoption/drift-baseline-slices.json',
+  'docs/platform-adoption/drift-baseline-slices.md',
+  'docs/platform-adoption/drift-baseline.json',
+  'docs/platform-adoption/drift-baseline.md',
+  'docs/platform-adoption/module-classification.md',
+  'scripts/platform-adoption/make-slice-view.sh',
 
   // ---------------------------------------------------------------------
   // Added by issue #130 (epic #168), the VPS bootstrap script.
@@ -381,6 +400,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
 // repository. This guard is what keeps them that way — allowlisting them
 // would silently permit the regression it exists to catch.
 
+const MANIFEST_FILE_LINE_RE = /\bkvox\.manifest(?:\.ts)?\b/;
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 const BINARY_EXT_RE = /\.(png|ico|jpg|jpeg|gif|woff2?|ttf|pdf|zip)$/i;
 const EXTRA_EXEMPT: ReadonlySet<string> = new Set([
@@ -487,6 +507,14 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
 
     const lines = content.split('\n');
     lines.forEach((lineText, idx) => {
+      // `apps/api/src/kvox.manifest.ts` (issue #459) is the API's composition
+      // root and every entry point imports it by that name. Its filename is a
+      // permanent anchor on the same standing as the codemod anchors above:
+      // a rename of the product renames that one file with `git mv` plus its
+      // import lines, which a line-level scan for the file's name can find on
+      // its own. Only lines that name that file are exempt; any other mention
+      // of the product name on the same file is still flagged.
+      if (MANIFEST_FILE_LINE_RE.test(lineText)) return;
       for (const { value, re } of patterns) {
         if (re.test(lineText)) {
           offenders.push({ file, line: idx + 1, text: lineText.trim().slice(0, 160), value });

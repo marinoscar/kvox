@@ -2,7 +2,7 @@ import { patchUserSettingsSchema } from '../../settings/dto/update-user-settings
 import {
   graphPreferencesPatchSchema,
   graphPreferencesSchema,
-} from '../../common/schemas/user-settings-namespaces.schema';
+} from './graph-preferences.schema';
 import {
   changedGraphSections,
   enabledDomainKeys,

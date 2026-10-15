@@ -20,8 +20,8 @@
 > (#113 of #105) and `docs/specs/search.md` (#177 of #164) each set: a spec
 > written last describes what was actually built, including the decisions
 > that only surfaced during implementation. It is **not** a usage guide for
-> the checklist itself, and it does not restate `CLAUDE.md`'s MANDATORY
-> "Onboarding" rule block — that states two invariants; this explains why
+> the checklist itself, and it does not restate the "Onboarding" rule in
+> `apps/api/AGENTS.md` — that states two invariants; this explains why
 > they exist and gathers the decisions the epic's nine issues each argued
 > for.
 
@@ -352,7 +352,7 @@ bounded (`ONBOARDING_MAX_SKIPPED = 40`, `ONBOARDING_MAX_STEP_KEY_LENGTH = 64`,
 control, not cosmetics: it is a user-supplied array landing in a JSONB blob,
 and the bound is what stops it becoming arbitrary storage.
 
-Adding a user-settings namespace is a **six-file change**
+Adding a user-settings namespace used to be a **six-file change** (since issue #459 it is one declaration registered in `kvox.manifest.ts`, and the parity guard iterates the registry; the history that motivated the guard follows)
 (`userSettingsSchema`, `userSettingsPatchSchema` in
 `common/schemas/settings.schema.ts`; `updateUserSettingsSchema`,
 `patchUserSettingsSchema` in `settings/dto/update-user-settings.dto.ts`;
@@ -365,7 +365,7 @@ PATCH request schema: a missing entry there means `PATCH { "onboarding": {
 row is rewritten unchanged, and the endpoint answers **200 with a body that
 looks correct** — no error, no log line, no audit entry, just a welcome
 dialog that will not stay dismissed and nothing anywhere saying why. This
-epic pays that six-file cost for the first time with a guard behind it:
+epic paid that six-file cost for the first time with a guard behind it:
 `user-settings-parity.spec.ts`, modelled on `settings-parity.spec.ts` but
 not copied from it, because user settings has a genuinely different amount
 of help from the compiler — every namespace here is optional in all six
@@ -606,7 +606,7 @@ focused before the dialog opened, and Escape closing it.
 
 `SetupChecklist.test.tsx`'s "the breakpoint-gate rule" suite greps every
 onboarding component, context and page's source for `useMediaQuery` and
-fails if it finds one: CLAUDE.md's Settings UI Pattern rule 5 fixes the
+fails if it finds one: AGENTS.md's Settings UI Pattern rule 5 fixes the
 five coupled breakpoint gates permanently at five, and every responsive
 decision in this epic is an `sx`/`Grid` breakpoint object resolved in CSS
 instead, for that reason.

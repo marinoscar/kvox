@@ -3,7 +3,7 @@
 > Epic #19 (issues #20–#32): upload, diarized transcription, corrections,
 > versions, sharing, export, and the redesigned signed-in home page. This
 > document **is** issue #20 — the architecture spec the epic requires before
-> any of the issues it blocks (#21, #23, #24) starts, per CLAUDE.md's
+> any of the issues it blocks (#21, #23, #24) starts, per AGENTS.md's
 > Issue-Driven Development rule and the settings/job-queue precedent of
 > writing the *why* down before the code. Nothing described below is merged
 > yet. Every file path named in this document is where the implementing issue
@@ -46,7 +46,7 @@ application of a rule this repository already has rather than a new one
 invented for this epic:
 
 1. **The pipeline is queue jobs, not a detached promise, not webhooks.**
-   CLAUDE.md's "Every Long-Running Activity Is a Queue Job" rule 1 was written
+   AGENTS.md's "Every Long-Running Activity Is a Queue Job" rule 1 was written
    for exactly this shape of problem — work that outlives the request that
    started it — and a provider transcription of a multi-hour recording can
    take minutes to hours. §1 is that rule applied end to end: upload → submit
@@ -57,7 +57,7 @@ invented for this epic:
    backup's fix — a lease derived from a declared runtime ceiling — is reused
    here rather than re-invented).
 2. **Node eligibility is the default, and every exception is named against a
-   CLAUDE.md rule 2 exemption, not asserted.** `media.audio.transcode` is
+   AGENTS.md rule 2 exemption, not asserted.** `media.audio.transcode` is
    CPU-bound and secret-free, which is precisely what rule 2 means by
    "node-eligible by default" — so it carries `nodeResultSchema` and
    `persistNodeResult` from day one, following the `example.checksum`
@@ -211,7 +211,7 @@ Eight job types, all under `apps/api/src/transcripts/` except the provider
 calls themselves, which live behind `apps/api/src/transcription/`'s registry
 and are called *from* the job handlers rather than duplicated into them.
 
-| Job type | Profile | Node-eligible? | CLAUDE.md rule cited |
+| Job type | Profile | Node-eligible? | AGENTS.md rule cited |
 |---|---|---|---|
 | `media.audio.transcode` | `{ maxRuntimeMs: 3h, maxAttempts: 3 }` | **Yes** | Rule 2 — CPU-bound, secret-free work is node-eligible *by default* |
 | `transcription.submit` | `{ maxRuntimeMs: 2h, maxAttempts: 3 }` | No | Rule 3 — needs the provider API key, a long-lived secret no per-job broker can narrow |
@@ -224,7 +224,7 @@ and are called *from* the job handlers rather than duplicated into them.
 
 Every server-only row above is server-only **because a specific rule 2
 exemption or rule 3 constraint applies to it**, never because it was
-convenient — CLAUDE.md rule 2 states node-eligibility as the default posture
+convenient — AGENTS.md rule 2 states node-eligibility as the default posture
 precisely so that a spec cannot wave a type to "server-only" without saying
 why, and the table above is that accounting made explicit for all eight
 types at once.
@@ -394,6 +394,15 @@ re-enqueues itself, and everything about it follows from that:
   leaves `dedup_key` `NULL`, and `docs/specs/job-queue.md` §4.2 already
   establishes that a `NULL` key never collides with anything — the new row is
   inserted unconditionally, exactly as intended.
+  This re-enqueue lives in exactly one place —
+  `TranscriptPipelineService.enqueuePoll` — and
+  `transcript-pipeline.service.spec.ts` pins it. A regression here has no
+  other symptom: nothing errors, the transcript simply stops advancing.
+- **Two enqueues in the pipeline are guarded on the job-handler registry.**
+  `media.audio.transcode` (#26) and `transcript.snapshot` (#27) are registered
+  by later issues than the code that enqueues them; without the guard the
+  enqueue would create `pending` rows no worker can ever claim, which would sit
+  in the admin job list as a permanent backlog of one.
 - **Not one job holding a slot in a loop.** §11 covers this as a rejected
   alternative in detail; the summary is that a single long-lived polling job
   holds a worker slot for the recording's entire transcription time and
@@ -462,7 +471,7 @@ handed with no database access at all, and its computation (render Markdown,
 render a PDF with pdfkit) is exactly the kind of CPU-bound, secret-free work
 rule 2 says should default to node-eligible.
 
-It stays server-only anyway, for a reason CLAUDE.md's rule 2 does not
+It stays server-only anyway, for a reason AGENTS.md's rule 2 does not
 enumerate because it is not about privilege or database access at all: **the
 renderers live in the API**, and a second, independently-maintained copy in
 `apps/cli`'s node executors would mean the *same* export request could
@@ -860,8 +869,8 @@ but a user-created speaker legitimately has none, and two user-created
 speakers with no label must not collide on `NULL = NULL` under the naive
 reading of a non-partial unique index. This migration therefore hand-writes
 that index in `migration.sql`, exactly as the two precedents do, and is the
-same kind of intentional schema drift CLAUDE.md's own "Database Tables"
-section already documents for `jobs`.
+same kind of intentional schema drift the table inventory in
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (§6.4) already documents for `jobs`.
 
 ### 3.3 `transcript_segments`
 
@@ -1370,9 +1379,10 @@ The Transcription settings card (`/admin/settings/transcription`, issue #23)
 is gated on `system_settings:read`/`write`, **not** a new
 `transcription:*` permission pair — deliberately following the SMTP-password
 precedent rather than the `push:*`/`nodes:*`/`broadcasts:*`/`db_backup:*`
-precedent for splitting a permission out. CLAUDE.md's own "Key Permissions"
-section states the test each of those four splits passed to earn its own
-permission, and the AssemblyAI API key fails all four of them:
+precedent for splitting a permission out. The permission catalog in
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (§7.3) lists those four splits;
+the test each passed to earn its own permission is tabulated below, and the
+AssemblyAI API key fails all four of them:
 
 | Split permission | Why it exists | Does the transcription key share that property? |
 |---|---|---|
@@ -1394,7 +1404,7 @@ a shared permission does not already check.
 
 `GET /api/transcription/config` is the one **non-admin** endpoint in this
 group (`transcripts:read`), following the `/api/notifications/config`
-pattern CLAUDE.md's Browser Notifications section already establishes: a
+pattern [`docs/specs/browser-notifications.md`](browser-notifications.md) §6 already establishes: a
 regular user needs to know *whether* transcription is available, the upload
 limits, and the provider's name for the privacy notice (§10), without
 needing `system_settings:read` to ask.
@@ -1869,7 +1879,7 @@ deployment whose `.env` predates issue #21 still has no `audio/*` in its
 generic upload allowlist and should add one if it wants audio accepted
 through the *generic* storage surface; that gap no longer affects
 transcription, which is the point. See
-[`docs/deployment/vps.md` §9](../deployment/vps.md#9-troubleshooting) for the
+[`docs/deployment/vps.md` §13](../deployment/vps.md#13-troubleshooting) for the
 operator-facing version of this note.
 
 ## 10. Privacy
@@ -1916,7 +1926,7 @@ authority as reading what flows through it.
 
 Three events, added to `NOTIFICATION_EVENTS`
 (`apps/api/src/notifications/notification-events.ts`) following the exact
-three-step recipe CLAUDE.md's "Adding a Notification" section already
+three-step recipe in [`apps/api/src/notifications/README.md`](../../apps/api/src/notifications/README.md) already
 documents — a registry entry, template(s), and a `notify()` call after the
 triggering write commits, outside any transaction:
 

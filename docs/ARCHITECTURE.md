@@ -334,7 +334,8 @@ All components served from the same base URL via Nginx reverse proxy:
 │       ├── testing-dev.md            # Testing specialist
 │       └── docs-dev.md               # Documentation specialist
 │
-├── CLAUDE.md                         # AI assistant guidance
+├── AGENTS.md                         # Shared AI assistant rules (nested ones in apps/*)
+├── CLAUDE.md                         # Claude Code additions (imports AGENTS.md)
 └── README.md                         # Project overview
 ```
 
@@ -689,6 +690,352 @@ disappear; only the browser toast is suppressed for them.
 | **Soft Deletes** | Users deactivated via `is_active` flag, not hard deleted |
 | **Audit Trail** | `audit_events` table logs all security-relevant actions |
 
+### 6.4 Table inventory
+
+Every table the schema defines beyond the ERD in §6.1, with the cascade, indexing and hand-written-SQL decisions that are not visible from `schema.prisma` alone.
+
+
+- `users` - User accounts with profile info
+- `user_identities` - OAuth provider identities (provider + subject)
+- `roles` / `permissions` / `role_permissions` - RBAC
+- `user_roles` - User-to-role assignments
+- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one means declaring it in its module and adding it to `apps/api/src/kvox.manifest.ts` (parity specs iterate the registries) — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry). `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
+- `user_settings` - Per-user settings (JSONB). Namespaces include `onboarding` (issue #272, epic
+  #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
+  `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
+  the `### Onboarding` group of [`API.md`](API.md#onboarding) and [`docs/specs/onboarding.md`](specs/onboarding.md)). Absent from
+  `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
+  `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the registry-driven parity check user
+  settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
+  preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
+  adjudication}`, `domains.{work,personal}` (`personal` default `false`, #383) — absent means every default, resolved by
+  `GraphPreferencesService`; see `docs/specs/ontology.md` §10
+- `audit_events` - Action audit log
+- `refresh_tokens` - JWT refresh tokens (hashed)
+- `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue
+  #301) track `POST /api/allowlist/{id}/reminder`: a manual, admin-pressed resend, not a
+  scheduler — there is deliberately no cron or job type behind it. `reminder_count` is
+  incremented in the database (`increment`, not a read-modify-write) so two admins pressing
+  the button at once can't both write the same count
+- `device_codes` - Device authorization codes (RFC 8628)
+- `storage_objects` - File metadata, status, storage references. `part_size` (#21) is
+  the part size an upload was initialised with, **persisted rather than recomputed**:
+  re-deriving it from the current `STORAGE_PART_SIZE` renumbered the parts of every
+  upload in flight whenever an operator changed that setting, so a resuming client
+  completed a corrupt object. `managed_by` names the owning module (plain `text`, no
+  enum, no FK — same reasoning as `jobs.subject_type`) and is what hides an object
+  from the generic list and 409s its generic DELETE.
+- `storage_object_chunks` - Multipart upload chunk tracking
+- `personal_access_tokens` - User-created long-lived API tokens (hashed)
+- `jobs` - The background queue (epic #254). `subject_type`/`subject_id` are both plain
+  `text`, nullable, no FK either way — a job's subject is polymorphic (a storage object
+  today, something else tomorrow), and a fork's own tables cannot be enumerated by a
+  Prisma relation. `attempts` is charged **at claim time**, not on completion or failure —
+  see `job-claim.service.ts` — so a process that dies mid-run (OOM kill, hard crash) still
+  bounds its retries; a job read inside `process()` always sees its own attempt already
+  counted. Two indexes exist **only** in `migration.sql`, not in `schema.prisma`, because
+  Prisma cannot express a partial unique index: `jobs_active_dedup_uniq_idx` (`dedup_key`
+  `WHERE status IN ('pending','running') AND dedup_key IS NOT NULL`) is the actual dedup
+  enforcement, and `database_backup_runs_active_uniq_idx` below is its counterpart. This is
+  deliberate, intentional schema drift — do not "fix" it by adding a `@@unique` to the model.
+- `job_stats_rollup` - One row per job type, incrementally accumulating succeeded/failed
+  counts and duration sums so lifetime stats survive the history purge. `sumDurationMs` is
+  `Float`, not `BigInt`, to avoid crashing `JSON.stringify` at read time.
+- `worker_nodes` - Registered worker node fleet (epic #254): identity, declared
+  `eligibleTypes`/`concurrency`, operator `status` (`online`/`draining`/`offline`/`disabled`).
+  Health is never stored — it is derived from `lastHeartbeatAt` at read time.
+- `node_credentials` - `nod_…` bearer credentials a worker node authenticates with. Mirrors
+  `personal_access_tokens`' hash/prefix/show-once shape, minus a mandatory expiry (a node
+  runs unattended for months; revocation, not a clock, is the control).
+- `job_node_secrets` - One row per short-lived, job-scoped credential a node has been issued
+  (epic #345, issue #349). Records the broker `kind`, the credential's **handle** (e.g. a
+  minted PostgreSQL role name) and its `expiresAt`/`revokedAt` — **never the credential's
+  material**; the table has no column that could hold one. `@@unique([jobId, kind])` makes a
+  second grant for the same job and broker unrepresentable, so a re-request while the lease
+  is live extends the existing grant instead of minting a second. Three revocation paths can
+  set `revokedAt`: the job-settle listener, `NodeSecretSweepTask`'s cron, and `VALID UNTIL`
+  itself at the database level, which is why the row's `expiresAt` is bounded by the job's
+  lease rather than being a clock of its own.
+- `database_backup_runs` - One row per backup/restore attempt, with its own heartbeat and
+  stale window — **not** a `jobs` row, because the lease reaper's `stuckThresholdMinutes`
+  (default 30 min) would reset a legitimately multi-hour `pg_dump`/restore to pending and
+  start a second one against the same storage key. At most one active run (`pending` or
+  `running`) is enforced by `database_backup_runs_active_uniq_idx`, the same
+  raw-SQL-only partial unique index pattern as `jobs` above — never by a `findFirst`
+  before the insert, which cannot close the race a concurrent request needs closed.
+- `transcripts` - One row per uploaded recording (issue #24, epic #19). Three
+  independent status enums (`status`, `transcriptionStatus`, `playbackStatus`) rather than
+  one, because transcode and transcription run **concurrently** and a single enum would need
+  one member per combination of the two — the same `worker_nodes`-style split of "stated
+  intent" from "sub-pipeline progress." `ownerId` **cascades** on user deletion (a transcript
+  has no meaning, and this app grants no path to read it, once its owner is gone — there is
+  deliberately no `transcripts:read_any`); `sourceObjectId`/`playbackObjectId`/
+  `rawResultObjectId` all **restrict** instead, the opposite direction of ownership: they
+  point sideways into `storage_objects` (a different module's table), and only
+  `transcript.purge` deleting the transcript row first may ever free one, never an unrelated
+  storage cleanup. See `docs/specs/transcription.md` §3.1 and the block comment above the
+  `Transcript` model for the full reasoning, including the honestly-stated gap between a raw
+  cascading user delete (removes SQL rows only) and `transcript.purge` (also removes the
+  storage/provider data). `title_search_vector` (issue #174, epic #164) is a `GENERATED ALWAYS
+  AS (to_tsvector('english', coalesce(title, ''))) STORED` column with its own GIN index — a
+  transcript's title must be full-text searchable even when no child segment matches at all, so
+  it needs its own vector rather than folding into the segment vector below. Generated, not
+  trigger-maintained: a trigger does not fire under `pg_restore`'s `session_replication_role =
+  replica`, so a restored database would come back with a silently empty search index. Hand-written
+  in `migration.sql` only — Prisma has no DSL for a generated column's expression — the same
+  intentional schema drift as `jobs`/`database_backup_runs`/`transcript_speakers`. See
+  `docs/specs/search.md` §2. `speaker_identities` (JSONB, default `{}`, issue #323) maps speaker
+  id to display name for a speaker **identified** rather than corrected — naming "Speaker A" as
+  "Oscar" writes here and to the live speaker row without bumping `current_version`, and
+  `materialize()` overlays this map onto any speaker still at its placeholder at every version;
+  see `docs/specs/transcription.md` §4.6. `recorded_at` (issue #352, `timestamptz`, `NOT NULL`,
+  indexed `(owner_id, recorded_at desc)`) is when the recording was made — defaulting to the
+  upload instant and backfilled from `created_at`, owner/editor-correctable via `PATCH
+  /api/transcripts/{id}` without moving `current_version` — and is the meeting date connected
+  knowledge reads (`docs/specs/ontology.md` §5.4).
+- `transcript_speakers` - One row per diarized voice in a transcript. `label` is nullable —
+  the provider's own diarization letter (`"A"`) for an AI-detected speaker, `NULL` for one a
+  user created directly. Unique per transcript **among labelled rows only**, via the same
+  hand-written **partial** unique index pattern `jobs_active_dedup_uniq_idx` and
+  `database_backup_runs_active_uniq_idx` already establish (`transcript_speakers_transcript_
+  id_label_key`, `WHERE label IS NOT NULL`) — Prisma's `@@unique` DSL cannot express the
+  `WHERE` clause, so it lives hand-written in `migration.sql` only. This is the **one**
+  Prisma-inexpressible constraint issue #24 adds; every other uniqueness constraint on the
+  transcript tables is a plain `@@unique`.
+- `transcript_segments` - One row per line of transcript text. `id` is **stable across
+  edits** — a `segment.split` keeps it on the earlier half specifically so a bookmark, an
+  export reference, or a stale concurrent-editor `rev` still names something real.
+  `speakerId` **restricts**: a speaker cannot be deleted while a segment still names it,
+  `speaker.merge` re-points every segment away first. `ordinal` is a **gap-based float**, not
+  a dense integer sequence, so inserting a segment only needs the midpoint between its two
+  neighbours rather than renumbering every later row on every split. `wordsAlignment`
+  (`exact`/`interpolated`/`none`) records how much of the per-word timing survived the last
+  text edit — a token-level LCS diff, not a heuristic re-run on every read. `search_vector`
+  (issue #174, epic #164) is a `GENERATED ALWAYS AS (to_tsvector('english', coalesce(text, '')))
+  STORED` column, GIN-indexed, unweighted — a segment has no title of its own to weight against,
+  unlike `notes.search_vector` below. Same generated-column-not-trigger reasoning as
+  `transcripts.title_search_vector` above; see `docs/specs/search.md` §2.
+- `transcript_versions` - The append-only correction history `materialize()` replays
+  (`docs/specs/transcription.md` §4.4): `ops` holds the **concrete** edits this version
+  applied (never the abstract `find_replace` call itself — §4.2 — so replaying history stays
+  correct even if the matching logic changes later), `authorId` is `NULL` **only** for the AI
+  ingest version, and nothing ever deletes a row here short of purging the whole transcript.
+  `@@unique([transcriptId, version])` is the sequence itself; `@@unique([transcriptId,
+  clientBatchId])` is a retried-save idempotency key that needs **no** hand-written partial
+  index — Postgres's standard NULLS-DISTINCT behaviour already lets any number of
+  `NULL`-`clientBatchId` versions (ingest, restore) coexist for free.
+- `transcript_shares` - `viewer`/`editor` grants, unique on `(transcriptId, userId)`.
+  `TranscriptAccessService` combines a share with `transcripts:write` for `edit`-level access
+  — a share alone can raise a viewer's ceiling, never grant authority this app's own RBAC
+  withholds from their role.
+- `transcript_exports` - One row per rendered export file, content-addressed by
+  `(transcriptId, version, format, optionsHash)` (the index this issue declares specifically
+  for `POST /:id/exports`'s reuse check, per `docs/specs/transcription.md` §8.5) so an
+  identical repeat request returns the existing file instead of re-rendering. `jobId` is
+  `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun.jobId` exactly: this row's own
+  7-day expiry is independent of `job.history.purge`'s retention schedule for the underlying
+  `jobs` row.
+- `transcript_name_checks` - One row per AI name-check **run** (issues #328/#330, epic #326):
+  `mode` (`standard`/`thorough`), `status`, `basedOnVersion`, the resolved `terms` checked for,
+  denormalized `candidateCount`/`suggestionCount`, cost accounting, and `jobId`
+  (`@unique`/nullable/`SetNull`, mirroring `TranscriptExport.jobId`). `requestedById` is
+  `SetNull`, not `Cascade` — a run is kept as transcript history after its requester is gone,
+  matching `TranscriptVersion.authorId`. See
+  [`docs/specs/transcript-name-correction.md`](specs/transcript-name-correction.md)
+- `transcript_name_suggestions` - One row per **proposed** correction a run produced: the
+  segment and the `TranscriptSegment.rev` its `start`/`end` offsets were computed against
+  (the same `rev`-pinning shape `TranscriptVersion` uses), `original`/`replacement`, `source`
+  (`'phonetic'`/`'discovery'`), and `status` (`pending`/`accepted`/`rejected`/`stale`).
+  Accepting one never writes `transcript_segments.text` directly — it becomes an ordinary
+  `segment.update_text` op through the same `/operations` path every other correction uses
+- `user_ai_credentials` - One AI provider API key per `(userId, provider)` (issue #47, epic
+  #45): each user's own key, never a deployment-wide one — see `docs/specs/notes.md` §9.
+  `secret` is `encryptSecret(rawKey, 'ai-key')` — the same cipher every other secret in this
+  application uses, under a new purpose string for domain separation, so a ciphertext lifted
+  out of `credentials` and pasted here fails authentication rather than decrypting into a
+  context where it means something else. `userId` **cascades**, and that is the whole reason
+  this is its own table rather than a row in `credentials`: `credentials` has no foreign key
+  to `users` and cannot grow one (`Credential.updatedByUserId` is `SetNull` on purpose, so
+  offboarding an admin never deletes a working SMTP configuration), so encoding a user id into
+  `credentials.name` would leave a deleted user's personal key in that table forever with no
+  FK to clean it up. Never returned by any endpoint, for any role.
+- `notes` - One AI-generated, user-correctable document per row (issue #48, epic #45),
+  generated from a transcript, another note, or an uploaded document. `ownerId` **cascades**
+  on user deletion — a note has no meaning and this app grants no path to read it once its
+  owner is gone, mirroring `transcripts.owner_id` and the deliberate absence of
+  `notes:read_any`. `sourceTranscriptId`/`sourceNoteId`/`sourceObjectId` all **restrict**
+  instead, the opposite direction: they point sideways into another module's table, and only
+  `note.purge` deleting the note row first may ever free one. `notes.body` is a denormalized
+  copy of the `note_versions` row at `currentVersion` — kept in the same transaction that
+  appends a version — so `GET /api/notes/:id` answers "what does this note say right now"
+  with a single-row read. See `docs/specs/notes.md` §4.1 and the block comment above the
+  `Note` model. `search_vector` (issue #174, epic #164) is a single `GENERATED ALWAYS AS (...)
+  STORED` column, GIN-indexed, combining `setweight(to_tsvector(title), 'A') ||
+  setweight(to_tsvector(body), 'B')` — weighted, unlike `transcript_segments.search_vector`,
+  because a hit in the user's own title is stronger evidence than a hit in the AI-generated body,
+  and `ts_rank_cd` can reflect that asymmetry when it is computed over one combined vector. Same
+  generated-column-not-trigger reasoning as the transcript columns above; see
+  `docs/specs/search.md` §2.
+- `note_templates` - The reusable "recipe" (instructions, output format, structure, tone,
+  length, an optional per-template model) a note is generated from (issue #48, epic #45).
+  `ownerId IS NULL` means **built-in**: seeded, readable by every user, and immutable through
+  the API under every role (`PATCH`/`DELETE` answer 403, never 404 — see `docs/API.md`'s Note
+  Templates section for the full reasoning). `PATCH`/`DELETE` on another user's own template
+  answers 404. Deleting a template that notes still reference **archives** it instead
+  (`isArchived`) rather than deleting the row, so a note never loses its `templateId`.
+- `note_generations` - The durable buffer the SSE stream (issue #52) reads from, never the
+  delivery mechanism itself: `note.generate` (issue #49) appends every delta to `content` on
+  the way past, so a generation completes identically whether or not anyone is watching.
+  `noteId` is nullable — `NULL` for a **template preview** (issue #50), which has no note to
+  belong to, is never listed in `GET /api/notes`, and is hard-deleted by `notes.housekeeping`
+  at its 10-minute TTL. `errorClass` is a proper enum (`auth`/`refusal`/`rate_limit`/`other`)
+  matching `ai-errors.ts`'s taxonomy — the SSE layer's own `NoteStreamErrorClass` adds two
+  wire-only values, `timeout` and `gone`, that never exist in this column because neither is a
+  property of the generation (see [`specs/notes.md`](specs/notes.md), the streaming contract). `systemPrompt`/
+  `userContent`/`sourceVersion`/`contextCapturedAt` (issue #307) snapshot exactly what was sent
+  to the AI provider, written before the call so a failure still records it; `NULL` on a row
+  from before this feature, deliberately never backfilled.
+- `note_versions` - The append-only correction history (issue #48, epic #45). **A full body
+  snapshot per row, not an operation log** — unlike `transcript_versions`, deliberately: a
+  note is a page or two of prose, so storing the whole markdown body per save costs kilobytes
+  and needs no reducer to read back, and `GET /api/notes/:id/versions/:version` is a
+  single-row read. `authorId: NULL` means the AI, the same convention
+  `transcript_versions.author_id` established. `kind` is `ai_generated` / `edit` / `restore`.
+- `note_exports` - One row per rendered export file, content-addressed by `(noteId, version,
+  format, optionsHash)`, mirroring `transcript_exports` field for field (issue #54,
+  `docs/specs/notes.md` §8). `jobId` is `@unique`/nullable/`SetNull`; the row's own 7-day
+  expiry is independent of `job.history.purge`'s retention schedule for the underlying `jobs`
+  row.
+- `user_hidden_note_templates` - Per-user, per-template "hide from my picker" preference
+  (issue #310, epic #306), `@@id([userId, templateId])`, both FKs **Cascade**. A join table
+  rather than a `user_settings` namespace (real FK integrity, plain indexed `WHERE user_id =`
+  queries, no cap, no settings-namespace declaration cost) and rather than reusing
+  `note_templates.is_archived` (that column is shared by every viewer; hiding is per-user and
+  must never affect anyone else's picker, built-in included). Hiding is a listing preference
+  only — it never gates create/regenerate/preview reading the template by id.
+- `kg_entities` - The Connected Knowledge graph foundation's node table — Person, Organization,
+  Project, Meeting (issue #351, epic #344), `type` a plain ontology key (#350), never a Prisma
+  enum, so a new type costs zero migrations. `embedding vector(1536)` reuses `SearchEmbedding`'s
+  exact model/dimension contract rather than a second convention; `merged_into_id` self-relation
+  (SetNull) is set once §7's entity resolution merges this row into another. `owner_id` **Cascade**
+  — the same reasoning `notes.owner_id`/`transcripts.owner_id` establish, and there is deliberately
+  no `graph:read_any`. `pg_trgm` (new to this codebase — see `docs/specs/ontology.md` §10) backs
+  `kg_entities_label_trgm_idx`, and `kg_entities_embedding_hnsw_idx` mirrors
+  `search_embeddings_embedding_hnsw_idx`'s own hand-written discipline; both live only in
+  `migration.sql`, never in `schema.prisma`, the same intentional drift `jobs`/`transcript_speakers`
+  already establish.
+- `kg_entity_aliases` - A separate table, not an array column, so an alias carries its own
+  indexed exact/fuzzy lookup (`normalized`, produced by #355's `normalizeAlias()` — this
+  **replaces** `citext`, not installed and not needed) plus its own provenance (`source`).
+  `entity_id`/`owner_id` both Cascade. `kg_entity_aliases_normalized_trgm_idx` is hand-written
+  (`gin_trgm_ops`), alongside the label index above.
+- `kg_relations` - Every graph edge (§5.2's sixteen types, plain text `type`, never enum). A
+  relation's `from` side is **exactly one of** a resolved entity (`from_id`) or a diarized
+  speaker awaiting identification (`from_speaker_id`, a real FK into `transcript_speakers`,
+  Cascade) — enforced by `kg_relations_one_source_chk`, with `from_speaker_id` restricted to
+  `IDENTIFIED_AS` by `kg_relations_speaker_type_chk` and to one edge per speaker by the
+  hand-written partial unique `kg_relations_speaker_link_uniq_idx`. `valid tstzrange` (§5.4) is
+  `Unsupported` — Prisma cannot read or write it at all, so every write goes through
+  `$executeRaw` inside the same transaction as the `create`, and every read through `$queryRaw`
+  (`lower`/`upper`/`lower_inc`/`upper_inc`); `kg_relations_valid_gist_idx` is what makes the
+  containment/overlap queries this shape exists for actually fast. No inverse row is ever stored
+  (§5.2).
+- `kg_items` - `Commitment`/`Decision`/`Claim`/`PersonFact` in **one** table, distinguished by
+  `kind` (the one real Prisma enum among this graph's `type`/`kind` columns — see `kg_entities`
+  above for why the others stay plain text). `meeting_id` (SetNull, backs `CREATED_IN`/
+  `DECIDED_IN`), `owner_person_id`/`counterparty_id`/`subject_id` (Cascade) all point sideways
+  into `kg_entities`. `sensitivity` is non-NULL **iff** `kind = 'person_fact'`
+  (`kg_items_sensitivity_chk`); a `claim`/`person_fact` always carries a `subject_id`
+  (`kg_items_subject_required_chk`). `kg_items_live_statement_uniq_idx` (hand-written partial
+  unique, scoped to `accepted`/`edited` rows with a subject) is the §8 "known, skipped" dedup
+  guard — a verbatim restatement attaches evidence instead of inserting a duplicate.
+  `valid`/`embedding` mirror `kg_relations`/`kg_entities` exactly, including the `Unsupported`
+  raw-SQL contract and the hand-written GiST/HNSW indexes.
+- `kg_evidence` - The §5.3 citation contract. `subject_kind`/`subject_id` are **polymorphic, no
+  FK** — the identical `jobs.subject_type`/`subject_id` pattern. Every real anchor FK
+  (`transcript_id`/`segment_id`/`note_id`/`import_object_id`) is **SetNull, not Restrict** — a
+  deliberate divergence from most of this schema's sideways pointers: an evidence row is a
+  citation that must survive losing what it pointed to, and `quote` (NOT NULL) is precisely what
+  keeps it readable once every anchor has gone to NULL. There is deliberately **no CHECK**
+  requiring any anchor to be present. `char_start`/`char_end` are offsets into the cited **note
+  version body** when `note_id` is set, or into the cited **segment's text** when `segment_id` is
+  set — NULL means the whole segment, and on a **note** citation both NULL means the note's
+  Context field (#440, no body offsets to give); #363 relies on this exact convention. A hand-written
+  **deferred constraint trigger** (#355, `kg_assert_has_evidence`, intentional schema drift)
+  refuses at `COMMIT`, with SQLSTATE `23514`, any `accepted`/`edited` entity, relation or item
+  left with no evidence row — so write the subject and its evidence in one transaction, and
+  delete evidence **after** (or together with) its subject, never before.
+- `kg_mentions` - The coarse `MENTIONS` shortcut (§5.2), distinct from `kg_evidence`'s precise
+  per-claim citation — `entity_id`/`note_id`/`transcript_id` all **Cascade** (the opposite of
+  `kg_evidence` above: a mention has no meaning once either side is gone). Exactly one source
+  document per row (`kg_mentions_one_source_chk`).
+- `kg_proposals` - One row per extraction/import/resolution run, with the **complete** proposal
+  status/kind sets landed by this migration (issue #351) so #363/#364/#366/#387 never need
+  `ALTER TYPE … ADD VALUE`. Only `kind = 'extraction'` has a note;
+  `kg_proposals_note_source_chk` keys on `note_version`, **never** `note_id` — `note_id` is
+  `SetNull` and can only go NULL after the note is hard-deleted, while `note_version` never
+  changes, so the CHECK stays satisfied across that delete. Two hand-written partial uniques cap
+  concurrency: at most one `draft` and at most one `extracting` proposal per note, plus at most
+  one `extracting` **import** proposal per owner (scoped by `owner_id`, since an import has no
+  note). `commit_log` is #366's internal undo record, never serialized to clients. `job_id`
+  mirrors `TranscriptExport.jobId` (`@unique`, nullable, SetNull).
+- `kg_proposal_items` - One row per proposed entity/relation/item/`closing` edit.
+  `merge_into_id` (SetNull into `kg_entities`) is set **iff** `decision = 'merge_into'`
+  (`kg_proposal_items_merge_into_chk`) — losing the target clears the override rather than
+  blocking the delete. `payload` is always a JSON object (`kg_proposal_items_kind_payload_chk`).
+  `committed_ref_id` is polymorphic, no FK — the `kg_entities`/`kg_relations`/`kg_items` row this
+  item became once committed.
+- `kg_merges` - One row per merge (§7), with the full reversal payload. `survivor_id`/`merged_id`
+  both Cascade into `kg_entities` — a merge record has no meaning once either entity it names is
+  gone.
+- `kg_distinct_pairs` - Confirmed-not-the-same pairs (§7), `@@id([ownerId, aId, bId])`.
+  `kg_distinct_pairs_order_chk` (`a_id < b_id`, hand-written — Prisma cannot express a
+  cross-column CHECK) canonicalizes an unordered pair so `(a, b)` and `(b, a)` can never both
+  exist as two different rows for the same fact.
+- `kg_attribute_defs` - One row per user-defined attribute (§17.3): entity type, key, label,
+  kind, extractability, sensitivity. `@@unique([ownerId, entityType, key])`; `owner_id` Cascade,
+  the same reasoning every other `kg_*` table's `owner_id` follows.
+- `kg_entity_digests` - §9.2's precomputed entity brief — "precompute once, read cheaply."
+  `entity_id` is the **primary key**, not a separate `id`: exactly one digest per entity, always
+  replaced in place, never versioned. Written **only** by the `kg.entity_digest` job (#372,
+  `EntityDigestHandler`); `GET /api/graph/entities/:id/brief` (`EntityBriefService`) reads it and
+  triggers a refresh by enqueueing, never by writing this table itself.
+- `kg_entity_views` - `(user_id, entity_id, last_viewed_at)`, plain `@@unique([userId,
+  entityId])` — §9.2's "recently viewed" list. The **one** table in this graph keyed on
+  `user_id`, not `owner_id`: which entities a viewer has looked at is a per-viewer fact, not an
+  ownership fact. Upserted by `EntityViewService` (#372) from the brief GET whenever
+  `markViewed` and no `as_of` — after the response is assembled, so a visit's own delta is
+  computed against the previous one, never itself.
+- `kg_graph_layouts` - One row per computed whole-graph layout snapshot (issue #371), read by
+  `GET /api/graph/overview` and never by anything else. A **cache of derived data, never a
+  source of truth** — `clusters`/`positions` hold ids and numbers only, **no label is ever
+  stored**, so a renamed, merged or forgotten entity never shows a stale name through this
+  table; the overview joins labels live instead. `owner_id` **Cascade**, the same reasoning
+  every other `kg_*` table's `owner_id` follows. Only the newest **two** rows per owner are
+  kept — the handler prunes the rest in the same transaction that inserts the new one — so this
+  is a handful of rows per owner, not a growing history. `source_updated_at` is
+  `max(updated_at)` over the owner's `kg_entities`/`kg_relations` at the moment the snapshot was
+  computed, stamped **before** the read starts; `GET /api/graph/overview` compares it against a
+  fresh count to report `stale: true` without ever recomputing itself.
+- `kg_exports` - One row per requested RDF export of an owner's graph (issue #386), mirroring
+  `note_exports`: `format` (`jsonld`/`turtle`/`nquads`), `status`
+  (`pending`/`running`/`ready`/`failed`), **content-addressed** on `graph_fingerprint` (sha256 over the
+  ontology version, the format, the namespace and the owner's `kg_*` max `updated_at` + row counts — a
+  plain non-unique `(owner_id, format, graph_fingerprint)` index, like `note_exports_lookup_idx`),
+  `stats` (counts only), a short `error_message`, `expires_at` = request + 7 days. `owner_id` Cascade;
+  `object_id` **Restrict** into a `managed_by: 'graph'` storage object (the sweep and `kg.purge` clear it
+  first); `job_id` `@unique`/SetNull. No hand-written SQL.
+- `ask_conversations` - One saved Ask conversation (issue #376, epic #348). `owner_id`
+  **Cascade**; `scope_entity_id` **SetNull** into `kg_entities` — forgetting or merging the
+  scoped entity drops the link, never the conversation; `title` null until the first message.
+- `ask_messages` - One turn. `content` is the assistant's durable stream buffer (append-only
+  while streaming — the `note_generations` contract); `tool_calls`/`citations` JSONB,
+  `error_class`, `finish_reason` (`stop | step_cap | token_cap | time_cap`; non-`stop` =
+  "stopped early"), `job_id` `@unique`/SetNull like `transcript_exports.job_id`;
+  `conversation_id` Cascade. `ask_messages_one_running_turn_uniq_idx` (hand-written partial
+  unique, `migration.sql` only — intentional drift) allows one `pending`/`streaming` assistant
+  turn per conversation; #378 maps its violation to 409 `ask_turn_running`.
+
 ---
 
 ## 7. Security Architecture
@@ -789,6 +1136,85 @@ disappear; only the browser toast is suppressed for them.
                         └───────────────┘
 ```
 
+#### Permission catalog
+
+The complete set of roles and permission strings the API enforces. The diagram above shows the original MVP subset; this list is the current catalog.
+
+##### Roles
+- **Admin**: Full access, manage users and system settings
+- **Contributor**: Standard capabilities, manage own settings
+- **Viewer**: Least privilege (default), manage own settings
+
+##### Key permissions
+- `system_settings:read/write` - System settings access
+- `user_settings:read/write` - User settings access
+- `users:read/write` - User management
+- `rbac:manage` - Role assignment
+- `allowlist:read/write` - Allowlist management (Admin only)
+- `storage:read/write/delete` - Storage object access (own objects)
+- `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
+- `jobs:read/write` - Background job queue: inspect vs. retry/reset/delete
+- `nodes:read/write` - Worker node fleet: audit vs. register/claim/revoke. **Split from
+  `jobs:*`, not folded into it** — "what work is queued" and "which machines are attached
+  to this deployment" are different questions, and a Settings UI Pattern rule 3 card gated
+  on `jobs:read` would be advertising a permission the nodes controller never checks
+- `db_backup:read/write/restore` - Database backup: inspect vs. schedule/trigger/cancel/delete
+  vs. **restore or roll back**. `:restore` is a **third**, deliberately separate permission —
+  not part of `:write` — because scheduling a nightly dump and replacing the live database
+  are not the same authority, and a deployment must be able to grant the first to someone
+  it does not trust with the second. Folding it into `:write` would let every existing
+  `db_backup:write` holder silently acquire the ability to roll back production
+- `broadcasts:read/write` - Admin notification broadcasts (epic #319)
+- `push:read/write` - Web Push (VAPID) configuration: generate, rotate, enable/disable
+  (epic #355). **Not a reuse of `system_settings:*`** — generating/rotating key material
+  has a real, described blast radius (every existing subscriber goes dark until it
+  re-subscribes) that should not ride along with routine settings edits, mirroring why
+  `broadcasts:*` and `nodes:*` were split out rather than folded into
+  `system_settings:*`/`jobs:*`
+- `transcripts:read/write` - Audio transcription (issue #24, epic #19): read your own
+  transcripts and shares vs. create/edit/delete them. **Seeded to all three roles — Admin,
+  Contributor and Viewer** — the opposite posture from every pair above: recording and
+  correcting a transcript is the core product action, not an operational surface, and this
+  app's default role is Viewer. `transcripts:write` is the *additional* check
+  `TranscriptAccessService` applies for `edit`-level access on top of a share — a viewer
+  share can never grant editing no matter what a future role holds. **There is deliberately
+  no `transcripts:read_any`**, unlike every other "any"-scoped permission in this table: a
+  transcript is somebody's private recorded conversation, not shared infrastructure, so no
+  permission string exists for an admin (or anyone) to read one they do not own or hold a
+  share on — out of scope for this feature, not merely unused. No access answers **404,
+  never 403** (`docs/specs/transcription.md` §6.1) — a 403 would confirm the transcript
+  exists, which a stranger has no business learning about a private conversation.
+- `notes:read/write` - AI-generated notes (issue #48, epic #45), mirroring `transcripts:*`
+  exactly and for the identical reason: generating a note is the core product action this
+  epic exists to enable, and a fresh account's default role is Viewer. `notes:read` gates
+  every note read (list, get, versions, the generation stream, `GET /api/ai/config`);
+  `notes:write` gates create/regenerate/edit/delete **and**
+  `POST /api/note-templates/:id/preview` — a preview reads a template but its action is
+  generating real content through the caller's own AI key, the same mechanism `note.generate`
+  runs, so it is gated by the permission that governs generating, not by the template CRUD
+  permission. **There is deliberately no `notes:read_any`, not even for an admin** — a note
+  is derived from somebody's private conversation, exactly like a transcript, and no
+  permission string for reading another user's note exists anywhere in this design, for any
+  role, ever. `NoteAccessService.require` answers a caller with no access a plain **404**,
+  never 403, for the identical reason `TranscriptAccessService` does.
+- `note_templates:read/write` - Note template CRUD (issue #48, epic #45). A **separate pair**
+  from `notes:*`, not folded in — two different controllers with two different write
+  surfaces (editing a recipe versus generating content). `note_templates:write` gates
+  creating, editing and deleting a user's **own** custom templates only; it does not gate
+  built-ins, which are immutable through the API regardless of any permission any role holds
+  — a built-in's `PATCH`/`DELETE` answers **403**, a deliberate divergence from `notes:*`'s
+  404-never-403 posture, because a built-in template's existence is public by design (it is
+  in every account's own catalogue) while another user's template's existence is private.
+  Both permissions are seeded to all three roles.
+- `graph:read/write` - Connected knowledge (issue #354, epic #344): read your own graph
+  (entities, relations, facts, proposals, the effective ontology) vs. curate it (commit
+  proposals, edit/merge/forget entities, manage attribute definitions). **Seeded to all three
+  roles**, mirroring `notes:*`, and delivered through the idempotent seed, never a migration.
+  **There is deliberately no `graph:read_any`**, for the notes/transcripts reason: a graph is
+  derived from somebody's private conversations. `GraphAccessService.require` answers no
+  access with a byte-identical **404** per kind; `edit` on the caller's own row without
+  `graph:write` is the one **403**.
+
 ### 7.4 Access Control Layers
 
 ```
@@ -820,6 +1246,15 @@ Before OAuth authentication completes:
 - Admins add emails via `/api/allowlist` before users can login
 - Claimed entries cannot be removed (protects existing users)
 - Use user deactivation (`is_active: false`) to revoke access
+- `INITIAL_ADMIN_EMAIL` is automatically added to the allowlist during database seeding
+
+**Admin UI:**
+- Manage the allowlist at `/admin/settings/users` (Allowlist tab; `/admin/users` still redirects here)
+- Two tabs: **Users** (existing registered users) and **Allowlist** (pre-authorize email addresses for future logins)
+
+**Status tracking:**
+- **Pending**: email added to the allowlist but the user has not logged in yet
+- **Claimed**: the user has logged in and created an account
 
 ---
 
@@ -965,8 +1400,7 @@ for genuinely parallel content only.
 
 The `General` group above is not the whole Console: the `Operations` group
 (Jobs, Job Insights, Worker Nodes, Database Backup, Broadcasts, each under
-`/admin/settings/*`) is documented in `CLAUDE.md`'s "Operations Admin
-Settings Group" section rather than duplicated in this table. `System`,
+`/admin/settings/*`) is documented in §9.7 ("Admin settings groups") rather than duplicated in this table. `System`,
 the admin `Appearance` page, `Feature Flags` and `Advanced (JSON)` — all
 four previously listed here — were removed as unused by issue #366; see
 [`docs/specs/settings-ui.md`](specs/settings-ui.md).
@@ -1055,6 +1489,76 @@ with a "Copied"/"Copy failed" transient state. It was introduced for
 `NoteContextDialog.tsx` (see `docs/specs/notes.md` §4.4); the six pre-existing
 inline `navigator.clipboard` call sites were deliberately left as-is by that
 change and are candidates to migrate later, not a regression to fix now.
+
+### 9.6 Navigation destinations
+
+`apps/web/src/config/destinations.ts` is the single source of truth for the
+app's navigation targets — the bottom bar, the navigation rail and the avatar
+menu all read it, so none of the three can disagree about what exists or who
+may see it. Full design, with rejected alternatives, in
+[`docs/specs/ux-refresh.md`](specs/ux-refresh.md) §1.
+
+**Six destinations** since issue #438: `home`, `transcripts`, `notes`,
+`knowledge`, `settings`, `console` — two of them (`settings`, `console`)
+`pinned`. Each non-pinned destination gates on the exact permission its
+controller enforces (`transcripts:read`, `notes:read`, …), the same Settings
+UI Pattern rule 3 discipline the admin cards follow. `knowledge` additionally
+gates on a **runtime feature flag** — the first destination to do so — see
+below.
+
+**`knowledge` (path `/graph`, issue #438) is a destination of its own,
+gated on `graph:read` *and* `GET /api/ai/config`'s `graphEnabled`.** It
+owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph`,
+`/graph/explore`, `/graph/overview`, `/graph/entities/:id`,
+`/graph/imports/:proposalId` (issue #387) and `/ask`/`/ask/:conversationId`
+(issue #380, epic #348) are all reached through it. `home` owns only `['/']`
+now. While `graphEnabled` is unknown or still loading, the item is hidden
+rather than shown-then-removed — a runtime flag is not a permission check
+that resolves instantly from the JWT already in hand, so a naive gate would
+flash the tab in and then pull it out from under a tapping thumb. Before
+issue #438 the graph and Ask were reached through `home`'s own `DESTINATION_ROUTES`
+entry instead (issue #373 for the graph, #380 for Ask) — see
+`docs/specs/ontology.md` §13 and §21.5 for that history and the reasoning
+behind promoting it to its own destination.
+
+**Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
+is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
+reached *by design* rather than by a coincidence of which permissions a user
+happens to hold. A fifth non-pinned destination is not an addition, it is a
+redesign of that bar — which is why issue #438 pins `settings` rather than
+adding `knowledge` as a fifth: the bar is `home`, `transcripts`, `notes`,
+`knowledge` (three when the graph is off or the caller lacks `graph:read`).
+
+⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
+navigation rail's foot below a divider, appears in the avatar menu, and is
+**omitted from the bottom bar entirely** — the bar has no foot to pin to.
+`console` was the only one before issue #438; `settings` joined it there, the
+same move #106 made for Console, freeing the fourth bar slot for `knowledge`
+without breaching the ceiling above. That is what makes the administrator's
+own phone show Home · Transcripts · Notes · Knowledge rather than spending a
+primary tab on an operational surface.
+
+### 9.7 Admin settings groups
+
+
+A third `ADMIN_SECTIONS` group (`apps/web/src/config/adminSections.tsx`),
+alongside `General` and `Access` — issue #266, epic #254. `General` is
+configuration an administrator *sets*; `Operations` is the running system: work
+in flight, the machines executing it, and the copies of the data taken while it
+ran. Five cards at `/admin/settings/*`, each gated on the exact permission its
+controller enforces (Settings UI Pattern rule 3):
+
+- **Jobs** (`/admin/settings/jobs`, `jobs:read`) and **Job Insights**
+  (`/admin/settings/jobs/insights`, `jobs:read`, nested under Jobs)
+- **Worker Nodes** (`/admin/settings/workers`, `nodes:read`)
+- **Database Backup** (`/admin/settings/db-backup`, `db_backup:read`)
+- **Broadcasts** (`/admin/settings/broadcasts`, `broadcasts:read`, epic #319)
+
+All five read permissions are seeded Admin-only, so writes are gated inside
+each page (disabling controls) rather than by a second card permission — the
+card gate is about reachability, the page gates content. `Maintenance` is a
+`General` card, not an `Operations` one — it is a system setting, not a
+running-system view.
 
 ---
 
@@ -1235,7 +1739,7 @@ not on completion or failure. A job that takes its whole process down with it
 (OOM kill, hard crash) still bounds its retries, because the counter was
 already charged before the crash could happen; charging on failure would let
 exactly the failures that never reach a failure handler retry forever. See
-`job-claim.service.ts` and the `jobs` table entry in `CLAUDE.md`.
+`job-claim.service.ts` and the `jobs` entry in the §6.4 table inventory.
 
 ### 12.2 Two executors, one handler, no branching
 
@@ -1266,7 +1770,7 @@ server, for a deployment with no nodes — while its `nodeResultSchema` +
 and posted back for the server to persist. **There is no `if (isNode)`
 branch anywhere in a handler or in the claim path** — a node is an option a
 deployment can add, never a requirement any handler must plan around. See
-`CLAUDE.md`'s "Adding a Job Type" recipe and
+the "Adding a Job Type" recipe in
 `apps/api/src/jobs/handlers/README.md` for what that split looks like in a
 real handler (`example-checksum.handler.ts`).
 
@@ -1386,7 +1890,7 @@ lease plus a short grace — and the server records only the credential's
 **handle** in `job_node_secrets`, never its material. Three independent paths
 can end a grant: the job-settle listener, the ten-minute
 `NodeSecretSweepTask` cron (the third permanent exemption from "every
-long-running activity is a queue job" — see `CLAUDE.md` — because credential
+long-running activity is a queue job" — see `AGENTS.md` — because credential
 revocation must not depend on the queue it might itself be wedged inside),
 and `VALID UNTIL` enforced by PostgreSQL itself, which needs no cron to be
 correct. Full design, including the two separate opt-in settings and the
@@ -1961,7 +2465,7 @@ cd apps/web && npm test
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide |
 | [TESTING.md](TESTING.md) | Testing framework guide |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Device authorization guide |
-| [CLAUDE.md](../CLAUDE.md) | AI assistant guidance |
+| [AGENTS.md](../AGENTS.md) and [CLAUDE.md](../CLAUDE.md) | AI assistant guidance: shared rules (AGENTS.md) and Claude Code additions (CLAUDE.md) |
 
 ### 16.3 Specification Index
 

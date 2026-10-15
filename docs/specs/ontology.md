@@ -1,7 +1,7 @@
 # Connected Knowledge → The kvox Ontology
 
 > Epic not yet filed — this document **is** the spec the epic is filed from,
-> per CLAUDE.md's Issue-Driven Development rule and the precedent
+> per AGENTS.md's Issue-Driven Development rule and the precedent
 > `docs/specs/notes.md` set for issue #46 and `docs/specs/transcription.md`
 > set for issue #20. **Nothing described below is merged.** There are no
 > `kg_*` tables, no `graph.*` job types, no `/api/graph/*` controller, and no
@@ -27,7 +27,7 @@
 > architecture and `reciprocalRankFusion` this design reuses directly),
 > `docs/specs/transcript-name-correction.md` (the phonetic/discovery/
 > adjudication pipeline shape this design's resolution step is modelled on),
-> and CLAUDE.md's MANDATORY job-queue and Settings UI Pattern rules, both of
+> and AGENTS.md's MANDATORY job-queue and Settings UI Pattern rules, both of
 > which this document commits to following rather than restating.
 >
 > This document supersedes a broader draft (project name `knotes`,
@@ -891,7 +891,7 @@ reason `docs/specs/notes.md` §2.3 gives: every user brings their own vendor
 account, so a 429 against one user's key is evidence about that user alone.
 **Server-only, permanently** — no `nodeResultSchema`/`persistNodeResult` is
 declared, so `JobHandlerRegistry.serverOnlyTypes()` reports it and no worker
-node can ever claim it (CLAUDE.md rule 2), for the identical reason
+node can ever claim it (AGENTS.md rule 2), for the identical reason
 `note.generate` is server-only: the credential in play is the user's own
 long-lived vendor key, and no AI vendor here offers a job-scoped sub-key a
 `nodeSecretBroker` could mint and hand to a remote machine — the same
@@ -1256,7 +1256,7 @@ write path, with exactly two named exceptions: the **speaker-naming write**
 that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
 from `TranscriptEditingService` (after an identification, and since #405
 after any versioned save or restore that changes a speaker's name) rather than
-performed inline in that request — CLAUDE.md's job-queue rule applies here
+performed inline in that request — `AGENTS.md`'s job-queue rule applies here
 exactly as everywhere else, however small the write — and a **manual edit on
 an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
@@ -1496,7 +1496,13 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   four separate tables would mean writing that query, that dedup pass, and
   that review-status transition four times over rather than once. `owner_id`
   Cascade.
-- **`kg_evidence`** — the §5.3 contract, exactly as specified there.
+- **`kg_evidence`** — the §5.3 contract, exactly as specified there. The
+  no-orphans invariant (§3.3) has a database backstop: a hand-written
+  **deferred constraint trigger** (#355, `kg_assert_has_evidence`,
+  intentional schema drift) refuses at `COMMIT`, with SQLSTATE `23514`, any
+  `accepted`/`edited` entity, relation or item left with no evidence row —
+  so write the subject and its evidence in one transaction, and delete
+  evidence **after** (or together with) its subject, never before.
   Foreign keys into `transcripts`/`transcript_segments`/`notes` are
   **`SetNull`**, not `Restrict` — a deliberate divergence from
   `notes.source_transcript_id`'s `Restrict` (`docs/specs/notes.md` §4.1):
@@ -1661,8 +1667,7 @@ query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 **Per-user preferences are not a table.** Automatic extraction, the
 resolution thresholds, mode and adjudication switch, and the enabled domains
 live in the `graph` namespace of the existing `user_settings` JSONB row
-(issue #369 — `apps/api/src/common/schemas/user-settings-namespaces.schema.ts`,
-all six user-settings parity places), read through `GraphPreferencesService`
+(issue #369 — declared as a `UserSettingsNamespace` in `apps/api/src/graph/preferences/graph.user-settings.ts` and registered in `kvox.manifest.ts`), read through `GraphPreferencesService`
 (`apps/api/src/graph/preferences/`), which fills every absent field from
 `GRAPH_PREFERENCE_DEFAULTS` at read time and never writes a default into the
 row:
@@ -1698,7 +1703,7 @@ Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
-`kg.extract` lives under `graph/extraction/` (§6), `kg.graph_layout`
+`kg.extract` lives under `graph/extraction/` (§6; `GraphExtractionModule`, imported by `NotesModule` for the auto-extract hook — one-way: it provides the two note services it needs itself), `kg.resolve`/`kg.embed` under `graph/resolution/` (`GraphResolutionModule`, §7), `kg.graph_layout`
 under `graph/layout/` (§22.3) and `kg.migrate` under `graph/migrate/` (§17.4) —
 each grouped with the feature it belongs to rather than in one shared handler
 directory:
@@ -1711,8 +1716,8 @@ directory:
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
-| `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
-| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY`, and re-run for one owner by the admin job list's Retry |
+| `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical AGENTS.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
+| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY` through `enqueueHousekeepingJob` with a subject type **and** id (`kg.export`'s sweep passes a subject type alone; the helper scopes its in-flight check and dedup key to exactly what it is given), and re-run for one owner by the admin job list's Retry |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
@@ -1899,7 +1904,7 @@ entity page's Ask panel (§21.5) came later, with issue #381, through the
 header's `actions` slot.
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
-Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
+Settings UI Pattern rule 2 (AGENTS.md), a tab gate is about *content*
 within one destination, while reachability is about the *route*; the
 proposal panel is neither a destination nor parallel content to the note
 itself — it is a transient review surface over the note that is already
@@ -2168,8 +2173,8 @@ that package for exactly this reason: the API to validate and extract
 against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
-single source of truth for settings (CLAUDE.md's Adding a Setting rule, and
-the six-file settings-parity discipline `settings-parity.spec.ts` enforces),
+single source of truth for settings (the Adding a setting rule in [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md), and
+the settings-namespace registry that `settings-parity.spec.ts` iterates),
 and the same argument that makes it right for a system-settings namespace
 makes it right here: one declaration yields runtime validation of a `props`
 object, a JSON Schema for the extraction prompt's structured-output mode,
@@ -2238,8 +2243,8 @@ argument §5.2 makes against `RELATED_TO` applies identically here to an
 undeclared property.
 
 **A `key` is permanent once rows exist**, the identical discipline
-`Job.type` already carries in this codebase (CLAUDE.md's Adding a Job Type
-recipe): renaming `WORKS_FOR` after real relations of that type exist would
+`Job.type` already carries in this codebase (the Adding a job type
+recipe in [`apps/api/src/jobs/handlers/README.md`](../../apps/api/src/jobs/handlers/README.md)): renaming `WORKS_FOR` after real relations of that type exist would
 either orphan every existing row's `type` string or require a data migration
 indistinguishable from adding a new type and retiring the old one — §17.4
 states the retirement path (deprecate, never delete) this constraint forces.
@@ -2257,7 +2262,7 @@ protected field names, and the operating principle "add attributes without
 breaking existing nodes; a genuinely new type needs re-ingestion" that
 directly motivates §17.4's versioning rules. **LinkML itself is not
 adopted as a dependency** — it is a Python toolchain, and this codebase is
-TypeScript end to end (CLAUDE.md's Technology Stack); the ideas worth taking
+TypeScript end to end ([`AGENTS.md`](../../AGENTS.md) Project overview); the ideas worth taking
 (closed classes, slots, mixins) cost nothing to reimplement in Zod, while the
 toolchain itself would be a second language's build step wired into a
 Node/TypeScript monorepo for no capability this document's design actually
@@ -2272,8 +2277,8 @@ The definition file is not one flat list of types — it is modules listed
 is not something to depend on. `index.ts` imports each domain module and
 passes it to `buildOntologyRegistry([coreDomain, workDomain, ...], ...)`
 directly — one import and one array entry is the whole cost of adding a
-domain, with the same "one registry entry" simplicity CLAUDE.md's Adding a
-Job Type and Adding a Notification recipes give their own registries, just
+domain, with the same "one registry entry" simplicity the Adding a
+job type ([handlers README](../../apps/api/src/jobs/handlers/README.md)) and Adding a notification ([notifications README](../../apps/api/src/notifications/README.md)) recipes give their own registries, just
 without the runtime self-registration mechanism those use:
 
 - **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,
@@ -2446,7 +2451,7 @@ is permanent once rows exist (§17.1); deprecate before delete, always.
 
 **Maintenance discipline.** A `CHANGELOG` lives in the definition file
 itself, and a parity test in the style of `settings-parity.spec.ts`
-(CLAUDE.md's Database Tables section) checks the properties that keep the
+(table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) checks the properties that keep the
 file internally honest: every type has a description, every relation
 declares its endpoint types, every attribute declares a `kind`, and no key
 that ever shipped is ever removed from the file (only deprecated).
@@ -2464,8 +2469,7 @@ definition file, not a database migration at all. Treating an ontology bump
 as a Prisma migration would be modelling application-level, per-user data as
 if it were the physical schema, and would additionally spend the *user's*
 own AI provider key inside a `migrate deploy` step run on the operator's
-behalf, precisely the objection CLAUDE.md's `note.retitle` entry (⚠ "a job
-and deliberately not a migration") already raises for a different feature
+behalf, precisely the objection `docs/specs/notes.md` §3.4 ("A job, and deliberately not a migration") already raises for a different feature
 facing the identical shape of mistake.
 
 **The step vocabulary (issue #384).** A migration is declared, not
@@ -2741,7 +2745,9 @@ artefacts, not a design that could disagree with itself by intent.
   is `kv:` plus every `RDF_PREFIXES` prefix, never a remapping of `kv:` terms).
 - **Reuse, expiry, purge.** `POST` reuses an unexpired, non-failed export
   with the same `graph_fingerprint` (§10); a daily enqueue-only cron queues
-  `kg.export` in sweep mode to delete expired exports and their files; and
+  `kg.export` in sweep mode (`payload.mode: 'sweep'`, subject
+  `kg_export_sweep`, `KgExportExpiryTask`) to delete expired exports and their
+  files; and
   `kg.purge` — "forget this person" and the Danger Zone alike — deletes every
   export, since a file written before still names what was forgotten.
 
@@ -3031,7 +3037,7 @@ phone it takes the bottom-sheet-or-full-screen shape `NameSuggestionsPanel.tsx`
 `Drawer` from the bottom for a short list of pending rows, promoted to a
 full-screen route when a proposal is large enough that a partial-height
 sheet would make scanning it worse than not showing it at all. This is the
-page-level `down('sm')` read `LibraryPageFrame.tsx` already takes (CLAUDE.md's
+page-level `down('sm')` read `LibraryPageFrame.tsx` already takes ([`AGENTS.md`](../../AGENTS.md)'s
 Settings UI Pattern rule 5's own footnote) — a layout choice inside one page,
 never a sixth breakpoint gate on app chrome.
 
@@ -3054,8 +3060,8 @@ already have from each other.
 
 `ai.taskModels: Partial<Record<TaskKey, { model: string; reasoningEffort?:
 'low'|'medium'|'high' }>>` — a new field on the existing `ai` system-settings
-namespace (CLAUDE.md's Database Tables section), following the identical
-six-place settings-parity discipline every other `ai` field already follows
+namespace (`system_settings` in [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4), following the identical
+settings-namespace discipline every other `ai` field already follows
 (verified above). `TaskKey` is `'graph.extract' | 'graph.adjudicate' |
 'graph.digest' | 'graph.agent'` — one key per AI-calling *shape* this
 design has, not one per job type, because `kg.resolve`'s
@@ -3070,7 +3076,7 @@ A second new field, `ai.graphEnabled: boolean`, default **`false`** —
 connected knowledge is off for a fresh deployment until an administrator
 turns it on, the identical "off by default until configured" posture
 `nodes.jobSecretBrokerEnabled` and `databaseBackup.nodeOffloadEnabled`
-(CLAUDE.md's Environment Variables section) already establish for a feature
+([`docs/DEVELOPMENT.md`](../DEVELOPMENT.md#environment-variables)) already establish for a feature
 with a real blast radius: turning this on is the moment every eligible note
 starts spending the *owning user's own* AI provider credit on an extraction
 they did not explicitly request per-note. `kg.extract` is never enqueued
@@ -3094,8 +3100,8 @@ delta/tool-call/done events for the agent loop. Every model descriptor a
 provider reports (`AiProvider.listModels`/`deriveModelDescriptor`, verified
 above) carries two new boolean flags, `structuredOutput` and `toolCalling`,
 alongside its existing context-window/output-ceiling numbers
-(`ai-model-resolution.ts`'s five-rank chain, CLAUDE.md's `ai` namespace
-entry) — a model with `structuredOutput: false` is not offered for
+(`ai-model-resolution.ts`'s five-rank chain, the `ai` namespace
+entry in [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) — a model with `structuredOutput: false` is not offered for
 `graph.extract`/`graph.adjudicate`/`graph.digest`, and one with
 `toolCalling: false` is not offered for `graph.agent`, at both save time
 (§20.4) and resolution time (§20.3), so an unusable pairing is
@@ -3220,7 +3226,7 @@ exactly as §20.3 describes), reading prior turns in the conversation as the
 message history, calling tools as needed, and writing every delta into
 `ask_messages.content` on the way past — **the identical durable-buffer-not-
 delivery-mechanism discipline** `note_generations` already establishes
-(CLAUDE.md's Notes rule 1): a turn completes identically whether or not the
+(`docs/specs/notes.md` §5.1): a turn completes identically whether or not the
 SSE stream below is open, and closing the tab loses nothing.
 
 **Caps.** A hard **step cap** (a fixed number of tool calls per turn) and a
@@ -3352,7 +3358,7 @@ and `resolveStreamOffset` (the header-over-query rule, moved into
   refetches. Tuning is the `ASK_STREAM_TUNING` DI token, `{}` in `AskModule`.
 - Access is `graph:read` + `AskAccessService.requireMessage` **before** the
   stream opens; a foreign, missing or `role: 'user'` message is the same JSON
-  404. The stream writes nothing (CLAUDE.md, Notes rule 1).
+  404. The stream writes nothing (`docs/specs/notes.md` §5.1).
 
 ### 21.5 Web surfaces
 
@@ -3387,7 +3393,7 @@ landing. What it does, and the decisions a neighbouring change could undo:
 - **Layout.** ≥ 600 px: the conversation list in a 280 px pane that scrolls
   on its own; < 600 px: the thread full width and the list in a left
   temporary drawer. That is a page-level `down('sm')` read — where the page
-  puts its own list — not a sixth coupled breakpoint gate (CLAUDE.md,
+  puts its own list — not a sixth coupled breakpoint gate (AGENTS.md,
   Settings UI Pattern rule 5). The page's height mirrors `Layout`'s padding so
   the composer sits above the phone's bottom bar.
 - **Sending** from `/ask` creates the conversation, posts the question and
@@ -3727,6 +3733,30 @@ listener re-lays only when the readable entity count has moved by at least
 graph does not re-lay on every new person). A manual refresh that joins an
 automatic job still waiting out its delay pulls it forward to run now.
 
+The details a neighbouring file can break: `GraphLayoutEnqueuer` is the one
+place the job is ever enqueued, with ordinary dedup (never `skipDedup`), so at
+most one layout job is pending or running per owner. The 120-second delay is
+the constant `GRAPH_LAYOUT_COALESCE_MS`. The `graph.changed` event
+(`apps/api/src/graph/graph-events.ts`) is emitted after a graph write commits,
+never inside the transaction, and `GraphLayoutListener` runs one cheap
+readable-entity count and enqueues only past the 20% threshold above — never
+on every commit, which this section forbids. `kg.graph_layout` is server-only
+without being a credential question: it makes no AI call and needs no vendor
+key, but its input is the owner's entire graph read across `kg_entities`,
+`kg_relations` and `kg_items` at run time, so it opts out of node eligibility
+under the "reads several tables mid-computation" exception (the queue-job rule
+2 in `AGENTS.md`). Its profile is `{ maxRuntimeMs: 15 min, maxAttempts: 2 }`:
+one automatic retry is honest here, unlike `note.generate`'s `maxAttempts: 1`,
+because a retry recomputes a derived cache and calls no vendor. The stored
+snapshot holds ids and coordinates only — never a label — and only the newest
+**two** rows per owner are kept (the handler prunes the rest in the transaction
+that inserts the new one), so `GET /api/graph/overview` joins labels live and a
+forgotten person's name cannot resurface through this cache. `kg.purge`'s
+`scope: 'all'` plan deletes the owner's `kg_graph_layouts` rows as its last
+step, since even an ids-and-coordinates cache is a map of the graph being
+wiped; `scope: 'person'` does not touch it — the next layout drops the
+forgotten entity through the live join.
+
 The overview itself renders clusters as the zoomed-out unit — a cluster's
 size and label (its most central entities) rather than every individual
 node at once — and **drilling into a cluster hands its member node ids
@@ -3851,7 +3881,7 @@ printed in a brief).
 - **Storing anything user-owned in the existing `credentials` table.**
   Not directly applicable to this graph's own data, but named here because
   the same reasoning `docs/specs/notes.md`'s "Rejected alternatives" gives
-  for `user_ai_credentials` (CLAUDE.md's Notes rule 5, the cascade argument) generalizes to
+  for `user_ai_credentials` (`docs/specs/notes.md` §4.2, the cascade argument) generalizes to
   every table this document defines: `credentials` has no foreign key to
   `users` and cannot grow one without complicating a table that exists to
   hold infrastructure secrets outliving whichever administrator configured
@@ -3896,7 +3926,7 @@ printed in a brief).
   a migration or an extractor could get backwards.
 - **LinkML/YAML as the definition format**, rather than TypeScript + Zod.
   Rejected per §17.1: LinkML is a Python toolchain, and this codebase is
-  TypeScript end to end (CLAUDE.md's Technology Stack) — adopting it would
+  TypeScript end to end ([`AGENTS.md`](../../AGENTS.md) Project overview) — adopting it would
   mean a second language's build step wired into a Node/TypeScript monorepo,
   for capabilities (closed classes, slots, mixins) this design gets for free
   by reimplementing the *ideas* in Zod, the tool this codebase already uses
@@ -3931,7 +3961,7 @@ printed in a brief).
   user's own domain toggle, an ontology bump requiring row reshaping) as a
   `prisma migrate` step run by an operator would additionally spend a user's
   own AI provider key inside a deploy step performed on their behalf,
-  exactly the mistake CLAUDE.md's `note.retitle` entry already documents
+  exactly the mistake `docs/specs/notes.md` §3.4 already documents
   and rejects for a different feature facing the identical shape of problem.
   `kg.migrate` (§11), a per-user, per-row, resumable job, is the actual
   mechanism.

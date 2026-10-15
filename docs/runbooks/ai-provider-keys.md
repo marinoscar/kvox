@@ -37,7 +37,7 @@ Source of truth for every claim below:
   actually calls the provider: `profile: { maxAttempts: 1 }`, the
   per-user throttle key, and which failures return normally (terminal)
   versus rethrow (retryable/deferred).
-- `apps/api/src/notes/generation/token-budget.ts` — `assertWithinBudget`,
+- `apps/api/src/ai/ai-token-budget.ts` — `assertWithinBudget`,
   where a too-large prompt is refused with numbers, before any request is
   sent.
 - `apps/web/src/pages/UserAiPage.tsx` and
@@ -196,8 +196,8 @@ whether the deployment is broken.
 
 ## 6. Diagnosing a failed generation
 
-`note.generate` is `maxAttempts: 1` **by design** (see `CLAUDE.md`'s
-"Notes, Note Templates and the AI Layer" section) — nothing about this job
+`note.generate` is `maxAttempts: 1` **by design** (see the Notes rule in
+[`apps/api/AGENTS.md`](../../apps/api/AGENTS.md)) — nothing about this job
 type auto-retries, ever, because a second attempt would call the provider
 with the user's own key a second time and, completions being
 non-deterministic, show them different text than the partial stream they
@@ -216,7 +216,7 @@ note.
 
 **B. A token-ceiling refusal (`errorClass` is not set at all — this is a
 400 at request time, before a job is even queued).** `assertWithinBudget`
-(`generation/token-budget.ts`) runs *before* `POST /api/notes` or
+(`ai/ai-token-budget.ts`) runs *before* `POST /api/notes` or
 `POST /api/notes/{id}/regenerate` creates anything, so this never shows up
 as a failed note in the note list — it's a 400 response naming the actual
 numbers: "this source is approximately *N* tokens; this model allows *M*
