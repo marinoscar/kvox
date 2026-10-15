@@ -41,9 +41,9 @@ npm install                                   # the lockfile carries the old wor
 ```
 
 Then regenerate the visual baselines — see [step 5](#the-manual-steps) —
-and expect CI to be red until you do; that's covered in its own section
-below because it's the thing most likely to cause a moment of panic on a
-first fork.
+and expect the visual suite to fail locally until you do; that's covered
+in its own section below because it's the thing most likely to cause a
+moment of panic on a first fork.
 
 ## What gets renamed, and what doesn't
 
@@ -220,8 +220,10 @@ human, in this order:
      npx playwright test --config=tests/visual/playwright.config.ts --update-snapshots
    ```
 
-   See [CI will be red until you regenerate the baselines](#ci-will-be-red-until-you-regenerate-the-baselines)
-   below for why this isn't optional.
+   See [The visual suite fails until you regenerate the baselines](#the-visual-suite-fails-until-you-regenerate-the-baselines)
+   below for why this isn't optional. The `visual-baselines.yml` workflow
+   (Actions, "Regenerate visual baselines") does the same thing without
+   Docker on your machine.
 
 3. **Regenerate the email logo**, if the rebrand changed the theme colour
    (identity's icon rasters carry no product name, so a name-only rename has
@@ -266,19 +268,21 @@ stay exactly as it is. The first row is the one that matters most.
 | The `.appctl-deploy.json` filename | `apps/cli/src/deploy/state.ts` | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. Kept under its historical `appctl` name for the identical reason — it's the same file already sitting on servers deployed under the old name, and `appctlVersion`, the field inside it recording the CLI version at time of write, stays spelled the same way for the same reason. |
 | `@app/shared`, and the `api` / `web` / `nginx` Compose service names | — | These are internal plumbing names, not identity — nothing user-facing reads them, and nothing about a rebrand depends on them. |
 
-## CI will be red until you regenerate the baselines
+## The visual suite fails until you regenerate the baselines
 
 Say this loudly, because it is the single most likely thing to cause a
-moment of panic on a first fork: **after you rename the product name, CI
-will fail until you regenerate the visual baselines, and that is expected —
-it is not a sign that something went wrong.**
+moment of panic on a first fork: **after you rename the product name, the
+visual suite will fail until you regenerate the baselines, and that is
+expected — it is not a sign that something went wrong.** The suite is no
+longer a CI job, so nothing turns red on a pull request; the failure shows up
+the next time anyone runs it.
 
 Seven of the eleven visual-regression baselines under
 `tests/visual/specs/**/*-snapshots/` are full-page (`fullPage`) screenshots
 that include the AppBar wordmark, and the suite runs at `maxDiffPixels: 4` —
 effectively zero pixel tolerance. Changing the product name is a genuine
-pixel change to every one of those seven screenshots, so the very next CI
-run after a rename will show seven failing visual tests until you run the
+pixel change to every one of those seven screenshots, so the very next run
+of the suite after a rename will show seven failing visual tests until you run the
 [baseline regeneration command](#the-manual-steps) above and commit the
 result. The remaining four baselines are rail-scoped or drill-down shots
 that don't include the wordmark and are unaffected.
