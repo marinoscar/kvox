@@ -5,7 +5,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 ## Layout
 
 - `src/config/`: `adminSections.tsx` (`ADMIN_SECTIONS`, `SettingsCardDef`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`), `destinations.ts`.
-- `src/pages/`, `src/components/` (`settings/SettingsHub.tsx`, `navigation/`, `common/Layout.tsx`, `library/`), `src/hooks/`, `src/services/api.ts` (the `PlatformHttpClient` instance and KVox's endpoint functions), `src/contexts/`.
+- `src/pages/`, `src/components/` (`settings/` holds only KVox's own cards, `navigation/`, `common/Layout.tsx`, `library/`), `src/hooks/`, `src/services/api.ts` (the `PlatformHttpClient` instance and KVox's endpoint functions), `src/contexts/`.
 - `src/identity/`: KVox's bindings of the platform identity slice (`@marinoscar/platform-web/identity/{headless,ui}`): `IdentityProviders.tsx` (`AuthProvider` with `client={api}` and the push-unsubscribe `onBeforeLogout`), `identityAdapters.ts`, `LoginPage.tsx` (brand mark in the `Logo` slot), `UsersPage.tsx` + `usersPageSlots.ts` (Reminders tab). `useAuth`, `usePermissions`, `RequireAuth` and `RequirePermission` are imported from `@marinoscar/platform-web/identity/headless`; KVox has no `AuthContext` of its own.
 - Routes live in `src/App.tsx`. Tests: `src/__tests__/` (Vitest + React Testing Library, MSW for the API); registry suites in `src/__tests__/config/` (`settingsRegistry.test.ts`, `userSettingsSections.test.ts`, `destinations.test.ts`).
 
@@ -14,7 +14,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 1. A new settings page is a card appended to `ADMIN_SECTIONS` or `USER_SETTINGS_SECTIONS`, plus its route in `App.tsx`. No route without a card.
 2. Never add a settings page as a tab of another. Tabs only for parallel content inside one destination (live example: the packaged Users & Allowlist page, `@marinoscar/platform-web/identity/ui` `UsersPage`, with KVox's Reminders tab appended through `slots.Tabs` in `src/identity/usersPageSlots.ts`).
 3. A card's `permission` is the exact string the API controller enforces (`system_settings:read`, `users:read`, `allowlist:read`, `jobs:read`, `nodes:read`, `db_backup:read`, `broadcasts:read`, `push:read`). Writes are gated inside the page by disabling controls.
-4. Reuse `SettingsHub` (`src/components/settings/SettingsHub.tsx`); never fork it. `src/pages/UserSettingsHubPage.tsx` is the 4-prop binding.
+4. Reuse the packaged `SettingsHub` (`@marinoscar/platform-web/settings/ui`); never fork it or add a local copy. Profile and Appearance are the packaged `UserProfilePage` and `UserAppearancePage` from the same entry; the `useSystemSettings` and `useUserSettings` hooks come from `@marinoscar/platform-web/settings/headless`. `src/pages/UserSettingsHubPage.tsx` is the 4-prop binding.
 5. Update the registry tests above when you add a card.
 
 ## Five coupled breakpoint gates
@@ -26,7 +26,7 @@ Change all five together or none. The boundary is `sm` (600px), never `md` (900p
 | 1 | `Layout.tsx` `showRail` (`up('sm')`) mounts `NavigationRail` | `components/common/Layout.tsx` |
 | 2 | `BottomNav` self-gate `down('sm')` | `components/navigation/BottomNav.tsx` |
 | 3 | `<main>` `pb: { xs: 10, sm: 3 }` | `components/common/Layout.tsx` |
-| 4 | `SettingsHub` `isCompactWindow` (`down('sm')`) | `components/settings/SettingsHub.tsx` |
+| 4 | `SettingsHub` `isCompactWindow` (`down('sm')`) | `@marinoscar/platform-web/settings/ui` (the package keeps the gate; not a file in `src/`) |
 | 5 | `AppBar` `isCompactWindow` (`down('sm')`) | `components/navigation/AppBar.tsx` |
 
 `components/library/LibraryPageFrame.tsx` also reads `down('sm')` but is **not** a sixth gate: it only decides where one page puts its create action (header button or FAB), never whether app chrome mounts. The rail's collapsed width (72px) is a width, not a gate.

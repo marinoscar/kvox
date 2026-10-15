@@ -17,9 +17,11 @@ import type {
   GraphPreferencesPatch,
   GraphPreferencesSettings,
   GraphResolutionMode,
+  UserSettings,
+  UserSettingsUpdate,
 } from '../types';
 import { useIsMounted } from './useIsMounted';
-import { useUserSettings } from './useUserSettings';
+import { useUserSettings } from './userSettingsRetry';
 
 export interface ResolvedGraphPreferences {
   extraction: { autoExtract: boolean };
@@ -93,7 +95,9 @@ export interface UseGraphPreferencesReturn {
 export function useGraphPreferences(): UseGraphPreferencesReturn {
   // `syncTheme: false` — this page never changes the theme, and must not
   // stamp the stored one back over the AppBar toggle.
-  const { settings, isLoading, error, updateSettings } = useUserSettings({ syncTheme: false });
+  const { settings, isLoading, error, updateSettings } = useUserSettings<UserSettings, UserSettingsUpdate>({
+    syncTheme: false,
+  });
   const [saveState, setSaveState] = useState<GraphSaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const isMounted = useIsMounted();

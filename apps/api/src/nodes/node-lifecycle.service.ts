@@ -60,9 +60,9 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { SystemNodesValue } from '../common/schemas/settings.schema';
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemNodesValue } from '@marinoscar/platform-contract/nodes';
+import { NODES_SYSTEM_SETTINGS } from '@marinoscar/platform-api/nodes';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { readJobSecretBrokerEnabled } from '../jobs/node-offload.service';
 
 /**
@@ -158,7 +158,7 @@ export class NodeLifecycleService {
    * threshold an operator is watching.
    */
   async getPolicy(): Promise<SystemNodesValue> {
-    const defaults = DEFAULT_SYSTEM_SETTINGS.nodes;
+    const defaults = NODES_SYSTEM_SETTINGS.defaults;
 
     try {
       const policy = await this.systemSettings.getNodesPolicy();

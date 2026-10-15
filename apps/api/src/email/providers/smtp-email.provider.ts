@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
-import { CredentialsService } from '../../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { BaseEmailProvider, SecretRedactor } from '../base-email.provider';
 import { EmailSettingsService } from '../email-settings.service';
 import {

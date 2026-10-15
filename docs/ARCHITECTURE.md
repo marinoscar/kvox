@@ -280,10 +280,12 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── audit-sink.adapter.ts     # AUDIT_SINK -> audit_events
 │   │   │   │   ├── system-settings-store.adapter.ts
 │   │   │   │   ├── doctor.config.ts
-│   │   │   │   └── identity/         # IdentityModule.forRoot + its host ports
+│   │   │   │   ├── identity/         # IdentityModule.forRoot + its host ports
+│   │   │   │   ├── settings/         # SettingsModule.forRoot + host ports (data, profile images)
+│   │   │   │   └── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
 │   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
-│   │   │   ├── settings/             # Settings module (user + system)
+│   │   │   ├── settings/             # registry/ (namespace manifests) and profile-image/ only
 │   │   │   ├── health/               # Health check module
 │   │   │   ├── prisma/               # Prisma service
 │   │   │   ├── common/               # Shared utilities
@@ -603,6 +605,10 @@ apps/api/src/storage/
 
 #### User Settings Shape
 
+Served by the platform settings slice (`/api/user-settings`, section 7.7). `theme` and `profile` are core fields;
+`dataTables`, `navigation` and `notifications` (platform namespaces) and `onboarding` and `graph` (KVox's) are optional
+namespaces, present only once set, in that stored key order.
+
 ```json
 {
   "theme": "light | dark | system",
@@ -624,7 +630,10 @@ than by a data migration (see `apps/api/src/common/profile-image/profile-image.t
 #### System Settings Shape
 
 `system_settings.value` — the JSONB column itself — holds `notifications`,
-`jobs`, `nodes`, `databaseBackup` and `maintenance`. (Two earlier namespaces,
+`jobs`, `nodes`, `databaseBackup` and `maintenance` (the platform's declarations)
+followed by KVox's `transcription` and `ai`; the shapes of those two are in
+[`docs/API.md`](API.md#get-system-settings) and their specs. The order is the stored key order: a new
+namespace is appended, never inserted. (Two earlier namespaces,
 `ui` and `features`, were removed by issue #366: nothing at runtime ever read
 either one, so they were dropped from the schema, DTOs and seed rather than
 kept as dead weight — see `docs/specs/settings-ui.md` for the settings-UI
@@ -671,15 +680,15 @@ side of that cleanup.)
 }
 ```
 
-`GET/PUT/PATCH /api/system-settings` project this stored row into
-`SystemSettingsResponseDto`, which adds a `security` block on the way out —
+`GET/PUT/PATCH /api/system-settings` (platform `SystemSettingsService`, row key `global`) project this stored row into
+a response that adds a `security` block on the way out —
 see [`docs/API.md`](API.md#get-system-settings) for the full response shape.
 
 `security` is derived, read-only configuration — `jwtAccessTtlMinutes` and
 `refreshTtlDays` are read from the `JWT_ACCESS_TTL_MINUTES` /
 `JWT_REFRESH_TTL_DAYS` environment variables via `ConfigService`, not from the
 database. It is never written to `system_settings.value`: the write schemas
-(`updateSystemSettingsSchema` / `patchSystemSettingsSchema`) don't declare it,
+(the schemas composed from the namespace registry) don't declare it,
 so a client that sends it has the key silently stripped by the global
 `ZodValidationPipe` before the request reaches the settings service.
 
@@ -723,17 +732,17 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-system-role assignments. Only the system role `admin` lives here now; `contributor`, `viewer` and `org_admin` are **organization** roles held on `memberships.role_id` (platform migration `0024_split_system_org_roles` moved them; see §7.3)
 - `organizations` / `memberships` - The platform's tenancy tables. KVox runs in single-organization mode (`TENANCY_MODE` unset): one default organization, and every user has one membership in it whose role is their org role
-- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one means declaring it in its module and adding it to `apps/api/src/kvox.manifest.ts` (parity specs iterate the registries) — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry). `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
-- `user_settings` - Per-user settings (JSONB). Namespaces include `onboarding` (issue #272, epic
+- `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` and `ai` (KVox's, `app-registrations/settings.ts`; `ai` is a shim until #473). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
+- `user_settings` - Per-user settings (JSONB), served by the platform settings slice. Optional namespaces in stored key order: `dataTables`, `navigation`, `notifications` (platform), then `onboarding` and `graph` (KVox, `app-registrations/settings.ts`). `onboarding` (issue #272, epic
   #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
   `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
   the `### Onboarding` group of [`API.md`](API.md#onboarding) and [`docs/specs/onboarding.md`](specs/onboarding.md)). Absent from
-  `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
-  `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the registry-driven parity check user
-  settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
+  the default user-settings document on purpose: absent is how "never onboarded" is spelled (the declaration,
+  `onboarding/onboarding.user-settings.ts`, has no default). Also `graph` (issue #369): per-user connected-knowledge
   preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
   adjudication}`, `domains.{work,personal}` (`personal` default `false`, #383) — absent means every default, resolved by
   `GraphPreferencesService`; see `docs/specs/ontology.md` §10
+- `credentials` - Encrypted `(purpose, name)` secrets an administrator enters at runtime (SMTP password, VAPID private key, the speech-to-text provider key). Owned by the platform credentials slice (`CredentialsService`, `@marinoscar/platform-api/credentials`); the same table and the same ciphertext as before the slice was adopted (issue #466), so no row was rewritten. `updatedByUserId` is `SetNull`. Never returned by any endpoint. The platform's `user_credentials` and `org_credentials` tables exist and stay empty: this app keeps no per-user or per-organization secret there (AI keys live in `user_ai_credentials`), and `org_settings` likewise stays empty in single-organization mode
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control. A platform table: KVox does not extend it. It no longer has the `reminder_count` / `last_reminder_at` columns (dropped by the `kvox_allowlist_reminders` migration, issue #465)
@@ -871,7 +880,7 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   `segment.update_text` op through the same `/operations` path every other correction uses
 - `user_ai_credentials` - One AI provider API key per `(userId, provider)` (issue #47, epic
   #45): each user's own key, never a deployment-wide one — see `docs/specs/notes.md` §9.
-  `secret` is `encryptSecret(rawKey, 'ai-key')` — the same cipher every other secret in this
+  `secret` is `encryptSecret(rawKey, 'ai-key')` (from `@marinoscar/platform-api/core`) — the same cipher every other secret in this
   application uses, under a new purpose string for domain separation, so a ciphertext lifted
   out of `credentials` and pasted here fails authentication rather than decrypting into a
   context where it means something else. `userId` **cascades**, and that is the whole reason
@@ -1340,12 +1349,12 @@ the binding:
 |------|--------------|-------------|
 | `IDENTITY_NOTIFIER` | `IdentityNotifierAdapter` over `NotificationsService` (`security.role_changed`, `user.welcome`, `allowlist.invitation`; org invitations log and drop in single-org mode) | #468 |
 | `IDENTITY_JOBS` | `IdentityJobsAdapter`: registers `auth.token.cleanup` and `device-auth.code.cleanup` into `JobHandlerRegistry`, enqueues through `JobsService` | #470 |
-| `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the default user-settings document) and the profile-image helpers | #466 |
+| `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the settings slice's default user-settings document) and the profile-image helpers | #469 (profile images) |
 | `IDENTITY_NODE_CREDENTIALS` | `NodeCredentialService` | #470 |
 
 `PlatformHostModule.forRoot` (`apps/api/src/platform/platform-host.module.ts`) supplies the core ports identity needs:
 `AUDIT_SINK` (`audit-sink.adapter.ts`, writes `audit_events`), the system-settings store
-(`system-settings-store.adapter.ts`, over `SystemSettingsService` until #466) and `PLATFORM_PRISMA`. Because identity
+(`system-settings-store.adapter.ts`, over the platform `SystemSettingsService` since #466) and `PLATFORM_PRISMA`. Because identity
 needs the doctor check registry, the packaged `GET /api/admin/doctor` (`system_settings:read`, read-only) is mounted
 too; its checks are configured in `platform/doctor.config.ts`. The shims are listed in
 [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
@@ -1355,6 +1364,41 @@ On the web, `AuthProvider` comes from `@marinoscar/platform-web/identity/headles
 Login, Callback, Activate, Tokens and Users are the packaged pages from `@marinoscar/platform-web/identity/ui`. KVox
 binds only the Login page (`identity/LoginPage.tsx`, the `BrandMark` in the `Logo` slot), the Users page (the Reminders
 tab) and the test login page (`/testing/login`).
+
+### 7.7 Platform settings and credentials slices
+
+Settings and the encrypted credential store are the platform's slices, not KVox code (issue #466, epic #462). KVox
+registers what is its own and binds two host ports.
+
+| Concern | Owner | Where in KVox |
+|---------|-------|---------------|
+| Routes `/api/system-settings`, `/api/user-settings`, `/api/org-settings`, merge, `If-Match`, the audit row per system write | platform settings slice | `platform/settings/settings.config.ts` (`SettingsModule.forRoot`, global, `systemRowKey` `'global'`, `orgLayer` `'auto'`) |
+| `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (system) and `dataTables`, `navigation`, `notifications` (user) declarations | platform | listed in stored key order in `settings/registry/{system,user}-settings.manifest.ts`; `databaseBackup.storageProvider` default `s3` kept through `APP_SYSTEM_SETTINGS_DEFAULTS` |
+| `transcription`, `ai` (system) and `onboarding`, `graph` (user) declarations | KVox | `transcription/transcription.system-settings.ts`, `ai/ai.system-settings.ts` (shim until #473), `onboarding/onboarding.user-settings.ts`, `graph/graph.user-settings.ts`, assembled in `app-registrations/settings.ts`; the platform requires a `merge` per namespace, so the old service merges live in the declarations |
+| Encrypted `(purpose, name)` store, the AES-256-GCM cipher, the boot-time `SECRETS_ENCRYPTION_KEY` check | platform credentials slice and `core` | `platform/credentials/credentials.config.ts` (`CredentialsModule`, not global; `UserCredentialsModule`, `OrgCredentialsModule` mounted and unused), `main.ts` calls `verifyEncryptionKeyAtStartup` from `@marinoscar/platform-api/core` |
+| Credential purposes `smtp`, `email_ses`, `push_vapid` | platform definitions (strings equal the ones KVox always stored) | `platform/credentials/credential-purposes.manifest.ts` |
+| Credential purpose `transcription` | KVox | registered in `kvox.manifest.ts` under `[registry:credential-purposes]` (the base-domain-boundary test forbids `platform/credentials` importing `transcription`) |
+| Per-user AI keys | KVox | `user_ai_credentials`, encrypted with the core `encryptSecret`/`decryptSecret`, purpose `'ai-key'`; never in `credentials` |
+
+A purpose is also the AES-GCM sub-key domain, so a purpose string is permanent. The cipher is byte-compatible with the one
+KVox ran before (verified in both directions on existing ciphertext), which is why adopting the slice needed no data
+migration.
+
+Registration order matters. `settings/registry/index.ts` registers every namespace as an import side effect and must run
+before `SettingsModule.forRoot()` composes the request bodies and the OpenAPI document, so every entry point reaches it
+through `kvox.manifest.ts`. A platform slice that later mounts and tries to register its own `jobs` or `nodes` key finds KVox's
+registration first and leaves it alone; keep that order. The platform's declarations are supersets of the schemas KVox stored
+before, so `APP_SYSTEM_SETTINGS_EXTENSIONS` is empty.
+
+Temporary shims, with the issue that removes each, are in
+[`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): the `ai` declaration (#473), the
+`user-settings.namespace-changed` interceptor (`platform/settings/user-settings-change.interceptor.ts`, which re-emits the
+event the platform service does not), the profile-image adapter (#469) and `cron` in `db-backup/schedule.util.ts` (#467).
+
+On the web, the hub (`SettingsHub`) and the Profile and Appearance pages come from `@marinoscar/platform-web/settings/ui`,
+and the `useSystemSettings` and `useUserSettings` hooks from `@marinoscar/platform-web/settings/headless`; KVox keeps the two
+registries (`config/adminSections.tsx`, `config/userSettingsSections.tsx`) and the `UserSettingsHubPage` and
+`Admin/SettingsHubPage` bindings ([`specs/settings-ui.md`](specs/settings-ui.md)).
 
 ---
 
@@ -2084,11 +2128,6 @@ The project uses a **mocked database approach** for all tests by default. This p
 ```
 apps/api/
 ├── src/
-│   ├── settings/
-│   │   ├── user-settings/
-│   │   │   └── user-settings.service.spec.ts
-│   │   └── system-settings/
-│   │       └── system-settings.service.spec.ts
 │   └── common/
 │       ├── filters/http-exception.filter.spec.ts
 │       └── interceptors/transform.interceptor.spec.ts
@@ -2114,9 +2153,7 @@ apps/api/
     ├── rbac/
     │   ├── rbac.integration.spec.ts      # Org roles hold the KVox permissions through the membership
     │   └── guard-integration.integration.spec.ts
-    ├── settings/
-    │   ├── user-settings.integration.spec.ts
-    │   └── system-settings.integration.spec.ts
+    ├── settings/                         # KVox-side checks on the packaged settings routes
     └── health/
         └── health.integration.spec.ts
 ```

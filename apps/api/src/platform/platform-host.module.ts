@@ -5,7 +5,7 @@
 // Binds the DI-time host ports every packaged slice reaches the app through:
 //
 //   AUDIT_SINK             -> `audit_events` (PrismaAuditSink)
-//   SYSTEM_SETTINGS_STORE  -> this app's CURRENT SystemSettingsService until #466
+//   SYSTEM_SETTINGS_STORE  -> the platform SystemSettingsService (#466)
 //   PLATFORM_PRISMA        -> the existing PrismaService
 //
 // `PlatformHostModule.forRoot` is GLOBAL, so the identity slice (which injects
@@ -18,7 +18,6 @@
 import { PlatformHostModule } from '@marinoscar/platform-api/core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { SettingsModule } from '../settings/settings.module';
 import { PrismaAuditSink } from './audit-sink.adapter';
 import { SystemSettingsStoreAdapter } from './system-settings-store.adapter';
 
@@ -26,5 +25,4 @@ export const platformHostModule = PlatformHostModule.forRoot({
   audit: { useClass: PrismaAuditSink },
   settings: { useClass: SystemSettingsStoreAdapter },
   prisma: { useExisting: PrismaService },
-  imports: [SettingsModule],
 });

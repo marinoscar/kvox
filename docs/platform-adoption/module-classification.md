@@ -34,6 +34,8 @@ The apps view under-counts the API: EAB's `apps/api/src` holds only bindings, so
 
 Issue tokens (`issue 1.3`, `Epic 3`) are roadmap numbers, not GitHub issue numbers: 1.2 host, 1.3 identity, 1.4 settings and credentials, 2.1 jobs and nodes, 2.2 storage, 2.3 email and notifications, 2.4 db-backup, Epic 3 AI, 4.1 exports, 4.2 user-data, 4.3 onboarding, 4.4 CLI `createCli`, 4.5 infra, 4.6 web shell, Epic 6 domain API packages, Epic 7 domain web packages. Target names are EAB slice names from `packages/platform-slices.json`, or `@marinoscar/kvox-<x>` for domain code.
 
+Status note (issue #466, roadmap 1.4): this page is the classification as written before adoption. Its rows for `credentials`, `common/crypto`, the `settings` module, `common/schemas`, `common/types`, `components/settings` and the settings hooks and pages describe code that #466 deleted or replaced with the packaged slices. The current state is in [`local-exceptions.md`](local-exceptions.md) and `docs/ARCHITECTURE.md` §7.7.
+
 ### KVox workarounds referenced below
 
 | Workaround | What it is | Used by |

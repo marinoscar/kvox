@@ -10,13 +10,13 @@ import type { DatabaseBackupRun, Job, Prisma } from '@prisma/client';
 
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { MaintenanceModeService } from '../common/maintenance/maintenance-mode.service';
-import type { SystemDatabaseBackupValue } from '../common/schemas/settings.schema';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import type { RestoreCompletedEmailData } from '../email';
 import { JobsService } from '../jobs/jobs.service';
 import { jobTempPath } from '../jobs/job-temp';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   STORAGE_PROVIDER,
   type StorageProvider,

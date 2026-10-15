@@ -14,12 +14,12 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { Logger } from '@nestjs/common';
+import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
 import { verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
-import { verifyEncryptionKeyAtStartup } from './common/crypto/encryption-key-startup-check';
 import { createOpenApiDocument } from './openapi/document';
 import { registerDocsRoutesOrDegrade } from './openapi/register-docs-routes';
 
@@ -56,7 +56,8 @@ async function bootstrap() {
   // strict about the state that matters without breaking every deployment and
   // the `Smoke (boot compiled API)` CI job, neither of which sets the variable.
   // The full reasoning — including why there is no development fallback key and
-  // no NODE_ENV branch — is in the header of encryption-key-startup-check.ts.
+  // no NODE_ENV branch — is in the header of core's encryption-key-startup-check
+  // (`@marinoscar/platform-api/core`, adopted by #466).
   //
   // Throwing rather than exiting explicitly, matching the TEST_AUTH_ENABLED
   // guard above: `bootstrap()` is called unhandled at the bottom of this file,
@@ -64,7 +65,10 @@ async function bootstrap() {
   // message on stderr. Not calling `app.close()` first is deliberate — the
   // process is about to die and the OS reclaims the connection, so closing
   // would only add a way for a shutdown hang to swallow the diagnosis.
-  await verifyEncryptionKeyAtStartup(app.get(PrismaService), logger);
+  await verifyEncryptionKeyAtStartup(
+    () => app.get(PrismaService).credential.count(),
+    logger,
+  );
 
   // Register cookie plugin
   await app.register(fastifyCookie, {

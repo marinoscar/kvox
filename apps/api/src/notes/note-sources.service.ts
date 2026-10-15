@@ -37,7 +37,7 @@ import {
 import { randomUUID } from 'node:crypto';
 
 import { JobsService } from '../jobs/jobs.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../storage/storage-job-input';
 import {
   acceptedDocumentTypesSentence,

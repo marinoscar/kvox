@@ -37,12 +37,12 @@ import type { DatabaseBackupRun, Job } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
 
 import type { MaintenanceModeService } from '../common/maintenance/maintenance-mode.service';
-import type { SystemDatabaseBackupValue } from '../common/schemas/settings.schema';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import { JOB_TEMP_PREFIX } from '../jobs/job-temp';
 import type { NotificationsService } from '../notifications/notifications.service';
 import type { JobsService } from '../jobs/jobs.service';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '../storage/providers/storage-provider.interface';
 import type { AdminConnection, AdminQueryClient } from './admin-connection.util';
 import {

@@ -34,7 +34,7 @@ export default defineConfig({
   // ReferenceError the moment anything renders the settings hub, not a type
   // error anybody would see first.
   //
-  // What that cost, concretely: `SettingsHub.tsx` renders
+  // What that cost, concretely: the packaged `SettingsHub` page bindings render
   // `Version {__APP_VERSION__}`, so every harness page mounting either hub
   // threw during render, `ErrorBoundary` replaced the WHOLE application, and
   // all eight hub/rail specs failed with `element(s) not found` rather than

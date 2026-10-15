@@ -1,4 +1,4 @@
-import { DEFAULT_SYSTEM_SETTINGS } from '../../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../settings/registry/default-system-settings';
 import {
   DEFAULT_PLAYBACK_BITRATE_KBPS,
   ffmpegArgs,

@@ -38,7 +38,7 @@
 
 import { Injectable } from '@nestjs/common';
 
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { ProviderAuthError } from '../transcription/errors';
 import {
   createProviderContext,

@@ -10,7 +10,7 @@ import * as webpush from 'web-push';
 import type { z } from 'zod';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import {
   DEFAULT_PUSH_CONFIG,
   DEFAULT_VAPID_SUBJECT,

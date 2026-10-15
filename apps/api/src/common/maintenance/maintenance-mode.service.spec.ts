@@ -1,7 +1,7 @@
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../types/settings.types';
-import type { SystemMaintenanceValue } from '../schemas/settings.schema';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../settings/registry/default-system-settings';
+import type { SystemMaintenanceValue } from '@marinoscar/platform-api/host';
 import {
   MAINTENANCE_AUDIT_DISABLE,
   MAINTENANCE_AUDIT_ENABLE,
@@ -23,7 +23,7 @@ import {
  */
 describe('MaintenanceModeService', () => {
   let systemSettings: {
-    getMaintenancePolicy: jest.Mock;
+    getNamespace: jest.Mock;
     patchSettings: jest.Mock;
   };
   let prisma: { auditEvent: { create: jest.Mock } };
@@ -42,7 +42,7 @@ describe('MaintenanceModeService', () => {
     delete process.env.MAINTENANCE_MODE;
 
     systemSettings = {
-      getMaintenancePolicy: jest.fn().mockResolvedValue(persisted()),
+      getNamespace: jest.fn().mockResolvedValue(persisted()),
       patchSettings: jest.fn().mockResolvedValue(undefined),
     };
     prisma = { auditEvent: { create: jest.fn().mockResolvedValue({}) } };
@@ -68,7 +68,7 @@ describe('MaintenanceModeService', () => {
 
   describe('the persisted layer', () => {
     it('reports the stored window when nothing overrides it', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({
           enabled: true,
           message: 'Back at 03:00 UTC',
@@ -112,7 +112,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('falls back to the persisted message and allowAdmins when it carries none', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ message: 'Stored copy', allowAdmins: false }),
       );
       service.setInMemoryOverride({ enabled: true });
@@ -146,7 +146,7 @@ describe('MaintenanceModeService', () => {
     // procedure in docs/runbooks/maintenance-mode.md is a lie and the only
     // remaining fix is editing JSONB in the database by hand.
     it('MAINTENANCE_MODE=false overrides a persisted enabled window', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ enabled: true, allowAdmins: false }),
       );
       process.env.MAINTENANCE_MODE = 'false';
@@ -188,7 +188,7 @@ describe('MaintenanceModeService', () => {
     it.each(['1', '0', 'yes', 'no', 'TRUE', 'False', 'on', 'off', ''])(
       'treats %p as no override at all',
       async (value) => {
-        systemSettings.getMaintenancePolicy.mockResolvedValue(
+        systemSettings.getNamespace.mockResolvedValue(
           persisted({ enabled: true }),
         );
         process.env.MAINTENANCE_MODE = value;
@@ -219,12 +219,12 @@ describe('MaintenanceModeService', () => {
 
   describe('when the persisted layer cannot be read', () => {
     it('does not throw, and degrades to the last known state', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ message: 'Known copy' }),
       );
       await service.resolve();
 
-      systemSettings.getMaintenancePolicy.mockRejectedValue(
+      systemSettings.getNamespace.mockRejectedValue(
         new Error('database "appdb" does not exist'),
       );
       const state = await service.resolve({ fresh: true });
@@ -235,7 +235,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('degrades to the seeded defaults when it has never read successfully', async () => {
-      systemSettings.getMaintenancePolicy.mockRejectedValue(new Error('down'));
+      systemSettings.getNamespace.mockRejectedValue(new Error('down'));
 
       const state = await service.resolve();
 
@@ -249,7 +249,7 @@ describe('MaintenanceModeService', () => {
       // This is the whole reason the memory layer exists: the persisted flag
       // lives inside the database being renamed, so at this exact moment it is
       // unreadable and only this layer can hold traffic back.
-      systemSettings.getMaintenancePolicy.mockRejectedValue(new Error('gone'));
+      systemSettings.getNamespace.mockRejectedValue(new Error('gone'));
       service.setInMemoryOverride({
         enabled: true,
         message: 'Restoring database',
@@ -265,7 +265,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('does not hand out the shared defaults object for a caller to mutate', async () => {
-      systemSettings.getMaintenancePolicy.mockRejectedValue(new Error('down'));
+      systemSettings.getNamespace.mockRejectedValue(new Error('down'));
 
       const state = await service.resolve();
       state.layers.persisted.value.enabled = true;
@@ -285,7 +285,7 @@ describe('MaintenanceModeService', () => {
       await service.resolve();
       await service.resolve();
 
-      expect(systemSettings.getMaintenancePolicy).toHaveBeenCalledTimes(1);
+      expect(systemSettings.getNamespace).toHaveBeenCalledTimes(1);
     });
 
     it('consults the row again once the window has passed', async () => {
@@ -295,14 +295,14 @@ describe('MaintenanceModeService', () => {
       jest.advanceTimersByTime(MAINTENANCE_PERSISTED_CACHE_MS + 1);
       await service.resolve();
 
-      expect(systemSettings.getMaintenancePolicy).toHaveBeenCalledTimes(2);
+      expect(systemSettings.getNamespace).toHaveBeenCalledTimes(2);
     });
 
     it('is bypassed by `fresh`, which is what the admin GET uses', async () => {
       await service.resolve();
       await service.resolve({ fresh: true });
 
-      expect(systemSettings.getMaintenancePolicy).toHaveBeenCalledTimes(2);
+      expect(systemSettings.getNamespace).toHaveBeenCalledTimes(2);
     });
 
     it('is dropped by invalidateCache', async () => {
@@ -310,7 +310,7 @@ describe('MaintenanceModeService', () => {
       service.invalidateCache();
       await service.resolve();
 
-      expect(systemSettings.getMaintenancePolicy).toHaveBeenCalledTimes(2);
+      expect(systemSettings.getNamespace).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -339,7 +339,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('leaves the original start alone when the window is already open', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({
           enabled: true,
           startedAt: '2026-01-01T00:00:00.000Z',
@@ -357,7 +357,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('clears the provenance when the window is closed', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ enabled: true, startedAt: '2026-01-01T00:00:00.000Z' }),
       );
 
@@ -401,7 +401,7 @@ describe('MaintenanceModeService', () => {
     });
 
     it('records an audit event when a window is closed', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ enabled: true }),
       );
 
@@ -430,7 +430,7 @@ describe('MaintenanceModeService', () => {
     it('does not serve a stale cached value to the very next request', async () => {
       jest.useFakeTimers();
       await service.resolve();
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ enabled: true }),
       );
 
@@ -443,7 +443,7 @@ describe('MaintenanceModeService', () => {
 
   describe('isEnabled', () => {
     it('ignores allowAdmins, because a probe carries no token', async () => {
-      systemSettings.getMaintenancePolicy.mockResolvedValue(
+      systemSettings.getNamespace.mockResolvedValue(
         persisted({ enabled: true, allowAdmins: true }),
       );
 

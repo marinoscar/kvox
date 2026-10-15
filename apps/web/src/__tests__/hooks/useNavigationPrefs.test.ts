@@ -14,11 +14,11 @@ import type { UserSettings, UserSettingsUpdate } from '../../types';
  *     PATCH would no-op and the UI would be showing a change never sent.
  */
 
-vi.mock('../../hooks/useUserSettings', () => ({
+vi.mock('../../hooks/userSettingsRetry', () => ({
   useUserSettings: vi.fn(),
 }));
 
-import { useUserSettings } from '../../hooks/useUserSettings';
+import { useUserSettings } from '../../hooks/userSettingsRetry';
 
 const mockUseUserSettings = vi.mocked(useUserSettings);
 

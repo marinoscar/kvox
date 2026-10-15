@@ -62,7 +62,7 @@
  * There is no `useMediaQuery` here and no `display: { xs, sm }` switch between
  * two layouts. `CLAUDE.md` names five coupled breakpoint gates that move
  * together or not at all (`Layout.tsx`'s `showRail`, `BottomNav`'s self-gate,
- * `<main>`'s padding, and `isCompactWindow` in both `SettingsHub.tsx` and
+ * `<main>`'s padding, and `isCompactWindow` in both `SettingsHub` (the packaged hub, `@marinoscar/platform-web/settings/ui`) and
  * `AppBar.tsx`); a sixth gate here would be a sixth thing to keep in lockstep
  * for no gain.
  *

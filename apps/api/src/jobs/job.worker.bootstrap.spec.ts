@@ -37,6 +37,7 @@ import { JwtAuthGuard } from '@marinoscar/platform-api/identity';
 import configuration from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsStandInModule } from '../../test/helpers/settings-stand-in.module';
 
 /** How long the handler below stalls before registering itself. */
 const REGISTRATION_DELAY_MS = 40;
@@ -94,15 +95,14 @@ describe('JobWorker lifecycle (real module graph)', () => {
         ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
         EventEmitterModule.forRoot(),
         PrismaModule,
+        SettingsStandInModule,
         SlowHandlerModule,
       ],
     })
-      // `JobsModule` imports `SettingsModule` since #263 (the reaper and the
-      // purge read the `jobs` policy through `SystemSettingsService`), which
-      // brings the settings CONTROLLERS into this graph along with the guards
-      // they are decorated with. This suite is about lifecycle ordering and
-      // has no HTTP surface, so the guard is stubbed rather than dragging the
-      // whole auth graph in behind it.
+      // The jobs graph reads the `jobs` policy through `SystemSettingsService`
+      // (stood in above). This suite is about lifecycle ordering and has no HTTP
+      // surface, so the guard is stubbed rather than dragging the whole auth
+      // graph in behind it.
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       // The graph must RESOLVE, not reach a database: this suite is about

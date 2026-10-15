@@ -2,9 +2,9 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import type { DatabaseBackupRun } from '@prisma/client';
 
 import type { PrismaService } from '../prisma/prisma.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '../storage/providers/storage-provider.interface';
-import type { SystemDatabaseBackupValue } from '../common/schemas/settings.schema';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import {
   BACKUP_DOWNLOAD_URL_EXPIRY_SECONDS,
   DatabaseBackupAdminService,

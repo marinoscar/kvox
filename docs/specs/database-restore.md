@@ -404,7 +404,7 @@ exported, and bound to no controller**: #286 owns the restore endpoints, and a
 service reachable over HTTP before the route that authorizes it exists is a
 surface nobody has reviewed.
 
-It needs no new module import. `SettingsModule` already supplies
+It needs no new module import. The platform `SettingsModule` (global) already supplies
 `SystemSettingsService` (it reads `restoreRollbackMode`), `PrismaModule` is
 `@Global()`, and the cluster work goes through a `pg.Client` outside the pool.
 It notably does **not** take `StorageProvidersModule`: pre-flight never touches

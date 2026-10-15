@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
-import { decryptSecret, encryptSecret } from '../common/crypto/secret-cipher';
+import { decryptSecret, encryptSecret } from '@marinoscar/platform-api/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_CREDENTIAL_PURPOSE } from './ai-credential.constants';
 import { AiProviderRegistry } from './ai-provider.registry';

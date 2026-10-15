@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { TranscriptionProviderRegistry } from './transcription-provider.registry';
 import { TranscriptionSettingsService } from './transcription-settings.service';
 import { TRANSCRIPTION_CREDENTIAL_PURPOSE } from './transcription-credential.constants';
@@ -79,7 +79,7 @@ interface Harness {
     deleteSecret: jest.Mock;
   };
   systemSettings: {
-    getTranscriptionPolicy: jest.Mock;
+    getNamespace: jest.Mock;
     patchSettings: jest.Mock;
   };
   prisma: { systemSettings: { findUnique: jest.Mock }; auditEvent: { create: jest.Mock } };
@@ -100,7 +100,7 @@ function buildHarness(
   };
 
   const systemSettings = {
-    getTranscriptionPolicy: jest.fn(async () => policy),
+    getNamespace: jest.fn(async () => policy),
     patchSettings: jest.fn(async () => ({})),
   };
 

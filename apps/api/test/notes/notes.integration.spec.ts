@@ -1,6 +1,6 @@
 import request from 'supertest';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service';
 import { NOTE_CONFLICT_REASONS } from '../../src/notes/dto/note.dto';
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';

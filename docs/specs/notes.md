@@ -121,13 +121,13 @@ almost the whole weight of that:
    because regenerating has to remain the thing only a person decides to do.
 4. **Per-user API keys get a table of their own, not a row in `credentials`.**
    `credentials` is `(purpose, name)`-keyed with no foreign key to `users`
-   (`apps/api/src/common/crypto/secret-cipher.ts`'s own consumer,
-   `CredentialsService`) precisely because it holds **infrastructure**
+   (the platform's `CredentialsService`,
+   `@marinoscar/platform-api/credentials`) precisely because it holds **infrastructure**
    secrets — an SMTP password, this deployment's own AssemblyAI key — that
    must outlive whichever admin last typed them in. A personal OpenAI key is
    the opposite kind of fact: it belongs to exactly one user and has to leave
    when they do. `user_ai_credentials` (§4) cascades on user delete and
-   reuses `encryptSecret`/`decryptSecret` from `secret-cipher.ts` completely
+   reuses `encryptSecret`/`decryptSecret` from `@marinoscar/platform-api/core` completely
    unchanged — a new table and a new foreign key, zero new cryptography.
 
 Two further postures run through every section below, worth stating once:
@@ -1478,7 +1478,7 @@ survives the template's deletion anyway.
 |---|---|
 | `id`, `user_id` (FK `users`, **Cascade**) | The one FK `credentials` structurally cannot have (§ "Why this shape" decision 4) |
 | `provider_id` | Which registered `AiProvider` this key is for |
-| `secret` (`@db.Text`) | `encryptSecret(rawKey, 'ai-key')`'s output — `secret-cipher.ts` unchanged, a new `purpose` string |
+| `secret` (`@db.Text`) | `encryptSecret(rawKey, 'ai-key')`'s output — the platform cipher unchanged, a new `purpose` string |
 | `hint?` | Last 4 characters, for the settings UI, mirroring `Credential.hint` |
 | `last_tested_at?`, `last_test_ok?` | The result of the most recent `testConnection` probe, so the settings page can show "last verified 2 hours ago" without re-probing on every page load |
 | `created_at`, `updated_at` | |
@@ -1487,7 +1487,7 @@ survives the template's deletion anyway.
 Never returned over the wire in any form (`GET /api/user-ai-credentials`
 returns `hint`, `lastTestedAt`, `lastTestOk` — never `secret`), following
 `CredentialsService.describe()`'s exact no-plaintext-egress discipline
-(`secret-cipher.ts`'s own header: "THIS MODULE MUST NOT LOG" — the same
+(the platform cipher's own header: "THIS MODULE MUST NOT LOG" — the same
 invariant extends to every consumer of it).
 
 ### 4.3 `note_templates`
@@ -2327,7 +2327,7 @@ any other system this deployment operates.
 **Under whose account.** The API key used is the **calling user's own
 saved key**, decrypted server-side for the duration of that one outbound
 request only — never written to disk beyond its encrypted column in
-`user_ai_credentials`, never logged, following `secret-cipher.ts`'s own
+`user_ai_credentials`, never logged, following the platform cipher's own
 "THIS MODULE MUST NOT LOG" invariant. This means the content that reaches
 the provider is subject to **that individual user's own** account-level data
 and retention settings with that provider — not a blanket policy this
@@ -2349,7 +2349,7 @@ exposes there, **never** a job's payload or a generation's `content`.
 
 **What an administrator cannot see.** The plaintext of any user's saved AI
 key — write-only over the wire, never returned by any endpoint, the same
-guarantee `CredentialsService`/`secret-cipher.ts` already give every other
+guarantee `CredentialsService` and the platform cipher already give every other
 secret this application stores. The content of any note, or the prompt that
 produced it. Which specific transcript, note, or document a given note was
 generated from, through any path this RBAC model grants — there is no
@@ -2686,7 +2686,7 @@ requested work, not a security-relevant change to their account.
   is — which `credentials`' schema cannot express without adding a
   user-scoped column to a table every other consumer of it does not need,
   and without complicating the one guarantee that table exists to hold
-  (no plaintext egress, `secret-cipher.ts`'s own invariant) with a second,
+  (no plaintext egress, the platform cipher's own invariant) with a second,
   narrower cascade rule that applies to only one row shape among many.
 - **A `nodeSecretBroker` for `note.generate`, minting a scoped OpenAI
   key.** Rejected as structurally impossible, not merely undesirable: unlike

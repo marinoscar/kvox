@@ -41,7 +41,7 @@ import { Job, PrismaClient } from '@prisma/client';
 import { createHmac, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { JobClaimService } from '../../src/jobs/job-claim.service';
 import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { JobLeaseService } from '../../src/jobs/job-lease.service';
@@ -73,7 +73,7 @@ import type {
   UploadedPart,
 } from '../../src/storage/providers';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
 import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';

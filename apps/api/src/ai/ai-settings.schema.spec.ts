@@ -9,7 +9,7 @@ import {
   systemAiSchema,
   type AiTaskModelCarriesNoSecret,
 } from './ai-settings.schema';
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { OpenAiProvider } from './providers/openai.provider';
 
