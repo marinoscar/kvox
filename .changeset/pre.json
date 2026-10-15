@@ -1,0 +1,11 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "api": "1.2.2",
+    "cli": "1.8.0",
+    "web": "1.2.2",
+    "@app/shared": "1.0.0"
+  },
+  "changesets": []
+}

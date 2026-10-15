@@ -58,7 +58,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | How Claude Code and OpenCode share the repository rules, where each config file lives, the local model setup |
 | [API.md](API.md) | API reference: conventions, auth schemes, response envelope, pagination, errors, every endpoint group |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas, repository tooling (platform pin, single-instance check, changesets) |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
 | [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines |
 | [personal-access-tokens.md](personal-access-tokens.md) | Creating and using `pat_` tokens for scripts and CI |

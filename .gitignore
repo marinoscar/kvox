@@ -104,3 +104,6 @@ apps/api/.kg-eval/
 # ask:eval scratch output (issue #382): report.json/answers.md from runs over
 # the synthetic golden set's Ask questions.
 apps/api/.ask-eval/
+
+# TypeDoc output per package (generated, never committed)
+docs-api/

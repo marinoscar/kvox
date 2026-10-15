@@ -369,6 +369,19 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/platform-adoption/drift-baseline.md',
   'docs/platform-adoption/module-classification.md',
   'scripts/platform-adoption/make-slice-view.sh',
+  // Repository tooling for the platform adoption (issue #461): these files name
+  // the `@marinoscar/platform-*` / `@marinoscar/kvox-*` npm scopes (an external
+  // registry namespace, not a rebrand target) and the future workspace package
+  // prefix, so a literal scan cannot tell them from a stale identity.
+  '.changeset/README.md',
+  'apps/api/package.json',
+  'apps/web/package.json',
+  'eslint.config.mjs',
+  'package.json',
+  'packages/kvox-slices.json',
+  'scripts/check-platform-pin.mjs',
+  'scripts/run-kvox-packages.mjs',
+  'typedoc.base.json',
 
   // ---------------------------------------------------------------------
   // Added by issue #130 (epic #168), the VPS bootstrap script.
