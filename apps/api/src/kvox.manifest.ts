@@ -53,4 +53,12 @@ if (!registered) {
     AI_SYSTEM_SETTINGS,
   ]);
   registerUserSettingsNamespaces([...CORE_USER_NAMESPACES, GRAPH_USER_SETTINGS]);
+
+  // ---- issue #460: domain registrations, in dependency order ---------------
+  // Each section is owned by one registry; append your calls under your marker.
+  // [registry:job-labels]
+  // [registry:email-templates]
+  // [registry:notifications]
+  // [registry:onboarding]
+  // [registry:user-data]
 }
