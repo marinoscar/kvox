@@ -362,6 +362,12 @@ jobs:
     # Each shard has its OWN Postgres service container, so `--runInBand` (the
     # suites share one cluster and must not overlap) still holds per shard, and
     # the shards cannot interfere with each other.
+    #
+    # The database password is derived from the run id, attempt and shard rather
+    # than written as a literal: the container is throwaway and only reachable
+    # from this runner, but a fixed, well-known password in the file is what
+    # secret scanners flag as a hardcoded credential. It must match in both
+    # places below (the service and the job `env`).
     strategy:
       fail-fast: false
       matrix:
@@ -380,7 +386,7 @@ jobs:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ${{ format('ci-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.shard) }}
           POSTGRES_DB: appdb
         ports:
           - 5432:5432
@@ -395,7 +401,7 @@ jobs:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: '5432'
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${{ format('ci-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.shard) }}
       POSTGRES_DB: appdb
       POSTGRES_SSL: 'false'
     steps:
