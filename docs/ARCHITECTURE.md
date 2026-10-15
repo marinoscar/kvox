@@ -1246,6 +1246,15 @@ Before OAuth authentication completes:
 - Admins add emails via `/api/allowlist` before users can login
 - Claimed entries cannot be removed (protects existing users)
 - Use user deactivation (`is_active: false`) to revoke access
+- `INITIAL_ADMIN_EMAIL` is automatically added to the allowlist during database seeding
+
+**Admin UI:**
+- Manage the allowlist at `/admin/settings/users` (Allowlist tab; `/admin/users` still redirects here)
+- Two tabs: **Users** (existing registered users) and **Allowlist** (pre-authorize email addresses for future logins)
+
+**Status tracking:**
+- **Pending**: email added to the allowlist but the user has not logged in yet
+- **Claimed**: the user has logged in and created an account
 
 ---
 

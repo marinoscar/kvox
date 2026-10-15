@@ -40,7 +40,7 @@ are optional:
 npm install                                   # the lockfile carries the old workspace name too
 ```
 
-Then regenerate the visual baselines — see [step 5](#5-the-manual-steps) —
+Then regenerate the visual baselines — see [step 5](#the-manual-steps) —
 and expect CI to be red until you do; that's covered in its own section
 below because it's the thing most likely to cause a moment of panic on a
 first fork.
@@ -279,7 +279,7 @@ that include the AppBar wordmark, and the suite runs at `maxDiffPixels: 4` —
 effectively zero pixel tolerance. Changing the product name is a genuine
 pixel change to every one of those seven screenshots, so the very next CI
 run after a rename will show seven failing visual tests until you run the
-[baseline regeneration command](#5-the-manual-steps) above and commit the
+[baseline regeneration command](#the-manual-steps) above and commit the
 result. The remaining four baselines are rail-scoped or drill-down shots
 that don't include the wordmark and are unaffected.
 

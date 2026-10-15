@@ -1699,6 +1699,53 @@ itself. It does not follow calls into helper methods — a cron calling
 that it only enqueues. It is a tripwire on the shape of a cron body, not a proof
 about the whole call graph.
 
+**The reference cron and the shared helper.** `jobs/tasks/job-history-purge.task.ts`
+is the reference `@Cron`, and `jobs/housekeeping.enqueue.ts` is the shared
+helper several of the converted crons enqueue through. A detached
+`void this.doSomething()`, an `@OnEvent` body that downloads or spawns, and a
+`@Cron` body that does work inline are all violations of the rule above.
+
+**Rules 2–4: node eligibility, job-scoped credentials, execution profiles.**
+Epic #345 makes four standing decisions binding; the first is the section above.
+The other three, as stated in the repository's top-level rules
+([`AGENTS.md`](../../AGENTS.md#mandatory-every-long-running-activity-is-a-queue-job)):
+
+2. **Node-eligibility is the default posture.** A new job type SHOULD carry
+   `nodeResultSchema` + `persistNodeResult` unless it genuinely cannot —
+   because it writes as it goes, reads several tables mid-computation, or
+   needs a privilege a remote machine must never hold (the database restore is
+   the canonical example: it renames the live database and stays server-only
+   permanently). Eligibility stays **derived** from those two members; there
+   is no `nodeEligible` flag and there never will be
+   (`apps/api/src/jobs/job-handler.interface.ts`). A deployment declines the
+   offload with a system setting consulted at claim time
+   (`NodeOffloadService.offeredTypes()` and a handler's own
+   `nodeOffloadEnabled()`) — never by editing the handler.
+
+3. **A node never persists a job-scoped credential.** Every secret a node
+   needs for a job is issued per job by the server through
+   `POST /api/nodes/:id/jobs/:jobId/secret`, gated by `assertJobHeldByNode`,
+   bounded by the job's own lease, held in the node's memory only, and revoked
+   when the job settles or by the sweep above. The server stores the
+   credential's **handle** in `job_node_secrets`, never its material — that
+   table has no column able to hold one. A handler declares the need by
+   carrying a `nodeSecretBroker` (`apps/api/src/jobs/job-secret-broker.ts`);
+   presence is the declaration, exactly as `nodeResultSchema` +
+   `persistNodeResult` declare eligibility. The node's own `nod_` identity
+   token is the single exception to "never persisted" — it is an identity a
+   node authenticates with, not a job-scoped grant.
+
+4. **A job type declares its execution profile, or takes the global default.**
+   `JobHandler.profile` is optional and, when present, carries exactly
+   `{ maxRuntimeMs, maxAttempts }` — **and only those two numbers**
+   (`apps/api/src/jobs/job-execution-profile.ts`). The lease, the renewal
+   interval, and the reaper's patience for an implausible lease are all
+   *derived* from `maxRuntimeMs`, so a lease that contradicts a declared
+   timeout is unrepresentable rather than merely avoided. Do not add
+   `leaseMs` or `heartbeatMs` to the profile — a declared duration that can
+   disagree with `maxRuntimeMs` is exactly the state this rule exists to rule
+   out.
+
 ## 8. The admin surface
 
 > #264. `apps/api/src/jobs/job-admin.controller.ts`,
