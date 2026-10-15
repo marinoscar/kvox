@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // One implementation of "an additive, typed, string-keyed list", so every closed
-// list KVox turns into a registry shares ONE duplicate rule, ONE ordering rule
+// list this app turns into a registry shares ONE duplicate rule, ONE ordering rule
 // and ONE set of error codes. The names (`defineRegistry`, `RegistryOptions`,
 // `Registry`, `RegistryError`, `freezeAllRegistries`, `listDefinedRegistries`)
 // match the platform's so Epic 1 can swap the import path and nothing else.
