@@ -675,13 +675,24 @@ const response = await request(app.getHttpServer())
 
 ### Making Database Changes
 
-1. **Update Prisma Schema:**
+The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `platform db compose` from the platform fragments in `@marinoscar/platform-db` plus KVox's own `apps/api/prisma/fragments/*.prisma`. There is no `schema.prisma`. Never edit a file in `prisma/schema/`: the next compose overwrites it and `db:compose:check` fails in CI.
+
+1. **Edit a fragment:**
    ```bash
    cd apps/api
-   # Edit prisma/schema.prisma
+   # Edit prisma/fragments/<domain>.prisma (transcripts, notes, search, graph, ask, ...)
    ```
+   - A KVox model lives in the fragment of its domain.
+   - A relation from a KVox model to a platform model (`User`, `StorageObject`, `Job`) needs a back-relation. Add it as `extend model User { ... }` in the fragment that owns the foreign key. An `extend` block holds back-relation fields only: the composer refuses a scalar field or an index there.
+   - A column on a platform table is not possible from a fragment. Use a side table keyed by the platform id, and list the exception in `docs/platform-adoption/local-exceptions.md`.
 
-2. **Create Migration:**
+2. **Compose the schema:**
+   ```bash
+   npm run db:compose
+   ```
+   Commit the result under `prisma/schema/` with your change.
+
+3. **Create the migration:**
    ```bash
    # Using npm script (recommended - handles environment variables)
    npm run prisma:migrate:dev -- --name descriptive_name
@@ -689,8 +700,9 @@ const response = await request(app.getHttpServer())
    # Or in Docker container
    docker compose exec api npm run prisma:migrate:dev -- --name descriptive_name
    ```
+   Only one open pull request may carry a migration at a time.
 
-3. **Generate Prisma Client:**
+4. **Generate Prisma Client:**
    ```bash
    # Using npm script (recommended)
    npm run prisma:generate
@@ -699,7 +711,14 @@ const response = await request(app.getHttpServer())
    docker compose exec api npm run prisma:generate
    ```
 
-4. **Update Seeds (if needed):**
+5. **Check the schema and the history:**
+   ```bash
+   npm run db:compose:check   # prisma/schema/ equals a fresh compose
+   npm run db:check           # installed platform migrations still match platform.lock
+   npm run db:drift:kvox      # migrations replayed in a shadow database equal the schema
+   ```
+
+6. **Update Seeds (if needed):**
    ```bash
    # Edit prisma/seed.ts
 
@@ -710,7 +729,14 @@ const response = await request(app.getHttpServer())
    docker compose exec api npm run prisma:seed
    ```
 
-**Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details.
+Rules that keep this safe:
+
+- **KVox never authors platform migrations.** A platform package release brings new ones. Install them with `npm run db:sync`, review the new directories under `prisma/migrations/`, commit them with `platform.lock`, then `npm run prisma:migrate`. Never edit or rename an installed directory, comments included: the lock hashes the raw bytes.
+- **Raw-SQL objects stay in `migration.sql`.** Partial unique, trigram, HNSW and GiST indexes, generated `tsvector` columns, CHECK constraints and triggers cannot be declared in a fragment. Never add `@@unique` or `@@index` for one. List every new partial or expression index under `rawSqlIndexes` in `platform.lock`, with `definition` copied from `SELECT indexdef FROM pg_indexes WHERE indexname = '<name>'`.
+- **`db:drift:kvox` filters `apps/api/prisma/drift-allowlist.json`.** Each entry needs `statement`, `reason` and `removeIn` (an issue number). Never add an entry to hide a real difference on a platform table.
+- The first adoption of the platform history on an existing database is a one-off baseline: `docs/runbooks/database-baseline.md`. The day-to-day workflow is also in the `platform-migration` skill (`.claude/skills/platform-migration/SKILL.md`).
+
+**Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`, `db:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details. `db:drift:kvox` replays the history in a shadow database: set `SHADOW_DATABASE_URL` to an empty database, or use a role that may create databases. The shadow replay runs `CREATE EXTENSION vector`, which needs a superuser (see `docs/platform-adoption/local-exceptions.md`).
 
 ### Settings namespace registry
 
