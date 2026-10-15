@@ -23,18 +23,25 @@ concurrency:
 #   everything else                  under 1 min per step
 #
 # That made the workflow 9-13 min, set by the API suite and the visual run.
-# The API suite is now `api-test` (4 shards, with a persisted Jest cache) and
+# The API suite is now `api-test` (4 shards) and
 # `test:db` is `db-test` (2 shards), the same shape `web-test` already had.
 # The visual regression job was removed from CI (its suite and the manual
 # `visual-baselines.yml` workflow remain). Typecheck, the CLI suite and the
 # CLI build stay together in `Build & Test`.
 #
-# First sharded run (3 API shards, cold Jest cache): 6m22s wall clock, set by
-# the API shards (4m44s-6m20s). Sharding did NOT divide the work evenly: the
-# shards summed to ~13 min of test time against 7.5-8.4 min serial, because
-# each one recompiles and type-checks the files it loads from a cold cache
-# (~40 integration suites load the whole AppModule, 20-35s each). Hence the
-# Jest cache and the 4th shard. Everything else finished by 3m36s.
+# Measured on PR #514 (same commit, 4 API shards, no queueing on the re-run):
+# 4m55s wall clock, down from 9m27s-12m01s. The API shards are still the
+# critical path (3m07s-4m00s of tests, ~4m50s per job). Two things that did NOT
+# help, so do not retry them without new evidence:
+#   - A persisted Jest cache (actions/cache on --cacheDirectory): it restored
+#     fine but held only ~11 MB, and the same 123-suite shard took 126s cold
+#     and 205s warm. ts-jest compile is not the bottleneck; running the ~40
+#     integration suites that boot the whole AppModule (20-35s each) is.
+#   - A 4th shard on its own: total test time stayed ~13-14 min, so shards
+#     divide the wall clock but not the work. Shard run-to-run noise is large
+#     (+-1 min for the same files), so compare per-step times over several runs.
+# Runs also queue when other PRs' CI is active: the account's concurrent-job
+# cap is shared, and this workflow now fans out to 13 jobs.
 #
 # Two earlier findings still hold:
 #   - Splitting typecheck/CLI into their own job was measured slower (71-95s
@@ -148,25 +155,7 @@ jobs:
           (cd apps/api && npx prisma generate)
           wait "$apt_pid"
 
-      # Persist Jest's transform cache between runs. The API suite compiles and
-      # TYPE-CHECKS every TypeScript file through ts-jest (the specs under
-      # `test/` are checked nowhere else: `tsc --noEmit` only includes `src/`),
-      # and ~40 of the integration suites each load the whole AppModule graph,
-      # so a cold cache made the 3-shard run cost ~13 min of CPU against ~8 min
-      # serial. Jest keys cache entries by file content and config, so a hit is
-      # always valid and a stale entry is only dead weight. One cache per shard,
-      # newest entry restored by prefix; the primary key carries the commit so
-      # every run saves a fresh copy (entries are immutable).
-      - name: Restore Jest cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/jest-cache
-          key: jest-api-${{ runner.os }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
-          restore-keys: |
-            jest-api-${{ runner.os }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
-            jest-api-${{ runner.os }}-${{ matrix.shard }}-
-
-      - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4 --cacheDirectory=${{ runner.temp }}/jest-cache
+      - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
