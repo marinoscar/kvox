@@ -1,3 +1,8 @@
+// Belt and braces for tests that build `AppModule` without `test/setup.ts`: the
+// settings DTOs below are composed from the registries this fills (see
+// kvox.manifest.ts). Must stay the first import.
+import './kvox.manifest';
+
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';

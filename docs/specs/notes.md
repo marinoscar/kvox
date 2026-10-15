@@ -931,8 +931,8 @@ string; reasoningEffort?: 'low'|'medium'|'high' }>>` is a new field on the
 existing `ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
 the deployment switch that keeps a fresh install from spending anybody's key
 on automatic extraction before an administrator turns it on. Both fields
-follow the identical six-place settings-parity discipline §2.5 already
-establishes for `allowedModels` (table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4).
+follow the identical settings-namespace declaration discipline §2.5 already
+establishes (declared in their module, registered in `kvox.manifest.ts`) for `allowedModels` (table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4).
 
 **`chooseTaskModel` is the one pure function three surfaces call**, so they
 can never disagree about which model a task would run on: the run-time
@@ -1089,7 +1089,7 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/notes/generation/token-budget.ts`. `computeTokenBudget` is pure
+`apps/api/src/ai/ai-token-budget.ts`. `computeTokenBudget` is pure
 and takes the model's own `contextWindowTokens`/`maxOutputTokens`
 (`resolveAllowedModel`'s output, §2.5 — since #78 a permitted model may carry
 its own numbers on its `allowedModels` entry, and every caller resolves
@@ -2143,13 +2143,12 @@ and no shared column.
   foreign key to `note_templates` in either direction — nothing catches a
   hidden id that outlives the template it named, filtering "is this template
   hidden" becomes a JSONB containment check instead of an indexed join, and
-  the six-file settings-parity discipline this codebase's `apps/api/AGENTS.md`
-  documents for a `system_settings` namespace (and its five-file counterpart
-  for `user_settings`) buys nothing here that a plain table with two foreign
+  the settings-namespace declaration this codebase's `apps/api/AGENTS.md`
+  documents for a `system_settings` or `user_settings` namespace buys nothing here that a plain table with two foreign
   keys does not already get for free. A join table gives real FK integrity
   in both directions, an ordinary indexed `WHERE user_id = ...` / `WHERE
   template_id = ...` query, no cap on how many templates one caller may
-  hide, and zero settings-parity cost.
+  hide, and zero settings-namespace cost.
 - **Not `note_templates.is_archived`.** `is_archived` is a column on the
   **shared** row (§4.3) — true or false for every viewer at once, which is
   exactly wrong for hiding: a built-in must stay archived-`false` and fully
@@ -2721,7 +2720,7 @@ the list this spec was designed against — the same purpose
 | `notes.housekeeping`'s `@Cron` only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended — the existing test this document's job additions must not break |
 | The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against a fake `AiProvider` |
 | The rate-limit throttle key is `ai-provider:<userId>`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the generation's `userId`, unlike transcription's single shared key |
-| `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `token-budget.spec.ts`, including a property test over the two call sites |
+| `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `ai-token-budget.spec.ts`, including a property test over the two call sites |
 | An over-budget `POST /api/notes` is refused with a 400 naming both the estimated and the allowed token counts, and creates no note, no generation row, and enqueues no job | `apps/api/test/notes/notes-create.e2e.spec.ts` |
 | `notes.status` and `note_generations.status` follow exactly the transitions §1's tables state, including `deleting` being refused with 409 while `status = 'generating'` | `apps/api/src/notes/notes.service.spec.ts` and an e2e state-machine walk |
 | `notes.body`/`provider`/`model` are updated only by `note.generate`'s completion transaction or an explicit `PATCH`, and always equal `note_versions.body` at `current_version` after either | `apps/api/src/notes/notes.service.spec.ts`, asserting the invariant after a generate, a regenerate, and a manual edit |
