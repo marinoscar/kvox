@@ -73,7 +73,7 @@ import { buildDedupKey } from './job-keys';
  *
  * PLATFORM-ADOPTION-SHIM(#468): platform `0034_open_job_reason` turned the
  * Prisma `JobReason` enum into an open string column, so the generated client
- * no longer exports the type. KVox keeps its three built-in values here until
+ * no longer exports the type. This app keeps its three built-in values here until
  * #468 deletes this file in favour of the platform's job module.
  */
 export type JobReason = 'upload' | 'rerun' | 'backfill';

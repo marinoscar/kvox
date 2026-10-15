@@ -30,7 +30,7 @@ export interface ObjectIdPage {
  *
  * `storage_objects.managed_by` and `part_size` are declared deviations from the
  * platform table (migration `20260914120000_add_storage_part_size_and_managed_by`),
- * so the composed Prisma client has neither field. Everything KVox does with
+ * so the composed Prisma client has neither field. Everything this app does with
  * them goes through this store, with raw SQL. #469 re-points it at
  * `kvox_object_ownership` and deletes it.
  *

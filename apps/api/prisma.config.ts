@@ -11,7 +11,7 @@ import { defineConfig } from '@prisma/config';
  * For runtime use, apps/api/src/config/configuration.ts does the same.
  *
  * `prisma/schema/` is the GENERATED folder: `npm run db:compose` composes the
- * platform fragments (@marinoscar/platform-db) with this app's own
+ * platform-db package fragments with this app's own
  * `prisma/fragments/*.prisma`. Edit a fragment, never the folder. With a schema
  * folder, Prisma would look for migrations inside it, so the migrations path
  * must be explicit.

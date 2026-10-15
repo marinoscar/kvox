@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 // PLATFORM-ADOPTION-SHIM(#469)
 //
 // The platform made `storage_objects.org_id` NOT NULL (`0025_org_scoped_rls`),
-// so every `storageObject.create` has to name an organization. KVox is
+// so every `storageObject.create` has to name an organization. This app is
 // single-org until the storage slice lands (#469), so the organization is
 // always the default one: `organizations WHERE is_default` (exactly one row,
 // `organizations_default_uniq_idx`).
