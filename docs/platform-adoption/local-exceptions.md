@@ -30,9 +30,20 @@ The extensions `vector` and `pg_trgm` are part of `kvox:domain-schema`. `CREATE 
 | Default organization (`StorageObject.orgId`) | `apps/api/src/prisma/default-org.ts`, and every `storageObject.create` | The platform column `storage_objects.org_id` is required. The helper resolves `organizations WHERE is_default` once and caches it. | #469, with the storage slice |
 | `Job.reason` as a string | `apps/api/src/jobs/jobs.service.ts` | Platform `0034_open_job_reason` turned the Prisma enum into a string. The file types `reason` locally as `'upload' \| 'rerun' \| 'backfill'`. | #468 deletes the file |
 | `UserAiCredential` fragment | `apps/api/prisma/fragments/ai-credentials.prisma`, `extend model User { aiCredentials ... }` | KVox keeps its own per-user AI key table, `user_ai_credentials`. The platform stores user AI keys in `user_ai_keys`. | #472 migrates the data and removes the fragment |
+| `Job` columns the platform added (`orgId`, `claimToken`, `traceContext`) | `apps/api/src/jobs/job-claim.service.ts` (`JOB_CLAIM_COLUMNS`), `apps/api/src/jobs/job-admin.service.ts` (`JobUnlistedField`, `JOB_LIST_SELECT`, `JobListItem`) | The claim's `RETURNING` clause maps every `Job` field, so the three new columns are mapped. The admin list omits them, as it omits `payload`, because none is operator-facing. | #468 replaces the jobs module with the platform's |
+| `jobs.reason` is TEXT in the restore carry | `apps/api/src/db-backup/database-restore.service.ts` (`CARRY_JOB_SQL`) | The `"JobReason"` enum type no longer exists after platform `0034_open_job_reason`, so the carry statement casts `$6::text`. | #468 |
+| Storage-object test fixtures | `apps/api/test/helpers/storage-object.helper.ts`, `apps/api/test/helpers/fake-ownership-store.helper.ts`, and the `jest.mock` of `prisma/default-org` in the mocked-database specs | Real-database fixtures insert through `createStorageObject` (default org, then `managed_by` / `part_size` in SQL). Mocked-database specs answer the legacy store from their own fixture rows. | #469 deletes them with the store |
+| Platform columns in model-field tests | `apps/api/test/nodes/worker-node-model-fields.spec.ts` (`lastVitals`, `lastVitalsAt`), `apps/api/test/broadcasts/broadcast-model.db.spec.ts` (`targetOrgId`) | The documented field lists include columns the platform added to `worker_nodes` and `notification_broadcasts`. Marked `PLATFORM-ADOPTION-SHIM(#470)`. | #470 |
+| Ask-eval fixture seeder | `apps/api/scripts/ask-eval/seed-graph.ts` | Inserts storage objects with the default organization and stamps `managed_by` with raw SQL. | #469 |
 | Escaped `Unsupported("vector(1536)")` | `apps/api/prisma/fragments/graph.prisma` and `search.prisma`: the three embedding fields (`KgEntity`, `KgItem`, `SearchEmbedding`) | The composer in `@marinoscar/platform-db` `0.1.0-next.5` cannot read the literal `Unsupported("vector(1536)")`. The fragments write the quotes escaped so the composed schema is valid. | The platform release that fixes the composer. Then write the plain literal and re-run `db:compose` |
 
 Any other compile error that a platform model change causes is fixed the same way. Add its row to this table.
+
+## Known failing tests
+
+| Test | Cause | Related |
+|---|---|---|
+| `apps/api/src/db-backup/pg-job-role.broker.db.spec.ts` ("produces an archive `readTocEntryCount` accepts when pg_dump runs AS the minted role") | `pg_dump` fails with "query would be affected by row-level security policy for table ai_runs". The platform forces row-level security on `ai_runs`, and the NOSUPERUSER dump role the broker mints is subject to it. Superusers ignore the policy. | #471. Not a shim: left failing on purpose until the role switch is decided. |
 
 ## Standing constraints
 

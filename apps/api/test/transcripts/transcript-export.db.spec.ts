@@ -59,7 +59,7 @@ import { PdfTranscriptExporter } from '../../src/transcripts/export/pdf.exporter
 import { ORDINAL_GAP, OP_TYPES } from '../../src/transcripts/editing';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
-import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
+import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('transcript-export.db.spec');
@@ -240,9 +240,9 @@ describeWithDb('Transcript exports (real Postgres)', () => {
     await prisma.transcript.deleteMany({ where: { title: { startsWith: TITLE_PREFIX } } });
     await prisma.storageObject.deleteMany({
       where: {
-        storageKey: { startsWith: 'transcripts/' },
-        managedBy: 'transcripts',
-        uploadedById: ownerId,
+        id: {
+          in: await idsManagedBy(prisma, 'transcripts', { storageKeyPrefix: 'transcripts/', uploadedByIds: [ownerId] }),
+        },
       },
     });
   }

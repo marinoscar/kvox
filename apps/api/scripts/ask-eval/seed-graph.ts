@@ -45,6 +45,20 @@ import {
   type ItemLabelKind,
 } from '../kg-eval/fixture-schema';
 
+// PLATFORM-ADOPTION-SHIM(#469): `storage_objects.org_id` is required and
+// `managed_by` is no longer on the Prisma client, so the fixture inserts use the
+// default organization and stamp `managed_by` with raw SQL.
+async function defaultOrgId(tx: Prisma.TransactionClient): Promise<string> {
+  const org = await tx.organization.findFirst({ where: { isDefault: true }, select: { id: true } });
+  if (!org) throw new Error('No default organization; run the platform migrations and seed.');
+  return org.id;
+}
+
+async function stampManagedBy(tx: Prisma.TransactionClient, id: string, module: string): Promise<void> {
+  await tx.$executeRaw`UPDATE storage_objects SET managed_by = ${module} WHERE id = ${id}::uuid`;
+}
+
+
 /** Every email this seeder's throwaway user gets starts with this. */
 export const ASK_EVAL_EMAIL_PREFIX = 'ask-eval';
 
@@ -273,10 +287,11 @@ async function seedTranscriptAndNote(ctx: Ctx, fixture: GoldenFixture): Promise<
         size: BigInt(1),
         mimeType: 'audio/mp4',
         storageKey: `${ASK_EVAL_EMAIL_PREFIX}/${randomUUID()}`,
-        managedBy: 'transcripts',
+        orgId: await defaultOrgId(ctx.tx),
         uploadedById: ctx.ownerId,
       },
     });
+    await stampManagedBy(ctx.tx, source.id, 'transcripts');
     const transcript = await ctx.tx.transcript.create({
       data: {
         ownerId: ctx.ownerId,
@@ -326,10 +341,11 @@ async function seedTranscriptAndNote(ctx: Ctx, fixture: GoldenFixture): Promise<
         size: BigInt(fixture.note.body.length),
         mimeType: 'text/markdown',
         storageKey: `${ASK_EVAL_EMAIL_PREFIX}/${randomUUID()}`,
-        managedBy: 'notes',
+        orgId: await defaultOrgId(ctx.tx),
         uploadedById: ctx.ownerId,
       },
     });
+    await stampManagedBy(ctx.tx, doc.id, 'notes');
     sourceObjectId = doc.id;
   }
 
