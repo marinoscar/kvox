@@ -2549,7 +2549,7 @@ What #259 proves, and by what:
 | The module graph still boots with `JobsModule` registered | `npm run openapi:dump` (preview-mode boot of `AppModule`) plus `npm run openapi:lint` |
 
 What #260 proves, and by what. Everything in the first block runs against a
-**real Postgres** (`npm run test:db`, which CI's `smoke` job invokes after
+**real Postgres** (`npm run test:db`, which CI's `db-test` job invokes after
 `prisma:migrate`); everything in the second runs without one:
 
 | Claim | Covered by |

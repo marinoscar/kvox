@@ -1033,19 +1033,21 @@ A few settings in `tests/visual/playwright.config.ts` exist specifically because
 - **`maxDiffPixels: 4`** (an absolute count, not a ratio) — several specs screenshot a mostly-blank nav rail element where a real regression changes only a few hundred pixels out of roughly 47,000 total, comfortably under even a 1% ratio threshold. An absolute pixel count catches that; a percentage would not.
 - **pixelmatch `threshold: 0.05`** (down from Playwright's default of `0.2`) — the #105 caption-padding regression's visual delta is a subtle tint-edge shift on a near-black dark theme background. At the default perceptual threshold, pixelmatch does not register it as different at all, despite a large, real, confirmed RGB delta.
 
-Baselines are generated and verified **only** inside the pinned container, `mcr.microsoft.com/playwright:v1.62.1-noble` — never on a developer's host machine. Host Chromium's font hinting and antialiasing drift from CI's, and at this tight a pixel tolerance that drift alone is enough to fail a spec with no real regression present.
+Baselines are generated and verified **only** inside the pinned container, `mcr.microsoft.com/playwright:v1.62.1-noble` — never on a developer's host machine. Host Chromium's font hinting and antialiasing drift from the container's, and at this tight a pixel tolerance that drift alone is enough to fail a spec with no real regression present.
 
 ### CI Integration
 
-A `visual` job in `.github/workflows/ci.yml` runs concurrently with the other CI jobs (no `needs:` dependency), inside `container: mcr.microsoft.com/playwright:v1.62.1-noble`. It invokes the pinned Playwright binary directly:
+The visual suite is **not run in CI**. The `visual` job was removed from `.github/workflows/ci.yml`, so a pull request no longer gets a pixel-regression check, and a layout change that moves a baseline is not caught until someone runs the suite. Run it locally before merging a change that touches layout, the theme, the navigation rail or the settings hub (see [Running Tests Locally](#running-tests-locally)).
+
+Nothing else about the suite changed. `tests/visual/`, the harness at `apps/web/visual/` and the pinned container `mcr.microsoft.com/playwright:v1.62.1-noble` all remain, and the suite still runs locally and in that container. Baselines can still be regenerated without Docker on your machine through the manual `.github/workflows/visual-baselines.yml` workflow (Actions, "Regenerate visual baselines", Run workflow). It runs only on `workflow_dispatch`, inside the same pinned image, and either commits the regenerated snapshots back to the branch you pick or, with `commit: false`, publishes them as an artifact to inspect first. Its header notes that the `visual` job it refers to is gone; re-add the job to `ci.yml` before relying on that workflow's "red `visual` job" language.
+
+Run the suite with the pinned Playwright binary directly:
 
 ```bash
 tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
 ```
 
-It does **not** use `npx playwright`, which resolves a different, unpinned Playwright module instance from the repo root and throws a `"did not expect test() to be called here"` error from having two copies of the Playwright module loaded in the same process.
-
-The job uploads `tests/visual/playwright-report/` via `actions/upload-artifact@v4` unconditionally (`if: always()`), so a failing run's HTML report — which embeds the expected, actual, and diff PNGs for every failed assertion — is downloadable directly from the Actions run without needing to reproduce the failure locally.
+Do **not** use `npx playwright`. It resolves a different, unpinned Playwright module instance from the repo root and throws a `"did not expect test() to be called here"` error from having two copies of the Playwright module loaded in the same process.
 
 ### Running Tests Locally
 
@@ -1061,7 +1063,7 @@ npx playwright test --config=tests/visual/playwright.config.ts
 
 (Manually starting the harness dev server yourself, from `apps/web/visual/`, is only needed if you want to poke at the harness in a browser outside of a test run.)
 
-To generate or verify baselines, run the suite inside the exact pinned container instead — the point of the container is that the pixels it produces are the same pixels CI will produce. From the repo root:
+To generate or verify baselines, run the suite inside the exact pinned container instead — the point of the container is that the pixels it produces are the same pixels the committed baselines and the `visual-baselines.yml` workflow produce. From the repo root:
 
 ```bash
 REPO=$(git rev-parse --show-toplevel)
@@ -1083,7 +1085,7 @@ Three details in that command are load-bearing:
 
 To regenerate baselines after an intentional visual change, run the suite with `--update-snapshots` inside the same pinned container — `tests/visual/package.json` provides `npm run test:update` for this. As with the run command above, this must happen inside `mcr.microsoft.com/playwright:v1.62.1-noble`, not on a host machine.
 
-This is the most important paragraph in this section: **blessing a diff without opening the image and confirming the new pixels are the intended change is the standard failure mode of every snapshot-testing suite, and it would defeat the entire purpose of this one.** A rubber-stamped `--update-snapshots` run after a CI failure silently readmits the exact class of regression — #105 — that this suite exists to catch. Before running `test:update`, open the failing run's HTML report, look at the diff image for each failing spec, and understand specifically what changed and why. Only update the baseline once that change is confirmed intentional. If it isn't, the fix is to fix the code, not the baseline.
+This is the most important paragraph in this section: **blessing a diff without opening the image and confirming the new pixels are the intended change is the standard failure mode of every snapshot-testing suite, and it would defeat the entire purpose of this one.** A rubber-stamped `--update-snapshots` run after a failing local run silently readmits the exact class of regression — #105 — that this suite exists to catch. Before running `test:update`, open the failing run's HTML report (`tests/visual/playwright-report/`), look at the diff image for each failing spec, and understand specifically what changed and why. Only update the baseline once that change is confirmed intentional. If it isn't, the fix is to fix the code, not the baseline.
 
 ---
 
@@ -1129,23 +1131,28 @@ run.
 
 ### Where They Run in CI
 
-The `smoke` job in `.github/workflows/ci.yml` is the only place in this
-repository's CI where a real PostgreSQL is running (`pgvector/pgvector:pg16`,
-as a service container — see issue #178 for why that image and not plain
-`postgres:16-alpine`). That job runs the compiled API artifact end to end —
-build, migrate, seed, boot — and `npm run test:db --workspace=api` is one
-step in that sequence, positioned deliberately: **after** `npm run
-prisma:migrate --workspace=api` and **before** `npm run prisma:seed
---workspace=api`. The migration has to have actually run for the
-hand-written indexes and constraints these suites check to exist at all; the
-step runs before seeding so the suites see a freshly-migrated, unseeded
-database, not one with the application's default rows already in it. It runs
-with `NODE_ENV=test` explicitly set for that one step — overriding the job's
-ambient (otherwise unset/production) value — because that is the
-`NODE_ENV` these suites assume when they build their own connection string
-from the job's `POSTGRES_*` environment variables (see
+The `db-test` job in `.github/workflows/ci.yml` is where these suites run in
+CI. It is a matrix of 2 shards, and each shard gets its own
+`pgvector/pgvector:pg16` service container (see issue #178 for why that image
+and not plain `postgres:16-alpine`), so `--runInBand` still holds per shard
+and the shards cannot interfere with each other. Each shard runs `npm run
+prisma:migrate --workspace=api` and then `npm run test:db --workspace=api --
+--shard=N/2`, positioned deliberately: **after** the migration and with no
+seed step at all. The migration has to have actually run for the hand-written
+indexes and constraints these suites check to exist at all; the database is
+left unseeded so the suites see a freshly-migrated database, not one with the
+application's default rows already in it. The test step runs with
+`NODE_ENV=test` explicitly set, because that is the `NODE_ENV` these suites
+assume when they build their own connection string from the job's
+`POSTGRES_*` environment variables (see
 `apps/api/test/helpers/scratch-database.helper.ts` and
 `apps/api/test/jobs/db-test-support.ts`).
+
+The `smoke` job is the only other place in CI with a real PostgreSQL, but it
+no longer runs these suites: it builds the API, migrates, seeds twice and boots
+the compiled artifact. The `*.db.spec.ts` files are likewise absent from the
+sharded `api-test` job (`npm test --workspace=api -- --shard=N/4`), which has
+no database.
 
 ### Running Them Locally
 
@@ -1193,7 +1200,7 @@ one must too:
 
 1. **Scope every row behind a distinct type/name prefix, and clean up after
    yourself.** These suites all share one database (locally, `appdb`; in CI,
-   the `smoke` job's service container), so nothing may assume it has that
+   the `db-test` shard's service container), so nothing may assume it has that
    database to itself. The established pattern is a prefix keyed on the
    suite and the running process id — e.g. `` `test.claim.${process.pid}.` ``
    in `job-claim.db.spec.ts` — used for every job `type`, user `email` or

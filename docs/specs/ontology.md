@@ -3609,7 +3609,7 @@ Two run modes, mirroring `kg:eval`'s own posture: `npm run ask:eval
 --workspace=api` needs a real key and is **local and report-only** — CI never
 gates on a real model's answer quality, which would need a paid key in CI and
 flakes on provider variance. `apps/api/test/ask/ask-eval.replay.db.spec.ts`
-is what runs in CI (the `smoke` job's `npm run test:db`): the full gold graph,
+is what runs in CI (the `db-test` job's `npm run test:db`): the full gold graph,
 the real handler and toolset, and a **scripted fake provider**
 (`fake-provider.ts`) with a fixed tool-call sequence per question, using
 handles the real tools actually returned — plus one answer that cites an
