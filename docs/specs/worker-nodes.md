@@ -51,7 +51,7 @@ wrong in a way that only becomes visible after a leak.
 promise.** `JwtAuthGuard` resolves a `pat_` token through
 `PatService.validateToken` into the owning `AuthenticatedUser` and hands it to
 `RolesGuard` and `PermissionsGuard` exactly as the JWT strategy would.
-`src/openapi/description.ts` publishes that as a universal claim — a PAT works
+the OpenAPI description (the platform's, since #464) publishes that as a universal claim — a PAT works
 on every authenticated route, with no narrower scope — and
 a PAT-universality integration spec (formerly `test/auth/pat-universality.integration.spec.ts`; the PAT guard is the platform's since #465) exists specifically to keep
 it true. That is the correct design for a PAT: a human deliberately delegating
@@ -543,7 +543,7 @@ thing to get wrong, and its only correct values are already inside that range.
 
 **The URL is never logged**, at any level, by any component: the storage
 provider names the key only, `NodeDataPlaneService` names the job and the
-object, and `LoggingInterceptor` records method, url and duration — never a
+object, and the platform request logger (the host core's `LoggingInterceptor`) records method, url and duration — never a
 response body. `test/nodes/node-data-plane.integration.spec.ts` asserts that
 across a real request, because it is a property of the whole pipeline rather
 than of one service.

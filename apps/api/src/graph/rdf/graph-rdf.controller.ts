@@ -20,7 +20,7 @@ import { GraphRdfService, type RdfArtefact } from './graph-rdf.service';
 // RAW TURTLE, NOT THE `{ data }` ENVELOPE. The body is a Turtle document an RDF
 // tool reads directly, so the handler writes the reply itself (`@Res()`),
 // which is the documented way past the global `TransformInterceptor`
-// (`openapi/data-envelope.ts` skips schemaless-JSON responses likewise).
+// (the platform's OpenAPI enrichment skips schemaless-JSON responses likewise).
 //
 // CONDITIONAL. Weak ETag over the ontology version and the caller's attribute
 // definitions (`graph-rdf.service.ts`); a matching `If-None-Match` is a 304

@@ -2,8 +2,9 @@
  * The job queue's list, its summary, and the five writes (issue #266, epic #254).
  *
  * Three exports, one file, because they are three views of one surface and the
- * page mounts all three together — the same reasoning `useMaintenance.ts` gives
- * for holding two hooks that share no state. What they genuinely share is the
+ * page mounts all three together — the same reasoning the packaged maintenance
+ * hooks (`@marinoscar/platform-web/host/headless`) give for holding two hooks
+ * that share no state. What they genuinely share is the
  * contract: every function resolves rather than throws, and a failure is a
  * STRING the page renders, because every caller is a click handler that needs
  * to branch, not a place to handle an exception that has already been captured
@@ -65,7 +66,7 @@ export const JOBS_POLL_INTERVAL_MS = 10_000;
 function messageFor(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     // 403 is named explicitly because its remedy is a permission rather than a
-    // retry — the same treatment `useMaintenance` and `useEmailSettings` give it.
+    // retry — the same treatment the packaged `useMaintenance` and `useEmailSettings` give it.
     if (err.status === 403) return 'You do not have permission to manage jobs';
     return err.message;
   }

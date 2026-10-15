@@ -5,6 +5,7 @@ import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { AssemblyAiProvider } from './providers/assemblyai.provider';
 import { TranscriptionConfigController } from './transcription-config.controller';
 import { TranscriptionConfigService } from './transcription-config.service';
+import { TranscriptionConfiguredDoctorCheck } from './transcription-configured.doctor-check';
 import { TranscriptionProviderRegistry } from './transcription-provider.registry';
 import { TranscriptionSettingsController } from './transcription-settings.controller';
 import { TranscriptionSettingsService } from './transcription-settings.service';
@@ -52,6 +53,8 @@ import { TranscriptionSettingsService } from './transcription-settings.service';
     TranscriptionSettingsService,
     TranscriptionConfigService,
     AssemblyAiProvider,
+    // The Doctor check `<slug>.transcription.configured` (#464); registers itself.
+    TranscriptionConfiguredDoctorCheck,
   ],
   // The registry and the settings service are what #25's job handler needs:
   // one to resolve the configured provider, the other to read the policy and

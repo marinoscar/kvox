@@ -20,8 +20,8 @@ import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
-import { createOpenApiDocument } from './openapi/document';
-import { registerDocsRoutesOrDegrade } from './openapi/register-docs-routes';
+import { registerPlatformDocs } from '@marinoscar/platform-api/host';
+import { APP_OPENAPI } from './openapi/document';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -92,26 +92,21 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // OpenAPI: the document and the two routes that serve it. Everything that
-  // shapes them lives in `src/openapi/` rather than here, so the same pure
-  // functions are callable from the test suite and from `scripts/dump-openapi.ts`
-  // — which is what makes the document CI lints the document users get.
+  // OpenAPI: the document and the two routes that serve it (`/api/docs` and
+  // `/api/openapi.json`), both built by the platform host slice from
+  // `APP_OPENAPI` (`openapi/document.ts`); `scripts/dump-openapi.ts` builds the
+  // same document, so the one CI lints is the one users get.
   //
   // Registered AFTER `setGlobalPrefix('api')` above, because the introspection
   // reads the prefix off the application; the dump script sets the same prefix
   // for the same reason.
   //
-  // `…OrDegrade` rather than a bare call: generation is the widest failure
-  // surface in this function, and it runs before the port is bound, so an
-  // unguarded throw makes a documentation defect a total outage. It logs at
-  // `error` and serves 503s on both docs paths instead. See the function's own
-  // comment for why that is not gated on NODE_ENV, and note that `openapi:dump`
-  // in CI still fails the build on a document that cannot be generated.
-  const docsReady = registerDocsRoutesOrDegrade(
-    app,
-    () => createOpenApiDocument(app),
-    logger,
-  );
+  // `registerPlatformDocs` degrades rather than throws: generation is the widest
+  // failure surface in this function, and it runs before the port is bound, so an
+  // unguarded throw would make a documentation defect a total outage. It logs at
+  // `error` and serves 503s on both docs paths instead; `openapi:dump` in CI
+  // still fails the build on a document that cannot be generated.
+  const docsReady = registerPlatformDocs(app, APP_OPENAPI, logger);
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');

@@ -12,7 +12,7 @@ import { UserDataService } from './user-data.service';
 // deliberately, per the controller's own header: the resource is the
 // caller's own data, scoped by `userId` in the query itself, not a feature an
 // RBAC permission gates. This file pins that absence the same way
-// `maintenance.controller.spec.ts` pins its PRESENCE, so a later "helpfully"
+// the platform's maintenance controller pins its PRESENCE, so a later "helpfully"
 // added `@Permissions(...)` — which would strand exactly the offboarded user
 // this design exists to protect — fails a test rather than merging quietly.
 // =============================================================================

@@ -31,6 +31,11 @@
 > already exposes for them to attach to (`sw.ts`'s `SKIP_WAITING` listener,
 > the `ios-needs-install` capability state), not components verified against
 > this checkout. Re-verify those two sections once those branches merge.
+>
+> **Update (#464):** the install and update prompts are now the packaged
+> `InstallPrompt` and `UpdatePrompt` from `@marinoscar/platform-web/host/ui`,
+> mounted in `apps/web/src/App.tsx`; the app's own `components/pwa/` and
+> `MaintenanceBanner` copies were deleted, and the banner is the packaged one.
 
 > **Section 10 is not part of epic #215.** It documents the four operational
 > events and the permission-addressed recipient rule added by issue #288 (epic

@@ -153,7 +153,7 @@ This is a production-grade web application template that establishes:
                          Load User          Permissions         Response
 ```
 
-The guards are the platform's (`@marinoscar/platform-api/identity`), applied by the
+Before any of these, the host core's request-id middleware and `MaintenanceGuard` (the only global guard) run on every route. The guards below are the platform's (`@marinoscar/platform-api/identity`), applied by the
 `@Auth(...)` decorator on every KVox controller; there is no global JWT guard, so a route
 with neither `@Auth` nor `@Public()` is refused by the `identity` conformance suite.
 
@@ -1356,7 +1356,7 @@ the binding:
 `AUDIT_SINK` (`audit-sink.adapter.ts`, writes `audit_events`), the system-settings store
 (`system-settings-store.adapter.ts`, over the platform `SystemSettingsService` since #466) and `PLATFORM_PRISMA`. Because identity
 needs the doctor check registry, the packaged `GET /api/admin/doctor` (`system_settings:read`, read-only) is mounted
-too; its checks are configured in `platform/doctor.config.ts`. The shims are listed in
+too; since #464 it is configured in `doctor/doctor.config.ts` ([7.8](#78-platform-host-core-about-and-doctor)). The shims are listed in
 [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
 
 On the web, `AuthProvider` comes from `@marinoscar/platform-web/identity/headless` (mounted by
@@ -1399,6 +1399,35 @@ On the web, the hub (`SettingsHub`) and the Profile and Appearance pages come fr
 and the `useSystemSettings` and `useUserSettings` hooks from `@marinoscar/platform-web/settings/headless`; KVox keeps the two
 registries (`config/adminSections.tsx`, `config/userSettingsSections.tsx`) and the `UserSettingsHubPage` and
 `Admin/SettingsHubPage` bindings ([`specs/settings-ui.md`](specs/settings-ui.md)).
+
+### 7.8 Platform host core, About and Doctor
+
+The host plumbing is the platform's host slice (`@marinoscar/platform-api/host`) and Doctor slice (`@marinoscar/platform-api/doctor`), not KVox code (issue #464, epic #462). KVox's own health, About, OpenAPI helper, maintenance, envelope, error filter and request-id files were deleted.
+
+| Concern | Owner | Where in KVox |
+|---------|-------|---------------|
+| Event bus, `AppMetricsService`, `GET /api/health`, `/live`, `/ready`, maintenance (`GET\|PUT /api/admin/maintenance`), the `{ data, meta }` envelope, the request log, the error filter, request ids | `PlatformHostCoreModule.forRoot` | `platform/host-core.config.ts`, mounted where the old health module sat so the OpenAPI path order is stable |
+| `MaintenanceGuard` | host core | The application's **only** `APP_GUARD`. KVox declares no `APP_GUARD`, `APP_FILTER` or `APP_INTERCEPTOR` of its own for these concerns, and the `host` conformance suite refuses an undeclared global guard |
+| `GET /api/admin/about` | `AboutModule.forRoot` | `platform/about/about.config.ts` (`resolveApiVersion` from `openapi/version.ts`) |
+| `/api/docs`, `/api/openapi.json` | `registerPlatformDocs(app, APP_OPENAPI, logger)` in `main.ts` | `openapi/document.ts` is only `APP_OPENAPI`; `openapi/tags.ts` and `version.ts` stay |
+| `GET /api/admin/doctor`, `GET /api/admin/doctor/support-bundle` | `DoctorModule.forRoot` with `supportBundle: { appSlug }` | `doctor/doctor.config.ts` |
+
+The routes and the environment (`MAINTENANCE_MODE`, `DEPLOY_INFO_PATH`, optional `EVENT_BUS_ADAPTER`) are unchanged. `allow-during-maintenance.decorator.ts` is a one-line re-export from `@marinoscar/platform-api/core`, so every `@AllowDuringMaintenance()` use compiles as before. Maintenance behaviour: [`specs/maintenance-mode.md`](specs/maintenance-mode.md).
+
+What KVox adds through registries (`app-registrations/host.ts`, imported first by `host-core.config.ts` because the registries freeze when the application bootstraps):
+
+- An About group **Transcription** (provider id and model only, never a key; provider `none` when unset) and a group **Deployment**. `platform/about/deploy-extras.ts` recovers the fields the CLI writes and the platform reader drops (`app.repoUrl`, `remote.sha`, the boolean `run.completed`, `run.attemptedAt`, `adoptedAt`, `host.cpuModel|diskBytes|nodeVersion`).
+- Two Doctor checks, each a provider that registers itself with `DoctorCheckRegistry` in `onModuleInit`. `<APP_SLUG>.db.extensions` (`doctor/checks/db-extensions.doctor-check.ts`, in `doctor/doctor-checks.module.ts`) fails when `vector` or `pg_trgm` is missing. `<APP_SLUG>.transcription.configured` (`transcription/transcription-configured.doctor-check.ts`) warns when no provider or no stored key exists; it lives under `transcription` because base code must not import domain code.
+
+#### Doctor
+
+`GET /api/admin/doctor` (`system_settings:read`) runs every registered check and returns one row per check with `pass`, `warn`, `fail` or `skip`, a remedy and the settings page that fixes it; the response is always HTTP 200. The route is **read-only by contract**: a check selects and describes, and never creates, alters or writes (no row, object or audit event, no mail or push, no model call), and the `doctor-read-only` conformance suite proves it for KVox's own checks too. Checks are time-bounded (5000 ms unless declared otherwise) and a check whose dependency failed is reported as `skip`. The support bundle (`GET /api/admin/doctor/support-bundle`) is a redacted JSON diagnostic file named after `APP_SLUG`. On the web, the packaged page is bound at `/admin/settings/doctor` and its card is appended to the Operations group of `config/adminSections.tsx` ([9.7](#97-admin-settings-groups)).
+
+> **Expected failure until #471.** The platform check `db.rls_role` reports `fail`, and so the overall verdict is `fail`, because KVox still connects to PostgreSQL as the `postgres` superuser and the check wants a `NOSUPERUSER NOBYPASSRLS` role. This is documented, not a defect to fix in the Doctor: #471 switches the role. Do not "fix" it by loosening or removing the check, and do not change `POSTGRES_USER` before #471 (see "Standing constraints" in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md)).
+
+Temporary shims in this slice, each with its removal issue in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): `platform/http/not-modified.interceptor.ts` (a `304` must skip the envelope), `platform/about/about-contributors.module.ts` (hands the `SettingsResolver` to the Transcription contributor) and, on the web, the `isFeatureEnabled` read in `platform/platformHost.tsx`. Known gap: `kvox deploy about` cannot read the new About response until #482.
+
+On the web, `PlatformHostProvider` (`apps/web/src/platform/platformHost.tsx`, inside `AuthProvider`), `MaintenanceGate`, `MaintenanceBanner`, `InstallPrompt`, `UpdatePrompt`, the About and Maintenance pages (`@marinoscar/platform-web/host/ui`) and the Doctor page (`@marinoscar/platform-web/doctor/ui`) replaced the local components, hooks and pages.
 
 ---
 
@@ -1482,7 +1511,16 @@ The routes are mounted, but KVox runs in single-organization mode and the web ap
 
 | Method | Path | Permission | Purpose |
 |--------|------|------------|---------|
-| `GET` | `/api/admin/doctor` | `system_settings:read` | Read-only configuration and health checks (packaged) |
+| `GET` | `/api/admin/doctor` | `system_settings:read` | Read-only configuration and health checks (packaged, plus two app checks; `db.rls_role` fails until #471) |
+| `GET` | `/api/admin/doctor/support-bundle` | `system_settings:read` | Redacted diagnostic JSON file for a support ticket (packaged) |
+
+#### About and Maintenance (Admin)
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| `GET` | `/api/admin/about` | `system_settings:read` | Deployment record, runtime facts and About groups (packaged) |
+| `GET` | `/api/admin/maintenance` | `system_settings:read` | Maintenance window state and layers (packaged) |
+| `PUT` | `/api/admin/maintenance` | `system_settings:write` | Open or close the window (packaged) |
 
 #### Settings
 
@@ -1509,9 +1547,9 @@ The routes are mounted, but KVox runs in single-organization mode and the web ap
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| `GET` | `/api/health` | Public | Full health check |
+| `GET` | `/api/health` | Public | Full health check (packaged host core) |
 | `GET` | `/api/health/live` | Public | Liveness probe |
-| `GET` | `/api/health/ready` | Public | Readiness probe (+ DB) |
+| `GET` | `/api/health/ready` | Public | Readiness probe (+ DB; 503 during a maintenance window) |
 
 ### 8.3 Response Format
 
@@ -1537,13 +1575,17 @@ The routes are mounted, but KVox runs in single-organization mode and the web ap
 ```json
 {
   "statusCode": 400,
+  "code": "BAD_REQUEST",
   "message": "Human readable error message",
-  "error": "BadRequest",
   "details": {
-    // Additional context
-  }
+    // Additional context (a Zod error adds `issues`)
+  },
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "path": "/api/example"
 }
 ```
+
+The envelope, the error filter and request ids are the platform host core's (7.8), not app code. Errors are not wrapped in `data`; a `429` adds `Retry-After`; every response carries `x-request-id`.
 
 ---
 
@@ -1736,7 +1778,7 @@ A third `ADMIN_SECTIONS` group (`apps/web/src/config/adminSections.tsx`),
 alongside `General` and `Access` — issue #266, epic #254. `General` is
 configuration an administrator *sets*; `Operations` is the running system: work
 in flight, the machines executing it, and the copies of the data taken while it
-ran. Five cards at `/admin/settings/*`, each gated on the exact permission its
+ran. Six cards at `/admin/settings/*`, each gated on the exact permission its
 controller enforces (Settings UI Pattern rule 3):
 
 - **Jobs** (`/admin/settings/jobs`, `jobs:read`) and **Job Insights**
@@ -1744,8 +1786,10 @@ controller enforces (Settings UI Pattern rule 3):
 - **Worker Nodes** (`/admin/settings/workers`, `nodes:read`)
 - **Database Backup** (`/admin/settings/db-backup`, `db_backup:read`)
 - **Broadcasts** (`/admin/settings/broadcasts`, `broadcasts:read`, epic #319)
+- **Doctor** (`/admin/settings/doctor`, `system_settings:read`, issue #464), the packaged
+  `doctorSettingsPage.card` appended last; see [7.8](#78-platform-host-core-about-and-doctor)
 
-All five read permissions are seeded Admin-only, so writes are gated inside
+The read permissions of the first five cards are seeded Admin-only, so writes are gated inside
 each page (disabling controls) rather than by a second card permission — the
 card gate is about reachability, the page gates content. `Maintenance` is a
 `General` card, not an `Operations` one — it is a system setting, not a
@@ -1882,7 +1926,9 @@ Request → Nginx → API → Database
 | Endpoint | Purpose | Checks |
 |----------|---------|--------|
 | `/api/health/live` | Kubernetes liveness | Process running |
-| `/api/health/ready` | Kubernetes readiness | Process + DB connection |
+| `/api/health/ready` | Kubernetes readiness | Process + DB connection (503 during maintenance) |
+
+Both probes are served by the platform host core. The deeper, operator-facing view is the Doctor (7.8).
 
 ---
 

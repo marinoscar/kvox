@@ -23,8 +23,8 @@
 //      is not a deliverable, it is homework, and it is read during an incident.
 //
 //   3. ⚠ THE 409's `details.activeRunId` MUST SURVIVE THE FILTER.
-//      `common/filters/http-exception.filter.ts` REBUILDS every error body from
-//      a fixed key allowlist — `message` and `details` off the payload, `code`
+//      The platform `HttpExceptionFilter` (`@marinoscar/platform-api/core`)
+//      REBUILDS every error body from a fixed key allowlist — `message` and `details` off the payload, `code`
 //      derived from the status — so a field written at the TOP LEVEL is
 //      silently dropped and never reaches the client.
 //      `exception.getResponse()` returns the payload BEFORE the filter touches

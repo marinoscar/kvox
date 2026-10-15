@@ -82,7 +82,8 @@ import {
   DatabaseRestorePreflightService,
   defaultRestorePreflightSeam,
 } from '../../src/db-backup/restore-preflight.service';
-import { MaintenanceModeService } from '../../src/common/maintenance/maintenance-mode.service';
+import { MaintenanceModeService } from '@marinoscar/platform-api/host';
+import { PrismaAuditSink } from '../../src/platform/audit-sink.adapter';
 import type { NotificationsService } from '../../src/notifications/notifications.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -187,7 +188,10 @@ async function buildEnvironment(dbName: string): Promise<Environment> {
     preflightSeam
   );
 
-  const maintenance = new MaintenanceModeService(settingsStub, prisma as unknown as PrismaService);
+  const maintenance = new MaintenanceModeService(
+    settingsStub,
+    new PrismaAuditSink(prisma as unknown as PrismaService),
+  );
 
   function makeRestoreService(seamOverrides: Partial<DatabaseRestoreSeam> = {}): DatabaseRestoreService {
     const seam: DatabaseRestoreSeam = {

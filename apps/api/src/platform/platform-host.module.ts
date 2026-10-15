@@ -10,9 +10,9 @@
 //
 // `PlatformHostModule.forRoot` is GLOBAL, so the identity slice (which injects
 // `PLATFORM_PRISMA` in a dozen services) and the app route that reports an
-// audit event resolve them without importing anything. Mounting the host CORE
-// module (`PlatformHostCoreModule`: event bus, maintenance, the response
-// envelope) is #464, not this issue.
+// audit event resolve them without importing anything. The host CORE module
+// (`PlatformHostCoreModule`: event bus, maintenance, the response envelope) is
+// mounted separately, by `host-core.config.ts` (#464).
 // =============================================================================
 
 import { PlatformHostModule } from '@marinoscar/platform-api/core';

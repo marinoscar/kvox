@@ -24,7 +24,7 @@
  *     flow to fetch a provider key appeared to lose the flow.
  *
  * So it sits in `Layout.tsx`'s `<main>` beside the two components that already
- * do this job — `MaintenanceBanner` (#258) and `NotificationPermissionBanner`
+ * do this job — the packaged `MaintenanceBanner` (#258) and `NotificationPermissionBanner`
  * (#365). Both render `null` for most users and sit above every page; this is
  * the third, and the precedent is exact.
  *
@@ -77,7 +77,7 @@
  * 2. ⚠ NOT AN `Alert`. MUI's `Alert` carries `role="alert"`, which is an
  *    ASSERTIVE live region — it interrupts whatever is being read, on every
  *    navigation, for a message that is not urgent and has not changed.
- *    `MaintenanceBanner` uses one correctly because "this deployment is out of
+ *    the packaged `MaintenanceBanner` uses one correctly because "this deployment is out of
  *    service" genuinely is an interruption; "you have two setup steps left" is
  *    not, and borrowing the shape would borrow the announcement with it.
  * 3. THE PROGRESS BAR HAS A TEXT EQUIVALENT beside it, never only an
@@ -266,7 +266,7 @@ export function OnboardingBanner() {
 
   const copy = BANNER_COPY[audience];
 
-  // Suppressed on the checklist's own page, the position `MaintenanceBanner`
+  // Suppressed on the checklist's own page, the position the packaged `MaintenanceBanner`
   // takes for the same reason: that page's whole body is a fuller statement of
   // what this summarises, and a "Continue" button pointing at the page it is
   // already on reads as a broken control rather than as a prompt.

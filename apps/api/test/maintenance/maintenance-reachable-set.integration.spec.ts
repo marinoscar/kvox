@@ -1,17 +1,18 @@
 import request from 'supertest';
 import type { OpenAPIObject } from '@nestjs/swagger';
-import { createOpenApiDocument } from '../../src/openapi/document';
 import {
   DOCS_PATH,
-  OPENAPI_JSON_PATH,
-  registerDocsRoutes,
-} from '../../src/openapi/register-docs-routes';
-import { forEachOperation, MutableDocument } from '../../src/openapi/types';
-import {
   MAINTENANCE_ERROR_MARKER,
   MAINTENANCE_RETRY_AFTER_SECONDS,
-} from '../../src/common/maintenance/maintenance.guard';
-import { MaintenanceModeService } from '../../src/common/maintenance/maintenance-mode.service';
+  MaintenanceModeService,
+  OPENAPI_JSON_PATH,
+  createOpenApiDocument,
+  forEachOperation,
+  registerDocsRoutes,
+  type MutableDocument,
+} from '@marinoscar/platform-api/host';
+import { APP_OPENAPI } from '../../src/openapi/document';
+import { resolveApiVersion } from '../../src/openapi/version';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import {
@@ -58,6 +59,11 @@ const EXPECTED_REACHABLE = [
   // The maintenance switch itself — the endpoint that closes the window.
   'GET /api/admin/maintenance',
   'PUT /api/admin/maintenance',
+
+  // The platform's About report (#464): the diagnostic page an operator opens
+  // while a window is open. Authentication and `system_settings:read` still
+  // apply; only the maintenance 503 is waived.
+  'GET /api/admin/about',
 
   // Signing in, staying signed in, signing out, and the identity lookup the
   // maintenance page needs to know whether the viewer is an admin.
@@ -109,8 +115,11 @@ describe('Maintenance mode: the reachable set', () => {
       // "/api/docs is not covered by this guard" claim below is tested against
       // the real registration rather than asserted in prose.
       registerRoutes: (app) => {
-        document = createOpenApiDocument(app);
-        registerDocsRoutes(app, document);
+        document = createOpenApiDocument(app, APP_OPENAPI);
+        registerDocsRoutes(app, document, {
+          appName: APP_OPENAPI.appName,
+          version: resolveApiVersion(),
+        });
       },
     });
     maintenance = context.module.get(MaintenanceModeService);
@@ -201,11 +210,11 @@ describe('Maintenance mode: the reachable set', () => {
   });
 
   it('does NOT cover /api/docs or /api/openapi.json — documented, not discovered', async () => {
-    // `openapi/register-docs-routes.ts` mounts both directly on the Fastify
+    // `registerPlatformDocs` (platform host slice) mounts both directly on the Fastify
     // instance, OUTSIDE Nest's router, so no Nest guard — global or otherwise —
     // ever sees them. That is intentional: a maintenance window is exactly when
     // an operator wants the API reference. It is written down here, in
-    // maintenance.guard.ts, in app.module.ts and in
+    // the platform's MaintenanceGuard, in app.module.ts and in
     // docs/specs/maintenance-mode.md, so it is a decision rather than a hole
     // somebody finds later.
     const docs = await context.app.inject({ method: 'GET', url: DOCS_PATH });

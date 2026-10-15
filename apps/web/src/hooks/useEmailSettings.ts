@@ -35,8 +35,8 @@ export interface UseEmailSettingsOptions {
    * #271), which is rendered for anyone holding `allowlist:read`, most of whom
    * may hold no `system_settings:read` at all. Rendering nothing but still
    * firing the request would buy a predictable 403 per visit for an answer the
-   * session already knew could not be read — the position `useMaintenance`
-   * takes for its banner and `OnboardingContext` takes for the admin
+   * session already knew could not be read — the position the packaged `useMaintenance`
+   * (`host/headless`) takes for its banner and `OnboardingContext` takes for the admin
    * checklist, spelled the same way here: a BOOLEAN PASSED INTO ONE
    * `useCallback`, never a conditional hook call.
    */
@@ -67,7 +67,7 @@ export function useEmailSettings(
   const { enabled = true } = options;
 
   const [settings, setSettings] = useState<EmailSettings | null>(null);
-  // Starts `false` when disabled, matching `useMaintenance`: a hook that will
+  // Starts `false` when disabled, matching the packaged `useMaintenance`: a hook that will
   // never fetch must not report a load that is permanently in progress, or a
   // consumer gating on `isLoading` would sit forever in "not known yet" — and
   // for this hook's #300 consumer that state and "email is fine" have to be

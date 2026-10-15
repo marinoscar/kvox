@@ -738,7 +738,7 @@ export class TranscriptsService {
             : '');
 
     // `details` is the only key besides `message` the shared error envelope
-    // carries through (`common/filters/http-exception.filter.ts`), so the note
+    // carries through (the platform's `HttpExceptionFilter`), so the note
     // list travels there — ids and titles, so the web UI can name the notes
     // standing in the way rather than only saying no.
     throw new ConflictException({

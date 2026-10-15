@@ -106,7 +106,7 @@ function isUnreachable(err: unknown): boolean {
  * Turn any thrown value into the sentence the page will render.
  *
  * 403 is named explicitly because its remedy is a permission rather than a
- * retry — the treatment `useJobs`, `useWorkerNodes` and `useMaintenance` all
+ * retry — the treatment `useJobs`, `useWorkerNodes` and the packaged `useMaintenance` (`host/headless`) all
  * give it. The message says "database backups" and not "settings", because the
  * API reserves a dedicated `db_backup:*` triple for this surface and telling an
  * operator to ask for the wrong permission is worse than telling them nothing.

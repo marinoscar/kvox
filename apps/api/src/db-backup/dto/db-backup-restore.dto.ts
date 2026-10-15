@@ -465,7 +465,7 @@ export const startRestoreBlockedSchema = z.object({
  * schema's output, and a class cannot have a union instance type — TypeScript
  * rejects it outright ("Base constructor return type is not an object type").
  * So the union stays a schema and a type, and the OpenAPI document composes the
- * three variant classes with `oneOf`. `openapi/data-envelope.ts` still wraps the
+ * three variant classes with `oneOf`. The platform's OpenAPI envelope pass still wraps the
  * result correctly because `ApiDataResponse` emits the `{ data: … }` envelope
  * itself rather than relying on the later pass to recognise a composed schema.
  */

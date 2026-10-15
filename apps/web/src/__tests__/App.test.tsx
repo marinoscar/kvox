@@ -46,6 +46,10 @@ vi.mock('../pages/Admin/MaintenancePage', () => ({
 vi.mock('../pages/Admin/AboutPage', () => ({
   default: () => <h1>Admin About</h1>,
 }));
+// Issue #464: the packaged Doctor page behind its own route and gate.
+vi.mock('../pages/Admin/DoctorPage', () => ({
+  default: () => <h1>Admin Doctor</h1>,
+}));
 
 // Issue #465: the route renders KVox's binding of the packaged Users page.
 vi.mock('../identity/UsersPage', () => ({
@@ -697,6 +701,7 @@ describe('App', () => {
       ['/admin/settings/notifications', 'Admin Notifications'],
       ['/admin/settings/maintenance', 'Admin Maintenance'],
       ['/admin/settings/about', 'Admin About'],
+      ['/admin/settings/doctor', 'Admin Doctor'],
     ])('renders %s for a user holding system_settings:read', async (path, heading) => {
       signInAs(READER, ['contributor']);
 
@@ -715,6 +720,7 @@ describe('App', () => {
       '/admin/settings/notifications',
       '/admin/settings/maintenance',
       '/admin/settings/about',
+      '/admin/settings/doctor',
     ])(
       'redirects a user without system_settings:read away from %s',
       async (path) => {
