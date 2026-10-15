@@ -323,14 +323,14 @@ actual numbers (`docs/specs/notes.md`'s rule 4: never truncate silently).
 ## 6. Job-queue rules compliance
 
 `transcript.name_check` (`TranscriptNameCheckHandler`) is a `JobHandler`
-under CLAUDE.md's "Every Long-Running Activity Is a Queue Job" rule, enqueued
+under AGENTS.md's "Every Long-Running Activity Is a Queue Job" rule, enqueued
 by `TranscriptNameCheckService.create` and never run inline — a two-hour
 transcript's `thorough` run can need dozens of sequential model calls, each
 taking seconds, which is squarely the "outlives the HTTP request" case that
 rule exists for.
 
 - **`profile: { maxRuntimeMs: 20 * 60_000, maxAttempts: 1 }`** — exactly the
-  two numbers CLAUDE.md's rule 4 permits, and **deliberately one attempt**,
+  two numbers AGENTS.md's rule 4 permits, and **deliberately one attempt**,
   for the identical reason `note.generate` carries `maxAttempts: 1`
   (`docs/specs/notes.md` rule 2): every request here is billed to the
   requesting user's *own* key, so an automatic retry would silently re-run
@@ -390,8 +390,8 @@ on its own would be a second write path the version log does not know about,
 and `materialize()` — which replays the version log through the *same*
 reducer functions the live edit path calls (`docs/specs/transcription.md`
 §4.4) — could no longer be guaranteed to rebuild what the user actually sees.
-This is exactly the shape rule 1 in CLAUDE.md's transcript-correction section
-protects: nothing outside `apps/api/src/transcripts/editing/` may write a
+This is exactly the shape the Transcripts rule in
+[`apps/api/AGENTS.md`](../../apps/api/AGENTS.md) protects: nothing outside `apps/api/src/transcripts/editing/` may write a
 segment's text.
 
 **Deterministic chunking and `clientBatchId`.** An apply call is chunked at

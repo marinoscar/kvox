@@ -70,7 +70,7 @@ is what makes `--resume` work at all.
 ## 1. Scope and the four decisions already made
 
 `kvox deploy` takes this repository (or, far more likely, a fork of it —
-see the Architecture Principles in `CLAUDE.md`: this is a template) from "an
+see the Architecture principles in `AGENTS.md`: this is a template) from "an
 empty VPS with Docker installed" to "running, migrated, seeded, and served
 over HTTPS at a real domain," and back again on every subsequent `update`.
 Four decisions are locked in; do not re-open them in a child issue without
@@ -389,7 +389,7 @@ epic #118's architecture decision 1; the full addendum is #134) —
 the exact path local development already uses (`cp
 infra/compose/.env.example infra/compose/.env`), which is also where docker
 compose looks for a `.env` file by default when invoked from that directory
-(the existing `Key Commands` in `CLAUDE.md` already `cd infra/compose`
+(the existing `Key commands` in `AGENTS.md` already `cd infra/compose`
 before every `docker compose` invocation; deploy's `executor.ts` does the
 same). It is written with the identical atomic-write discipline as
 `config.ts`'s `writeConfigFile`: a freshly-created `wx`-flagged temp file at
