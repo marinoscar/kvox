@@ -1954,6 +1954,8 @@ Revoke a token.
 
 ### Jobs (Background Queue)
 
+> **Implementation.** These routes are served by `@marinoscar/platform-api/jobs` (`JobsModule.forRoot`, mounted in `apps/api/src/platform/jobs/jobs.config.ts`); this repository holds no controller for them. Rows carry `orgId` (null for housekeeping and system jobs). The Admin Jobs and Job Insights pages are the platform's.
+
 **All routes require Admin role, split `jobs:read` (the four reads below) / `jobs:write` (the four writes)** — see [`docs/specs/job-queue.md`](specs/job-queue.md) for the queue's design (the atomic `FOR UPDATE SKIP LOCKED` claim, retry/rate-limit budgets, the lease reaper) and rejected alternatives; this section documents only the request/response contract.
 
 Every literal route below (`stats`, `insights`, `insights/reset-history`, `retry-failed`, `reset-stuck`) is matched before `:id` — Nest matches in declaration order, and reordering would make e.g. `POST /admin/jobs/reset-stuck` a 400 malformed-UUID error instead of running the sweep.
@@ -1968,7 +1970,7 @@ Queue summary: totals, a per-status and per-type breakdown, how many pending job
     "total": 1024,
     "byStatus": { "pending": 12, "running": 3, "succeeded": 990, "failed": 19 },
     "byType": [
-      { "type": "example.checksum", "label": "Example: Checksum", "total": 500, "byStatus": { "pending": 2, "running": 1, "succeeded": 490, "failed": 7 } }
+      { "type": "media.audio.transcode", "label": "Audio transcode", "total": 500, "byStatus": { "pending": 2, "running": 1, "succeeded": 490, "failed": 7 } }
     ],
     "scheduled": 4,
     "stuckRunning": 0,
@@ -2005,10 +2007,10 @@ Throughput and completion estimates the summary cannot answer: duration percenti
       "byType": ["..."]
     },
     "eta": [
-      { "type": "example.checksum", "label": "Example: Checksum", "pending": 2, "running": 1, "remaining": 3, "avgMs": 820, "basis": "live", "estimatedMs": 1230 }
+      { "type": "media.audio.transcode", "label": "Audio transcode", "pending": 2, "running": 1, "remaining": 3, "avgMs": 820, "basis": "live", "estimatedMs": 1230 }
     ],
     "lifetime": [
-      { "type": "example.checksum", "label": "Example: Checksum", "succeeded": 5400, "failed": 22, "total": 5422, "avgMs": 810, "durationSamples": 5400 }
+      { "type": "media.audio.transcode", "label": "Audio transcode", "succeeded": 5400, "failed": 22, "total": 5422, "avgMs": 810, "durationSamples": 5400 }
     ]
   }
 }
@@ -2036,7 +2038,7 @@ Moves failed jobs back to `pending` with attempt and rate-limit budgets reset. I
 
 **Request Body:**
 ```json
-{ "type": "example.checksum" }
+{ "type": "media.audio.transcode" }
 ```
 
 | Field | Type | Required | Description |
@@ -2092,8 +2094,8 @@ List jobs, newest first, filterable and paginated. Payloads are **not** included
     "items": [
       {
         "id": "uuid",
-        "type": "example.checksum",
-        "typeLabel": "Example: Checksum",
+        "type": "media.audio.transcode",
+        "typeLabel": "Audio transcode",
         "subjectType": "storage_object",
         "subjectId": "uuid",
         "dedupKey": null,
@@ -2156,6 +2158,8 @@ Deletes the row.
 
 ### Worker Nodes
 
+> **Implementation.** All three route groups below are served by `@marinoscar/platform-api/nodes` (`NodesModule.forRoot` and `NodeCredentialModule`, mounted in `apps/api/src/platform/jobs/jobs.config.ts`); this repository holds no controller for them. The Admin Worker Nodes page is the platform's.
+
 Distributed execution for node-eligible job types. See [`docs/specs/worker-nodes.md`](specs/worker-nodes.md) for the control/data-plane split, the lease, and why `nodes:*` is a permission pair separate from `jobs:*`. Three route groups, each with a different caller and a different blast radius.
 
 #### `/api/nodes/*` — what a node talks to
@@ -2172,7 +2176,7 @@ Register, or reattach to, this machine's row. Idempotent on `(owner, name)` — 
   "hostname": "worker-1.local",
   "platform": "linux-x64",
   "cliVersion": "1.2.0",
-  "eligibleTypes": ["example.checksum"],
+  "eligibleTypes": ["media.audio.transcode"],
   "concurrency": 4
 }
 ```
@@ -2187,7 +2191,7 @@ Register, or reattach to, this machine's row. Idempotent on `(owner, name)` — 
       "hostname": "worker-1.local",
       "platform": "linux-x64",
       "cliVersion": "1.2.0",
-      "eligibleTypes": ["example.checksum"],
+      "eligibleTypes": ["media.audio.transcode"],
       "concurrency": 4,
       "status": "online",
       "capabilities": null,
@@ -2206,7 +2210,7 @@ Every node-eligible job type (both `nodeResultSchema` and `persistNodeResult` pr
 
 **Response:**
 ```json
-{ "data": { "types": [{ "type": "example.checksum", "resultSchema": { "type": "object", "...": "..." } }] } }
+{ "data": { "types": [{ "type": "media.audio.transcode", "resultSchema": { "type": "object", "...": "..." } }] } }
 ```
 
 ---
@@ -2228,7 +2232,7 @@ Claims up to the node's `concurrency` runnable jobs under a server-derived lease
 
 **Request Body:**
 ```json
-{ "types": ["example.checksum"], "limit": 4 }
+{ "types": ["media.audio.transcode"], "limit": 4 }
 ```
 
 **Response:**
@@ -2237,7 +2241,7 @@ Claims up to the node's `concurrency` runnable jobs under a server-derived lease
   "data": {
     "jobs": [
       {
-        "job": { "id": "uuid", "type": "example.checksum", "subjectType": "storage_object", "subjectId": "uuid", "priority": 0, "attempts": 1, "startedAt": "2024-01-01T00:00:00.000Z", "leaseExpiresAt": "2024-01-01T00:10:00.000Z" },
+        "job": { "id": "uuid", "type": "media.audio.transcode", "subjectType": "storage_object", "subjectId": "uuid", "priority": 0, "attempts": 1, "startedAt": "2024-01-01T00:00:00.000Z", "leaseExpiresAt": "2024-01-01T00:10:00.000Z" },
         "params": { "objectId": "uuid" }
       }
     ]

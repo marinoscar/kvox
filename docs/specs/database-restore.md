@@ -560,7 +560,7 @@ source outright. Streaming the object straight into `pg_restore` would forfeit
 on a host that is about to hold a second copy of the whole database anyway.
 
 The file carries `JOB_TEMP_PREFIX` — the application's janitor-swept prefix from
-`apps/api/src/jobs/job-temp.ts` — so a SIGKILL between the download and the
+`job-temp.ts` in `@marinoscar/platform-api/jobs` — so a SIGKILL between the download and the
 delete cannot leak it forever. That import reaches into the job queue on
 purpose, and it is the one case where copying the prefix would be wrong:
 `db-backup-storage.ts` deliberately duplicated `job-temp.ts`'s slugifier because

@@ -282,6 +282,7 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── doctor.config.ts
 │   │   │   │   ├── identity/         # IdentityModule.forRoot + its host ports
 │   │   │   │   ├── settings/         # SettingsModule.forRoot + host ports (data, profile images)
+│   │   │   │   ├── jobs/             # JobsModule.forRoot + NodesModule.forRoot + their host ports (the queue and fleet are the platform's)
 │   │   │   │   └── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
 │   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
@@ -732,7 +733,7 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-system-role assignments. Only the system role `admin` lives here now; `contributor`, `viewer` and `org_admin` are **organization** roles held on `memberships.role_id` (platform migration `0024_split_system_org_roles` moved them; see §7.3)
 - `organizations` / `memberships` - The platform's tenancy tables. KVox runs in single-organization mode (`TENANCY_MODE` unset): one default organization, and every user has one membership in it whose role is their org role
-- `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` and `ai` (KVox's, `app-registrations/settings.ts`; `ai` is a shim until #473). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
+- `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations; the jobs slice also registers a `retention` namespace, one `{ enabled, days }` policy per growing table, which the 01:00 `RetentionPurgeTask` reads, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` and `ai` (KVox's, `app-registrations/settings.ts`; `ai` is a shim until #473). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
 - `user_settings` - Per-user settings (JSONB), served by the platform settings slice. Optional namespaces in stored key order: `dataTables`, `navigation`, `notifications` (platform), then `onboarding` and `graph` (KVox, `app-registrations/settings.ts`). `onboarding` (issue #272, epic
   #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
   `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
@@ -1942,6 +1943,21 @@ does. Full design and rejected alternatives:
 the one property that makes the two composable: **the executor is
 interchangeable and the queue does not know or care which one ran a job.**
 
+**Ownership.** The queue is `@marinoscar/platform-api/jobs` and the node fleet
+is `@marinoscar/platform-api/nodes` (issue #468, epic #467). This repository
+holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
+gone. KVox's part is the composition and host ports in
+`apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
+`NODE_JOB_INPUTS` and `NODE_OBJECT_STORE` adapters), the handlers that live
+beside their features, and the 42 pinned job type strings
+(`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
+[`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the
+Jobs, Job Insights and Worker Nodes admin pages are the platform's, and the
+package also registers the `retention` system-settings namespace with a 01:00
+enqueue-only `RetentionPurgeTask`. Paths in the sections below that name
+`job-claim.service.ts`, `job-handler.interface.ts` and similar are files in
+the package.
+
 ### 12.1 The claim: `FOR UPDATE SKIP LOCKED`
 
 Every job execution path — the in-process worker pool and a remote node's
@@ -1999,7 +2015,7 @@ flowchart LR
     NC -. "node-eligible types only:<br/>nodeResultSchema +<br/>persistNodeResult" .-> H
 ```
 
-A `JobHandler` (`apps/api/src/jobs/job-handler.interface.ts`) is written once.
+A `JobHandler` (`@marinoscar/platform-api/jobs`, `job-handler.interface.ts`) is written once.
 The in-process worker pool calls `process(job)` directly. A node has no
 database access, so a node-eligible handler's `process()` still runs — on the
 server, for a deployment with no nodes — while its `nodeResultSchema` +
@@ -2007,9 +2023,9 @@ server, for a deployment with no nodes — while its `nodeResultSchema` +
 and posted back for the server to persist. **There is no `if (isNode)`
 branch anywhere in a handler or in the claim path** — a node is an option a
 deployment can add, never a requirement any handler must plan around. See
-the "Adding a Job Type" recipe in
-`apps/api/src/jobs/handlers/README.md` for what that split looks like in a
-real handler (`example-checksum.handler.ts`).
+the `add-job-type` skill (`.claude/skills/add-job-type/SKILL.md`) for the
+recipe, and `apps/api/src/notes/handlers/note-source-extract.handler.ts` for
+what that split looks like in a real node-eligible handler.
 
 The node's data plane is a second, deliberate asymmetry: a node fetches and
 writes job input/output **directly against the storage provider** through
@@ -2118,7 +2134,7 @@ answer the storage half, and a `pg_dump` for `db.backup.run` is the first type
 that needed the database half too. A handler declares the need by carrying a
 `nodeSecretBroker`; its presence is the declaration, exactly as
 `nodeResultSchema` + `persistNodeResult` declare node eligibility itself
-(`job-handler.interface.ts`). At claim time a node calls
+(`JobHandler` in `@marinoscar/platform-api/jobs`). At claim time a node calls
 `POST /api/nodes/:id/jobs/:jobId/secret`, gated by `assertJobHeldByNode`
 (§12.3's lease check) and by `nodes.jobSecretBrokerEnabled`; the broker mints
 a short-lived, job-scoped credential — for `db.backup.run`, a PostgreSQL role

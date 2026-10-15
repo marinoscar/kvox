@@ -1,11 +1,11 @@
 ---
 name: add-job-type
-description: Add a background job type to the kvox queue - implement a JobHandler, self-register it, enqueue it through JobsService with an explicit orgId, declare its label and execution profile, decide node eligibility, and add the tests that pin it. Use when a feature must do long-running work (a dump, a sweep, an export, a network round trip per row), when adding an AI job that spends a user's own key, or when a @Cron or @OnEvent body would otherwise work inline.
+description: Add a background job type to the job queue - implement a JobHandler, self-register it, enqueue it through JobsService with an explicit orgId, declare its label and execution profile, decide node eligibility, and add the tests that pin it. Use when a feature must do long-running work (a dump, a sweep, an export, a network round trip per row), when adding an AI job that spends a user's own key, or when a @Cron or @OnEvent body would otherwise work inline.
 ---
 
 # Add a job type
 
-The queue and the worker-node fleet are the platform's: `@marinoscar/platform-api/jobs` and `@marinoscar/platform-api/nodes`. KVox has no queue code of its own (the old `apps/api/src/jobs` and `apps/api/src/nodes` folders are gone), only handlers and their host ports (`apps/api/src/platform/jobs/`). Read the contract in the installed package: the slice section of `node_modules/@marinoscar/platform-api/README.md` and the TSDoc in `node_modules/@marinoscar/platform-api/dist/jobs/job-handler.interface.d.ts` (every optional member is documented there). Spec and rules: `docs/specs/job-queue.md` (section 7.10) and `docs/specs/worker-nodes.md`.
+The queue and the worker-node fleet are the platform's: `@marinoscar/platform-api/jobs` and `@marinoscar/platform-api/nodes`. This repository has no queue code of its own (the old `apps/api/src/jobs` and `apps/api/src/nodes` folders are gone), only handlers and their host ports (`apps/api/src/platform/jobs/`). Read the contract in the installed package: the slice section of `node_modules/@marinoscar/platform-api/README.md` and the TSDoc in `node_modules/@marinoscar/platform-api/dist/jobs/job-handler.interface.d.ts` (every optional member is documented there). Spec and rules: `docs/specs/job-queue.md` (section 7.10) and `docs/specs/worker-nodes.md`.
 
 ## Imports
 
@@ -31,7 +31,7 @@ import { resolveJobOrgId } from '@marinoscar/platform-api/identity';
 
 ## Rules
 
-- A job `type` string is permanent once jobs of that type exist. A rename is a new type. The snapshot spec pins every string KVox has registered.
+- A job `type` string is permanent once jobs of that type exist. A rename is a new type. The snapshot spec pins every string the app has registered.
 - Any work that outlives the request or cron tick is a job. No detached `void this.doIt()`. The only permanent exemptions are the three listed in `AGENTS.md` and `docs/specs/job-queue.md` section 7.10 (the platform's lease reaper, temp-file janitor and node-secret sweep); the `cron-enqueue-only` conformance suite is their executable form. Never add a fourth.
 - Node eligibility is the default: provide both `nodeResultSchema` and `persistNodeResult` unless the handler writes as it goes, reads several tables mid-computation, or needs a privilege a node must never hold. Eligibility is derived; there is no `nodeEligible` flag. Never provide only one of the two. A server-only type is listed by `JobHandlerRegistry.serverOnlyTypes()`, which `JOBS_WORKER_MODE=system` also uses.
 - A per-job secret is declared with `nodeSecretBroker`. A node never persists it; `job_node_secrets` stores handles only.

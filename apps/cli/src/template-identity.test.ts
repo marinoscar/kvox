@@ -238,7 +238,6 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // in prose.
   // ---------------------------------------------------------------------
   'apps/api/src/db-backup/restore-preflight.service.ts',
-  'apps/api/src/nodes/dto/node-control-plane.dto.ts',
   'apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts',
   'apps/cli/src/commands/api.ts',
   'apps/cli/src/commands/config.ts',
@@ -293,12 +292,10 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   //     Markdown prose or runbooks showing `kvox <subcommand>` invocations —
   //     the same standing as `VISION.md` and `docs/specs/transcription.md`
   //     above.
-  //   - `.github/workflows/ci.yml` and
-  //     `apps/api/src/jobs/contracts/README.md` each carry exactly one
-  //     explanatory COMMENT naming the command (`kvox deploy`, `kvox`
-  //     itself) inside an otherwise product-neutral file — the same
-  //     standing as `apps/cli/src/tui/tty.ts` above, just outside
-  //     `apps/cli`.
+  //   - `.github/workflows/ci.yml` carries exactly one explanatory COMMENT
+  //     naming the command (`kvox deploy`) inside an otherwise
+  //     product-neutral file — the same standing as
+  //     `apps/cli/src/tui/tty.ts` above, just outside `apps/cli`.
   //   - `.claude/skills/rename-app/SKILL.md` and
   //     `.claude/skills/rename-app/references/do-not-rename.md` are the
   //     rebranding instructions themselves: they necessarily discuss BOTH
@@ -338,7 +335,6 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'AGENTS.md',
   'CLAUDE.md',
   'apps/cli/AGENTS.md',
-  'apps/api/src/jobs/contracts/README.md',
   'docs/ARCHITECTURE.md',
   'docs/DEVELOPMENT.md',
   'docs/DEVICE-AUTH.md',

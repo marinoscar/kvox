@@ -513,8 +513,8 @@ as every ordinary handler before profiles existed at all
 
 Enqueued by a ten-minute `@Cron` in
 `apps/api/src/transcripts/tasks/transcripts-housekeeping.task.ts`, through
-the shared `enqueueHousekeepingJob` helper (`apps/api/src/jobs
-/housekeeping.enqueue.ts`) — the exact helper `docs/specs/job-queue.md` §7.10
+the shared `enqueueHousekeepingJob` helper (`enqueueHousekeepingJob` from
+`@marinoscar/platform-api/jobs`) — the exact helper `docs/specs/job-queue.md` §7.10
 introduced so that "the cron decides whether work is due and enqueues it; a
 handler does the work" costs six lines per conversion rather than sixty. This
 cron, and only this cron, is what `apps/api/test/jobs/cron-enqueue-only.spec.ts`
@@ -695,7 +695,7 @@ routine speech (a sentence, a short exchange) is rarely split mid-thought.
 `ProviderInputError` (the provider rejects this specific input — an
 unsupported codec it did not actually support despite matching
 `acceptedMimeTypes`, a corrupt file, an unreadable stream) and
-`RateLimitError` (`apps/api/src/jobs/rate-limit.error.ts`, reused verbatim —
+`RateLimitError` (`@marinoscar/platform-api/jobs`, reused verbatim —
 see §1.6) are the three named classes; **everything else is retryable by
 default**, following the identical "positively identify, otherwise assume
 retryable" posture `classifyRateLimit` takes for HTTP status codes

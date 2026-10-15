@@ -8,12 +8,12 @@
 > #265 insights and ETA).
 > Implementation: **`@marinoscar/platform-api/jobs`** (the queue) and
 > **`@marinoscar/platform-api/nodes`** (the worker-node fleet; see
-> [worker-nodes.md](worker-nodes.md)). KVox no longer holds the queue code:
+> [worker-nodes.md](worker-nodes.md)). this repository no longer holds the queue code:
 > issue #468 (epic #467) deleted `apps/api/src/jobs` and `apps/api/src/nodes`
 > and mounted the packaged slices, composed in
 > `apps/api/src/platform/jobs/jobs.config.ts` with the host ports in
 > `apps/api/src/platform/jobs/jobs-host.module.ts`. The `Job` and
-> `JobStatsRollup` models come from the platform's database fragments. KVox
+> `JobStatsRollup` models come from the platform's database fragments. The app
 > keeps its own handlers, its job type strings and this document's rules.
 >
 > **How to read the file paths below.** The sections were written when the
@@ -23,7 +23,7 @@
 > output is under `node_modules/@marinoscar/platform-api/dist/jobs/`, and each
 > exported symbol's TSDoc is the contract. The spec files in the verification
 > tables ran in this repository before #468 and are now the package's own
-> suites; KVox's side is the conformance run in `apps/api/test/conformance.spec.ts`
+> suites; this repository's side is the conformance run in `apps/api/test/conformance.spec.ts`
 > (`cron-enqueue-only`, `on-event-no-io`, jobs server-only) and the type
 > snapshot in `apps/api/test/jobs/job-type-snapshot.spec.ts`.
 >
@@ -2268,7 +2268,7 @@ of the older sections needs to know:
 - **Where the code is.** `@marinoscar/platform-api/jobs` (queue, worker pool,
   reaper, janitor, history purge, labels, `JobScope`, `enqueueHousekeepingJob`,
   `job.settled`, `/api/admin/jobs`) and `@marinoscar/platform-api/nodes`
-  (fleet; [worker-nodes.md](worker-nodes.md)). KVox supplies the host ports in
+  (fleet; [worker-nodes.md](worker-nodes.md)). The app supplies the host ports in
   `apps/api/src/platform/jobs/` and its handlers.
 - **Jobs carry `org_id`.** Null for housekeeping and other system jobs; the
   default organization's id for a job whose handler touches `storage_objects`.
@@ -2288,7 +2288,7 @@ of the older sections needs to know:
   such as the notification inbox, the delivery log, the audit trail and AI runs). `RetentionPurgeTask` runs at **01:00** (after
   `job.history.purge` at midnight) and, like every cron here, **only enqueues**:
   one global purge job per enabled policy whose handler is mounted. It needs no
-  exemption from §7.10. KVox registers no policy of its own
+  exemption from §7.10. This app registers no policy of its own
   (`APP_RETENTION_POLICIES` in `apps/api/src/app-registrations/jobs.ts`).
 - **`JOBS_WORKER_MODE=system`** claims exactly what no node may claim right
   now, which the platform computes in `NodeOffloadService.serverOnlyRightNow()`
@@ -2326,7 +2326,7 @@ Forty-two type strings are pinned. A type string is permanent once rows exist.
 | `user.data.purge` | user-data | Server-only |
 | `job.history.purge` | platform jobs | Queue housekeeping; `orgId` null |
 | `nodes.fleet.sweep`, `nodes.fleet.prune` | platform nodes | Fleet housekeeping; `orgId` null |
-| `storage.cleanup.stale-uploads` | KVox storage | Housekeeping; `orgId` null |
+| `storage.cleanup.stale-uploads` | storage | Housekeeping; `orgId` null |
 | `admin.broadcast.start`, `admin.broadcast.chunk` | notifications | Admin broadcasts |
 | `db.backup.run` | db-backup | Node-eligible; brokered database credential (worker-nodes.md §20.1) |
 | `db.backup.sweep`, `db.restore.old-db-drop` | db-backup | Housekeeping; server-only |
@@ -2365,7 +2365,7 @@ To make a type node-eligible, add **both** `nodeResultSchema` and
 `persistNodeResult` — and nothing else (§2).
 
 **Organization on the row.** The platform's `jobs` table carries `org_id`.
-KVox has no ambient organization (`JOBS_ORG_SCOPE` answers null in
+This app has no ambient organization (`JOBS_ORG_SCOPE` answers null in
 `jobs-host.module.ts`), so every enqueue states it: `null` for housekeeping and
 other system jobs, and the default organization's id for a job whose handler
 touches `storage_objects`, which the handler then reaches through
@@ -2374,7 +2374,7 @@ touches `storage_objects`, which the handler then reaches through
 then the default organization (`resolveJobOrgId` from
 `@marinoscar/platform-api/identity`).
 
-The worked example for a handler that does real work is KVox's own
+The worked example for a handler that does real work is this app's own
 `apps/api/src/transcripts/tasks/transcripts-housekeeping.task.ts` with its
 handler (a scheduling task that only enqueues), and the platform's
 `job-history-purge.handler` (§7.5) for a batched loop in a transaction. The
