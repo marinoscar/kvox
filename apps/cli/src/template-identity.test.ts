@@ -442,6 +442,29 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'apps/api/prisma/schema/platform.ai.prisma',
   'apps/api/prisma/schema/platform.credentials.prisma',
   'apps/api/prisma/schema/platform.jobs.prisma',
+
+  // ---------------------------------------------------------------------
+  // Added by issue #465 (epic #462), the app adopting the platform packages.
+  //
+  // `@marinoscar/platform-*` / `@marinoscar/kvox-*` specifiers are NOT listed
+  // here: `stripRegistryScopes` hides them from the scan, so source files that
+  // merely import a platform package need no entry. Only the files below carry
+  // a genuine product-name literal that cannot be reworded.
+  // ---------------------------------------------------------------------
+
+  // The `kvox:allowlist-reminders` deviation id is a PERMANENT identifier
+  // recorded in platform.lock and the drift allowlist; renaming it would
+  // invalidate the recorded baseline. The fragment is hand-edited, and the
+  // schema file is composed from it by `npm run db:compose`.
+  'apps/api/prisma/fragments/allowlist-reminders.prisma',
+  'apps/api/prisma/schema/app.allowlist-reminders.prisma',
+  // Applied migrations are immutable history (editing one breaks its checksum),
+  // and SQL cannot import from `@app/shared`.
+  'apps/api/prisma/migrations/20261015125136_kvox_allowlist_reminders/migration.sql',
+  'apps/api/prisma/migrations/20261015125334_kvox_scope_domain_permissions/migration.sql',
+  // Assistant instructions for apps/web, the same standing as AGENTS.md and
+  // apps/cli/AGENTS.md above: Markdown naming the product, no `@app/shared`.
+  'apps/web/AGENTS.md',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this
@@ -533,6 +556,30 @@ function wordBoundaryPattern(value: string): RegExp {
   return new RegExp(`${lead}${escaped}${tail}`);
 }
 
+/**
+ * Registry scope specifiers that are NOT identity literals (issue #465, epic #462).
+ *
+ * `@marinoscar/platform-*` (api, web, db, contract, ...) and `@marinoscar/kvox-*`
+ * are npm packages published under an external registry namespace. The scope
+ * belongs to the registry account that owns the packages, so a fork rename must
+ * NEVER change it, and `scripts/rename.mjs` does not (its edits are literal,
+ * URL-anchored finds that never match an `@scope/` specifier). Without this,
+ * every source file that imports a platform package would match the `owner`
+ * pattern and would need its own allowlist entry.
+ *
+ * Deliberately NARROW, hardcoded rather than derived from identity.json (the
+ * scope does not follow the repository owner on a fork): only these two
+ * package-name prefixes are removed. A bare `marinoscar`, the `marinoscar/kvox`
+ * repo slug, a `github.com/marinoscar/...` URL and any other `@marinoscar/<x>`
+ * scope are left in place and still flagged.
+ */
+const REGISTRY_SCOPE_RE = /@marinoscar\/(?:platform|kvox)-[\w-]*(?:\/[\w.-]+)*/g;
+
+/** Remove registry scope specifiers from a line before identity matching. */
+function stripRegistryScopes(lineText: string): string {
+  return lineText.replace(REGISTRY_SCOPE_RE, '');
+}
+
 interface Offender {
   file: string;
   line: number;
@@ -567,8 +614,9 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
       // its own. Only lines that name that file are exempt; any other mention
       // of the product name on the same file is still flagged.
       if (MANIFEST_FILE_LINE_RE.test(lineText)) return;
+      const scanned = stripRegistryScopes(lineText);
       for (const { value, re } of patterns) {
-        if (re.test(lineText)) {
+        if (re.test(scanned)) {
           offenders.push({ file, line: idx + 1, text: lineText.trim().slice(0, 160), value });
         }
       }
@@ -577,6 +625,38 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
 
   return offenders;
 }
+
+describe('stripRegistryScopes (issue #465): the external npm scope is not an identity literal', () => {
+  const ownerRe = wordBoundaryPattern('marinoscar');
+  const flagged = (line: string): boolean => ownerRe.test(stripRegistryScopes(line));
+
+  it.each([
+    "import { x } from '@marinoscar/platform-api/identity';",
+    'import { y } from "@marinoscar/platform-web";',
+    "// see @marinoscar/platform-db and @marinoscar/platform-contract/schemas",
+    "const p = require('@marinoscar/kvox-slices');",
+  ])('hides %s', (line) => {
+    expect(flagged(line)).toBe(false);
+  });
+
+  it('leaves the surrounding text intact', () => {
+    expect(stripRegistryScopes("from '@marinoscar/platform-api/identity';")).toBe("from '';");
+  });
+
+  it.each([
+    'see marinoscar/kvox for details',
+    'owner: marinoscar',
+    'https://github.com/marinoscar/anything',
+    "import x from '@marinoscar/other-package';",
+    "import x from '@marinoscar/platform';",
+  ])('still flags %s', (line) => {
+    expect(flagged(line)).toBe(true);
+  });
+
+  it('still flags a real literal on the same line as a scope specifier', () => {
+    expect(flagged("from '@marinoscar/platform-api'; // github.com/marinoscar/kvox")).toBe(true);
+  });
+});
 
 describe('no stale identity literal outside the allowlist (issue #343, epic #341)', () => {
   const identity = readManifest();
