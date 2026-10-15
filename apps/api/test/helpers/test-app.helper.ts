@@ -9,6 +9,7 @@ import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { PrismaSystemService } from '../../src/prisma/prisma-system.service';
 import { installManagedDeleteHook } from '../../src/kvox-objects/managed-delete.hook';
 import { prismaMock } from '../mocks/prisma.mock';
 import { JobWorker } from '@marinoscar/platform-api/jobs';
@@ -133,7 +134,13 @@ export async function createTestApp(
       // `src/jobs/job.worker.bootstrap.spec.ts`, both of which drive it
       // deliberately.
       .overrideProvider(JobWorker)
-      .useValue({});
+      .useValue({})
+      // The platform's bypass client is a SECOND PrismaClient on its own pool
+      // (#469: the storage slice's cross-org reads - the public avatar route,
+      // the stale-upload sweep - go through it). Against the mock it answers
+      // from the same deep mock, so a spec feeds one set of tables.
+      .overrideProvider(PrismaSystemService)
+      .useValue({ forSystem: () => prismaMock, $disconnect: async () => undefined });
 
     for (const { provide, useValue } of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(provide).useValue(useValue);
