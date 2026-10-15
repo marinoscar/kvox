@@ -1,22 +1,32 @@
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { ONBOARDING_STEP_KEY_PATTERN } from '../common/schemas/user-settings-namespaces.schema';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
-import type { AiConfigService } from '../ai/ai-config.service';
-import type { EmailSettingsService } from '../email/email-settings.service';
-import type { PushConfigService } from '../notifications/push-config.service';
-import type { PrismaService } from '../prisma/prisma.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
-import type { UserSettingsService } from '../settings/user-settings/user-settings.service';
-import type { TranscriptionConfigService } from '../transcription/transcription-config.service';
+import { resetRegistryForTests, withTemporaryEntries } from '../common/registry/testing';
+import {
+  OMNIPOTENT,
+  buildOnboardingKit,
+  callerWith,
+  deepFreeze,
+  requireStep,
+  stepOf,
+  type KitFacts,
+} from '../../test/helpers/onboarding-service.kit';
 import {
   ADMIN_ONBOARDING_STEPS,
+  BASE_ADMIN_ONBOARDING_STEPS,
+  BASE_USER_ONBOARDING_STEPS,
   USER_ONBOARDING_STEPS,
   type OnboardingAdminContext,
   type OnboardingStep,
   type OnboardingUserContext,
 } from './onboarding-steps';
-import { OnboardingService } from './onboarding.service';
-import type { OnboardingState, OnboardingStepState } from './dto/onboarding-state.dto';
+import {
+  onboardingFactRegistry,
+  onboardingStepRegistry,
+  onboardingStepsFor,
+  registerOnboardingStep,
+  type OnboardingFactDef,
+} from './onboarding.registries';
+import type { OnboardingState } from './dto/onboarding-state.dto';
 
 // =============================================================================
 // OnboardingService — the registry's truth table and its two invariants (#274)
@@ -44,236 +54,77 @@ import type { OnboardingState, OnboardingStepState } from './dto/onboarding-stat
 //      step queried — it would only need updating, which is exactly what
 //      somebody adding the eleventh step would do without noticing.
 //
-// The registries are typed `readonly ... []`, which is a compile-time
-// statement about intent rather than a frozen array — so test 3 can push onto
-// them through a cast and must put them back in a `finally`. That cast is
-// confined to `withExtraStep` below and belongs nowhere else.
+// SINCE #460 THE STEP CATALOGUE HAS TWO SOURCES. This file owns the BASE steps
+// (`admin.ai`, `admin.email`, `admin.access`, `admin.push`, `admin.backup`,
+// `user.ai_key`, `user.profile`). The four domain steps live beside their
+// modules and are tested there (`transcription.onboarding.spec.ts`,
+// `transcripts.onboarding.spec.ts`, `notes.onboarding.spec.ts`), against the
+// real registered facts. So:
+//
+//   - 'the registry' below reads the FULL registry the manifest built (base +
+//     domain), because the load-bearing order is a property of the whole list;
+//   - everything that RUNS the service swaps the registry for the base steps
+//     only, so this file imports no domain module and exercises no domain fact.
+//     Test-time steps are added with `withTemporaryEntries`, which restores the
+//     registry even when the body throws.
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// Stubs. Every one of them counts its calls into a shared total, which is what
-// makes tests 2 and 3 possible.
-// -----------------------------------------------------------------------------
-
-interface Stubs {
-  service: OnboardingService;
-  reads: () => number;
-  resetReads: () => void;
-  prisma: {
-    transcript: { count: jest.Mock };
-    note: { count: jest.Mock };
-    user: { count: jest.Mock };
-    allowedEmail: { count: jest.Mock };
-  };
-  emailSettings: { describeForAdmin: jest.Mock };
-  pushConfig: { describeForAdmin: jest.Mock };
-  systemSettings: { getAiPolicy: jest.Mock; getDatabaseBackupPolicy: jest.Mock };
+async function userState(facts: KitFacts = {}): Promise<OnboardingState> {
+  return buildOnboardingKit(facts).service.getUserState(OMNIPOTENT);
 }
 
-interface Facts {
-  transcriptionAvailable?: boolean;
-  ai?: Partial<OnboardingUserContext['ai']>;
-  aiPolicy?: Partial<OnboardingAdminContext['aiPolicy']>;
-  emailProvider?: 'smtp' | null;
-  emailEnabled?: boolean;
-  pushConfigured?: boolean;
-  pushEnabled?: boolean;
-  backupEnabled?: boolean;
-  transcriptCount?: number;
-  readyTranscriptCount?: number;
-  noteCount?: number;
-  userCount?: number;
-  allowedEmailCount?: number;
-  displayName?: string | null;
-  skipped?: string[];
+async function adminState(facts: KitFacts = {}): Promise<OnboardingState> {
+  return buildOnboardingKit(facts).service.getAdminState(OMNIPOTENT);
 }
 
-function build(facts: Facts = {}): Stubs {
-  let reads = 0;
-  const counted =
-    <T>(value: T) =>
-    (): Promise<T> => {
-      reads += 1;
-      return Promise.resolve(value);
-    };
-
-  const transcriptCount = facts.transcriptCount ?? 0;
-  const readyTranscriptCount = facts.readyTranscriptCount ?? 0;
-
-  const prisma = {
-    transcript: {
-      // The admin builder asks for `status: 'ready'`; the user builder does
-      // not. One mock serves both by reading the filter it was handed, which
-      // also means a builder that silently dropped `deletedAt` would still be
-      // caught by the dedicated assertion below rather than here.
-      count: jest.fn((args: { where?: { status?: string } }) => {
-        reads += 1;
-        return Promise.resolve(
-          args?.where?.status === 'ready' ? readyTranscriptCount : transcriptCount,
-        );
-      }),
-    },
-    note: { count: jest.fn(counted(facts.noteCount ?? 0)) },
-    user: { count: jest.fn(counted(facts.userCount ?? 1)) },
-    allowedEmail: { count: jest.fn(counted(facts.allowedEmailCount ?? 1)) },
-  };
-
-  const transcriptionConfig = {
-    getConfig: jest.fn(counted({ available: facts.transcriptionAvailable ?? true })),
-  };
-
-  const aiConfig = {
-    getConfig: jest.fn(
-      counted({
-        available: true,
-        provider: 'openai',
-        providerLabel: 'OpenAI',
-        keyConfigured: true,
-        ...facts.ai,
-      }),
-    ),
-  };
-
-  // ⚠ `in`, not `??`. Both of the facts below are legitimately `null`, and a
-  // `??` default would quietly turn the two cases this suite most needs to
-  // drive — no AI provider chosen, no display name set — back into the
-  // configured ones, passing every assertion for the wrong reason.
-  const displayName =
-    'displayName' in facts ? (facts.displayName ?? null) : 'Ada Lovelace';
-  const aiProvider =
-    facts.aiPolicy && 'provider' in facts.aiPolicy
-      ? (facts.aiPolicy.provider ?? null)
-      : 'openai';
-
-  const userSettings = {
-    getSettings: jest.fn(
-      counted({
-        profile: { displayName },
-        ...(facts.skipped ? { onboarding: { skipped: facts.skipped } } : {}),
-      }),
-    ),
-  };
-
-  const systemSettings = {
-    getAiPolicy: jest.fn(
-      counted({
-        enabled: facts.aiPolicy?.enabled ?? true,
-        provider: aiProvider,
-        providers: {
-          openai: {
-            allowedModels: Array.from(
-              { length: facts.aiPolicy?.allowedModelCount ?? 1 },
-              (_, index) => ({ id: `model-${index}` }),
-            ),
-          },
-        },
-      }),
-    ),
-    getDatabaseBackupPolicy: jest.fn(counted({ enabled: facts.backupEnabled ?? true })),
-  };
-
-  const emailSettings = {
-    describeForAdmin: jest.fn(
-      counted({
-        provider: facts.emailProvider === undefined ? 'smtp' : facts.emailProvider,
-        enabled: facts.emailEnabled ?? true,
-      }),
-    ),
-  };
-
-  const pushConfig = {
-    describeForAdmin: jest.fn(
-      counted({
-        configured: facts.pushConfigured ?? true,
-        enabled: facts.pushEnabled ?? true,
-      }),
-    ),
-  };
-
-  const service = new OnboardingService(
-    prisma as unknown as PrismaService,
-    transcriptionConfig as unknown as TranscriptionConfigService,
-    aiConfig as unknown as AiConfigService,
-    userSettings as unknown as UserSettingsService,
-    systemSettings as unknown as SystemSettingsService,
-    emailSettings as unknown as EmailSettingsService,
-    pushConfig as unknown as PushConfigService,
-  );
-
+/** A step that exists only for a test; every field a real step has. */
+function testStep(overrides: Partial<OnboardingStep> & { key: string }): OnboardingStep {
   return {
-    service,
-    reads: () => reads,
-    resetReads: () => {
-      reads = 0;
-      for (const stub of [
-        prisma.transcript.count,
-        prisma.note.count,
-        prisma.user.count,
-        prisma.allowedEmail.count,
-        transcriptionConfig.getConfig,
-        aiConfig.getConfig,
-        userSettings.getSettings,
-        systemSettings.getAiPolicy,
-        systemSettings.getDatabaseBackupPolicy,
-        emailSettings.describeForAdmin,
-        pushConfig.describeForAdmin,
-      ]) {
-        stub.mockClear();
-      }
-    },
-    prisma,
-    emailSettings,
-    pushConfig,
-    systemSettings,
+    audience: 'user',
+    order: 1000,
+    facts: [],
+    tier: 'recommended',
+    title: 'An extra step added at test time',
+    description: 'Exists only to prove a property of the registry.',
+    actionLabel: 'Go',
+    href: '/',
+    skippable: true,
+    applies: () => true,
+    evaluate: () => ({ status: 'pending' }),
+    ...overrides,
   };
-}
-
-/** A caller holding every permission any step names, so nothing is filtered. */
-const OMNIPOTENT: RequestUser = {
-  id: 'user-1',
-  email: 'ada@example.com',
-  roles: ['admin'],
-  permissions: Object.values(PERMISSIONS),
-  isActive: true,
-};
-
-function user(permissions: string[]): RequestUser {
-  return { ...OMNIPOTENT, permissions };
-}
-
-function stepOf(state: OnboardingState, key: string): OnboardingStepState | undefined {
-  return state.steps.find((step) => step.key === key);
-}
-
-/** The step named, asserted present — so a typo in a key fails loudly. */
-function requireStep(state: OnboardingState, key: string): OnboardingStepState {
-  const step = stepOf(state, key);
-  if (!step) {
-    throw new Error(`Expected step ${key} in the ${state.audience} checklist`);
-  }
-  return step;
-}
-
-async function userState(facts: Facts = {}): Promise<OnboardingState> {
-  return build(facts).service.getUserState(OMNIPOTENT);
-}
-
-async function adminState(facts: Facts = {}): Promise<OnboardingState> {
-  return build(facts).service.getAdminState(OMNIPOTENT);
 }
 
 // =============================================================================
 
 describe('OnboardingService', () => {
   // ---------------------------------------------------------------------------
-  // Registry invariants — properties of the entries themselves
+  // Registry invariants — properties of the FULL registered catalogue
   // ---------------------------------------------------------------------------
 
-  describe('the registry', () => {
+  describe('the registry (base + domain steps, as the manifest registered them)', () => {
     const everyStep: OnboardingStep<never>[] = [
       ...(ADMIN_ONBOARDING_STEPS as readonly OnboardingStep<never>[]),
       ...(USER_ONBOARDING_STEPS as readonly OnboardingStep<never>[]),
     ];
+
+    it('holds the base steps and the four domain steps', () => {
+      expect(ADMIN_ONBOARDING_STEPS.map((step) => step.key)).toEqual([
+        'admin.transcription',
+        'admin.ai',
+        'admin.smoke_test',
+        'admin.email',
+        'admin.access',
+        'admin.push',
+        'admin.backup',
+      ]);
+      expect(USER_ONBOARDING_STEPS.map((step) => step.key)).toEqual([
+        'user.ai_key',
+        'user.first_transcript',
+        'user.first_note',
+        'user.profile',
+      ]);
+    });
 
     it('a `required` step is never skippable', () => {
       for (const step of everyStep) {
@@ -312,9 +163,28 @@ describe('OnboardingService', () => {
       expect(new Set(keys).size).toBe(keys.length);
     });
 
-    it('every step declares the audience of the array it is in', () => {
+    it('every step declares the audience of the list it is in', () => {
       for (const step of ADMIN_ONBOARDING_STEPS) expect(step.audience).toBe('admin');
       for (const step of USER_ONBOARDING_STEPS) expect(step.audience).toBe('user');
+    });
+
+    it('every declared fact is registered', () => {
+      for (const step of everyStep) {
+        for (const id of step.facts) {
+          expect([step.key, id, onboardingFactRegistry.has(id)]).toEqual([
+            step.key,
+            id,
+            true,
+          ]);
+        }
+      }
+    });
+
+    it('numbers each audience 10, 20, 30, ... in strictly increasing order', () => {
+      for (const steps of [ADMIN_ONBOARDING_STEPS, USER_ONBOARDING_STEPS]) {
+        const orders = steps.map((step) => step.order);
+        expect(orders).toEqual(orders.map((_, index) => (index + 1) * 10));
+      }
     });
 
     it('orders `admin.email` before `admin.access`', () => {
@@ -328,10 +198,10 @@ describe('OnboardingService', () => {
       // outbound email works sends nothing at all, to nobody, with no failure
       // surfaced to either party. The checklist teaches the order that works.
       //
-      // `OnboardingService.render` never sorts, so this array's order IS the
-      // order an administrator reads ('returns the registry order' below pins
-      // that half). Without this assertion the dependency is invisible and a
-      // later edit reverses it silently.
+      // The registry renders in `(order, key)` order ('returns the registry
+      // order' below pins that half), so this pair's `order` values ARE the
+      // order an administrator reads. Without this assertion the dependency is
+      // invisible and a later edit reverses it silently.
       const keys = ADMIN_ONBOARDING_STEPS.map((step) => step.key);
 
       expect(keys).toContain('admin.email');
@@ -347,566 +217,580 @@ describe('OnboardingService', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Invariant 1: purity — `ctx` is the only argument, and nothing else is read
+  // Everything below RUNS the service against the BASE steps only.
   // ---------------------------------------------------------------------------
 
-  describe('step purity', () => {
-    it('takes ctx as its only argument, mutates nothing, and reads no collaborator', async () => {
-      const stubs = build();
+  describe('against the base steps', () => {
+    const savedSteps = onboardingStepRegistry._captureState();
+    const savedFacts = onboardingFactRegistry._captureState();
 
-      // Build both contexts through the real service, then evaluate every step
-      // against a FROZEN copy with the call counters cleared. Any read a step
-      // performs for itself lands on a stub and is counted; any write to the
-      // context it was handed throws.
-      const userSnapshot = await stubs.service.buildUserContext('user-1');
-      const adminSnapshot = await stubs.service.buildAdminContext('user-1');
-      stubs.resetReads();
+    beforeAll(() => {
+      resetRegistryForTests(onboardingFactRegistry);
+      resetRegistryForTests(onboardingStepRegistry);
+      registerOnboardingStep(...BASE_ADMIN_ONBOARDING_STEPS, ...BASE_USER_ONBOARDING_STEPS);
+    });
 
-      const frozenUser = deepFreeze(userSnapshot.context);
-      const frozenAdmin = deepFreeze(adminSnapshot.context);
+    afterAll(() => {
+      onboardingFactRegistry._restoreState(savedFacts);
+      onboardingStepRegistry._restoreState(savedSteps);
+    });
 
-      for (const step of USER_ONBOARDING_STEPS) {
-        expect(step.applies.length).toBeLessThanOrEqual(1);
-        expect(step.evaluate.length).toBeLessThanOrEqual(1);
-        step.applies(frozenUser);
-        step.evaluate(frozenUser);
+    // -------------------------------------------------------------------------
+    // Invariant 1: purity — `ctx` is the only argument, and nothing else is read
+    // -------------------------------------------------------------------------
+
+    describe('step purity', () => {
+      it('takes ctx as its only argument, mutates nothing, and reads no collaborator', async () => {
+        const kit = buildOnboardingKit();
+
+        // Build both contexts through the real service, then evaluate every step
+        // against a FROZEN copy with the call counters cleared. Any read a step
+        // performs for itself lands on a stub and is counted; any write to the
+        // context it was handed throws.
+        const userSnapshot = await kit.service.buildUserContext('user-1');
+        const adminSnapshot = await kit.service.buildAdminContext('user-1');
+        kit.resetReads();
+
+        const frozenUser = deepFreeze(userSnapshot.context);
+        const frozenAdmin = deepFreeze(adminSnapshot.context);
+
+        for (const step of onboardingStepsFor<OnboardingUserContext>('user')) {
+          expect(step.applies.length).toBeLessThanOrEqual(1);
+          expect(step.evaluate.length).toBeLessThanOrEqual(1);
+          step.applies(frozenUser);
+          step.evaluate(frozenUser);
+        }
+
+        for (const step of onboardingStepsFor<OnboardingAdminContext>('admin')) {
+          expect(step.applies.length).toBeLessThanOrEqual(1);
+          expect(step.evaluate.length).toBeLessThanOrEqual(1);
+          step.applies(frozenAdmin);
+          step.evaluate(frozenAdmin);
+        }
+
+        // ⚠ THE ASSERTION THAT MATTERS: evaluating the WHOLE registry, twice
+        // over, performed exactly zero reads.
+        expect(kit.reads()).toBe(0);
+        expect(kit.prisma.user.count).not.toHaveBeenCalled();
+        expect(kit.prisma.allowedEmail.count).not.toHaveBeenCalled();
+        expect(kit.emailSettings.describeForAdmin).not.toHaveBeenCalled();
+        expect(kit.pushConfig.describeForAdmin).not.toHaveBeenCalled();
+        expect(kit.moduleRef.get).not.toHaveBeenCalled();
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Invariant 2: the read count does not grow with the registry
+    // -------------------------------------------------------------------------
+
+    describe('bounded read count', () => {
+      it('adding a user step changes the number of reads by zero', async () => {
+        const before = buildOnboardingKit();
+        await before.service.getUserState(OMNIPOTENT);
+        const baseline = before.reads();
+
+        await withTemporaryEntries(
+          onboardingStepRegistry,
+          [testStep({ key: 'test.extra_step', audience: 'user' })],
+          async () => {
+            const after = buildOnboardingKit();
+            const state = await after.service.getUserState(OMNIPOTENT);
+
+            // The step really was evaluated — otherwise an unchanged read count
+            // would prove nothing at all.
+            expect(stepOf(state, 'test.extra_step')?.status).toBe('pending');
+            expect(after.reads()).toBe(baseline);
+          },
+        );
+      });
+
+      it('adding an admin step changes the number of reads by zero', async () => {
+        const before = buildOnboardingKit();
+        await before.service.getAdminState(OMNIPOTENT);
+        const baseline = before.reads();
+
+        await withTemporaryEntries(
+          onboardingStepRegistry,
+          [testStep({ key: 'test.extra_step', audience: 'admin' })],
+          async () => {
+            const after = buildOnboardingKit();
+            const state = await after.service.getAdminState(OMNIPOTENT);
+
+            expect(stepOf(state, 'test.extra_step')?.status).toBe('pending');
+            expect(after.reads()).toBe(baseline);
+          },
+        );
+      });
+
+      it('the user request never reads an admin-only fact', async () => {
+        // The structural half of #275's argument, at the unit level: the
+        // integration suite asserts the same thing through the wire.
+        const kit = buildOnboardingKit();
+        await kit.service.getUserState(OMNIPOTENT);
+
+        expect(kit.emailSettings.describeForAdmin).not.toHaveBeenCalled();
+        expect(kit.pushConfig.describeForAdmin).not.toHaveBeenCalled();
+        expect(kit.systemSettings.getDatabaseBackupPolicy).not.toHaveBeenCalled();
+        expect(kit.prisma.user.count).not.toHaveBeenCalled();
+        expect(kit.prisma.allowedEmail.count).not.toHaveBeenCalled();
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Facts (issue #460): resolved once, in parallel, before any step runs
+    // -------------------------------------------------------------------------
+
+    describe('facts', () => {
+      function fact(
+        id: string,
+        resolve: OnboardingFactDef['resolve'],
+        inject: string = 'test.provider',
+      ): OnboardingFactDef {
+        return { id, inject, resolve };
       }
 
-      for (const step of ADMIN_ONBOARDING_STEPS) {
-        expect(step.applies.length).toBeLessThanOrEqual(1);
-        expect(step.evaluate.length).toBeLessThanOrEqual(1);
-        step.applies(frozenAdmin);
-        step.evaluate(frozenAdmin);
+      /** Register `facts`, then run `body` with them (and any steps) in place. */
+      async function withFacts<R>(
+        facts: OnboardingFactDef[],
+        steps: OnboardingStep[],
+        body: () => Promise<R>,
+      ): Promise<R> {
+        return withTemporaryEntries(onboardingFactRegistry, facts, () =>
+          withTemporaryEntries(onboardingStepRegistry, steps, body),
+        );
       }
 
-      // ⚠ THE ASSERTION THAT MATTERS: evaluating the WHOLE registry, twice
-      // over, performed exactly zero reads.
-      expect(stubs.reads()).toBe(0);
-      expect(stubs.prisma.transcript.count).not.toHaveBeenCalled();
-      expect(stubs.prisma.note.count).not.toHaveBeenCalled();
-      expect(stubs.prisma.user.count).not.toHaveBeenCalled();
-      expect(stubs.prisma.allowedEmail.count).not.toHaveBeenCalled();
-      expect(stubs.emailSettings.describeForAdmin).not.toHaveBeenCalled();
-      expect(stubs.pushConfig.describeForAdmin).not.toHaveBeenCalled();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Invariant 2: the read count does not grow with the registry
-  // ---------------------------------------------------------------------------
-
-  describe('bounded read count', () => {
-    /**
-     * Run `body` with one extra step appended to `registry`, then restore it.
-     *
-     * The cast is the only one in this file: the arrays are `readonly` as a
-     * statement of intent, not as a frozen object, and this is the one test
-     * that has a legitimate reason to make the registry longer.
-     */
-    async function withExtraStep<Ctx>(
-      registry: readonly OnboardingStep<never>[],
-      body: () => Promise<void>,
-    ): Promise<void> {
-      const mutable = registry as OnboardingStep<never>[];
-      mutable.push({
-        key: 'test.extra_step',
-        audience: registry === (ADMIN_ONBOARDING_STEPS as unknown) ? 'admin' : 'user',
-        tier: 'recommended',
-        title: 'An extra step added at test time',
-        description: 'Exists only to prove that adding a step costs no reads.',
-        actionLabel: 'Go',
-        href: '/',
-        skippable: true,
-        applies: () => true,
-        evaluate: () => ({ status: 'pending' }),
-      } as OnboardingStep<never>);
-
-      try {
-        await body();
-      } finally {
-        mutable.pop();
-      }
-    }
-
-    it('adding a user step changes the number of reads by zero', async () => {
-      const before = build();
-      await before.service.getUserState(OMNIPOTENT);
-      const baseline = before.reads();
-
-      await withExtraStep(
-        USER_ONBOARDING_STEPS as readonly OnboardingStep<never>[],
-        async () => {
-          const after = build();
-          const state = await after.service.getUserState(OMNIPOTENT);
-
-          // The step really was evaluated — otherwise an unchanged read count
-          // would prove nothing at all.
-          expect(stepOf(state, 'test.extra_step')?.status).toBe('pending');
-          expect(after.reads()).toBe(baseline);
-        },
-      );
-    });
-
-    it('adding an admin step changes the number of reads by zero', async () => {
-      const before = build();
-      await before.service.getAdminState(OMNIPOTENT);
-      const baseline = before.reads();
-
-      await withExtraStep(
-        ADMIN_ONBOARDING_STEPS as readonly OnboardingStep<never>[],
-        async () => {
-          const after = build();
-          const state = await after.service.getAdminState(OMNIPOTENT);
-
-          expect(stepOf(state, 'test.extra_step')?.status).toBe('pending');
-          expect(after.reads()).toBe(baseline);
-        },
-      );
-    });
-
-    it('the user request never reads an admin-only fact', async () => {
-      // The structural half of #275's argument, at the unit level: the
-      // integration suite asserts the same thing through the wire.
-      const stubs = build();
-      await stubs.service.getUserState(OMNIPOTENT);
-
-      expect(stubs.emailSettings.describeForAdmin).not.toHaveBeenCalled();
-      expect(stubs.pushConfig.describeForAdmin).not.toHaveBeenCalled();
-      expect(stubs.systemSettings.getDatabaseBackupPolicy).not.toHaveBeenCalled();
-      expect(stubs.prisma.user.count).not.toHaveBeenCalled();
-      expect(stubs.prisma.allowedEmail.count).not.toHaveBeenCalled();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Soft deletion
-  // ---------------------------------------------------------------------------
-
-  describe('content counts', () => {
-    it('counts only rows that are not soft-deleted', async () => {
-      const stubs = build();
-      await stubs.service.getUserState(OMNIPOTENT);
-
-      // ⚠ `deletedAt: null`, matching `transcripts.service.ts` and
-      // `notes.service.ts`'s own visibility filter — NOT `status: { not:
-      // 'deleting' }`, which is the plausible-looking filter that would leave a
-      // purged-but-not-yet-collected row counted.
-      expect(stubs.prisma.transcript.count).toHaveBeenCalledWith({
-        where: { ownerId: 'user-1', deletedAt: null },
-      });
-      expect(stubs.prisma.note.count).toHaveBeenCalledWith({
-        where: { ownerId: 'user-1', deletedAt: null },
-      });
-    });
-
-    it('a user whose only transcript is soft-deleted is not activated', async () => {
-      // The count comes back 0 because the filter excluded the row, which is
-      // the behaviour under test — the step must go back to `pending` rather
-      // than staying satisfied on the strength of a deleted recording.
-      const state = await userState({ transcriptCount: 0 });
-
-      expect(requireStep(state, 'user.first_transcript').status).toBe('pending');
-    });
-
-    it("the admin smoke test counts only the caller's own READY transcripts", async () => {
-      const stubs = build();
-      await stubs.service.getAdminState(OMNIPOTENT);
-
-      expect(stubs.prisma.transcript.count).toHaveBeenCalledWith({
-        where: { ownerId: 'user-1', deletedAt: null, status: 'ready' },
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // The admin truth table
-  // ---------------------------------------------------------------------------
-
-  describe('admin.transcription', () => {
-    it('satisfied when the deployment can transcribe', async () => {
-      const state = await adminState({ transcriptionAvailable: true });
-      expect(requireStep(state, 'admin.transcription').status).toBe('satisfied');
-    });
-
-    it('pending when it cannot', async () => {
-      const state = await adminState({ transcriptionAvailable: false });
-      expect(requireStep(state, 'admin.transcription').status).toBe('pending');
-    });
-
-    it('goes back to pending when the credential is removed, with nothing cleared', async () => {
-      // The stored-completion failure mode, driven directly: the same caller,
-      // the same everything, one fact flipped underneath — and no write anywhere
-      // in between, because there is nothing to write.
-      const configured = await adminState({ transcriptionAvailable: true });
-      expect(requireStep(configured, 'admin.transcription').status).toBe('satisfied');
-
-      const rotatedAway = await adminState({ transcriptionAvailable: false });
-      expect(requireStep(rotatedAway, 'admin.transcription').status).toBe('pending');
-    });
-  });
-
-  describe('admin.ai', () => {
-    it('satisfied when enabled, with a provider and at least one permitted model', async () => {
-      const state = await adminState({
-        aiPolicy: { enabled: true, provider: 'openai', allowedModelCount: 1 },
-      });
-      expect(requireStep(state, 'admin.ai').status).toBe('satisfied');
-    });
-
-    it('pending when the master switch is off', async () => {
-      const state = await adminState({ aiPolicy: { enabled: false } });
-      expect(requireStep(state, 'admin.ai').status).toBe('pending');
-    });
-
-    it('pending when no provider is chosen', async () => {
-      const state = await adminState({ aiPolicy: { provider: null } });
-      expect(requireStep(state, 'admin.ai').status).toBe('pending');
-    });
-
-    it('pending when no model is permitted', async () => {
-      const state = await adminState({ aiPolicy: { allowedModelCount: 0 } });
-      expect(requireStep(state, 'admin.ai').status).toBe('pending');
-    });
-  });
-
-  describe('admin.smoke_test', () => {
-    it('satisfied once the caller owns a transcript that reached ready', async () => {
-      const state = await adminState({ readyTranscriptCount: 1 });
-      expect(requireStep(state, 'admin.smoke_test').status).toBe('satisfied');
-    });
-
-    it('stays satisfied after the provider is disconnected — the test did happen', async () => {
-      const state = await adminState({
-        readyTranscriptCount: 1,
-        transcriptionAvailable: false,
-      });
-      expect(requireStep(state, 'admin.smoke_test').status).toBe('satisfied');
-    });
-
-    it('blocked, naming the step that has to land first, while no provider is connected', async () => {
-      const state = await adminState({
-        readyTranscriptCount: 0,
-        transcriptionAvailable: false,
-      });
-      const step = requireStep(state, 'admin.smoke_test');
-
-      expect(step.status).toBe('blocked');
-      expect(step.blockedReason).toBe(
-        'Connect a transcription provider first — there is nothing to send a recording to yet.',
-      );
-    });
-
-    it('pending once a provider is connected and nothing has been transcribed', async () => {
-      const state = await adminState({
-        readyTranscriptCount: 0,
-        transcriptionAvailable: true,
-      });
-      const step = requireStep(state, 'admin.smoke_test');
-
-      expect(step.status).toBe('pending');
-      expect(step.blockedReason).toBeNull();
-    });
-  });
-
-  describe('admin.access', () => {
-    it('satisfied when somebody besides the initial admin was allowlisted', async () => {
-      const state = await adminState({ allowedEmailCount: 2, userCount: 1 });
-      expect(requireStep(state, 'admin.access').status).toBe('satisfied');
-    });
-
-    it('satisfied when a second account exists', async () => {
-      const state = await adminState({ allowedEmailCount: 1, userCount: 2 });
-      expect(requireStep(state, 'admin.access').status).toBe('satisfied');
-    });
-
-    it('pending on a deployment with exactly the seeded admin', async () => {
-      // ⚠ NOT `> 0`. The seed puts INITIAL_ADMIN_EMAIL on the allowlist and the
-      // first login creates that account, so every fresh deployment has exactly
-      // one of each — and `> 0` would report it satisfied on day zero.
-      const state = await adminState({ allowedEmailCount: 1, userCount: 1 });
-      expect(requireStep(state, 'admin.access').status).toBe('pending');
-    });
-  });
-
-  describe('admin.email', () => {
-    it('satisfied with a provider chosen and switched on', async () => {
-      const state = await adminState({ emailProvider: 'smtp', emailEnabled: true });
-      expect(requireStep(state, 'admin.email').status).toBe('satisfied');
-    });
-
-    it('pending with no provider', async () => {
-      const state = await adminState({ emailProvider: null, emailEnabled: true });
-      expect(requireStep(state, 'admin.email').status).toBe('pending');
-    });
-
-    it('pending with a provider that is switched off', async () => {
-      const state = await adminState({ emailProvider: 'smtp', emailEnabled: false });
-      expect(requireStep(state, 'admin.email').status).toBe('pending');
-    });
-  });
-
-  describe('admin.push', () => {
-    it('satisfied with a key pair present and the feature on', async () => {
-      const state = await adminState({ pushConfigured: true, pushEnabled: true });
-      expect(requireStep(state, 'admin.push').status).toBe('satisfied');
-    });
-
-    it('pending with keys generated but the feature off', async () => {
-      const state = await adminState({ pushConfigured: true, pushEnabled: false });
-      expect(requireStep(state, 'admin.push').status).toBe('pending');
-    });
-
-    it('pending with the feature on but no key pair', async () => {
-      const state = await adminState({ pushConfigured: false, pushEnabled: true });
-      expect(requireStep(state, 'admin.push').status).toBe('pending');
-    });
-  });
-
-  describe('admin.backup', () => {
-    it('satisfied when a schedule is enabled', async () => {
-      const state = await adminState({ backupEnabled: true });
-      expect(requireStep(state, 'admin.backup').status).toBe('satisfied');
-    });
-
-    it('pending when nothing is scheduled', async () => {
-      const state = await adminState({ backupEnabled: false });
-      expect(requireStep(state, 'admin.backup').status).toBe('pending');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // The user truth table
-  // ---------------------------------------------------------------------------
-
-  describe('user.ai_key', () => {
-    it('absent when this deployment names no AI vendor at all', async () => {
-      // ABSENT, not pending: there is no vendor a key could belong to, and a
-      // step offering to add one would lead to a form that cannot be filled in.
-      const state = await userState({ ai: { provider: null, available: false } });
-      expect(stepOf(state, 'user.ai_key')).toBeUndefined();
-    });
-
-    it('satisfied once the caller has stored their own key', async () => {
-      const state = await userState({ ai: { keyConfigured: true } });
-      expect(requireStep(state, 'user.ai_key').status).toBe('satisfied');
-    });
-
-    it('pending — never blocked — while a vendor is named but AI is switched off', async () => {
-      // ⚠ THE #83 CASE. `provider` is populated with AI off precisely so the
-      // first administrator can save the key they need in order to load the
-      // model list that turns AI on. Blocking here reinstates the deadlock in
-      // which nobody can go first.
-      const state = await userState({
-        ai: { provider: 'openai', available: false, keyConfigured: false },
-      });
-      const step = requireStep(state, 'user.ai_key');
-
-      expect(step.status).toBe('pending');
-      expect(step.blockedReason).toBeNull();
-    });
-  });
-
-  describe('user.first_transcript', () => {
-    it('satisfied once the caller owns a transcript', async () => {
-      const state = await userState({ transcriptCount: 1 });
-      expect(requireStep(state, 'user.first_transcript').status).toBe('satisfied');
-    });
-
-    it('blocked, naming the administrator, when transcription is unconfigured', async () => {
-      const state = await userState({
-        transcriptCount: 0,
-        transcriptionAvailable: false,
-      });
-      const step = requireStep(state, 'user.first_transcript');
-
-      expect(step.status).toBe('blocked');
-      // ⚠ THE SENTENCE ITSELF IS THE BEHAVIOUR. `blocked` exists to tell a user
-      // that a disabled button is not their to-do and not their mistake, and it
-      // only does that if the reason names the person who has to act.
-      expect(step.blockedReason).toBe(
-        'Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.',
-      );
-    });
-
-    it('pending when transcription works and the caller has not used it', async () => {
-      const state = await userState({
-        transcriptCount: 0,
-        transcriptionAvailable: true,
-      });
-      expect(requireStep(state, 'user.first_transcript').status).toBe('pending');
-    });
-
-    it('absent for a caller without `transcripts:write`', async () => {
-      const state = await build().service.getUserState(user([]));
-      expect(stepOf(state, 'user.first_transcript')).toBeUndefined();
-    });
-  });
-
-  describe('user.first_note', () => {
-    it('satisfied once the caller owns a note', async () => {
-      const state = await userState({ noteCount: 1 });
-      expect(requireStep(state, 'user.first_note').status).toBe('satisfied');
-    });
-
-    it('blocked, naming the administrator, when the deployment cannot generate', async () => {
-      const state = await userState({
-        noteCount: 0,
-        ai: { available: false, keyConfigured: false },
-      });
-      const step = requireStep(state, 'user.first_note');
-
-      expect(step.status).toBe('blocked');
-      // ⚠ THE DEPLOYMENT'S READINESS IS CHECKED FIRST, and the reason proves
-      // it: with no key AND no AI, pointing at `user.ai_key` would be pointing
-      // at a step that may not even be in this list.
-      expect(step.blockedReason).toBe(
-        'Your administrator has not finished setting up AI generation for this deployment yet.',
-      );
-    });
-
-    it("blocked, naming the caller's own key, when AI works but they have none", async () => {
-      const state = await userState({
-        noteCount: 0,
-        ai: { available: true, keyConfigured: false },
-      });
-      const step = requireStep(state, 'user.first_note');
-
-      expect(step.status).toBe('blocked');
-      expect(step.blockedReason).toBe(
-        'Add your own AI provider key first — notes are generated with it.',
-      );
-    });
-
-    it('pending when everything is in place and nothing has been generated', async () => {
-      const state = await userState({
-        noteCount: 0,
-        ai: { available: true, keyConfigured: true },
-      });
-      expect(requireStep(state, 'user.first_note').status).toBe('pending');
-    });
-
-    it('absent for a caller without `notes:write`', async () => {
-      const state = await build().service.getUserState(
-        user([PERMISSIONS.TRANSCRIPTS_WRITE]),
-      );
-      expect(stepOf(state, 'user.first_note')).toBeUndefined();
-    });
-  });
-
-  describe('user.profile', () => {
-    it('satisfied with a display name', async () => {
-      const state = await userState({ displayName: 'Ada' });
-      expect(requireStep(state, 'user.profile').status).toBe('satisfied');
-    });
-
-    it('pending with none', async () => {
-      const state = await userState({ displayName: null });
-      expect(requireStep(state, 'user.profile').status).toBe('pending');
-    });
-
-    it('pending with a name made of whitespace', async () => {
-      // It renders as nothing, so calling it satisfied leaves the user with no
-      // way to work out why their initials are blank everywhere.
-      const state = await userState({ displayName: '   ' });
-      expect(requireStep(state, 'user.profile').status).toBe('pending');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // The derived counts
-  // ---------------------------------------------------------------------------
-
-  describe('the derived counts', () => {
-    it('counts only unsatisfied `required` steps into requiredRemaining', async () => {
-      const state = await userState({
-        ai: { keyConfigured: false }, // user.ai_key       required, pending
-        transcriptCount: 1, //           user.first_transcript required, satisfied
-        noteCount: 0, //                 user.first_note  recommended, pending
-        displayName: null, //            user.profile     optional, pending
+      it('hands a step the value its fact resolved, as ctx.facts[id]', async () => {
+        const kit = buildOnboardingKit();
+        kit.provide('test.provider', { value: 42 });
+
+        await withFacts(
+          [fact('test.answer', async (provider: { value: number }, ctx) => provider.value + ctx.callerId.length)],
+          [
+            testStep({
+              key: 'test.reads_fact',
+              facts: ['test.answer'],
+              evaluate: (ctx) => ({
+                status: (ctx.facts as unknown as Record<string, number>)['test.answer'] === 48 ? 'satisfied' : 'pending',
+              }),
+            }),
+          ],
+          async () => {
+            const state = await kit.service.getUserState(OMNIPOTENT);
+            // 42 + 'user-1'.length (6)
+            expect(requireStep(state, 'test.reads_fact').status).toBe('satisfied');
+          },
+        );
       });
 
-      expect(state.requiredRemaining).toBe(1);
-      expect(state.totalRemaining).toBe(3);
-      expect(state.allRequiredSatisfied).toBe(false);
-    });
+      it('resolves a fact once however many steps name it, and counts it as one read', async () => {
+        const baselineKit = buildOnboardingKit();
+        await baselineKit.service.getUserState(OMNIPOTENT);
+        const baseline = baselineKit.reads();
 
-    it('allRequiredSatisfied is true with recommended work still outstanding', async () => {
-      const state = await userState({
-        ai: { keyConfigured: true },
-        transcriptCount: 1,
-        noteCount: 0,
-        displayName: null,
+        const kit = buildOnboardingKit();
+        const resolve = jest.fn(kit.counted(7));
+        kit.provide('test.provider', {});
+
+        await withFacts(
+          [fact('test.shared', resolve)],
+          [
+            testStep({ key: 'test.first', facts: ['test.shared'] }),
+            testStep({ key: 'test.second', facts: ['test.shared'] }),
+            testStep({ key: 'test.third', facts: ['test.shared'] }),
+          ],
+          async () => {
+            await kit.service.getUserState(OMNIPOTENT);
+          },
+        );
+
+        expect(resolve).toHaveBeenCalledTimes(1);
+        expect(kit.reads()).toBe(baseline + 1);
       });
 
-      expect(state.requiredRemaining).toBe(0);
-      expect(state.allRequiredSatisfied).toBe(true);
-      expect(state.totalRemaining).toBe(2);
-    });
+      it('starts every fact before any of them settles, and before any step runs', async () => {
+        const kit = buildOnboardingKit();
+        kit.provide('test.provider', {});
+        const log: string[] = [];
+        let releaseFirst: () => void = () => undefined;
+        const firstGate = new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
 
-    it('a blocked step counts as outstanding', async () => {
-      // It is not satisfied, and a deployment that cannot transcribe has not
-      // finished being set up merely because the reason belongs to somebody
-      // else — saying so is what the banner is for.
-      const state = await userState({
-        transcriptionAvailable: false,
-        transcriptCount: 0,
-        ai: { keyConfigured: true },
-        noteCount: 1,
-        displayName: 'Ada',
+        await withFacts(
+          [
+            fact('test.slow', async () => {
+              log.push('slow:start');
+              await firstGate;
+              log.push('slow:end');
+              return 1;
+            }),
+            fact('test.quick', async () => {
+              log.push('quick:start');
+              releaseFirst();
+              return 2;
+            }),
+          ],
+          [
+            testStep({
+              key: 'test.after_facts',
+              facts: ['test.slow', 'test.quick'],
+              applies: () => {
+                log.push('step:applies');
+                return true;
+              },
+            }),
+          ],
+          async () => {
+            await kit.service.getUserState(OMNIPOTENT);
+          },
+        );
+
+        // Both started before the slow one finished (parallel, not sequential:
+        // the quick fact is what releases the slow one), and the step ran last.
+        expect(log).toEqual(['slow:start', 'quick:start', 'slow:end', 'step:applies']);
       });
 
-      expect(requireStep(state, 'user.first_transcript').status).toBe('blocked');
-      expect(state.requiredRemaining).toBe(1);
-      expect(state.allRequiredSatisfied).toBe(false);
-    });
+      it('never resolves a fact only the other audience names', async () => {
+        const kit = buildOnboardingKit();
+        kit.provide('test.provider', {});
+        const resolve = jest.fn(async () => 1);
 
-    it('a skipped step is returned, marked, and counted out', async () => {
-      const state = await userState({
-        noteCount: 0,
-        displayName: null,
-        ai: { keyConfigured: true },
-        transcriptCount: 1,
-        skipped: ['user.first_note'],
+        await withFacts(
+          [fact('test.admin_only', resolve)],
+          [testStep({ key: 'test.admin_step', audience: 'admin', facts: ['test.admin_only'] })],
+          async () => {
+            await kit.service.getUserState(OMNIPOTENT);
+            expect(resolve).not.toHaveBeenCalled();
+
+            await kit.service.getAdminState(OMNIPOTENT);
+            expect(resolve).toHaveBeenCalledTimes(1);
+          },
+        );
       });
 
-      const skipped = requireStep(state, 'user.first_note');
+      it('fails the request when a fact rejects, rather than dropping the step', async () => {
+        const kit = buildOnboardingKit();
+        kit.provide('test.provider', {});
 
-      // ⚠ RETURNED, not filtered: a skip the user cannot see is a skip the user
-      // cannot undo.
-      expect(skipped.skipped).toBe(true);
-      expect(skipped.status).toBe('pending');
-      expect(state.totalRemaining).toBe(1); // user.profile only
+        await withFacts(
+          [fact('test.broken', async () => Promise.reject(new Error('boom')))],
+          [testStep({ key: 'test.needs_broken', facts: ['test.broken'] })],
+          async () => {
+            await expect(kit.service.getUserState(OMNIPOTENT)).rejects.toThrow('boom');
+          },
+        );
+      });
+
+      it('fails the request when the fact’s provider cannot be resolved', async () => {
+        const kit = buildOnboardingKit(); // nothing provided under 'test.provider'
+
+        await withFacts(
+          [fact('test.orphan', async () => 1)],
+          [testStep({ key: 'test.needs_orphan', facts: ['test.orphan'] })],
+          async () => {
+            await expect(kit.service.getUserState(OMNIPOTENT)).rejects.toThrow(
+              /could not find/,
+            );
+          },
+        );
+      });
+
+      it('looks the provider up across the whole application (strict: false)', async () => {
+        const kit = buildOnboardingKit();
+        kit.provide('test.provider', {});
+
+        await withFacts(
+          [fact('test.lookup', async () => 1)],
+          [testStep({ key: 'test.needs_lookup', facts: ['test.lookup'] })],
+          async () => {
+            await kit.service.getUserState(OMNIPOTENT);
+          },
+        );
+
+        expect(kit.moduleRef.get).toHaveBeenCalledWith('test.provider', { strict: false });
+      });
     });
 
-    it('a skip recorded against a key no step uses is inert', async () => {
-      const state = await userState({ skipped: ['user.retired_step'] });
+    // -------------------------------------------------------------------------
+    // Rendering order and permission filtering
+    // -------------------------------------------------------------------------
 
-      expect(state.steps.every((step) => step.skipped === false)).toBe(true);
+    describe('rendering', () => {
+      it('renders in (order, key) order, whatever the registration order', async () => {
+        await withTemporaryEntries(
+          onboardingStepRegistry,
+          [
+            testStep({ key: 'test.zeta', order: 25 }),
+            testStep({ key: 'test.alpha', order: 25 }),
+            testStep({ key: 'test.first', order: 5 }),
+          ],
+          async () => {
+            const state = await userState();
+            expect(state.steps.map((step) => step.key)).toEqual([
+              'test.first',
+              'user.ai_key',
+              'test.alpha',
+              'test.zeta',
+              'user.profile',
+            ]);
+          },
+        );
+      });
+
+      it('shows each step only to a caller holding its permission', async () => {
+        const state = await buildOnboardingKit().service.getAdminState(callerWith([]));
+        // Every base admin step names a permission; a caller with none sees none.
+        expect(state.steps).toEqual([]);
+
+        const some = await buildOnboardingKit().service.getAdminState(
+          callerWith([PERMISSIONS.PUSH_READ]),
+        );
+        expect(some.steps.map((step) => step.key)).toEqual(['admin.push']);
+      });
     });
-  });
 
-  describe('audience', () => {
-    it('labels each response with the checklist it is', async () => {
-      expect((await userState()).audience).toBe('user');
-      expect((await adminState()).audience).toBe('admin');
+    // -------------------------------------------------------------------------
+    // The admin truth table (base steps)
+    // -------------------------------------------------------------------------
+
+    describe('admin.ai', () => {
+      it('satisfied when enabled, with a provider and at least one permitted model', async () => {
+        const state = await adminState({
+          aiPolicy: { enabled: true, provider: 'openai', allowedModelCount: 1 },
+        });
+        expect(requireStep(state, 'admin.ai').status).toBe('satisfied');
+      });
+
+      it('pending when the master switch is off', async () => {
+        const state = await adminState({ aiPolicy: { enabled: false } });
+        expect(requireStep(state, 'admin.ai').status).toBe('pending');
+      });
+
+      it('pending when no provider is chosen', async () => {
+        const state = await adminState({ aiPolicy: { provider: null } });
+        expect(requireStep(state, 'admin.ai').status).toBe('pending');
+      });
+
+      it('pending when no model is permitted', async () => {
+        const state = await adminState({ aiPolicy: { allowedModelCount: 0 } });
+        expect(requireStep(state, 'admin.ai').status).toBe('pending');
+      });
     });
 
-    it('returns the registry order', async () => {
-      const state = await adminState();
-      expect(state.steps.map((step) => step.key)).toEqual(
-        ADMIN_ONBOARDING_STEPS.map((step) => step.key),
-      );
+    describe('admin.access', () => {
+      it('satisfied when somebody besides the initial admin was allowlisted', async () => {
+        const state = await adminState({ allowedEmailCount: 2, userCount: 1 });
+        expect(requireStep(state, 'admin.access').status).toBe('satisfied');
+      });
+
+      it('satisfied when a second account exists', async () => {
+        const state = await adminState({ allowedEmailCount: 1, userCount: 2 });
+        expect(requireStep(state, 'admin.access').status).toBe('satisfied');
+      });
+
+      it('pending on a deployment with exactly the seeded admin', async () => {
+        // ⚠ NOT `> 0`. The seed puts INITIAL_ADMIN_EMAIL on the allowlist and the
+        // first login creates that account, so every fresh deployment has exactly
+        // one of each — and `> 0` would report it satisfied on day zero.
+        const state = await adminState({ allowedEmailCount: 1, userCount: 1 });
+        expect(requireStep(state, 'admin.access').status).toBe('pending');
+      });
+    });
+
+    describe('admin.email', () => {
+      it('satisfied with a provider chosen and switched on', async () => {
+        const state = await adminState({ emailProvider: 'smtp', emailEnabled: true });
+        expect(requireStep(state, 'admin.email').status).toBe('satisfied');
+      });
+
+      it('pending with no provider', async () => {
+        const state = await adminState({ emailProvider: null, emailEnabled: true });
+        expect(requireStep(state, 'admin.email').status).toBe('pending');
+      });
+
+      it('pending with a provider that is switched off', async () => {
+        const state = await adminState({ emailProvider: 'smtp', emailEnabled: false });
+        expect(requireStep(state, 'admin.email').status).toBe('pending');
+      });
+    });
+
+    describe('admin.push', () => {
+      it('satisfied with a key pair present and the feature on', async () => {
+        const state = await adminState({ pushConfigured: true, pushEnabled: true });
+        expect(requireStep(state, 'admin.push').status).toBe('satisfied');
+      });
+
+      it('pending with keys generated but the feature off', async () => {
+        const state = await adminState({ pushConfigured: true, pushEnabled: false });
+        expect(requireStep(state, 'admin.push').status).toBe('pending');
+      });
+
+      it('pending with the feature on but no key pair', async () => {
+        const state = await adminState({ pushConfigured: false, pushEnabled: true });
+        expect(requireStep(state, 'admin.push').status).toBe('pending');
+      });
+    });
+
+    describe('admin.backup', () => {
+      it('satisfied when a schedule is enabled', async () => {
+        const state = await adminState({ backupEnabled: true });
+        expect(requireStep(state, 'admin.backup').status).toBe('satisfied');
+      });
+
+      it('pending when nothing is scheduled', async () => {
+        const state = await adminState({ backupEnabled: false });
+        expect(requireStep(state, 'admin.backup').status).toBe('pending');
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // The user truth table (base steps)
+    // -------------------------------------------------------------------------
+
+    describe('user.ai_key', () => {
+      it('absent when this deployment names no AI vendor at all', async () => {
+        // ABSENT, not pending: there is no vendor a key could belong to, and a
+        // step offering to add one would lead to a form that cannot be filled in.
+        const state = await userState({ ai: { provider: null, available: false } });
+        expect(stepOf(state, 'user.ai_key')).toBeUndefined();
+      });
+
+      it('satisfied once the caller has stored their own key', async () => {
+        const state = await userState({ ai: { keyConfigured: true } });
+        expect(requireStep(state, 'user.ai_key').status).toBe('satisfied');
+      });
+
+      it('pending — never blocked — while a vendor is named but AI is switched off', async () => {
+        // ⚠ THE #83 CASE. `provider` is populated with AI off precisely so the
+        // first administrator can save the key they need in order to load the
+        // model list that turns AI on. Blocking here reinstates the deadlock in
+        // which nobody can go first.
+        const state = await userState({
+          ai: { provider: 'openai', available: false, keyConfigured: false },
+        });
+        const step = requireStep(state, 'user.ai_key');
+
+        expect(step.status).toBe('pending');
+        expect(step.blockedReason).toBeNull();
+      });
+    });
+
+    describe('user.profile', () => {
+      it('satisfied with a display name', async () => {
+        const state = await userState({ displayName: 'Ada' });
+        expect(requireStep(state, 'user.profile').status).toBe('satisfied');
+      });
+
+      it('pending with none', async () => {
+        const state = await userState({ displayName: null });
+        expect(requireStep(state, 'user.profile').status).toBe('pending');
+      });
+
+      it('pending with a name made of whitespace', async () => {
+        // It renders as nothing, so calling it satisfied leaves the user with no
+        // way to work out why their initials are blank everywhere.
+        const state = await userState({ displayName: '   ' });
+        expect(requireStep(state, 'user.profile').status).toBe('pending');
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // The derived counts
+    // -------------------------------------------------------------------------
+
+    describe('the derived counts', () => {
+      it('counts only unsatisfied `required` steps into requiredRemaining', async () => {
+        const state = await userState({
+          ai: { keyConfigured: false }, // user.ai_key  required, pending
+          displayName: null, //            user.profile optional, pending
+        });
+
+        expect(state.requiredRemaining).toBe(1);
+        expect(state.totalRemaining).toBe(2);
+        expect(state.allRequiredSatisfied).toBe(false);
+      });
+
+      it('allRequiredSatisfied is true with optional work still outstanding', async () => {
+        const state = await userState({
+          ai: { keyConfigured: true },
+          displayName: null,
+        });
+
+        expect(state.requiredRemaining).toBe(0);
+        expect(state.allRequiredSatisfied).toBe(true);
+        expect(state.totalRemaining).toBe(1);
+      });
+
+      it('a blocked step counts as outstanding', async () => {
+        // It is not satisfied, and a deployment that cannot transcribe has not
+        // finished being set up merely because the reason belongs to somebody
+        // else — saying so is what the banner is for.
+        await withTemporaryEntries(
+          onboardingStepRegistry,
+          [
+            testStep({
+              key: 'test.blocked_required',
+              tier: 'required',
+              skippable: false,
+              evaluate: () => ({ status: 'blocked', blockedReason: 'Somebody else first.' }),
+            }),
+          ],
+          async () => {
+            const state = await userState({
+              ai: { keyConfigured: true },
+              displayName: 'Ada',
+            });
+
+            expect(requireStep(state, 'test.blocked_required').status).toBe('blocked');
+            expect(state.requiredRemaining).toBe(1);
+            expect(state.allRequiredSatisfied).toBe(false);
+          },
+        );
+      });
+
+      it('a skipped step is returned, marked, and counted out', async () => {
+        const state = await userState({
+          displayName: null,
+          ai: { keyConfigured: true },
+          skipped: ['user.profile'],
+        });
+
+        const skipped = requireStep(state, 'user.profile');
+
+        // ⚠ RETURNED, not filtered: a skip the user cannot see is a skip the user
+        // cannot undo.
+        expect(skipped.skipped).toBe(true);
+        expect(skipped.status).toBe('pending');
+        expect(state.totalRemaining).toBe(0);
+      });
+
+      it('a skip recorded against a key no step uses is inert', async () => {
+        const state = await userState({ skipped: ['user.retired_step'] });
+
+        expect(state.steps.every((step) => step.skipped === false)).toBe(true);
+      });
+    });
+
+    describe('audience', () => {
+      it('labels each response with the checklist it is', async () => {
+        expect((await userState()).audience).toBe('user');
+        expect((await adminState()).audience).toBe('admin');
+      });
+
+      it('returns the registry order', async () => {
+        const state = await adminState();
+        expect(state.steps.map((step) => step.key)).toEqual(
+          onboardingStepsFor('admin').map((step) => step.key),
+        );
+        expect(state.steps.map((step) => step.key)).toEqual([
+          'admin.ai',
+          'admin.email',
+          'admin.access',
+          'admin.push',
+          'admin.backup',
+        ]);
+      });
     });
   });
 });
-
-/** Recursively `Object.freeze`, so a step mutating its context throws. */
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === 'object') {
-    for (const nested of Object.values(value)) {
-      deepFreeze(nested);
-    }
-    Object.freeze(value);
-  }
-  return value;
-}

@@ -13,6 +13,8 @@
 // between these call sites keeps them in step.
 // =============================================================================
 
+import { userDataScopeIds, userDataScopeReaches } from './user-data.registries';
+
 /**
  * Delete, in bulk, the data one user owns.
  *
@@ -38,6 +40,16 @@ export const USER_DATA_PURGE_JOB_TYPE = 'user.data.purge';
 export const USER_DATA_SUBJECT_TYPE = 'user';
 
 /**
+ * One of the registered scope ids (see {@link USER_DATA_SCOPES}).
+ *
+ * A plain `string` since issue #460: the scope set is composed from the scope
+ * registry (`user-data.registries.ts`) rather than closed over a literal union,
+ * because two of its members (`transcripts`, `notes`) are declared by their
+ * domains. The ids themselves are unchanged and still permanent.
+ */
+export type UserDataScope = string;
+
+/**
  * What a deletion request may ask for.
  *
  * ORDERED NARROWEST-FIRST, and the order is the one the UI renders: three
@@ -51,21 +63,32 @@ export const USER_DATA_SUBJECT_TYPE = 'user';
  * "delete my content, revoke my keys and start me over" are two decisions a
  * person makes separately.
  *
+ * COMPOSED FROM THE SCOPE REGISTRY (issue #460): `transcripts` and `notes` are
+ * declared by their domains, `files`, `content` and `everything` by
+ * `user-data.base.ts`, and `kvox.manifest.ts` registers them. Like the settings
+ * composers, reading this before the manifest has run is a wiring bug, so it
+ * throws instead of yielding an empty list that would make every scope
+ * "unknown".
+ *
  * ⚠ THESE STRINGS ARE PERMANENT ONCE A JOB CARRIES ONE. A `user.data.purge`
  * row's payload records the scope it was queued for, and a handler that ran
  * days later against a renamed member would silently widen or narrow what it
  * destroys — the one kind of drift this feature cannot afford.
  */
-export const USER_DATA_SCOPES = [
-  'transcripts',
-  'notes',
-  'files',
-  'content',
-  'everything',
-] as const;
+export const USER_DATA_SCOPES: readonly UserDataScope[] = composeScopes();
 
-/** One of {@link USER_DATA_SCOPES}. */
-export type UserDataScope = (typeof USER_DATA_SCOPES)[number];
+function composeScopes(): readonly UserDataScope[] {
+  const ids = userDataScopeIds();
+
+  if (ids.length === 0) {
+    throw new Error(
+      'User-data scopes are not registered: import apps/api/src/kvox.manifest before anything ' +
+        'that reads USER_DATA_SCOPES.',
+    );
+  }
+
+  return Object.freeze(ids);
+}
 
 /**
  * Whether `scope` includes the given category.
@@ -77,116 +100,22 @@ export type UserDataScope = (typeof USER_DATA_SCOPES)[number];
  * one thing at request time and another at run time — and because the two are
  * separated by a queue and by minutes, nothing would report the disagreement.
  *
- * Pure, exported and dependency-free so the whole scope matrix is testable
- * without a database, a queue or a Nest module.
+ * REGISTRY-DRIVEN since issue #460: the matrix is no longer a `switch` naming
+ * every domain. Each narrow scope lists the category it maps to; the two
+ * composites are resolved from each category's `content` flag (`content` = the
+ * categories with `content: true`, `everything` = all of them). The matrix is
+ * unchanged, and `registrations.characterization.spec.ts` pins it.
+ *
+ * ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites fan
+ * out. The arguments for where each category sits live beside the category, in
+ * its declaring file: `noteTemplates`, `notes` -> `notes/notes.user-data.ts`;
+ * `graph` -> `graph/graph.user-data.ts`; `ask` -> `ask/ask.user-data.ts`;
+ * `credentials`, `onboarding` -> `user-data.base.ts`.
+ *
+ * Total over strings: an unknown scope or category answers `false`.
  */
-export function scopeIncludes(
-  scope: UserDataScope,
-  category:
-    | 'transcripts'
-    | 'notes'
-    | 'noteTemplates'
-    | 'files'
-    | 'credentials'
-    | 'onboarding'
-    | 'graph'
-    | 'ask',
-): boolean {
-  switch (category) {
-    // ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites
-    // fan out. That symmetry is the rule the three cases below hold, and the
-    // `noteTemplates` case is the one that had to be argued for rather than
-    // assumed — see its own comment.
-    case 'transcripts':
-      return scope === 'transcripts' || scope === 'content' || scope === 'everything';
-    case 'notes':
-      return scope === 'notes' || scope === 'content' || scope === 'everything';
-    case 'files':
-      return scope === 'files' || scope === 'content' || scope === 'everything';
-    // ⚠ NOTE TEMPLATES ARE `content`/`everything` ONLY — THE NARROW `notes`
-    // SCOPE DOES NOT TOUCH THEM.
-    //
-    // A template is not note CONTENT; it is reusable CONFIGURATION. It has its
-    // own settings destination (`/settings/note-templates`), it is authored
-    // deliberately and independently of any particular note, and its whole
-    // purpose is to be used by notes that DO NOT EXIST YET — so "the notes are
-    // gone, therefore the recipes are meaningless" is exactly backwards.
-    //
-    // The user-facing consequence is the argument. A person clicking "Delete
-    // notes" on a row whose inventory reads "12 notes · 340 MB" has been told
-    // they are deleting notes; silently emptying a different settings page they
-    // did not open is the kind of surprise a Danger Zone can least afford. And
-    // unlike the data itself, templates were HAND-WRITTEN and are recoverable
-    // from nowhere — there is no provider, no bucket and no source recording to
-    // rebuild one from.
-    //
-    // The composites still take them, and that is consistent rather than a
-    // compromise: `content` means "everything you made", and a template is
-    // something you made.
-    case 'noteTemplates':
-      return scope === 'content' || scope === 'everything';
-    // ⚠ CREDENTIALS ARE `everything` ONLY. Revoking a user's API tokens is not
-    // implied by "delete my recordings", and a `content` scope that silently
-    // signed out their CLI would be a surprise with no way back.
-    case 'credentials':
-      return scope === 'everything';
-    // ⚠ ONBOARDING IS `everything` ONLY, for a reason RELATED TO CREDENTIALS
-    // RATHER THAN TO THE FOUR CONTENT CATEGORIES ABOVE: it is not something the
-    // user MADE. The `onboarding` user-settings namespace (epic #271, issue
-    // #272) holds first-run INTENT — `welcomeSeenAt`, `dismissedAt`,
-    // `adminDismissedAt`, `skipped[]` — state this application wrote about the
-    // user rather than content the user authored, which is exactly what keeps
-    // it out of `content` ("everything you made") on the same line credentials
-    // sit on.
-    //
-    // A full wipe should genuinely start over, and without this it did not.
-    // The checklist itself is DERIVED on every read, so after an `everything`
-    // run its required steps correctly go outstanding again (no transcripts,
-    // no AI key) — but the surviving `dismissedAt` makes
-    // `chooseBannerAudience` bail and the surviving `welcomeSeenAt` makes
-    // `FirstRunWelcomeDialog`'s `due` gate bail, so the user is never shown the
-    // guidance those steps exist to give. A person who deleted everything and
-    // then saw no first-run guidance at all would reasonably conclude the
-    // feature was broken.
-    //
-    // ⚠ THIS CATEGORY IS NOT A MEMBER OF `USER_DATA_SCOPES`, deliberately.
-    // That array's strings are permanent once a queued payload records one;
-    // this union is internal to this function and names the STEPS a scope fans
-    // out to, not the requests a caller may make. There is no "delete my
-    // onboarding state" scope and there should not be — the replay button on
-    // `/settings/getting-started` is already that, without destroying anything.
-    case 'onboarding':
-      return scope === 'everything';
-    // ⚠ THE KNOWLEDGE GRAPH IS `content`/`everything` ONLY (#357, epic #344).
-    //
-    // The graph is derived content the user MADE, by reviewing and committing
-    // proposals — so it follows `content` ("everything you made"), the same
-    // line note templates sit on. None of the narrow scopes takes it: "Delete
-    // transcripts" does not silently empty a graph the user curated by hand,
-    // and a graph row whose cited transcript is gone keeps its `quote` (every
-    // evidence anchor FK is SetNull, by design).
-    //
-    // A CATEGORY, NOT A SCOPE — like `onboarding`, it is not a member of
-    // `USER_DATA_SCOPES`, whose strings are permanent. The handler enqueues
-    // `kg.purge { scope: 'all' }` for it rather than deleting inline. A deleted
-    // ACCOUNT loses its graph separately, by the `owner_id` Cascade on every
-    // `kg_*` table. (#376 adds `case 'ask'` beside this one — additive cases.)
-    case 'graph':
-      return scope === 'content' || scope === 'everything';
-    // ⚠ ASK CONVERSATIONS ARE `content`/`everything` ONLY (#376, epic #348).
-    //
-    // A saved conversation is content the user MADE — their own questions and
-    // the answers they asked for — so it follows `content`, the line note
-    // templates and the graph sit on. No narrow scope takes it: "Delete notes"
-    // does not silently empty a different page the user did not open.
-    //
-    // A CATEGORY, NOT A SCOPE, like `graph`: `USER_DATA_SCOPES` is unchanged.
-    // Deleted INLINE by the handler (one indexed DELETE; messages cascade)
-    // rather than through a job of its own. A deleted ACCOUNT loses its
-    // conversations separately, by the `ask_conversations.owner_id` Cascade.
-    case 'ask':
-      return scope === 'content' || scope === 'everything';
-  }
+export function scopeIncludes(scope: UserDataScope, category: string): boolean {
+  return userDataScopeReaches(scope, category);
 }
 
 /**

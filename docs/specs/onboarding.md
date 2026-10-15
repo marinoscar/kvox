@@ -132,10 +132,26 @@ different door. The skip list is applied once, outside every step, in
 
 ## 4. The step registry and its one-pass context
 
-`apps/api/src/onboarding/onboarding-steps.ts` is a registry in the shape
-this codebase already uses for `NOTIFICATION_EVENTS`, `JobHandlerRegistry`
-and `ADMIN_SECTIONS`: one entry per step, and adding a step costs exactly
-that entry — no controller branches on a step key, no service has a
+The step catalogue is a registry in the shape this codebase already uses
+for `JobHandlerRegistry` and `ADMIN_SECTIONS`: one entry per step, and
+adding a step costs exactly that entry. Since issue #460 it is a *real*
+registry (`apps/api/src/onboarding/onboarding.registries.ts`:
+`registerOnboardingStep(...steps)` and `registerOnboardingFact(...facts)`,
+names copied from EnterpriseAppBase). The step *types* and the base steps
+(`admin.ai`, `admin.email`, `admin.access`, `admin.push`, `admin.backup`,
+`user.ai_key`, `user.profile`) stay in `onboarding-steps.ts`; the steps and
+facts a domain owns are **declared in that domain's module and registered
+from `apps/api/src/kvox.manifest.ts`**: `transcription/transcription.onboarding.ts`
+(`transcription.available`, `admin.transcription`, `admin.smoke_test`),
+`transcripts/transcripts.onboarding.ts` (`transcripts.ownCount`,
+`transcripts.ownReadyCount`, `user.first_transcript`) and
+`notes/notes.onboarding.ts` (`notes.ownCount`, `user.first_note`). The
+onboarding module imports no domain module. To add a step: write the
+`OnboardingStep` (and any fact it needs) beside the module that owns the
+feature, and add it to the manifest's onboarding section, facts before
+steps. Step keys stay permanent.
+
+One entry per step still holds — no controller branches on a step key, no service has a
 `switch`, and `OnboardingService.render` states in its own comment that the
 moment a `switch (step.key)` lands there, adding a step stops being free.
 
@@ -148,12 +164,14 @@ Both take `ctx` as their only argument and must not mutate it or read
 anything else — `onboarding.service.spec.ts`'s "step purity" suite asserts
 exactly that, per step.
 
-**The registry array's order is the rendered order, and one pair of it is
-load-bearing.** `OnboardingService.render` filters this array and maps it —
-it never sorts — so the sequence written in `ADMIN_ONBOARDING_STEPS` /
-`USER_ONBOARDING_STEPS` is the sequence a caller reads top to bottom. Most
-of that sequence is editorial and a future edit may reshuffle it freely. One
-pair may not: `admin.email` was moved to precede `admin.access` (#300)
+**The `order` field is the rendered order, and one pair of it is
+load-bearing.** Every step carries `order` (10, 20, 30, … per audience, so a
+gap is room to insert one) and the registry lists them by `(order, key)`;
+`OnboardingService.render` filters that list and maps it — it never
+re-sorts — so the sequence is the sequence a caller reads top to bottom.
+`ADMIN_ONBOARDING_STEPS` / `USER_ONBOARDING_STEPS` remain as live views of
+the registry for specs. Most of that sequence is editorial and a future edit
+may renumber it freely. One pair may not: `admin.email` was moved to precede `admin.access` (#300)
 because adding an address to the allowlist — what `admin.access` asks an
 administrator to do — is what fires `allowlist.invitation`, and that event
 declares `channels: ['email']` and nothing else. Not because the browser
@@ -168,7 +186,7 @@ not to enforce it: `admin.access` still evaluates independently of
 `admin.email`'s status (§5, §8.5), because allowlisting somebody you told
 out of band is legitimate, and a hard dependency would refuse a deployment
 that has deliberately decided not to send mail. The only thing that pins the
-order is a registry-level test asserting `admin.email`'s index precedes
+order is a registry-level test asserting `admin.email`'s position precedes
 `admin.access`'s (`onboarding.service.spec.ts`, "orders `admin.email`
 before `admin.access`") — a dependency nothing pins is one a later edit
 silently reverses.
@@ -186,6 +204,22 @@ write. They remain one file and one shared `OnboardingContext` union so the
 two checklists cannot drift into different shapes, which is what would
 happen if each audience got its own registry module.
 
+**Facts: how a domain contributes data without a query per step.** A
+domain-owned read is an `OnboardingFactDef` — `{ id, inject, resolve(instance,
+ctx) }`, id `<module>.<fact>`. A step names the facts it reads in `facts`;
+the service resolves every distinct fact the audience's steps name **once,
+in parallel, inside the same `Promise.all` as the base reads and before any
+step runs**, looking the provider up with `ModuleRef.get(inject, { strict:
+false })`, and hands the values to `applies`/`evaluate` as `ctx.facts[id]`
+(typed by augmenting `OnboardingFactValues`). A Viewer's request never
+resolves a fact only an administrator's step names, and a provider that
+cannot be resolved (or a resolver that rejects) fails the request rather than
+silently dropping a step. Both invariants of §3 therefore hold unchanged:
+completion is derived on every read, and no step issues its own query. The
+registry refuses a `required` step that is skippable, a `facts` entry that is
+not a registered fact, a key outside `ONBOARDING_STEP_KEY_PATTERN`, an
+`href` that is not root-relative and any duplicate key.
+
 `OnboardingService.buildUserContext(userId)` and
 `buildAdminContext(userId)` are the one-pass builders §3 promised: each
 issues a fixed set of reads inside a single `Promise.all` and returns one
@@ -195,10 +229,11 @@ re-counts the reads issued, asserting the count changes by **zero** — the
 mechanism that makes "a step never issues its own query" a property of the
 code rather than a convention someone could quietly violate. Every fact on
 either context is read from a service that already implements the real
-readiness check — `TranscriptionConfigService.getConfig()`,
-`AiConfigService.getConfig(userId)`, `EmailSettingsService.describeForAdmin()`,
-`PushConfigService.describeForAdmin()`, `SystemSettingsService`'s AI and
-backup policies, and four `prisma.count()` calls — precisely so the
+readiness check — `AiConfigService.getConfig(userId)`,
+`EmailSettingsService.describeForAdmin()`, `PushConfigService.describeForAdmin()`,
+`SystemSettingsService`'s AI and backup policies and two account counts on
+the base contexts, plus the `TranscriptionConfigService.getConfig()` fact and
+the transcript/note count facts the domains contribute — precisely so the
 checklist never reimplements a conjunction some other file already argues
 for and could drift from. Transcript and note counts filter `deletedAt:
 null`, the same visibility predicate `transcripts.service.ts` and

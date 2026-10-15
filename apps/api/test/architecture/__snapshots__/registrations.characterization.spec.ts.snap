@@ -1,0 +1,1139 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Domain registrations characterization HTTP responses GET /api/admin/jobs/stats labels after enqueueing one job of each of three types 1`] = `
+"{
+  "data": {
+    "total": 3,
+    "byStatus": {
+      "pending": 3,
+      "running": 0,
+      "succeeded": 0,
+      "failed": 0
+    },
+    "byType": [
+      {
+        "type": "note.generate",
+        "label": "Note generation",
+        "total": 1,
+        "byStatus": {
+          "pending": 1,
+          "running": 0,
+          "succeeded": 0,
+          "failed": 0
+        }
+      },
+      {
+        "type": "transcription.submit",
+        "label": "Transcription submit",
+        "total": 1,
+        "byStatus": {
+          "pending": 1,
+          "running": 0,
+          "succeeded": 0,
+          "failed": 0
+        }
+      },
+      {
+        "type": "user.data.purge",
+        "label": "Account data deletion",
+        "total": 1,
+        "byStatus": {
+          "pending": 1,
+          "running": 0,
+          "succeeded": 0,
+          "failed": 0
+        }
+      }
+    ],
+    "scheduled": 0,
+    "stuckRunning": 0,
+    "stuckThresholdMinutes": 30,
+    "generatedAt": "<generated at>"
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/admin/onboarding (Admin) 1`] = `
+"{
+  "data": {
+    "audience": "admin",
+    "steps": [
+      {
+        "key": "admin.transcription",
+        "tier": "required",
+        "title": "Connect a transcription provider",
+        "description": "Choose a speech-to-text provider and store its API key. Until this is done, nobody on this deployment can upload a recording.",
+        "actionLabel": "Open transcription settings",
+        "href": "/admin/settings/transcription",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "admin.ai",
+        "tier": "required",
+        "title": "Enable AI note generation",
+        "description": "Pick an AI provider and permit at least one model. Users bring their own API keys; this decides which vendor and which models they may use.",
+        "actionLabel": "Open AI settings",
+        "href": "/admin/settings/ai",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "admin.smoke_test",
+        "tier": "recommended",
+        "title": "Transcribe a test recording",
+        "description": "Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.",
+        "actionLabel": "Upload a recording",
+        "href": "/transcripts/new",
+        "status": "blocked",
+        "blockedReason": "Connect a transcription provider first — there is nothing to send a recording to yet.",
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "admin.email",
+        "tier": "recommended",
+        "title": "Configure outbound email",
+        "description": "Invitations, welcome messages and notification emails need somewhere to be sent from. Until this is configured an invitation reaches nobody at all — the person being invited has no account for it to appear in.",
+        "actionLabel": "Open email settings",
+        "href": "/admin/settings/email",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "admin.access",
+        "tier": "recommended",
+        "title": "Invite somebody",
+        "description": "This deployment restricts access to an email allowlist. Add the people who should be able to sign in.",
+        "actionLabel": "Open users & allowlist",
+        "href": "/admin/settings/users",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "admin.push",
+        "tier": "recommended",
+        "title": "Turn on browser notifications",
+        "description": "Generate a Web Push key pair so this deployment can raise notifications outside the browser tab. Ships disabled by default.",
+        "actionLabel": "Open push settings",
+        "href": "/admin/settings/push",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "admin.backup",
+        "tier": "recommended",
+        "title": "Schedule database backups",
+        "description": "Turn on the nightly backup so this deployment has a copy of its data to restore from.",
+        "actionLabel": "Open backup settings",
+        "href": "/admin/settings/db-backup",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      }
+    ],
+    "requiredRemaining": 2,
+    "totalRemaining": 7,
+    "allRequiredSatisfied": false
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/notifications/config 1`] = `
+"{
+  "data": {
+    "browserEnabled": true,
+    "pushEnabled": false,
+    "vapidPublicKey": null
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/notifications/events 1`] = `
+"{
+  "data": [
+    {
+      "key": "user.welcome",
+      "label": "Welcome",
+      "description": "Sent once, the first time you sign in to this application.",
+      "channels": [
+        "email"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "allowlist.invitation",
+      "label": "Invitation to join",
+      "description": "Sent when an administrator adds your email address to the allowlist, inviting you to sign in.",
+      "channels": [
+        "email"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "allowlist.invitation_reminder",
+      "label": "Invitation reminder",
+      "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
+      "channels": [
+        "email"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "security.role_changed",
+      "label": "Your roles changed",
+      "description": "Sent when an administrator changes the roles assigned to your account, which changes what you can access.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": true
+    },
+    {
+      "key": "admin.broadcast",
+      "label": "Announcements",
+      "description": "Occasional messages an administrator sends to everyone using this application.",
+      "channels": [
+        "email",
+        "browser",
+        "push"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "admin.broadcast_critical",
+      "label": "Important announcements",
+      "description": "Messages an administrator has marked as important — service interruptions, security notices and anything else everyone needs to see. These cannot be turned off.",
+      "channels": [
+        "email",
+        "browser",
+        "push"
+      ],
+      "defaultEnabled": true,
+      "mandatory": true
+    },
+    {
+      "key": "jobs.job_failed",
+      "label": "Background job failed",
+      "description": "Sent when a background job exhausts its retry budget and is given up on. Retries and deferrals are silent; only the final give-up raises this.",
+      "channels": [
+        "email"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "nodes.node_offline",
+      "label": "Worker node went offline",
+      "description": "Sent when a worker node stops heartbeating and the fleet sweep marks it offline. Capacity has dropped until it comes back.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "db_backup.backup_failed",
+      "label": "Database backup failed",
+      "description": "Sent when a database backup run fails, or stops heartbeating and is given up on. The deployment has one fewer recovery point than it thinks.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "db_backup.restore_completed",
+      "label": "Database restored",
+      "description": "Sent when a database restore finishes and the restored copy becomes the live database. This cannot be turned off.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": true
+    },
+    {
+      "key": "transcripts.transcript_ready",
+      "label": "Transcript ready",
+      "description": "Sent when one of your recordings finishes transcribing and can be read, corrected and shared.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "transcripts.transcript_failed",
+      "label": "Transcription failed",
+      "description": "Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "transcripts.transcript_shared",
+      "label": "A recording was shared with you",
+      "description": "Sent when another user shares one of their recordings with you, as a viewer or an editor.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "notes.note_ready",
+      "label": "Note ready",
+      "description": "Sent when a note you asked for finishes generating and can be read and edited.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "notes.note_failed",
+      "label": "Note generation failed",
+      "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
+      "channels": [
+        "email",
+        "browser"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    }
+  ],
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/onboarding (Admin) 1`] = `
+"{
+  "data": {
+    "audience": "user",
+    "steps": [
+      {
+        "key": "user.ai_key",
+        "tier": "required",
+        "title": "Add your AI provider key",
+        "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
+        "actionLabel": "Add your key",
+        "href": "/settings/ai",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "user.first_transcript",
+        "tier": "required",
+        "title": "Transcribe your first recording",
+        "description": "Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.",
+        "actionLabel": "New transcript",
+        "href": "/transcripts/new",
+        "status": "blocked",
+        "blockedReason": "Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.",
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "user.first_note",
+        "tier": "recommended",
+        "title": "Generate your first note",
+        "description": "Turn a transcript, a document or another note into a structured, editable note using a template.",
+        "actionLabel": "New note",
+        "href": "/notes/new",
+        "status": "blocked",
+        "blockedReason": "Your administrator has not finished setting up AI generation for this deployment yet.",
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "user.profile",
+        "tier": "optional",
+        "title": "Set your display name",
+        "description": "How you appear to the people you share transcripts and notes with.",
+        "actionLabel": "Edit your profile",
+        "href": "/settings/profile",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      }
+    ],
+    "requiredRemaining": 2,
+    "totalRemaining": 4,
+    "allRequiredSatisfied": false
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/onboarding (Viewer) 1`] = `
+"{
+  "data": {
+    "audience": "user",
+    "steps": [
+      {
+        "key": "user.ai_key",
+        "tier": "required",
+        "title": "Add your AI provider key",
+        "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
+        "actionLabel": "Add your key",
+        "href": "/settings/ai",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "user.first_transcript",
+        "tier": "required",
+        "title": "Transcribe your first recording",
+        "description": "Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.",
+        "actionLabel": "New transcript",
+        "href": "/transcripts/new",
+        "status": "blocked",
+        "blockedReason": "Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.",
+        "skippable": false,
+        "skipped": false
+      },
+      {
+        "key": "user.first_note",
+        "tier": "recommended",
+        "title": "Generate your first note",
+        "description": "Turn a transcript, a document or another note into a structured, editable note using a template.",
+        "actionLabel": "New note",
+        "href": "/notes/new",
+        "status": "blocked",
+        "blockedReason": "Your administrator has not finished setting up AI generation for this deployment yet.",
+        "skippable": true,
+        "skipped": false
+      },
+      {
+        "key": "user.profile",
+        "tier": "optional",
+        "title": "Set your display name",
+        "description": "How you appear to the people you share transcripts and notes with.",
+        "actionLabel": "Edit your profile",
+        "href": "/settings/profile",
+        "status": "pending",
+        "blockedReason": null,
+        "skippable": true,
+        "skipped": false
+      }
+    ],
+    "requiredRemaining": 2,
+    "totalRemaining": 4,
+    "allRequiredSatisfied": false
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (nothing held, no deletion in flight) 1`] = `
+"{
+  "data": {
+    "transcripts": {
+      "count": 0,
+      "bytes": "0"
+    },
+    "notes": {
+      "count": 0,
+      "bytes": "0"
+    },
+    "files": {
+      "count": 0,
+      "bytes": "0"
+    },
+    "noteTemplates": {
+      "count": 0
+    },
+    "credentials": {
+      "aiKeys": 0,
+      "accessTokens": 0
+    },
+    "graph": {
+      "entities": 0,
+      "items": 0
+    },
+    "askConversations": {
+      "count": 0
+    },
+    "activeDeletion": null
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (nothing held, no deletion in flight) 2`] = `
+[
+  "transcripts",
+  "notes",
+  "files",
+  "noteTemplates",
+  "credentials",
+  "graph",
+  "askConversations",
+  "activeDeletion",
+]
+`;
+
+exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (populated, deletion in flight) 1`] = `
+"{
+  "data": {
+    "transcripts": {
+      "count": 3,
+      "bytes": "2048"
+    },
+    "notes": {
+      "count": 5,
+      "bytes": "2048"
+    },
+    "files": {
+      "count": 2,
+      "bytes": "2048"
+    },
+    "noteTemplates": {
+      "count": 4
+    },
+    "credentials": {
+      "aiKeys": 1,
+      "accessTokens": 2
+    },
+    "graph": {
+      "entities": 7,
+      "items": 9
+    },
+    "askConversations": {
+      "count": 6
+    },
+    "activeDeletion": {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "scope": "notes",
+      "status": "pending",
+      "requestedAt": "2026-01-01T00:00:00.000Z"
+    }
+  },
+  "meta": {
+    "timestamp": "<request timestamp>"
+  }
+}"
+`;
+
+exports[`Domain registrations characterization pure registry values ADMIN_ONBOARDING_STEPS keys, in array order 1`] = `
+[
+  "admin.transcription",
+  "admin.ai",
+  "admin.smoke_test",
+  "admin.email",
+  "admin.access",
+  "admin.push",
+  "admin.backup",
+]
+`;
+
+exports[`Domain registrations characterization pure registry values JOB_TYPE_LABELS, in declared order 1`] = `
+[
+  [
+    "example.echo",
+    "Example echo",
+  ],
+  [
+    "example.checksum",
+    "Example checksum",
+  ],
+  [
+    "job.history.purge",
+    "Job history purge",
+  ],
+  [
+    "admin.broadcast.start",
+    "Broadcast start",
+  ],
+  [
+    "admin.broadcast.chunk",
+    "Broadcast delivery",
+  ],
+  [
+    "db.backup.run",
+    "Database backup",
+  ],
+  [
+    "db.restore.run",
+    "Database restore",
+  ],
+  [
+    "db.backup.sweep",
+    "Backup sweep",
+  ],
+  [
+    "db.restore.old-db-drop",
+    "Restore cleanup",
+  ],
+  [
+    "storage.cleanup.stale-uploads",
+    "Stale upload cleanup",
+  ],
+  [
+    "auth.token.cleanup",
+    "Token cleanup",
+  ],
+  [
+    "device-auth.code.cleanup",
+    "Device code cleanup",
+  ],
+  [
+    "nodes.fleet.sweep",
+    "Fleet sweep",
+  ],
+  [
+    "nodes.fleet.prune",
+    "Fleet prune",
+  ],
+  [
+    "media.audio.transcode",
+    "Audio transcode",
+  ],
+  [
+    "transcription.submit",
+    "Transcription submit",
+  ],
+  [
+    "transcription.poll",
+    "Transcription poll",
+  ],
+  [
+    "transcription.ingest",
+    "Transcription ingest",
+  ],
+  [
+    "transcript.snapshot",
+    "Transcript snapshot",
+  ],
+  [
+    "transcript.export",
+    "Transcript export",
+  ],
+  [
+    "transcript.purge",
+    "Transcript purge",
+  ],
+  [
+    "transcripts.housekeeping",
+    "Transcript housekeeping",
+  ],
+  [
+    "transcript.name_check",
+    "Transcript name check",
+  ],
+  [
+    "note.generate",
+    "Note generation",
+  ],
+  [
+    "note.source.extract",
+    "Document text extraction",
+  ],
+  [
+    "note.export",
+    "Note export",
+  ],
+  [
+    "note.purge",
+    "Note purge",
+  ],
+  [
+    "notes.housekeeping",
+    "Note housekeeping",
+  ],
+  [
+    "note.retitle",
+    "Note retitle",
+  ],
+  [
+    "user.data.purge",
+    "Account data deletion",
+  ],
+  [
+    "search.index",
+    "Semantic indexing",
+  ],
+  [
+    "kg.purge",
+    "Knowledge graph deletion",
+  ],
+  [
+    "kg.speaker_link",
+    "Link named speakers to people",
+  ],
+  [
+    "kg.extract",
+    "Knowledge graph extraction",
+  ],
+  [
+    "kg.resolve",
+    "Knowledge graph resolution",
+  ],
+  [
+    "kg.embed",
+    "Knowledge graph embeddings",
+  ],
+  [
+    "kg.graph_layout",
+    "Knowledge graph layout",
+  ],
+  [
+    "kg.entity_digest",
+    "Knowledge graph entity digest",
+  ],
+  [
+    "kg.migrate",
+    "Knowledge graph migration",
+  ],
+  [
+    "kg.export",
+    "Knowledge graph export",
+  ],
+  [
+    "kg.import",
+    "Knowledge graph import",
+  ],
+  [
+    "ask.respond",
+    "Ask answer",
+  ],
+]
+`;
+
+exports[`Domain registrations characterization pure registry values NOTIFICATION_EVENTS, in declared order 1`] = `
+[
+  {
+    "channels": [
+      "email",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent once, the first time you sign in to this application.",
+    "key": "user.welcome",
+    "label": "Welcome",
+  },
+  {
+    "channels": [
+      "email",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when an administrator adds your email address to the allowlist, inviting you to sign in.",
+    "key": "allowlist.invitation",
+    "label": "Invitation to join",
+  },
+  {
+    "channels": [
+      "email",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
+    "key": "allowlist.invitation_reminder",
+    "label": "Invitation reminder",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when an administrator changes the roles assigned to your account, which changes what you can access.",
+    "key": "security.role_changed",
+    "label": "Your roles changed",
+    "mandatory": true,
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+      "push",
+    ],
+    "defaultEnabled": true,
+    "description": "Occasional messages an administrator sends to everyone using this application.",
+    "key": "admin.broadcast",
+    "label": "Announcements",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+      "push",
+    ],
+    "defaultEnabled": true,
+    "description": "Messages an administrator has marked as important — service interruptions, security notices and anything else everyone needs to see. These cannot be turned off.",
+    "key": "admin.broadcast_critical",
+    "label": "Important announcements",
+    "mandatory": true,
+  },
+  {
+    "channels": [
+      "email",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a background job exhausts its retry budget and is given up on. Retries and deferrals are silent; only the final give-up raises this.",
+    "key": "jobs.job_failed",
+    "label": "Background job failed",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a worker node stops heartbeating and the fleet sweep marks it offline. Capacity has dropped until it comes back.",
+    "key": "nodes.node_offline",
+    "label": "Worker node went offline",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a database backup run fails, or stops heartbeating and is given up on. The deployment has one fewer recovery point than it thinks.",
+    "key": "db_backup.backup_failed",
+    "label": "Database backup failed",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a database restore finishes and the restored copy becomes the live database. This cannot be turned off.",
+    "key": "db_backup.restore_completed",
+    "label": "Database restored",
+    "mandatory": true,
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when one of your recordings finishes transcribing and can be read, corrected and shared.",
+    "key": "transcripts.transcript_ready",
+    "label": "Transcript ready",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.",
+    "key": "transcripts.transcript_failed",
+    "label": "Transcription failed",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when another user shares one of their recordings with you, as a viewer or an editor.",
+    "key": "transcripts.transcript_shared",
+    "label": "A recording was shared with you",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a note you asked for finishes generating and can be read and edited.",
+    "key": "notes.note_ready",
+    "label": "Note ready",
+  },
+  {
+    "channels": [
+      "email",
+      "browser",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
+    "key": "notes.note_failed",
+    "label": "Note generation failed",
+  },
+]
+`;
+
+exports[`Domain registrations characterization pure registry values Object.keys(EMAIL_TEMPLATES), in registration order 1`] = `
+[
+  "test-email",
+  "user-welcome",
+  "allowlist-invitation",
+  "allowlist-invitation-reminder",
+  "role-changed",
+  "broadcast",
+  "job-failed",
+  "node-offline",
+  "backup-failed",
+  "restore-completed",
+  "transcript-ready",
+  "transcript-failed",
+  "transcript-shared",
+  "note-ready",
+  "note-failed",
+]
+`;
+
+exports[`Domain registrations characterization pure registry values USER_DATA_SCOPES, in declared order 1`] = `
+[
+  "transcripts",
+  "notes",
+  "files",
+  "content",
+  "everything",
+]
+`;
+
+exports[`Domain registrations characterization pure registry values USER_ONBOARDING_STEPS keys, in array order 1`] = `
+[
+  "user.ai_key",
+  "user.first_transcript",
+  "user.first_note",
+  "user.profile",
+]
+`;
+
+exports[`Domain registrations characterization pure registry values onboarding step metadata (order, audience, tier, skippable, permission, href) 1`] = `
+{
+  "admin": [
+    {
+      "actionLabel": "Open transcription settings",
+      "audience": "admin",
+      "description": "Choose a speech-to-text provider and store its API key. Until this is done, nobody on this deployment can upload a recording.",
+      "href": "/admin/settings/transcription",
+      "key": "admin.transcription",
+      "permission": "system_settings:read",
+      "position": 0,
+      "skippable": false,
+      "tier": "required",
+      "title": "Connect a transcription provider",
+    },
+    {
+      "actionLabel": "Open AI settings",
+      "audience": "admin",
+      "description": "Pick an AI provider and permit at least one model. Users bring their own API keys; this decides which vendor and which models they may use.",
+      "href": "/admin/settings/ai",
+      "key": "admin.ai",
+      "permission": "system_settings:read",
+      "position": 1,
+      "skippable": false,
+      "tier": "required",
+      "title": "Enable AI note generation",
+    },
+    {
+      "actionLabel": "Upload a recording",
+      "audience": "admin",
+      "description": "Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.",
+      "href": "/transcripts/new",
+      "key": "admin.smoke_test",
+      "permission": "transcripts:write",
+      "position": 2,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Transcribe a test recording",
+    },
+    {
+      "actionLabel": "Open email settings",
+      "audience": "admin",
+      "description": "Invitations, welcome messages and notification emails need somewhere to be sent from. Until this is configured an invitation reaches nobody at all — the person being invited has no account for it to appear in.",
+      "href": "/admin/settings/email",
+      "key": "admin.email",
+      "permission": "system_settings:read",
+      "position": 3,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Configure outbound email",
+    },
+    {
+      "actionLabel": "Open users & allowlist",
+      "audience": "admin",
+      "description": "This deployment restricts access to an email allowlist. Add the people who should be able to sign in.",
+      "href": "/admin/settings/users",
+      "key": "admin.access",
+      "permission": "users:read",
+      "position": 4,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Invite somebody",
+    },
+    {
+      "actionLabel": "Open push settings",
+      "audience": "admin",
+      "description": "Generate a Web Push key pair so this deployment can raise notifications outside the browser tab. Ships disabled by default.",
+      "href": "/admin/settings/push",
+      "key": "admin.push",
+      "permission": "push:read",
+      "position": 5,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Turn on browser notifications",
+    },
+    {
+      "actionLabel": "Open backup settings",
+      "audience": "admin",
+      "description": "Turn on the nightly backup so this deployment has a copy of its data to restore from.",
+      "href": "/admin/settings/db-backup",
+      "key": "admin.backup",
+      "permission": "db_backup:read",
+      "position": 6,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Schedule database backups",
+    },
+  ],
+  "user": [
+    {
+      "actionLabel": "Add your key",
+      "audience": "user",
+      "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
+      "href": "/settings/ai",
+      "key": "user.ai_key",
+      "permission": null,
+      "position": 0,
+      "skippable": false,
+      "tier": "required",
+      "title": "Add your AI provider key",
+    },
+    {
+      "actionLabel": "New transcript",
+      "audience": "user",
+      "description": "Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.",
+      "href": "/transcripts/new",
+      "key": "user.first_transcript",
+      "permission": "transcripts:write",
+      "position": 1,
+      "skippable": false,
+      "tier": "required",
+      "title": "Transcribe your first recording",
+    },
+    {
+      "actionLabel": "New note",
+      "audience": "user",
+      "description": "Turn a transcript, a document or another note into a structured, editable note using a template.",
+      "href": "/notes/new",
+      "key": "user.first_note",
+      "permission": "notes:write",
+      "position": 2,
+      "skippable": true,
+      "tier": "recommended",
+      "title": "Generate your first note",
+    },
+    {
+      "actionLabel": "Edit your profile",
+      "audience": "user",
+      "description": "How you appear to the people you share transcripts and notes with.",
+      "href": "/settings/profile",
+      "key": "user.profile",
+      "permission": "user_settings:write",
+      "position": 3,
+      "skippable": true,
+      "tier": "optional",
+      "title": "Set your display name",
+    },
+  ],
+}
+`;
+
+exports[`Domain registrations characterization pure registry values the full scopeIncludes(scope, category) matrix 1`] = `
+{
+  "content": {
+    "ask": true,
+    "credentials": false,
+    "files": true,
+    "graph": true,
+    "noteTemplates": true,
+    "notes": true,
+    "onboarding": false,
+    "transcripts": true,
+  },
+  "everything": {
+    "ask": true,
+    "credentials": true,
+    "files": true,
+    "graph": true,
+    "noteTemplates": true,
+    "notes": true,
+    "onboarding": true,
+    "transcripts": true,
+  },
+  "files": {
+    "ask": false,
+    "credentials": false,
+    "files": true,
+    "graph": false,
+    "noteTemplates": false,
+    "notes": false,
+    "onboarding": false,
+    "transcripts": false,
+  },
+  "notes": {
+    "ask": false,
+    "credentials": false,
+    "files": false,
+    "graph": false,
+    "noteTemplates": false,
+    "notes": true,
+    "onboarding": false,
+    "transcripts": false,
+  },
+  "transcripts": {
+    "ask": false,
+    "credentials": false,
+    "files": false,
+    "graph": false,
+    "noteTemplates": false,
+    "notes": false,
+    "onboarding": false,
+    "transcripts": true,
+  },
+}
+`;

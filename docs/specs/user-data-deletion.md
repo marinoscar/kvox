@@ -8,7 +8,9 @@
 > `apps/api/src/user-data/user-data.service.ts`,
 > `apps/api/src/user-data/dto/user-data.dto.ts`,
 > `apps/api/src/user-data/handlers/user-data-purge.handler.ts` and
-> `apps/api/src/user-data/user-data.module.ts` on the API side;
+> `apps/api/src/user-data/user-data.module.ts` on the API side (since issue
+> #460 also `user-data.registries.ts`, `user-data.base.ts` and each domain's
+> `*.user-data.ts` — see §8);
 > `apps/web/src/pages/UserDangerZonePage.tsx`,
 > `apps/web/src/components/settings/UserDataDeleteDialog.tsx`,
 > `apps/web/src/hooks/useUserData.ts` and `apps/web/src/services/userData.ts`
@@ -60,7 +62,8 @@ reasons.
 ## 2. The scope matrix
 
 Five scopes, defined once — `USER_DATA_SCOPES` and `scopeIncludes` in
-`apps/api/src/user-data/job-types.ts` — and read by both the request
+`apps/api/src/user-data/job-types.ts`, both composed from the scope and
+category registries (§8) — and read by both the request
 validator (which only checks the string is a member) and the purge handler
 (which decides every destructive step from it). There is no second,
 independently written `scope === 'content' || scope === 'everything'`
@@ -414,3 +417,69 @@ timestamps. "Delete everything" should mean start over. Every other namespace
 every scope, because deleting your data is not resetting your preferences.
 Account deletion, if this application ever adds it, is a separate feature
 with its own confirmation flow, not a sixth scope on this one.
+
+## 8. Categories and scopes are registered, not enumerated (issue #460)
+
+Until issue #460 `user-data/` named every domain: `scopeIncludes` switched on
+`transcripts | notes | noteTemplates | graph | ask`, the summary read six domain
+tables, and the purge handler imported four domain services. None of that is
+true any more, and the matrix in §2 is unchanged (the characterization snapshot
+`registrations.characterization.spec.ts` and `job-types.spec.ts` pin it).
+
+**Two registries** (`user-data.registries.ts`, names and fields copied from
+EnterpriseAppBase so a later swap changes an import path):
+
+- `registerUserDataCategory(def)` — `id`, `label`, `description`, `content`
+  (does the `content` scope reach it), `order` (the summary key order) and two
+  app-specific hooks: `summary` (`key`, response `schema`, `inject`, `run`) and `purge`
+  (`order`, `inject`, `run`).
+- `registerUserDataScope(def)` — `id`, `label`, `description`, `categories`
+  (a list, or `'content'` / `'all'`), `confirmation` (validated to equal
+  `id.toUpperCase()`, which is the §1 confirmation rule), `layer`, `order`.
+
+**Who declares what.** Domains declare their own categories beside their
+module, in a deliberately light `<domain>/<domain>.user-data.ts`
+(`transcripts`, `notes` and `noteTemplates`, `graph`, `ask`; the narrow scopes
+`transcripts` and `notes`), and their hook class in
+`<domain>.user-data.hooks.ts`. `user-data/user-data.base.ts` declares what no
+domain owns: `files`, `credentials`, `onboarding`, the narrow scope `files` and
+the two composites `content` and `everything`, which are resolved from each
+category's `content` flag exactly as the old switch did. `kvox.manifest.ts`
+registers all of it.
+
+**The declaration file stays light on purpose.** The manifest evaluates before
+the settings namespaces are registered, and a hook class imports services that
+transitively compose schemas from those registries. So the declaration refers to
+its hook class by `import type` only and by a string token
+(`NOTES_USER_DATA_HOOKS`, ...), and the domain module provides
+`{ provide: TOKEN, useClass: Hooks }`.
+
+**Two orders, not one.** `category.order` is the *listing* order — the key
+order of `GET /api/user-data/summary` (transcripts, notes, files, noteTemplates,
+credentials, graph, askConversations, then `activeDeletion`). `purge.order` is
+the *execution* order of the job, and it is §4's FK-clearing order, not a
+preference: ask 10, graph 20, credentials 30, notes 40, transcripts 50, note
+templates 60, files 70, onboarding 80. A duplicate `purge.order` is refused at
+registration (a tie would make FK clearing depend on registration order). The
+call-order spec in `handlers/user-data-purge.handler.spec.ts` is the safety net.
+
+**Hooks are injected.** `UserDataModule` imports no domain module. The handler
+and the summary resolve each hook with `ModuleRef.get(token, { strict: false })`,
+so a hook class must be provided in exactly one module. ⚠ **A hook that cannot be
+resolved fails** — the purge job (before its first destructive step, so nothing
+is half-deleted for a reason knowable up front) or the summary request. It is
+never skipped: skipping a category would report a deletion the user believes
+happened. On boot the handler also refuses a scope naming a category nothing
+registered.
+
+**Where the old private methods went.** `deleteAskConversations` ->
+`ask/ask.user-data.hooks.ts`; `enqueueGraphPurge` ->
+`graph/graph.user-data.hooks.ts`; `deleteNotes`, `deleteNoteTemplates`, the notes
+search-index sweep and the notes byte total (with the extracted-text sidecar rule
+that needs `NOTES_MANAGED_BY` and `readExtractedObjectId`) ->
+`notes/notes.user-data.hooks.ts`; `deleteTranscripts`, its index sweep and the
+transcripts byte total -> `transcripts/transcripts.user-data.hooks.ts`;
+`destroyCredentials`, `deleteUnmanagedObjects`, `resetOnboarding` ->
+`user-data/user-data.base.hooks.ts`. Shared plumbing (the batch bounds, the audit
+row, the live-purge coverage check) is `user-data/user-data.support.ts`. The code
+moved verbatim; the purge semantics did not change.

@@ -142,22 +142,40 @@
 // ORDER, AND WHY IT IS NOT STYLISTIC
 // -----------------------------------------------------------------------------
 //
-//   1. credentials      (`everything` only)
-//   2. notes            — clearing `source_note_id` first
-//   3. transcripts      — clearing `source_transcript_id` first
-//   4. note templates   (`content`/`everything` only — never the narrow `notes`
-//                        scope; see `scopeIncludes`)
-//   5. unmanaged storage objects
-//   6. onboarding state (`everything` only)
+// THE STEPS ARE THE REGISTERED USER-DATA CATEGORIES (issue #460), run in the
+// order each declares in `purge.order`. Today's order, which no registration may
+// reshuffle, is:
 //
-// 2 before 3 because a note's `source_transcript_id` is `Restrict`: deleting
+//   1. ask conversations   (10; `content`/`everything` only)
+//   2. knowledge graph     (20; `content`/`everything` only — enqueues `kg.purge`)
+//   3. credentials         (30; `everything` only)
+//   4. notes               (40) — clearing `source_note_id` first
+//   5. transcripts         (50) — clearing `source_transcript_id` first
+//   6. note templates      (60; `content`/`everything` only — never the narrow
+//                           `notes` scope; see `scopeIncludes`)
+//   7. unmanaged storage objects (70)
+//   8. onboarding state    (80; `everything` only)
+//
+// Each step is a method on a hook class declared by the category's own module
+// (`ask/ask.user-data.ts`, `graph/graph.user-data.ts`, `notes/notes.user-data.ts`,
+// `transcripts/transcripts.user-data.ts`, `user-data/user-data.base.ts`); this
+// handler resolves them with `ModuleRef` and imports no domain. Every hook the
+// scope reaches is resolved BEFORE the first destructive step, and a hook that
+// cannot be resolved fails the job — a category is never skipped silently.
+//
+// The chain that decides the order of 4 to 7, in the vocabulary the rest of
+// this header (and the spec's §4) uses:
+//
+//   notes -> transcripts -> note templates -> unmanaged storage objects
+//
+// 4 before 5 because a note's `source_transcript_id` is `Restrict`: deleting
 // transcripts while the user's own notes still cite them would leave the
-// transcript purge blocked. 4 after 2 because `NoteTemplatesService.remove`
+// transcript purge blocked. 6 after 4 because `NoteTemplatesService.remove`
 // archives rather than deletes while notes still reference a template, so the
 // notes have to have gone first for a delete to be possible at all — and every
-// scope that reaches step 4 has already run step 2, so that ordering is never
-// vacuous. 5 last
-// because it is the only step whose rows nothing else can point at.
+// scope that reaches step 6 has already run step 4, so that ordering is never
+// vacuous. 7 last because it is the only step whose rows nothing else can point
+// at.
 //
 // Credentials go FIRST rather than in that chain, and they are the one step
 // that has a choice: they participate in no foreign key with anything above
@@ -191,55 +209,28 @@
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import type { Job, Prisma } from '@prisma/client';
+import { ModuleRef } from '@nestjs/core';
+import type { Job } from '@prisma/client';
 
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { KG_PURGE_JOB_TYPE, KG_SUBJECT_USER } from '../../graph/job-types';
 import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
-import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../notes/job-types';
-import { NoteTemplatesService } from '../../notes/note-templates.service';
-import { NotesService } from '../../notes/notes.service';
-import { PatService } from '../../pat/pat.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { SEARCH_DOC_NOTE, SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
-import { SearchIndexService } from '../../search/indexing/search-index.service';
-import { UserSettingsService } from '../../settings/user-settings/user-settings.service';
-import { ObjectsService } from '../../storage/objects/objects.service';
+import { USER_DATA_PURGE_JOB_TYPE, type UserDataScope } from '../job-types';
 import {
-  TRANSCRIPT_PURGE_JOB_TYPE,
-  TRANSCRIPT_SUBJECT_TYPE,
-} from '../../transcripts/job-types';
-import { TranscriptPipelineService } from '../../transcripts/transcript-pipeline.service';
+  assertUserDataRegistriesConsistent,
+  userDataPurgeSteps,
+} from '../user-data.registries';
 import {
-  scopeIncludes,
-  USER_DATA_PURGE_JOB_TYPE,
-  type UserDataScope,
-} from '../job-types';
+  resolveUserDataHook,
+  USER_DATA_PURGE_BATCH,
+  USER_DATA_PURGE_MAX_BATCHES,
+} from '../user-data.support';
 import { readPurgePayload } from '../user-data.service';
 
-/**
- * Rows per batch, matching `NOTES_HOUSEKEEPING_BATCH`.
- *
- * The number is a compromise between round trips and the size of the `IN` list
- * the job lookup builds; 200 is what the notes sweep already settled on and
- * there is no reason for this file to pick a different one.
- */
-export const USER_DATA_PURGE_BATCH = 200;
-
-/**
- * Most batches any one step will run before giving up.
- *
- * A STOP, NOT A BUDGET. Every loop below terminates by its own predicate
- * (a soft-deleted note no longer matches `deletedAt: null`), so reaching this
- * bound means a row is being selected and not changed — a state where looping
- * forever would hold a worker slot and produce nothing. Hitting it throws, so
- * the job fails loudly with the step named instead of running until the
- * timeout.
- */
-export const USER_DATA_PURGE_MAX_BATCHES = 5_000;
+// Re-exported so existing importers of the bounds keep their path; the
+// definitions moved to `user-data.support.ts` so hook classes in other folders
+// can share them.
+export { USER_DATA_PURGE_BATCH, USER_DATA_PURGE_MAX_BATCHES };
 
 @Injectable()
 export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
@@ -269,19 +260,14 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
 
   constructor(
     private readonly registry: JobHandlerRegistry,
-    private readonly prisma: PrismaService,
-    private readonly notes: NotesService,
-    private readonly templates: NoteTemplatesService,
-    private readonly pipeline: TranscriptPipelineService,
-    private readonly objects: ObjectsService,
-    private readonly pat: PatService,
-    private readonly aiCredentials: UserAiCredentialsService,
-    private readonly searchIndex: SearchIndexService,
-    private readonly userSettings: UserSettingsService,
-    private readonly jobs: JobsService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   onModuleInit(): void {
+    // A scope naming a category nothing registered would delete less than its
+    // confirmation dialog promised and fail nowhere else, so refuse to boot.
+    assertUserDataRegistriesConsistent();
+
     this.registry.register(this);
   }
 
@@ -307,48 +293,26 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
       `Starting bulk deletion of scope "${scope}" for user ${userId} (job ${job.id})`,
     );
 
-    // #376: Ask conversations go first — inline, one indexed DELETE. Nothing
-    // else depends on the order: a message carries no FK into `kg_*` besides
-    // the conversation's SetNull scope.
-    if (scopeIncludes(scope, 'ask')) {
-      await this.deleteAskConversations(userId);
-    }
+    // ⚠ EVERY HOOK THE SCOPE REACHES IS RESOLVED BEFORE THE FIRST STEP RUNS. A
+    // hook that cannot be found throws here — failing the job before anything
+    // has been destroyed, never skipping its category and reporting success.
+    const steps = userDataPurgeSteps(scope).map((category) => {
+      const purge = category.purge as NonNullable<typeof category.purge>;
 
-    // #357: the knowledge graph goes next, so graph rows citing
-    // about-to-be-deleted notes and transcripts go away with them. Correctness
-    // does not depend on the order — every evidence anchor FK is SetNull.
-    if (scopeIncludes(scope, 'graph')) {
-      await this.enqueueGraphPurge(userId);
-    }
+      return {
+        category,
+        purge,
+        instance: resolveUserDataHook(this.moduleRef, purge.inject, category.id, 'purge'),
+      };
+    });
 
-    if (scopeIncludes(scope, 'credentials')) {
-      await this.destroyCredentials(userId);
-    }
-
-    if (scopeIncludes(scope, 'notes')) {
-      await this.deleteNotes(userId);
-      await this.forgetFromSearchIndex(userId, SEARCH_DOC_NOTE);
-    }
-
-    if (scopeIncludes(scope, 'transcripts')) {
-      await this.deleteTranscripts(userId);
-      await this.forgetFromSearchIndex(userId, SEARCH_DOC_TRANSCRIPT);
-    }
-
-    if (scopeIncludes(scope, 'noteTemplates')) {
-      await this.deleteNoteTemplates(userId);
-    }
-
-    if (scopeIncludes(scope, 'files')) {
-      await this.deleteUnmanagedObjects(userId);
-    }
-
-    // Last, and see the header's ORDER section for why: this is the one step
-    // that makes a CLAIM to the user ("you are starting over") rather than
-    // destroying something, so it may only run after the destruction it
-    // narrates has actually been carried out.
-    if (scopeIncludes(scope, 'onboarding')) {
-      await this.resetOnboarding(userId);
+    // The steps run in `purge.order` — see the header's ORDER section. Last in
+    // that order is the onboarding reset: this is the one step that makes a
+    // CLAIM to the user ("you are starting over") rather than destroying
+    // something, so it may only run after the destruction it narrates has
+    // actually been carried out.
+    for (const { purge, instance } of steps) {
+      await purge.run(instance, userId, { jobId: job.id, scope });
     }
 
     this.logger.warn(
@@ -356,580 +320,6 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
         `(job ${job.id})`,
     );
   }
-
-  // ===========================================================================
-  // The semantic index (#188, epic #165)
-  // ===========================================================================
-
-  /**
-   * Delete every one of the user's saved Ask conversations (#376, epic #348).
-   *
-   * INLINE rather than a job of its own: it is one indexed `DELETE` on
-   * `ask_conversations (owner_id, …)` inside this already-queued job, and every
-   * message goes with its conversation through the `conversation_id` Cascade —
-   * a turn still streaming included (`ask.respond` returns normally when its
-   * row is gone). Counts only in the audit, never content.
-   */
-  private async deleteAskConversations(userId: string): Promise<void> {
-    const { count } = await this.prisma.askConversation.deleteMany({ where: { ownerId: userId } });
-
-    await this.audit(userId, 'user_data:ask_conversations_deleted', { count });
-
-    this.logger.warn(`User ${userId}: ${count} Ask conversation(s) deleted`);
-  }
-
-  /**
-   * Hand the user's whole knowledge graph to `kg.purge { scope: 'all' }`
-   * (#357, epic #344).
-   *
-   * ⚠ IT ENQUEUES AND DELETES NOTHING ITSELF — the fan-out-to-existing-handlers
-   * rule this handler already follows for `transcript.purge`/`note.purge`.
-   * `kg.purge` owns the plan (a dozen tables, evidence with no FK to its
-   * subject, entity ids inside draft proposal JSON); a second copy of it here
-   * is how the two would come to disagree about what "the graph" is.
-   *
-   * Subject `user`/userId with ORDINARY dedup: a re-run of this deletion while
-   * an earlier graph purge is still pending or running gets that job back
-   * rather than a second one. The type string comes from the constants-only
-   * `graph/job-types.ts`, so this module never imports `GraphModule`.
-   */
-  private async enqueueGraphPurge(userId: string): Promise<void> {
-    const job = await this.jobs.enqueue({
-      type: KG_PURGE_JOB_TYPE,
-      reason: 'rerun',
-      subjectType: KG_SUBJECT_USER,
-      subjectId: userId,
-      payload: { userId, scope: 'all' },
-    });
-
-    await this.audit(userId, 'user_data:graph_purge_queued', { jobId: job.id });
-
-    this.logger.warn(`User ${userId}: knowledge graph queued for deletion (kg.purge job ${job.id})`);
-  }
-
-  /**
-   * Drop every `search_chunks` / `search_index_state` row for one category of
-   * this user's documents.
-   *
-   * ⚠ THIS IS NOT REDUNDANT WITH THE FAN-OUT ABOVE, and the reason is the same
-   * one that makes every other step of this handler belt-and-braces about the
-   * `Restrict` keys. `deleteNotes`/`deleteTranscripts` soft-delete each document
-   * and QUEUE a per-item `note.purge`/`transcript.purge`, and each of those
-   * handlers calls `SearchIndexService.forget` itself — so on the happy path
-   * this call finds nothing left to do. But those jobs run LATER, and a job can
-   * exhaust its attempts. A user who pressed a button that said their
-   * transcripts would be destroyed must not be left with the TEXT of those
-   * transcripts sitting in `search_chunks` because a purge job three hops away
-   * gave up quietly. Every document of this kind owned by this user is on its
-   * way out, so deleting all of their index rows now is the same set reached
-   * sooner, not a guess.
-   *
-   * ⚠ IT DELETES ROWS RATHER THAN FANNING OUT, which is the one place this
-   * handler's usual "never reimplement byte deletion here" rule does not apply:
-   * there are no bytes. A chunk is a row of text and a vector in this database,
-   * with no object storage behind it and no provider copy to revoke — the whole
-   * reason `transcript.purge` may not be shortcut is that it deletes
-   * multi-gigabyte objects whose only remaining reference is the row this
-   * handler would otherwise destroy first. Nothing of that shape exists here.
-   *
-   * ⚠ NOT CALLED FOR THE `files` SCOPE. An uploaded file is not a searchable
-   * document in this epic — only transcripts and notes are chunked — so there
-   * is nothing of its owner's in these tables to remove, and a sweep by owner
-   * alone would delete the index rows of documents the user did NOT ask to
-   * delete.
-   *
-   * Never throws into the purge: the documents are already soft-deleted and
-   * queued, and failing a destructive job part-way because a cleanup read lost
-   * a race would leave the user with a `failed` row and no idea which half ran.
-   * A leftover index row is a storage cost the per-item purge still covers.
-   */
-  private async forgetFromSearchIndex(
-    userId: string,
-    documentType: typeof SEARCH_DOC_NOTE | typeof SEARCH_DOC_TRANSCRIPT,
-  ): Promise<void> {
-    try {
-      const forgotten = await this.searchIndex.forgetOwnerDocuments(userId, documentType);
-
-      if (forgotten > 0) {
-        this.logger.log(
-          `User ${userId}: ${forgotten} ${documentType}(s) removed from the semantic index`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `User ${userId}: could not clear the semantic index for ${documentType}s: ` +
-          `${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-
-  // ===========================================================================
-  // Step 1 — credentials (`everything` only)
-  // ===========================================================================
-
-  /**
-   * Erase every AI provider key and revoke every personal access token.
-   *
-   * Both go through the service that owns the rows rather than through
-   * `prisma` directly: `UserAiCredentialsService.removeAll` because a key is
-   * encrypted and audited by that module, and `PatService.revokeAllForUser`
-   * because revoking (not deleting) is that module's deliberate choice and this
-   * file should not be the second place that decision is made.
-   */
-  private async destroyCredentials(userId: string): Promise<void> {
-    const aiKeys = await this.aiCredentials.removeAll(userId);
-    const tokens = await this.pat.revokeAllForUser(userId);
-
-    await this.audit(userId, 'user_data:credentials_destroyed', {
-      aiKeys,
-      accessTokens: tokens,
-    });
-
-    this.logger.warn(
-      `User ${userId}: removed ${aiKeys} AI key(s) and revoked ${tokens} access token(s)`,
-    );
-  }
-
-  // ===========================================================================
-  // Step 2 — notes
-  // ===========================================================================
-
-  /**
-   * Soft-delete every live note this user owns and hand each to `note.purge`.
-   *
-   * ⚠ `status: 'generating'` IS NOT EXCLUDED — see the header's force section.
-   * A generation still running against a note that has just become `deleting`
-   * finishes or fails against a row `note.purge` then removes; `note.generate`
-   * is `maxAttempts: 1`, so there is no retry to outlive the purge, and
-   * `notes.housekeeping` re-queues any note left in `deleting` without a live
-   * purge job. The alternative — skipping generating notes — leaves the user
-   * with notes they asked to be rid of and no indication why.
-   */
-  private async deleteNotes(userId: string): Promise<void> {
-    let deleted = 0;
-
-    for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.note.findMany({
-        where: { ownerId: userId, deletedAt: null },
-        select: { id: true },
-        take: USER_DATA_PURGE_BATCH,
-      });
-
-      if (rows.length === 0) {
-        if (deleted > 0) {
-          await this.audit(userId, 'user_data:notes_deleted', { count: deleted });
-        }
-
-        this.logger.log(`User ${userId}: ${deleted} note(s) soft-deleted and queued for purge`);
-
-        return;
-      }
-
-      const ids = rows.map((row) => row.id);
-
-      // ⚠ BEFORE THE SOFT DELETE, NOT AFTER. `notes.source_note_id` is
-      // `Restrict`, so `note.purge` cannot remove the row while a derived note
-      // points at it — and the derived note may well be one of the rows in a
-      // LATER batch, whose own purge is equally blocked. Clearing first turns
-      // a mutual deadlock between two purge jobs into two ordinary deletes.
-      //
-      // No `ownerId` filter: a note derived from one of these may belong to
-      // somebody the transcript was shared with. It keeps its text and loses
-      // the link — see the header.
-      await this.prisma.note.updateMany({
-        where: { sourceNoteId: { in: ids } },
-        data: { sourceNoteId: null },
-      });
-
-      await this.prisma.note.updateMany({
-        where: { id: { in: ids } },
-        data: { status: 'deleting', deletedAt: new Date() },
-      });
-
-      await this.enqueuePurges(ids, NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE, (id) =>
-        this.notes.enqueuePurge(id),
-      );
-
-      deleted += ids.length;
-    }
-
-    throw new Error(
-      `Bulk note deletion for user ${userId} did not converge after ` +
-        `${USER_DATA_PURGE_MAX_BATCHES} batches`,
-    );
-  }
-
-  // ===========================================================================
-  // Step 3 — transcripts
-  // ===========================================================================
-
-  /**
-   * Soft-delete every live transcript this user owns and hand each to
-   * `transcript.purge`.
-   *
-   * ⚠ THE DEPENDENT-NOTE CHECK `TranscriptsService.remove` RUNS IS DELIBERATELY
-   * ABSENT, replaced by clearing the pointer it would have refused over.
-   */
-  private async deleteTranscripts(userId: string): Promise<void> {
-    let deleted = 0;
-
-    for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.transcript.findMany({
-        where: { ownerId: userId, deletedAt: null },
-        select: { id: true },
-        take: USER_DATA_PURGE_BATCH,
-      });
-
-      if (rows.length === 0) {
-        if (deleted > 0) {
-          await this.audit(userId, 'user_data:transcripts_deleted', { count: deleted });
-        }
-
-        this.logger.log(
-          `User ${userId}: ${deleted} transcript(s) soft-deleted and queued for purge`,
-        );
-
-        return;
-      }
-
-      const ids = rows.map((row) => row.id);
-
-      // ⚠ EVERY NOTE, NOT JUST SURVIVING ONES AND NOT JUST THIS USER'S.
-      //
-      // Another user's note: it was generated from a transcript they were
-      // shared, and it keeps its content and loses its provenance link. That
-      // is the deliberate trade described in the header — the owner's right to
-      // delete their own recording outranks a stranger's pointer to it, and
-      // deleting the stranger's note instead would be far worse.
-      //
-      // This user's own already-soft-deleted note: it is queued for
-      // `note.purge` but its row still exists and still holds the `Restrict`
-      // reference, so leaving it would make the two purge jobs race — whichever
-      // runs second wins, and the loser is a foreign-key violation in a job
-      // list. Clearing removes the race rather than ordering it.
-      await this.prisma.note.updateMany({
-        where: { sourceTranscriptId: { in: ids } },
-        data: { sourceTranscriptId: null },
-      });
-
-      await this.prisma.transcript.updateMany({
-        where: { id: { in: ids } },
-        data: { status: 'deleting', deletedAt: new Date() },
-      });
-
-      await this.enqueuePurges(
-        ids,
-        TRANSCRIPT_PURGE_JOB_TYPE,
-        TRANSCRIPT_SUBJECT_TYPE,
-        (id) => this.pipeline.enqueuePurge(id),
-      );
-
-      deleted += ids.length;
-    }
-
-    throw new Error(
-      `Bulk transcript deletion for user ${userId} did not converge after ` +
-        `${USER_DATA_PURGE_MAX_BATCHES} batches`,
-    );
-  }
-
-  // ===========================================================================
-  // Step 4 — note templates
-  // ===========================================================================
-
-  /**
-   * Delete the user's OWN custom templates, through the path that already knows
-   * when a template must be archived instead.
-   *
-   * ⚠ REACHED BY `content` AND `everything` ONLY. The narrow `notes` scope
-   * deliberately does not come here — a template is reusable configuration with
-   * its own settings destination, not note content, and "Delete notes" silently
-   * emptying a page the user did not open is the surprise a Danger Zone can
-   * least afford. `scopeIncludes` carries the full argument.
-   *
-   * ⚠ BUILT-INS ARE UNREACHABLE HERE BY CONSTRUCTION: the query filters on
-   * `ownerId: userId`, and a built-in has `ownerId IS NULL`. It is not that
-   * `NoteTemplatesService.remove` would refuse them (it would, with a 403) —
-   * they are never selected, so no request to delete one is ever made.
-   *
-   * ⚠ SOME TEMPLATES WILL BE ARCHIVED RATHER THAN DELETED, AND THAT IS
-   * CORRECT-BUT-TEMPORARY. `remove` archives while any note still names the
-   * template, and step 2's notes are at that moment soft-deleted rather than
-   * gone — their purge jobs are still queued. So a run that deletes notes and
-   * templates together leaves the templates archived (invisible in the normal
-   * catalogue, still the user's rows). A later run — this handler is
-   * re-entrant, and `POST /api/user-data/deletions` is the button — finds the
-   * notes actually gone and deletes them. Deleting them regardless was
-   * rejected: it would put a second, contradictory answer to "may this template
-   * go?" in this file, and the one in `note-templates.service.ts` exists so a
-   * note never loses the record of what produced it.
-   */
-  private async deleteNoteTemplates(userId: string): Promise<void> {
-    let removed = 0;
-    let archived = 0;
-    const skipped = new Set<string>();
-
-    for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.noteTemplate.findMany({
-        where: {
-          ownerId: userId,
-          ...(skipped.size > 0 ? { id: { notIn: [...skipped] } } : {}),
-        },
-        select: { id: true },
-        take: USER_DATA_PURGE_BATCH,
-      });
-
-      if (rows.length === 0) {
-        if (removed > 0 || archived > 0) {
-          await this.audit(userId, 'user_data:note_templates_deleted', {
-            deleted: removed,
-            archived,
-          });
-        }
-
-        this.logger.log(
-          `User ${userId}: ${removed} note template(s) deleted, ${archived} archived`,
-        );
-
-        return;
-      }
-
-      for (const row of rows) {
-        try {
-          const outcome = await this.templates.remove(userId, row.id);
-
-          if (outcome.outcome === 'archived') {
-            // ⚠ RECORDED AS SKIPPED so the next page moves past it. An
-            // archived row still matches `ownerId: userId`, so without this
-            // the query returns the same page forever and the batch bound
-            // below would be the only thing stopping the loop.
-            skipped.add(row.id);
-            archived += 1;
-          } else {
-            removed += 1;
-          }
-        } catch (error) {
-          // One damaged template must not stop the rest — the same posture
-          // `notes.housekeeping` takes towards a single bad row. It is
-          // recorded and skipped, and the user can run the deletion again.
-          skipped.add(row.id);
-
-          this.logger.warn(
-            `Could not remove note template ${row.id} for user ${userId}: ${describe(error)}`,
-          );
-        }
-      }
-    }
-
-    throw new Error(
-      `Bulk note template deletion for user ${userId} did not converge after ` +
-        `${USER_DATA_PURGE_MAX_BATCHES} batches`,
-    );
-  }
-
-  // ===========================================================================
-  // Step 5 — unmanaged storage objects
-  // ===========================================================================
-
-  /**
-   * Delete the caller's plain uploads: bytes and row, through `ObjectsService`.
-   *
-   * ⚠ `managedBy: null` IS PART OF THE QUERY, not a check after the fact. A
-   * transcript's source audio, a note's rendered export and every other
-   * module-owned object are `managed_by`-stamped precisely so they can only be
-   * removed by the module that understands them (issue #21), and their bytes
-   * are already on their way out through the purge jobs steps 2 and 3 queued.
-   * Selecting them here would either 409 out of `ObjectsService.delete` or, if
-   * that check were ever relaxed, delete a live transcript's audio.
-   *
-   * `ObjectsService.delete` is used rather than a narrower in-process method
-   * precisely BECAUSE of that 409: it can never fire on this query's rows, so
-   * reusing the ordinary path costs nothing and keeps one implementation of
-   * "remove an object's bytes, its row, its chunks and write the audit event".
-   */
-  private async deleteUnmanagedObjects(userId: string): Promise<void> {
-    let deleted = 0;
-    const failed = new Set<string>();
-
-    for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.storageObject.findMany({
-        where: {
-          uploadedById: userId,
-          managedBy: null,
-          ...(failed.size > 0 ? { id: { notIn: [...failed] } } : {}),
-        },
-        select: { id: true },
-        take: USER_DATA_PURGE_BATCH,
-      });
-
-      if (rows.length === 0) {
-        if (deleted > 0 || failed.size > 0) {
-          await this.audit(userId, 'user_data:files_deleted', {
-            count: deleted,
-            failed: failed.size,
-          });
-        }
-
-        this.logger.log(
-          `User ${userId}: ${deleted} unmanaged file(s) deleted, ${failed.size} could not be`,
-        );
-
-        return;
-      }
-
-      for (const row of rows) {
-        try {
-          await this.objects.delete(row.id, userId);
-          deleted += 1;
-        } catch (error) {
-          // ⚠ RECORDED AND EXCLUDED FROM THE NEXT PAGE. An object whose bytes
-          // the provider refuses to delete keeps its row, so without this the
-          // same page is selected forever. Tolerating the failure rather than
-          // throwing is the same choice every other step makes: one
-          // unreachable file must not strand the rest of a deletion.
-          failed.add(row.id);
-
-          this.logger.warn(
-            `Could not delete storage object ${row.id} for user ${userId}: ${describe(error)}`,
-          );
-        }
-      }
-    }
-
-    throw new Error(
-      `Bulk file deletion for user ${userId} did not converge after ` +
-        `${USER_DATA_PURGE_MAX_BATCHES} batches`,
-    );
-  }
-
-  // ===========================================================================
-  // Step 6 — onboarding state (`everything` only)
-  // ===========================================================================
-
-  /**
-   * Forget that this user has ever been onboarded.
-   *
-   * ⚠ IT CLEARS EXACTLY ONE NAMESPACE, AND THAT IS THE WHOLE CONTRACT.
-   * `theme`, `profile`, `navigation`, `notifications` and `dataTables` are
-   * untouched — the account still works, the user is still signed in looking
-   * at it, and "delete my data" is not "reset my preferences". A widening of
-   * this call to the whole settings row is pinned against in
-   * `user-data-purge.handler.spec.ts` for exactly that reason: it would be a
-   * one-word change here and an invisible, unasked-for change to the user's
-   * screen.
-   *
-   * ⚠ IT REUSES `UserSettingsService.patchSettings` AND HAND-WRITES NO JSONB
-   * EDIT. `{ onboarding: null }` is already a supported, tested operation
-   * (issue #272): `onboardingPatchSchema` is `.nullable()`, `mergeOnboarding`
-   * returns `undefined` for `null`, and `patchSettings` then omits the key
-   * entirely rather than storing `{}`. That collapse-to-ABSENT is precisely
-   * the state a wipe wants, because absent is how "never onboarded" is spelled
-   * throughout epic #271 — a stored `{}` would be a PRESENT `onboarding` key
-   * and would read as "onboarded, with no opinions". A second, independently
-   * written namespace removal in this file is the duplication `scopeIncludes`'s
-   * own header argues against, and this one would be worse than most: it would
-   * have to reproduce the collapse rule from memory, and getting it wrong
-   * fails silently and permanently.
-   *
-   * ⚠ NO `If-Match`. `patchSettings`' third argument is an optimistic
-   * concurrency expectation, and this call has none to state: it is the server
-   * acting on a job the user queued minutes ago, not a browser tab racing
-   * another tab. Passing a version read moments earlier would turn a user who
-   * happened to toggle their theme mid-deletion into a `failed` purge.
-   *
-   * ⚠ IT THROWS RATHER THAN SWALLOWING, unlike `forgetFromSearchIndex` above,
-   * and the asymmetry is about POSITION rather than importance. That one runs
-   * BETWEEN destructive steps, where failing would leave the user with a
-   * `failed` row and no idea which half ran. This one runs last, after every
-   * destructive step has completed and written its own audit row, so a failure
-   * here is unambiguous: everything was deleted and the reset did not happen.
-   * Reporting that honestly costs a `failed` job the user can re-request — the
-   * handler is re-entrant, so the second run deletes nothing and retries just
-   * this. Swallowing would cost the opposite: onboarding state surviving a full
-   * wipe with nothing anywhere saying so, which is the exact bug this step was
-   * added to fix.
-   */
-  private async resetOnboarding(userId: string): Promise<void> {
-    await this.userSettings.patchSettings(userId, { onboarding: null });
-
-    await this.audit(userId, 'user_data:onboarding_reset', {});
-
-    this.logger.log(
-      `User ${userId}: first-run onboarding state cleared — the checklist and ` +
-        `welcome surfaces will be offered again`,
-    );
-  }
-
-  // ===========================================================================
-  // Helpers
-  // ===========================================================================
-
-  /**
-   * Queue a per-item purge for each id a live purge job does not already cover.
-   *
-   * ⚠ ONE `job.findMany` FOR THE WHOLE BATCH, never one lookup per id — the
-   * shape `notes.housekeeping`'s `requeueStalledPurges` established, and for
-   * the same reason: a per-row query turns a sweep into an N+1 against the very
-   * table the queue is contending on.
-   *
-   * The check is an optimisation rather than a correctness requirement —
-   * `JobsService.enqueue` deduplicates on `(type, subjectType, subjectId)`
-   * while a job is `pending`/`running` anyway — but it saves several hundred
-   * insert-then-conflict-then-re-read round trips per batch on a re-run.
-   */
-  private async enqueuePurges(
-    ids: string[],
-    jobType: string,
-    subjectType: string,
-    enqueue: (id: string) => Promise<void>,
-  ): Promise<void> {
-    const live = await this.prisma.job.findMany({
-      where: {
-        type: jobType,
-        subjectType,
-        subjectId: { in: ids },
-        status: { in: ['pending', 'running'] },
-      },
-      select: { subjectId: true },
-    });
-
-    const covered = new Set(live.map((entry) => entry.subjectId));
-
-    for (const id of ids) {
-      if (covered.has(id)) continue;
-
-      await enqueue(id);
-    }
-  }
-
-  /**
-   * One audit row per destructive step.
-   *
-   * `targetType: 'user'` and `targetId` the user's own id, matching both
-   * `UserDataService.audit` and the job's own `subject_type`/`subject_id`: the
-   * whole trail for one deletion is greppable by the account it happened to,
-   * which is the only key that spans six tables.
-   */
-  private async audit(
-    userId: string,
-    action: string,
-    meta: Record<string, unknown>,
-  ): Promise<void> {
-    await this.prisma.auditEvent.create({
-      data: {
-        actorUserId: userId,
-        action,
-        targetType: 'user',
-        targetId: userId,
-        meta: meta as Prisma.InputJsonValue,
-      },
-    });
-  }
-}
-
-/** Anything thrown, as a message. JavaScript lets you throw a string. */
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Re-exported so a reader of this file does not have to chase the union. */

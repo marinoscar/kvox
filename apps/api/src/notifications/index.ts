@@ -35,7 +35,8 @@
 // unscoped consumer of it is an IDOR. The module does not export any of them
 // either; this barrel and the module agree on purpose.
 //
-// #128 filled `EVENT_EMAIL_TEMPLATES` and `EVENT_BROWSER_TEMPLATES` and wired
+// #128 filled the email and browser template maps (since #460 part of each
+// notification's registration, `registerNotification`) and wired
 // the three real triggers — user creation in `AuthService.handleGoogleLogin`,
 // `AllowlistService.addEmail`, and `UsersService.updateUserRoles` — which
 // closes epic #109. Adding the next notification is three steps and is written
@@ -50,6 +51,15 @@ export {
   supportsChannel,
   isMandatory,
 } from './notification-events';
+
+// The registration API (issue #460). A module declares its notification (event,
+// email template, browser template) and `kvox.manifest.ts` registers it.
+export {
+  NOTIFICATION_EVENT_KEY_PATTERN,
+  registerNotification,
+  registerNotifications,
+} from './notification-registry';
+export type { NotificationRegistration } from './notification-registry';
 
 export { NotificationsController } from './notifications.controller';
 export { NotificationsModule } from './notifications.module';
@@ -120,7 +130,7 @@ export type {
 
 // The browser channel's template contract (#127). Exported as TYPES ONLY —
 // #128 needs these to write the renderers it registers in
-// `EVENT_BROWSER_TEMPLATES`, and nothing outside the channel needs the class
+// `registerNotification`, and nothing outside the channel needs the class
 // or the map itself.
 export type {
   BrowserNotificationContent,

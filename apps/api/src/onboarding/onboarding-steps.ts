@@ -1,4 +1,9 @@
 import { PERMISSIONS } from '../common/constants/roles.constants';
+import {
+  liveArray,
+  onboardingStepsFor,
+  type OnboardingFactValues,
+} from './onboarding.registries';
 
 // =============================================================================
 // The onboarding step registry (issue #274, epic #271)
@@ -124,20 +129,21 @@ export interface OnboardingBaseContext {
   readonly userId: string;
 
   /**
-   * Whether this deployment can transcribe at all —
-   * `TranscriptionConfigService.getConfig().available`, the four-fact
-   * conjunction that service's header describes (enabled, a provider chosen,
-   * that provider registered in this build, a key stored for it).
+   * The facts the audience's registered steps declared (issue #460), resolved
+   * ONCE per request, in parallel with the base reads, before any step runs.
    *
-   * Read from that service rather than re-derived: a second implementation of
-   * "is transcription usable" is how a checklist ends up green on a deployment
-   * whose upload button is disabled.
+   * Domain modules own them (`transcription.available`, `transcripts.ownCount`,
+   * `transcripts.ownReadyCount`, `notes.ownCount`) and augment
+   * {@link OnboardingFactValues} to type them; this module names none of them.
+   * A step reads `ctx.facts[id]` for the ids in its own `facts` and nothing
+   * else. See `onboarding.registries.ts`.
    */
-  readonly transcription: { readonly available: boolean };
+  readonly facts: Readonly<OnboardingFactValues>;
 }
 
 /**
- * Everything the USER checklist's four steps read, and nothing else.
+ * Everything the USER checklist's base steps read, and nothing else (domain
+ * steps read their own facts through {@link OnboardingBaseContext.facts}).
  *
  * ⚠ No email settings, no VAPID configuration, no backup schedule, no account
  * counts. Those are admin-only facts and they are not merely filtered out of a
@@ -165,19 +171,6 @@ export interface OnboardingUserContext extends OnboardingBaseContext {
   };
 
   /**
-   * How many transcripts this caller owns that are not soft-deleted.
-   *
-   * ⚠ EXCLUDES SOFT-DELETED ROWS (`deletedAt: null`, the same filter
-   * `transcripts.service.ts`'s own list and summary queries use). A count that
-   * included them would tell a user who deleted their only recording that they
-   * are still activated, and the checklist would never come back.
-   */
-  readonly ownTranscriptCount: number;
-
-  /** How many notes this caller owns that are not soft-deleted (`deletedAt: null`). */
-  readonly ownNoteCount: number;
-
-  /**
    * `profile.displayName` from this caller's own user settings — `null` when
    * they have never set one. Whitespace is not a name; `user.profile` trims.
    */
@@ -185,7 +178,8 @@ export interface OnboardingUserContext extends OnboardingBaseContext {
 }
 
 /**
- * Everything the ADMIN checklist's seven steps read, and nothing else.
+ * Everything the ADMIN checklist's base steps read, and nothing else (domain
+ * steps read their own facts through {@link OnboardingBaseContext.facts}).
  *
  * Built ONLY by `buildAdminContext`, which is reachable only from
  * `GET /api/admin/onboarding` behind `system_settings:read` (#275).
@@ -208,12 +202,6 @@ export interface OnboardingAdminContext extends OnboardingBaseContext {
     readonly provider: string | null;
     readonly allowedModelCount: number;
   };
-
-  /**
-   * Transcripts this caller owns that reached `ready` — the evidence behind
-   * `admin.smoke_test`. Soft-deleted rows excluded, as above.
-   */
-  readonly ownReadyTranscriptCount: number;
 
   /** `EmailSettingsService.describeForAdmin()`: a provider chosen AND switched on. */
   readonly email: { readonly configured: boolean };
@@ -257,6 +245,21 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
 
   readonly audience: OnboardingAudience;
   readonly tier: OnboardingTier;
+
+  /**
+   * Position within this step's audience: 10, 20, 30, ... The checklist renders
+   * in `(order, key)` order (issue #460), so the sequence is now data rather
+   * than the position in an array that no longer exists in one place. The gaps
+   * leave room to insert a step without renumbering its neighbours.
+   */
+  readonly order: number;
+
+  /**
+   * Ids of the facts this step reads from `ctx.facts`. The service resolves the
+   * union of the audience's steps' facts once per request; a step that reads
+   * only the base context declares `[]`.
+   */
+  readonly facts: readonly string[];
 
   /** Short imperative title, e.g. "Connect a transcription provider". */
   readonly title: string;
@@ -317,7 +320,7 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
 }
 
 // =============================================================================
-// Admin steps — setting the DEPLOYMENT up
+// Admin steps — setting the DEPLOYMENT up (the base ones)
 // =============================================================================
 //
 // ⚠ THE LIST STILL CULMINATES IN A REAL TRANSCRIPTION, NOT A GREEN TICK ON A
@@ -351,43 +354,33 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
 // administrator ever transcribed anything personally.
 //
 // -----------------------------------------------------------------------------
-// THIS ARRAY'S ORDER IS THE RENDERED ORDER, AND ONE PAIR OF IT IS LOAD-BEARING
+// THE `order` FIELD IS THE RENDERED ORDER, AND ONE PAIR OF IT IS LOAD-BEARING
 // -----------------------------------------------------------------------------
 //
-// `OnboardingService.render` filters this array and maps it and NEVER SORTS IT,
-// so the sequence written here is the sequence an administrator reads top to
-// bottom. Most of that sequence is editorial and a future edit may reshuffle it
-// freely. ONE PAIR MAY NOT: `admin.email` comes before `admin.access` because
-// inviting somebody before outbound email works sends nothing at all, to
-// nobody, with no failure surfaced anywhere. That argument is written out on
-// `admin.email` itself, and `onboarding.service.spec.ts`'s registry block pins
-// the pair — a dependency nothing pins is one a later edit silently reverses.
+// Since #460 the steps are registered (`onboarding.registries.ts`), the domain
+// ones from their own modules, and `OnboardingService.render` walks them in
+// `(order, key)` order. Most of that sequence is editorial and a future edit may
+// renumber it freely. ONE PAIR MAY NOT: `admin.email` (40) comes before
+// `admin.access` (50) because inviting somebody before outbound email works
+// sends nothing at all, to nobody, with no failure surfaced anywhere. That
+// argument is written out on `admin.email` itself, and
+// `onboarding.service.spec.ts`'s registry block pins the pair — a dependency
+// nothing pins is one a later edit silently reverses.
 // =============================================================================
 
-export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminContext>[] =
+/**
+ * The administrator steps this module owns outright: the ones whose facts are
+ * all base context. `admin.transcription` (order 10) and `admin.smoke_test`
+ * (order 30) are declared in `transcription/transcription.onboarding.ts`, which
+ * is why these `order` values start at 20 and skip 30.
+ */
+export const BASE_ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminContext>[] =
   [
-    {
-      key: 'admin.transcription',
-      audience: 'admin',
-      tier: 'required',
-      title: 'Connect a transcription provider',
-      description:
-        'Choose a speech-to-text provider and store its API key. Until this is done, nobody on this deployment can upload a recording.',
-      actionLabel: 'Open transcription settings',
-      href: '/admin/settings/transcription',
-      // `transcription-settings.controller.ts` gates its reads on exactly this.
-      permission: PERMISSIONS.SYSTEM_SETTINGS_READ,
-      skippable: false,
-      applies: () => true,
-      evaluate: (ctx) => ({
-        // The whole four-fact conjunction, borrowed rather than re-derived —
-        // see `OnboardingBaseContext.transcription`.
-        status: ctx.transcription.available ? 'satisfied' : 'pending',
-      }),
-    },
     {
       key: 'admin.ai',
       audience: 'admin',
+      order: 20,
+      facts: [],
       tier: 'required',
       title: 'Enable AI note generation',
       description:
@@ -409,59 +402,6 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
       }),
     },
     {
-      key: 'admin.smoke_test',
-      audience: 'admin',
-      // ⚠ RECOMMENDED, NOT REQUIRED, AND THAT IS WHAT MAKES IT SKIPPABLE (#299).
-      // This is the one admin step that is not a form, and it is the one an
-      // administrator may legitimately decline: the recording has to be theirs,
-      // it costs a real provider call against the deployment's own account, and
-      // a deployment can be genuinely, correctly configured by somebody who
-      // never intends to upload anything themselves. Leaving it `required` left
-      // the checklist unable to settle for that administrator, with no control
-      // to say so — and it could not simply gain one, because a `required` step
-      // is never skippable (see `OnboardingStep.skippable`). Demoting the tier
-      // is the honest fix rather than the convenient one: a step the
-      // administrator may decline is, by definition, not required.
-      tier: 'recommended',
-      title: 'Transcribe a test recording',
-      description:
-        'Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.',
-      actionLabel: 'Upload a recording',
-      href: '/transcripts/new',
-      // The destination is the create surface, not a settings page:
-      // `transcripts.controller.ts` enforces `transcripts:write` on `POST
-      // /api/transcripts`. Seeded to all three roles, so this never hides the
-      // step from an administrator.
-      permission: PERMISSIONS.TRANSCRIPTS_WRITE,
-      skippable: true,
-      applies: () => true,
-      evaluate: (ctx) => {
-        if (ctx.ownReadyTranscriptCount > 0) {
-          return { status: 'satisfied' };
-        }
-
-        // ⚠ BLOCKED, NOT PENDING, while the provider is unconfigured. A
-        // SKIPPABLE step especially must distinguish "you cannot do this yet"
-        // from "you have declined this": the skip control sits right there, and
-        // an administrator who reads an unexplained to-do as one they do not
-        // need is making that decision on bad information — they would be
-        // switching off the one check that would have caught a wrong key,
-        // believing they had merely opted out of a chore. So the step says what
-        // is in the way, and the fix is the step directly above this one, which
-        // is worth saying out loud rather than leaving them to notice the
-        // ordering.
-        if (!ctx.transcription.available) {
-          return {
-            status: 'blocked',
-            blockedReason:
-              'Connect a transcription provider first — there is nothing to send a recording to yet.',
-          };
-        }
-
-        return { status: 'pending' };
-      },
-    },
-    {
       // ⚠ BEFORE `admin.access`, AND THE ORDER IS THE WHOLE POINT (#300).
       // Adding an address to the allowlist — which is what `admin.access` below
       // asks an administrator to do — is what fires the `allowlist.invitation`
@@ -481,6 +421,8 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
       // that works: configure email, then invite.
       key: 'admin.email',
       audience: 'admin',
+      order: 40,
+      facts: [],
       tier: 'recommended',
       title: 'Configure outbound email',
       description:
@@ -508,6 +450,8 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
       // to send mail.
       key: 'admin.access',
       audience: 'admin',
+      order: 50,
+      facts: [],
       tier: 'recommended',
       title: 'Invite somebody',
       description:
@@ -534,6 +478,8 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
     {
       key: 'admin.push',
       audience: 'admin',
+      order: 60,
+      facts: [],
       tier: 'recommended',
       title: 'Turn on browser notifications',
       description:
@@ -555,6 +501,8 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
     {
       key: 'admin.backup',
       audience: 'admin',
+      order: 70,
+      facts: [],
       tier: 'recommended',
       title: 'Schedule database backups',
       description:
@@ -571,15 +519,30 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
     },
   ];
 
+/**
+ * The administrator checklist as registered, in rendered order. A live view of
+ * the step registry (see {@link liveArray}), so it includes the steps the
+ * domain modules contribute. The service reads `onboardingStepsFor('admin')`.
+ */
+export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminContext>[] =
+  liveArray(() => onboardingStepsFor<OnboardingAdminContext>('admin'));
+
 // =============================================================================
-// User steps — activating one ACCOUNT
+// User steps — activating one ACCOUNT (the base ones)
 // =============================================================================
 
-export const USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserContext>[] =
+/**
+ * The account steps this module owns outright. `user.first_transcript`
+ * (order 20) and `user.first_note` (order 30) are declared in
+ * `transcripts/transcripts.onboarding.ts` and `notes/notes.onboarding.ts`.
+ */
+export const BASE_USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserContext>[] =
   [
     {
       key: 'user.ai_key',
       audience: 'user',
+      order: 10,
+      facts: [],
       tier: 'required',
       title: 'Add your AI provider key',
       description:
@@ -607,82 +570,10 @@ export const USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserContex
       }),
     },
     {
-      key: 'user.first_transcript',
-      audience: 'user',
-      tier: 'required',
-      title: 'Transcribe your first recording',
-      description:
-        'Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.',
-      actionLabel: 'New transcript',
-      href: '/transcripts/new',
-      permission: PERMISSIONS.TRANSCRIPTS_WRITE,
-      skippable: false,
-      applies: () => true,
-      evaluate: (ctx) => {
-        if (ctx.ownTranscriptCount > 0) {
-          return { status: 'satisfied' };
-        }
-
-        if (!ctx.transcription.available) {
-          return {
-            status: 'blocked',
-            // ⚠ NAMES THE ADMINISTRATOR, because that is the entire difference
-            // between this and `pending`. A user staring at a disabled upload
-            // button needs to know this is not their to-do and not their
-            // mistake — it is somebody else's, and no amount of trying again
-            // will change it.
-            blockedReason:
-              'Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.',
-          };
-        }
-
-        return { status: 'pending' };
-      },
-    },
-    {
-      key: 'user.first_note',
-      audience: 'user',
-      tier: 'recommended',
-      title: 'Generate your first note',
-      description:
-        'Turn a transcript, a document or another note into a structured, editable note using a template.',
-      actionLabel: 'New note',
-      href: '/notes/new',
-      permission: PERMISSIONS.NOTES_WRITE,
-      skippable: true,
-      applies: () => true,
-      evaluate: (ctx) => {
-        if (ctx.ownNoteCount > 0) {
-          return { status: 'satisfied' };
-        }
-
-        // ⚠ ORDER MATTERS, AND IT IS NOT ARBITRARY. The deployment's own
-        // readiness is checked FIRST: when no vendor is configured `user.ai_key`
-        // is absent from this list entirely, so "add your key first" would point
-        // at a step the user cannot see. Whoever has to act is named in each
-        // case, which is the one thing `blocked` is for.
-        if (!ctx.ai.available) {
-          return {
-            status: 'blocked',
-            blockedReason:
-              'Your administrator has not finished setting up AI generation for this deployment yet.',
-          };
-        }
-
-        if (!ctx.ai.keyConfigured) {
-          return {
-            status: 'blocked',
-            blockedReason:
-              'Add your own AI provider key first — notes are generated with it.',
-          };
-        }
-
-        return { status: 'pending' };
-      },
-    },
-    {
       key: 'user.profile',
       audience: 'user',
+      order: 40,
+      facts: [],
       tier: 'optional',
       title: 'Set your display name',
       description:
@@ -705,3 +596,7 @@ export const USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserContex
       }),
     },
   ];
+
+/** The account checklist as registered, in rendered order (a live registry view). */
+export const USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserContext>[] =
+  liveArray(() => onboardingStepsFor<OnboardingUserContext>('user'));

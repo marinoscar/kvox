@@ -145,9 +145,12 @@ The full reasoning — why the database decides dedup instead of a
 No migration, no enum, no queue wiring. `Job.type` is a plain string column
 precisely so a new handler costs zero schema change, and the admin dashboard
 lists whatever `JobHandlerRegistry.types()` reports. Add a friendly label for
-your type in `../job-type-labels.ts` if you want one — an unmapped type
-renders as its raw type string rather than blank, so the label is optional
-polish and never a requirement.
+your type if you want one: put it in a label record beside your module (for
+example `notes/job-type-labels.ts`, exporting `<MODULE>_JOB_TYPE_LABELS`) and
+register it from `src/kvox.manifest.ts` with `registerJobTypeLabels(...)`. Base
+types stay in `../job-type-labels.ts`; the `jobs/` folder never imports a
+domain label file. An unmapped type renders as its raw type string rather than
+blank, so the label is optional polish and never a requirement.
 
 ## Node Eligibility (Optional)
 
@@ -448,7 +451,7 @@ observable, retried on the queue's budget, and executed on a worker slot.
 | `../job-handler.interface.ts` | The contract, and the node-eligibility rules |
 | `../job-handler.registry.ts` | The registry, and why registration is explicit |
 | `../job-keys.ts` | `buildDedupKey()` — the single definition of `Job.dedupKey` |
-| `../job-type-labels.ts` | Display labels for the admin UI |
+| `../job-type-labels.ts`, `../job-type-label.ts` | Base display labels for the admin UI, and the registry (`registerJobTypeLabel`) domain modules register theirs into from `src/kvox.manifest.ts` |
 | `../contracts/` | Node result schemas, published as JSON Schema by `GET /api/nodes/job-types` |
 | `../../storage/storage-job-input.ts` | `resolveStorageObjectInput()` — a job's input, or a named failure |
 | `../../nodes/node-data-plane.service.ts` | The presigned download/upload routes a node uses |

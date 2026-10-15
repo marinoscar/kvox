@@ -12,7 +12,7 @@ Recipe with full code: `apps/api/src/jobs/handlers/README.md` (`grep -n '^##' <f
 1. Create the handler beside the feature: a class implementing `JobHandler` (`apps/api/src/jobs/job-handler.interface.ts`) with a dotted, lowercase `type` and `process(job)`. Throw to fail; a normal return means the work committed. Be idempotent: the queue is at-least-once.
 2. Self-register in `onModuleInit`: `this.registry.register(this)`. Add the class to the feature module's `providers` and import `JobsModule`.
 3. Enqueue through `JobsService` (`apps/api/src/jobs/jobs.service.ts`) with identifiers in `payload`, not copies of data. A `@Cron` only decides whether work is due and enqueues (`enqueueHousekeepingJob` in `apps/api/src/jobs/housekeeping.enqueue.ts`; reference `apps/api/src/jobs/tasks/job-history-purge.task.ts`). An `@OnEvent` body enqueues; it never downloads or spawns.
-4. Add a friendly label in `apps/api/src/jobs/job-type-labels.ts`. It is optional for display but pinned by `apps/api/src/jobs/job-type-labels.spec.ts`; run that spec.
+4. Add a friendly label in a `job-type-labels.ts` beside your module and register it in `apps/api/src/kvox.manifest.ts` (base types go in `apps/api/src/jobs/job-type-labels.ts`). It is optional for display but pinned by `apps/api/src/jobs/job-type-labels.spec.ts`; run that spec.
 5. Write a handler spec. If the cron or event body is new, `apps/api/test/jobs/cron-enqueue-only.spec.ts` must still pass.
 
 ## Rules

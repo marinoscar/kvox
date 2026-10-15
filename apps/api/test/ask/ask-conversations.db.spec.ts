@@ -24,6 +24,8 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { AskConversationsService } from '../../src/ask/ask-conversations.service';
+import { ASK_USER_DATA_HOOKS } from '../../src/ask/ask.user-data';
+import { AskUserDataHooks } from '../../src/ask/ask.user-data.hooks';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { UserDataPurgeHandler } from '../../src/user-data/handlers/user-data-purge.handler';
@@ -255,24 +257,18 @@ describeWithDb('Ask conversations (real Postgres)', () => {
   });
 
   describe('the Danger Zone `ask` category (user.data.purge against real rows)', () => {
-    // Real Prisma; every other collaborator mocked — the same harness shape as
-    // `user-data-purge.handler.spec.ts`. The owners here have no notes,
-    // transcripts or files, so the other steps find nothing to do.
+    // Real Prisma and the REAL `ask` hook; every other category's hook is a
+    // stub (issue #460: the handler resolves hooks through `ModuleRef`). The
+    // owners here have no notes, transcripts or files, so the other steps find
+    // nothing to do.
     function purgeHandler() {
-      const ok = () => jest.fn().mockResolvedValue(undefined);
-      return new UserDataPurgeHandler(
-        new JobHandlerRegistry(),
-        prisma as never,
-        { enqueuePurge: ok() } as never,
-        { remove: ok() } as never,
-        { enqueuePurge: ok() } as never,
-        { delete: ok() } as never,
-        { revokeAllForUser: jest.fn().mockResolvedValue(0) } as never,
-        { removeAll: jest.fn().mockResolvedValue(0) } as never,
-        { forget: ok(), forgetOwnerDocuments: jest.fn().mockResolvedValue(0) } as never,
-        { patchSettings: jest.fn().mockResolvedValue({}) } as never,
-        { enqueue: jest.fn().mockResolvedValue({ id: 'kg-job', status: 'pending' }) } as never,
-      );
+      const noop = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : async () => 0) });
+      const askHooks = new AskUserDataHooks(prisma as never);
+      const moduleRef = {
+        get: (token: unknown) => (token === ASK_USER_DATA_HOOKS ? askHooks : noop),
+      };
+
+      return new UserDataPurgeHandler(new JobHandlerRegistry(), moduleRef as never);
     }
     const purge = (userId: string, scope: string) =>
       purgeHandler().process({ id: `job-${userId}`, payload: { userId, scope } } as never);

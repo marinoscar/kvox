@@ -36,16 +36,28 @@
 // comment). The dashboard still has to render that historical row.
 // =============================================================================
 
+// -----------------------------------------------------------------------------
+// ISSUE #460: BASE TYPES ONLY
+// -----------------------------------------------------------------------------
+//
+// This file holds the labels of the job types the BASE ships. Every domain
+// type's label is declared in its own module (`transcripts/job-type-labels.ts`,
+// `notes/…`, `search/…`, `graph/…`, `ask/…`) and all of them are registered,
+// base first, from `src/kvox.manifest.ts` into the registry in
+// `job-type-label.ts`. Registration order is the order `JOB_TYPE_LABELS`
+// enumerates in, and the manifest reproduces the pre-registry order exactly.
+// =============================================================================
+
+import { JOB_TYPE_LABELS } from './job-type-label';
+
 /**
- * Display labels for the job types this repository ships.
- *
- * A fork adds its own entries here. Keys are `Job.type` values; values are
- * short human phrases in sentence case, sized for a table cell.
+ * Display labels for the job types the base ships. Keys are `Job.type` values;
+ * values are short human phrases in sentence case, sized for a table cell.
  *
  * Deliberately NOT exhaustive over anything — see the header: an unmapped
  * type is a supported, expected state, not a bug.
  */
-export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
+export const BASE_JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // The template's demonstration handler
   // (`handlers/example-echo.handler.ts`). Delete the handler and you may
   // delete this line; neither is load-bearing.
@@ -99,89 +111,24 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // are the words the handlers, the settings and the runbook already use.
   'nodes.fleet.sweep': 'Fleet sweep',
   'nodes.fleet.prune': 'Fleet prune',
-  // The transcript pipeline (#25, epic #19). `media.audio.transcode` and
-  // `transcript.snapshot` are labelled here too even though issues #26 and #27
-  // register their handlers: a label is a display string, not a registration,
-  // and having it ready costs nothing while a missing one shows an operator a
-  // raw dotted type in the admin list.
-  'media.audio.transcode': 'Audio transcode',
-  'transcription.submit': 'Transcription submit',
-  'transcription.poll': 'Transcription poll',
-  'transcription.ingest': 'Transcription ingest',
-  'transcript.snapshot': 'Transcript snapshot',
-  'transcript.export': 'Transcript export',
-  'transcript.purge': 'Transcript purge',
-  'transcripts.housekeeping': 'Transcript housekeeping',
-  // AI name correction (#328/#330, epic #326). Spends the requesting user's
-  // own AI key, like `note.generate` — the label says what it checks, not how.
-  'transcript.name_check': 'Transcript name check',
-  // The note pipeline (#49, epic #45). All five originally sat here ahead of
-  // their handlers — a label is a display string, not a registration, so having
-  // one ready costs nothing while a missing one shows an operator a raw dotted
-  // type the moment its type first appears. All five are registered today:
-  // `note.generate` (#49), `note.source.extract` (#51), `note.export` (#54),
-  // `note.purge` and `notes.housekeeping` (#53).
-  'note.generate': 'Note generation',
-  'note.source.extract': 'Document text extraction',
-  'note.export': 'Note export',
-  'note.purge': 'Note purge',
-  'notes.housekeeping': 'Note housekeeping',
-  // Retroactive titling (#184, epic #163), registered by its own issue. "Note
-  // retitle" and not "Note titling": a dashboard filtered by this type during a
-  // library sweep is showing one row per note being RE-named, and the operator
-  // reading it wants the verb that says these notes already had a title.
-  'note.retitle': 'Note retitle',
+};
+
+/**
+ * The label of `user.data.purge`, kept apart from {@link BASE_JOB_TYPE_LABELS}
+ * only because it sat between the note and search labels in the pre-registry
+ * map and the manifest preserves that enumeration order.
+ */
+export const USER_DATA_JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // The user-facing Danger Zone (#80). "Account data deletion" rather than
   // "User data purge": an operator meeting this row in the job list is meeting
   // the most destructive thing an ordinary account can ask this application to
   // do, and the label should say so in the words the user was shown, not in
   // the module's internal noun.
   'user.data.purge': 'Account data deletion',
-  // Semantic search (#188, epic #165). "Semantic indexing" rather than
-  // "Search index": layer 1 of search is the generated `tsvector` columns,
-  // which are maintained by Postgres itself and never appear in this list at
-  // all — so an operator meeting this row needs the word that distinguishes
-  // the EMBEDDING pass, which costs a document owner money, from the
-  // full-text one, which costs nothing and has no job.
-  'search.index': 'Semantic indexing',
-  // Connected knowledge (#357, epic #344). One label for both scopes — a
-  // forgotten person and a Danger Zone graph wipe are the same operation
-  // (deleting graph rows) at two sizes, and the operator needs the noun.
-  'kg.purge': 'Knowledge graph deletion',
-  // Connected knowledge (epic #344). `kg.speaker_link` (#356) is the
-  // speaker-naming write into the owner's graph.
-  'kg.speaker_link': 'Link named speakers to people',
-  // `kg.extract` (#363): one structured-output call per note that proposes
-  // graph rows for review, on the note owner's own AI key.
-  'kg.extract': 'Knowledge graph extraction',
-  // #364: the bulk duplicate re-scan (its only output is a proposal to review)
-  // and profile embeddings for resolution's vector arm, both on the owner's key.
-  'kg.resolve': 'Knowledge graph resolution',
-  'kg.embed': 'Knowledge graph embeddings',
-  // #371, epic #347: the whole-graph overview snapshot (clusters + positions).
-  'kg.graph_layout': 'Knowledge graph layout',
-  // #372 — the rolling per-entity summary the entity brief shows; spends the
-  // owner's own AI key, like `note.generate`.
-  'kg.entity_digest': 'Knowledge graph entity digest',
-  // #384 — reshapes one user's graph rows after an ontology bump that renames
-  // or retags something; no AI key involved.
-  'kg.migrate': 'Knowledge graph migration',
-  // #386, epic #349 — an RDF export of one owner's graph (and its daily expiry sweep).
-  'kg.export': 'Knowledge graph export',
-  // #387, epic #349 — an uploaded RDF file validated against SHACL and turned
-  // into a reviewable proposal; resolution may use the owner's own AI key.
-  'kg.import': 'Knowledge graph import',
-  // #378, epic #348 — one read-only graph-agent answer, on the asker's own AI key.
-  'ask.respond': 'Ask answer',
 };
 
 /**
- * The display label for `type`, falling back to `type` itself.
- *
- * Total by construction: every string in, a non-empty string out. Callers
- * never have to write their own `?? type`, which is what keeps the fallback
- * from being applied in some views and forgotten in others.
+ * Back-compat view of every registered label (a live read of the registry).
+ * Prefer `jobTypeLabel()` from `./job-type-label`.
  */
-export function jobTypeLabel(type: string): string {
-  return JOB_TYPE_LABELS[type] ?? type;
-}
+export { JOB_TYPE_LABELS };

@@ -11,10 +11,8 @@ import type {
   BrowserNotificationContent,
   BrowserNotificationTemplate,
 } from './browser-notification.channel';
-import {
-  EVENT_BROWSER_TEMPLATES,
-  sanitizeLink,
-} from './browser-notification.channel';
+import { sanitizeLink } from './browser-notification.channel';
+import { browserTemplateFor } from '../notification-registry';
 import type {
   ChannelDeliveryResult,
   NotificationChannelSender,
@@ -408,7 +406,7 @@ export class PushNotificationChannel implements NotificationChannelSender {
    * are independently pluggable, and a "shared render" would be the first
    * thread tying their behaviour together, the same coupling this file's own
    * header comment argues against for the *id* they each mint. What genuinely
-   * IS shared — `EVENT_BROWSER_TEMPLATES` itself, and `sanitizeLink` — is
+   * IS shared — `browserTemplateFor` itself, and `sanitizeLink` — is
    * imported, because a divergence there would be a security or content bug,
    * not a legitimate per-channel choice.
    *
@@ -424,7 +422,7 @@ export class PushNotificationChannel implements NotificationChannelSender {
     | { ok: false; error: string } {
     const { event, data } = context;
     const template: BrowserNotificationTemplate | undefined =
-      EVENT_BROWSER_TEMPLATES[event.key];
+      browserTemplateFor(event.key);
 
     if (!template) {
       this.logger.warn(

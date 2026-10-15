@@ -1,8 +1,12 @@
-import { APP_NAME, SafeHtml, html, plainText, renderLayout } from './layout';
 import {
+  APP_NAME,
+  SafeHtml,
+  html,
+  plainText,
+  renderLayout,
   TRANSACTIONAL_EMAIL_HEADERS,
   type RenderedEmail,
-} from './email-template.types';
+} from '../../email/templates';
 
 // =============================================================================
 // `notes.note_failed` (issue #49, epic #45)
@@ -44,6 +48,14 @@ export interface NoteFailedEmailData {
   category: string;
   /** Absolute URL of the application root, for the CTA. Optional. */
   appUrl?: string;
+}
+
+// Typed registration (issue #460): this domain declares its own template key,
+// so the base `EmailTemplateDataMap` names no domain payload.
+declare module '../../email/templates' {
+  interface EmailTemplateDataMap {
+    'note-failed': NoteFailedEmailData;
+  }
 }
 
 /** Where the CTA points, appended to `appUrl`. */

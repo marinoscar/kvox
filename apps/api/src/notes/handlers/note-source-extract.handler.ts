@@ -81,7 +81,7 @@ import {
   noteSourceExtractResultSchema,
   toExtractionOutcome,
   type NoteSourceExtractResult,
-} from '../../jobs/contracts/note-source-extract.contract';
+} from '../contracts/note-source-extract.contract';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveStorageObjectInput } from '../../storage/storage-job-input';
 import {
@@ -144,7 +144,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
   /**
    * THE FIRST OF THE TWO MEMBERS THAT MAKE THIS TYPE NODE-ELIGIBLE.
    *
-   * It lives in `jobs/contracts/` rather than inline because a second reader
+   * It lives in `notes/contracts/` rather than inline because a second reader
    * needs it: `GET /api/nodes/job-types` converts it with `z.toJSONSchema()` so
    * a client validates a result against the server's own definition rather than
    * against a copy it carries.

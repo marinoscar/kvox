@@ -1,5 +1,13 @@
 import type { EmailTemplate, RenderedEmail } from './email-template.types';
 import {
+  EMAIL_TEMPLATES,
+  EMAIL_TEMPLATE_NAMES,
+  emailTemplateRegistry,
+  registerEmailTemplate,
+  registerEmailTemplates,
+  type EmailTemplateRegistrations,
+} from './email-template.registry';
+import {
   type AllowlistInvitationEmailData,
   allowlistInvitationEmail,
 } from './allowlist-invitation.email';
@@ -17,25 +25,11 @@ import {
   type NodeOfflineEmailData,
   nodeOfflineEmail,
 } from './node-offline.email';
-import { type NoteFailedEmailData, noteFailedEmail } from './note-failed.email';
-import { type NoteReadyEmailData, noteReadyEmail } from './note-ready.email';
 import {
   type RestoreCompletedEmailData,
   restoreCompletedEmail,
 } from './restore-completed.email';
 import { type RoleChangedEmailData, roleChangedEmail } from './role-changed.email';
-import {
-  type TranscriptFailedEmailData,
-  transcriptFailedEmail,
-} from './transcript-failed.email';
-import {
-  type TranscriptReadyEmailData,
-  transcriptReadyEmail,
-} from './transcript-ready.email';
-import {
-  type TranscriptSharedEmailData,
-  transcriptSharedEmail,
-} from './transcript-shared.email';
 import { type TestEmailData, testEmail } from './test-email.email';
 import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.email';
 
@@ -54,26 +48,24 @@ import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.emai
 // never sent" and which therefore produces no error to notice.
 //
 // -----------------------------------------------------------------------------
-// THE THREE-WAY LOCK
+// THE LOCK, SINCE #460
 // -----------------------------------------------------------------------------
 //
-// Adding a template means editing TWO places, and the compiler forces the
-// second:
+// Templates are REGISTERED, not listed (`./email-template.registry.ts`), and
+// adding one means two things in the module that owns it:
 //
-//   1. add `'thing': ThingEmailData` to `EmailTemplateDataMap`
-//   2. add `'thing': thingEmail` to `EMAIL_TEMPLATES`
+//   1. add `'thing': ThingEmailData` to `EmailTemplateDataMap`, by module
+//      augmentation from a domain folder or inline here for a base template
+//   2. register `'thing': thingEmail` (`registerEmailTemplate`), from
+//      `BASE_EMAIL_TEMPLATES` below or the domain's own record, and add that
+//      record to `kvox.manifest.ts`
 //
 // `EmailTemplateName` is DERIVED from the data map rather than declared as its
-// own union, so step 1 cannot produce a name with no data type. `EMAIL_TEMPLATES`
-// is a mapped type over `EmailTemplateName`, so step 1 without step 2 is a
-// compile error, and step 2 without step 1 is an excess-property error. There
-// is no ordering in which a half-registered template compiles.
-//
-// This differs from `notification-events.ts`, which uses an ARRAY as its source
-// of truth because #126 renders the preferences matrix in declaration order.
-// Nothing renders templates in order — they are only ever looked up by key — so
-// a keyed object is the honest shape here, and it buys the exhaustiveness above
-// that an array cannot give.
+// own union, so step 1 cannot produce a name with no data type, and
+// `registerEmailTemplate` pins each renderer's data parameter to its name's
+// entry in the map. "In the map but never registered" is no longer a compile
+// error; the registry refuses a notification binding naming an unregistered
+// template, and `index.spec.ts` walks every registered template.
 //
 // This file is intentionally NOT a Nest provider, for the same reason
 // notification-events.ts is not: it is pure data and pure functions, so a test
@@ -83,7 +75,8 @@ import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.emai
 /**
  * Every template, mapped to the data it renders from.
  *
- * The source of truth for {@link EmailTemplateName}. Add the entry here first.
+ * The source of truth for {@link EmailTemplateName}. Interface-merged, so a
+ * domain adds its own key from its own folder (see the lock above).
  *
  * #128 added the three real event templates. NAMES ARE KEBAB-CASE AND MATCH
  * THE FILE, while the notification event keys that select them are dotted
@@ -121,24 +114,11 @@ export interface EmailTemplateDataMap {
   'backup-failed': BackupFailedEmailData;
   'restore-completed': RestoreCompletedEmailData;
 
-  // The transcript pipeline's two owner-addressed events (#25, epic #19).
-  // Unlike the four operational templates above — which are addressed to a
-  // PERMISSION and describe the deployment — these describe one person's own
-  // recording and are sent to its owner alone.
-  'transcript-ready': TranscriptReadyEmailData;
-  'transcript-failed': TranscriptFailedEmailData;
-
-  // Sharing (#29, epic #19). The one transcript template addressed to somebody
-  // OTHER than the owner — the recipient of a share — which is why it carries
-  // nothing about the recording's content beyond the title.
-  'transcript-shared': TranscriptSharedEmailData;
-
-  // The note pipeline's two owner-addressed events (#49, epic #45). Same
-  // posture as the two transcript templates above and for the same reason: a
-  // generation runs for minutes on somebody else's infrastructure, so the
-  // reader has usually closed the tab by the time there is anything to say.
-  'note-ready': NoteReadyEmailData;
-  'note-failed': NoteFailedEmailData;
+  // The transcript and note templates (transcript-ready/-failed/-shared,
+  // note-ready/-failed) are NOT listed here since #460: a domain adds its own
+  // key by augmenting this interface from its own folder
+  // (`transcripts/notifications/`, `notes/notifications/`) and registers the
+  // renderer with `registerEmailTemplate`.
 }
 
 /**
@@ -156,16 +136,16 @@ export interface EmailTemplateDataMap {
 export type EmailTemplateName = keyof EmailTemplateDataMap & string;
 
 /**
- * Name -> renderer.
+ * The platform's own templates, in registration order, for `kvox.manifest.ts`
+ * to register BEFORE any domain's (a notification binding may only name a
+ * template that is already registered).
  *
- * The mapped type is what makes this exhaustive: every `EmailTemplateName`
- * must appear, and each entry's data parameter is pinned to that name's entry
- * in {@link EmailTemplateDataMap}, so a template cannot be registered under a
- * key whose payload it does not accept.
+ * Domain templates are not here: each domain folder exports its own record
+ * (`TRANSCRIPTS_EMAIL_TEMPLATES`, `NOTES_EMAIL_TEMPLATES`) and the manifest
+ * registers them after this one. `registerEmailTemplates` pins every entry's
+ * data parameter to its name's entry in {@link EmailTemplateDataMap}.
  */
-export const EMAIL_TEMPLATES: {
-  [K in EmailTemplateName]: EmailTemplate<EmailTemplateDataMap[K]>;
-} = {
+export const BASE_EMAIL_TEMPLATES: EmailTemplateRegistrations = {
   'test-email': testEmail,
   'user-welcome': userWelcomeEmail,
   'allowlist-invitation': allowlistInvitationEmail,
@@ -176,35 +156,27 @@ export const EMAIL_TEMPLATES: {
   'node-offline': nodeOfflineEmail,
   'backup-failed': backupFailedEmail,
   'restore-completed': restoreCompletedEmail,
-  'transcript-ready': transcriptReadyEmail,
-  'transcript-failed': transcriptFailedEmail,
-  'transcript-shared': transcriptSharedEmail,
-  'note-ready': noteReadyEmail,
-  'note-failed': noteFailedEmail,
 };
 
-/**
- * Every registered name, derived from the registry rather than restated.
- *
- * For #124/#126 and for tests that need to assert something about all
- * templates at once — that each returns a non-empty `subject`, `html` AND
- * `text`, for instance, which is a test that has to be able to enumerate them
- * or it only ever checks the ones somebody remembered to list.
- */
-export const EMAIL_TEMPLATE_NAMES = Object.keys(
+export {
   EMAIL_TEMPLATES,
-) as EmailTemplateName[];
+  EMAIL_TEMPLATE_NAMES,
+  emailTemplateRegistry,
+  registerEmailTemplate,
+  registerEmailTemplates,
+};
+export type { EmailTemplateRegistrations };
 
 /**
  * Is `value` a registered template name?
  *
- * The guard #125 needs at the boundary where an untyped string — from a
- * delivery record being retried, from a persisted job — re-enters the typed
+ * The guard #125 needs at the boundary where an untyped string -- from a
+ * delivery record being retried, from a persisted job -- re-enters the typed
  * world. Without it the only way in is a cast, and a cast is how a
  * decommissioned name becomes an `undefined` function call at runtime.
  */
 export function isEmailTemplateName(value: string): value is EmailTemplateName {
-  return Object.prototype.hasOwnProperty.call(EMAIL_TEMPLATES, value);
+  return emailTemplateRegistry.has(value);
 }
 
 /**
@@ -227,7 +199,7 @@ export function isEmailTemplateName(value: string): value is EmailTemplateName {
 export function findEmailTemplate(
   name: string,
 ): EmailTemplate<never> | undefined {
-  return isEmailTemplateName(name) ? EMAIL_TEMPLATES[name] : undefined;
+  return emailTemplateRegistry.get(name)?.template;
 }
 
 /**
@@ -247,7 +219,7 @@ export function renderEmailTemplate<K extends EmailTemplateName>(
   name: K,
   data: EmailTemplateDataMap[K],
 ): RenderedEmail {
-  return EMAIL_TEMPLATES[name](data);
+  return (EMAIL_TEMPLATES[name] as EmailTemplate<EmailTemplateDataMap[K]>)(data);
 }
 
 // -----------------------------------------------------------------------------
@@ -319,17 +291,6 @@ export { nodeOfflineEmail } from './node-offline.email';
 export { backupFailedEmail } from './backup-failed.email';
 export { restoreCompletedEmail } from './restore-completed.email';
 
-export { transcriptReadyEmail, formatDuration } from './transcript-ready.email';
-export { transcriptFailedEmail } from './transcript-failed.email';
-export {
-  transcriptSharedEmail,
-  shareRoleLabel,
-  shareRoleSentence,
-} from './transcript-shared.email';
-
-// The note pipeline's two templates (#49, epic #45).
-export { noteReadyEmail } from './note-ready.email';
-export { noteFailedEmail } from './note-failed.email';
 
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
 export type { EmailTemplate, RenderedEmail } from './email-template.types';
@@ -356,8 +317,3 @@ export type {
   BackupFailureOutcome,
 } from './backup-failed.email';
 export type { RestoreCompletedEmailData } from './restore-completed.email';
-export type { TranscriptReadyEmailData } from './transcript-ready.email';
-export type { TranscriptFailedEmailData } from './transcript-failed.email';
-export type { TranscriptSharedEmailData } from './transcript-shared.email';
-export type { NoteReadyEmailData } from './note-ready.email';
-export type { NoteFailedEmailData } from './note-failed.email';

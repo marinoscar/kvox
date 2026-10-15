@@ -18,6 +18,7 @@ import type {
 } from '../../email';
 import { describeThrown } from '../describe-thrown';
 import type { NotificationChannel } from '../notification-events';
+import { emailTemplateNameFor } from '../notification-registry';
 import type {
   ChannelDeliveryResult,
   NotificationChannelSender,
@@ -57,72 +58,12 @@ import type {
 // exactly this call site.
 // =============================================================================
 
-/**
- * Notification event key -> the email template that renders it.
- *
- * -----------------------------------------------------------------------------
- * FILLED BY #128. THESE THREE LINES ARE HALF OF "WIRING AN EVENT".
- * -----------------------------------------------------------------------------
- *
- * #125 shipped this empty because inventing a template before anybody had
- * written the copy would ship a message nobody had reviewed. #128 adds the
- * three templates and the three lines here that point at them.
- *
- * EVERY EVENT DECLARING THE `email` CHANNEL MUST APPEAR HERE. A missing entry
- * is not a silent skip: `deliver` below records a FAILED delivery saying no
- * template is registered, so "declared but unsendable" shows up in
- * `notification_deliveries` rather than being invisible.
- *
- * A MAP AND NOT A NAMING CONVENTION. Event keys are dotted (`user.welcome`);
- * template names are kebab-case and match their file (`user-welcome` ->
- * `user-welcome.email.ts`). Deriving one from the other would couple two
- * independently-owned naming schemes and turn a rename into a silent
- * "template not found" at send time — the map is three lines and it is
- * greppable from either side.
- *
- * `Partial<Record<...>>` so a lookup is typed `EmailTemplateName | undefined`
- * and the missing case has to be handled rather than trusted. The VALUES are
- * `EmailTemplateName`, so a typo on the right-hand side is a compile error;
- * only the event keys on the left are unchecked strings, and an unknown one is
- * dead weight rather than a runtime fault (the dispatcher never looks it up).
- */
-export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
-  {
-    'user.welcome': 'user-welcome',
-    'allowlist.invitation': 'allowlist-invitation',
-    // The manual reminder (#301, epic #271). Its own template, not a second
-    // key pointing at `allowlist-invitation` the way the broadcast pair below
-    // shares one: these two messages read differently, which is the reason
-    // there are two event keys at all.
-    'allowlist.invitation_reminder': 'allowlist-invitation-reminder',
-    'security.role_changed': 'role-changed',
-    // ONE TEMPLATE, TWO KEYS (#322, epic #319). `admin.broadcast` and
-    // `admin.broadcast_critical` differ in whether a recipient may MUTE them —
-    // `mandatory` on the second — not in how the message reads, and the copy
-    // they render was typed by an administrator either way. A second template
-    // would be a copy of the first that drifts from it, so the `critical` flag
-    // in the payload adds the one footer line that differs. This map is
-    // `Partial<Record<string, ...>>`, so two keys pointing at one name is
-    // exactly as legal as it is correct.
-    'admin.broadcast': 'broadcast',
-    'admin.broadcast_critical': 'broadcast',
-    // The four operational events (#288, epic #254). One template each: unlike
-    // the broadcast pair above, these four say genuinely different things, and
-    // the only shape they share is the detail table their layouts happen to
-    // use.
-    'jobs.job_failed': 'job-failed',
-    'nodes.node_offline': 'node-offline',
-    'db_backup.backup_failed': 'backup-failed',
-    'db_backup.restore_completed': 'restore-completed',
-    // The transcript pipeline's two owner-addressed events (#25, epic #19).
-    'transcripts.transcript_ready': 'transcript-ready',
-    'transcripts.transcript_failed': 'transcript-failed',
-    // Sharing (#29) — the one transcript template addressed to the RECIPIENT.
-    'transcripts.transcript_shared': 'transcript-shared',
-    // The note pipeline's two owner-addressed events (#49, epic #45).
-    'notes.note_ready': 'note-ready',
-    'notes.note_failed': 'note-failed',
-  };
+// The event -> email template map (`EVENT_EMAIL_TEMPLATES`) is gone (issue #460):
+// each notification now registers its template name with its event
+// (`registerNotification`), the registry refuses a binding whose template is not
+// registered, and this channel reads it with `emailTemplateNameFor`. A MISSING
+// binding for an event declaring `email` is still a recorded FAILED delivery
+// ('No email template is registered for event ...'), not a silent skip.
 
 @Injectable()
 export class EmailNotificationChannel implements NotificationChannelSender {
@@ -191,7 +132,7 @@ export class EmailNotificationChannel implements NotificationChannelSender {
     // "this event is declared but can never be sent" is a bug that should be
     // visible in the same place an operator already looks for undelivered
     // notifications.
-    const templateName = EVENT_EMAIL_TEMPLATES[eventKey];
+    const templateName = emailTemplateNameFor(eventKey);
     if (templateName === undefined) {
       return {
         success: false,
@@ -315,7 +256,7 @@ export class EmailNotificationChannel implements NotificationChannelSender {
     const template = findEmailTemplate(templateName);
 
     if (!template) {
-      // Only reachable if `EVENT_EMAIL_TEMPLATES` names a template that has
+      // Only reachable if a notification's `emailTemplate` names a template that has
       // since been removed from the template registry. The type system stops
       // that in a single build; a rolling deploy of two builds is where it
       // could briefly be true.

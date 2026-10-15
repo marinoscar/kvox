@@ -132,7 +132,7 @@ import {
 import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { NodeOffloadService } from '../jobs/node-offload.service';
 import { JobLeaseService } from '../jobs/job-lease.service';
-import { jobTypeLabel } from '../jobs/job-type-labels';
+import { jobTypeLabel } from '../jobs/job-type-label';
 import { JobSettleOutcome, JobTerminalService } from '../jobs/job-terminal.service';
 import { resolveJobLeaseMs } from '../jobs/job.worker';
 import { PrismaService } from '../prisma/prisma.service';

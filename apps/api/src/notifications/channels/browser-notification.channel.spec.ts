@@ -1,8 +1,9 @@
+import { BrowserNotificationChannel, sanitizeLink } from './browser-notification.channel';
 import {
-  BrowserNotificationChannel,
-  EVENT_BROWSER_TEMPLATES,
-  sanitizeLink,
-} from './browser-notification.channel';
+  browserTemplateFor,
+  clearBrowserTemplateOverridesForTests,
+  overrideBrowserTemplateForTests,
+} from '../notification-registry';
 import { NOTIFICATION_EVENTS } from '../notification-events';
 import type { NotificationChannel } from '../notification-events';
 import type {
@@ -66,7 +67,7 @@ const SAMPLE_PAYLOADS: Record<string, unknown> = {
   // `db_backup.restore_completed` call `.toISOString()` on a `Date` — so `{}`
   // would exercise their throw branch rather than the happy path the loop
   // below is about. `jobs.job_failed` is deliberately absent from
-  // `EVENT_BROWSER_TEMPLATES` and needs no entry here: it takes the registry
+  // the registered browser templates and needs no entry here: it takes the registry
   // fallback, which is exactly what the loop asserts still works.
   'nodes.node_offline': {
     nodeId: 'node-1',
@@ -137,10 +138,10 @@ describe('BrowserNotificationChannel', () => {
   });
 
   // ==========================================================================
-  // EVENT_BROWSER_TEMPLATES is empty until #128
+  // Browser bindings exist only for events that declare the channel (#128)
   // ==========================================================================
 
-  describe('EVENT_BROWSER_TEMPLATES agrees with the registry (#128)', () => {
+  describe('the browser bindings agree with the registry (#128)', () => {
     it('registers no template for an event that does not declare the browser channel', () => {
       // The registry's per-event `channels` list is the source of truth. A
       // renderer for an event that never offers this channel is dead code
@@ -154,7 +155,7 @@ describe('BrowserNotificationChannel', () => {
       expect(nonBrowserEvents.length).toBeGreaterThan(0);
 
       for (const key of nonBrowserEvents) {
-        expect(EVENT_BROWSER_TEMPLATES[key]).toBeUndefined();
+        expect(browserTemplateFor(key)).toBeUndefined();
       }
     });
 
@@ -437,29 +438,29 @@ describe('BrowserNotificationChannel', () => {
   // Truncation, and a throwing template
   // ==========================================================================
   //
-  // `EVENT_BROWSER_TEMPLATES` is a plain (non-frozen) object exported for
-  // #128 to populate later. It is empty today, but nothing stops a test from
-  // registering a temporary entry at runtime to exercise `render()`'s other
-  // two branches — a template that returns oversized content, and one that
-  // throws — without touching the source file. Removed in `afterEach` so it
-  // never leaks into another test.
+  // Since #460 the templates are part of each notification's registration and
+  // the registry is not writable here, so a test installs a temporary renderer
+  // through the registry's test seam (`overrideBrowserTemplateForTests`) to
+  // exercise `render()`'s other two branches — a template that returns
+  // oversized content, and one that throws. Cleared in `afterEach` so it never
+  // leaks into another test.
   // ==========================================================================
 
   describe('title/body truncation (registered template returns oversized content)', () => {
     const EVENT_KEY = 'user.welcome';
 
     afterEach(() => {
-      delete EVENT_BROWSER_TEMPLATES[EVENT_KEY];
+      clearBrowserTemplateOverridesForTests();
     });
 
     it('caps title at 200 chars and body at 2000 chars, each ending with an ellipsis', async () => {
       const oversizedTitle = 'T'.repeat(250);
       const oversizedBody = 'B'.repeat(2500);
 
-      EVENT_BROWSER_TEMPLATES[EVENT_KEY] = () => ({
+      overrideBrowserTemplateForTests(EVENT_KEY, () => ({
         title: oversizedTitle,
         body: oversizedBody,
-      });
+      }));
 
       mockPrisma.notification.create.mockResolvedValue({
         id: 'notif-1',
@@ -481,10 +482,10 @@ describe('BrowserNotificationChannel', () => {
     });
 
     it('leaves content under the cap untouched, with no ellipsis added', async () => {
-      EVENT_BROWSER_TEMPLATES[EVENT_KEY] = () => ({
+      overrideBrowserTemplateForTests(EVENT_KEY, () => ({
         title: 'Short title',
         body: 'Short body.',
-      });
+      }));
 
       mockPrisma.notification.create.mockResolvedValue({
         id: 'notif-1',
@@ -507,13 +508,13 @@ describe('BrowserNotificationChannel', () => {
     const EVENT_KEY = 'user.welcome';
 
     afterEach(() => {
-      delete EVENT_BROWSER_TEMPLATES[EVENT_KEY];
+      clearBrowserTemplateOverridesForTests();
     });
 
     it('deliver() returns { success: false, error } WITHOUT ever calling prisma.notification.create', async () => {
-      EVENT_BROWSER_TEMPLATES[EVENT_KEY] = () => {
+      overrideBrowserTemplateForTests(EVENT_KEY, () => {
         throw new Error('template blew up');
-      };
+      });
 
       const context = contextFor(EVENT_KEY);
       const result = await channel.deliver(context, 'user-1');

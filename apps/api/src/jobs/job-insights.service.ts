@@ -173,7 +173,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JOB_CLOCK, JobClock, systemJobClock } from './job-clock';
 import { countOf, foldTypeCounts, sumCounts, zeroCounts } from './job-counts.util';
-import { jobTypeLabel } from './job-type-labels';
+import { jobTypeLabel } from './job-type-label';
 import { resolveWorkerConcurrency } from './job.worker';
 import { JobStatusName } from './dto/job-response.dto';
 import { JobStatusCounts } from './dto/job-stats.dto';
