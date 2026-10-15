@@ -1,5 +1,5 @@
 // =============================================================================
-// KVox's own settings schemas (issue #466, epic #462)
+// this app's own settings schemas (issue #466, epic #462)
 // =============================================================================
 //
 // What used to live here (the composed `userSettingsSchema`, `systemSettingsSchema`
@@ -10,7 +10,7 @@
 // (`@marinoscar/platform-contract/{jobs,nodes,db-backup,notifications,settings}`,
 // `@marinoscar/platform-api/host`).
 //
-// Only KVox's own namespaces keep schemas in this repo:
+// Only this app's own namespaces keep schemas in this repo:
 //   transcription  transcription/transcription-settings.schema.ts
 //   ai             ai/ai-settings.schema.ts   (re-exported below)
 //   graph          graph/preferences/graph-preferences.schema.ts

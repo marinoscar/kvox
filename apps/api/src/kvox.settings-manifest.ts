@@ -11,7 +11,7 @@
 // by a module `kvox.manifest.ts` imports FIRST.
 //
 // Since #466 the registration itself is `settings/registry/` (the system and
-// user manifests, folding the platform's declarations with KVox's from
+// user manifests, folding the platform's declarations with this app's from
 // `app-registrations/settings.ts`); this file only triggers it.
 //
 // Order is the stored key order and the OpenAPI order: append, never insert.

@@ -10,7 +10,7 @@
 //
 // IT MUST RUN AFTER THE NAMESPACE MANIFESTS: the request bodies and the OpenAPI
 // document are composed from the registries when `forRoot` runs, so the import
-// below comes first. `systemRowKey` stays `'global'` (the row KVox has always
+// below comes first. `systemRowKey` stays `'global'` (the row this app has always
 // used) and `orgLayer` is `'auto'`: in single-organization mode an organization
 // layer applies only when its row exists, which here it never does.
 // =============================================================================

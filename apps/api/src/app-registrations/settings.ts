@@ -2,7 +2,7 @@
 // This app's settings namespaces (issue #466, epic #462)
 // =============================================================================
 //
-// What KVox adds to the platform's settings registries, and the type
+// What this app adds to the platform's settings registries, and the type
 // augmentation that makes `SystemSettingsService.getNamespace('transcription')`
 // and `UserSettingsService` responses typed. `settings/registry/` folds these
 // lists with the platform's own declarations (`assembleSystemSettingsNamespaces`,
@@ -12,16 +12,16 @@
 //   user   (app list): onboarding, graph
 //
 // The PLATFORM list (notifications, jobs, nodes, databaseBackup, maintenance /
-// dataTables, navigation, notifications) is in `settings/registry/`. KVox
+// dataTables, navigation, notifications) is in `settings/registry/`. this app
 // registers those declarations even though the slices that own them are not
-// mounted yet (#464, #467): the services KVox still runs read them through
+// mounted yet (#464, #467): the services this app still runs read them through
 // `getNamespace`.
 //
 // STORED SHAPE: NO FIELD IS RENAMED. Every stored key the platform declaration
 // of a shared namespace lacks would be dropped on the next write, so
 // `APP_SYSTEM_SETTINGS_EXTENSIONS` carries one `extendSystemSettingsNamespace`
-// per KVox-only field. The diff run for #466 found none (every platform
-// declaration is a superset of KVox's stored schema), so it is empty.
+// per this app-only field. The diff run for #466 found none (every platform
+// declaration is a superset of this app's stored schema), so it is empty.
 // =============================================================================
 
 import type {
@@ -41,31 +41,31 @@ import { ONBOARDING_USER_SETTINGS } from '../onboarding/onboarding.user-settings
 import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../transcription/transcription.system-settings';
 
-/** KVox's system namespaces, in stored key order (after the platform's five). */
+/** this app's system namespaces, in stored key order (after the platform's five). */
 export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
   TRANSCRIPTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
-  // PLATFORM-ADOPTION-SHIM(3.1): KVox's own `ai` declaration until #473.
+  // PLATFORM-ADOPTION-SHIM(3.1): this app's own `ai` declaration until #473.
   KVOX_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
-/** KVox's user namespaces, in stored key order (after the platform's three). */
+/** this app's user namespaces, in stored key order (after the platform's three). */
 export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   ONBOARDING_USER_SETTINGS as UserSettingsNamespace,
   GRAPH_USER_SETTINGS as UserSettingsNamespace,
 ];
 
-/** Fields KVox stores in a platform-declared system namespace that the platform lacks. */
+/** Fields this app stores in a platform-declared system namespace that the platform lacks. */
 export const APP_SYSTEM_SETTINGS_EXTENSIONS: readonly SystemSettingsNamespaceExtension[] = [];
 
-/** Fields KVox stores in a platform-declared user namespace that the platform lacks. */
+/** Fields this app stores in a platform-declared user namespace that the platform lacks. */
 export const APP_USER_SETTINGS_EXTENSIONS: readonly UserSettingsNamespaceExtension[] = [];
 
 /**
- * KVox's defaults where they differ from the platform's declaration. Only
+ * this app's defaults where they differ from the platform's declaration. Only
  * defaults change: the shape, the merge and every schema stay the platform's.
  *
  * `databaseBackup.storageProvider`: the platform defaults to `''` ("whatever
- * provider is active"); KVox has always defaulted to `'s3'`, and a row with no
+ * provider is active"); this app has always defaulted to `'s3'`, and a row with no
  * `databaseBackup` block reads as the default.
  */
 export const APP_SYSTEM_SETTINGS_DEFAULTS: readonly SettingsDefaultsOverride[] = [

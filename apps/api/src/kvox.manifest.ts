@@ -25,7 +25,7 @@
 //   user:   dataTables, navigation, notifications, onboarding, graph
 // (`theme` and `profile` are core fields placed ahead of the user namespaces by
 // the composers.) Since #466 the namespaces are registered by
-// `settings/registry/` (the platform's declarations folded with KVox's from
+// `settings/registry/` (the platform's declarations folded with this app's from
 // `app-registrations/settings.ts`) and `kvox.settings-manifest.ts` only triggers it.
 //
 // Registration is idempotent per process: Jest imports this from `setup.ts` and

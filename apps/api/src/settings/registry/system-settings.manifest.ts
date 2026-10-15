@@ -9,15 +9,15 @@
 //
 // The first five are the PLATFORM's declarations. They are registered here even
 // though the slices that own them (`JobsModule`, `NodesModule`, the db-backup
-// slice, the host slice) are not mounted yet: the services KVox still runs read
+// slice, the host slice) are not mounted yet: the services this app still runs read
 // them through `SystemSettingsService.getNamespace`. When a platform slice's
 // `forRoot()` later tries to register its own key, `ensureSystemSettingsNamespaces`
 // leaves it alone because this manifest registered it first. KEEP THAT ORDER.
 //
-// `transcription` and `ai` are KVox's (`app-registrations/settings.ts`). `ai` is
-// KVox's own declaration until #473 (PLATFORM-ADOPTION-SHIM(3.1)).
+// `transcription` and `ai` are this app's (`app-registrations/settings.ts`). `ai` is
+// this app's own declaration until #473 (PLATFORM-ADOPTION-SHIM(3.1)).
 //
-// A namespace the platform declares WITHOUT a field KVox stores would drop that
+// A namespace the platform declares WITHOUT a field this app stores would drop that
 // field on the next write; `APP_SYSTEM_SETTINGS_EXTENSIONS` is where such a
 // field is added. It is empty: the stored-schema diff found none.
 // =============================================================================

@@ -2,11 +2,13 @@
 // GraphPreferencesChangeForwarder (issue #459, issue #369, epic #346)
 // =============================================================================
 //
-// The settings module no longer knows what the `graph` user-settings namespace
+// The platform settings slice does not know what the `graph` user-settings namespace
 // means. It announces every namespace whose stored value changed
-// (`user-settings.namespace-changed`, `settings/user-settings/user-settings.events.ts`);
+// (`user-settings.namespace-changed`, `platform/settings/user-settings.events.ts`,
+// emitted since #466 by `platform/settings/user-settings-change.interceptor.ts`
+// around `PUT|PATCH /api/user-settings`);
 // this forwarder is the graph module's subscription to that announcement. For
-// `key === 'graph'` it runs what `UserSettingsService.emitGraphPreferencesChanged`
+// `key === 'graph'` it runs what this app's former `UserSettingsService.emitGraphPreferencesChanged`
 // used to run: resolve both sides against `GRAPH_PREFERENCE_DEFAULTS`, and emit
 // `graph.preferences_changed` with the same payload, only when the EFFECTIVE
 // preferences changed. Compared after resolution, so writing a default
@@ -17,7 +19,7 @@
 // is unchanged and still only ENQUEUES.
 //
 // Synchronous on purpose: `EventEmitter2` dispatches synchronously, and the
-// settings service wraps the original emit in a try/catch so a throwing
+// change interceptor wraps the original emit in a try/catch so a throwing
 // listener cannot turn a committed write into an error response. Nothing is
 // caught here, so the same guard covers this forwarder and the listeners behind
 // it.

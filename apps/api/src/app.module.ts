@@ -107,7 +107,7 @@ import configuration from './config/configuration';
     // The platform's settings slice (#466, epic #462): `GET|PUT|PATCH
     // /api/system-settings`, `/api/user-settings` and `/api/org-settings`, with
     // the namespaces `settings/registry/` registers (the platform's five system
-    // and three user declarations plus KVox's `transcription`, `ai`,
+    // and three user declarations plus this app's `transcription`, `ai`,
     // `onboarding` and `graph`). Replaces this app's own SettingsModule. GLOBAL:
     // every module reads `SystemSettingsService` / `UserSettingsService`
     // without importing it. Must come after the manifest imports at the top.

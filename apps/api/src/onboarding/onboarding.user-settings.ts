@@ -7,9 +7,9 @@
 // `apps/api/src/app-registrations/settings.ts` (`APP_USER_SETTINGS_NAMESPACES`).
 // The schemas are in `common/schemas/user-settings-namespaces.schema.ts`.
 //
-// KVox keeps its own declaration: the platform ships an `onboarding` user
+// this app keeps its own declaration: the platform ships an `onboarding` user
 // namespace too (`@marinoscar/platform-api/onboarding`), but its stored shape is
-// not KVox's, and the stored rows must read back unchanged.
+// not this app's, and the stored rows must read back unchanged.
 //
 // ABSENT MEANS "NEVER ONBOARDED": no `.default()` anywhere; registration
 // refuses one.

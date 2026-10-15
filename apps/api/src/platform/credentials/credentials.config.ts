@@ -12,9 +12,11 @@
 // this app keeps no per-user or per-organization credential in these tables
 // (every AI key lives in `user_ai_credentials`).
 //
-// The purposes are registered by `app-registrations/registrations.ts`
-// (`registerKvoxCredentialPurposes`), which every entry point imports before the
-// registries freeze at bootstrap.
+// The purposes are registered at import time, before the registries freeze at
+// bootstrap: the platform's (`smtp`, `email_ses`, `push_vapid`) by
+// `app-registrations/registrations.ts` (`registerKvoxCredentialPurposes`), and
+// the app's own `transcription` by `kvox.manifest.ts`
+// (`[registry:credential-purposes]`).
 // =============================================================================
 
 import {

@@ -5,13 +5,13 @@
 // The platform's `CredentialsService` refuses to write a purpose nobody
 // registered, and a credential's PURPOSE IS ALSO ITS AES-GCM SUB-KEY DOMAIN:
 // changing a string orphans every secret stored under it. So each purpose below
-// is the string KVox has ALWAYS stored, and no stored row is rewritten:
+// is the string this app has ALWAYS stored, and no stored row is rewritten:
 //
-//   smtp           platform `SMTP_CREDENTIAL_PURPOSE_DEF`   (same string as KVox's)
-//   email_ses      platform `SES_CREDENTIAL_PURPOSE_DEF`    (KVox stores no SES secret)
-//   push_vapid     platform `PUSH_VAPID_CREDENTIAL_PURPOSE_DEF` (same string as KVox's)
+//   smtp           platform `SMTP_CREDENTIAL_PURPOSE_DEF`   (same string as this app's)
+//   email_ses      platform `SES_CREDENTIAL_PURPOSE_DEF`    (this app stores no SES secret)
+//   push_vapid     platform `PUSH_VAPID_CREDENTIAL_PURPOSE_DEF` (same string as this app's)
 //
-// `transcription` (the speech-to-text provider key, name '<providerId>') is KVox's
+// `transcription` (the speech-to-text provider key, name '<providerId>') is this app's
 // own and is registered by `kvox.manifest.ts` (`[registry:credential-purposes]`):
 // base code here may not import the transcription folder.
 //
@@ -19,7 +19,7 @@
 // `push_vapid` equal `SMTP_CREDENTIAL_PURPOSE` / `PUSH_VAPID_CREDENTIAL_PURPOSE`
 // in `email/smtp-credential.constants.ts` and
 // `notifications/push-vapid-credential.constants.ts`, so no app-level
-// re-registration under KVox's own string was needed.
+// re-registration under this app's own string was needed.
 //
 // NOT HERE: `ai-key`. Every AI key is per user in `user_ai_credentials`, never
 // in `credentials`; that table uses the cipher (`encryptSecret` /

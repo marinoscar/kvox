@@ -1,7 +1,7 @@
 // =============================================================================
 // The `ai` system settings namespace (issue #459, issue #47, epic #45)
 //
-// PLATFORM-ADOPTION-SHIM(3.1): KVox registers its OWN `ai` declaration under the
+// PLATFORM-ADOPTION-SHIM(3.1): this app registers its OWN `ai` declaration under the
 // key `ai` until #473 adopts the platform's `AI_SYSTEM_SETTINGS`. Registered by
 // `apps/api/src/app-registrations/settings.ts` as `KVOX_AI_SYSTEM_SETTINGS`.
 // =============================================================================

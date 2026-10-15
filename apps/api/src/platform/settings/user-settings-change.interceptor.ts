@@ -6,7 +6,7 @@
 // PLATFORM-ADOPTION-SHIM(#466): the graph module re-scans when a user changes a
 // resolution threshold (`GraphPreferencesChangeForwarder` turns
 // `user-settings.namespace-changed` with `key === 'graph'` into
-// `graph.preferences_changed`). KVox's own settings service emitted that event;
+// `graph.preferences_changed`). this app's own settings service emitted that event;
 // the platform's does not. This global interceptor restores it for the two write
 // routes: it reads the caller's namespaces before the handler runs and diffs
 // them against the response afterwards, emitting once per namespace whose value

@@ -9,7 +9,7 @@
 //
 // `theme` and `profile` are core FIELDS the platform composes ahead of these.
 // The first three are the platform's declarations; `onboarding` and `graph` are
-// KVox's (`app-registrations/settings.ts`).
+// this app's (`app-registrations/settings.ts`).
 // =============================================================================
 
 import { NOTIFICATIONS_USER_SETTINGS } from '@marinoscar/platform-api/notifications';

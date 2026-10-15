@@ -27,6 +27,6 @@ import { KVOX_USER_OWNED_MODELS } from './user-owned-models';
 registerPlatformPermissions({ app: { permissions: [KVOX_PERMISSIONS] } });
 registerPlatformUserOwnedModels(KVOX_USER_OWNED_MODELS);
 registerPlatformModelOwnership(KVOX_MODEL_OWNERSHIP);
-// The credential purposes KVox stores (#466): the platform's `CredentialsService`
+// The credential purposes this app stores (#466): the platform's `CredentialsService`
 // refuses a write to a purpose nobody registered.
 registerKvoxCredentialPurposes();
