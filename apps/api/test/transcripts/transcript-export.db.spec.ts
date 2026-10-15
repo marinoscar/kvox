@@ -37,7 +37,6 @@ import { ConfigService } from '@nestjs/config';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { ObjectsService } from '@marinoscar/platform-api/storage';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
@@ -58,8 +57,8 @@ import { ORDINAL_GAP, OP_TYPES } from '../../src/transcripts/editing';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
+import { JobScope, type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-export.db.spec');
 
@@ -73,6 +72,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
   let storage: StorageProvider;
 
   let objects: TranscriptObjectsService;
+  let managed: ReturnType<typeof createDbManagedObjects>;
   let editing: TranscriptEditingService;
   let exportService: TranscriptExportService;
   let exportHandler: TranscriptExportHandler;
@@ -100,22 +100,8 @@ describeWithDb('Transcript exports (real Postgres)', () => {
 
     const service = prisma as unknown as PrismaService;
 
-    objects = new TranscriptObjectsService(
-      service,
-      {
-        deleteManagedObject: async (id: string) => {
-          const row = await prisma.storageObject.findUnique({ where: { id } });
-
-          if (!row) return;
-
-          await storage.delete(row.storageKey);
-          await prisma.storageObject.delete({ where: { id } });
-        },
-      } as unknown as ObjectsService,
-      new ConfigService({}),
-      storage,
-      new LegacyObjectOwnershipStore(service as never),
-    );
+    managed = createDbManagedObjects(prisma, storage);
+    objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
 
     const materialize = new TranscriptMaterializeService(service, objects);
     const access = new TranscriptAccessService(service);
@@ -177,6 +163,8 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       {
         get: jest.fn().mockResolvedValue({ abandonedUploadHours: 3 }),
       } as unknown as TranscriptionSettingsService,
+      new JobScope(prisma as never),
+      managed,
     );
 
     editing = new TranscriptEditingService(service, access, materialize, {
@@ -639,7 +627,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
         data: { expiresAt: new Date(Date.now() - 60_000) },
       });
 
-      await housekeeping.process({ id: randomUUID(), payload: {} } as never);
+      await housekeeping.process({ id: randomUUID(), type: 'transcripts.housekeeping', payload: {}, orgId: null } as never);
 
       expect(await prisma.transcriptExport.findUnique({ where: { id: exportId } })).toBeNull();
       // `object_id` is `Restrict`, so the sweep has to null the reference
@@ -653,7 +641,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
 
       const { exportId } = await runExport(seed.transcriptId, { format: 'markdown' });
 
-      await housekeeping.process({ id: randomUUID(), payload: {} } as never);
+      await housekeeping.process({ id: randomUUID(), type: 'transcripts.housekeeping', payload: {}, orgId: null } as never);
 
       expect(await prisma.transcriptExport.findUnique({ where: { id: exportId } })).not.toBeNull();
     });

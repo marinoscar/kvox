@@ -11,6 +11,9 @@ import {
   CreateMockAllowedEmailOptions,
 } from './test-data.factory';
 
+/** The default organization every mocked `organization.findFirst` answers with (a UUID: scopes validate it). */
+export const TEST_DEFAULT_ORG_ID = '00000000-0000-4000-8000-0000000000a1';
+
 /**
  * Mock setup helpers to configure Prisma mock responses
  * Use these to set up test scenarios without database calls
@@ -666,6 +669,25 @@ export function setupBaseMocks(): void {
   (prismaMock.transcript.findMany as jest.Mock).mockResolvedValue([]);
   (prismaMock.storageObject.findMany as jest.Mock).mockResolvedValue([]);
   (prismaMock.note.findMany as jest.Mock).mockResolvedValue([]);
+
+  // ---------------------------------------------------------------------------
+  // Org scope (#469)
+  // ---------------------------------------------------------------------------
+  //
+  // `storage_objects` is an org table under forced RLS, so every read goes
+  // through `runInOrg` (KVox's gateway) or `forOrg` (the platform storage slice
+  // resolves it through `PLATFORM_PRISMA`). A deep mock answers `undefined` for
+  // both, which would swallow the callback. They hand the same mock back as the
+  // scoped client, so a spec keeps feeding `prismaMock.storageObject.*` and
+  // `prismaMock.kvoxObjectOwnership.*` exactly as it would without RLS, and
+  // `resolveOrgId` finds the default organization.
+  (prismaMock.organization.findFirst as jest.Mock).mockResolvedValue({ id: TEST_DEFAULT_ORG_ID });
+  (prismaMock.runInOrg as jest.Mock).mockImplementation(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) =>
+    fn(prismaMock),
+  );
+  (prismaMock.forOrg as jest.Mock).mockImplementation(() => prismaMock);
+  (prismaMock.kvoxObjectOwnership.findMany as jest.Mock).mockResolvedValue([]);
+  (prismaMock.kvoxObjectOwnership.upsert as jest.Mock).mockResolvedValue({});
 
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);

@@ -9,6 +9,7 @@ import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { installManagedDeleteHook } from '../../src/kvox-objects/managed-delete.hook';
 import { prismaMock } from '../mocks/prisma.mock';
 import { JobWorker } from '@marinoscar/platform-api/jobs';
 
@@ -167,6 +168,9 @@ export async function createTestApp(
   });
 
   app.setGlobalPrefix('api');
+  // Mirrors main.ts (#469): the managed-object delete veto and abort forward are a Fastify
+  // `onRequest` hook, installed right after the prefix is set.
+  installManagedDeleteHook(app);
   // Note: ZodValidationPipe is already registered globally via APP_PIPE in AppModule
   // Do NOT add a standard ValidationPipe here as it conflicts with Zod DTOs
 

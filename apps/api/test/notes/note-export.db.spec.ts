@@ -60,8 +60,8 @@ import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('note-export.db.spec');
 
@@ -123,21 +123,8 @@ describeWithDb('Note exports (real Postgres)', () => {
 
     const service = prisma as unknown as PrismaService;
 
-    objects = new NoteObjectsService(
-      service,
-      {
-        deleteManagedObject: async (id: string) => {
-          const row = await prisma.storageObject.findUnique({ where: { id } });
-
-          if (!row) return;
-
-          await storage.delete(row.storageKey);
-          await prisma.storageObject.delete({ where: { id } });
-        },
-      } as unknown as ObjectsService,
-      storage,
-      new LegacyObjectOwnershipStore(service as never),
-    );
+    managed = createDbManagedObjects(prisma, storage);
+    objects = new NoteObjectsService(managed, storage);
 
     registry = new NoteExporterRegistry();
     renders = 0;
@@ -184,6 +171,7 @@ describeWithDb('Note exports (real Postgres)', () => {
       registry,
       { get: () => ({ type: NOTE_EXPORT_JOB_TYPE }) } as unknown as JobHandlerRegistry,
       { enqueue } as unknown as JobsService,
+      managed,
     );
 
     handler = new NoteExportHandler(

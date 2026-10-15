@@ -85,13 +85,6 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
-// helper that queries `organizations`, which the mocked client cannot answer.
-jest.mock('../../src/prisma/default-org', () => ({
-  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
-}));
-
 describe('Transcripts Integration', () => {
   let context: TestContext;
   let mockCredentials: { describe: jest.Mock; getSecret: jest.Mock };
@@ -137,10 +130,6 @@ describe('Transcripts Integration', () => {
     resetPrismaMock();
     setupBaseMocks();
     jest.clearAllMocks();
-
-    // `resolveOrgId` reads the default organization for storage-touching jobs
-    // (transcode, submit, ingest, snapshot, purge).
-    prismaMock.organization.findFirst.mockResolvedValue({ id: 'org-1' } as never);
 
     mockCredentials.describe.mockResolvedValue({ name: 'assemblyai' });
     mockCredentials.getSecret.mockResolvedValue('aai-key');
@@ -198,11 +187,13 @@ describe('Transcripts Integration', () => {
       // The upload object is claimed by this module, which makes it invisible
       // to the generic storage listing and undeletable through the generic
       // DELETE (spec §9.3).
-      //
-      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is stamped by the legacy
-      // ownership store (the init-upload call is what claims the object).
-      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
-      expect(ownership.setManagedBy.mock.calls.map((call: unknown[]) => call[1])).toContain('transcripts');
+      // The init-upload call is what claims the object: the `kvox_object_ownership`
+      // row is written (inside the org scope) right after the platform's init.
+      expect(prismaMock.kvoxObjectOwnership.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ objectId: 'obj-source', managedBy: 'transcripts' }),
+        }),
+      );
     });
 
     it('is 400 for a file above the active provider\'s ceiling', async () => {

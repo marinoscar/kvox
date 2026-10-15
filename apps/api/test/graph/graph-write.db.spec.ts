@@ -40,6 +40,7 @@ import { normalizeAlias } from '../../src/graph/write/normalize';
 import type { EvidenceInput } from '../../src/graph/dto/graph-evidence.dto';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-write.db.spec');
 
@@ -55,7 +56,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
-    write = new GraphWriteService(new EvidenceValidator());
+    write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE)));
   });
 
   afterAll(async () => {

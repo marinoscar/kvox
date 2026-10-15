@@ -35,6 +35,8 @@ import { NoteGenerationService } from '../../src/notes/generation/note-generatio
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
 import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
+import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
+import { KvoxObjectOwnershipStore } from '../../src/kvox-objects/kvox-object-ownership.store';
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import { EXTRACTION_METADATA_KEY } from '../../src/notes/source-metadata';
 import { MARKDOWN_BODY, markdownFile, scannedPdf } from '../fixtures/documents.fixture';
@@ -148,6 +150,7 @@ function createStorage(world: World) {
     }),
     exists: jest.fn(async (key: string) => world.bucket.has(key)),
     getBucket: jest.fn(() => 'test-bucket'),
+    kind: 's3',
   };
 }
 
@@ -158,35 +161,43 @@ function createStorage(world: World) {
  * file is about a VALUE THAT LANDED, and a mock that only records calls would
  * let the extraction "write" a metadata key the generator never reads back.
  */
-/** PLATFORM-ADOPTION-SHIM(#469): `managed_by` lives on the fake world's rows. */
-function fakeOwnership(world: World) {
-  return {
-    setManagedBy: async (id: string, module: string) => {
-      const row = world.objects.get(id);
-      if (row) row.managedBy = module;
-    },
-    getManagedBy: async (ids: readonly string[]) =>
-      new Map(ids.map((id) => [id, (world.objects.get(id)?.managedBy as string | undefined) ?? null])),
-  };
-}
-
 function createPrisma(world: World): Record<string, unknown> {
   let nextObjectId = 2;
 
   const prisma: Record<string, unknown> = {
-    // PLATFORM-ADOPTION-SHIM(#469): `createRow` inserts and stamps `managed_by`
-    // in one transaction, over the default organization.
-    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+    // `storage_objects` is read under `runInOrg`; the fake hands itself back as the scoped client.
+    runInOrg: async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     organization: { findFirst: jest.fn(async () => ({ id: 'org-1' })) },
+    // The ownership side table: stamps the module on the fake world's row, which is what the
+    // assertions (and `managedBy` reads) look at.
+    kvoxObjectOwnership: {
+      upsert: jest.fn(
+        async ({ where, create }: { where: { objectId: string }; create: { managedBy: string } }) => {
+          const row = world.objects.get(where.objectId);
+          if (row) row.managedBy = create.managedBy;
+
+          return { objectId: where.objectId, managedBy: create.managedBy };
+        },
+      ),
+      findMany: jest.fn(async ({ where }: { where: { objectId: { in: string[] } } }) =>
+        where.objectId.in.flatMap((id) => {
+          const owner = world.objects.get(id)?.managedBy as string | undefined;
+
+          return owner ? [{ objectId: id, managedBy: owner }] : [];
+        }),
+      ),
+    },
     storageObject: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
         const row = world.objects.get(where.id);
 
         return row ? { ...row } : null;
       }),
-      findFirst: jest.fn(async ({ where }: { where: { storageKey?: string } }) => {
+      findFirst: jest.fn(async ({ where }: { where: { id?: string; storageKey?: string } }) => {
         for (const row of world.objects.values()) {
-          if (row.storageKey === where.storageKey) return { ...row };
+          if (where.id !== undefined ? row.id === where.id : row.storageKey === where.storageKey) {
+            return { ...row };
+          }
         }
 
         return null;
@@ -312,12 +323,13 @@ function harness(world: World) {
   const prisma = createPrisma(world);
   const storage = createStorage(world);
 
-  const objects = new NoteObjectsService(
+  const managed = new KvoxManagedObjectsService(
     prisma as never,
-    { deleteManagedObject: jest.fn() } as never,
+    new KvoxObjectOwnershipStore(),
+    {} as never,
     storage as never,
-    fakeOwnership(world) as never,
   );
+  const objects = new NoteObjectsService(managed, storage as never);
 
   const extract = new NoteSourceExtractHandler(
     new JobHandlerRegistry(),
@@ -326,6 +338,7 @@ function harness(world: World) {
     // The handler's `storage_objects` access runs through the job's organization scope.
     { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) } as never,
     storage as never,
+    managed,
   );
 
   const sources = new NoteSourceService(
@@ -333,6 +346,7 @@ function harness(world: World) {
     { materialize: jest.fn() } as never,
     { render: jest.fn() } as never,
     objects,
+    managed,
   );
 
   const providers = new AiProviderRegistry();

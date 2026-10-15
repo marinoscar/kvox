@@ -45,7 +45,6 @@ import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { ObjectsService } from '@marinoscar/platform-api/storage';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
@@ -58,8 +57,8 @@ import { ORDINAL_GAP, OP_TYPES, sortByOrdinal } from '../../src/transcripts/edit
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-corrections.db.spec');
 
@@ -88,13 +87,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
   /** Build the whole correction stack over one client. */
   function stackFor(client: PrismaClient) {
     const service = client as unknown as PrismaService;
-    const objects = new TranscriptObjectsService(
-      service,
-      { deleteManagedObject: jest.fn() } as unknown as ObjectsService,
-      new ConfigService({}),
-      storage,
-      new LegacyObjectOwnershipStore(service as never),
-    );
+    const objects = new TranscriptObjectsService(createDbManagedObjects(client, storage), new ConfigService({}), storage);
     const materializeService = new TranscriptMaterializeService(service, objects);
     const access = new TranscriptAccessService(service);
     const pipeline = {

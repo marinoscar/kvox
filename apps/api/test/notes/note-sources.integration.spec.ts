@@ -6,9 +6,11 @@ import {
   closeTestApp,
 } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { TEST_DEFAULT_ORG_ID, setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser, createMockViewerUser } from '../helpers/auth-mock.helper';
+import { createMembershipContributor } from '../helpers/membership-user.helper';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
+import { APP_SLUG } from '@app/shared';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { markdownFile, multiPagePdf } from '../fixtures/documents.fixture';
@@ -20,10 +22,11 @@ import { markdownFile, multiPagePdf } from '../fixtures/documents.fixture';
 // HTTP-level coverage for the acceptance criteria that are about the WIRE
 // rather than about the extractor:
 //
-//   * the upload creates a storage object `managed_by: 'notes'` — which is what
-//     hides it from `GET /api/storage/objects` and makes its generic `DELETE`
-//     answer **409 naming this module**, both asserted here against the REAL
-//     storage controller rather than trusted;
+//   * the upload creates a storage object owned by `notes` (a
+//     `kvox_object_ownership` row) — which is what hides it from the app's file
+//     list (`GET /api/<app>/files`) and makes its generic `DELETE` answer
+//     **409 naming this module** (the Fastify veto hook), both asserted here
+//     against the real routes rather than trusted;
 //   * a rejected MIME type is refused with the accepted list in the message and
 //     **no object row is created** — because a row created here could neither
 //     be listed nor deleted by the user who caused it;
@@ -49,22 +52,13 @@ const managedObject = (overrides: Record<string, unknown> = {}) => ({
   storageProvider: 's3',
   bucket: 'test-bucket',
   status: 'ready',
-  managedBy: 'notes',
   uploadedById: 'owner-1',
   metadata: {},
-  partSize: null,
   s3UploadId: null,
   createdAt: new Date('2026-09-14T00:00:00.000Z'),
   updatedAt: new Date('2026-09-14T00:00:00.000Z'),
   ...overrides,
 });
-
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
-// helper that queries `organizations`, which the mocked client cannot answer.
-jest.mock('../../src/prisma/default-org', () => ({
-  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
-}));
 
 describe('Note source documents (#51)', () => {
   let context: TestContext;
@@ -108,8 +102,6 @@ describe('Note source documents (#51)', () => {
     prismaMock.storageObject.findFirst.mockResolvedValue(null);
     prismaMock.storageObject.create.mockResolvedValue(managedObject());
     prismaMock.job.create.mockResolvedValue({ id: 'job-1', type: 'note.source.extract' });
-    // The extraction job runs in an organization: the enqueue resolves the default one.
-    prismaMock.organization.findFirst.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' } as never);
   });
 
   // ==========================================================================
@@ -144,18 +136,19 @@ describe('Note source documents (#51)', () => {
 
       // ⚠ THE CLAIM THAT MAKES EVERY OTHER ASSERTION IN THIS FILE WORK. A
       // managed object is invisible to the generic listing and refuses the
-      // generic DELETE — see the two specs below, which drive the REAL storage
-      // controller rather than trusting this flag.
-      //
-      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is stamped by the legacy
-      // ownership store, in the same transaction as the insert.
+      // generic DELETE — see the specs below, which drive the REAL routes
+      // rather than trusting this flag. The ownership row is written in the
+      // same org-scoped transaction as the insert.
       expect(prismaMock.storageObject.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ uploadedById: user.id, orgId: 'org-1' }),
+          data: expect.objectContaining({ uploadedById: user.id, orgId: TEST_DEFAULT_ORG_ID }),
         }),
       );
-      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
-      expect(ownership.setManagedBy.mock.calls.map((call: unknown[]) => call[1])).toContain('notes');
+      expect(prismaMock.kvoxObjectOwnership.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ objectId: OBJECT_ID, orgId: TEST_DEFAULT_ORG_ID, managedBy: 'notes' }),
+        }),
+      );
 
       // The extraction is a QUEUE JOB, not an inline step: a document outlives
       // the request that uploaded it.
@@ -280,27 +273,27 @@ describe('Note source documents (#51)', () => {
   });
 
   // ==========================================================================
-  // What `managed_by: 'notes'` actually buys, through the REAL storage routes
+  // What notes ownership actually buys, through the REAL routes
   // ==========================================================================
 
   describe('the uploaded object is owned by this module', () => {
-    it('is excluded from `GET /api/storage/objects`', async () => {
-      const user = await createMockTestUser(context);
+    it('is excluded from `GET /api/<app>/files`', async () => {
+      const user = await createMembershipContributor(context);
 
       prismaMock.storageObject.findMany.mockResolvedValue([]);
       prismaMock.storageObject.count.mockResolvedValue(0);
 
       await request(context.app.getHttpServer())
-        .get('/api/storage/objects')
+        .get(`/api/${APP_SLUG}/files`)
         .set(authHeader(user.accessToken))
         .expect(200);
 
-      // The listing filters on `managedBy: null`, so a notes document is not
-      // merely absent from this fixture — it is unreachable by construction.
-      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
-      expect(ownership.selectObjectIds).toHaveBeenCalledWith(
-        expect.objectContaining({ managed: 'unmanaged' }),
-        expect.anything(),
+      // The list filters on "no ownership row", so a notes document is not
+      // merely absent from this fixture: it is unreachable by construction.
+      expect(prismaMock.storageObject.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ uploadedById: user.id, kvoxOwnership: { is: null } }),
+        }),
       );
     });
 
@@ -309,11 +302,12 @@ describe('Note source documents (#51)', () => {
       // about the object's STATE — a note points at it — which is what 409
       // means. Deleting it through the generic endpoint would leave a note
       // pointing at a document that no longer exists.
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
 
       prismaMock.storageObject.findUnique.mockResolvedValue(
         managedObject({ uploadedById: user.id }),
       );
+      prismaMock.kvoxObjectOwnership.findMany.mockResolvedValue([{ objectId: OBJECT_ID, managedBy: 'notes' }]);
 
       const response = await request(context.app.getHttpServer())
         .delete(`/api/storage/objects/${OBJECT_ID}`)
@@ -326,7 +320,7 @@ describe('Note source documents (#51)', () => {
     });
 
     it('is still readable by its owner — only list and delete change', async () => {
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
 
       prismaMock.storageObject.findUnique.mockResolvedValue(
         managedObject({ uploadedById: user.id }),

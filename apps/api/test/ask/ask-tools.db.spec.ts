@@ -41,6 +41,7 @@ import { TranscriptAccessService } from '../../src/transcripts/transcript-access
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { UUID_ANYWHERE } from './ask-tool-fakes';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-tools.db.spec');
 
@@ -62,7 +63,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     const ontology = new GraphOntologyService(p, preferences);
     const reads = new GraphReadService(p, access, ontology, transcriptAccess);
     const neighborhood = new GraphNeighborhoodService(p, access, ontology);
-    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p));
+    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
     // The document leg's own visibility is SearchService's (and its specs'); stubbed here.
     const search = { search: async () => ({ results: [], nextCursor: null }) };
     const brief = new EntityBriefService(

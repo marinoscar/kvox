@@ -42,7 +42,6 @@ import type {
   StorageUploadOptions,
   StorageUploadResult,
   UploadPart,
-  UploadedPart,
 } from '@marinoscar/platform-api/storage';
 
 function notSupported(method: string): never {
@@ -62,6 +61,8 @@ function notSupported(method: string): never {
  * it — this class only ever writes inside it.
  */
 export class TmpDirStorageProvider implements StorageProvider {
+  readonly kind = 'tmpdir';
+
   constructor(
     private readonly baseDir: string,
     private readonly bucket: string = 'test-tmp-bucket'
@@ -147,13 +148,6 @@ export class TmpDirStorageProvider implements StorageProvider {
 
   abortMultipartUpload(_key: string, _uploadId: string): Promise<void> {
     return notSupported('abortMultipartUpload');
-  }
-
-  // Issue #21 added this to the interface. This helper's multipart surface is
-  // uniformly unsupported, so it stays that way rather than growing a
-  // half-real implementation nothing here exercises.
-  listParts(_key: string, _uploadId: string): Promise<UploadedPart[]> {
-    return notSupported('listParts');
   }
 
   getSignedDownloadUrl(_key: string, _options?: SignedUrlOptions): Promise<string> {

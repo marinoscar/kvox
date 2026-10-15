@@ -40,7 +40,6 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { NotificationsService } from '../../src/notifications/notifications.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { ObjectsService } from '@marinoscar/platform-api/storage';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
@@ -59,7 +58,7 @@ import {
 import { TranscriptsService } from '../../src/transcripts/transcripts.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-sharing.db.spec');
 
@@ -108,13 +107,8 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
 
     access = new TranscriptAccessService(service);
 
-    const objects = new TranscriptObjectsService(
-      service,
-      { deleteManagedObject: jest.fn() } as unknown as ObjectsService,
-      new ConfigService({}),
-      storage,
-      new LegacyObjectOwnershipStore(service as never),
-    );
+    const managed = createDbManagedObjects(prisma, storage);
+    const objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
 
     const pipeline = {
       enqueuePurge: jest.fn().mockResolvedValue(true),
@@ -129,7 +123,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
 
     transcripts = new TranscriptsService(
       service,
-      { initUpload: jest.fn() } as unknown as ObjectsService,
+      managed,
       objects,
       access,
       pipeline,
