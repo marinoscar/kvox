@@ -192,7 +192,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full testing strategy.
 
 ## Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — architecture rules and conventions for contributors
+- [`AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md) — architecture rules and conventions for contributors and AI assistants (AGENTS.md is the shared rule set; CLAUDE.md imports it)
 - [`VISION.md`](VISION.md) — product principle and direction
 - [`CHANGELOG.md`](CHANGELOG.md) — released changes
 - [`docs/API.md`](docs/API.md) — API reference
@@ -204,4 +204,5 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full testing strategy.
 - [`docs/runbooks/`](docs/runbooks/) — operator procedures
 - [`docs/deployment/`](docs/deployment/) — deployment guides (VPS, worker nodes)
 - [`docs/RENAMING.md`](docs/RENAMING.md) — rebranding this template for a new product
+- [`docs/platform-adoption/`](docs/platform-adoption/README.md) — platform drift baseline and module classification (EnterpriseAppBase retrofit)
 - [`apps/cli/README.md`](apps/cli/README.md) — CLI usage, install and CI setup

@@ -1,0 +1,131 @@
+# Documentation index
+
+Every document in this repository, grouped by what you need it for. Links are relative to `docs/`.
+
+- A **spec** (`specs/`) describes the design of one feature and serves as its reference: the model, the rules, and the rejected alternatives. It is written for developers extending the application.
+- A **runbook** (`runbooks/`, plus the two guides in `deployment/`) is a step-by-step procedure for an operator running a deployment.
+- A **recipe** lives next to the code it describes (see [Developer recipes in the code](#developer-recipes-in-the-code)).
+
+## Read first
+
+In this order:
+
+1. [../README.md](../README.md): what the application is, what you get, how to start it.
+2. [../AGENTS.md](../AGENTS.md): the rules every contributor and AI assistant follows, with a link to the doc that owns each detail.
+3. [ARCHITECTURE.md](ARCHITECTURE.md): the system map, permission catalog, tables and job types.
+4. [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md): authentication, credential kinds, RBAC, transport and data protection.
+5. [DEVELOPMENT.md](DEVELOPMENT.md): the dev loop and the Fastify, Prisma and Passport gotchas.
+6. [TESTING.md](TESTING.md): test layers, helpers and how to run each suite.
+
+## Doc map by task
+
+Find the right doc without loading the whole index. Read a doc by section (grep its headings, then read a range), never whole.
+
+| Task | Read |
+|---|---|
+| Understand the system, permission catalog, tables, job types | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Auth, credential kinds, sessions, RBAC | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) |
+| Add or change an endpoint | [API.md](API.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md), then `/api/docs` (OpenAPI) |
+| Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
+| Write or run tests | [TESTING.md](TESTING.md) |
+| Add a job type or any long-running work | [../apps/api/src/jobs/handlers/README.md](../apps/api/src/jobs/handlers/README.md), [specs/job-queue.md](specs/job-queue.md), the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)) |
+| Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
+| Add a notification event | [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md), [specs/browser-notifications.md](specs/browser-notifications.md) |
+| Add a settings page (admin or per-user) | [specs/settings-ui.md](specs/settings-ui.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md), the `add-settings-page` skill ([../.claude/skills/add-settings-page/SKILL.md](../.claude/skills/add-settings-page/SKILL.md)) |
+| Change navigation, the bottom bar or the rail | [specs/ux-refresh.md](specs/ux-refresh.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md) |
+| Touch the transcript editor or correction model | [specs/transcription.md](specs/transcription.md) (§4), [specs/transcript-name-correction.md](specs/transcript-name-correction.md) |
+| Add a transcript or note export format | [specs/transcription.md](specs/transcription.md), [specs/notes.md](specs/notes.md), [specs/transcript-export.v1.schema.json](specs/transcript-export.v1.schema.json) |
+| Touch notes, templates or the AI layer | [specs/notes.md](specs/notes.md), [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) |
+| Touch the knowledge graph or the Ask agent | [specs/ontology.md](specs/ontology.md), [runbooks/ontology-migration.md](runbooks/ontology-migration.md) |
+| Change search | [specs/search.md](specs/search.md) |
+| Change onboarding | [specs/onboarding.md](specs/onboarding.md) |
+| Change the Danger Zone or user data deletion | [specs/user-data-deletion.md](specs/user-data-deletion.md) |
+| Change broadcasts | [specs/notification-broadcasts.md](specs/notification-broadcasts.md) |
+| Change backups or restore | [specs/database-backup.md](specs/database-backup.md), [specs/database-restore.md](specs/database-restore.md) |
+| Change maintenance mode | [specs/maintenance-mode.md](specs/maintenance-mode.md), [runbooks/maintenance-mode.md](runbooks/maintenance-mode.md) |
+| Change the CLI or `kvox deploy` | [../apps/cli/AGENTS.md](../apps/cli/AGENTS.md), [../apps/cli/README.md](../apps/cli/README.md), [specs/vps-deploy.md](specs/vps-deploy.md), [specs/deploy-spec.md](specs/deploy-spec.md) |
+| Deploy to a VPS | [deployment/vps.md](deployment/vps.md) |
+| Run worker nodes | [deployment/worker-nodes.md](deployment/worker-nodes.md) |
+| Sign in from a CLI or device | [DEVICE-AUTH.md](DEVICE-AUTH.md), [personal-access-tokens.md](personal-access-tokens.md) |
+| Rename or rebrand the application | [RENAMING.md](RENAMING.md) |
+| Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
+| Operate a deployment (secrets, CORS, VAPID, restore) | [Runbooks](#runbooks) |
+
+## Guides
+
+| Guide | What it covers |
+|---|---|
+| [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | How Claude Code and OpenCode share the repository rules, where each config file lives, the local model setup |
+| [API.md](API.md) | API reference: conventions, auth schemes, response envelope, pagination, errors, every endpoint group |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas |
+| [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
+| [personal-access-tokens.md](personal-access-tokens.md) | Creating and using `pat_` tokens for scripts and CI |
+| [RENAMING.md](RENAMING.md) | Renaming or rebranding the application |
+| [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Authentication, authorization, transport and data protection |
+| [TESTING.md](TESTING.md) | Test layers, helpers and how to run each suite |
+
+## Feature specs
+
+| Spec | Feature |
+|---|---|
+| [specs/browser-notifications.md](specs/browser-notifications.md) | Notification channels, service worker, Web Push |
+| [specs/database-backup.md](specs/database-backup.md) | Scheduled and on-demand `pg_dump` backups, node offload |
+| [specs/database-restore.md](specs/database-restore.md) | Restore and rollback from a backup |
+| [specs/deploy-spec.md](specs/deploy-spec.md) | Portable implementation specification of the deploy CLI |
+| [specs/job-queue.md](specs/job-queue.md) | The Postgres-backed background job queue |
+| [specs/maintenance-mode.md](specs/maintenance-mode.md) | The 503 maintenance window and its layers |
+| [specs/notes.md](specs/notes.md) | AI-generated notes, templates, the AI layer |
+| [specs/notification-broadcasts.md](specs/notification-broadcasts.md) | Admin broadcasts to every user |
+| [specs/onboarding.md](specs/onboarding.md) | The first-run checklist |
+| [specs/ontology.md](specs/ontology.md) | Connected knowledge: the ontology, graph, Ask agent, explorer |
+| [specs/search.md](specs/search.md) | Ranked full-text search over transcripts and notes |
+| [specs/settings-ui.md](specs/settings-ui.md) | The registry-driven settings hub |
+| [specs/transcript-export.v1.schema.json](specs/transcript-export.v1.schema.json) | Public JSON Schema of the transcript export document |
+| [specs/transcript-name-correction.md](specs/transcript-name-correction.md) | AI name correction for transcripts |
+| [specs/transcription.md](specs/transcription.md) | Audio to transcript: pipeline, editing model, versions, sharing |
+| [specs/user-data-deletion.md](specs/user-data-deletion.md) | The Danger Zone and bulk deletion of a user's data |
+| [specs/ux-refresh.md](specs/ux-refresh.md) | The navigation destination model and UX refresh |
+| [specs/vps-deploy.md](specs/vps-deploy.md) | Design of `kvox deploy` (VPS deployment) |
+| [specs/worker-nodes.md](specs/worker-nodes.md) | Remote worker nodes and their data plane |
+
+## Deployment
+
+| Guide | What it covers |
+|---|---|
+| [deployment/vps.md](deployment/vps.md) | Deploying to a VPS: prerequisites, install, first login, troubleshooting |
+| [deployment/worker-nodes.md](deployment/worker-nodes.md) | Running worker nodes that execute jobs remotely |
+
+## Runbooks
+
+| Runbook | Use it when |
+|---|---|
+| [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) | AI provider keys and note generation need setup or diagnosis |
+| [runbooks/database-restore.md](runbooks/database-restore.md) | You restore the database from a backup |
+| [runbooks/maintenance-mode.md](runbooks/maintenance-mode.md) | You open, close or recover a maintenance window |
+| [runbooks/node-job-secrets.md](runbooks/node-job-secrets.md) | You configure per-job database credentials for worker nodes |
+| [runbooks/ontology-migration.md](runbooks/ontology-migration.md) | An ontology bump needs `kg.migrate` run or retried |
+| [runbooks/postgres-client-version.md](runbooks/postgres-client-version.md) | `pg_dump` fails on a client/server version mismatch |
+| [runbooks/rotate-secrets-encryption-key.md](runbooks/rotate-secrets-encryption-key.md) | You rotate `SECRETS_ENCRYPTION_KEY` |
+| [runbooks/s3-cors.md](runbooks/s3-cors.md) | Browser uploads or playback need bucket CORS |
+| [runbooks/vapid-keys.md](runbooks/vapid-keys.md) | You generate, enable, rotate or disable Web Push keys |
+
+## Developer recipes in the code
+
+| Recipe | What it covers |
+|---|---|
+| [../apps/api/src/jobs/handlers/README.md](../apps/api/src/jobs/handlers/README.md) | Adding a job type, with node-eligible worked examples |
+| [../apps/api/src/jobs/contracts/README.md](../apps/api/src/jobs/contracts/README.md) | Job contracts shared between the server and worker nodes |
+| [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md) | Adding a notification: event, templates, `notify()` |
+| [../apps/cli/README.md](../apps/cli/README.md) | `kvox`: install, `login`, `api`, `config`, `deploy`, `node`, CI usage |
+
+## Agent rules
+
+| File | Scope |
+|---|---|
+| [../AGENTS.md](../AGENTS.md) | The shared rule set for the whole repository |
+| [../CLAUDE.md](../CLAUDE.md) | Claude Code entry point: imports `AGENTS.md`, adds cloud-session and subagent rules |
+| [../apps/api/AGENTS.md](../apps/api/AGENTS.md) | Backend rules |
+| [../apps/web/AGENTS.md](../apps/web/AGENTS.md) | Frontend rules |
+| [../apps/cli/AGENTS.md](../apps/cli/AGENTS.md) | CLI rules, including the version bump |
+| [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | How the rule files, agents and skills fit together |

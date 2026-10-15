@@ -2262,8 +2262,8 @@ Three real differences, not merely a smaller document:
    not to produce. `markdown.exporter.ts` needs no such branch — its render
    is a passthrough of the stored string either way.
 3. **Word (`.docx`) export.** `docx` export was explicitly deferred out of
-   epic #19's scope (`docs/specs/transcription.md` §8's own scope line,
-   restated in CLAUDE.md) and has never been built anywhere in this
+   epic #19's scope (`docs/specs/transcription.md` §8's own scope line)
+   and has never been built anywhere in this
    codebase. #54 is where the **first** `docx` exporter actually lands, built
    for notes rather than retrofitted onto transcripts, because VISION.md's
    "Information Should Be Portable" section names Word explicitly and a page

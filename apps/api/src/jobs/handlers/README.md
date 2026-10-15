@@ -403,6 +403,25 @@ settle path cannot. **Nothing it returns may be persisted except the handle**
 for the worked example, including the two separate opt-in settings that gate
 whether this ever reaches a node at all.
 
+### An offload policy (`nodeOffloadEnabled`, optional)
+
+`nodeOffloadEnabled?(): Promise<boolean>` is a runtime policy read (not a
+static flag) letting a deployment say "not this workload" about a type that is
+structurally node-eligible. It is read at claim time by
+`NodesService.nodeEligibleTypes` and never changes what
+`JobHandlerRegistry.serverOnlyTypes()` reports. Implement it only when the
+default (always offer an eligible type) is genuinely wrong for this type;
+`db-backup-run.handler.ts` reads `databaseBackup.nodeOffloadEnabled` (default
+false) so that a deployment must opt in before a database dump may leave the
+server.
+
+`db-backup/handlers/db-backup-run.handler.ts` (`db.backup.run`, epic #345) is
+the worked example that uses all four optional members: a `profile` sized for a
+multi-hour dump with `maxAttempts: 1`, `deriveOutputKey` re-reading the
+backup's own run row, `nodeOffloadEnabled` reading
+`databaseBackup.nodeOffloadEnabled`, and `nodeSecretBroker` minting a
+short-lived read-only PostgreSQL role.
+
 ## Example Handlers
 
 See `example-echo.handler.ts` — a server-only handler that logs its payload
