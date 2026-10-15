@@ -691,7 +691,7 @@ maintenance window is opened with **`allowAdmins: false`**:
 - The **persisted** maintenance flag lives *inside* the database being renamed,
   so during those seconds it is unreadable. `MaintenanceModeService` has an
   **in-memory override layer for exactly this caller** and says so in its own
-  header (`apps/api/src/common/maintenance/maintenance-mode.service.ts`); the
+  header (`MaintenanceModeService` in `@marinoscar/platform-api/host`); the
   restore swap is the only thing in the repository that sets it.
 - `allowAdmins: true` would be actively wrong here rather than merely generous.
   An admin request during the window does not get "access to a degraded system";
@@ -916,11 +916,12 @@ stronger reason: a service that can replace the production database must not be
 reachable over HTTP before the route that authorizes it has been reviewed. #286
 owns that route.
 
-The one new module import is **`MaintenanceModule`**, and it is not optional: it
+The one new dependency is **`MaintenanceModeService`**, and it is not optional: it
 is where the in-memory override lives, and without it the swap would have no way
-to hold traffic back at the only moment it must. `MaintenanceModule` is not
-`@Global()` (unlike `PrismaModule`), it exports `MaintenanceModeService`
-explicitly, and the dependency direction stays acyclic — maintenance depends on
+to hold traffic back at the only moment it must. As written, this was a
+`MaintenanceModule` import that exported the service explicitly; since #464 the
+service comes from the platform host core (`PlatformHostCoreModule`, `@marinoscar/platform-api/host`),
+which is global, so the module needs no import. The dependency direction stays acyclic — maintenance depends on
 settings and JWT, and on nothing in `db-backup`.
 
 `DATABASE_RESTORE_SEAM` joins `DB_BACKUP_ENGINE`, `DB_BACKUP_TIMERS`,
@@ -1162,9 +1163,9 @@ said exactly what to do and refuses when you do it.
 A second restore while one is in flight is a **`409`** carrying the id of the
 run that is already running at **`details.activeRunId`** — the same envelope
 rule §2 of `docs/specs/database-backup.md` states for `POST runs`, and for the
-same reason: `HttpExceptionFilter` rebuilds every error body from a fixed key
+same reason: the platform `HttpExceptionFilter` rebuilds every error body from a fixed key
 allowlist (`message` and `details` off the payload, `code` derived from the
-status), so a field written at the *top level* of a thrown payload is silently
+status unless it is a registered error code), so a field written at the *top level* of a thrown payload is silently
 dropped and never reaches the client.
 
 And `exception.getResponse()` returns the payload **before** the filter has
@@ -1392,8 +1393,9 @@ This is the one page in the application that deliberately takes the API down
 3. then success.
 
 Step 2 is handled centrally and needs nothing from this page: `services/api.ts`
-recognises the marker on the one error path every request shares, and
-`MaintenanceGate` swaps the subtree for the maintenance screen, whose "Try
+recognises the marker on the one error path every request shares
+(`readMaintenanceBlock` in `services/maintenance.ts`), and the packaged
+`MaintenanceGate` (`@marinoscar/platform-web/host/ui`) swaps the subtree for the maintenance screen, whose "Try
 again" clears the block and remounts. Step 1 is what `DbBackupPage` has to get
 right on its own, because a transport failure with *no response at all* is, on
 the wire, indistinguishable from a backend that is actually broken.

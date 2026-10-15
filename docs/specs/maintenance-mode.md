@@ -3,18 +3,21 @@
 > Issue #257, epic #254 (Phase 0). Builds on #256, which declared the
 > `maintenance` system-settings namespace (`enabled`, `message`, `allowAdmins`,
 > `startedAt`, `startedById`) and reserved the `Maintenance` OpenAPI tag before
-> any controller used it. Implemented in
-> `apps/api/src/common/maintenance/maintenance-mode.service.ts`,
-> `apps/api/src/common/maintenance/maintenance.guard.ts`,
-> `apps/api/src/common/maintenance/maintenance.controller.ts`,
-> `apps/api/src/common/maintenance/maintenance.module.ts`,
-> `apps/api/src/common/maintenance/allow-during-maintenance.decorator.ts`, and
-> `apps/api/src/common/maintenance/dto/update-maintenance.dto.ts`, with
-> exemptions applied in `apps/api/src/health/health.controller.ts`,
-> the identity slice's auth, device-auth and test-auth controllers (the app's own
-> `apps/api/src/auth/`, `device-auth/` and `test-auth/` copies were deleted by
-> #465; the platform's controllers carry the exemption), and the global registration
-> in `apps/api/src/app.module.ts`.
+> any controller used it. Since #464 (epic #462) the code is the platform's, in
+> `@marinoscar/platform-api/host`: the maintenance service, `MaintenanceGuard`,
+> the `GET|PUT /api/admin/maintenance` controller and the update DTO ship in
+> the package, and `PlatformHostCoreModule.forRoot` (mounted by
+> `apps/api/src/platform/host-core.config.ts`) provides them with
+> `MaintenanceGuard` as the application's only `APP_GUARD`. The routes, the
+> `MAINTENANCE_MODE` environment override and the stored settings are
+> unchanged; the app's own copies under `apps/api/src/common/maintenance/` were
+> deleted. What stays in the app is
+> `apps/api/src/common/maintenance/allow-during-maintenance.decorator.ts`, a
+> one-line re-export of the decorator from `@marinoscar/platform-api/core`, so
+> every `@AllowDuringMaintenance()` use compiles unchanged. Exemptions are
+> applied by the packaged health controller, by the identity slice's auth,
+> device-auth and test-auth controllers (the app's own copies were deleted by
+> #465) and by any app controller that carries the decorator.
 >
 > Operator procedures — turning a window on and off, the environment
 > break-glass, and recovering from an `allowAdmins: false` lockout — are in
@@ -152,7 +155,7 @@ inventing one would put a lie in the audit trail.
 
 ## 2. The guard resolves the admin role itself
 
-`MaintenanceGuard` is registered as `APP_GUARD` — **the repository's first
+`MaintenanceGuard` is registered as `APP_GUARD` — **the application's only
 global guard** — so it runs on every Nest route before any route-level
 `UseGuards`. That ordering is the whole point (a window must hold back a route
 before that route's own auth runs), and it has a direct consequence:
@@ -160,9 +163,9 @@ before that route's own auth runs), and it has a direct consequence:
 has not run.
 
 So the guard verifies the bearer token itself, with its own `JwtService`, and
-reads the `roles` claim that `auth/strategies/jwt.strategy.ts` puts there.
+reads the `roles` claim that the identity slice's JWT strategy puts there.
 
-Three rules govern that, and each is asserted in `maintenance.guard.spec.ts`:
+Three rules govern that, and each is asserted in the platform's `maintenance.guard.spec.ts`:
 
 - **It never populates `request.user`.** Writing a user onto the request here
   would give every downstream guard, interceptor and handler an authentication
@@ -183,10 +186,10 @@ Three rules govern that, and each is asserted in `maintenance.guard.spec.ts`:
   back off and the least likely to be the human trying to fix things. The
   `Retry-After` header is the right answer for them.
 
-### 2.1 `MaintenanceModule` does not import `AuthModule`
+### 2.1 The maintenance module does not import the auth module
 
 It registers its **own** `JwtModule.registerAsync` against the same
-`jwt.secret`, with the same `'fallback-secret'` default `jwt.strategy.ts` uses.
+`jwt.secret`, with the same `'fallback-secret'` default the JWT strategy uses.
 
 `AuthModule` does export `JwtModule`, so importing it would work today. It also
 pulls in `UsersModule`, `AllowlistModule`, `PatModule`, `NotificationsModule`,
@@ -194,16 +197,18 @@ pulls in `UsersModule`, `AllowlistModule`, `PatModule`, `NotificationsModule`,
 graph — behind a guard that runs in front of every request. That is one
 refactor away from a circular import, and the shape of that failure is the
 application not booting at all. It is an **acceptance criterion** of #257, and
-`maintenance.module.spec.ts` asserts it by walking the module graph rather than
-leaving it as a convention someone restores later.
+the platform's maintenance module spec asserts it by walking the module graph
+rather than leaving it as a convention someone restores later.
 
 The module deliberately does **not** re-export its `JwtModule`. `AuthModule`
 already exports one into the root context, and a second exported `JwtService`
 binding there could shadow it — including for the helpers the test suite
-resolves from the root injector to sign tokens. `app.module.ts` therefore
-aliases the guard with `useExisting`, so the instance is constructed in
-`MaintenanceModule`'s context (where its `JwtService` lives) while the global
-registration stays visible in the module that owns the application.
+resolves from the root injector to sign tokens. The packaged host module
+therefore registers the guard as the `APP_GUARD` and constructs it in the
+maintenance module's own context (where its `JwtService` lives). Since #464 that
+wiring is inside `PlatformHostCoreModule`, and `app.module.ts` carries no
+`APP_GUARD` of its own; the `host` conformance suite fails the build if an app
+adds one without declaring it in `allowedAppGuards` with a reason.
 
 ## 3. The 503: a stable marker and `Retry-After`
 
@@ -215,8 +220,9 @@ it when the deployment is simply broken.
 So every blocked response carries:
 
 - **`details.reason === 'MAINTENANCE_MODE'`** — `MAINTENANCE_ERROR_MARKER`,
-  exported from `maintenance.guard.ts`. The web client mirrors this constant in
-  #258; changing it is a wire-contract change.
+  exported by the packaged guard. The web client mirrors this constant in
+  `apps/web/src/services/maintenance.ts` (`readMaintenanceBlock`); changing it is
+  a wire-contract change.
 - **`details.retryAfterSeconds`** and a **`Retry-After` header**, both
   `MAINTENANCE_RETRY_AFTER_SECONDS` (30). Fixed and short rather than an
   estimate of when the window will close: nobody knows that, and a confident
@@ -225,13 +231,14 @@ So every blocked response carries:
   and "sign in as an administrator and carry on".
 
 **The marker must live under `details`.**
-`common/filters/http-exception.filter.ts` rebuilds every error body from a
-fixed key allowlist (`statusCode`, `code`, `message`, `details`, `timestamp`,
-`path`) and *always* derives `code` from the status, ignoring any `code` on the
-thrown payload. A custom top-level field would be silently stripped on the way
-out. That is why the marker is asserted through the **real filter**, over HTTP,
-in `test/maintenance/maintenance.integration.spec.ts`, and not only against the
-guard in isolation.
+The platform `HttpExceptionFilter` (`@marinoscar/platform-api/host`, which
+replaced the app's own filter in #464) rebuilds every error body from a fixed
+key allowlist and a custom top-level field is stripped on the way out. A
+registered error `code` is now kept (the old filter always derived `code` from
+the status); that is an additive difference and does not change the marker's
+place. The marker is asserted through the **real filter**, over HTTP, by the
+packaged `host` conformance suite and the app's maintenance integration test, and
+not only against the guard in isolation.
 
 The header is set on the Fastify reply by the guard before it throws; the
 filter's `send()` preserves headers set earlier.
@@ -257,7 +264,8 @@ first means the instance drains for the reason that is actually true, with a
 body that says so — and readiness keeps answering correctly at the one moment
 storage genuinely is not there. `resolve()` never throws, so this cannot turn a
 database outage into a `500` on the probe. Both the ordering and the status are
-asserted (`health.controller.spec.ts` proves the probe is never reached).
+asserted by the platform's health controller spec, which proves the probe is
+never reached.
 
 The readiness `503` carries the same marker but **no `Retry-After`** — that
 header is the guard's contract with API clients, and this response is read by
@@ -310,14 +318,16 @@ which is the moment somebody should have to justify it.
 
 ## 6. `/api/docs` is not covered by this guard
 
-`openapi/register-docs-routes.ts` mounts `/api/docs` and `/api/openapi.json`
+`registerPlatformDocs` (`@marinoscar/platform-api/host`, called from `main.ts`
+with `APP_OPENAPI` from `apps/api/src/openapi/document.ts`) mounts `/api/docs`
+and `/api/openapi.json`
 **directly on the Fastify instance, outside Nest's router**. No Nest guard —
 global or otherwise — ever sees them, so both stay readable while a window is
 open.
 
 That is intentional, and that file's own comments already say so: a maintenance
 window is exactly when an operator wants the API reference. It is stated here,
-in `maintenance.guard.ts`, in `app.module.ts` and in the reachable-set test so
+in the packaged guard, in `main.ts` (`registerPlatformDocs`) and in the reachable-set test so
 that it is a documented decision rather than a hole somebody finds by noticing
 the enumeration test does not cover it.
 
@@ -396,20 +406,25 @@ the request body: an audit trail the audited party can dictate is not one.
 
 | Claim | Where it is asserted |
 |---|---|
-| `MAINTENANCE_MODE=false` overrides a persisted `enabled: true` | `maintenance-mode.service.spec.ts`, and end to end in `test/maintenance/maintenance.integration.spec.ts` |
-| Only `'true'`/`'false'` count as an override | `maintenance-mode.service.spec.ts` (table-driven over `1`, `0`, `yes`, `no`, `TRUE`, `False`, `on`, `off`, `''`) |
+| `MAINTENANCE_MODE=false` overrides a persisted `enabled: true` | The platform's `maintenance-mode.service.spec.ts`, and end to end in `apps/api/test/maintenance/maintenance.integration.spec.ts` |
+| Only `'true'`/`'false'` count as an override | The platform's `maintenance-mode.service.spec.ts` (table-driven over `1`, `0`, `yes`, `no`, `TRUE`, `False`, `on`, `off`, `''`) |
 | The 503 body carries the marker **through the real exception filter**, plus `Retry-After` | `test/maintenance/maintenance.integration.spec.ts` |
-| `pat_` and `nod_` bearers never receive the admin bypass | `maintenance.guard.spec.ts` and the integration suite |
-| The guard never populates `request.user` | `maintenance.guard.spec.ts` |
+| `pat_` and `nod_` bearers never receive the admin bypass | The platform's `maintenance.guard.spec.ts` and the integration suite |
+| The guard never populates `request.user` | The platform's `maintenance.guard.spec.ts` |
 | The exact reachable set, enumerated from the router | `test/maintenance/maintenance-reachable-set.integration.spec.ts` |
-| `/api/health/live` is 200, `/api/health/ready` is 503 **before** the DB probe | `health.controller.spec.ts` (probe never reached) and the integration suite |
-| `MaintenanceModule` does not import `AuthModule` | `maintenance.module.spec.ts` (module-graph walk) |
+| `/api/health/live` is 200, `/api/health/ready` is 503 **before** the DB probe | The platform's `health.controller.spec.ts` (probe never reached) and the integration suite |
+| The maintenance module does not import the auth graph; `MaintenanceGuard` is the only `APP_GUARD` | The platform's module-graph spec and the `host` conformance suite (`apps/api/test/conformance.spec.ts`) |
 | `/api/docs` and `/api/openapi.json` stay readable | `test/maintenance/maintenance-reachable-set.integration.spec.ts` |
-| A window is audited, with provenance | `maintenance-mode.service.spec.ts` and the integration suite |
+| A window is audited, with provenance | The platform's `maintenance-mode.service.spec.ts` and the integration suite |
 
-Not covered here, and left to the issues that own them: the client-side banner
-and the mirrored marker (#258), and the restore swap that installs the
-in-memory override (#285). Nothing in this repository calls
+The client side is the packaged web host slice (`@marinoscar/platform-web/host/ui`)
+since #464: `MaintenanceGate` renders the public maintenance screen,
+`MaintenanceBanner` the admin banner, and `AboutPage` and `MaintenancePage` the
+admin pages. The app's `PlatformHostProvider` binding is
+`apps/web/src/platform/platformHost.tsx`.
+
+Not covered here, and left to the issue that owns it: the restore swap that
+installs the in-memory override (#285). Nothing in this repository calls
 `setInMemoryOverride` yet — it is exercised by tests and by
 `GET /api/admin/maintenance`'s layer reporting, and its first production caller
 arrives with #285.

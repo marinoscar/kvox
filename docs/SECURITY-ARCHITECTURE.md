@@ -771,6 +771,23 @@ interface RequestUser {
 
 ---
 
+### Global Host Pipeline (platform host core)
+
+Since issue #464 (epic #462) the cross-cutting request pipeline is the platform host core's (`PlatformHostCoreModule.forRoot`, `apps/api/src/platform/host-core.config.ts`), not app code. The app registers no `APP_GUARD`, `APP_FILTER` or `APP_INTERCEPTOR` of its own for these concerns, and the `host` conformance suite fails the build if an undeclared global guard appears.
+
+| Stage | Behaviour | Security relevance |
+|-------|-----------|--------------------|
+| Request-id middleware | Every request gets an id (the incoming `x-request-id`, else a generated UUID), echoed in the `x-request-id` and `x-trace-id` response headers and carried into log lines and spans | Correlation across proxy, API and logs; clients cannot forge a trace relationship that the server trusts |
+| `MaintenanceGuard` (the only `APP_GUARD`) | While a maintenance window is open, answers `503` with a stable marker and `Retry-After` to every route not marked `@AllowDuringMaintenance()`; an `admin` bypass applies only when `allowAdmins` is true, and `pat_` and `nod_` bearers never receive it. It decides from the token without populating `request.user` | Runs before any per-route guard, and cannot depend on the database being readable; design in [`specs/maintenance-mode.md`](specs/maintenance-mode.md) |
+| Response interceptor | Wraps successful JSON in `{ data, meta }`; the request logger records method, URL and duration, never a body | Bodies and credentials are not logged. A `304` skips the envelope through `platform/http/not-modified.interceptor.ts` (a tracked shim) |
+| `HttpExceptionFilter` | Rebuilds every error body from a fixed key set (`statusCode`, `code`, `message`, `details`, `timestamp`, `path`); a non-HTTP error is reported by its own message, with the stack in `details` outside production only; a registered error `code` is kept, a Zod error adds `details.issues` (path and message, never the submitted value) and a `429` adds `Retry-After` | A stray top-level field on a thrown payload cannot reach a client |
+
+The authentication guards remain per route (`@Auth(...)` or `@Public()`), applied after this pipeline. `/api/docs` and `/api/openapi.json` are mounted outside Nest's router, so no guard sees them; this is deliberate (an operator wants the API reference during a maintenance window) and they expose the contract, never data.
+
+The platform Doctor (`GET /api/admin/doctor`, `system_settings:read`) is the read-only configuration check. It reports `db.rls_role` as `fail` while the application connects as a superuser, which is **expected until #471**; see [`ARCHITECTURE.md`](ARCHITECTURE.md#78-platform-host-core-about-and-doctor). The support bundle passes every section through a central redaction pass before download.
+
+---
+
 ## 6. Database Security Model
 
 ### Security Tables ERD
@@ -1658,7 +1675,9 @@ apps/api/src/platform/
 ├── platform-host.module.ts         # PlatformHostModule.forRoot (audit sink, settings store, PLATFORM_PRISMA)
 ├── audit-sink.adapter.ts           # AUDIT_SINK -> audit_events
 ├── system-settings-store.adapter.ts
-├── doctor.config.ts                # checks behind GET /api/admin/doctor
+├── host-core.config.ts             # PlatformHostCoreModule.forRoot (maintenance guard, envelope, error filter, request ids)
+├── about/about.config.ts           # AboutModule.forRoot
+├── http/not-modified.interceptor.ts   # shim: a 304 skips the envelope
 └── identity/
     ├── identity.config.ts          # IdentityModule.forRoot
     ├── identity-host.module.ts     # binds the host ports
@@ -1696,9 +1715,12 @@ apps/api/prisma/
 ```
 apps/api/src/
 ├── main.ts                         # Application bootstrap (imports app-registrations first)
+├── doctor/doctor.config.ts         # DoctorModule.forRoot: GET /api/admin/doctor (read-only checks)
 └── common/
     ├── constants/
     │   └── roles.constants.ts      # ROLES / PERMISSIONS derived from the registries
+    └── maintenance/
+        └── allow-during-maintenance.decorator.ts   # re-export of the core decorator
 ```
 
 **Credential Encryption (see section 14):** the cipher, the boot-time key check and the encrypted store are the platform's, not the app code (issue #466). the app mounts and configures them:
@@ -1777,7 +1799,8 @@ apps/web/src/
 - [ ] Initial admin email added to allowlist during seeding
 - [ ] OAuth credentials from production Google project
 - [ ] Audit logging verified and monitored
-- [ ] Error handler sanitizes responses (no stack traces)
+- [ ] Error handler sanitizes responses (no stack traces; the platform `HttpExceptionFilter` shows `details.stack` outside production only)
+- [ ] Doctor reviewed: every check passes except the documented `db.rls_role` failure (until #471)
 - [ ] `SECRETS_ENCRYPTION_KEY` set before any credential-store consumer (e.g. SMTP settings) goes live
 
 **Monitoring:**

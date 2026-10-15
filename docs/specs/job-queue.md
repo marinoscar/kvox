@@ -2003,9 +2003,9 @@ fails a test rather than an incident.
 
 ### 8.8 Errors carry their machine-readable half in `details`
 
-`common/filters/http-exception.filter.ts` rebuilds every error body from a
-fixed key allowlist and **derives `code` from the status**, discarding any
-`code` an exception supplied. A field added at the top level of a thrown
+The platform `HttpExceptionFilter` (`@marinoscar/platform-api/host`, since #464) rebuilds every error body from a
+fixed key allowlist and **derives `code` from the status** unless the exception
+carries a registered error code. A field added at the top level of a thrown
 payload therefore never reaches the client. So the running-job refusal sends
 `details: { jobId, status: 'running', reason: 'job_running' }` and the dedup
 collision sends `details: { jobId, reason: 'active_dedup_conflict' }`.
@@ -2744,7 +2744,7 @@ the cache TTL and the two time windows are exact timestamps rather than ranges.
 | Every route is Admin-only and rejects an anonymous caller and a viewer | `test/jobs/job-admin.integration.spec.ts` — all six routes, both cases |
 | The query parameters survive the real `ZodValidationPipe`: bounds, enums and the boolean | `test/jobs/job-admin.integration.spec.ts` |
 | The running-job refusal's machine-readable half survives the exception filter's key allowlist | `test/jobs/job-admin.integration.spec.ts` — asserts `details` on the wire |
-| Every route carries `x-rbac` and the document still lints | `npm run openapi:dump` + `npm run openapi:lint`, plus `test/openapi/openapi-document.spec.ts` |
+| Every route carries `x-rbac` and the document still lints | `npm run openapi:dump` + `npm run openapi:lint`, plus the platform's OpenAPI document spec (the app's own `test/openapi/` was deleted by #464) |
 
 Be honest about the limits of #264. No test here asks Postgres whether the
 `(status, type, id)` covering index is genuinely chosen for the two `groupBy`

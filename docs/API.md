@@ -31,22 +31,22 @@ Access tokens are short-lived (15 minutes by default). Use the refresh token flo
 
 ### Error Response
 
+Every error body is built by the platform `HttpExceptionFilter` (`@marinoscar/platform-api/host`, mounted by `PlatformHostCoreModule`; the app's own filter was deleted by #464) from a fixed key set, and is **not** wrapped in the `data` envelope:
+
 ```json
 {
   "statusCode": 400,
+  "code": "BAD_REQUEST",
   "message": "Human readable error message",
-  "error": "BadRequest"
+  "details": {},
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "path": "/api/example"
 }
 ```
 
-For validation errors:
-```json
-{
-  "statusCode": 400,
-  "message": ["Field validation error 1", "Field validation error 2"],
-  "error": "BadRequest"
-}
-```
+`code` is derived from the status unless the thrown error carries a registered error `code` for that same status, in which case it is kept. `details` appears only when the failure carried structured data, and it is the only place endpoint-specific data survives (a custom top-level field is dropped). A validation (Zod) error adds `details.issues`, an array of `{ path, message }` that never echoes the submitted value. A `429` carries a `Retry-After` header. Every response carries `x-request-id` (the incoming header, or a generated UUID) and `x-trace-id`.
+
+A few routes send a verbatim body instead (`withVerbatimErrorBody`, which the filter honours through a shared `Symbol.for` key); each documents its own shape.
 
 ## Pagination
 
@@ -2361,6 +2361,8 @@ Revokes any credential, whoever owns it. `404` if already revoked.
 
 ### Maintenance
 
+Served by the platform host slice (`@marinoscar/platform-api/host`, mounted in `apps/api/src/platform/host-core.config.ts`) since #464; the paths, bodies and the `MAINTENANCE_MODE` override are unchanged. While a window is open every other route answers `503` through the packaged `MaintenanceGuard`, the application's only global guard.
+
 **No dedicated permission** — this is a system setting (`system_settings:read`/`system_settings:write`), stored in the `maintenance` namespace. See [`docs/specs/maintenance-mode.md`](specs/maintenance-mode.md) and [`docs/runbooks/maintenance-mode.md`](runbooks/maintenance-mode.md). Both routes are exempt from the maintenance guard itself (`@AllowDuringMaintenance()`), so the switch that turns a window off is always reachable — `@Auth()` still applies underneath.
 
 #### GET /admin/maintenance
@@ -2412,77 +2414,62 @@ Opens or closes the window. Writes the persisted `maintenance` namespace and rec
 
 ### About (Admin-only)
 
-What is deployed here (issue #124, epic #118). One read-only route reporting the deployment record the CLI wrote at deploy time, plus what only the running process and a live database connection can answer. Gated on `system_settings:read` — **deliberately not a permission of its own** (epic #118 decision 8): "what is deployed here" is an administrator's configuration read, and the web card at `/admin/settings/about` (#126) carries this exact string per the Settings UI Pattern rule 3. Not exempt from the maintenance window — it is an admin page, and administrators bypass the window already unless `allowAdmins` is `false`.
+What is deployed here (issue #124, epic #118). One read-only route reporting the deployment record the CLI wrote at deploy time, plus what only the running process and a live database connection can answer. Since #464 (epic #462) it is the platform's `AboutModule` (`@marinoscar/platform-api/host`, bound in `apps/api/src/platform/about/about.config.ts`), not app code. Gated on `system_settings:read` — **deliberately not a permission of its own** (epic #118 decision 8): "what is deployed here" is an administrator's configuration read, and the web card at `/admin/settings/about` carries this exact string per the Settings UI Pattern rule 3. Not exempt from the maintenance window — it is an admin page, and administrators bypass the window already unless `allowAdmins` is `false`.
 
-**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (the deploy CLI, `deploy update --check` / `status`), never from a call made here; `deployRunComplete`, `deployFailedStep` and `deployAttemptedAt` are derived from the record's own `run` block the same way.
+**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. The `remote` block is what the deploy CLI last recorded (`deploy update --check` / `status`), never a call made here.
 
 #### GET /admin/about
 **Requires:** `system_settings:read`
 
-Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/deploy-info/info.json`, bind-mounted read-only by the CLI) **on every request**, so rewriting the file takes effect on the next response with no restart. **Always answers 200**: the local dev stack and CI have no such file and must still render the page; an operator diagnosing a broken database is the person who most needs the rest of it.
+Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/deploy-info/info.json`, bind-mounted read-only by the CLI) **on every request**, so rewriting the file takes effect on the next response with no restart. **Always answers 200**: the local dev stack and CI have no such file and must still render the page.
 
 **Response:**
 ```json
 {
   "data": {
-    "deployInfo": {
-      "schema": 1,
-      "app": { "name": "example-app", "version": "1.4.0", "commitSha": "3f2a9c1d…", "ref": "main", "repoUrl": "https://github.com/example-org/example-app" },
-      "installedAt": "2026-08-01T09:15:00.000Z",
-      "updatedAt": "2026-09-14T22:41:07.000Z",
-      "lastCommand": "update",
-      "deployedBy": { "cli": "example-cli", "version": "1.4.0" },
-      "domain": "app.example.com",
-      "bindPort": 3535,
-      "host": { "hostname": "vps-01", "os": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-45-generic", "arch": "x64", "cpuModel": "AMD EPYC 7B13", "cpus": 4, "memoryBytes": 8323072000, "diskBytes": 80530636800, "dockerVersion": "27.1.1", "composeVersion": "2.29.1", "nodeVersion": "22.11.0" },
-      "remote": { "sha": "9b8c7d6e…", "commitsBehind": 2, "checkedAt": "2026-09-15T06:00:00.000Z" },
-      "run": { "completed": true }
-    },
+    "api": { "version": "1.2.2", "deploymentMode": "production" },
     "deployInfoStatus": "ok",
-    "detail": null,
-    "runtime": {
-      "apiVersion": "1.4.0",
-      "nodeVersion": "v22.11.0",
-      "processStartedAt": "2026-09-14T22:41:30.000Z",
-      "uptimeSeconds": 43110,
-      "serverTimeUtc": "2026-09-15T10:40:00.000Z",
-      "environment": "production"
-    },
-    "database": {
-      "serverVersion": "PostgreSQL 16.4 (Debian 16.4-1.pgdg120+1) on x86_64-pc-linux-gnu, …",
-      "appliedMigrations": 42,
-      "lastMigrationName": "20260901120000_add_note_exports",
-      "lastMigrationAt": "2026-09-14T22:41:12.000Z"
-    },
+    "deployInfoPath": "/app/deploy-info/info.json",
+    "deployInfoError": null,
+    "app": { "name": "example-app", "version": "1.4.0", "commitSha": "3f2a9c1d…", "ref": "main" },
+    "installedAt": "2026-08-01T09:15:00.000Z",
+    "updatedAt": "2026-09-14T22:41:07.000Z",
+    "deployedBy": { "cli": "example-cli", "version": "1.4.0" },
+    "domain": "app.example.com",
+    "remote": { "commitsBehind": 2, "checkedAt": "2026-09-15T06:00:00.000Z" },
+    "run": { "completed": [], "failedStep": null, "outcome": null },
+    "lastCommand": "update",
+    "bindPort": 3535,
+    "proxy": null,
+    "host": { "hostname": "vps-01", "os": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-45-generic", "arch": "x64", "cpus": 4, "memoryBytes": 8323072000, "dockerVersion": "27.1.1", "composeVersion": "2.29.1", "capturedAt": "2026-09-14T22:41:00.000Z" },
+    "history": null,
+    "runtime": { "processStartedAt": "2026-09-14T22:41:30.000Z", "nodeVersion": "v22.11.0", "environment": "production" },
+    "database": { "status": "up", "responseTime": "3ms" },
     "databaseError": null,
-    "updateAvailable": true,
-    "checkedAt": "2026-09-15T06:00:00.000Z",
-    "deployRunComplete": true,
-    "deployFailedStep": null,
-    "deployAttemptedAt": null
-  }
+    "extras": [
+      { "id": "transcription", "label": "Transcription", "facts": { "provider": "assemblyai", "model": "best" } },
+      { "id": "deployment", "label": "Deployment", "facts": { "repoUrl": "https://example.com/example-org/example-app", "remoteSha": "9b8c7d6e…", "runCompleted": true } }
+    ]
+  },
+  "meta": { "timestamp": "2026-09-15T10:40:00.000Z" }
 }
 ```
+
+The values above are illustrative; the shape is the document the running server publishes (`npm run openapi:dump`).
 
 **Fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `deployInfo` | object \| null | The file as written by the CLI, parsed. Every field inside is nullable (the CLI's best effort at deploy time), objects are `.passthrough()` so a newer CLI's extra fields ride through, and any key matching `password`/`secret`/`key`/`token` (case-insensitive, at any depth) is stripped before it is relayed. `null` unless `deployInfoStatus` is `ok`. |
-| `deployInfoStatus` | `ok` \| `absent` \| `unreadable` \| `invalid` | `absent`: no file at the path — the ordinary state outside a CLI deploy. `unreadable`: the file exists but could not be read or is not JSON (a torn write; the next request reads the finished file). `invalid`: JSON, but not this schema. |
-| `detail` | string \| null | The read/parse message when the status is not `ok`. |
-| `runtime` | object | `apiVersion` (`APP_VERSION`, else the npm version, else `package.json`), `nodeVersion`, `processStartedAt`, `uptimeSeconds`, `serverTimeUtc` (always `Z`-suffixed — the clock every other timestamp is compared against), `environment` (`NODE_ENV`). |
-| `database` | object \| null | `serverVersion` (`SELECT version()` verbatim), `appliedMigrations` (rows in `_prisma_migrations` with `finished_at` set), `lastMigrationName`, `lastMigrationAt`. `null` with `databaseError` set when the query fails — the route still answers 200. |
-| `databaseError` | string \| null | Why `database` is null, when it is. |
-| `updateAvailable` | boolean \| null | `remote.commitsBehind > 0`. **`null` means unknown, not "no"** — the CLI has never run a remote check. Derived here so the web card and the terminal agree. |
-| `checkedAt` | string \| null | `remote.checkedAt`, passed through; `null` until the CLI has checked. |
-| `deployRunComplete` | boolean \| null | Did the deploy run that wrote the record run to the end? (issue #283) `null` when there is no record at all. **`true` also when the record carries no `run` block** — every `deploy-info` written before #283 was written only after a pipeline finished, so absence means "completed"; derived here so the web card and `deploy about` cannot disagree about it. `false` when the CLI wrote the record and a later step then failed: the deployment facts beside it are still accurate, because the record is only written once `/api/health/ready` has answered. |
-| `deployFailedStep` | string \| null | The pipeline step that stopped the run (e.g. `publish`, `verify`). `null` unless `deployRunComplete` is `false`. |
-| `deployAttemptedAt` | string \| null | When that run ended. `null` unless `deployRunComplete` is `false` — on a completed run `deployInfo.updatedAt` is already that instant. |
+| `api` | object | `version` (this app's `resolveApiVersion`: `APP_VERSION`, else the npm version, else `package.json`) and `deploymentMode`. |
+| `deployInfoStatus` | string | Whether the record could be read (`ok`, `absent`, `unreadable` or `invalid`, as the platform reports it). `absent` is the ordinary state outside a CLI deploy. |
+| `deployInfoPath` / `deployInfoError` | string \| null | The path read, and the read or parse message when the status is not `ok`. |
+| `app`, `installedAt`, `updatedAt`, `deployedBy`, `domain`, `remote`, `run`, `lastCommand`, `bindPort`, `proxy`, `host`, `history` | object \| null | The documented subset of the deploy record. Every field inside is nullable. A key matching `password`, `secret`, `key` or `token` is stripped. `run.outcome` is always `null` for the deploy CLI's files (it writes a boolean `run.completed`, which the platform reader does not map). |
+| `runtime` | object | `processStartedAt`, `nodeVersion`, `environment`. |
+| `database` / `databaseError` | object \| null | A liveness probe (`status`, `responseTime`). `null` with `databaseError` set when it fails; the route still answers 200. |
+| `extras` | array | One `{ id, label, facts }` per About contributor. The app registers two (`apps/api/src/app-registrations/host.ts`): **Transcription** (`provider` id and `model` only, never a key; `provider` is `none` when unset) and **Deployment** (the deploy-info fields the platform reader drops: `repoUrl`, `remoteSha`, `runCompleted`, `runAttemptedAt`, `adoptedAt`, `hostCpuModel`, `hostDiskBytes`, `hostNodeVersion`; read by `apps/api/src/platform/about/deploy-extras.ts`). |
 
-⚠ **An incomplete run is `deployInfoStatus: "ok"`, not a fifth status.** The four statuses answer "could the record be read", and a record written by a run that later failed parsed perfectly. The two questions are independent: a client renders the deployment facts *and* warns about the step, rather than choosing between them. Note also that `deployInfo.updatedAt` keeps meaning **the last deploy that succeeded** — on a failed `update` past the health step it stays at the previous success while `deployInfo.app.commitSha` names the revision now actually serving, and `run` is what reconciles the two.
-
-Every timestamp is ISO-8601 UTC.
+**Known gap (#482).** `runtime.apiVersion`, `uptimeSeconds`, `serverTimeUtc`, `database.serverVersion`, `migrations` and `updateAvailable` no longer exist. The CLI's `deploy about` API block still expects them and degrades to "the API answered something this build cannot read" until #482 updates it. The web About page is the packaged one and is unaffected.
 
 **Error Cases:**
 - 401 Unauthorized - Missing or invalid token
@@ -7996,7 +7983,14 @@ on those two alone.
 ### Doctor (Admin-only)
 
 #### GET /admin/doctor
-Packaged by the platform (its `doctor` slice) and mounted because the identity slice registers its checks with the doctor registry; the checks the app configures are in `apps/api/src/platform/doctor.config.ts`.
+Packaged by the platform (its `doctor` slice), mounted by `apps/api/src/doctor/doctor.config.ts` (`DoctorModule.forRoot`). The platform checks come with the identity slice and `PlatformHostCoreModule`; this app adds two, registered through the Doctor check registry by providers:
+
+| Check id | Category | Result |
+|----------|----------|--------|
+| `<APP_SLUG>.db.extensions` | `core` | `fail` when `vector` or `pg_trgm` is not installed (remedy: create the extension as a superuser before migrating); `data` holds extension names only. Provider: `apps/api/src/doctor/checks/db-extensions.doctor-check.ts`. |
+| `<APP_SLUG>.transcription.configured` | `ai` | `warn` when no transcription provider is selected or the selected provider has no stored key; a credential presence check only. Provider: `apps/api/src/transcription/transcription-configured.doctor-check.ts` (under `transcription` because base code must not import domain code). |
+
+⚠ **`db.rls_role` reports `fail` and that is expected.** The platform check wants a `NOSUPERUSER NOBYPASSRLS` database role, and this app still connects as `postgres`. The failure stays until #471 switches the role; it is recorded in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md) and the overall `verdict` is `fail` until then.
 
 **Requires:** `system_settings:read` permission
 
@@ -8033,62 +8027,65 @@ Runs a read-only check of every capability this deployment has (database, authen
 }
 ```
 
-The values above are illustrative. `status` and `verdict` are `pass`, `warn`, `fail` or `skip`; `verdict` is the worst status present, ordered `pass` < `skip` < `warn` < `fail`. On `warn` and `fail`, `remedy` says what to do and `settingsPath` names the page that fixes it. The route is read-only (no row, object or audit event is written, no mail or push is sent, no model is called), each check is cut off after 5000 ms unless it declares otherwise, and a check whose dependency failed or was skipped is reported as `skip` without running.
+The values above are illustrative (`generatedAt` is the server clock; the example row is one platform check). `status` and `verdict` are `pass`, `warn`, `fail` or `skip`; `verdict` is the worst status present, ordered `pass` < `skip` < `warn` < `fail`. On `warn` and `fail`, `remedy` says what to do and `settingsPath` names the page that fixes it. The route is read-only (no row, object or audit event is written, no mail or push is sent, no model is called), each check is cut off after 5000 ms unless it declares otherwise, and a check whose dependency failed or was skipped is reported as `skip` without running.
+
+#### GET /admin/doctor/support-bundle
+**Requires:** `system_settings:read` permission
+
+Downloads one JSON file for a support ticket: the Doctor report, the deployment versions, a 24-hour telemetry summary and every section the application registers, each validated by a strict schema and then passed through a central redaction pass that removes secrets and personal data. The file is named after `APP_SLUG` (`supportBundle: { appSlug }` in `doctor.config.ts`). The body is a bare JSON document (`bundleVersion`, `generatedAt`, `redaction: { rules, replacements }`, `sections`), not the `data` envelope.
+
+**Error Cases:**
+- 401 Unauthorized - Missing or invalid token
+- 403 Forbidden - Caller lacks `system_settings:read`
 
 ---
 
 ### Health
 
-**Public endpoints** - Used for Kubernetes liveness/readiness probes.
+**Public endpoints** - Used for Kubernetes liveness/readiness probes. Served by the platform host core (`@marinoscar/platform-api/host`) since #464; the app's own health module was deleted. The controller is exempt from the maintenance guard, and each indicator's result is bounded and secret-filtered because the routes are public. The only built-in indicator is `database` (a timed `SELECT 1`).
 
 #### GET /health
-Full health check - includes database connectivity test. Equivalent to GET /health/ready.
+Full health check - runs every registered indicator, critical or not.
 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "checks": {
-    "database": "ok"
-  }
+  "data": {
+    "status": "ok",
+    "info": { "database": { "status": "up", "responseTime": "3ms" } },
+    "error": {},
+    "details": { "database": { "status": "up", "responseTime": "3ms" } },
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  },
+  "meta": { "timestamp": "2024-01-01T00:00:00.000Z" }
 }
 ```
 
 **Error Cases:**
-- 503 Service Unavailable - Database connection failed
+- 503 Service Unavailable - An indicator failed (the body is the Terminus result, not enveloped)
 
 ---
 
 #### GET /health/live
-Liveness check - always returns 200 if service is running.
+Liveness check - always returns 200 if the process is running, **including during a maintenance window** so an orchestrator does not restart the container mid-upgrade.
 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "timestamp": "2024-01-01T00:00:00.000Z"
+  "data": { "status": "ok", "timestamp": "2024-01-01T00:00:00.000Z" },
+  "meta": { "timestamp": "2024-01-01T00:00:00.000Z" }
 }
 ```
 
 ---
 
 #### GET /health/ready
-Readiness check - includes database connectivity test.
+Readiness check - runs the critical indicators (database connectivity). The maintenance question is answered first, so a load balancer drains the instance for the true reason.
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "checks": {
-    "database": "ok"
-  }
-}
-```
+**Response:** same shape as `GET /health`.
 
 **Error Cases:**
-- 503 Service Unavailable - Database connection failed
+- 503 Service Unavailable - The database check failed, or a maintenance window is open (the error body then carries `details.reason: "MAINTENANCE_MODE"` and no `Retry-After`)
 
 ---
 
@@ -8158,41 +8155,20 @@ OpenAPI 3.1 document at `/api/openapi.json`. It allows you to:
 
 ### How the document is built
 
-Everything that shapes `/api/openapi.json` lives in `apps/api/src/openapi/` rather than in
-`main.ts`, so it can be built by a test harness and by `scripts/dump-openapi.ts` (the `openapi:dump`
-npm script) without booting a listening server — the document CI lints is the document users get.
+The document and the Scalar page are built by the platform host slice (`createOpenApiDocument` and `registerPlatformDocs` from `@marinoscar/platform-api/host`), not by app code (issue #464 deleted the app's own copies). What the app supplies is small:
 
-- **`document.ts`** builds the base document with Nest's `SwaggerModule.createDocument`, then runs
-  it through a fixed pipeline of enrichment passes (`rbac-docs.ts`, `data-envelope.ts`,
-  `tags.ts`, `nullable.ts`, in that order — order matters, since later passes must see what
-  earlier ones added). **`version.ts`** resolves the version stamped into `info.version`
-  (`APP_VERSION`, then `npm_package_version`, then `apps/api/package.json`, never throwing).
-  **`description.ts`** builds the Markdown intro shown at the top of the page and inside the
-  downloaded spec itself.
-- **`rbac-docs.ts`** renders each operation's `@Auth()` metadata (roles, permissions) into the
-  **Requires:** line appended to its description — generated from the same decorator the guards
-  read, so the documented requirement cannot drift from the enforced one.
-- **`tags.ts`** is the single declaration of every `@ApiTags(...)` name, its description, and which
-  sidebar section it belongs to, emitted as the `x-tagGroups` vendor extension Scalar reads to
-  render the sectioned sidebar. A tag used by a controller but not declared here, or declared here
-  and used by nobody, fails a test rather than silently rendering wrong.
-- **`data-envelope.ts`** rewrites every documented 2xx JSON response to match what the global
-  `TransformInterceptor` actually sends (`{ data, meta }`), since a handler's declared return type
-  and its wire shape are two different things once that interceptor runs. **`nullable.ts`** rewrites
-  `@ApiProperty({ nullable: true })`'s OpenAPI 3.0 spelling into the 3.1 type union the published
-  document (3.1, driven by zod v4's JSON Schema 2020-12 output) actually requires.
-- **`docs-page.ts`** renders the `/api/docs` page itself — a hand-written template rather than the
-  `@scalar/nestjs-api-reference` package, because the one-click session auth below has to resolve a
-  token before Scalar mounts, which that package's fixed template does not expose a seam for. See
-  [One-click session auth](#one-click-session-auth) below.
-- The Spectral lint (`npm run openapi:lint` against `.spectral.yaml`, run in CI via `openapi:dump`
-  then `openapi:lint`) fails the build on a missing or duplicated operation id, an undeclared tag,
-  or anything else that would quietly degrade the reference page.
+- **`apps/api/src/openapi/document.ts`** exports `APP_OPENAPI` (`appName`, `repoUrl`, `version`). `main.ts` and `scripts/dump-openapi.ts` both pass it, so the document CI lints (`npm run openapi:dump`, then `npm run openapi:lint`) is the document users get.
+- **`apps/api/src/openapi/version.ts`** resolves the version stamped into `info.version` (`APP_VERSION`, then `npm_package_version`, then `apps/api/package.json`, never throwing); the same function feeds the About report.
+- **`apps/api/src/openapi/tags.ts`** is the single declaration of every `@ApiTags(...)` name, its description and its sidebar section (emitted as the `x-tagGroups` vendor extension Scalar reads). A tag used by a controller but not declared there, or declared and used by nobody, fails a test.
+
+The platform applies the same enrichment passes the app used to carry: the `{ data, meta }` envelope on every documented 2xx JSON response, the nullable normalisation to OpenAPI 3.1, the generated **Requires:** RBAC line per operation (rendered from the `@Auth()` metadata the guards read), security schemes and operation ids. `/api/docs` and `/api/openapi.json` are mounted on the Fastify instance, outside Nest's router, so they stay readable during a maintenance window.
+
+The Spectral lint (`npm run openapi:lint` against `.spectral.yaml`) fails the build on a missing or duplicated operation id, an undeclared tag, or anything else that would quietly degrade the reference page.
 
 #### One-click session auth
 
 Landing on `/api/docs` while already signed in authorizes it automatically, with no manual token
-step. The page's inline script (`buildDocsAuthScript` in `docs-page.ts`) runs before Scalar mounts:
+step. The page's inline script (packaged with `registerPlatformDocs`) runs before Scalar mounts:
 it calls `POST /api/auth/refresh` with `credentials: 'include'` — required even same-origin, since
 the refresh cookie is scoped to `/api/auth` — reads the access token out of the response envelope
 (`body.data.accessToken`), and passes it to Scalar as a pre-authorized `securitySchemes` entry for
