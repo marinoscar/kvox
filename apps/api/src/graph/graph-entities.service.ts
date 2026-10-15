@@ -33,9 +33,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../ai/ai-settings.service';
-import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobHandlerRegistry } from '../jobs/job-handler.registry';
-import { JobsService } from '../jobs/jobs.service';
+import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphAccessService } from './access/graph-access.service';
 import type { GraphEntityResponse, PatchEntityDto } from './dto/graph-entity.dto';
@@ -57,6 +55,7 @@ import { KG_PERSON_TYPE } from './purge/kg-purge.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { toGraphHttpException } from './write/graph-write.errors';
 import { GraphWriteService, type EntityUpdateResult } from './write/graph-write.service';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 export const GRAPH_ENTITY_EDITED_ACTION = 'graph.entity_edited';
 export const GRAPH_PERSON_FORGET_REQUESTED_ACTION = 'graph.person_forget_requested';
@@ -165,6 +164,8 @@ export class GraphEntitiesService {
     const job = await this.jobs.enqueue({
       type: KG_PURGE_JOB_TYPE,
       reason: 'rerun',
+      // The purge deletes the graph's export and import `storage_objects`, so it runs in an organization.
+      orgId: await resolveOrgId(this.prisma, null, `kg.purge enqueue for entity ${id}`),
       subjectType: KG_SUBJECT_ENTITY,
       subjectId: id,
       payload: { userId: user.id, scope: 'person', entityId: id },
@@ -202,6 +203,7 @@ export class GraphEntitiesService {
         await this.jobs.enqueue({
           type: KG_EMBED_JOB_TYPE,
           reason: 'rerun',
+          orgId: null,
           subjectType: KG_SUBJECT_USER,
           subjectId: ownerId,
           skipDedup: true,
@@ -212,6 +214,7 @@ export class GraphEntitiesService {
         await this.jobs.enqueue({
           type: KG_ENTITY_DIGEST_JOB_TYPE,
           reason: 'backfill',
+          orgId: null,
           subjectType: KG_SUBJECT_ENTITY,
           subjectId: entityId,
           payload: { entityId, ownerId },

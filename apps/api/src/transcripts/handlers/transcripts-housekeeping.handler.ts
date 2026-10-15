@@ -66,8 +66,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../transcription/transcription.system-settings';
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
 import {
@@ -78,6 +76,7 @@ import {
 } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
+import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /**
  * The source-object facts step 2 decides on. One query loads them for every
@@ -150,6 +149,8 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
   private readonly logger = new Logger(TranscriptsHousekeepingHandler.name);
 
   readonly type = TRANSCRIPTS_HOUSEKEEPING_JOB_TYPE;
+
+  readonly label = 'Transcript housekeeping';
 
   constructor(
     private readonly registry: JobHandlerRegistry,

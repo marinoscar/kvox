@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { Job } from '@prisma/client';
 
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '../../storage/providers/storage-provider.interface';
@@ -13,6 +12,7 @@ import type {
   DatabaseBackupRetentionService,
 } from '../db-backup-retention.service';
 import { DatabaseBackupSweepHandler } from './db-backup-sweep.handler';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The backup sweep's acceptance criteria (issue #282 and #288, moved by #353)

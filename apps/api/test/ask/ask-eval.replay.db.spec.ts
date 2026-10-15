@@ -43,7 +43,6 @@ import { GraphPreferencesService } from '../../src/graph/preferences/graph-prefe
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
@@ -52,6 +51,7 @@ import { loadGoldenSet } from '../../scripts/kg-eval/load';
 import { done, FakeAskProvider, text, toolCall } from '../../scripts/ask-eval/fake-provider';
 import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 

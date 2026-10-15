@@ -66,9 +66,6 @@ import {
 } from '@app/shared/ontology';
 import type { Job } from '@prisma/client';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { KG_MIGRATE_JOB_TYPE } from '../job-types';
 import {
   DEFAULT_KG_MIGRATE_DEFINITION,
@@ -84,6 +81,7 @@ import {
   type KgMigrateTable,
 } from './kg-migrate.plan';
 import { KgMigrateRepository, type KgMigrateRow, type KgMigrateUpdate } from './kg-migrate.repository';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 export const KG_MIGRATE_PROFILE: JobExecutionProfile = {
   maxRuntimeMs: 60 * 60_000,
@@ -112,6 +110,8 @@ export class KgMigrateHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgMigrateHandler.name);
 
   readonly type = KG_MIGRATE_JOB_TYPE;
+
+  readonly label = 'Knowledge graph migration';
 
   readonly profile: JobExecutionProfile = KG_MIGRATE_PROFILE;
 

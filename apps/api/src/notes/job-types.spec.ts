@@ -7,13 +7,10 @@
 // history under the old name. Pinning them in a test is how a rename becomes a
 // deliberate act rather than a refactor's side effect.
 //
-// All five are also asserted to have a LABEL even though four of them have no
-// handler yet — a label is a display string, not a registration, and the point
-// of adding them together is that the admin job list never shows an operator a
-// raw dotted key the day one of those issues lands.
+// All five are also asserted to declare a LABEL on their handler, so the admin
+// job list never shows an operator a raw dotted key.
 // =============================================================================
 
-import { jobTypeLabel } from '../jobs/job-type-label';
 import {
   NOTES_HOUSEKEEPING_JOB_TYPE,
   NOTES_MANAGED_BY,
@@ -24,6 +21,13 @@ import {
   NOTE_SUBJECT_TYPE,
   aiProviderThrottleKey,
 } from './job-types';
+import { jobTypeLabel, JobHandlerRegistry, type JobHandler } from '@marinoscar/platform-api/jobs';
+
+import { NoteExportHandler } from './handlers/note-export.handler';
+import { NoteGenerateHandler } from './handlers/note-generate.handler';
+import { NotePurgeHandler } from './handlers/note-purge.handler';
+import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler';
+import { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler';
 
 const ALL_FIVE = [
   NOTE_GENERATE_JOB_TYPE,
@@ -48,10 +52,35 @@ describe('note job type strings', () => {
     expect(new Set(ALL_FIVE).size).toBe(ALL_FIVE.length);
   });
 
-  it.each(ALL_FIVE)('%s has a friendly label, not a raw dotted key', (type) => {
-    expect(jobTypeLabel(type)).not.toBe(type);
-    expect(jobTypeLabel(type).length).toBeGreaterThan(0);
+  // Since #468 a handler declares its own `label` and the platform registry records
+  // it when the handler registers. The constructors only store their collaborators,
+  // so each handler is built bare: this reads the declared `type` and `label`.
+  const HANDLERS = [
+    NoteGenerateHandler,
+    NoteSourceExtractHandler,
+    NoteExportHandler,
+    NotePurgeHandler,
+    NotesHousekeepingHandler,
+  ] as unknown as Array<new () => JobHandler>;
+
+  it('has one handler per type, in the same order', () => {
+    expect(HANDLERS.map((Handler) => new Handler().type)).toEqual(ALL_FIVE);
   });
+
+  it.each(HANDLERS.map((Handler) => [new Handler().type, Handler] as const))(
+    '%s declares a friendly label, not a raw dotted key',
+    (type, Handler) => {
+      const handler = new Handler();
+
+      expect(handler.label).toBeDefined();
+      expect(handler.label).not.toBe(type);
+      expect(handler.label?.length).toBeGreaterThan(0);
+
+      new JobHandlerRegistry().register(handler);
+
+      expect(jobTypeLabel(type)).toBe(handler.label);
+    },
+  );
 
   it('names the subject type and the managed-by tag this module owns', () => {
     expect(NOTE_SUBJECT_TYPE).toBe('note');

@@ -1,3 +1,4 @@
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `db.restore.run` — replacing the live database, as a queue job
 // (issue #353, epic #345)
@@ -107,11 +108,7 @@
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import type { Job } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { DatabaseRestoreService, DB_RESTORE_RUN_TYPE } from '../database-restore.service';
 
 /**
@@ -136,6 +133,7 @@ export class DatabaseRestoreRunHandler implements JobHandler, OnModuleInit {
    * of the two can own the definition. See `DB_RESTORE_RUN_TYPE`.
    */
   readonly type = DB_RESTORE_RUN_TYPE;
+  readonly label = 'Database restore';
 
   /**
    * The two numbers this type is unlike the rest of the queue in — and there

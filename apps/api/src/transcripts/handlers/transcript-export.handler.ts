@@ -61,13 +61,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma, TranscriptExport } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptExportService, exportFilename } from '../export/transcript-export.service';
 import { TRANSCRIPT_EXPORT_JOB_TYPE } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /** Five minutes. See the file header for the two numbers' reasoning. */
 export const EXPORT_MAX_RUNTIME_MS = 5 * 60 * 1000;
@@ -77,6 +75,8 @@ export class TranscriptExportHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(TranscriptExportHandler.name);
 
   readonly type = TRANSCRIPT_EXPORT_JOB_TYPE;
+
+  readonly label = 'Transcript export';
 
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: EXPORT_MAX_RUNTIME_MS,

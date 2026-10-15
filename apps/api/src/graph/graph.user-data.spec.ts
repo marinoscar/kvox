@@ -13,12 +13,14 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
 // =============================================================================
 
 const USER_ID = 'user-1';
+const ORG_ID = '11111111-1111-4111-8111-111111111111';
 
 function harness() {
   const prisma = {
     kgEntity: { count: jest.fn().mockResolvedValue(0) },
     kgItem: { count: jest.fn().mockResolvedValue(0) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    organization: { findFirst: jest.fn().mockResolvedValue({ id: ORG_ID }) },
   };
   const jobs = { enqueue: jest.fn().mockResolvedValue({ id: 'kg-job-1', status: 'pending' }) };
 
@@ -52,6 +54,7 @@ describe('GraphUserDataHooks — purge', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: KG_PURGE_JOB_TYPE,
       reason: 'rerun',
+      orgId: ORG_ID,
       subjectType: KG_SUBJECT_USER,
       subjectId: USER_ID,
       payload: { userId: USER_ID, scope: 'all' },
@@ -81,7 +84,7 @@ describe('GraphUserDataHooks — purge', () => {
 
     await hooks.purge(USER_ID);
 
-    expect(Object.keys(prisma).sort()).toEqual(['auditEvent', 'kgEntity', 'kgItem']);
+    expect(Object.keys(prisma).sort()).toEqual(['auditEvent', 'kgEntity', 'kgItem', 'organization']);
     expect(prisma.kgEntity).not.toHaveProperty('deleteMany');
   });
 });

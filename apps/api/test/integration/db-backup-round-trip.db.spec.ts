@@ -71,12 +71,6 @@ import {
 } from '../../src/db-backup/db-backup-runner.service';
 import { DatabaseBackupAlreadyRunningError } from '../../src/db-backup/db-backup.errors';
 import { DatabaseBackupRunHandler } from '../../src/db-backup/handlers/db-backup-run.handler';
-import { buildClaimLeases } from '../../src/jobs/job-execution-profile';
-import { JobClaimService } from '../../src/jobs/job-claim.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobTerminalService } from '../../src/jobs/job-terminal.service';
-import { JobsService } from '../../src/jobs/jobs.service';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { spawnPgDump } from '../../src/db-backup/pg-dump.util';
 import { readTocEntryCount } from '../../src/db-backup/pg-restore.util';
 import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
@@ -86,6 +80,7 @@ import type { NotificationsService } from '../../src/notifications/notifications
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { cleanupTmpDir, TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
+import { buildClaimLeases, JobClaimService, JobHandlerRegistry, JobsService, JobTerminalService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 /**
  * The real engine, but pointed at `POSTGRES_*` with `DATABASE_URL` stripped —

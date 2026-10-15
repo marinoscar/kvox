@@ -6,10 +6,9 @@ import type {
   AiGenerateRequest,
   AiProvider,
 } from '../../src/ai/providers/ai-provider.interface';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
+import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // One mechanism, two entry points (issue #50, epic #45)

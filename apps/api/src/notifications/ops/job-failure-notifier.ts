@@ -4,12 +4,9 @@ import { OnEvent } from '@nestjs/event-emitter';
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import type { JobFailedEmailData } from '../../email';
-import {
-  JOB_SETTLED_EVENT,
-  type JobSettledEvent,
-} from '../../jobs/events/job-settled.event';
 import { describeThrown } from '../describe-thrown';
 import { NotificationsService } from '../notifications.service';
+import { JOB_SETTLED_EVENT, type JobSettledEvent } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // JobFailureNotifier — `jobs.job_failed` (issue #288, epic #254)

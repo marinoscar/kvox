@@ -31,7 +31,6 @@ import { AiAuthError, AiInputError } from '../../ai/ai-errors';
 import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { extractionBudget } from '../extraction/graph-extraction.service';
@@ -60,6 +59,7 @@ import {
   readItemVerdicts,
   type ItemAdjudicationPair,
 } from '../dedup/item-adjudication-prompt';
+import { ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 export const ADJUDICATION_MAX_OUTPUT_TOKENS = 4_000;
 

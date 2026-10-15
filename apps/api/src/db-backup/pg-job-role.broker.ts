@@ -1,3 +1,4 @@
+import { type IssuedJobSecret, type JobSecretBroker, type JobSecretUsability } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // The PostgreSQL per-job role broker (issue #350, epic #345)
 // =============================================================================
@@ -193,11 +194,6 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { Job } from '@prisma/client';
 
-import type {
-  IssuedJobSecret,
-  JobSecretBroker,
-  JobSecretUsability,
-} from '../jobs/job-secret-broker';
 import {
   quoteIdentifier,
   quoteLiteral,

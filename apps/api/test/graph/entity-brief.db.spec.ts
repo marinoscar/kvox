@@ -36,14 +36,13 @@ import { KG_ENTITY_DIGEST_JOB_TYPE } from '../../src/graph/job-types';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { SearchService } from '../../src/search/search.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('entity-brief.db.spec');
 

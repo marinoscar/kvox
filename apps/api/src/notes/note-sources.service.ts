@@ -36,8 +36,8 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
-import { JobsService } from '../jobs/jobs.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../storage/storage-job-input';
 import {
   acceptedDocumentTypesSentence,
@@ -47,6 +47,8 @@ import {
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from './job-types';
 import { NoteObjectsService } from './note-objects.service';
 import { documentExtension, sourceDocumentStorageKey } from './source-metadata';
+import { resolveOrgId } from '@marinoscar/platform-api/identity';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** What the controller hands over once it has a complete multipart part. */
 export interface UploadedDocument {
@@ -80,6 +82,7 @@ export class NoteSourcesService {
     private readonly objects: NoteObjectsService,
     private readonly jobs: JobsService,
     private readonly settings: SystemSettingsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /** The per-deployment ceiling on one uploaded document, in bytes. */
@@ -134,6 +137,10 @@ export class NoteSourcesService {
     const filename = this.safeFilename(upload.filename, mimeType);
     const storageKey = sourceDocumentStorageKey(randomUUID(), documentExtension(mimeType));
 
+    // The extraction reads and writes `storage_objects`, so the job runs in an organization.
+    // Resolved before the upload so a failure here leaves no orphaned object.
+    const orgId = await resolveOrgId(this.prisma, null, `note.source.extract enqueue for ${userId}`);
+
     const object = await this.objects.put({
       storageKey,
       name: filename,
@@ -146,6 +153,7 @@ export class NoteSourcesService {
     const job = await this.jobs.enqueue({
       type: NOTE_SOURCE_EXTRACT_JOB_TYPE,
       reason: 'upload',
+      orgId,
       // `storage_object`, so the node data plane can resolve this job's input
       // and mint a presigned GET for it without knowing anything about notes.
       subjectType: STORAGE_OBJECT_SUBJECT_TYPE,

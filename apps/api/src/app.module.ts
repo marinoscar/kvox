@@ -22,6 +22,10 @@ import { hostCoreModule } from './platform/host-core.config';
 import { aboutModule } from './platform/about/about.config';
 import { AboutContributorsModule } from './platform/about/about-contributors.module';
 import { identityModule } from './platform/identity/identity.config';
+// MUST precede `settings.config`: the jobs slice registers the `retention` settings
+// namespace, which the platform refuses once the settings request bodies are
+// composed (see `platform/jobs/jobs.config.ts`).
+import { jobsModule, nodesModule, NodeCredentialModule } from './platform/jobs/jobs.config';
 import { settingsModule } from './platform/settings/settings.config';
 import {
   CredentialsModule,
@@ -32,12 +36,9 @@ import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-remind
 import { CommonModule } from './common/common.module';
 import { ProfileImageModule } from './settings/profile-image/profile-image.module';
 import { StorageModule } from './storage/storage.module';
-import { NodeCredentialModule } from './nodes/node-credential.module';
-import { NodesModule } from './nodes/nodes.module';
 import { EmailModule } from './email/email.module';
 import { BroadcastsModule } from './notifications/broadcasts/broadcasts.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { JobsModule } from './jobs/jobs.module';
 import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TranscriptionModule } from './transcription/transcription.module';
@@ -122,16 +123,11 @@ import configuration from './config/configuration';
     // stable. GLOBAL.
     hostCoreModule,
     StorageModule,
-    // Worker node credentials (#267, epic #254): the `nod_` token family the
-    // node fleet authenticates with, and its `/api/node-credentials` admin
-    // endpoints. @Global because the identity slice's `JwtAuthGuard` resolves a
-    // `nod_` token through it (`IDENTITY_NODE_CREDENTIALS`, bound in
-    // `platform/identity/identity-host.module.ts`).
-    //
-    // DELIBERATELY NOT the (much heavier) nodes module #268 will add; see the
-    // block comment in `nodes/node-credential.module.ts` for why splitting by
-    // dependency weight rather than by topic is what keeps the guard's
-    // dependency graph acyclic.
+    // Worker node credentials, the platform's since #468 (epic #467): the `nod_`
+    // token family the node fleet authenticates with, and its
+    // `/api/node-credentials` admin endpoints. @Global because the identity
+    // slice's `JwtAuthGuard` resolves a `nod_` token through it
+    // (`IDENTITY_NODE_CREDENTIALS`, bound in `platform/identity/identity-host.module.ts`).
     NodeCredentialModule,
     // Encrypted credential store (#115), the platform's since #466. Registered
     // here so it is part of the module graph; consumers still import
@@ -164,30 +160,19 @@ import configuration from './config/configuration';
     // rather than the first time an admin presses Send. The admin API (#324)
     // and page (#325) land on top of this module later.
     BroadcastsModule,
-    // Background job queue (#259, epic #254): the handler contract, the
-    // handler registry and one worked example handler. Registered here even
-    // though nothing enqueues, claims or runs a job yet (#260-#263 add
-    // enqueue/claim, the terminal state machine, the worker pool and the
-    // hygiene crons) so a broken graph fails at boot rather than at the first
-    // job -- and so the example handler's self-registration is exercised on
-    // every boot, which is what proves the extension point actually works. It
-    // costs nothing at runtime: no loop is started and no query is issued
-    // until a worker exists.
-    JobsModule,
-    // The worker-node control plane (#268, epic #254): register/reattach,
-    // heartbeat, claim, lease renewal, result and failure submission at
-    // `/api/nodes`. Registered AFTER `JobsModule` for readability only — Nest
-    // resolves the graph, not the order — but the dependency is real and
-    // one-way: this module claims through `JobClaimService` and settles
-    // through `JobTerminalService` rather than owning either, which is what
-    // keeps the two executors (this API's own worker pool, and a remote node)
-    // from ever disagreeing about a row.
-    //
-    // Deliberately separate from the `@Global` `NodeCredentialModule` above,
-    // which carries only the guard's dependency; see the block comments in
-    // both node modules for why splitting by dependency weight is what keeps
-    // `JwtAuthGuard` out of a cycle with `JobsModule`.
-    NodesModule,
+    // The platform's jobs slice (#468, epic #467): the queue (enqueue with dedup,
+    // claim, leases, the terminal state machine), the in-process worker pool,
+    // the lease reaper, the job-history purge, the temp-file janitor, the
+    // provider throttle and `/api/admin/jobs/*`. Replaces this app's own queue.
+    // GLOBAL: a handler's only wiring is the `registry.register(this)` in its own
+    // `onModuleInit`, so being in the module graph IS the registration, and a
+    // broken one fails at boot.
+    jobsModule,
+    // The platform's worker-node control plane (#468): `/api/nodes/*` (register,
+    // heartbeat, claim, lease renewal, result and failure, the brokered job
+    // secret), `/api/admin/nodes/*`, the fleet sweep and prune and the
+    // brokered-secret sweep. Needs `jobsModule` in the same app.
+    nodesModule,
 
     // The database backup engine (#281, epic #254): the `database_backup_runs`
     // table's only writer, and the streaming `pg_dump` behind it. Registered

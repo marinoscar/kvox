@@ -38,6 +38,7 @@ import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-type
 import type { NotesService } from '../../src/notes/notes.service';
 import { buildNotesService } from './notes-service-test-factory';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { JobScope } from '@marinoscar/platform-api/jobs';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
 function isPostgresReachable(host: string, port: number, timeoutMs = 2000): boolean {
@@ -142,6 +143,8 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       // `search_chunks.document_id` has no foreign key, so nothing else would
       // ever clean them up.
       { forget: jest.fn().mockResolvedValue(undefined) } as never,
+      // `storage_objects` reads run in the job's organization.
+      new JobScope(prisma as never),
     );
   });
 

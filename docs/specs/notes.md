@@ -320,7 +320,7 @@ posture `classifyRateLimit` takes for the queue generally
 |---|---|---|---|
 | `AiAuthError` | The key is invalid, revoked, or lacks the needed scope; the provider returns `401`/`403` | `failed` | **No** — the job returns normally, having correctly diagnosed a permanent condition, the identical posture `docs/specs/transcription.md` §1.6 gives `ProviderAuthError` |
 | `AiRefusalError` | The provider declines the request itself — a content-policy refusal, a model that rejects the input outright, an over-budget input the job's own re-check (§3) catches at run time despite the request-time check passing | `failed` | **No** — same reasoning; retrying an identical refused request gets the identical refusal |
-| `RateLimitError` (429) | The provider's own rate limit, reused verbatim from `apps/api/src/jobs/rate-limit.error.ts` — the same class `docs/specs/transcription.md` §1.6 shares across its three provider-calling handlers | `notes.status` **unchanged** — invisible backoff, not a failure | **No** — deferred through the throttle key in §2.4, exactly as `docs/specs/job-queue.md` §5.3 describes for the queue generally |
+| `RateLimitError` (429) | The provider's own rate limit, reused verbatim from `@marinoscar/platform-api/jobs` — the same class `docs/specs/transcription.md` §1.6 shares across its three provider-calling handlers | `notes.status` **unchanged** — invisible backoff, not a failure | **No** — deferred through the throttle key in §2.4, exactly as `docs/specs/job-queue.md` §5.3 describes for the queue generally |
 | `AiStructuredOutputError` (`reason: 'truncated' \| 'invalid_json'`, issue #358) | `generateStructured` only: `finish_reason: 'length'` (the answer was cut off mid-object), or a `stop` finish whose accumulated content does not `JSON.parse` (a gateway ignoring `response_format`) | Caller-defined — a note has no structured-output path today; §6/§7 of `docs/specs/ontology.md` treat it as a failed proposal | **No** — terminal, like `AiAuthError`/`AiRefusalError` above: re-sending the identical prompt to the identical model is not expected to change a truncation, since `maxOutputTokens` is policy, not chance |
 | Everything else (default) | A network error, an unexpected exception mid-stream, a `5xx`, a database write failing partway through a flush | `failed` | **Yes** — and because `profile.maxAttempts: 1` (§1.3, decision 3), this is the note's **only** attempt: there is no second automatic try the way an ordinary retryable failure gets elsewhere in this codebase |
 
@@ -425,7 +425,7 @@ literal is gone** — `AiConfigService`, `AiSettingsService`,
 `this.registry.get(policy.provider)`. Adding a second OpenAI-API-compatible
 vendor now costs one id in `AI_PROVIDER_IDS`, one block in
 `aiProvidersSchema`, and one provider class — no consumer edit, in the same
-"one registry entry" shape the "add a job type" ([handlers README](../../apps/api/src/jobs/handlers/README.md)) and "add a
+"one registry entry" shape the "add a job type" ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and "add a
 notification" ([notifications README](../../apps/api/src/notifications/README.md)) recipes already establish elsewhere in this codebase.
 
 It is **nullable, not optional**, field for field with
@@ -1517,7 +1517,7 @@ join table and not a `user_settings` namespace or a reuse of `is_archived`.
 No `is_built_in` boolean: it would be a second, independently-settable
 statement of a fact `owner_id IS NULL` already states, which is the identical
 "presence is the declaration, never a flag that can disagree with it"
-argument `apps/api/src/jobs/job-handler.interface.ts` makes for node
+argument `JobHandler` in `@marinoscar/platform-api/jobs` makes for node
 eligibility.
 
 **Why the template is `instructions` plus five structured columns, and not

@@ -79,7 +79,7 @@ import {
   useDbBackupRuns,
 } from '../../../hooks/useDbBackup';
 import DbBackupPage from '../../../pages/Admin/DbBackupPage';
-import { shortId } from '../../../pages/Admin/jobsTable';
+import { shortId } from '@marinoscar/platform-web/jobs/headless';
 
 const mockUseConfig = vi.mocked(useDbBackupConfig);
 const mockUseRuns = vi.mocked(useDbBackupRuns);

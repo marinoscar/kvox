@@ -27,12 +27,10 @@ import { Job } from '@prisma/client';
 
 import { BroadcastChunkHandler, BROADCAST_CHUNK_TYPE } from './broadcast-chunk.handler';
 import type { ConfigService } from '@nestjs/config';
-import type { JobHandler } from '../../../jobs/job-handler.interface';
-import type { JobsService } from '../../../jobs/jobs.service';
-import type { JobHandlerRegistry } from '../../../jobs/job-handler.registry';
 import type { NotificationsService } from '../../notifications.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { BROADCAST_CHUNK_SIZE, BROADCAST_SUBJECT_TYPE } from '../broadcast-audience';
+import { type JobHandler, type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 
 const BROADCAST_ID = 'bcast-1';
 const CUTOFF = new Date('2026-03-01T12:00:00.000Z');
@@ -389,6 +387,7 @@ describe('BroadcastChunkHandler', () => {
       expect(enqueue).toHaveBeenCalledWith({
         type: BROADCAST_CHUNK_TYPE,
         reason: 'backfill',
+        orgId: null,
         subjectType: BROADCAST_SUBJECT_TYPE,
         subjectId: BROADCAST_ID,
         skipDedup: true,

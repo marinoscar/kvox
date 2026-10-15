@@ -6,12 +6,11 @@ import type {
   AiGenerateRequest,
   AiProvider,
 } from '../../src/ai/providers/ai-provider.interface';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { NoteGenerationStreamService } from '../../src/notes/generation/note-generation-stream.service';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import type { NoteStreamMessage } from '../../src/notes/generation/note-stream';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
+import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // THE STREAM IS ADDITIVE (issue #52, epic #45, docs/specs/notes.md §5)

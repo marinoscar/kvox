@@ -1,7 +1,6 @@
 import { PassThrough } from 'node:stream';
 import type { Job, StorageObject, TranscriptExport } from '@prisma/client';
 
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TranscriptObjectsService } from '../transcript-objects.service';
 import type { TranscriptExportService } from '../export/transcript-export.service';
@@ -13,6 +12,7 @@ import {
   TranscriptExportHandler,
   alreadyDone,
 } from './transcript-export.handler';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcript.export` (issue #28, epic #19, spec §1.5.6)

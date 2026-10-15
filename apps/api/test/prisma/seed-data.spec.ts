@@ -3,6 +3,8 @@ import { join } from 'path';
 
 import { NOTE_TEMPLATES } from '../../prisma/seed-app';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
+// The jobs slice registers its `retention` namespace when `JobsModule.forRoot` runs (#468); the catalog includes it.
+import '../../src/platform/jobs/jobs.config';
 import {
   composeDefaultSystemSettings,
   currentSystemSettingsSchema,

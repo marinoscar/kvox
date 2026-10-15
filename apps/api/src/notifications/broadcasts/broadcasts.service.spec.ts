@@ -19,7 +19,6 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationBroadcast } from '@prisma/client';
 
-import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { NotificationsService } from '../notifications.service';
@@ -31,6 +30,7 @@ import {
 import { BROADCAST_SUBJECT_TYPE } from './broadcast-audience';
 import { BROADCAST_START_TYPE } from './handlers/broadcast-start.handler';
 import type { CreateBroadcastInput } from './dto/create-broadcast.dto';
+import { type JobsService } from '@marinoscar/platform-api/jobs';
 
 const BROADCAST_ID = '11111111-1111-4111-8111-111111111111';
 const ADMIN_ID = '22222222-2222-4222-8222-222222222222';

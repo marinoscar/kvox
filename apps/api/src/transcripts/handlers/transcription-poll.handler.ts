@@ -42,10 +42,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import {
@@ -58,6 +54,12 @@ import {
   TranscriptPipelineService,
 } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import {
+  type JobExecutionProfile,
+  JobHandler,
+  JobHandlerRegistry,
+  ProviderThrottleService,
+} from '@marinoscar/platform-api/jobs';
 
 /** Two minutes. One poll is one HTTP round trip; see the file header. */
 export const POLL_MAX_RUNTIME_MS = 2 * 60 * 1000;
@@ -67,6 +69,8 @@ export class TranscriptionPollHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(TranscriptionPollHandler.name);
 
   readonly type = TRANSCRIPTION_POLL_JOB_TYPE;
+
+  readonly label = 'Transcription poll';
 
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: POLL_MAX_RUNTIME_MS,

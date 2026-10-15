@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   confirmationFor,
@@ -13,6 +12,7 @@ import {
 import { userDataSummarySchema } from './dto/user-data.dto';
 import { userDataCategories } from './user-data.registries';
 import { readPurgePayload, UserDataService } from './user-data.service';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // UserDataService (issue #80)
@@ -105,6 +105,7 @@ describe('UserDataService', () => {
   let prisma: {
     job: { findFirst: jest.Mock };
     auditEvent: { create: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
   let jobs: { enqueue: jest.Mock };
   let hookCalls: string[];
@@ -113,6 +114,8 @@ describe('UserDataService', () => {
     prisma = {
       job: { findFirst: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
+      // `resolveOrgId` reads the default organization for the job's `orgId`.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-1' }) },
     };
 
     jobs = { enqueue: jest.fn() };
@@ -392,6 +395,7 @@ describe('UserDataService', () => {
       expect(jobs.enqueue).toHaveBeenCalledWith(
         expect.objectContaining({
           type: USER_DATA_PURGE_JOB_TYPE,
+          orgId: 'org-1',
           subjectType: USER_DATA_SUBJECT_TYPE,
           subjectId: USER_ID,
           payload: expect.objectContaining({ userId: USER_ID, scope: 'content' }),

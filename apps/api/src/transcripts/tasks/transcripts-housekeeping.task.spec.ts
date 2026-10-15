@@ -1,10 +1,9 @@
 import { Test } from '@nestjs/testing';
 
-import { JobsService } from '../../jobs/jobs.service';
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPTS_HOUSEKEEPING_JOB_TYPE } from '../job-types';
 import { TranscriptsHousekeepingTask } from './transcripts-housekeeping.task';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The transcript housekeeping cron (issue #25)

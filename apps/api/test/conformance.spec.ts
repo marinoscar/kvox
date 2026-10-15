@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465 and #464, epic #462)
+// Platform conformance (issues #465, #464 and #468, epics #462 and #467)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -12,6 +12,7 @@ import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/doctor/testing';
 import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
+import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/settings/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
@@ -47,27 +48,6 @@ function readCatalog(): string | undefined {
     return undefined;
   }
 }
-
-const CRON_EXEMPT = [
-  {
-    file: 'jobs/tasks/job-stuck-reset.task.ts',
-    why:
-      'The lease reaper is what recovers abandoned jobs. Recovery that depends on the ' +
-      'queue it recovers is not recovery: a queue wedged enough to strand a reaper job needs reaping.',
-  },
-  {
-    file: 'jobs/tasks/temp-file-janitor.task.ts',
-    why:
-      "It sweeps THIS PROCESS'S local disk after a SIGKILLed worker. A node or another replica " +
-      'claiming that job would sweep the wrong filesystem and leave the full one untouched.',
-  },
-  {
-    file: 'nodes/tasks/node-secret-sweep.task.ts',
-    why:
-      'It revokes the short-lived database roles brokered to worker nodes, including for jobs settled by the ' +
-      'reaper. Making revocation depend on the queue leaks live credentials while the queue is wedged.',
-  },
-] as const;
 
 /**
  * Files that issue raw SQL. Each is argued: the Prisma client cannot express the statement
@@ -106,8 +86,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'graph/resolution/merge.service.ts', why: 'Entity merge with row locks across several tables; scoped by owner_id.' },
   { file: 'graph/speaker-link/speaker-link.reconciler.ts', why: 'Takes a per-transcript advisory lock (`pg_advisory_xact_lock`); touches no rows.' },
   { file: 'graph/write/graph-write.service.ts', why: 'GraphWriteService is the single graph write path; its raw statements use the live-statement and speaker-link partial unique indexes and are scoped by owner_id.' },
-  { file: 'jobs/job-claim.service.ts', why: 'Atomic claim with `FOR UPDATE SKIP LOCKED`; no user-owned rows.' },
-  { file: 'jobs/job-insights.service.ts', why: 'Read-only aggregates over the jobs table for the admin console; no user-owned rows.' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
   { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
   { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
@@ -118,7 +96,21 @@ const RAW_SQL_ALLOWLIST = [
 runPlatformConformance({
   sourceRoots: [join(API_DIR, 'src')],
   suites: {
-    cronEnqueueOnly: { exempt: CRON_EXEMPT, minCronFiles: 8 },
+    // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
+    // the package, outside this source root, and run from it: KVox has none of its own.
+    // Six files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
+    // notes-housekeeping, storage-cleanup, transcripts-housekeeping.
+    cronEnqueueOnly: { exempt: [], minCronFiles: 6 },
+    // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
+    // provider). OPTED OUT until #469, with a reason: storage/processing/object-processing.service.ts
+    // still runs the post-upload processors inline from its @OnEvent body (`storageProvider.download`),
+    // and #469 replaces that listener with a platform ObjectProcessor. Every other listener
+    // (nine files, one body each) is already a dispatch or one bounded write. #469 MUST restore
+    // `onEventNoIo: { minListenerFiles: 9, minListenerBodies: 9, mustScan: [...the eight listener files
+    // from issue #468...] }` here when it deletes that listener.
+    onEventNoIo: {
+      skip: 'PLATFORM-ADOPTION-SHIM(2.2): storage/processing/object-processing.service.ts runs processors inline until #469 replaces it',
+    },
     userOwnedData: {
       schemaPath: join(API_DIR, 'prisma', 'schema'),
       policies: userOwnedModelRegistry.list(),

@@ -1,12 +1,12 @@
 import { computeEffectiveSchema } from '@app/shared/ontology';
 
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { ProposalStageRegistry } from '../extraction/proposal-stage';
 import { rangeFromPrecision, type TemporalEdge } from '../temporal';
 import { FakeProposalDb, OWNER, entityPayload, linked } from '../../../test/graph/dedup-fakes';
 import type { ItemAdjudication } from './dedup-core';
 import type { ItemCandidateResult } from './item-candidates.service';
 import { WorkItemDedupStage } from './work-item-dedup.stage';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const JOE = 'aaaaaaaa-0000-4000-8000-000000000001';

@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // ⚠ THIS FILE ENQUEUES. IT DOES NOT WORK (CLAUDE.md rule 1;
-// `test/jobs/cron-enqueue-only.spec.ts` reads this body). Once a day it queues
+// the platform `cron-enqueue-only` conformance suite reads this body). Once a day it queues
 // ONE `kg.export` job in sweep mode — `subjectType: 'kg_export_sweep'`,
 // `subjectId: null`, payload `{ mode: 'sweep' }` — and the handler deletes up
 // to 500 expired exports and their files. No new job type: the export's own
@@ -18,10 +18,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EXPORT_JOB_TYPE, KG_SUBJECT_EXPORT_SWEEP } from '../job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
+import { subjectHousekeeping } from '../housekeeping-subject.enqueue';
 
 @Injectable()
 export class KgExportExpiryTask {
@@ -34,7 +34,7 @@ export class KgExportExpiryTask {
 
   @Cron('41 3 * * *')
   async handleCron(): Promise<void> {
-    await enqueueHousekeepingJob({
+    await subjectHousekeeping.enqueue({
       jobs: this.jobs,
       prisma: this.prisma,
       logger: this.logger,

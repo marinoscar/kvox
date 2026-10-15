@@ -4,9 +4,9 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { GraphObjectsService } from '../../src/graph/graph-objects.service';
 import { createGraphExportResponseSchema, graphExportListSchema, kgExportSchema } from '../../src/graph/export/dto/graph-export.dto';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // /api/graph/exports over the wire (#386, epic #349)
@@ -19,6 +19,7 @@ import { createGraphExportResponseSchema, graphExportListSchema, kgExportSchema 
 // =============================================================================
 
 const EXPORT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ORG_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function stripPermission(userId: string, permission: string): void {
   const original = prismaMock.user.findUnique.getMockImplementation();
@@ -76,6 +77,8 @@ describe('/api/graph/exports (integration)', () => {
     setupBaseMocks();
     enqueue?.mockRestore();
     sign?.mockRestore();
+    // The export job runs in an organization: the enqueue resolves the default one.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: ORG_ID } as never);
     enqueue = jest.spyOn(context.app.get(JobsService), 'enqueue').mockResolvedValue({ id: 'job-1' } as never);
     sign = jest
       .spyOn(context.app.get(GraphObjectsService), 'signedUrlFor')
@@ -133,6 +136,7 @@ describe('/api/graph/exports (integration)', () => {
     expect(enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'kg.export',
+        orgId: ORG_ID,
         subjectType: 'kg_export',
         subjectId: EXPORT,
         payload: { mode: 'render', exportId: EXPORT },

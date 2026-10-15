@@ -1,9 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProviderAuthError } from '../../transcription/errors';
 import { TRANSCRIPTION_THROTTLE_KEY } from '../job-types';
@@ -12,6 +9,7 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { TranscriptionPollHandler } from './transcription-poll.handler';
+import { JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcription.poll` — the chain, the backoff and the deadline (issue #25)

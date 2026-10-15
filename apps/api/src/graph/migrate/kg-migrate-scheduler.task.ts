@@ -4,10 +4,11 @@
 //
 // ⚠ THIS TASK RESHAPES NOTHING. Hourly, at minute 17, it asks which owners
 // still have graph rows a declared migration would touch, and enqueues one
-// `kg.migrate` per owner through `enqueueHousekeepingJob` — the shape
-// `jobs/tasks/job-history-purge.task.ts` established and CLAUDE.md's "Every
-// long-running activity is a queue job" rule requires
-// (`test/jobs/cron-enqueue-only.spec.ts` enforces it on this body).
+// `kg.migrate` per owner through `subjectHousekeeping.enqueue`
+// (`../housekeeping-subject.enqueue.ts`, the per-subject form of the platform's
+// `enqueueHousekeepingJob`) — the shape CLAUDE.md's "Every long-running
+// activity is a queue job" rule requires (the platform `cron-enqueue-only`
+// conformance suite, run from `test/conformance.spec.ts`, enforces it on this body).
 //
 //   - `ONTOLOGY_MIGRATIONS` empty (every 1.x build so far) → return at once,
 //     without a query: nothing can be pending.
@@ -33,8 +34,6 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   DEFAULT_KG_MIGRATE_DEFINITION,
@@ -47,6 +46,8 @@ import {
   type KgMigrateTable,
 } from './kg-migrate.plan';
 import { KgMigrateRepository } from './kg-migrate.repository';
+import { JobsService } from '@marinoscar/platform-api/jobs';
+import { subjectHousekeeping } from '../housekeeping-subject.enqueue';
 
 /** Owners enqueued per tick at most. */
 export const KG_MIGRATE_OWNERS_PER_TICK = 200;
@@ -80,7 +81,7 @@ export class KgMigrateSchedulerTask {
       const owners = await this.ownersToMigrate();
       for (const ownerId of owners) {
         const fields = kgMigrateEnqueueFields(ownerId, targetVersion);
-        await enqueueHousekeepingJob({
+        await subjectHousekeeping.enqueue({
           jobs: this.jobs,
           prisma: this.prisma,
           logger: this.logger,

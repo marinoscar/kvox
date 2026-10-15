@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { JobSettledEvent } from '../../jobs/events/job-settled.event';
 import {
   TRANSCODE_JOB_TYPE,
   TRANSCRIPT_EXPORT_JOB_TYPE,
@@ -19,6 +18,7 @@ import {
   resolveTranscriptId,
   TranscriptJobFailureListener,
 } from './transcript-job-failure.listener';
+import { JobSettledEvent } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // TranscriptJobFailureListener (issue #95, epic #19)

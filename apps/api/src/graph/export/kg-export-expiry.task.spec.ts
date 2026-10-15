@@ -1,13 +1,12 @@
 import { Test } from '@nestjs/testing';
 
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KgExportExpiryTask } from './kg-export-expiry.task';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
-// The graph export expiry cron (#386). `test/jobs/cron-enqueue-only.spec.ts`
-// already pins that its body only enqueues; this pins WHAT it enqueues — one
+// The graph export expiry cron (#386). The platform `cron-enqueue-only`
+// conformance suite (`test/conformance.spec.ts`) already pins that its body only enqueues; this pins WHAT it enqueues — one
 // `kg.export` job in sweep mode under its own subject type — and that a render
 // in flight never suppresses it.
 // =============================================================================
@@ -35,6 +34,8 @@ describe('KgExportExpiryTask', () => {
       subjectType: 'kg_export_sweep',
       subjectId: null,
       payload: { mode: 'sweep' },
+      // A system job: housekeeping is deployment-wide work, never an organization's.
+      orgId: null,
     });
   });
 

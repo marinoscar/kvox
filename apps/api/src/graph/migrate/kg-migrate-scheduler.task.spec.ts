@@ -1,13 +1,12 @@
 import type { ConfigService } from '@nestjs/config';
 
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
-import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { buildMigrationTestDefinition } from '../../../test/ontology/fixtures/migration-fixtures';
 import { KG_MIGRATE_JOB_TYPE } from '../job-types';
 import { KG_MIGRATE_OWNERS_PER_TICK, KgMigrateSchedulerTask } from './kg-migrate-scheduler.task';
 import { DEFAULT_KG_MIGRATE_DEFINITION, type KgMigrateDefinition } from './kg-migrate.plan';
 import type { KgMigrateRepository } from './kg-migrate.repository';
+import { HOUSEKEEPING_PRIORITY, type JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The `kg.migrate` scheduler (#384): it only ever enqueues — one job per owner,
@@ -83,6 +82,8 @@ describe('KgMigrateSchedulerTask', () => {
       subjectId: A,
       payload: { ownerId: A, targetVersion: '2.0.0' },
       priority: HOUSEKEEPING_PRIORITY,
+      // A system job: housekeeping is deployment-wide work, never an organization's.
+      orgId: null,
     });
   });
 

@@ -52,8 +52,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma, TranscriptExport } from '@prisma/client';
 
-import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../../jobs/jobs.service';
+import { type RequestUser, resolveOrgId } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateTranscriptExportDto } from '../dto/transcript-export.dto';
 import { identitiesFingerprint, parseSpeakerIdentities } from '../editing/speaker-identity';
@@ -70,6 +69,7 @@ import {
   TranscriptExporterRegistry,
   type TranscriptExporter,
 } from './transcript-exporter.interface';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Spec §8.5: an export is a reproducible artifact with a bounded life. */
 export const EXPORT_TTL_DAYS = 7;
@@ -216,6 +216,7 @@ export class TranscriptExportService {
 
     const job = await this.jobs.enqueue({
       type: TRANSCRIPT_EXPORT_JOB_TYPE,
+      orgId: await resolveOrgId(this.prisma, null, `${TRANSCRIPT_EXPORT_JOB_TYPE} enqueue`),
       // The enum has no "a user asked for this" member, and `upload` would
       // claim the job descends from an upload — which an export of a five-day
       // old transcript plainly does not.

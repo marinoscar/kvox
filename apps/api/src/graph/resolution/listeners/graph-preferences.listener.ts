@@ -16,12 +16,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
-import { JobsService } from '../../../jobs/jobs.service';
 import { KG_RESOLVE_JOB_TYPE, KG_SUBJECT_USER } from '../../job-types';
 import {
   GRAPH_PREFERENCES_CHANGED_EVENT,
   type GraphPreferencesChangedEvent,
 } from '../../preferences/graph-preferences.events';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class GraphPreferencesListener {
@@ -39,6 +39,7 @@ export class GraphPreferencesListener {
       await this.jobs.enqueue({
         type: KG_RESOLVE_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: KG_SUBJECT_USER,
         subjectId: event.userId,
         payload: { userId: event.userId, scope: 'all', reason: 'threshold_change' },

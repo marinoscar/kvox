@@ -11,11 +11,8 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import type { DbBackupRunResult } from '../jobs/contracts/db-backup-run.contract';
-import { enqueueHousekeepingJob } from '../jobs/housekeeping.enqueue';
-import { buildDedupKey } from '../jobs/job-keys';
+import type { DbBackupRunResult } from './contracts/db-backup-run.contract';
 import { DB_BACKUP_SWEEP_TYPE } from './handlers/db-backup-sweep.handler';
-import { isActiveDedupConflict, JobsService } from '../jobs/jobs.service';
 import { resolveApiVersion } from '../openapi/version';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -48,6 +45,7 @@ import {
   readServerVersionNumWithPgClient,
   type PgVersionCheck,
 } from './pg-version.util';
+import { buildDedupKey, enqueueHousekeepingJob, isActiveDedupConflict, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The streaming pg_dump engine (issue #281, epic #254)
@@ -736,6 +734,8 @@ export class DatabaseBackupRunnerService {
             // precisely by `DatabaseBackupRun.trigger`
             // (`manual`/`scheduled`/`pre_restore`).
             reason: 'backfill',
+            // A system job: it dumps the whole database, for no organization.
+            orgId: null,
             // No subject, which is what makes the dedup key constant — see
             // BACKUP_JOB_DEDUP_KEY. Dedup is deliberately left ON.
             payload: {

@@ -1,10 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { ProviderAuthError, ProviderInputError } from '../../transcription/errors';
@@ -16,6 +12,13 @@ import {
   readSpeakersExpected,
   TranscriptionSubmitHandler,
 } from './transcription-submit.handler';
+import {
+  type JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  ProviderThrottleService,
+  RateLimitError,
+} from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcription.submit` — the four acceptance criteria (issue #25)
@@ -63,10 +66,12 @@ const sourceObject = {
 
 describe('TranscriptionSubmitHandler', () => {
   let handler: TranscriptionSubmitHandler;
+  let scopeRun: jest.Mock;
   let provider: FakeProvider;
   let prisma: {
     transcript: { update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
     storageObject: { findUnique: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
   let pipeline: {
     loadForJob: jest.Mock;
@@ -88,6 +93,8 @@ describe('TranscriptionSubmitHandler', () => {
       deleteRemoteAfterIngest: true,
     };
 
+    scopeRun = jest.fn((_job, fn) => fn(prisma));
+
     prisma = {
       transcript: {
         update: jest.fn().mockResolvedValue({}),
@@ -95,6 +102,8 @@ describe('TranscriptionSubmitHandler', () => {
         findUnique: jest.fn(),
       },
       storageObject: { findUnique: jest.fn().mockResolvedValue(sourceObject) },
+      // The default organization, for a job queued before it carried an `orgId`.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-default' }) },
     };
 
     pipeline = {
@@ -124,6 +133,8 @@ describe('TranscriptionSubmitHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: ProviderThrottleService, useValue: throttle },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        // The scoped transaction client is the Prisma stub itself.
+        { provide: JobScope, useValue: { run: scopeRun } },
       ],
     }).compile();
 
@@ -172,6 +183,16 @@ describe('TranscriptionSubmitHandler', () => {
           audio: { kind: 'url', url: 'https://signed.example/audio' },
         }),
       );
+    });
+
+    it('runs a job queued before it carried an orgId, in the default organization', async () => {
+      await handler.process({ ...job(), orgId: null } as Job);
+
+      expect(scopeRun).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'job-1', orgId: 'org-default' }),
+        expect.any(Function),
+      );
+      expect(provider.submit).toHaveBeenCalled();
     });
 
     it('records the provider handle IMMEDIATELY, before the poll is queued', async () => {

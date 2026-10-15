@@ -1,5 +1,4 @@
 import { withTemporaryEntries } from '../../common/registry/testing';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { USER_DATA_PURGE_JOB_TYPE } from '../job-types';
 import {
   userDataCategoryRegistry,
@@ -8,6 +7,7 @@ import {
   type UserDataScopeDef,
 } from '../user-data.registries';
 import { UserDataPurgeHandler } from './user-data-purge.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `user.data.purge` (issue #80) — the Danger Zone's one job

@@ -108,6 +108,8 @@ describe('Note source documents (#51)', () => {
     prismaMock.storageObject.findFirst.mockResolvedValue(null);
     prismaMock.storageObject.create.mockResolvedValue(managedObject());
     prismaMock.job.create.mockResolvedValue({ id: 'job-1', type: 'note.source.extract' });
+    // The extraction job runs in an organization: the enqueue resolves the default one.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' } as never);
   });
 
   // ==========================================================================

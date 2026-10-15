@@ -56,12 +56,6 @@ import { APP_SLUG } from '@app/shared';
 import { kvNamespace } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../extraction/precheck';
@@ -94,6 +88,7 @@ import type { ImportQuad } from './import-dataset';
 import { buildImportVocabulary } from './import-vocabulary';
 import { RdfParseError, parseRdf, parseTurtleText } from './rdf-parse';
 import { mapImportToProposal, type ImportRow } from './rdf-to-proposal';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, JobsService, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 import { ChildProcessShaclEngine, type ShaclEngine } from './shacl-engine';
 import { splitUnknownProperties } from './unknown-properties';
 import { migrateQuads, negotiateVersion, readSourceVersion } from './version-negotiation';
@@ -153,6 +148,8 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
   private readonly engine: ShaclEngine;
 
   readonly type = KG_IMPORT_JOB_TYPE;
+
+  readonly label = 'Knowledge graph import';
 
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_IMPORT_MAX_RUNTIME_MS, maxAttempts: 1 };
 
@@ -446,7 +443,7 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
   private async enqueueMigration(ownerId: string): Promise<void> {
     try {
       const fields = kgMigrateEnqueueFields(ownerId, this.definition.targetVersion);
-      await this.jobs.enqueue({ ...fields, reason: 'rerun', payload: fields.payload as Prisma.InputJsonValue });
+      await this.jobs.enqueue({ ...fields, reason: 'rerun', orgId: null, payload: fields.payload as Prisma.InputJsonValue });
     } catch (error) {
       this.logger.warn(`Could not queue kg.migrate for owner ${ownerId}: ${error instanceof Error ? error.message : String(error)}`);
     }

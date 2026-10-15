@@ -30,7 +30,7 @@
 // IT IS A JOB, AND THE `@Cron` ONLY ENQUEUES IT
 // -----------------------------------------------------------------------------
 //
-// CLAUDE.md rule 1, and `test/jobs/cron-enqueue-only.spec.ts` is its executable
+// CLAUDE.md rule 1, and the platform `cron-enqueue-only` conformance suite (`test/conformance.spec.ts`) is its executable
 // form: a `@Cron` may decide WHETHER work is due and enqueue it, never do it.
 // Everything in this file is the work; `tasks/notes-housekeeping.task.ts` is
 // six lines that queue it — with NO new exemption, because there is nothing
@@ -50,8 +50,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   NOTES_HOUSEKEEPING_JOB_TYPE,
@@ -60,6 +58,7 @@ import {
 } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotesService } from '../notes.service';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /**
  * How long a note may sit in `deleting` before the sweep presumes its purge is
@@ -79,6 +78,8 @@ export class NotesHousekeepingHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(NotesHousekeepingHandler.name);
 
   readonly type = NOTES_HOUSEKEEPING_JOB_TYPE;
+
+  readonly label = 'Note housekeeping';
 
   constructor(
     private readonly registry: JobHandlerRegistry,

@@ -1290,7 +1290,7 @@ stored state cannot depend on which machine produced it.
 ordinary. JSON has no integers, so a size sent as a JSON **number** is exact
 only below 2^53 — the corruption would land on exactly the largest backups,
 i.e. the deployments node offload exists for. The result contract
-(`apps/api/src/jobs/contracts/db-backup-run.contract.ts`) therefore carries it
+(`apps/api/src/db-backup/contracts/db-backup-run.contract.ts`) therefore carries it
 as `^\d{1,20}$` and the handler converts once with `BigInt()`, mirroring what
 `toRunDto` already does on the way out.
 

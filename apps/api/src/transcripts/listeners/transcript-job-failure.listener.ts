@@ -76,10 +76,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Job } from '@prisma/client';
 
-import {
-  JOB_SETTLED_EVENT,
-  type JobSettledEvent,
-} from '../../jobs/events/job-settled.event';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   TRANSCODE_JOB_TYPE,
@@ -88,6 +84,7 @@ import {
   TRANSCRIPTION_POLL_JOB_TYPE,
   TRANSCRIPTION_SUBMIT_JOB_TYPE,
 } from '../job-types';
+import { JOB_SETTLED_EVENT, type JobSettledEvent } from '@marinoscar/platform-api/jobs';
 import {
   readTranscriptId,
   TranscriptPipelineService,

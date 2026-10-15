@@ -1,8 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../jobs/job-handler.registry';
-import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
@@ -18,6 +16,7 @@ import {
   readTranscriptId,
   TranscriptPipelineService,
 } from './transcript-pipeline.service';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // TranscriptPipelineService — the rules that are invisible at a call site
@@ -40,6 +39,7 @@ describe('TranscriptPipelineService', () => {
   let registry: { get: jest.Mock };
   let prisma: {
     transcript: { update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
   let notifications: { notify: jest.Mock };
 
@@ -57,6 +57,8 @@ describe('TranscriptPipelineService', () => {
           title: 'A recording',
         }),
       },
+      // `resolveOrgId` reads the default organization for storage-touching jobs.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-1' }) },
     };
 
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
@@ -97,6 +99,8 @@ describe('TranscriptPipelineService', () => {
           subjectType: TRANSCRIPT_SUBJECT_TYPE,
           subjectId: TRANSCRIPT_ID,
           skipDedup: true,
+          // One provider round trip; no `storage_objects` row, so no organization.
+          orgId: null,
         }),
       );
     });
@@ -119,6 +123,20 @@ describe('TranscriptPipelineService', () => {
         transcriptId: TRANSCRIPT_ID,
         delayMs: 60_000,
       });
+    });
+  });
+
+  describe('orgId on storage-touching jobs', () => {
+    it('resolves the organization for submit, ingest and purge', async () => {
+      await service.enqueueSubmit(TRANSCRIPT_ID);
+      await service.enqueueIngest(TRANSCRIPT_ID);
+      await service.enqueuePurge(TRANSCRIPT_ID);
+
+      expect(jobs.enqueue.mock.calls.map(([input]) => [input.type, input.orgId])).toEqual([
+        ['transcription.submit', 'org-1'],
+        ['transcription.ingest', 'org-1'],
+        ['transcript.purge', 'org-1'],
+      ]);
     });
   });
 
@@ -151,6 +169,7 @@ describe('TranscriptPipelineService', () => {
       expect(jobs.enqueue).toHaveBeenCalledWith(
         expect.objectContaining({
           type: TRANSCODE_JOB_TYPE,
+          orgId: 'org-1',
           subjectType: 'storage_object',
           subjectId: 'obj-1',
           // ⚠ `bitrateKbps` TRAVELS ON THE JOB (issue #26). A worker node reads
@@ -173,6 +192,7 @@ describe('TranscriptPipelineService', () => {
       );
 
       await expect(service.enqueueSnapshot(TRANSCRIPT_ID, 1)).resolves.toBe(true);
+      expect(jobs.enqueue).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1' }));
     });
   });
 

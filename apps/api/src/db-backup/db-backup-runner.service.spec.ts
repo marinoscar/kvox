@@ -6,8 +6,7 @@ import { Prisma, type Job } from '@prisma/client';
 
 import type { ConfigService } from '@nestjs/config';
 
-import type { DbBackupRunResult } from '../jobs/contracts/db-backup-run.contract';
-import { ACTIVE_DEDUP_INDEX_NAME, type JobsService } from '../jobs/jobs.service';
+import type { DbBackupRunResult } from './contracts/db-backup-run.contract';
 import type { NotificationsService } from '../notifications/notifications.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -34,6 +33,7 @@ import {
 } from './db-backup.errors';
 import type { PgProcess } from './pg-dump.util';
 import type { PgVersionCheck } from './pg-version.util';
+import { ACTIVE_DEDUP_INDEX_NAME, type JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The backup engine's acceptance criteria, one describe block each (#281)

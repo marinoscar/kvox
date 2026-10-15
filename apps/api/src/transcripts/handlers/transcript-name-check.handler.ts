@@ -18,11 +18,6 @@ import {
 } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
 import type { SystemAiValue } from '../../ai/ai-settings.schema';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { readAllowedModelEntries } from '../../notes/generation/allowed-models';
 import {
   assertWithinBudget,
@@ -55,6 +50,7 @@ import {
   type SourcedCandidate,
 } from '../name-check/prompts';
 import { loadNameCheckInput, type NameCheckInput } from '../name-check-input';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcript.name_check` (issues #328 and #330, epic #326)
@@ -170,6 +166,8 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(TranscriptNameCheckHandler.name);
 
   readonly type = TRANSCRIPT_NAME_CHECK_JOB_TYPE;
+
+  readonly label = 'Transcript name check';
 
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = {

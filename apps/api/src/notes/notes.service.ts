@@ -69,8 +69,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { Prisma } from '@prisma/client';
 import type { Note, NoteGeneration, NoteVersion } from '@prisma/client';
 
-import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../jobs/jobs.service';
+import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
@@ -78,7 +77,6 @@ import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
-import { HOUSEKEEPING_PRIORITY } from '../jobs/housekeeping.enqueue';
 import {
   EXCERPT_CHARS,
   NOTE_CONFLICT_REASONS,
@@ -93,6 +91,7 @@ import {
   type RestoreNoteVersionDto,
   type UpdateNoteDto,
 } from './dto/note.dto';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 import {
   NoteGenerationRequestService,
   type ResolvedModel,
@@ -901,6 +900,7 @@ export class NotesService {
       // The enum has no "a user asked for this" member, and `upload` would
       // claim the job descends from an upload, which a rename plainly does not.
       reason: 'rerun',
+      orgId: null,
       subjectType: NOTE_SUBJECT_TYPE,
       subjectId: note.id,
       payload: { noteId: note.id, force: true } satisfies Prisma.InputJsonObject,
@@ -976,6 +976,7 @@ export class NotesService {
         // Scheduled work over rows that already exist — the same reading
         // `enqueueHousekeepingJob` gives its own sweeps.
         reason: 'backfill',
+        orgId: null,
         subjectType: NOTE_SUBJECT_TYPE,
         subjectId: note.id,
         // ⚠ NO `force`. A sweep renames notes nobody is watching; see
@@ -1018,6 +1019,8 @@ export class NotesService {
     await this.jobs.enqueue({
       type: NOTE_PURGE_JOB_TYPE,
       reason: 'rerun',
+      // The purge deletes the note's `storage_objects`, so it runs in an organization.
+      orgId: await resolveOrgId(this.prisma, null, `note.purge enqueue for note ${noteId}`),
       subjectType: NOTE_SUBJECT_TYPE,
       subjectId: noteId,
       payload: { noteId },
@@ -1192,6 +1195,7 @@ export class NotesService {
     const job = await this.jobs.enqueueWithin(tx, {
       type: NOTE_GENERATE_JOB_TYPE,
       reason: input.kind === 'create' ? 'upload' : 'rerun',
+      orgId: null,
       subjectType: NOTE_SUBJECT_TYPE,
       subjectId: input.note.id,
       payload: {

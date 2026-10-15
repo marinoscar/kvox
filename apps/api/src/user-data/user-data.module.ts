@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
-import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
@@ -75,7 +74,6 @@ import { UserDataService } from './user-data.service';
 @Module({
   imports: [
     PrismaModule,
-    JobsModule,
     StorageModule,
     AiModule,
     // Epic #271 — `UserSettingsService.patchSettings`, so the `everything`
