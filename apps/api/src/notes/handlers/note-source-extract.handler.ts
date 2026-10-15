@@ -74,9 +74,6 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, StorageObject } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import {
   noteSourceExtractResultSchema,
   toExtractionOutcome,
@@ -94,6 +91,7 @@ import {
   describeExtractionFailure,
   type ExtractionOutcome,
 } from '../extraction/extraction-result';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
 import {

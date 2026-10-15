@@ -5,12 +5,8 @@ import type { Job } from '@prisma/client';
 
 import { JobFailureNotifier } from './job-failure-notifier';
 import { NotificationsService } from '../notifications.service';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobTerminalService } from '../../jobs/job-terminal.service';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
-import type { JobClock } from '../../jobs/job-clock';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { type JobClock, JobHandlerRegistry, JobTerminalService, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // JobFailureNotifier — tests (issue #288, epic #254)

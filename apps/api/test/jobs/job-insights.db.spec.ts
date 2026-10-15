@@ -50,13 +50,11 @@
 import type { ConfigService } from '@nestjs/config';
 import { Prisma, PrismaClient } from '@prisma/client';
 
-import { JobHistoryPurgeHandler } from '../../src/jobs/handlers/job-history-purge.handler';
-import { JobInsightsService } from '../../src/jobs/job-insights.service';
-import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { Job } from '@prisma/client';
 import { createDbClient, resolveDbSuite } from './db-test-support';
+import { type JobHandlerRegistry, JobHistoryPurgeHandler, JobInsightsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('job-insights.db.spec');
 

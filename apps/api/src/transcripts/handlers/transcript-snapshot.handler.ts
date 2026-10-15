@@ -48,13 +48,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPT_SNAPSHOT_JOB_TYPE } from '../job-types';
 import { TranscriptMaterializeService } from '../transcript-materialize.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /**
  * Ten minutes, and at most three attempts (issue #27).

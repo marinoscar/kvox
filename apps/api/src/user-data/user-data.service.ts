@@ -49,7 +49,6 @@ import { ModuleRef } from '@nestjs/core';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   confirmationFor,
@@ -65,6 +64,7 @@ import type {
 } from './dto/user-data.dto';
 import { userDataCategories } from './user-data.registries';
 import { resolveUserDataHook } from './user-data.support';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** The job statuses that mean "a deletion is in flight for this user". */
 const ACTIVE_JOB_STATUSES = ['pending', 'running'] as const;

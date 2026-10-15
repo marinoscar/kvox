@@ -32,11 +32,11 @@
 import request from 'supertest';
 import { z } from 'zod';
 
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockAdminUser, createMockViewerUser } from '../helpers/auth-mock.helper';
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 describe('Worker node control plane (Integration)', () => {
   let context: TestContext;

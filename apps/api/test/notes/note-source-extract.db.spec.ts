@@ -42,13 +42,6 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { JobClaimService } from '../../src/jobs/job-claim.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobLeaseService } from '../../src/jobs/job-lease.service';
-import { JobTerminalService } from '../../src/jobs/job-terminal.service';
-import { JobsService } from '../../src/jobs/jobs.service';
-import { NodeOffloadService } from '../../src/jobs/node-offload.service';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { ClaimJobsDto, NodeJobResultDto } from '../../src/nodes/dto/node-control-plane.dto';
 import { NodeUploadUrlDto } from '../../src/nodes/dto/node-data-plane.dto';
 import { NodeDataPlaneService } from '../../src/nodes/node-data-plane.service';
@@ -78,6 +71,7 @@ import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
 import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 

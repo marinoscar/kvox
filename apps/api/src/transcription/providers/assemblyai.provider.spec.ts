@@ -1,6 +1,5 @@
 import { Readable } from 'node:stream';
 
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { ProviderAuthError, ProviderInputError } from '../errors';
 import { MAX_SEGMENT_MS } from '../normalized-transcript';
 import { TranscriptionProviderRegistry } from '../transcription-provider.registry';
@@ -18,6 +17,7 @@ import languageDetected from '../__fixtures__/assemblyai/language-detected.json'
 import emptyResult from '../__fixtures__/assemblyai/empty.json';
 import providerError from '../__fixtures__/assemblyai/provider-error.json';
 import unpunctuated from '../__fixtures__/assemblyai/unpunctuated-monologue.json';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // AssemblyAI provider (issue #23, epic #19)

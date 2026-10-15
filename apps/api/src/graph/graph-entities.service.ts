@@ -34,8 +34,6 @@ import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../ai/ai-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobHandlerRegistry } from '../jobs/job-handler.registry';
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphAccessService } from './access/graph-access.service';
 import type { GraphEntityResponse, PatchEntityDto } from './dto/graph-entity.dto';
@@ -57,6 +55,7 @@ import { KG_PERSON_TYPE } from './purge/kg-purge.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { toGraphHttpException } from './write/graph-write.errors';
 import { GraphWriteService, type EntityUpdateResult } from './write/graph-write.service';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 export const GRAPH_ENTITY_EDITED_ACTION = 'graph.entity_edited';
 export const GRAPH_PERSON_FORGET_REQUESTED_ACTION = 'graph.person_forget_requested';

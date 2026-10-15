@@ -1,10 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { ProviderAuthError, ProviderInputError } from '../../transcription/errors';
@@ -16,6 +12,7 @@ import {
   readSpeakersExpected,
   TranscriptionSubmitHandler,
 } from './transcription-submit.handler';
+import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcription.submit` — the four acceptance criteria (issue #25)

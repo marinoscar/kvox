@@ -36,7 +36,6 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
-import { JobsService } from '../jobs/jobs.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../storage/storage-job-input';
 import {
@@ -47,6 +46,7 @@ import {
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from './job-types';
 import { NoteObjectsService } from './note-objects.service';
 import { documentExtension, sourceDocumentStorageKey } from './source-metadata';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** What the controller hands over once it has a complete multipart part. */
 export interface UploadedDocument {

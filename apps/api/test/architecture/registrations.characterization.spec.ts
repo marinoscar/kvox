@@ -11,7 +11,6 @@ import {
   createMockAdminUser,
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
-import { JobsService } from '../../src/jobs/jobs.service';
 import {
   ADMIN_ONBOARDING_STEPS,
   USER_ONBOARDING_STEPS,
@@ -23,6 +22,7 @@ import {
   USER_DATA_SCOPES,
   scopeIncludes,
 } from '../../src/user-data/job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // Domain-registration characterization (issue #460, step 2)

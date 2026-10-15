@@ -26,11 +26,10 @@
 import '../../src/kvox.manifest';
 
 // --- The only lines that change when the jobs slice moves to the platform ----
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { jobTypeLabels } from '../../src/jobs/job-type-label';
 // ------------------------------------------------------------------------------
 
 import { closeTestApp, createTestApp, type TestContext } from '../helpers/test-app.helper';
+import { JobHandlerRegistry, jobTypeLabels } from '@marinoscar/platform-api/jobs';
 
 /** Every type the booted app has a handler registered for. */
 function registeredTypes(context: TestContext): string[] {

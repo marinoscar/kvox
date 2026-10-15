@@ -1,4 +1,3 @@
-import { RateLimitError as QueueRateLimitError } from '../jobs/rate-limit.error';
 import {
   AiAuthError,
   AiBudgetError,
@@ -8,6 +7,7 @@ import {
   RateLimitError,
   isTerminalAiError,
 } from './ai-errors';
+import { RateLimitError as QueueRateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // AI error taxonomy (issue #47, epic #45)

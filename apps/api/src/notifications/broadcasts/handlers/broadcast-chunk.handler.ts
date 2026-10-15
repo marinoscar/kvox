@@ -1,3 +1,4 @@
+import { JobHandler, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // Broadcast chunk: one cursor-paged page of the fan-out (issue #323, epic #319)
 // =============================================================================
@@ -142,9 +143,6 @@ import { ConfigService } from '@nestjs/config';
 import { Job, NotificationBroadcast } from '@prisma/client';
 
 import type { BroadcastEmailData } from '../../../email/templates/broadcast.email';
-import { JobHandler } from '../../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../../jobs/job-handler.registry';
-import { JobsService } from '../../../jobs/jobs.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { NotificationChannel } from '../../notification-events';
 import type { NotifyOptions } from '../../notification.types';

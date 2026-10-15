@@ -27,8 +27,6 @@ import type { KgExport, KgExportFormat } from '@prisma/client';
 import { APP_SLUG } from '@app/shared';
 import { ONTOLOGY_VERSION, kvNamespace } from '@app/shared/ontology';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { contentDisposition } from '../../notes/export/note-export.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
@@ -38,6 +36,7 @@ import type { CreateGraphExportResponse, GraphExportList, KgExportView } from '.
 import { GraphExportSource } from './graph-export.source';
 import { graphExportFilename, type GraphExportFormat } from './graph-export-formats';
 import { graphFingerprint } from './graph-fingerprint';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /** An export and its file live this long (spec §18.2, notes.md §8). */
 export const KG_EXPORT_TTL_DAYS = 7;

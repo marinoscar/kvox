@@ -73,12 +73,12 @@ import type {
   DbBackupTrigger,
   RestoreStatus,
 } from '../../services/dbBackup';
-// Imported from the sibling table modules rather than re-implemented. Both are
-// three-line functions, which is exactly why copying them is tempting and
-// wrong: two formatters drift into one page reading "1500ms" beside another
-// reading "1.5s" for the same number, and an operator who has just come from
-// the jobs page must not have to re-read the timestamp format.
-import { formatDateTime, formatDuration, shortId } from './jobsTable';
+// Imported from the packaged jobs slice rather than re-implemented. All three
+// are tiny functions, which is exactly why copying them is tempting and wrong:
+// two formatters drift into one page reading "1500ms" beside another reading
+// "1.5s" for the same number, and an operator who has just come from the
+// packaged Jobs page must not have to re-read the timestamp format.
+import { formatDateTime, formatDuration, shortId } from '@marinoscar/platform-web/jobs/headless';
 
 /**
  * Persistence key for `user_settings.dataTables`. A constant, never derived

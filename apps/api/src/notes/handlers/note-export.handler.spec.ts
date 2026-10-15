@@ -1,13 +1,13 @@
 import { PassThrough } from 'node:stream';
 import type { Job, NoteExport } from '@prisma/client';
 
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NoteExportService } from '../export/note-export.service';
 import { noteDocument } from '../export/__fixtures__/note-document';
 import { NOTE_EXPORT_JOB_TYPE } from '../job-types';
 import type { NoteObjectsService } from '../note-objects.service';
 import { NoteExportHandler, alreadyDone } from './note-export.handler';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `note.export` (issue #54, docs/specs/notes.md §8.5)

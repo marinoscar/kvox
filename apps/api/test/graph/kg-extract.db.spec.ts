@@ -25,11 +25,11 @@ import { ProposalWriter } from '../../src/graph/extraction/proposal-writer.servi
 import { KgExtractHandler } from '../../src/graph/handlers/kg-extract.handler';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { NoteOriginService } from '../../src/notes/note-origin.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-extract.db.spec');
 

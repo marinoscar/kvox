@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 // PLATFORM-ADOPTION-SHIM(#468): `JobReason` is no longer a Prisma export.
-import { JobsService, type JobReason } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   SEARCH_INDEX_JOB_TYPE,
   type SearchDocumentType,
 } from './job-types';
+import { type JobReason, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The enqueue-and-forget surface of the semantic index (issue #188, epic #165)

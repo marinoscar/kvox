@@ -47,8 +47,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, type KgAliasSource } from '@prisma/client';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_NOT_FOUND_MESSAGES } from '../access/graph-access.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
@@ -59,6 +57,7 @@ import { GraphWriteService } from '../write/graph-write.service';
 import { orderPair } from './distinct-pair.service';
 import { asProps, planRelationFolds, type FoldGroup } from './merge-fold';
 import { stableStringify } from '../temporal';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 type Tx = Prisma.TransactionClient;
 

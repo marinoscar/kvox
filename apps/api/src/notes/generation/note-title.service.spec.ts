@@ -8,7 +8,6 @@ import type {
   AiProvider,
   AiProviderContext,
 } from '../../ai/providers/ai-provider.interface';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { MAX_TITLE_CHARS } from '../dto/note.dto';
 import {
   buildTitleUserContent,
@@ -17,6 +16,7 @@ import {
   TITLE_EXCERPT_CHARS,
   type TitleNoteInput,
 } from './note-title.service';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // NoteTitleService (issue #182, epic #163; the `Title:` fix is issue #182's

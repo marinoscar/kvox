@@ -13,10 +13,6 @@ import {
   type AiProvider,
 } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -38,6 +34,7 @@ import {
   type SearchDocumentType,
 } from './job-types';
 import { SearchIndexService } from './search-index.service';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `search.index` (issue #188, epic #165) — the job that makes a document

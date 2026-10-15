@@ -20,9 +20,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_GRAPH_LAYOUT_JOB_TYPE, KG_SUBJECT_USER } from '../job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** How long an automatic layout waits, so bursts coalesce. */
 export const GRAPH_LAYOUT_COALESCE_MS = 120_000;

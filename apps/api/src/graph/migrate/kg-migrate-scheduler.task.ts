@@ -33,8 +33,6 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   DEFAULT_KG_MIGRATE_DEFINITION,
@@ -47,6 +45,7 @@ import {
   type KgMigrateTable,
 } from './kg-migrate.plan';
 import { KgMigrateRepository } from './kg-migrate.repository';
+import { enqueueHousekeepingJob, JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Owners enqueued per tick at most. */
 export const KG_MIGRATE_OWNERS_PER_TICK = 200;

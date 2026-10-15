@@ -4,9 +4,9 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { GraphObjectsService } from '../../src/graph/graph-objects.service';
 import { createGraphExportResponseSchema, graphExportListSchema, kgExportSchema } from '../../src/graph/export/dto/graph-export.dto';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // /api/graph/exports over the wire (#386, epic #349)

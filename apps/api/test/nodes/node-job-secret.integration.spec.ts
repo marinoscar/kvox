@@ -37,13 +37,12 @@ import { Logger } from '@nestjs/common';
 import request from 'supertest';
 import { z } from 'zod';
 
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import type { IssuedJobSecret, JobSecretUsability } from '../../src/jobs/job-secret-broker';
 import { SECRET_CLOCK_SKEW_ALLOWANCE_MS } from '../../src/nodes/node-secret-broker.service';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockAdminUser, createMockViewerUser } from '../helpers/auth-mock.helper';
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
+import { type IssuedJobSecret, JobHandlerRegistry, type JobSecretUsability } from '@marinoscar/platform-api/jobs';
 
 describe('Worker node per-job secret broker (Integration)', () => {
   let context: TestContext;

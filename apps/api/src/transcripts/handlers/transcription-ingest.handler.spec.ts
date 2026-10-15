@@ -2,9 +2,6 @@ import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 import { gunzipSync } from 'node:zlib';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProviderInputError } from '../../transcription/errors';
 import { TranscriptObjectsService } from '../transcript-objects.service';
@@ -21,6 +18,7 @@ import {
   ORDINAL_GAP,
   TranscriptionIngestHandler,
 } from './transcription-ingest.handler';
+import { JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcription.ingest` — the acceptance criteria (issue #25)

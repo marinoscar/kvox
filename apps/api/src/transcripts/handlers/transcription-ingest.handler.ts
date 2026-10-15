@@ -39,10 +39,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 import { gzipSync } from 'node:zlib';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import type { NormalizedTranscript } from '../../transcription/normalized-transcript';
@@ -55,6 +51,7 @@ import {
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 /**
  * Fifteen minutes.

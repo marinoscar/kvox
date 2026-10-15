@@ -40,9 +40,9 @@ import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
 import type { StorageProvider } from '../../storage/providers/storage-provider.interface';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../storage/storage-job-input';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { extractedTextStorageKey, EXTRACTION_METADATA_KEY } from '../source-metadata';
 import { NoteSourceExtractHandler } from './note-source-extract.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const OBJECT_ID = 'source-object-1';
 const OWNER_ID = 'owner-1';

@@ -13,7 +13,6 @@
 // raw dotted key the day one of those issues lands.
 // =============================================================================
 
-import { jobTypeLabel } from '../jobs/job-type-label';
 import {
   NOTES_HOUSEKEEPING_JOB_TYPE,
   NOTES_MANAGED_BY,
@@ -24,6 +23,7 @@ import {
   NOTE_SUBJECT_TYPE,
   aiProviderThrottleKey,
 } from './job-types';
+import { jobTypeLabel } from '@marinoscar/platform-api/jobs';
 
 const ALL_FIVE = [
   NOTE_GENERATE_JOB_TYPE,

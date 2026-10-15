@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { IdentityJobHandler, IdentityJobsPort } from '@marinoscar/platform-api/identity';
 import type { Logger } from '@nestjs/common';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { enqueueHousekeepingJob, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
  * Identity's `IDENTITY_JOBS` over this app's CURRENT job queue

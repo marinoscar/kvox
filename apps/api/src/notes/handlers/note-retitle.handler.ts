@@ -1,3 +1,4 @@
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `note.retitle` (issue #184, epic #163) — naming the library that already exists
 // =============================================================================
@@ -84,9 +85,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoteTitleService } from '../generation/note-title.service';
 import { NOTE_RETITLE_JOB_TYPE } from '../job-types';

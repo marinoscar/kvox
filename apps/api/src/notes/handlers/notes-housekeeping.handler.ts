@@ -50,8 +50,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   NOTES_HOUSEKEEPING_JOB_TYPE,
@@ -60,6 +58,7 @@ import {
 } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotesService } from '../notes.service';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /**
  * How long a note may sit in `deleting` before the sweep presumes its purge is

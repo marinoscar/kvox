@@ -11,6 +11,12 @@ import { IdentityProviders } from './identity/IdentityProviders';
 // scope, before first render).
 import { APP_NAME } from '@app/shared';
 import { AppPlatformHostProvider } from './platform/platformHost';
+// Issue #468, epic #462. The packaged Jobs, Job Insights and Worker Nodes pages
+// take this app's table, spinner and API client from these two adapter objects.
+import { JobsWebAdaptersProvider } from '@marinoscar/platform-web/jobs/headless';
+import { NodesWebAdaptersProvider } from '@marinoscar/platform-web/nodes/headless';
+import { appJobsAdapters } from './platform/jobsAdapters';
+import { appNodesAdapters } from './platform/nodesAdapters';
 import './config/settingsFeatures';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
@@ -150,15 +156,21 @@ const AboutPage = lazy(() => import('./pages/Admin/AboutPage'));
 // Issue #464, epic #462 — the platform's Doctor: the deployment's health checks
 // and the support bundle. Lazy like every other admin page.
 const DoctorPage = lazy(() => import('./pages/Admin/DoctorPage'));
-// Issue #266, epic #254 — the background queue's two Operations pages. Lazy
-// like every other admin page: both pull in the shared DataTable, and neither
-// is on the path of a user who never opens the Console.
-const JobsPage = lazy(() => import('./pages/Admin/JobsPage'));
-const JobInsightsPage = lazy(() => import('./pages/Admin/JobInsightsPage'));
-// Issue #271, epic #254 — the fleet page, and with it the node credentials it
-// hosts as a section. Lazy for the same reason: two DataTables and two dialogs
-// that nobody who never opens the Console will ever mount.
-const WorkersPage = lazy(() => import('./pages/Admin/WorkersPage'));
+// Issues #266, #271 (epic #254), packaged by #468 (epic #462) — the background
+// queue's two Operations pages and the worker fleet, now the platform's
+// (`@marinoscar/platform-web/jobs/ui` and `/nodes/ui`). Lazy like every other
+// admin page: they pull in the shared DataTable and the node credential dialogs,
+// and none of it is on the path of a user who never opens the Console. The
+// packaged modules export named components, so each import maps to `default`.
+const JobsPage = lazy(() =>
+  import('@marinoscar/platform-web/jobs/ui').then((m) => ({ default: m.JobsPage })),
+);
+const JobInsightsPage = lazy(() =>
+  import('@marinoscar/platform-web/jobs/ui').then((m) => ({ default: m.JobInsightsPage })),
+);
+const WorkersPage = lazy(() =>
+  import('@marinoscar/platform-web/nodes/ui').then((m) => ({ default: m.WorkersPage })),
+);
 // Issue #287, epic #254 — the backup policy, the run history and the restore
 // dialog. Lazy for the same reason: a DataTable, a policy form and the restore
 // dialog that nobody who never opens the Console will ever mount.
@@ -932,9 +944,9 @@ function AppRoutes() {
                       CONTENT of this page rather than a destination of their
                       own, because revoking a leaked worker token is an
                       incident-response action and a second card would put two
-                      clicks in front of it. See `WorkersPage.tsx` and
-                      `components/admin/NodeCredentials.tsx` for the full
-                      argument and the alternatives rejected. */}
+                      clicks in front of it. The full argument and the
+                      alternatives rejected are in the packaged
+                      `NodeCredentials` (`@marinoscar/platform-web/nodes/ui`). */}
                   <Route
                     path="/admin/settings/workers"
                     element={
@@ -1062,7 +1074,11 @@ export default function App() {
     <ThemeContextProvider>
       <IdentityProviders>
         <AppPlatformHostProvider>
-          <AppRoutes />
+          <JobsWebAdaptersProvider adapters={appJobsAdapters}>
+            <NodesWebAdaptersProvider adapters={appNodesAdapters}>
+              <AppRoutes />
+            </NodesWebAdaptersProvider>
+          </JobsWebAdaptersProvider>
         </AppPlatformHostProvider>
       </IdentityProviders>
     </ThemeContextProvider>

@@ -18,10 +18,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
-import { enqueueHousekeepingJob } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EXPORT_JOB_TYPE, KG_SUBJECT_EXPORT_SWEEP } from '../job-types';
+import { enqueueHousekeepingJob, JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class KgExportExpiryTask {

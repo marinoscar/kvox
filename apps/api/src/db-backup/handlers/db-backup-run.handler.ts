@@ -1,3 +1,4 @@
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, type JobSecretBroker } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `db.backup.run` — the database dump as a queue job (issue #351, epic #345)
 // =============================================================================
@@ -148,10 +149,6 @@ import {
   BACKUP_JOB_TYPE,
   DatabaseBackupRunnerService,
 } from '../db-backup-runner.service';
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobSecretBroker } from '../../jobs/job-secret-broker';
 import { PgJobRoleBroker } from '../pg-job-role.broker';
 
 /**

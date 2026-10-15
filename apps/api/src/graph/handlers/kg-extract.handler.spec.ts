@@ -3,12 +3,12 @@ import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
 import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai/ai-errors';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { ProposalStageRegistry, type ProposalStage } from '../extraction/proposal-stage';
 import type { ProposedRow } from '../extraction/validate';
 import { IDS, goodAnswer, makeInput } from '../../../test/graph/extraction-fixtures';
 import { KgExtractHandler, classifyExtractionError, readKgExtractPayload, truncatedMessage } from './kg-extract.handler';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 const PROPOSAL = '1a000000-0000-4000-8000-000000000001';
 

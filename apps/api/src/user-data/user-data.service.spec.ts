@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   confirmationFor,
@@ -13,6 +12,7 @@ import {
 import { userDataSummarySchema } from './dto/user-data.dto';
 import { userDataCategories } from './user-data.registries';
 import { readPurgePayload, UserDataService } from './user-data.service';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // UserDataService (issue #80)

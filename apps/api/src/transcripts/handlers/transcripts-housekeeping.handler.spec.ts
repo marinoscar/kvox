@@ -1,7 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
@@ -10,6 +9,7 @@ import {
   decideAbandonedUpload,
   TranscriptsHousekeepingHandler,
 } from './transcripts-housekeeping.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcripts.housekeeping` — the reconciliation sweep (issue #25, §1.5.8)

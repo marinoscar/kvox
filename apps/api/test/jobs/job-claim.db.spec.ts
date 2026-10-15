@@ -24,9 +24,9 @@
 
 import { Job, PrismaClient, Prisma } from '@prisma/client';
 
-import { JobClaimService } from '../../src/jobs/job-claim.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { createDbClient, resolveDbSuite } from './db-test-support';
+import { JobClaimService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('job-claim.db.spec');
 

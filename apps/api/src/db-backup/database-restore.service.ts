@@ -12,8 +12,6 @@ import { PERMISSIONS } from '../common/constants/roles.constants';
 import { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import type { RestoreCompletedEmailData } from '../email';
-import { JobsService } from '../jobs/jobs.service';
-import { jobTempPath } from '../jobs/job-temp';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -46,6 +44,7 @@ import {
   DatabaseRestorePreflightService,
   type RestorePreflightResult,
 } from './restore-preflight.service';
+import { JobsService, jobTempPath } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The scratch-database restore and the atomic swap (issue #285, epic #254)

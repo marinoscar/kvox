@@ -1,3 +1,4 @@
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `user.data.purge` (issue #80) — the Danger Zone's one job
 // =============================================================================
@@ -212,9 +213,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { Job } from '@prisma/client';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { USER_DATA_PURGE_JOB_TYPE, type UserDataScope } from '../job-types';
 import {
   assertUserDataRegistriesConsistent,

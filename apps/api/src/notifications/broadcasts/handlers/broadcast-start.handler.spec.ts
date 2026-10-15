@@ -20,12 +20,10 @@
 import { Job } from '@prisma/client';
 
 import { BroadcastStartHandler, BROADCAST_START_TYPE } from './broadcast-start.handler';
-import type { JobHandler } from '../../../jobs/job-handler.interface';
-import type { JobsService } from '../../../jobs/jobs.service';
-import type { JobHandlerRegistry } from '../../../jobs/job-handler.registry';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { BROADCAST_SUBJECT_TYPE } from '../broadcast-audience';
 import { BROADCAST_CHUNK_TYPE } from './broadcast-chunk.handler';
+import { type JobHandler, type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 
 const BROADCAST_ID = 'bcast-1';
 

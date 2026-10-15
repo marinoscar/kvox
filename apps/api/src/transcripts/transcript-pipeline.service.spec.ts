@@ -1,8 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../jobs/job-handler.registry';
-import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
@@ -18,6 +16,7 @@ import {
   readTranscriptId,
   TranscriptPipelineService,
 } from './transcript-pipeline.service';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // TranscriptPipelineService — the rules that are invisible at a call site

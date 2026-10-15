@@ -61,8 +61,6 @@ import { z } from 'zod';
 
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
 import type { EvidenceInput } from '../dto/graph-evidence.dto';
@@ -104,6 +102,7 @@ import {
   effectivePayloadOf,
   type ProposalItemRowInput,
 } from './proposal-view.mapper';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 import { KG_PROPOSAL_TARGET_TYPE, lockProposal, notDraft, ProposalsService } from './proposals.service';
 import { relationFills } from './relation-fills';
 

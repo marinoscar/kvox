@@ -70,13 +70,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, NoteExport, Prisma } from '@prisma/client';
 
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoteExportService } from '../export/note-export.service';
 import { NOTE_EXPORT_JOB_TYPE, NOTES_MANAGED_BY } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /** Five minutes. See the file header for the two numbers' reasoning. */
 export const NOTE_EXPORT_MAX_RUNTIME_MS = 5 * 60 * 1000;

@@ -41,7 +41,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { NotificationBroadcast, Prisma } from '@prisma/client';
 
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { BroadcastEmailData } from '../../email/templates/broadcast.email';
@@ -52,6 +51,7 @@ import { BROADCAST_SUBJECT_TYPE, audienceWhere } from './broadcast-audience';
 import { BROADCAST_START_TYPE } from './handlers/broadcast-start.handler';
 import type { BroadcastListQuery } from './dto/broadcast-list-query.dto';
 import type { CreateBroadcastInput } from './dto/create-broadcast.dto';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
  * The two registry keys a broadcast can be raised under.

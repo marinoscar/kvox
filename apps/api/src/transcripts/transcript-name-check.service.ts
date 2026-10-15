@@ -42,7 +42,6 @@ import { createHash } from 'node:crypto';
 import { AiConfigService } from '../ai/ai-config.service';
 import { AiProviderRegistry } from '../ai/ai-provider.registry';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { readKeyterms } from '../transcription/keyterms';
 import {
@@ -61,6 +60,7 @@ import { applySplices, resolveSpan } from './name-check/spans';
 import { loadNameCheckInput, type NameCheckSpeaker } from './name-check-input';
 import { TranscriptAccessService, TRANSCRIPT_NOT_FOUND_MESSAGE } from './transcript-access.service';
 import { TranscriptEditingService, type OperationsResult } from './transcript-editing.service';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
  * Queue priority. Somebody is waiting for the result, but less urgently than

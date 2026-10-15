@@ -41,17 +41,13 @@ import { ConfigService } from '@nestjs/config';
 import { Job, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
-import { JobClaimService } from '../../src/jobs/job-claim.service';
-import { JobLeaseService } from '../../src/jobs/job-lease.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobTerminalService } from '../../src/jobs/job-terminal.service';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { NodesService } from '../../src/nodes/nodes.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { ClaimJobsDto } from '../../src/nodes/dto/node-control-plane.dto';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
-import { NodeOffloadService } from '../../src/jobs/node-offload.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobTerminalService, NodeOffloadService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('node-claim-contention.db.spec');
 

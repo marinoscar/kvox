@@ -40,7 +40,6 @@ import { Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
 import { GraphAttributeDefsService } from '../attribute-defs/graph-attribute-defs.service';
@@ -67,6 +66,7 @@ import {
 } from './graph-import.constants';
 import type { KgImportJobPayload } from './kg-import.handler';
 import { ASSERTION_SUBJECT_TYPE } from './unknown-properties';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** The audit action written on upload. */
 export const GRAPH_IMPORT_CREATED_ACTION = 'graph.import_created';

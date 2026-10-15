@@ -34,13 +34,11 @@ import { BACKUP_JOB_TYPE } from '../../src/db-backup/db-backup-runner.service';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { ConfigService } from '@nestjs/config';
 
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobWorker } from '../../src/jobs/job.worker';
-import { NodeOffloadService } from '../../src/jobs/node-offload.service';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockAdminUser } from '../helpers/auth-mock.helper';
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
+import { JobHandlerRegistry, JobWorker, NodeOffloadService } from '@marinoscar/platform-api/jobs';
 
 describe('db.backup.run node offload (Integration)', () => {
   let context: TestContext;

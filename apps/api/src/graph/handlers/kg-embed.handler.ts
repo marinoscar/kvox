@@ -30,15 +30,12 @@ import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
 import { AiAuthError } from '../../ai/ai-errors';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EMBED_JOB_TYPE } from '../job-types';
 import { GraphEmbedder, vectorLiteral } from '../resolution/graph-embedder.service';
 import { buildEntityProfileText, buildItemProfileText, profileHash } from '../resolution/profile-text';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 export const KG_EMBED_MAX_RUNTIME_MS = 5 * 60_000;
 export const KG_EMBED_MAX_ATTEMPTS = 3;

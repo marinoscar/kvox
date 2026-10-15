@@ -1,10 +1,9 @@
 import { Test } from '@nestjs/testing';
 
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTES_HOUSEKEEPING_JOB_TYPE } from '../job-types';
 import { NotesHousekeepingTask } from './notes-housekeeping.task';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The note housekeeping cron (issue #53, epic #45)

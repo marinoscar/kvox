@@ -15,11 +15,6 @@ import { AiProviderRegistry } from '../../ai/ai-provider.registry';
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { aiProviderThrottleKey, NOTE_GENERATE_JOB_TYPE } from '../job-types';
 import { readAllowedModelEntries } from '../generation/allowed-models';
@@ -38,6 +33,7 @@ import {
   computeTokenBudget,
   outputTokensForPrompt,
 } from '../../ai/ai-token-budget';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `note.generate` (issue #49, epic #45) — the heart of the epic

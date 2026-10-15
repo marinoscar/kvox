@@ -42,10 +42,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
@@ -64,6 +60,7 @@ import {
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { selectTranscriptionInput } from '../transcription-input';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 /**
  * Two hours.

@@ -37,8 +37,6 @@ import type {
 
 import type { TranscriptFailedEmailData } from './notifications/transcript-failed.email';
 import type { TranscriptReadyEmailData } from './notifications/transcript-ready.email';
-import { JobHandlerRegistry } from '../jobs/job-handler.registry';
-import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
@@ -55,6 +53,7 @@ import {
 } from './job-types';
 import { resolveTargetBitrateKbps } from './media/audio-transcode';
 import { firstPollDelayMs } from './poll-schedule';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
  * Which part of the pipeline a failure came from, in words a reader

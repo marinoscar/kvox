@@ -21,8 +21,8 @@
 // =============================================================================
 
 import { Prisma } from '@prisma/client';
+import { JOB_CLAIM_COLUMNS } from '@marinoscar/platform-api/jobs';
 
-import { JOB_CLAIM_COLUMNS } from '../../src/jobs/job-claim.service';
 
 describe('Prisma.JobScalarFieldEnum', () => {
   it('has exactly the field names Job is documented to have', () => {

@@ -9,7 +9,6 @@ import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
@@ -19,6 +18,7 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider } from './__fixtures__/fake-provider';
 import { MediaAudioTranscodeHandler } from './media-audio-transcode.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `media.audio.transcode` end to end, WITH A REAL ffmpeg (issue #26)

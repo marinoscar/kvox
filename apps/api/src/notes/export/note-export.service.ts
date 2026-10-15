@@ -57,8 +57,6 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import type { Note, NoteExport, Prisma } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../../jobs/jobs.service';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashExportRequest, type ExportOptions } from '../../export/export-options';
 import { NoteAccessService } from '../access/note-access.service';
@@ -72,6 +70,7 @@ import {
   type NoteExportSource,
 } from './note-export-document';
 import { NoteExporterRegistry, type NoteExporter } from './note-exporter.registry';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Spec §8.4: an export is a reproducible artifact with a bounded life. */
 export const NOTE_EXPORT_TTL_DAYS = 7;

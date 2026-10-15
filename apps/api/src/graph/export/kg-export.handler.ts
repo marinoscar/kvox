@@ -51,9 +51,6 @@ import { ONTOLOGY, ONTOLOGY_VERSION, kvNamespace } from '@app/shared/ontology';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphObjectsService } from '../graph-objects.service';
 import { evidenceIri } from '../rdf/iris';
@@ -67,6 +64,7 @@ import {
   type RdfSubjectBlock,
 } from './rdf-dataset-builder';
 import { serializeGraph } from './serializers';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 export const KG_EXPORT_MAX_RUNTIME_MS = 10 * 60_000;
 

@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { mediaAudioTranscodeResultSchema } from '../contracts/media-audio-transcode.contract';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import * as jobTemp from '../../jobs/job-temp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
@@ -18,6 +16,7 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { MediaAudioTranscodeHandler } from './media-audio-transcode.handler';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `media.audio.transcode` — the acceptance criteria (issue #26)

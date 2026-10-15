@@ -6,10 +6,10 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { AiSettingsService } from '../../src/ai/ai-settings.service';
-import { JobsService } from '../../src/jobs/jobs.service';
 import { GraphObjectsService } from '../../src/graph/graph-objects.service';
 import { attributeOfferResponseSchema, createGraphImportResponseSchema } from '../../src/graph/import/dto/graph-import.dto';
 import { GRAPH_IMPORT_MAX_BYTES } from '../../src/graph/import/graph-import.constants';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // /api/graph/imports and the attribute-offer routes over the wire (#387)

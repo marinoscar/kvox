@@ -26,10 +26,10 @@ import { KgMigrateHandler } from '../../src/graph/migrate/kg-migrate.handler';
 import { KgMigrateRepository } from '../../src/graph/migrate/kg-migrate.repository';
 import type { KgMigrateDefinition } from '../../src/graph/migrate/kg-migrate.plan';
 import { KgMigrateSchedulerTask } from '../../src/graph/migrate/kg-migrate-scheduler.task';
-import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { buildMigrationTestDefinition } from '../ontology/fixtures/migration-fixtures';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-migrate.db.spec');
 

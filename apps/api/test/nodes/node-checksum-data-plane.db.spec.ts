@@ -61,13 +61,6 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 
 import { ExampleChecksumHandler } from '../../src/jobs/handlers/example-checksum.handler';
-import type { JobHandler } from '../../src/jobs/job-handler.interface';
-import { JobClaimService } from '../../src/jobs/job-claim.service';
-import { JobLeaseService } from '../../src/jobs/job-lease.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobTerminalService } from '../../src/jobs/job-terminal.service';
-import { JobsService } from '../../src/jobs/jobs.service';
-import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
 import { ClaimJobsDto, NodeJobResultDto } from '../../src/nodes/dto/node-control-plane.dto';
 import { NodeUploadUrlDto } from '../../src/nodes/dto/node-data-plane.dto';
 import { NodeDataPlaneService } from '../../src/nodes/node-data-plane.service';
@@ -86,9 +79,9 @@ import type {
 } from '../../src/storage/providers';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
-import { NodeOffloadService } from '../../src/jobs/node-offload.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { JobClaimService, type JobHandler, JobHandlerRegistry, JobLeaseService, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('node-checksum-data-plane.db.spec');
 

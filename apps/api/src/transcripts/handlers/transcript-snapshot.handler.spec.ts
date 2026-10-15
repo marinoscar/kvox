@@ -11,12 +11,12 @@
 
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptMaterializeService } from '../transcript-materialize.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TRANSCRIPT_SNAPSHOT_JOB_TYPE } from '../job-types';
 import { SNAPSHOT_MAX_RUNTIME_MS, TranscriptSnapshotHandler } from './transcript-snapshot.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const TRANSCRIPT_ID = 'transcript-1';
 

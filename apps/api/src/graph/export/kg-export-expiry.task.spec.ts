@@ -1,9 +1,8 @@
 import { Test } from '@nestjs/testing';
 
-import { HOUSEKEEPING_PRIORITY } from '../../jobs/housekeeping.enqueue';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KgExportExpiryTask } from './kg-export-expiry.task';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // The graph export expiry cron (#386). `test/jobs/cron-enqueue-only.spec.ts`

@@ -57,8 +57,6 @@ import {
 import type { DbBackupConfig, DbBackupRun } from '../../services/dbBackup';
 import { ApiError } from '../../services/api';
 import { useVisiblePolling as sharedUseVisiblePolling } from '../../hooks/useVisiblePolling';
-import { useVisiblePolling as jobsUseVisiblePolling } from '../../hooks/useJobs';
-import { useVisiblePolling as nodesUseVisiblePolling } from '../../hooks/useWorkerNodes';
 import {
   useDbBackupActions,
   useDbBackupConfig,
@@ -145,11 +143,10 @@ function setTabHidden(hidden: boolean) {
 }
 
 describe('the backup poll', () => {
-  it('is the ONE `useVisiblePolling`, shared with the jobs and workers pages', () => {
-    // Identity, not behaviour — see the file header.
+  it('is the ONE `useVisiblePolling`, shared with the app\'s other polling hooks', () => {
+    // Identity, not behaviour — see the file header. (The jobs and workers
+    // pages are the platform's since #468 and carry their own copy.)
     expect(useVisiblePolling).toBe(sharedUseVisiblePolling);
-    expect(useVisiblePolling).toBe(jobsUseVisiblePolling);
-    expect(useVisiblePolling).toBe(nodesUseVisiblePolling);
   });
 
   describe('pausing', () => {

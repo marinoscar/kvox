@@ -39,8 +39,6 @@ import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { ObjectsService } from '../../src/storage/objects/objects.service';
 import type { StorageProvider } from '../../src/storage/providers/storage-provider.interface';
-import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import type { JobsService } from '../../src/jobs/jobs.service';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
@@ -61,6 +59,7 @@ import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('transcript-export.db.spec');
 

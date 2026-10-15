@@ -27,11 +27,11 @@ import { AskConversationsService } from '../../src/ask/ask-conversations.service
 import { ASK_USER_DATA_HOOKS } from '../../src/ask/ask.user-data';
 import { AskUserDataHooks } from '../../src/ask/ask.user-data.hooks';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { UserDataPurgeHandler } from '../../src/user-data/handlers/user-data-purge.handler';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-conversations.db.spec');
 

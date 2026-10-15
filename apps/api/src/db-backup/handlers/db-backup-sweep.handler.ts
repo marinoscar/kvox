@@ -1,3 +1,4 @@
+import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `db.backup.sweep` — the backup subsystem's housekeeping, as a queue job
 // (issue #353, epic #345)
@@ -95,8 +96,6 @@ import type { DatabaseBackupStatus, DatabaseBackupTrigger, Job } from '@prisma/c
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import type { BackupFailedEmailData } from '../../email';
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';

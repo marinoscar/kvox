@@ -53,7 +53,6 @@ import {
 
 import { ASK_JOB_TYPE_LABELS } from './ask/job-type-labels';
 import { GRAPH_JOB_TYPE_LABELS } from './graph/job-type-labels';
-import { registerJobTypeLabels } from './jobs/job-type-label';
 import {
   BASE_JOB_TYPE_LABELS,
   USER_DATA_JOB_TYPE_LABELS,
@@ -94,6 +93,7 @@ import {
   TRANSCRIPTS_EMAIL_TEMPLATES,
   TRANSCRIPTS_NOTIFICATIONS,
 } from './transcripts/notifications/transcripts.notifications';
+import { registerJobTypeLabels } from '@marinoscar/platform-api/jobs';
 
 let registered = false;
 

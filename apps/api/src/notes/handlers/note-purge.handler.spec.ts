@@ -1,11 +1,11 @@
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotePurgeHandler, readNoteId } from './note-purge.handler';
+import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `note.purge` (issue #53, epic #45)

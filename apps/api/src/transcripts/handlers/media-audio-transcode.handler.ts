@@ -69,10 +69,6 @@ import {
   type MediaAudioTranscodeResult,
   mediaAudioTranscodeResultSchema,
 } from '../contracts/media-audio-transcode.contract';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { jobTempPath } from '../../jobs/job-temp';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
@@ -95,6 +91,7 @@ import {
   TranscriptPipelineService,
 } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, jobTempPath } from '@marinoscar/platform-api/jobs';
 
 /**
  * Three hours.

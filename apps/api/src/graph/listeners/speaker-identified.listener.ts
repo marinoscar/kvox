@@ -22,12 +22,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
-import { JobsService } from '../../jobs/jobs.service';
 import {
   TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
   TranscriptSpeakersIdentifiedEvent,
 } from '../../transcripts/events/transcript-speakers-identified.event';
 import { KG_SPEAKER_LINK_JOB_TYPE, KG_SUBJECT_TRANSCRIPT } from '../job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class SpeakerIdentifiedListener {

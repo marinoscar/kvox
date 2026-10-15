@@ -53,7 +53,6 @@ import {
 import type { Prisma, TranscriptExport } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateTranscriptExportDto } from '../dto/transcript-export.dto';
 import { identitiesFingerprint, parseSpeakerIdentities } from '../editing/speaker-identity';
@@ -70,6 +69,7 @@ import {
   TranscriptExporterRegistry,
   type TranscriptExporter,
 } from './transcript-exporter.interface';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** Spec §8.5: an export is a reproducible artifact with a bounded life. */
 export const EXPORT_TTL_DAYS = 7;

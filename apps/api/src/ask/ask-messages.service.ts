@@ -35,13 +35,13 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { AiTaskModelResolver } from '../ai/ai-task-model-resolver.service';
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AskAccessService } from './ask-access.service';
 import { ASK_DERIVED_TITLE_MAX_CHARS, ASK_RESPOND_PRIORITY } from './ask-limits';
 import { toAskMessage } from './ask-message.mapper';
 import type { PostAskMessage, PostAskMessageResponse } from './dto/ask-messages.dto';
 import { ASK_MESSAGE_SUBJECT, ASK_RESPOND_JOB_TYPE, type AskRespondPayload } from './job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** The Ask-specific 409 reason (#376's `ASK_CONFLICT_REASONS`). */
 export const ASK_TURN_RUNNING = 'ask_turn_running';

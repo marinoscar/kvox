@@ -52,12 +52,10 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Job } from '@prisma/client';
 
-import { JobHandler } from '../../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../../jobs/job-handler.registry';
-import { JobsService } from '../../../jobs/jobs.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BROADCAST_SUBJECT_TYPE, audienceWhere } from '../broadcast-audience';
 import { BROADCAST_CHUNK_TYPE } from './broadcast-chunk.handler';
+import { JobHandler, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
  * The handler key, and therefore the `Job.type` every broadcast start row

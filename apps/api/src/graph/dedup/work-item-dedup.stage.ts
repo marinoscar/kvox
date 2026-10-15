@@ -28,7 +28,6 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { ProposalStageRegistry, type ProposalStage, type ProposalStageContext } from '../extraction/proposal-stage';
 import { KG_EXTRACT_JOB_TYPE } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
@@ -49,6 +48,7 @@ import {
 import type { ItemAdjudicationPair } from './item-adjudication-prompt';
 import { ItemCandidateService, type ItemCandidateResult } from './item-candidates.service';
 import { asJson, loadProposalRows, type ProposalRow } from './proposal-rows';
+import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 export interface WorkItemDedupStats {
   items: number;

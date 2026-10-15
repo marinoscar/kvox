@@ -24,9 +24,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import { AiSettingsService } from '../../ai/ai-settings.service';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { KG_ENTITY_DIGEST_JOB_TYPE, KG_SUBJECT_ENTITY } from '../job-types';
+import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 export interface EntityDigestPayload {
   entityId: string;

@@ -3,8 +3,6 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { hashExportRequest } from '../../export/export-options';
-import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NoteAccessService } from '../access/note-access.service';
 import { NOTE_EXPORT_JOB_TYPE } from '../job-types';
@@ -14,6 +12,7 @@ import { NoteExportService, NOTE_EXPORT_JOB_PRIORITY } from './note-export.servi
 import { NoteExporterRegistry } from './note-exporter.registry';
 import { PdfNoteExporter } from './pdf.exporter';
 import { WordNoteExporter } from './word.exporter';
+import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // NoteExportService (issue #54, docs/specs/notes.md §8.4)

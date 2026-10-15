@@ -70,7 +70,6 @@ import { Prisma } from '@prisma/client';
 import type { Note, NoteGeneration, NoteVersion } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
@@ -78,7 +77,6 @@ import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
-import { HOUSEKEEPING_PRIORITY } from '../jobs/housekeeping.enqueue';
 import {
   EXCERPT_CHARS,
   NOTE_CONFLICT_REASONS,
@@ -93,6 +91,7 @@ import {
   type RestoreNoteVersionDto,
   type UpdateNoteDto,
 } from './dto/note.dto';
+import { HOUSEKEEPING_PRIORITY, JobsService } from '@marinoscar/platform-api/jobs';
 import {
   NoteGenerationRequestService,
   type ResolvedModel,

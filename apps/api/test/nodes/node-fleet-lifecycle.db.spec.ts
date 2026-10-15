@@ -31,8 +31,6 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaClient, type Job } from '@prisma/client';
 
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
-import { JobStuckService } from '../../src/jobs/job-stuck.service';
 import { NodeLifecycleService } from '../../src/nodes/node-lifecycle.service';
 import { NodeFleetPruneHandler } from '../../src/nodes/handlers/node-fleet-prune.handler';
 import { NodeFleetSweepHandler } from '../../src/nodes/handlers/node-fleet-sweep.handler';
@@ -40,6 +38,7 @@ import type { NotificationsService } from '../../src/notifications/notifications
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
+import { JobHandlerRegistry, JobStuckService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('node-fleet-lifecycle.db.spec');
 

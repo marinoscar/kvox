@@ -41,13 +41,13 @@
 import { ConfigService } from '@nestjs/config';
 import type { Job } from '@prisma/client';
 
-import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 
 import { NodeFleetPruneHandler } from '../../src/nodes/handlers/node-fleet-prune.handler';
 import { NodeFleetSweepHandler } from '../../src/nodes/handlers/node-fleet-sweep.handler';
 import type { NodeLifecycleService } from '../../src/nodes/node-lifecycle.service';
 import type { NotificationsService } from '../../src/notifications/notifications.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 /** The shipped policy: stale after 90s, offline after 4 x that, forgotten after 30 days. */
 const POLICY = { staleHeartbeatSeconds: 90, offlineStaleMultiplier: 4, offlineRetentionDays: 30 };

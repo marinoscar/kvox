@@ -8,7 +8,6 @@ import { EntityDigestEnqueuer } from '../../graph/brief/entity-digest.enqueuer';
 import { GraphEntitiesService } from '../../graph/graph-entities.service';
 import { GraphLayoutEnqueuer } from '../../graph/layout/graph-layout.enqueuer';
 import { GraphWriteService } from '../../graph/write/graph-write.service';
-import { JobsService } from '../../jobs/jobs.service';
 import { expectNoUuid, makeCtx, seedEntity, uid } from '../../../test/ask/ask-tool-fakes';
 import { AskToolError } from './ask-tool';
 import { ASK_TOOL_NAMES, AskToolset, formatZodError, modelReadableError } from './ask-toolset';
@@ -20,6 +19,7 @@ import { ListCommitmentsTool } from './list-commitments.tool';
 import { NeighborsTool } from './neighbors.tool';
 import { SearchTool } from './search.tool';
 import { TimelineTool } from './timeline.tool';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // AskToolset (#377): the seven definitions conform to the strict subset, the

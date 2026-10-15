@@ -10,10 +10,10 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { auditUserData } from '../user-data/user-data.support';
 import { KG_PURGE_JOB_TYPE, KG_SUBJECT_USER } from './job-types';
+import { JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class GraphUserDataHooks {

@@ -23,13 +23,10 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EMBED_JOB_TYPE, KG_SPEAKER_LINK_JOB_TYPE, KG_SUBJECT_USER } from '../job-types';
 import { SpeakerLinkReconciler, type SpeakerLinkInput } from '../speaker-link/speaker-link.reconciler';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 const payloadSchema = z.object({
   transcriptId: z.uuid(),

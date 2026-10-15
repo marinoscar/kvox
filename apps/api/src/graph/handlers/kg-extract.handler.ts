@@ -50,11 +50,6 @@ import {
 import { AiTaskModelResolver, type AiModelResolution } from '../../ai/ai-task-model-resolver.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
-import type { JobHandler } from '../../jobs/job-handler.interface';
-import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
-import { RateLimitError } from '../../jobs/rate-limit.error';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { assertWithinBudget } from '../../ai/ai-token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -78,6 +73,7 @@ import type {
   ExtractionStats,
   ProposalResolution,
 } from '../proposals/proposal-payload.schema';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // 20 minutes (#435): room for the one truncation re-ask after a full-length
 // first answer.
