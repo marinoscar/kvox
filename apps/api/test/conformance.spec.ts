@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465, #464 and #468, epics #462 and #467)
+// Platform conformance (issues #465, #464, #468 and #469, epics #462 and #467)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -14,6 +14,7 @@ import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/settings/testing';
+import '@marinoscar/platform-api/storage/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
@@ -142,6 +143,11 @@ runPlatformConformance({
       // notifications, jobs, nodes, databaseBackup, maintenance, storage (platform declarations) + transcription, ai (KVox).
       minSystemNamespaces: 8,
     },
+    // Key prefixes (#469): the slice's own four plus db-backup are registered by the platform; the
+    // three below are this app's writers (platform/storage/storage-key-prefix.manifest.ts, deployment scope).
+    // The suite fails on a malformed or overlapping prefix, a missing id, an org-scoped prefix that
+    // builds a key without an organization, and a secret-named field in the storage settings schemas.
+    storage: { requiredPrefixIds: ['transcripts', 'notes', 'graph'] },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
   },

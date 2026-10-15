@@ -1566,7 +1566,7 @@ The object key is `uploads/<organization id>/<timestamp>/<uuid><ext>`.
 - 415 Unsupported Media Type - Content type is not in `ALLOWED_MIME_TYPES` (default `image/*,application/pdf,video/*,audio/*`); the message names the type that was rejected
 - 503 Service Unavailable - Object storage is not configured
 
-  ⚠ **This is the generic-upload allowlist only.** `POST /api/transcripts` (issue #79) does **not** route its content-type check through `ALLOWED_MIME_TYPES`: it enforces its own, fixed `audio/*,video/*` list regardless of what an operator has configured here, for the reason given under `### Transcripts` below. A 400 from a transcript upload never names this setting.
+  ⚠ **For transcripts this list is a second gate, not the policy.** `POST /api/transcripts` (issue #79) does **not** route its own content-type check through `ALLOWED_MIME_TYPES`: it enforces its own, fixed `audio/*,video/*` list regardless of what an operator has configured here, for the reason given under `### Transcripts` below. The platform's init then applies this list as well, so a list without `audio/*` and `video/*` makes the transcript upload answer 415 (which does name this setting); a 400 from the application's own check never does.
 
 ---
 
@@ -1705,7 +1705,7 @@ Completing queues the `storage.object.process` job, which runs the registered ob
 
 `DELETE /api/storage/objects/:id/upload/abort`
 
-**Requires** `storage:write` - Cancel an in-progress upload and clean up resources: the multipart upload is aborted at the provider, which frees its uploaded parts, and the row is deleted.
+**Requires** `storage:write` - Cancel an in-progress upload and clean up resources: the multipart upload is aborted at the provider, which frees its uploaded parts. For a plain upload the row is deleted.
 
 **Response:** HTTP 204 No Content
 
@@ -1713,8 +1713,11 @@ Completing queues the `storage.object.process` job, which runs the registered ob
 - 400 Bad Request - The object has no multipart upload to abort
 - 403 Forbidden - Caller does not own the upload
 - 404 Not Found - Upload not found
+- 503 Service Unavailable - Only for a managed object: the ownership lookup or the in-process forward failed (see below)
 
-**Transcripts.** A transcript whose source upload is aborted, abandoned, or reclaimed by the stale-upload sweep is no longer told about it by an event: the platform emits none. `transcripts.housekeeping`, which runs every **10 minutes**, finds `uploading` transcripts whose source object is `failed`, gone or older than the 72-hour stale-upload age and marks them `failed` with `failure_reason: "upload_aborted"` (at most 500 per run). An abort used to be reflected at once; it now takes **up to one housekeeping cycle**.
+**Managed objects (application behaviour).** A transcript's source audio, a note's source document and a graph import are referenced by their owner with a `Restrict` foreign key, so the platform's abort, which deletes the row, cannot run on them. The same Fastify `onRequest` hook that vetoes the generic `DELETE` (`managed-delete.hook.ts`) looks the object up in `kvox_object_ownership` and, when it is managed, forwards this request in-process to an application route, `DELETE /api/storage/objects/:id/upload/abort-managed` (`storage:write`, 204). That route aborts the multipart upload, **keeps the `storage_objects` row** with status `failed` and no upload id, and, for a transcripts-owned object, marks the transcript `failed` with `failure_reason: "upload_aborted"` where its status is still `uploading`. The client keeps calling `/upload/abort`; the `-managed` route is an implementation detail and is not meant to be called directly. An unmanaged object passes through to the platform handler unchanged. An anonymous request also passes through, so the platform answers 401. A failed lookup or forward answers 503.
+
+**Transcripts, other paths.** An upload abandoned past `transcription.abandonedUploadHours`, or reclaimed by the platform's 72-hour stale-upload sweep, emits no event. `transcripts.housekeeping`, which runs every **10 minutes**, finds `uploading` transcripts whose source object is `failed`, gone or stale and marks them `failed` with `failure_reason: "upload_aborted"` (at most 500 per run), and purges the failed row on a later cycle. A user's own cancel is reflected at once by the route above; these other paths take **up to one housekeeping cycle**.
 
 ---
 
@@ -3356,6 +3359,8 @@ later by `selectTranscriptionInput` once that rendition exists.
 The upload object is owned by the transcripts module (a `kvox_object_ownership`
 row), which makes it **absent** from `GET /kvox/files` and makes a generic
 `DELETE` against it return 409 — only this transcript being deleted removes it.
+
+⚠ **`ALLOWED_MIME_TYPES` still applies afterwards.** The transcript check above is the application's own pre-check; the platform's upload start then checks the same type against `ALLOWED_MIME_TYPES` and answers **415**. A deployment whose `ALLOWED_MIME_TYPES` omits `audio/*` or `video/*` therefore rejects transcript uploads, so keep both in it.
 
 ⚠ `source.size` is the client's claim, and every check here is made against it.
 That is not a trust decision: it is the only number available before a byte has

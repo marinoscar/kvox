@@ -135,9 +135,11 @@ stale-upload sweep emit nothing for this module to listen to, so
 `transcripts.housekeeping` (§1.5.8) finds both. A **cancelled** or reclaimed
 upload (its source object `failed`, gone, or older than the platform's
 72-hour stale-upload age) is marked `failed` with
-`failure_reason: 'upload_aborted'` within one housekeeping cycle, up to ten
-minutes, where it used to be an immediate purge; the same sweep's legacy
-branch then **purges** that row on the following cycle. An upload that goes
+`failure_reason: 'upload_aborted'`: at once for a user's own cancel (the
+application's abort-managed route marks the transcript itself, §9.3), and
+within one housekeeping cycle, up to ten minutes, for an abandoned or swept
+upload. The same sweep's legacy branch then **purges** that row on the
+following cycle. An upload that goes
 quiet but is still inside the stale-upload age is purged on
 `transcription.abandonedUploadHours`' clock (issue #322). Either way the
 transcript ends up purged rather than kept as a `failed` card: there is no
@@ -566,8 +568,9 @@ it reads `storage_objects` inside `runInJobOrg`) and does four things:
    the platform's stale-upload age (72 hours), and marks them `failed` with
    `failure_reason: 'upload_aborted'`, at most 500 per run. The decision is a
    pure function, so a `ready`/`processing` object (the audio is present) is
-   never touched. **Latency:** an abort used to be reflected at once; it now
-   takes up to one housekeeping cycle, ten minutes. Step 2's legacy branch then
+   never touched. **Latency:** a user's own cancel is reflected at once by the
+   abort-managed route (§9.3); an abandoned or swept upload takes up to one
+   housekeeping cycle, ten minutes. Step 2's legacy branch then
    purges the `failed` row on the next cycle.
 4. **Expires exports.** Deletes `transcript_exports` rows and their storage
    objects past their `expires_at` (§8.4).
@@ -1769,8 +1772,13 @@ is authoritative regardless of what the client remembers.
 > An owned object is absent from `GET /api/kvox/files`; the generic
 > `DELETE /api/storage/objects/:id` answers `409` with
 > `details: { reason: 'managed_by_module', module }` from a Fastify hook, before
-> the platform handler runs. The platform's abort deletes the row and emits no
-> event, so the abort reconcile lives in `transcripts.housekeeping` (§1.5.8).
+> the platform handler runs. The platform's abort deletes the row, which the
+> `Restrict` key forbids, and emits no event. So the same hook forwards
+> `DELETE .../upload/abort` for a managed object, in-process, to
+> `DELETE .../upload/abort-managed`: it aborts the multipart upload, keeps the row
+> as `failed` with no upload id, and marks a `uploading` transcript `failed`
+> (`upload_aborted`); a lookup or forward failure answers 503. Uploads that go
+> quiet or are swept are reconciled by `transcripts.housekeeping` (§1.5.8).
 > The text below describes the pre-#469 design.
 
 A migration adds `part_size int null` (saved once, at `init`, and used for

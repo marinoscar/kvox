@@ -57,7 +57,7 @@ Still environment variables, unchanged in meaning except where §5 says so:
 | `STORAGE_CSP_ORIGIN` | The browser-visible origin of the bucket, written into nginx's Content Security Policy. **No longer derived**; see §3 step 1. |
 | `STORAGE_PART_SIZE` | The deployment-wide multipart part size. See §5. |
 | `MAX_FILE_SIZE` | Largest upload accepted (answers 413 above it). |
-| `ALLOWED_MIME_TYPES` | Generic-upload content-type allowlist (answers 415 outside it). |
+| `ALLOWED_MIME_TYPES` | Content-type allowlist (answers 415 outside it). **Keep `audio/*` and `video/*` in it**: transcript uploads pass the application's own audio and video check and then the platform's init checks this list too, so a deployment that omits them rejects every transcript upload. |
 | `SIGNED_URL_EXPIRY` | Lifetime of a signed upload or download URL, in seconds. |
 
 Amazon SES email is the one remaining reader of AWS credentials in the
@@ -236,17 +236,24 @@ the bucket cannot answer. API detail:
 
 ## 7. Aborted uploads and transcripts
 
-A user who cancels an upload, or an upload the stale-upload sweep reclaims, no
-longer notifies the transcripts module: the platform emits no event for it. The
-`transcripts.housekeeping` job, which runs every 10 minutes, finds transcripts
-still `uploading` whose source object is aborted, gone, or older than the
-stale-upload age, and marks them `failed` with `failure_reason:
-"upload_aborted"` (at most 500 per run). **A cancelled transcript upload can
-therefore take up to one housekeeping cycle, about 10 minutes, to show as
-failed**, where it used to be instant. The following cycle purges the failed
+A user who cancels a transcript upload in the app is handled at once: the
+platform's abort would delete the object row, which the transcript holds with a
+`Restrict` foreign key, so the application intercepts the cancel for any object
+a module owns (a Fastify hook forwards it in-process to
+`DELETE /api/storage/objects/:id/upload/abort-managed`), aborts the multipart
+upload, keeps the row as `failed` and marks the transcript `failed` with
+`failure_reason: "upload_aborted"`. A failed ownership lookup or forward answers
+503 and the client can retry.
+
+Everything else emits no event: an upload that goes quiet, or one the
+72-hour stale-upload sweep reclaims. The `transcripts.housekeeping` job, which
+runs every 10 minutes, finds transcripts still `uploading` whose source object
+is aborted, gone, or older than the stale-upload age and marks them `failed`
+(`upload_aborted`, at most 500 per run). **Those cases can take up to one
+housekeeping cycle, about 10 minutes.** The following cycle purges the failed
 row, since an upload that never completed has no audio to retry with. Nothing
 needs doing; do not treat a transcript that is `uploading` for a few minutes
-after a cancel as stuck.
+as stuck.
 
 ## 8. Rotating the key, or moving to another bucket
 
@@ -277,6 +284,7 @@ after a cancel as stuck.
 | Upload fails with a network error and no status, console mentions CORS | The bucket's CORS rule. See [`s3-cors.md`](s3-cors.md). |
 | Playback does not start or seek | `Range` missing from the CORS rule, or `media-src` lacks the storage origin. |
 | A resumed upload completes with a corrupt or wrong-size object | The part size changed while it was in flight (§5). Delete the object and upload again. |
+| Transcript upload answers **415** at start although the file is audio or video | The platform's init checks `storage.allowedMimeTypes` (`ALLOWED_MIME_TYPES`, default `image/*,application/pdf,video/*,audio/*`) after the application's own pre-check. A deployment whose `ALLOWED_MIME_TYPES` omits `audio/*` or `video/*` rejects transcript uploads. Keep both in the list (§1). |
 | Generic `DELETE /api/storage/objects/{id}` answers 409 `managed_by_module` | The object belongs to transcripts, notes or the graph. Delete it through the owning feature. |
 
 ## 10. Notes for operators
