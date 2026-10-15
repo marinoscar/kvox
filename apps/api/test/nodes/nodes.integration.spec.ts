@@ -166,7 +166,7 @@ describe('Worker node control plane (Integration)', () => {
 
     it.each(routes)('403 on %s for a viewer', async (_label, method, path) => {
       // Every route is gated: the writes on `nodes:write`, the two reads on
-      // `nodes:read`, both Admin-only in `seed-data.ts`.
+      // `nodes:read`, both Admin-only in `prisma/catalog/permissions.json`.
       const viewer = await createMockViewerUser(context);
 
       await request(server())[method](path).set(authHeader(viewer.accessToken)).expect(403);

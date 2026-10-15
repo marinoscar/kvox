@@ -1,38 +1,84 @@
-import {
-  ROLES,
-  PERMISSIONS,
-  ROLE_PERMISSIONS,
-  DEFAULT_SYSTEM_SETTINGS as SEEDED_SYSTEM_SETTINGS,
-  NOTE_TEMPLATES,
-} from '../../prisma/seed-data';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+import { NOTE_TEMPLATES } from '../../prisma/seed-app';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
 import { composeDefaultSystemSettings } from '../../src/settings/registry';
 import { systemSettingsSchema } from '../../src/common/schemas/settings.schema';
 
 // =============================================================================
-// Seed data guard (#256, epic #254)
+// Seed data guard (#256, epic #254; reworked for #465, epic #462)
 // =============================================================================
 //
 // WHAT THIS CAN AND CANNOT CHECK. `prisma/seed.ts` needs a real Postgres, so
 // its behaviour is proven by CI's smoke job, which runs `npm run prisma:seed`
-// against a live database — twice on a re-run of an existing environment, which
-// is the actual idempotency evidence. Every write in that script is an `upsert`
-// keyed on a natural unique (`role.name`, `permission.name`,
-// `rolePermission.roleId_permissionId`, `systemSettings.key`), so re-running it
-// updates rows rather than inserting duplicates.
+// against a live database (twice on a re-run, which is the idempotency
+// evidence). The platform half of the seed (`seedPlatform` from
+// `@marinoscar/platform-db/seed`) upserts roles, permissions and grants from
+// the two committed catalogs in `prisma/catalog/`; KVox's own rows (the
+// built-in note templates) come from `prisma/seed-app.ts`.
 //
 // What no database can tell you is whether the DATA is self-consistent, and
-// that is what this file asserts, against `prisma/seed-data.ts` — split out of
-// the script for exactly this purpose, since the script itself connects to a
-// database and runs `main()` at import time.
+// that is what this file asserts, against the committed catalogs
+// (`permissions.json`, `system-settings-defaults.json`, generated from the
+// registries by `npm run catalog:permissions` / `catalog:settings`) and
+// `NOTE_TEMPLATES`.
 //
 // The failure this most directly prevents: a permission added to
 // `PERMISSIONS` in `roles.constants.ts` (which is what `@Auth()` decorators
-// name) but not to the seed, so every route guarded by it 403s for everyone in
-// a freshly seeded deployment, with nothing in the logs to explain why.
+// name) but missing from the catalog, so every route guarded by it 403s for
+// everyone in a freshly seeded deployment, with nothing in the logs to explain
+// why.
 // =============================================================================
 
-describe('seed data', () => {
+interface CatalogPermission {
+  name: string;
+  description: string;
+  scope: string;
+}
+
+interface CatalogRole {
+  name: string;
+  description: string;
+  scope: string;
+}
+
+interface PermissionCatalog {
+  roles: CatalogRole[];
+  permissions: CatalogPermission[];
+  rolePermissions: Record<string, string[]>;
+}
+
+const CATALOG_DIR = join(__dirname, '..', '..', 'prisma', 'catalog');
+
+const CATALOG = JSON.parse(
+  readFileSync(join(CATALOG_DIR, 'permissions.json'), 'utf8'),
+) as PermissionCatalog;
+
+const SEEDED_SYSTEM_SETTINGS = JSON.parse(
+  readFileSync(join(CATALOG_DIR, 'system-settings-defaults.json'), 'utf8'),
+);
+
+const ROLES = CATALOG.roles;
+const PERMISSIONS = CATALOG.permissions;
+const ROLE_PERMISSIONS = CATALOG.rolePermissions;
+
+/** The roles that hold the KVox domain permissions (everyone with an org). */
+const ORG_ROLES = ['org_admin', 'contributor', 'viewer'];
+
+/** The eight KVox domain permissions: transcripts, notes, templates, graph. */
+const KVOX_DOMAIN_PERMISSIONS = [
+  'transcripts:read',
+  'transcripts:write',
+  'notes:read',
+  'notes:write',
+  'note_templates:read',
+  'note_templates:write',
+  'graph:read',
+  'graph:write',
+];
+
+describe('seed data (catalogs and seed-app)', () => {
   describe('permissions', () => {
     it('declares each permission exactly once', () => {
       // Duplicates would not break the upsert — the second one would simply
@@ -156,8 +202,8 @@ describe('seed data', () => {
       expect(PERMISSION_CONSTANTS.GRAPH_WRITE).toBe('graph:write');
     });
 
-    it('grants both to ALL THREE roles, the same posture as notes:*', () => {
-      for (const role of ['admin', 'contributor', 'viewer']) {
+    it('grants both to every org role (org_admin, contributor, viewer), the same posture as notes:*', () => {
+      for (const role of ORG_ROLES) {
         for (const permission of ['graph:read', 'graph:write']) {
           expect(ROLE_PERMISSIONS[role]).toContain(permission);
         }
@@ -181,6 +227,32 @@ describe('seed data', () => {
   });
 
   describe('role-permission mappings', () => {
+    it('declares the eight KVox domain permissions with scope org (#465)', () => {
+      expect(KVOX_DOMAIN_PERMISSIONS).toHaveLength(8);
+
+      for (const name of KVOX_DOMAIN_PERMISSIONS) {
+        const matches = PERMISSIONS.filter((permission) => permission.name === name);
+        expect(matches).toHaveLength(1);
+        expect(matches[0].scope).toBe('org');
+      }
+    });
+
+    it('grants the eight KVox domain permissions to org_admin, contributor and viewer (#465)', () => {
+      for (const role of ORG_ROLES) {
+        for (const permission of KVOX_DOMAIN_PERMISSIONS) {
+          expect(ROLE_PERMISSIONS[role]).toContain(permission);
+        }
+      }
+    });
+
+    it('gives every permission a scope the platform knows (system or org)', () => {
+      const bad = PERMISSIONS.filter(
+        (permission) => !['system', 'org'].includes(permission.scope),
+      ).map((permission) => permission.name);
+
+      expect(bad).toEqual([]);
+    });
+
     it('names only roles that are seeded', () => {
       const roles = new Set<string>(ROLES.map((role) => role.name));
       const unknown = Object.keys(ROLE_PERMISSIONS).filter(
@@ -270,21 +342,21 @@ describe('seed data', () => {
       expect(leaked).toEqual([]);
     });
 
-    it('grants the transcripts permissions to ALL THREE roles (#24) — the opposite posture from every operational pair above', () => {
+    it('grants the transcripts permissions to every org role (#24) — the opposite posture from every operational pair above', () => {
       // Unlike jobs/nodes/db_backup/broadcasts/push (Admin-only), transcripts
       // is the core product action and this app's DEFAULT_ROLE is Viewer, so
       // every role — including Viewer — must hold both permissions from the
       // moment the seed runs.
       const transcripts = ['transcripts:read', 'transcripts:write'];
 
-      for (const role of ['admin', 'contributor', 'viewer']) {
+      for (const role of ORG_ROLES) {
         for (const permission of transcripts) {
           expect(ROLE_PERMISSIONS[role]).toContain(permission);
         }
       }
     });
 
-    it('grants the notes/note_templates permissions to ALL THREE roles (#48) — the same posture as transcripts:*', () => {
+    it('grants the notes/note_templates permissions to every org role (#48) — the same posture as transcripts:*', () => {
       // Mirrors transcripts:* exactly: generating a note is the core product
       // action, and this app's DEFAULT_ROLE is Viewer, so every role —
       // Viewer included — must hold all four grants from the moment the
@@ -296,7 +368,7 @@ describe('seed data', () => {
         'note_templates:write',
       ];
 
-      for (const role of ['admin', 'contributor', 'viewer']) {
+      for (const role of ORG_ROLES) {
         for (const permission of notes) {
           expect(ROLE_PERMISSIONS[role]).toContain(permission);
         }

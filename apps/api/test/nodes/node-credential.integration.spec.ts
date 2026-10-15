@@ -12,7 +12,7 @@
 // THE OTHER THING IS THE POINT OF THE ISSUE. A `nod_` credential resolves,
 // through `JwtAuthGuard`, to its owning user's real `AuthenticatedUser` —
 // roles, permissions and all. Since `nodes:write` is granted to Admin only
-// (`prisma/seed-data.ts`), THE OWNER OF A NODE CREDENTIAL IS AN ADMIN. The
+// (`prisma/catalog/permissions.json`), THE OWNER OF A NODE CREDENTIAL IS AN ADMIN. The
 // route allowlist in the guard is therefore the entire difference between "a
 // leaked worker token can pretend to be a worker" and "a leaked worker token
 // owns the deployment", and it is asserted here THROUGH THE REAL HTTP STACK —
@@ -33,7 +33,7 @@ import {
 } from '../helpers/test-app.helper';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { JwtAuthGuard } from '../../src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '@marinoscar/platform-api/identity';
 import { NodeCredentialService } from '../../src/nodes/node-credential.service';
 import { PatService } from '../../src/pat/pat.service';
 import { resetPrismaMock } from '../mocks/prisma.mock';

@@ -36,7 +36,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { NOTE_TEMPLATES } from '../../prisma/seed-data';
+import { NOTE_TEMPLATES } from '../../prisma/seed-app';
 import { createStorageObject } from '../helpers/storage-object.helper';
 
 /**
@@ -380,7 +380,8 @@ describeWithDb('Notes schema (real Postgres)', () => {
             description: template.description,
             instructions: template.instructions,
             outputFormat: template.outputFormat,
-            structure: template.structure,
+            bodyFormat: template.bodyFormat,
+            structure: [...template.structure],
             tone: template.tone,
             length: template.length,
           },
@@ -391,7 +392,8 @@ describeWithDb('Notes schema (real Postgres)', () => {
             description: template.description,
             instructions: template.instructions,
             outputFormat: template.outputFormat,
-            structure: template.structure,
+            bodyFormat: template.bodyFormat,
+            structure: [...template.structure],
             tone: template.tone,
             length: template.length,
           },

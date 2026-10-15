@@ -59,7 +59,7 @@ export const mockPermissions = {
     name: 'allowlist:write',
     description: 'Modify allowlist',
   },
-  // Storage object access. Present in `prisma/seed-data.ts` since the storage
+  // Storage object access. Present in `prisma/catalog/permissions.json` since the storage
   // module landed but absent from this mirror until #21 gave a storage route a
   // permission to enforce (`POST /:id/upload/parts`, storage:write) — at which
   // point every mocked user was silently a caller with NO storage rights.
@@ -79,7 +79,7 @@ export const mockPermissions = {
     description: 'Delete any storage object',
   },
   // The background queue's admin surface (#264, epic #254). Seeded to Admin
-  // only in `prisma/seed-data.ts`, and mirrored that way below.
+  // only in `prisma/catalog/permissions.json`, and mirrored that way below.
   jobsRead: {
     id: randomUUID(),
     name: 'jobs:read',
@@ -92,7 +92,7 @@ export const mockPermissions = {
   },
   // The worker fleet (#267, epic #254). Split from `jobs:*` deliberately —
   // see `common/constants/roles.constants.ts` — and, like the queue's pair,
-  // seeded to Admin ONLY in `prisma/seed-data.ts`. Mirrored that way below so
+  // seeded to Admin ONLY in `prisma/catalog/permissions.json`. Mirrored that way below so
   // an integration test that expects a viewer to be refused a node surface is
   // testing the real grant and not a fixture that happened to be generous.
   nodesRead: {
@@ -106,7 +106,7 @@ export const mockPermissions = {
     description: 'Register, drain and remove worker nodes',
   },
   // Admin notification broadcasts (#320/#324, epic #319). Seeded to Admin ONLY
-  // in `prisma/seed-data.ts` and mirrored that way below: a broadcast reaches
+  // in `prisma/catalog/permissions.json` and mirrored that way below: a broadcast reaches
   // every active user in the deployment, so an integration test that expects a
   // viewer to be refused these routes must be testing the real grant rather
   // than a fixture that happened to be generous.
@@ -121,7 +121,7 @@ export const mockPermissions = {
     description: 'Compose, schedule, cancel and send notification broadcasts',
   },
   // Database backup (#283, epic #254). Seeded to Admin ONLY in
-  // `prisma/seed-data.ts`, and mirrored that way below — a fixture that were
+  // `prisma/catalog/permissions.json`, and mirrored that way below — a fixture that were
   // more generous than the seed would make an integration test asserting that a
   // viewer is refused pass for the wrong reason.
   //
@@ -146,7 +146,7 @@ export const mockPermissions = {
     description: 'Restore the database from a backup',
   },
   // Runtime-configurable Web Push (VAPID) admin UI (#355). Seeded to Admin
-  // ONLY in `prisma/seed-data.ts`, and mirrored that way below — split from
+  // ONLY in `prisma/catalog/permissions.json`, and mirrored that way below — split from
   // `system_settings:*` deliberately (see `common/constants/roles.constants.ts`),
   // so a fixture that granted it more broadly than the seed would make an
   // integration test asserting a viewer is refused pass for the wrong reason.
@@ -161,7 +161,7 @@ export const mockPermissions = {
     description: 'Generate, rotate, enable/disable and remove the Web Push key pair',
   },
   // The transcript pipeline (#24/#25, epic #19). Seeded to ALL THREE ROLES in
-  // `prisma/seed-data.ts`, including Viewer, and mirrored that way below:
+  // `prisma/catalog/permissions.json`, including Viewer, and mirrored that way below:
   // creating a transcript is the action the whole feature exists for, and a
   // brand-new account's default role is Viewer. A fixture that withheld these
   // from Viewer would make an integration test asserting a viewer CAN create a
@@ -176,7 +176,7 @@ export const mockPermissions = {
     name: 'transcripts:write',
     description: 'Create, edit and delete your own transcripts',
   },
-  // Notes (#48, epic #45). Seeded to ALL THREE ROLES in `prisma/seed-data.ts`
+  // Notes (#48, epic #45). Seeded to ALL THREE ROLES in `prisma/catalog/permissions.json`
   // — the identical posture `transcripts:*` takes just above, and mirrored the
   // same way below. A fixture that withheld these from Viewer would make an
   // integration test asserting a viewer CAN reach `GET /api/ai/config` (which
@@ -202,7 +202,7 @@ export const mockPermissions = {
     description: 'Create, edit and delete your own note templates',
   },
   // Knowledge graph (#354, epic #344). Seeded to ALL THREE ROLES in
-  // `prisma/seed-data.ts`, mirrored that way below — the same posture as
+  // `prisma/catalog/permissions.json`, mirrored that way below — the same posture as
   // `notes:*`. A fixture that withheld these from Viewer would make an
   // integration test asserting a viewer CAN read `GET /api/graph/ontology`
   // fail for a reason the real seed does not have.
