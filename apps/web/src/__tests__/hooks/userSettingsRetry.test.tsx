@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { server } from '../mocks/server';
 import { ThemeContextProvider } from '../../contexts/ThemeContext';
-import { PlatformHost } from '../../platform/PlatformHost';
+import { AppPlatformHostProvider } from '../../platform/platformHost';
 import { useUserSettings, PACKAGED_CONFLICT_MESSAGE } from '../../hooks/userSettingsRetry';
 import { AuthContext } from '@marinoscar/platform-web/identity/headless';
 import type { AuthContextValue } from '@marinoscar/platform-web/identity/headless';
@@ -40,7 +40,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <MemoryRouter>
       <ThemeContextProvider>
         <AuthContext.Provider value={auth}>
-          <PlatformHost>{children}</PlatformHost>
+          <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
         </AuthContext.Provider>
       </ThemeContextProvider>
     </MemoryRouter>

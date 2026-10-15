@@ -5,10 +5,12 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 // route guards and the identity pages come from `@marinoscar/platform-web`.
 import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
 import { IdentityProviders } from './identity/IdentityProviders';
-// Issue #466, epic #462. The platform host (api, viewer, applyTheme) the
-// packaged settings pages and hooks read, and this app's settings-hub feature keys
-// (a side-effect import: it registers them at module scope, before first render).
-import { PlatformHost } from './platform/PlatformHost';
+// Issues #466 and #464, epic #462. The platform host (api, viewer, applyTheme,
+// feature switches) every packaged page and hook reads, and this app's
+// settings-hub feature keys (a side-effect import: it registers them at module
+// scope, before first render).
+import { APP_NAME } from '@app/shared';
+import { AppPlatformHostProvider } from './platform/platformHost';
 import './config/settingsFeatures';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
@@ -17,18 +19,20 @@ import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-// Issue #258, epic #254. Eagerly imported, not lazy: it renders on the error
-// path of a deployment that is deliberately out of service, and a code-split
-// chunk fetched at that moment is one more thing that has to be working for the
-// screen explaining why nothing is working to appear at all.
-import { MaintenanceGate } from './components/common/MaintenanceGate';
-// PWA prompts (#219, epic #215). Eagerly imported, not lazy: `UpdatePrompt` is
-// what REGISTERS the service worker, and a registration deferred behind a
-// dynamic import would not happen until React had already decided it was
-// needed. Both render `null` in their default state, so the cost is a few
-// hundred bytes in the entry chunk.
-import { UpdatePrompt } from './components/pwa/UpdatePrompt';
-import { InstallPrompt } from './components/pwa/InstallPrompt';
+// Issue #258, epic #254; the platform's since #464. Eagerly imported, not lazy:
+// the gate renders on the error path of a deployment that is deliberately out
+// of service, and a code-split chunk fetched at that moment is one more thing
+// that has to be working for the screen explaining why nothing is working to
+// appear at all.
+//
+// PWA prompts (#219, epic #215), also packaged. Eagerly imported, not lazy:
+// `UpdatePrompt` is what REGISTERS the service worker, and a registration
+// deferred behind a dynamic import would not happen until React had already
+// decided it was needed. Both render `null` in their default state. The
+// service-worker hook is handed in: `virtual:pwa-register/react` exists only
+// in this app's build (a Vitest alias stands in for it under test).
+import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platform-web/host/ui';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -83,7 +87,7 @@ const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 // Profile and Appearance are the platform's (#466, epic #462): the packaged
 // pages over the packaged `useUserSettings`, themed through the host's
-// `applyTheme` (`platform/PlatformHost.tsx`).
+// `applyTheme` (`platform/platformHost.tsx`).
 const UserProfilePage = lazy(() =>
   import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserProfilePage })),
 );
@@ -136,14 +140,16 @@ const TranscriptionSettingsPage = lazy(
 // Issue #55, epic #45 — the deployment's AI POLICY. Holds no key: every AI key
 // belongs to an individual user (`UserAiPage` above).
 const AiSettingsPage = lazy(() => import('./pages/Admin/AiSettingsPage'));
-// Issue #258, epic #254 — the maintenance window's switch and its layers.
-// `Admin`-prefixed locally to keep it distinct from `pages/MaintenancePage`,
-// which is the screen a BLOCKED user sees rather than the page that opens and
-// closes the window.
+// Issue #258, epic #254 — the maintenance window's switch and its layers
+// (the packaged page since #464). The screen a BLOCKED user sees is the
+// packaged `MaintenanceGate`'s, not a page of this app.
 const AdminMaintenancePage = lazy(() => import('./pages/Admin/MaintenancePage'));
 // Issue #126, epic #118 — what is deployed here. Lazy like every other admin
 // page: nobody who never opens the Console needs it in the entry chunk.
 const AboutPage = lazy(() => import('./pages/Admin/AboutPage'));
+// Issue #464, epic #462 — the platform's Doctor: the deployment's health checks
+// and the support bundle. Lazy like every other admin page.
+const DoctorPage = lazy(() => import('./pages/Admin/DoctorPage'));
 // Issue #266, epic #254 — the background queue's two Operations pages. Lazy
 // like every other admin page: both pull in the shared DataTable, and neither
 // is on the path of a user who never opens the Console.
@@ -198,7 +204,7 @@ function AppRoutes() {
 
             An ordinary 503 with no marker never reaches it — see
             `services/maintenance.ts` for why that distinction is the feature. */}
-        <MaintenanceGate>
+        <MaintenanceGate appName={APP_NAME}>
           <Suspense fallback={<LoadingSpinner fullScreen />}>
             <Routes>
               {/* Public routes */}
@@ -858,6 +864,22 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
+                  {/* Issue #464, epic #462. `system_settings:read`, the same
+                      string the `Doctor` card declares (the packaged
+                      `doctorSettingsPage.card`) and the same one the platform's
+                      `GET /api/admin/doctor` enforces. The page is read-only; the
+                      support bundle download is the one action it offers. */}
+                  <Route
+                    path="/admin/settings/doctor"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <DoctorPage />
+                      </RequirePermission>
+                    }
+                  />
                   {/* Issue #266, epic #254. `jobs:read` on both, the same
                       string the `Jobs` and `Job Insights` cards declare and the
                       same one `jobs/job-admin.controller.ts` enforces on its
@@ -1029,8 +1051,8 @@ function AppRoutes() {
           NEITHER RENDERS ANYTHING in its default state (no waiting worker, no
           captured install event), so a normal page load is pixel-identical to
           one before this change. */}
-      <UpdatePrompt />
-      <InstallPrompt />
+      <UpdatePrompt useRegisterSW={useRegisterSW} />
+      <InstallPrompt appName={APP_NAME} />
     </ThemeProvider>
   );
 }
@@ -1039,9 +1061,9 @@ export default function App() {
   return (
     <ThemeContextProvider>
       <IdentityProviders>
-        <PlatformHost>
+        <AppPlatformHostProvider>
           <AppRoutes />
-        </PlatformHost>
+        </AppPlatformHostProvider>
       </IdentityProviders>
     </ThemeContextProvider>
   );

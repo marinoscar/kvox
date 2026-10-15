@@ -1,7 +1,7 @@
 import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppBar } from '../navigation/AppBar';
-import { MaintenanceBanner } from './MaintenanceBanner';
+import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import { NotificationPermissionBanner } from '../notifications/NotificationPermissionBanner';
 // Onboarding (#276/#277, epic #271). The provider and the banner mount
 // together, HERE, for the reason each of them documents in its own header: the

@@ -39,6 +39,9 @@ import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
+// Doctor (#464, epic #462) — the platform's health-check page, declared by the
+// package (title, description, path, `system_settings:read`) and appended below.
+import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 // Operations (#266, epic #254). One icon per card, including the two cards
 // whose pages land in later issues — the card is declared now, so its icon is
 // declared now; see the `Operations` section's own header.
@@ -507,6 +510,11 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: '/admin/settings/broadcasts',
         permission: 'broadcasts:read',
       },
+      // Issue #464, epic #462. APPENDED, last in `Operations`: the card is the
+      // package's own entry (`system_settings:read` is `DEFAULT_DOCTOR_PERMISSION`,
+      // the string the platform's doctor controller enforces on its GET), plus
+      // its icon, which the package keeps beside the card.
+      { ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon },
     ],
   },
 ];
