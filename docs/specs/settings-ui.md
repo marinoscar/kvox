@@ -12,7 +12,7 @@
 > `apps/web/src/components/navigation/AppBar.tsx`. The visible pattern this
 > document explains the reasoning for — every new settings page is a card in
 > one of the two registries above, not a route left to find its own way — is
-> stated as a rule in `CLAUDE.md`'s "MANDATORY: Settings UI Pattern" section.
+> stated as a rule in `AGENTS.md`'s "MANDATORY: Settings UI Pattern" section.
 > This document is the *why*; it does not restate the rules there.
 >
 > Update, issue #366: the three cards §1 describes as epic #90's worked
@@ -166,7 +166,7 @@ screen).
 
 ## 3. Permissions are mirrored, never invented
 
-Rule 3 in `CLAUDE.md` requires a card's `permission` field to be the literal
+Rule 3 in `AGENTS.md` requires a card's `permission` field to be the literal
 string its controller enforces. This is checked against the running
 controllers below, not assumed:
 
@@ -263,7 +263,7 @@ the available width, not a subtle regression.
 
 ### Why there is deliberately no shared constant
 
-The honest answer to this — the thing `CLAUDE.md` explicitly defers to this
+The honest answer to this — the thing `AGENTS.md` explicitly defers to this
 document — turned out to be more specific than "these are different kinds of
 decisions that happen to share a number," and it is worth being precise about
 what the code actually shows rather than restating that generality. Reading
