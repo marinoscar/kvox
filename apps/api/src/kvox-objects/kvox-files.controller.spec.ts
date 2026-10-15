@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { PATH_METADATA } from '@nestjs/common/constants';
+import { APP_SLUG } from '@app/shared';
 
 import {
   KvoxFilesController,
@@ -41,7 +42,7 @@ describe('KvoxFilesController', () => {
   });
 
   it('is mounted at kvox/files', () => {
-    expect(Reflect.getMetadata(PATH_METADATA, KvoxFilesController)).toBe('kvox/files');
+    expect(Reflect.getMetadata(PATH_METADATA, KvoxFilesController)).toBe(`${APP_SLUG}/files`);
   });
 
   it('lists the caller\'s unmanaged objects in their organization with the platform response shape', async () => {

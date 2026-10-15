@@ -1,6 +1,6 @@
 import { DEFAULT_STORAGE_PART_SIZE_BYTES } from '@marinoscar/platform-api/storage';
 
-import { S3_MAX_PARTS, maxObjectBytes, resolvePartSize, totalPartsFor } from './kvox-part-size';
+import { S3_MAX_PARTS, maxObjectBytes, resolvePartSize, totalPartsFor } from './part-size';
 
 const GIB = 1024 ** 3;
 

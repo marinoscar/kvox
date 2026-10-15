@@ -282,11 +282,13 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── doctor.config.ts
 │   │   │   │   ├── identity/         # IdentityModule.forRoot + its host ports
 │   │   │   │   ├── settings/         # SettingsModule.forRoot + host ports (data, profile images)
+│   │   │   │   ├── storage/          # StorageModule.forRoot + StorageConfigModule + ProfileImageModule + key-prefix manifest
 │   │   │   │   ├── jobs/             # JobsModule.forRoot + NodesModule.forRoot + their host ports (the queue and fleet are the platform's)
 │   │   │   │   └── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
 │   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
-│   │   │   ├── settings/             # registry/ (namespace manifests) and profile-image/ only
+│   │   │   ├── kvox-objects/         # Ownership side table, managed-objects gateway, multipart routes, files list, delete veto, transcript upload processor
+│   │   │   ├── settings/             # registry/ (namespace manifests) only
 │   │   │   ├── health/               # Health check module
 │   │   │   ├── prisma/               # Prisma service
 │   │   │   ├── common/               # Shared utilities
@@ -391,97 +393,127 @@ pages/
 
 ### 5.4 Storage Subsystem
 
-The storage system provides file upload and management capabilities with support for large files through resumable multipart uploads.
+Object storage (uploads, avatars, renditions, exports, backups, the node data plane) is the platform's storage slice, `@marinoscar/platform-api/storage`, mounted by this application in `apps/api/src/platform/storage/`. The application adds a thin layer of its own in `apps/api/src/kvox-objects/` for what the platform does not model. Nothing in `apps/api/src/storage/` remains: that folder was this application's own stack and was deleted in #469.
 
 #### Architecture Overview
 
-The storage system uses a provider abstraction pattern to support multiple cloud storage backends while maintaining a consistent API.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Platform storage slice (@marinoscar/platform-api/storage)          │
+│  ├── Objects API  /api/storage/objects  (init, complete, abort,     │
+│  │                simple upload, list, download, delete, metadata)  │
+│  ├── Storage config  /api/admin/storage-config  (+ /admin/settings/ │
+│  │                storage in the web app)                           │
+│  ├── Resolving STORAGE_PROVIDER  (S3 / R2 / S3-compatible driver,   │
+│  │                chosen at runtime from the `storage` settings     │
+│  │                namespace + the credential store)                 │
+│  ├── ObjectProcessorRegistry  → storage.object.process job          │
+│  ├── storage.cleanup.stale-uploads job + cron (enqueue only)        │
+│  ├── Key-prefix registry  (every prefix the deployment writes)      │
+│  └── ProfileImageModule  (avatars)                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│  Application layer (apps/api/src/kvox-objects/)                     │
+│  ├── KvoxManagedObjects  (the ONLY code that reads/writes           │
+│  │                storage_objects; always inside runInOrg)          │
+│  ├── KvoxObjectOwnershipStore  (kvox_object_ownership)              │
+│  ├── KvoxMultipartController  (POST/GET .../upload/parts)           │
+│  ├── KvoxS3PartLister  (S3 ListParts)                               │
+│  ├── KvoxFilesController  (GET /api/kvox/files)                     │
+│  ├── managed-delete.hook  (Fastify onRequest: 409 on managed delete)│
+│  └── TranscriptUploadProcessor  (ObjectProcessor, starts the        │
+│                   transcription pipeline)                           │
+├─────────────────────────────────────────────────────────────────────┤
+│  Host bindings (apps/api/src/platform/storage/)                     │
+│  ├── storage.config.ts  (StorageModule.forRoot, StorageConfigModule,│
+│  │                       ProfileImageModule.forRoot)                │
+│  ├── storage-host.module.ts  (STORAGE_SYSTEM_DATA → PrismaSystem…)  │
+│  └── storage-key-prefix.manifest.ts                                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Storage Module                            │
-├─────────────────────────────────────────────────────────────┤
-│  Objects Controller                                          │
-│  └── Upload/Download/CRUD endpoints                          │
-├─────────────────────────────────────────────────────────────┤
-│  Objects Service                                             │
-│  └── Business logic, ownership validation                    │
-├─────────────────────────────────────────────────────────────┤
-│  Storage Provider Interface                                  │
-│  ├── S3StorageProvider (implemented)                         │
-│  └── AzureStorageProvider (future)                          │
-├─────────────────────────────────────────────────────────────┤
-│  Object Processing Pipeline                                  │
-│  └── Async post-upload processing with pluggable processors  │
-└─────────────────────────────────────────────────────────────┘
-```
+**Runtime-configured.** There is no storage environment variable for the bucket. The active driver and its non-secret settings are the `storage` system-settings namespace; the secret access key is in the credential store (`credentials`, purpose `storage`), encrypted with `SECRETS_ENCRYPTION_KEY`. An administrator edits both at `/admin/settings/storage`, and the resolving provider re-reads them on a short cache, so a change needs no restart. While nothing usable is saved, every storage call answers 503. The environment keeps only `STORAGE_CSP_ORIGIN` (nginx), `STORAGE_PART_SIZE`, `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES` and `SIGNED_URL_EXPIRY`. Operator steps: [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md).
+
+**Tenancy.** `storage_objects` and `storage_object_chunks` are organization tables with forced row-level security. Every application read or write goes through `runInOrg` (or the job's `JobScope`), and only `KvoxManagedObjects` does it; a grep-based tripwire spec fails when any other file outside the platform bindings touches `prisma.storageObject`. RLS stays inert until the role switch (#471).
 
 #### Upload Flow
 
 **1. Resumable Upload (Large Files)**:
-   - Client calls `/api/storage/objects/upload/init` with file metadata
-   - Server creates DB record, initializes S3 multipart, returns presigned URLs
-   - Client uploads parts directly to S3 (bypasses application server)
-   - Client calls `/api/storage/objects/:id/upload/complete` with part ETags
-   - Server finalizes upload with S3, triggers processing pipeline
+   - Client calls the platform's `POST /api/storage/objects/upload/init` with file metadata (a transcript, note or graph upload goes through `KvoxManagedObjects.initManagedUpload`, which wraps it and writes the ownership row)
+   - Server creates the DB record, starts the multipart upload, returns the deployment-wide `partSize` and presigned URLs for the **first ten parts**
+   - Client uploads parts directly to the bucket (bypasses the application server), asking `POST /api/storage/objects/:id/upload/parts` (application route, up to 100 part numbers per call) for the rest as it goes
+   - To resume, or to complete, the client asks `GET /api/storage/objects/:id/upload/parts` (application route, S3 `ListParts`) for the parts the bucket holds. The web client never reads a part's `ETag`, which a browser cannot do cross-origin without bucket CORS
+   - Client calls the platform's `POST /api/storage/objects/:id/upload/complete` with that list; the server finalizes the upload and queues `storage.object.process`
 
 **2. Simple Upload (Small Files < 100MB)**:
    - Client sends file via multipart/form-data to `/api/storage/objects`
-   - Server streams directly to S3
-   - Processing pipeline triggered on completion
+   - Server streams directly to the bucket
+   - Processing is queued on completion
+
+**Part size.** One number for the whole deployment (`STORAGE_PART_SIZE`, default 10 MiB). It is not stored per upload, so it must never change while uploads are in flight, and `partSize x 10,000` must cover the largest accepted file. The rule and its check are in the runbook.
 
 #### Processing Pipeline
 
-Post-upload processing is handled asynchronously via NestJS EventEmitter:
+Post-upload processing is a queue job, not an event:
 
 ```
-ObjectUploadedEvent (emitted)
+Upload completes (platform)
          ↓
-ObjectProcessingService (orchestrator)
+storage.object.process job (queued in the completing transaction)
          ↓
-Registered Processors (run in priority order)
+ObjectProcessorRegistry: every processor whose canProcess() matches
          ↓
-Results aggregated into object metadata
+TranscriptUploadProcessor (kvox.transcripts.source): if the object is
+transcripts-owned, enqueue transcription.submit / media.audio.transcode
          ↓
 Status updated: ready | failed
 ```
 
 **Key Features:**
-- Pluggable processor architecture
-- Priority-based execution order
-- Processors run asynchronously (non-blocking)
-- Results stored in object metadata JSONB field
-- Extensible for future processing needs (virus scanning, image resizing, etc.)
+- Pluggable processors registered through `ObjectProcessorRegistry` (queue rule 1: a processor only enqueues, it never downloads)
+- Runs in the job queue with retries, not in an `@OnEvent` listener (the old `storage.object.uploaded` and `storage.object.upload_aborted` events are gone, and the `on-event-no-io` conformance suite enforces it)
+- **Aborted uploads** emit nothing, so `transcripts.housekeeping` (every 10 minutes) marks `uploading` transcripts whose source object is aborted, gone or stale as `failed` (`upload_aborted`); a cancelled transcript upload therefore shows as failed up to one cycle later
+
+#### Object ownership
+
+`kvox_object_ownership (object_id, org_id, managed_by, created_at)` marks the objects other modules own (`transcripts`, `notes`, `graph`). It replaced the `storage_objects.managed_by` column and is keyed `(object_id, org_id)` because the platform requires the composite key for a foreign key into an organization table (a foreign-key check bypasses RLS). It is a system table (`kind: 'system'`, `orgReference: 'orgId'`) with no policy of its own. Effects:
+
+- `GET /api/kvox/files` lists a user's plain uploads minus owned objects; the platform's own list still shows them to their owner
+- A Fastify `onRequest` hook answers `409 { details: { reason: 'managed_by_module', module } }` for `DELETE /api/storage/objects/:id` on an owned object, before the platform handler runs
+- `KvoxManagedObjects.deleteManaged(id, module)` is the only way an owner deletes its object
+
+The deliberate differences from the platform slice (the hook, the files route, the two multipart routes, the part-size rule, the composite key) are listed in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
 
 #### Database Schema
 
-**storage_objects**:
-- File metadata, status, storage key
-- Owner reference (user_id)
+**storage_objects** (platform table):
+- File metadata, status, storage key, provider and bucket the bytes live in
+- Owner reference (`uploaded_by_id`) and `org_id`
 - Processing results in JSONB metadata field
+- No `managed_by` and no `part_size` (both dropped in #469)
 
-**storage_object_chunks**:
-- Tracks multipart upload progress
-- Part number, ETag, upload status
-- Enables resume capability
+**storage_object_chunks** (platform table):
+- Part number, ETag, size; the platform records the parts when an upload completes
+- Composite key `(object_id, org_id)` to the object
+
+**kvox_object_ownership** (application table): see above.
 
 #### Module Structure
 
 ```
-apps/api/src/storage/
-├── storage.module.ts                # Module definition
-├── objects/
-│   ├── objects.controller.ts        # HTTP endpoints
-│   ├── objects.service.ts           # Business logic
-│   ├── dto/                         # Data transfer objects
-│   └── interfaces/
-├── providers/
-│   ├── storage-provider.interface.ts
-│   └── s3-storage.provider.ts
-└── processing/
-    ├── object-processing.service.ts
-    └── processors/
-        └── base-processor.interface.ts
+apps/api/src/platform/storage/
+├── storage.config.ts                # StorageModule.forRoot, StorageConfigModule, ProfileImageModule.forRoot
+├── storage-host.module.ts           # STORAGE_SYSTEM_DATA host port
+└── storage-key-prefix.manifest.ts   # uploads, avatars, node-outputs, database-backups, transcripts, notes, graph
+
+apps/api/src/kvox-objects/
+├── kvox-objects.module.ts
+├── kvox-managed-objects.service.ts  # the only reader/writer of storage_objects
+├── kvox-object-ownership.store.ts   # kvox_object_ownership
+├── kvox-multipart.controller.ts     # POST/GET /api/storage/objects/:id/upload/parts
+├── kvox-s3-part-lister.ts           # ListPartsCommand
+├── kvox-files.controller.ts         # GET /api/kvox/files
+├── managed-delete.hook.ts           # 409 on a managed DELETE
+└── transcript-upload.processor.ts   # ObjectProcessor kvox.transcripts.source
 ```
 
 ---
@@ -602,6 +634,8 @@ apps/api/src/storage/
 └────────────────────┘
 ```
 
+Both tables are platform organization tables (`org_id`, composite key `(id, org_id)`). The application's own `kvox_object_ownership (object_id, org_id)` hangs off `storage_objects` with a cascade; see [5.4](#54-storage-subsystem).
+
 ### 6.2 JSONB Schema Definitions
 
 #### User Settings Shape
@@ -626,7 +660,7 @@ provider's picture, or one uploaded via `POST /api/user-settings/profile-image`)
 `imageObjectId` is the uploaded avatar's storage object id, present only when
 relevant. Rows written before this shape existed carry `useProviderImage`/
 `customImageUrl` instead — normalized to the shape above on every read rather
-than by a data migration (see `apps/api/src/common/profile-image/profile-image.ts`).
+than by a data migration (by the platform's `profile-image` helpers, `@marinoscar/platform-api/storage`, which replaced `apps/api/src/common/profile-image/` in #469).
 
 #### System Settings Shape
 
@@ -749,14 +783,9 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `allowed_emails` - Allowlist for access control. A platform table: KVox does not extend it. It no longer has the `reminder_count` / `last_reminder_at` columns (dropped by the `kvox_allowlist_reminders` migration, issue #465)
 - `kvox_allowlist_reminders` - Allowlist invitation-reminder bookkeeping (issue #301, moved by #465): `allowed_email_id` (UUID primary key), `reminder_count`, `last_reminder_at`, `updated_at`. Keyed by an allowlist row id with **no foreign key**, because the platform's `AllowedEmail` model cannot be extended and a SQL-only FK would show as drift. Orphans are therefore possible: `GET /api/allowlist/reminders` deletes rows whose entry no longer exists (one bounded `DELETE ... WHERE NOT EXISTS`) before it reads, and no caller trusts a row without the join. Written by the KVox-owned `POST /api/allowlist/:id/reminder` with an `INSERT ... ON CONFLICT` that increments in the database, so two admins pressing the button at once cannot both write the same count. A manual, admin-pressed resend, not a scheduler: there is deliberately no cron or job type behind it
 - `device_codes` - Device authorization codes (RFC 8628)
-- `storage_objects` - File metadata, status, storage references. `part_size` (#21) is
-  the part size an upload was initialised with, **persisted rather than recomputed**:
-  re-deriving it from the current `STORAGE_PART_SIZE` renumbered the parts of every
-  upload in flight whenever an operator changed that setting, so a resuming client
-  completed a corrupt object. `managed_by` names the owning module (plain `text`, no
-  enum, no FK — same reasoning as `jobs.subject_type`) and is what hides an object
-  from the generic list and 409s its generic DELETE.
-- `storage_object_chunks` - Multipart upload chunk tracking
+- `storage_objects` - File metadata, status, storage references. A platform **organization table with forced row-level security** (`org_id`, composite key `(id, org_id)`); the application reads and writes it only through `KvoxManagedObjects`, inside `runInOrg`. It carries no `part_size` and no `managed_by` any more (both columns dropped in #469): the part size is one deployment-wide number (`STORAGE_PART_SIZE`, an operator rule: never change it while uploads are in flight, [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md) section 5), and ownership moved to `kvox_object_ownership`
+- `kvox_object_ownership` - Which module owns a storage object (issue #469): `object_id` (UUID primary key), `org_id`, `managed_by` (`'transcripts'`, `'notes'` or `'graph'`; plain `text`, no enum, no CHECK, the same reasoning as `jobs.subject_type`), `created_at`, indexed on `managed_by`. A composite foreign key `(object_id, org_id)` into `storage_objects` with `ON DELETE CASCADE`: the platform requires the composite key for any link into an organization table, because a foreign-key check bypasses RLS. Registered as a `kind: 'system'` model with `orgReference: 'orgId'` and no policy of its own. It is what excludes an object from `GET /api/kvox/files` and what makes a generic `DELETE` answer 409. The data migration copied every non-null `managed_by` into it before the columns were dropped
+- `storage_object_chunks` - Multipart upload chunk tracking. A platform organization table; the platform records the parts when an upload completes
 - `personal_access_tokens` - User-created long-lived API tokens (hashed)
 - `jobs` - The background queue (epic #254). `subject_type`/`subject_id` are both plain
   `text`, nullable, no FK either way — a job's subject is polymorphic (a storage object
@@ -1054,7 +1083,7 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   ontology version, the format, the namespace and the owner's `kg_*` max `updated_at` + row counts — a
   plain non-unique `(owner_id, format, graph_fingerprint)` index, like `note_exports_lookup_idx`),
   `stats` (counts only), a short `error_message`, `expires_at` = request + 7 days. `owner_id` Cascade;
-  `object_id` **Restrict** into a `managed_by: 'graph'` storage object (the sweep and `kg.purge` clear it
+  `object_id` **Restrict** into a graph-owned storage object (`kvox_object_ownership.managed_by = 'graph'`) (the sweep and `kg.purge` clear it
   first); `job_id` `@unique`/SetNull. No hand-written SQL.
 - `ask_conversations` - One saved Ask conversation (issue #376, epic #348). `owner_id`
   **Cascade**; `scope_entity_id` **SetNull** into `kg_entities` — forgetting or merging the
@@ -1213,6 +1242,7 @@ The complete set of roles and permission strings the API enforces. The machine-r
 - `allowlist:read/write` - Allowlist management (Admin only). `allowlist:write` also gates `POST /api/allowlist/:id/reminder` and `allowlist:read` gates `GET /api/allowlist/reminders` (KVox-owned routes, §7.5)
 - `storage:read/write/delete` - Storage object access (own objects)
 - `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
+- `storage_config:read/write` - The object-storage configuration (provider, bucket, keys): view vs. change, test and provision. Platform permissions, system scope, **admin only**, deliberately distinct from `storage:*` (which gates object access and every member holds) and from `system_settings:*`. `storage_config:read` gates the Storage card, the exact string `StorageConfigController` enforces
 - `jobs:read/write` - Background job queue: inspect vs. retry/reset/delete
 - `nodes:read/write` - Worker node fleet: audit vs. register/claim/revoke. **Split from
   `jobs:*`, not folded into it** — "what work is queued" and "which machines are attached
@@ -1350,7 +1380,7 @@ the binding:
 |------|--------------|-------------|
 | `IDENTITY_NOTIFIER` | `IdentityNotifierAdapter` over `NotificationsService` (`security.role_changed`, `user.welcome`, `allowlist.invitation`; org invitations log and drop in single-org mode) | #468 |
 | `IDENTITY_JOBS` | `IdentityJobsAdapter`: registers `auth.token.cleanup` and `device-auth.code.cleanup` into `JobHandlerRegistry`, enqueues through `JobsService` | #470 |
-| `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the settings slice's default user-settings document) and the profile-image helpers | #469 (profile images) |
+| `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the settings slice's default user-settings document) and the platform's profile-image helpers (`ProfileImageModule`, #469) | none left (profile images removed in #469) |
 | `IDENTITY_NODE_CREDENTIALS` | `NodeCredentialService` | #470 |
 
 `PlatformHostModule.forRoot` (`apps/api/src/platform/platform-host.module.ts`) supplies the core ports identity needs:
@@ -1394,7 +1424,7 @@ before, so `APP_SYSTEM_SETTINGS_EXTENSIONS` is empty.
 Temporary shims, with the issue that removes each, are in
 [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): the `ai` declaration (#473), the
 `user-settings.namespace-changed` interceptor (`platform/settings/user-settings-change.interceptor.ts`, which re-emits the
-event the platform service does not), the profile-image adapter (#469) and `cron` in `db-backup/schedule.util.ts` (#467).
+event the platform service does not), and `cron` in `db-backup/schedule.util.ts` (#467). The profile-image adapter was removed in #469.
 
 On the web, the hub (`SettingsHub`) and the Profile and Appearance pages come from `@marinoscar/platform-web/settings/ui`,
 and the `useSystemSettings` and `useUserSettings` hooks from `@marinoscar/platform-web/settings/headless`; KVox keeps the two
@@ -1615,6 +1645,7 @@ for genuinely parallel content only.
 | — Notifications | `/admin/settings/notifications` | Required | `system_settings:read` | Turn browser notifications on/off deployment-wide and suppress individual events |
 | — Web Push | `/admin/settings/push` | Required | `push:read` | VAPID key generation/rotation for Web Push |
 | — Maintenance | `/admin/settings/maintenance` | Required | `system_settings:read` | Open/close the maintenance window |
+| — Storage | `/admin/settings/storage` | Required | `storage_config:read` | Object storage: provider, bucket, region, endpoint and keys, with Test and Create bucket (packaged `StorageConfigPage`, appended last in `General`) |
 | — Users & Allowlist | `/admin/settings/users` | Required | `users:read` | User accounts, roles, and allowlist (packaged page, plus the KVox Reminders tab) |
 | `/admin` (redirect) | `/admin` | Required | — | `<Navigate replace>` to `/admin/settings` |
 | `/admin/users` (redirect) | `/admin/users` | Required | — | `<Navigate replace>` to `/admin/settings/users` |
@@ -1948,7 +1979,7 @@ is `@marinoscar/platform-api/nodes` (issue #468, epic #467). This repository
 holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
 gone. KVox's part is the composition and host ports in
 `apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
-`NODE_JOB_INPUTS` and `NODE_OBJECT_STORE` adapters), the handlers that live
+`NODE_JOB_INPUTS` adapter, and `NODE_OBJECT_STORE` bound with the platform's `nodeObjectStoreBinding`), the handlers that live
 beside their features, and the 42 pinned job type strings
 (`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
 [`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the

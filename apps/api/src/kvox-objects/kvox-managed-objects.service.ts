@@ -2,9 +2,9 @@
 // KvoxManagedObjects (issue #469)
 // =============================================================================
 //
-// The ONLY KVox code that reads or writes `storage_objects` and
+// The ONLY app code that reads or writes `storage_objects` and
 // `storage_object_chunks`. The platform storage slice owns those tables (org
-// tables with forced row-level security); KVox's domain modules (transcripts,
+// tables with forced row-level security); this app's domain modules (transcripts,
 // notes, graph) reach them through this class so that:
 //
 //   * every statement runs under `runInOrg` (or inside the caller's own
@@ -62,7 +62,7 @@ export interface CreateManagedObjectInput {
   name?: string;
   /** Free-form JSONB. */
   metadata?: Record<string, unknown>;
-  /** Defaults to `ready`: KVox creates a managed row for bytes that already landed. */
+  /** Defaults to `ready`: a managed row is created for bytes that already landed. */
   status?: 'ready' | 'processing' | 'failed';
 }
 

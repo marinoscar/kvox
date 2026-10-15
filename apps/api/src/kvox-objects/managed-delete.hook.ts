@@ -2,16 +2,16 @@
 // The managed-object delete veto (issue #469)
 // =============================================================================
 //
-// The platform's `DELETE /api/storage/objects/:id` knows nothing of KVox
+// The platform's `DELETE /api/storage/objects/:id` knows nothing of the app's
 // ownership: it would delete a transcript's source audio and leave the
-// transcript pointing at nothing. The platform has no seam for a veto, so KVox
+// transcript pointing at nothing. The platform has no seam for a veto, so the app
 // installs a Fastify `onRequest` hook, from `main.ts` after `setGlobalPrefix`
 // (`installManagedDeleteHook(app)`), that answers
 //
 //   409 { code, message, details: { reason: 'managed_by_module', module } }
 //
 // BEFORE the platform handler runs, when the object has a `kvox_object_ownership`
-// row. KVox's own deletes go through `KvoxManagedObjects.deleteManaged`, never
+// row. The app's own deletes go through `KvoxManagedObjects.deleteManaged`, never
 // through this route, so nothing legitimate is blocked.
 //
 // SHAPE OF THE CHECK. One indexed single-row read of the ownership table (no RLS

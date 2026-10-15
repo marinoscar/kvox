@@ -126,7 +126,7 @@ import configuration from './config/configuration';
     // stable. GLOBAL.
     hostCoreModule,
     // The platform's storage slice (#469, epic #467): `/api/storage/objects`
-    // (the objects API, without KVox's multipart-parts routes),
+    // (the objects API, without this app's multipart-parts routes),
     // `/api/storage/status`, the `storage.cleanup.stale-uploads` and
     // `storage.object.process` job types and the stale-upload cron, over the
     // runtime-configured provider (the `storage` system setting plus the
@@ -135,7 +135,7 @@ import configuration from './config/configuration';
     // `/api/admin/storage-config` (read, save, connection test, bucket
     // provisioning) and the `storage.*` Doctor checks.
     StorageConfigModule,
-    // KVox's side of storage (#469): `KvoxManagedObjects` (the only code that
+    // This app's side of storage (#469): `KvoxManagedObjects` (the only code that
     // reads `storage_objects` for the domain modules), the ownership table, the
     // multipart-parts routes the platform lacks, `GET /api/kvox/files` and the
     // transcript upload processor.

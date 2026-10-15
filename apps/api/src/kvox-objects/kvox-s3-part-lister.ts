@@ -6,7 +6,7 @@
 // the client to hand back every part's ETag, and a browser cannot read the
 // `ETag` response header of a cross-origin PUT unless the bucket exposes it
 // (`apps/web/src/services/resumableUpload.ts` deliberately never reads it). So
-// KVox asks S3 itself, and the client passes what this class returns to the
+// this class asks S3 itself, and the client passes what this class returns to the
 // PLATFORM's `POST :id/upload/complete`.
 //
 // The S3 client is built the way the platform builds its own: the resolved

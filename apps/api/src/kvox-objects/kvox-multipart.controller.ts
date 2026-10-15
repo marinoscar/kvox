@@ -15,13 +15,13 @@
 // call requires. The client lists the parts here, then calls the PLATFORM's
 // `POST :id/upload/complete` with exactly that list. Resume uses the same list.
 //
-// Both routes load the object through `KvoxManagedObjects` (the only KVox code
+// Both routes load the object through `KvoxManagedObjects` (the only app code
 // that reads `storage_objects`) in the caller's organization, and answer 404,
 // never 403, for an object the caller did not upload.
 //
 // PART LAYOUT. The platform derives `totalParts = ceil(size / partSize)` from
 // the deployment-wide part size, so this controller does too
-// (`kvox-part-size.ts`). Never change the part size while uploads are in flight.
+// (`part-size.ts`). Never change the part size while uploads are in flight.
 // =============================================================================
 
 import {
@@ -50,7 +50,7 @@ import type { ResolvedStorageModuleOptions, StorageProvider } from '@marinoscar/
 
 import { KvoxManagedObjectsService, type StorageObjectRow } from './kvox-managed-objects.service';
 import { KvoxS3PartLister } from './kvox-s3-part-lister';
-import { S3_MAX_PARTS, resolvePartSize, totalPartsFor } from './kvox-part-size';
+import { S3_MAX_PARTS, resolvePartSize, totalPartsFor } from './part-size';
 
 /** The most part numbers one `POST :id/upload/parts` call may sign. */
 export const MAX_PRESIGN_BATCH = 100;

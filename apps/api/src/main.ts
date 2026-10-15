@@ -93,8 +93,8 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // PLATFORM-ADOPTION-SHIM(#469): the platform's `DELETE /api/storage/objects/:id`
-  // has no seam for KVox ownership, so this `onRequest` hook answers 409
-  // `managed_by_module` for an object a KVox module owns, before the handler
+  // has no seam for module ownership, so this `onRequest` hook answers 409
+  // `managed_by_module` for an object a domain module owns, before the handler
   // runs. After `setGlobalPrefix` because it matches the prefixed path.
   installManagedDeleteHook(app);
 

@@ -2,13 +2,13 @@
 // KvoxFilesController (issue #469)
 // =============================================================================
 //
-//   GET /api/kvox/files     the caller's plain uploads, minus managed objects
+//   GET /api/<app>/files     the caller's plain uploads, minus managed objects
 //
 // The platform's `GET /api/storage/objects` lists every object the caller
-// uploaded, and the objects KVox's modules create (a transcript's source audio,
+// uploaded, and the objects the app's modules create (a transcript's source audio,
 // a note's source document, a graph export) are uploaded in the caller's name,
 // so they would show up in a generic "Files" view and invite a delete that
-// would orphan the owning record. Every KVox client therefore lists through this
+// would orphan the owning record. Every client of this app therefore lists through this
 // route: the platform's list query shape (same query, same `{ items, meta }`
 // body, same response item), with `id IN (SELECT object_id FROM
 // kvox_object_ownership)` excluded.
@@ -22,6 +22,7 @@
 // =============================================================================
 
 import { Controller, Get, Query } from '@nestjs/common';
+import { APP_SLUG } from '@app/shared';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
@@ -33,7 +34,7 @@ import type { ObjectListQueryDto, ObjectListResponse } from '@marinoscar/platfor
 import { KvoxManagedObjectsService, type StorageObjectRow } from './kvox-managed-objects.service';
 
 /**
- * The `where` of the list: the caller's own objects that no KVox module owns.
+ * The `where` of the list: the caller's own objects that no module owns.
  * Exported so the real-Postgres spec exercises the same predicate.
  */
 export function unmanagedFilesWhere(userId: string, status?: ObjectListQueryDto['status']) {
@@ -67,7 +68,7 @@ export function toObjectResponse(row: StorageObjectRow) {
 }
 
 @ApiTags('Storage')
-@Controller('kvox/files')
+@Controller(`${APP_SLUG}/files`)
 export class KvoxFilesController {
   constructor(private readonly managed: KvoxManagedObjectsService) {}
 
@@ -76,7 +77,7 @@ export class KvoxFilesController {
   @ApiOperation({
     summary: 'List the caller\'s files',
     description:
-      'The platform\'s object list, minus objects owned by a KVox module (transcript sources, ' +
+      'The platform\'s object list, minus objects owned by an app module (transcript sources, ' +
       'note sources, graph exports). Same query and response shape as `GET /api/storage/objects`.',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })

@@ -2,8 +2,8 @@
 // KvoxObjectsModule (issue #469)
 // =============================================================================
 //
-// KVox's storage gateway: `KvoxManagedObjectsService` is the only code that
-// reads `storage_objects` for KVox's domain modules. Agents add their own
+// The storage gateway: `KvoxManagedObjectsService` is the only code that
+// reads `storage_objects` for the domain modules. Agents add their own
 // providers and controllers here (the multipart routes, the files route, the
 // upload processor).
 //

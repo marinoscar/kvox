@@ -2,7 +2,7 @@
 // KvoxObjectOwnershipStore (issue #469)
 // =============================================================================
 //
-// The `kvox_object_ownership` side table: which KVox module (`transcripts`,
+// The `kvox_object_ownership` side table: which domain module (`transcripts`,
 // `notes`, `graph`) owns a `storage_objects` row. It replaces the
 // `storage_objects.managed_by` column the platform table does not have.
 //
@@ -16,7 +16,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
-/** The KVox modules that can own a storage object. */
+/** The domain modules that can own a storage object. */
 export type KvoxModule = 'transcripts' | 'notes' | 'graph';
 
 /** Every {@link KvoxModule}, for validation. */
