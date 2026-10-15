@@ -413,7 +413,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
 // repository. This guard is what keeps them that way — allowlisting them
 // would silently permit the regression it exists to catch.
 
-const MANIFEST_FILE_LINE_RE = /\bkvox\.manifest(?:\.ts)?\b/;
+const MANIFEST_FILE_LINE_RE = /\bkvox\.(?:settings-)?manifest(?:\.ts)?\b/;
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 const BINARY_EXT_RE = /\.(png|ico|jpg|jpeg|gif|woff2?|ttf|pdf|zip)$/i;
 const EXTRA_EXEMPT: ReadonlySet<string> = new Set([
@@ -520,7 +520,7 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
 
     const lines = content.split('\n');
     lines.forEach((lineText, idx) => {
-      // `apps/api/src/kvox.manifest.ts` (issue #459) is the API's composition
+      // `apps/api/src/kvox.manifest.ts` (issue #459) and `kvox.settings-manifest.ts` (#460) are the API's composition
       // root and every entry point imports it by that name. Its filename is a
       // permanent anchor on the same standing as the codemod anchors above:
       // a rename of the product renames that one file with `git mv` plus its

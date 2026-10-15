@@ -44,6 +44,8 @@ import { NoteTemplatesService } from './note-templates.service';
 import { NotesController } from './notes.controller';
 import { NoteGenerationContextService } from './note-generation-context.service';
 import { NotesService } from './notes.service';
+import { NOTES_USER_DATA_HOOKS } from './notes.user-data';
+import { NotesUserDataHooks } from './notes.user-data.hooks';
 import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 
 // =============================================================================
@@ -128,6 +130,8 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
   ],
   providers: [
     NoteGenerationService,
+    // #460 — the `notes`/`noteTemplates` user-data categories' hooks (registered by `kvox.manifest.ts`).
+    { provide: NOTES_USER_DATA_HOOKS, useClass: NotesUserDataHooks },
     NoteSourceService,
     NoteGenerateHandler,
     // Naming a generated note (#182). It hangs off `NoteGenerationService.commit`

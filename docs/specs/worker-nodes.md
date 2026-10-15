@@ -25,7 +25,8 @@
 > `apps/api/src/nodes/dto/node-data-plane.dto.ts`,
 > `apps/api/src/storage/storage-job-input.ts`,
 > `apps/api/src/jobs/handlers/example-checksum.handler.ts` and
-> `apps/api/src/jobs/contracts/`.
+> `apps/api/src/jobs/contracts/` (base types) and the owning module's `contracts/`
+> folder (`transcripts/contracts/`, `notes/contracts/`).
 >
 > The fleet lifecycle cron (liveness, pruning, auto-drain) is **#270** and is
 > not described here.
@@ -886,7 +887,9 @@ on its own.
 `GET /api/nodes/job-types` lists every node-eligible type with its
 `nodeResultSchema` converted by `z.toJSONSchema()`, so a client validates a
 result before posting it, against the definition this server will actually
-enforce. The schemas live in `apps/api/src/jobs/contracts/`.
+enforce. The schemas live in `apps/api/src/jobs/contracts/` for the base types and in the
+owning module's `contracts/` folder for a domain type (`transcripts/contracts/`,
+`notes/contracts/`).
 
 **Rejected: a shared `packages/job-contracts` workspace.** The reasons are
 already written down in `packages/shared/index.js`, which is the one package

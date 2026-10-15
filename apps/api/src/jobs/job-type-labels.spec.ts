@@ -1,5 +1,6 @@
 import { ExampleEchoHandler } from './handlers/example-echo.handler';
-import { JOB_TYPE_LABELS, jobTypeLabel } from './job-type-labels';
+import { jobTypeLabel } from './job-type-label';
+import { JOB_TYPE_LABELS } from './job-type-labels';
 
 describe('jobTypeLabel', () => {
   it('returns the mapped label for a known type', () => {

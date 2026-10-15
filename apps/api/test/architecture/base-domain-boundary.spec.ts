@@ -63,16 +63,15 @@
 // `test/` if it is genuinely about the composition.
 //
 // -----------------------------------------------------------------------------
-// THE ALLOWLIST: ONLY WHAT ISSUE 0.4 REMOVES, AND IT MUST EMPTY
+// THE ALLOWLIST: EMPTY SINCE ISSUE #460
 // -----------------------------------------------------------------------------
 //
-// `ALLOWLIST` holds exactly the edges that #459 deliberately left for issue
-// 0.4 (onboarding, user-data and the note-source job contract). Each entry
-// carries a reason and the issue that removes it. An entry that no longer
-// matches a real edge FAILS the test ("stale allowlist entry: delete it"), so
-// whoever removes an edge cannot forget to remove its entry, and 0.4 finishes
-// with an empty list. A new entry needs a pull request that argues for it, which
-// is the conversation that should happen.
+// #459 left a handful of edges (onboarding, user-data, the note-source job
+// contract) for #460, which inverted them through registries the domain modules
+// fill from `kvox.manifest.ts`. `ALLOWLIST` is therefore empty. An entry that no
+// longer matches a real edge FAILS the test ("stale allowlist entry: delete
+// it"). A new entry needs a pull request that argues for it, which is the
+// conversation that should happen.
 // =============================================================================
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -103,7 +102,8 @@ const DOMAIN_DIRS: readonly string[] = [
 const ROOT_FILES_EXEMPT: readonly string[] = [
   'app.module.ts', // imports every feature module, base and domain, to assemble the application
   'main.ts', // the HTTP entry point; imports the manifest and the app module
-  'kvox.manifest.ts', // the composition root for static registries (settings namespaces)
+  'kvox.manifest.ts', // the composition root for static registries (settings, jobs, notifications, onboarding, user-data)
+  'kvox.settings-manifest.ts', // exists only to register settings namespaces before domain providers load (imported first by kvox.manifest.ts)
   'instrumentation.ts', // OpenTelemetry bootstrap, loaded before everything else
 ];
 
@@ -119,151 +119,14 @@ interface AllowedEdge {
 }
 
 /**
- * ⚠ THE REMAINING BASE -> DOMAIN EDGES, ALL OWNED BY ISSUE 0.4.
- * Only that issue may remove entries; nothing may add one without arguing it.
+ * THE ALLOWLIST IS EMPTY, AND STAYS EMPTY (issue #460 removed the last entries).
+ *
+ * To add one you need a pull request that argues the edge cannot be inverted
+ * through a registry. Each entry says which file imports what (`from`, `to`),
+ * why (`reason`) and the issue that removes it (`removedBy`). An entry that no
+ * longer matches a real edge fails the "stale entry" test below.
  */
-const ALLOWLIST: ReadonlyArray<AllowedEdge> = [
-  {
-    from: 'jobs/contracts/note-source-extract.contract.ts',
-    to: 'notes/extraction/extraction-result',
-    reason:
-      'The node-eligible note.source.extract job contract (the result schema a worker node validates against) is built from the notes extraction-result constants and types. The contract moves to the domain that owns the job type; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'onboarding/onboarding.module.ts',
-    to: 'transcription/transcription.module',
-    reason:
-      "Onboarding's admin.transcription step reads TranscriptionConfigService.getConfig() to derive whether transcription is available, and the module imports TranscriptionModule to get it. The step catalogue becomes a registry the transcription module contributes to; out of scope for #459.",
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'onboarding/onboarding.service.ts',
-    to: 'transcription/transcription-config.service',
-    reason:
-      "Onboarding's admin.transcription step reads TranscriptionConfigService.getConfig() to derive whether transcription is available, and the module imports TranscriptionModule to get it. The step catalogue becomes a registry the transcription module contributes to; out of scope for #459.",
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'onboarding/onboarding.service.spec.ts',
-    to: 'transcription/transcription-config.service',
-    reason:
-      'Spec of the edge above: onboarding.service.spec.ts types its TranscriptionConfigService stand-in with the real class, so it moves with the edge once the step is contributed through a registry.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'graph/job-types',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'notes/job-types',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'notes/note-templates.service',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'notes/notes.service',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'search/indexing/job-types',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'search/indexing/search-index.service',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'transcripts/job-types',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.ts',
-    to: 'transcripts/transcript-pipeline.service',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.spec.ts',
-    to: 'graph/job-types',
-    reason:
-      'Spec of the purge handler above: it asserts against the graph, notes and transcripts job type constants (KG_PURGE_JOB_TYPE, NOTE_PURGE_JOB_TYPE, ...) the handler itself imports, so it moves with the edge.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.spec.ts',
-    to: 'notes/job-types',
-    reason:
-      'Spec of the purge handler above: it asserts against the graph, notes and transcripts job type constants (KG_PURGE_JOB_TYPE, NOTE_PURGE_JOB_TYPE, ...) the handler itself imports, so it moves with the edge.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/handlers/user-data-purge.handler.spec.ts',
-    to: 'transcripts/job-types',
-    reason:
-      'Spec of the purge handler above: it asserts against the graph, notes and transcripts job type constants (KG_PURGE_JOB_TYPE, NOTE_PURGE_JOB_TYPE, ...) the handler itself imports, so it moves with the edge.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/user-data.module.ts',
-    to: 'notes/notes.module',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/user-data.module.ts',
-    to: 'search/indexing/search-indexing.module',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/user-data.module.ts',
-    to: 'transcripts/transcripts.module',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/user-data.service.ts',
-    to: 'notes/job-types',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-  {
-    from: 'user-data/user-data.service.ts',
-    to: 'notes/source-metadata',
-    reason:
-      'The Danger Zone purge fans out to the notes, transcripts, search and graph purge handlers, job types and services by name. It becomes a registry of per-category deleters each domain module registers; out of scope for #459.',
-    removedBy: 'issue 0.4',
-  },
-];
+const ALLOWLIST: ReadonlyArray<AllowedEdge> = [];
 
 // -----------------------------------------------------------------------------
 // Scanning
@@ -505,6 +368,89 @@ describe('base code does not import domain code (issue #459)', () => {
     const keys = ALLOWLIST.map((entry) => `${entry.from} -> ${entry.to}`);
 
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Registrations stay in the composition roots (issue #460)
+// -----------------------------------------------------------------------------
+
+/** Files outside a domain directory that may import a domain registration. */
+const REGISTRATION_IMPORTERS: readonly string[] = [
+  'kvox.manifest.ts',
+  'kvox.settings-manifest.ts',
+  'app.module.ts',
+];
+
+/**
+ * A domain file that exists to be REGISTERED into a base registry: its
+ * notifications, onboarding steps and facts, user-data categories and scopes,
+ * settings namespaces, and job-type labels.
+ */
+const isRegistrationFile = (to: string): boolean =>
+  /\.(notifications|onboarding|user-data|system-settings|user-settings)$/.test(to) ||
+  /(^|\/)job-type-labels$/.test(to);
+
+/** A domain's user-data hooks provider: only its own module may wire it. */
+const isUserDataHooksFile = (to: string): boolean => /\.user-data\.hooks$/.test(to);
+
+/** Every edge, from every file under `src/`, into a domain directory. */
+function allSrcEdges(): Edge[] {
+  return walkTypeScript(SRC).flatMap((file) => edgesIn(file, readFileSync(file, 'utf8')));
+}
+
+describe('domain registrations are imported by the composition roots only (issue #460)', () => {
+  it('lists only registration importers that exist', () => {
+    for (const file of REGISTRATION_IMPORTERS) {
+      expect({ file, exists: statSync(join(SRC, file)).isFile() }).toEqual({ file, exists: true });
+    }
+  });
+
+  it('has no file outside a domain directory, other than the roots, importing a domain registration', () => {
+    const violations = allSrcEdges()
+      .filter((edge) => isRegistrationFile(edge.to))
+      .filter((edge) => !DOMAIN_DIRS.includes(edge.from.split('/')[0]))
+      .filter((edge) => !REGISTRATION_IMPORTERS.includes(edge.from))
+      .map(
+        (edge) =>
+          `${edge.from}:${edge.line} imports the domain registration '${edge.specifier}'. ` +
+          'Only kvox.manifest.ts, kvox.settings-manifest.ts and app.module.ts may; base code reads the registry.',
+      );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('wires each domain user-data hooks provider from its own domain only', () => {
+    const violations = allSrcEdges()
+      .filter((edge) => isUserDataHooksFile(edge.to))
+      .filter((edge) => edge.from.split('/')[0] !== edge.domain)
+      .map((edge) => `${edge.from}:${edge.line} imports '${edge.specifier}' (domain '${edge.domain}').`);
+
+    expect(violations).toEqual([]);
+  });
+
+  it('actually finds the registrations it guards (a path mistake must not make this vacuous)', () => {
+    const importers = new Set(
+      allSrcEdges()
+        .filter((edge) => isRegistrationFile(edge.to))
+        .map((edge) => edge.from),
+    );
+
+    expect(importers.has('kvox.manifest.ts')).toBe(true);
+    expect(importers.has('kvox.settings-manifest.ts')).toBe(true);
+  });
+
+  it.each([
+    ['notes/notifications/notes.notifications', true],
+    ['transcripts/transcripts.onboarding', true],
+    ['graph/graph.user-data', true],
+    ['transcription/transcription.system-settings', true],
+    ['graph/preferences/graph.user-settings', true],
+    ['notes/job-type-labels', true],
+    ['notes/notes.service', false],
+    ['notes/notes.user-data.hooks', false],
+  ])('classifies %s as a registration file: %s', (to, expected) => {
+    expect(isRegistrationFile(to)).toBe(expected);
   });
 });
 

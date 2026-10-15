@@ -234,7 +234,7 @@ types at once.
 **Built (#26).** `apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts`
 is the handler, `apps/api/src/transcripts/media/` holds the decisions
 (`audio-transcode.ts`) and the spawns (`ffmpeg.service.ts`),
-`apps/api/src/jobs/contracts/media-audio-transcode.contract.ts` is the node
+`apps/api/src/transcripts/contracts/media-audio-transcode.contract.ts` is the node
 result contract, and `apps/cli/src/node/executors/media-audio-transcode.ts` is
 the node executor. It is written up as the fleet's third node-eligible type in
 [`worker-nodes.md` §20.2](worker-nodes.md). Converts whatever format was

@@ -9,14 +9,14 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Rules
 
-- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`, `/api/ai-credentials`, `/api/user-data`, `/api/onboarding`). Add new routes to RBAC coverage in `test/rbac/`.
+- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`, `/api/ai-credentials`, `/api/user-data`, `/api/onboarding`). Add routes to RBAC coverage in `test/rbac/`.
 - **Validate input with Zod** DTOs; annotate OpenAPI; run `npm run openapi:dump && npm run openapi:lint` from the repo root after route changes.
 - **Adding an endpoint**: controller method (auth/RBAC decorators), service method (all business logic), OpenAPI annotations, unit + integration tests, update `docs/API.md`.
 - **Adding a setting**: Zod schema, then wire DTOs, then types, then UI. A new `system_settings` or `user_settings` namespace is one declaration in its own module (`SystemSettingsNamespace` / `UserSettingsNamespace`, see `src/settings/registry/`) plus one line in `src/kvox.manifest.ts`; the wire schemas and defaults are composed from the registries, and `src/common/schemas/{settings,user-settings}-parity.spec.ts` iterate them. See [DEVELOPMENT.md](../../docs/DEVELOPMENT.md#settings-namespace-registry).
-- **Long-running work is a queue job** (root queue rules 1 to 4). Recipe: [src/jobs/handlers/README.md](src/jobs/handlers/README.md); label new types in `src/jobs/job-type-labels.ts`. Enqueue types registered by later issues only behind a registry guard, or they sit `pending` forever.
+- **Long-running work is a queue job** (root rules 1-4). Recipe: [src/jobs/handlers/README.md](src/jobs/handlers/README.md); label new types in a `job-type-labels.ts` beside the module and register it in `src/kvox.manifest.ts`. Same for notifications, onboarding steps and user-data categories: declare in the domain module, add a manifest line; base code never imports a domain folder. Enqueue later-registered types only behind a registry guard, or they sit `pending` forever.
 - **`notify()` after commit**, outside any `$transaction`; recipe: [src/notifications/README.md](src/notifications/README.md). Use `notifyAddress` for recipients with no account.
 - **Prisma**: use `npm run prisma:*`, never bare `npx prisma`. Partial unique and expression indexes are hand-written in `migration.sql` only (intentional drift, see root Invariants).
-- **A behaviour change carries tests** in the same or the next commit. Specs run through `scripts/jest.js` (`workerIdleMemoryLimit` is set in `test/jest.config.js`); `npm test` skips `*.db.spec.ts`.
+- **A behaviour change carries tests** in the same or the next commit. Specs run through `scripts/jest.js`; `npm test` skips `*.db.spec.ts`.
 
 ## Domain rules
 

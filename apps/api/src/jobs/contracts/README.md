@@ -9,6 +9,18 @@ against the handler's `nodeResultSchema` before `persistNodeResult` writes
 anything — so these schemas are a **trust boundary**, not a convenience. They
 are the only thing standing between an arbitrary remote body and a write.
 
+## What lives here
+
+Only the contracts of **base** job types: `db-backup-run.contract.ts` and
+`example-checksum.contract.ts`. A domain job type keeps its contract in its own
+module's `contracts/` folder (issue #460), so the base `jobs/` folder imports no
+domain code:
+
+- `../../notes/contracts/note-source-extract.contract.ts` (`note.source.extract`)
+- `../../transcripts/contracts/media-audio-transcode.contract.ts` (`media.audio.transcode`)
+
+The rationale below applies to all of them.
+
 ## Why the schemas live here and not in the handler file
 
 Two readers need them and only one of them is the handler:
@@ -57,7 +69,8 @@ two releases ago.
 
 ## Adding one
 
-1. Export the schema (and its inferred type) from a new file here.
+1. Export the schema (and its inferred type) from a new file here, or, for a
+   domain job type, from `<module>/contracts/` beside the module that owns it.
 2. Set it as `nodeResultSchema` on the handler, alongside `persistNodeResult`.
    Both members or neither — see `../job-handler.interface.ts`.
 3. There is no step 3. `GET /api/nodes/job-types` derives its whole answer
