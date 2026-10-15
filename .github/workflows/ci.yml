@@ -110,7 +110,10 @@ jobs:
     name: Repository tooling
     runs-on: ubuntu-latest
     steps:
+      # Full history: `changeset status` finds where HEAD diverged from `main`.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v6
         with:
