@@ -99,6 +99,8 @@ export class NoteRetitleHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTE_RETITLE_JOB_TYPE;
 
+  readonly label = 'Note retitle';
+
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: NOTE_RETITLE_MAX_RUNTIME_MS,

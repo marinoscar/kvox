@@ -147,6 +147,8 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_EXTRACT_JOB_TYPE;
 
+  readonly label = 'Knowledge graph extraction';
+
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_EXTRACT_MAX_RUNTIME_MS, maxAttempts: 1 };
 
   constructor(

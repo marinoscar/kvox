@@ -126,6 +126,8 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTE_GENERATE_JOB_TYPE;
 
+  readonly label = 'Note generation';
+
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: NOTE_GENERATE_MAX_RUNTIME_MS,

@@ -79,6 +79,8 @@ export class NotesHousekeepingHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTES_HOUSEKEEPING_JOB_TYPE;
 
+  readonly label = 'Note housekeeping';
+
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,

@@ -77,6 +77,8 @@ export class KgResolveHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgResolveHandler.name);
 
   readonly type = KG_RESOLVE_JOB_TYPE;
+
+  readonly label = 'Knowledge graph resolution';
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_RESOLVE_MAX_RUNTIME_MS, maxAttempts: 1 };
 
   constructor(

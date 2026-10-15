@@ -45,6 +45,8 @@ export class KgSpeakerLinkHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_SPEAKER_LINK_JOB_TYPE;
 
+  readonly label = 'Link named speakers to people';
+
   readonly profile: JobExecutionProfile = { maxRuntimeMs: 2 * 60_000, maxAttempts: 3 };
 
   constructor(

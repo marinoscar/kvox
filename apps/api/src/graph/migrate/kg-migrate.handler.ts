@@ -111,6 +111,8 @@ export class KgMigrateHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_MIGRATE_JOB_TYPE;
 
+  readonly label = 'Knowledge graph migration';
+
   readonly profile: JobExecutionProfile = KG_MIGRATE_PROFILE;
 
   private readonly definition: KgMigrateDefinition;

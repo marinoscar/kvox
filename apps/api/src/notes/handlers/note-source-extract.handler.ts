@@ -125,6 +125,8 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTE_SOURCE_EXTRACT_JOB_TYPE;
 
+  readonly label = 'Document text extraction';
+
   /**
    * Two numbers, and deliberately only two (`job-execution-profile.ts`).
    *

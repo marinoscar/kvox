@@ -85,6 +85,8 @@ export class NoteExportHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTE_EXPORT_JOB_TYPE;
 
+  readonly label = 'Note export';
+
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: NOTE_EXPORT_MAX_RUNTIME_MS,
     maxAttempts: 2,

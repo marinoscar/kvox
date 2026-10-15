@@ -82,6 +82,8 @@ export class KgGraphLayoutHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_GRAPH_LAYOUT_JOB_TYPE;
 
+  readonly label = 'Knowledge graph layout';
+
   readonly profile: JobExecutionProfile = KG_GRAPH_LAYOUT_PROFILE;
 
   constructor(

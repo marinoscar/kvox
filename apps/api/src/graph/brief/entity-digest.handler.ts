@@ -103,6 +103,8 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_ENTITY_DIGEST_JOB_TYPE;
 
+  readonly label = 'Knowledge graph entity digest';
+
   readonly profile: JobExecutionProfile = { maxRuntimeMs: ENTITY_DIGEST_MAX_RUNTIME_MS, maxAttempts: 1 };
 
   constructor(

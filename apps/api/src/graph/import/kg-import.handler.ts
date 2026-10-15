@@ -149,6 +149,8 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_IMPORT_JOB_TYPE;
 
+  readonly label = 'Knowledge graph import';
+
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_IMPORT_MAX_RUNTIME_MS, maxAttempts: 1 };
 
   constructor(

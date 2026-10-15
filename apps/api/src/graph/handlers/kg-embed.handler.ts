@@ -67,6 +67,8 @@ export class KgEmbedHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(KgEmbedHandler.name);
 
   readonly type = KG_EMBED_JOB_TYPE;
+
+  readonly label = 'Knowledge graph embeddings';
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_EMBED_MAX_RUNTIME_MS, maxAttempts: KG_EMBED_MAX_ATTEMPTS };
 
   constructor(

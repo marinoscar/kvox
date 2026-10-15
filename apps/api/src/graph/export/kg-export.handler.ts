@@ -83,6 +83,8 @@ export class KgExportHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_EXPORT_JOB_TYPE;
 
+  readonly label = 'Knowledge graph export';
+
   readonly profile: JobExecutionProfile = { maxRuntimeMs: KG_EXPORT_MAX_RUNTIME_MS, maxAttempts: 3 };
 
   constructor(

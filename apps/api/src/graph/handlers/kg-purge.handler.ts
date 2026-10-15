@@ -82,6 +82,8 @@ export class KgPurgeHandler implements JobHandler, OnModuleInit {
 
   readonly type = KG_PURGE_JOB_TYPE;
 
+  readonly label = 'Knowledge graph deletion';
+
   readonly profile: JobExecutionProfile = KG_PURGE_PROFILE;
 
   constructor(

@@ -82,6 +82,8 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
 
   readonly type = NOTE_PURGE_JOB_TYPE;
 
+  readonly label = 'Note purge';
+
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
