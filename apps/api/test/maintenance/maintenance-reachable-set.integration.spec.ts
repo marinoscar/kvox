@@ -214,7 +214,7 @@ describe('Maintenance mode: the reachable set', () => {
     // instance, OUTSIDE Nest's router, so no Nest guard — global or otherwise —
     // ever sees them. That is intentional: a maintenance window is exactly when
     // an operator wants the API reference. It is written down here, in
-    // maintenance.guard.ts, in app.module.ts and in
+    // the platform's MaintenanceGuard, in app.module.ts and in
     // docs/specs/maintenance-mode.md, so it is a decision rather than a hole
     // somebody finds later.
     const docs = await context.app.inject({ method: 'GET', url: DOCS_PATH });

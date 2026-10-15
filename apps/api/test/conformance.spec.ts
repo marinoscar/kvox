@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issue #465, epic #462)
+// Platform conformance (issues #465 and #464, epic #462)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -13,11 +13,32 @@ import '@marinoscar/platform-api/doctor/testing';
 import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
+import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
+import { STORAGE_PROVIDER } from '../src/storage/providers/storage-provider.interface';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
 
 const API_DIR = join(__dirname, '..');
+
+/**
+ * How the app boots for the `doctor-read-only` suite: the full `AppModule` with the Prisma
+ * client and the storage provider replaced by the suite's recording, write-refusing doubles.
+ * `PLATFORM_PRISMA` is bound `useExisting: PrismaService`, so overriding `PrismaService`
+ * covers every Prisma token the app has.
+ */
+const doctorConformanceFixture: DoctorConformanceFixture = {
+  createContext: (doubles) =>
+    createTestApp({
+      overrideProviders: [
+        { provide: PrismaService, useValue: doubles.prisma.client },
+        { provide: STORAGE_PROVIDER, useValue: doubles.storage.provider },
+      ],
+    }),
+  closeContext: (context) => closeTestApp(context as TestContext),
+};
 
 function readCatalog(): string | undefined {
   try {
@@ -110,8 +131,9 @@ runPlatformConformance({
       roles: roleRegistry.list(),
       grants: catalogGrants(buildPermissionCatalog()),
     },
-    host: { skip: 'adopted in #464' },
-    doctorReadOnly: { skip: 'adopted in #464' },
+    // MaintenanceGuard is the only global guard; the app registers none of its own.
+    host: { rootModule: AppModule },
+    doctorReadOnly: { fixture: doctorConformanceFixture },
     settings: {
       permissions: permissionRegistry.list(),
       catalog: {
