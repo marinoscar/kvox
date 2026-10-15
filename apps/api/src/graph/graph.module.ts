@@ -4,8 +4,7 @@ import { AiModule } from '../ai/ai.module';
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchModule } from '../search/search.module';
-import { StorageModule } from '../storage/storage.module';
-import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
+import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
 import { EntityBriefController } from './brief/entity-brief.controller';
@@ -82,7 +81,7 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, TranscriptsModule, AiModule, SearchModule, StorageModule, StorageProvidersModule],
+  imports: [PrismaModule, TranscriptsModule, AiModule, SearchModule, KvoxObjectsModule],
   providers: [
     GraphAccessService,
     // #460 — the `graph` user-data category's hooks (registered by `kvox.manifest.ts`).

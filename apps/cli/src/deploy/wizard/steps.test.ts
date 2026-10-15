@@ -12,7 +12,6 @@ import {
   DOMAIN_FIELD,
   GOOGLE_OAUTH_CHECK_ID,
   INSTALL_WIZARD_STEPS,
-  STORAGE_CHECK_ID,
   essentialFields,
   googleRedirectUri,
   resolveSteps,
@@ -29,7 +28,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REAL_TEMPLATE = join(HERE, '..', '..', '..', '..', '..', 'infra', 'compose', '.env.example');
 
 const SPECS = parseEnvExample(readFileSync(REAL_TEMPLATE, 'utf8'));
-const ALL_GROUPS = ['observability', 'storage'] as const;
+const ALL_GROUPS = ['observability'] as const;
 
 function stepOf(key: string, groups: readonly (typeof ALL_GROUPS)[number][] = ALL_GROUPS): string[] {
   return resolveSteps(INSTALL_WIZARD_STEPS, SPECS, { groups })
@@ -49,7 +48,6 @@ describe('INSTALL_WIZARD_STEPS against the real template', () => {
       'secrets',
       'oauth',
       'admin',
-      'storage',
       'resources',
       'optional',
       'review',
@@ -73,17 +71,18 @@ describe('INSTALL_WIZARD_STEPS against the real template', () => {
     }
   });
 
-  it('puts the storage group in the storage step and every other group in the catch-all', () => {
+  it('puts every grouped key in the catch-all', () => {
     for (const [key, metadata] of Object.entries(ENV_METADATA)) {
       if (metadata.group === undefined) continue;
-      expect(stepOf(key), key).toEqual([metadata.group === 'storage' ? 'storage' : 'optional']);
+      expect(stepOf(key), key).toEqual(['optional']);
     }
   });
 
-  it('asks nothing for a group the operator did not opt into', () => {
-    const storage = resolveSteps(INSTALL_WIZARD_STEPS, SPECS).find(({ step }) => step.id === 'storage');
-
-    expect(storage?.fields).toEqual([]);
+  it('has no object storage step: the bucket is configured at runtime, not in .env (#469)', () => {
+    expect(INSTALL_WIZARD_STEPS.map((step) => step.id)).not.toContain('storage');
+    for (const key of ['S3_BUCKET', 'S3_REGION', 'S3_ENDPOINT', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+      expect(SPECS.map((spec) => spec.key), key).not.toContain(key);
+    }
   });
 
   it('names only checks that exist in the registry', () => {
@@ -242,52 +241,6 @@ describe('runStepChecks', () => {
 
   it('ignores an id the registry does not have rather than failing', async () => {
     expect(await runStepChecks(['nope'], checkContext())).toEqual([]);
-  });
-});
-
-describe('the storage step', () => {
-  const storage = INSTALL_WIZARD_STEPS.find((step) => step.id === 'storage');
-
-  it('probes nothing when no bucket is configured', async () => {
-    expect(await storage?.onLeave?.(checkContext())).toEqual([]);
-    expect(
-      await storage?.onLeave?.(checkContext({ answers: new Map([['S3_BUCKET', 'your-bucket-name']]) })),
-    ).toEqual([]);
-  });
-
-  it('probes the endpoint host and port when one is set', async () => {
-    const probed: [string, number][] = [];
-    const results = await storage?.onLeave?.(
-      checkContext({
-        answers: new Map([
-          ['S3_BUCKET', 'uploads'],
-          ['S3_ENDPOINT', 'http://minio.internal:9000'],
-        ]),
-        probeTcp: async (host, port) => {
-          probed.push([host, port]);
-          return { ok: true, reason: undefined };
-        },
-      }),
-    );
-
-    expect(probed).toEqual([['minio.internal', 9000]]);
-    expect(results?.[0]).toMatchObject({ id: STORAGE_CHECK_ID, status: 'pass', severity: 'recommended' });
-  });
-
-  it('only ever warns, so an unreachable bucket never blocks the install', async () => {
-    const results = await storage?.onLeave?.(
-      checkContext({
-        answers: new Map([
-          ['S3_BUCKET', 'uploads'],
-          ['S3_REGION', 'eu-west-1'],
-        ]),
-        probeTcp: async () => ({ ok: false, reason: 'timeout' }),
-      }),
-    );
-
-    expect(results?.[0]?.status).toBe('warn');
-    expect(results?.[0]?.detail).toContain('uploads.s3.eu-west-1');
-    expect(results?.[0]?.remedy).toBeDefined();
   });
 });
 

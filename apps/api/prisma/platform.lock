@@ -26,13 +26,6 @@
   "deviations": [
     {
       "expectDiff": [
-        "ALTER TABLE \"storage_objects\" ADD COLUMN \"managed_by\" TEXT, ADD COLUMN \"part_size\" INTEGER;"
-      ],
-      "id": "kvox:storage-managed-by-part-size",
-      "reason": "KVox-only columns storage_objects.managed_by and storage_objects.part_size (migration 20260914120000_add_storage_part_size_and_managed_by). Temporary: #469 moves managed_by to kvox_object_ownership and drops part_size."
-    },
-    {
-      "expectDiff": [
         "CREATE TYPE \"AskErrorClass\" AS ENUM ('auth', 'refusal', 'rate_limit', 'budget', 'timeout', 'other');",
         "CREATE TYPE \"AskFinishReason\" AS ENUM ('stop', 'step_cap', 'token_cap', 'time_cap');",
         "CREATE TYPE \"AskMessageRole\" AS ENUM ('user', 'assistant');",

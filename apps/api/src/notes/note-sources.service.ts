@@ -38,7 +38,7 @@ import { randomUUID } from 'node:crypto';
 
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { PrismaService } from '../prisma/prisma.service';
-import { STORAGE_OBJECT_SUBJECT_TYPE } from '../storage/storage-job-input';
+import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import {
   acceptedDocumentTypesSentence,
   normalizeDocumentMimeType,

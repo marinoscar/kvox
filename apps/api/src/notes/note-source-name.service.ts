@@ -54,6 +54,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Note } from '@prisma/client';
 
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** What the resolver needs off a note. A full `Note` satisfies it structurally. */
@@ -94,7 +95,10 @@ export function noteSourceNameKey(type: string, id: string): string {
 
 @Injectable()
 export class NoteSourceNameService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly managedObjects: KvoxManagedObjectsService,
+  ) {}
 
   /**
    * Resolve every source named by `notes`, as far as `userId` may read them.
@@ -145,7 +149,7 @@ export class NoteSourceNameService {
           }),
       objectIds.size === 0
         ? []
-        : this.prisma.storageObject.findMany({
+        : this.managedObjects.findMany({
             // `managed_by: 'notes'` hides these from the generic storage list,
             // not from a read by id — but the uploader is still the only person
             // entitled to the filename.

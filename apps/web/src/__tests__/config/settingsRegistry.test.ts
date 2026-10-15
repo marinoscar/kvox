@@ -1070,13 +1070,14 @@ describe('the About card (#126)', () => {
     'utf8',
   );
 
-  it('is the last General card, directly after Maintenance', () => {
+  it('sits directly after Maintenance (#469 appends Storage after it)', () => {
     // Appended, not inserted: the hub, the rail and the drill-down list all
     // render this array in declaration order, and an insertion would move
-    // cards a reader has learnt the position of.
+    // cards a reader has learnt the position of. Storage (#469) is appended
+    // after About for the same reason.
     const titles = general?.cards.map((card) => card.title) ?? [];
-    expect(titles.at(-1)).toBe('About');
-    expect(titles.at(-2)).toBe('Maintenance');
+    expect(titles.indexOf('About')).toBe(titles.indexOf('Maintenance') + 1);
+    expect(titles.at(-1)).toBe('Storage');
   });
 
   it('is routed to /admin/settings/about, and is not inert', () => {
@@ -1171,5 +1172,67 @@ describe('the Doctor card (#464)', () => {
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/doctor'),
     ).toBe('Doctor');
+  });
+});
+
+/**
+ * The Storage card (#469, epic #467). The page is the platform storage slice's
+ * (`StorageConfigPage`, `@marinoscar/platform-web/storage/ui`), so the string
+ * the card gates on is read off the installed `@marinoscar/platform-api`
+ * package rather than off any app controller (CLAUDE.md Settings UI Pattern
+ * rule 3).
+ */
+describe('the Storage card (#469)', () => {
+  const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+  const storage = general?.cards.find((card) => card.title === 'Storage');
+
+  const API_SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../api/src');
+  const PLATFORM_API_DIST = resolve(API_SRC, '../../../node_modules/@marinoscar/platform-api/dist');
+  const permissionCatalog = readFileSync(
+    resolve(API_SRC, '../prisma/catalog/permissions.json'),
+    'utf8',
+  );
+  const storageController = readFileSync(
+    resolve(PLATFORM_API_DIST, 'storage/config/storage-config.controller.js'),
+    'utf8',
+  );
+
+  it('is the last General card, in General and not Operations', () => {
+    expect(general?.cards.at(-1)?.title).toBe('Storage');
+  });
+
+  it('is routed to /admin/settings/storage, and is not inert', () => {
+    expect(storage?.path).toBe('/admin/settings/storage');
+    expect(storage?.disabled).toBeUndefined();
+    expect(storage?.alwaysShow).toBeUndefined();
+  });
+
+  it('binds to storage_config:read, which the platform controller enforces — never storage:read', () => {
+    expect(storage?.permission).toBe('storage_config:read');
+    expect(storage?.permission).not.toBe('storage:read');
+    expect(storage?.permission).not.toBe('system_settings:read');
+    expect(permissionCatalog).toContain('"storage_config:read"');
+    expect(permissionCatalog).toContain('"storage_config:write"');
+    expect(storageController).toContain('STORAGE_CONFIG_READ');
+    expect(storageController).toContain('STORAGE_CONFIG_WRITE');
+  });
+
+  it('is visible to a storage_config:read holder and to nobody without it', () => {
+    const holder = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'storage_config:read',
+    );
+    expect(titlesOf(holder)).toEqual(['Storage']);
+
+    for (const other of ['system_settings:read', 'storage:read', 'users:read']) {
+      const result = visibleSettingsSections(ADMIN_SECTIONS, (p) => p === other);
+      expect(titlesOf(result)).not.toContain('Storage');
+    }
+  });
+
+  it('titles the compact AppBar "Storage" at its route', () => {
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/storage'),
+    ).toBe('Storage');
   });
 });

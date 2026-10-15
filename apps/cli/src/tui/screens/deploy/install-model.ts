@@ -19,7 +19,6 @@ import type { ServerFacts } from '../../../deploy/server-facts.js';
 import {
   DOMAIN_FIELD,
   INSTALL_WIZARD_STEPS,
-  STORAGE_CHECK_ID,
   googleRedirectUri,
   resolveSteps,
   validateDomain,
@@ -98,7 +97,6 @@ export const REPO_FIELD = '__repo';
 export const REF_FIELD = '__ref';
 export const ALL_FIELD = '__all';
 /** Which optional variable GROUPS the operator opted into, comma-separated. */
-export const GROUPS_FIELD = '__groups';
 export const PUBLIC_IP_FIELD = '__publicIp';
 export const STAGING_FIELD = '__staging';
 export const INSTALL_CRON_FIELD = '__installCron';
@@ -234,12 +232,6 @@ export function isTrue(answers: InstallAnswers, key: string): boolean {
   return answers[key] === 'true';
 }
 
-/** The optional variable groups the operator opted into on Welcome. */
-export function groupsOf(answers: InstallAnswers): EnvGroup[] {
-  const raw = answerOf(answers, GROUPS_FIELD);
-  return raw === '' ? [] : (raw.split(',').filter((part) => part !== '') as EnvGroup[]);
-}
-
 // -----------------------------------------------------------------------------
 // The step list
 // -----------------------------------------------------------------------------
@@ -269,7 +261,6 @@ const WELCOME_FIELDS: readonly string[] = [
   NAME_FIELD,
   REPO_FIELD,
   REF_FIELD,
-  GROUPS_FIELD,
   ALL_FIELD,
 ];
 
@@ -285,7 +276,7 @@ export interface InstallStepOptions {
  *
  * The same four exclusions `essentialFields` applies, minus its `essential`
  * filter: this wizard walks every step, so a non-essential key in the
- * `storage` or `optional` step is asked when that step is shown.
+ * `optional` step is asked when that step is shown.
  */
 function isAsked(metadata: EnvVarMetadata): boolean {
   return (
@@ -298,8 +289,8 @@ function isAsked(metadata: EnvVarMetadata): boolean {
  * order, ending on Review.
  *
  * A step whose fields all resolved without asking is dropped rather than
- * shown empty — which is how `storage` disappears when the operator did not
- * opt into it, with no second condition here saying so. `review` is kept
+ * shown empty — which is how a step whose group the operator did not opt
+ * into disappears, with no second condition here saying so. `review` is kept
  * although it asks nothing: it is where the summary and the confirmation go.
  */
 export function installSteps(
@@ -496,20 +487,6 @@ const INTERNAL_FIELDS: Readonly<Record<string, FormFieldSpec>> = {
       },
     ],
   },
-  [GROUPS_FIELD]: {
-    kind: 'select',
-    key: GROUPS_FIELD,
-    label: 'Object storage',
-    help: 'Uploads need S3-compatible storage. It can be configured later by editing the environment file.',
-    choices: [
-      { value: '', label: 'Not now', hint: 'The storage step is skipped.' },
-      {
-        value: 'storage',
-        label: 'Configure it now',
-        hint: 'Adds a step for the bucket, region, endpoint and keys.',
-      },
-    ],
-  },
   [PUBLIC_IP_FIELD]: {
     kind: 'text',
     key: PUBLIC_IP_FIELD,
@@ -583,7 +560,6 @@ export function validateInstallVersion(value: string): string | undefined {
 /** Defaults for the fields this renderer adds. */
 export const INTERNAL_DEFAULTS: InstallAnswers = {
   [ALL_FIELD]: 'false',
-  [GROUPS_FIELD]: '',
   [STAGING_FIELD]: 'false',
   [INSTALL_CRON_FIELD]: 'true',
 };
@@ -962,7 +938,6 @@ export const CHECK_FIELD: Readonly<Record<string, string>> = {
   'database-exists': 'POSTGRES_DB',
   'database-privileges': 'POSTGRES_USER',
   'database-ssl': 'POSTGRES_SSL',
-  [STORAGE_CHECK_ID]: 'S3_ENDPOINT',
 };
 
 /**
@@ -1027,9 +1002,8 @@ export function checkItems(
  * The checklist under a step's form.
  *
  * A step that names `checkIds` shows all of them from the first frame, the
- * way Welcome does. The storage step names none — its `onLeave` is a single
- * ad-hoc probe rather than registry entries — so there its results ARE the
- * list, and the rows appear as they arrive.
+ * way Welcome does. A step that names none and runs an ad-hoc probe in its
+ * `onLeave` shows its results AS the list, and the rows appear as they arrive.
  */
 export function stepCheckItems(
   step: InstallStep,

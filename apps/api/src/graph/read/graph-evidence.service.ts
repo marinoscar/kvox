@@ -27,6 +27,7 @@
 import { Injectable } from '@nestjs/common';
 import type { KgEvidence } from '@prisma/client';
 
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
@@ -85,6 +86,7 @@ export class GraphEvidenceService {
     private readonly access: GraphAccessService,
     private readonly transcriptAccess: TranscriptAccessService,
     private readonly noteAccess: NoteAccessService,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /** One citation. Not the caller's → the shared evidence 404. */
@@ -165,7 +167,7 @@ export class GraphEvidenceService {
         : [],
       noteIds.length ? this.prisma.note.findMany({ where: { id: { in: noteIds } } }) : [],
       objectIds.length
-        ? this.prisma.storageObject.findMany({
+        ? this.managedObjects.findMany({
             where: { id: { in: objectIds } },
             select: { id: true, uploadedById: true },
           })

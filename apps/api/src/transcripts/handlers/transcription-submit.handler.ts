@@ -44,10 +44,8 @@ import type { Job } from '@prisma/client';
 
 import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from '../../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER, type StorageProvider } from '@marinoscar/platform-api/storage';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import {
   clampKeytermsToCapability,
@@ -108,6 +106,7 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
     private readonly throttle: ProviderThrottleService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
     private readonly jobScope: JobScope,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   onModuleInit(): void {
@@ -188,9 +187,9 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
     // -------------------------------------------------------------------------
     const [source, rendition] = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
       Promise.all([
-        tx.storageObject.findUnique({ where: { id: transcript.sourceObjectId } }),
+        this.managedObjects.get(transcript.sourceObjectId, { tx }),
         transcript.playbackObjectId
-          ? tx.storageObject.findUnique({ where: { id: transcript.playbackObjectId } })
+          ? this.managedObjects.get(transcript.playbackObjectId, { tx })
           : Promise.resolve(null),
       ]),
     );

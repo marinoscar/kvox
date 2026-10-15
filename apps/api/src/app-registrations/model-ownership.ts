@@ -76,4 +76,12 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
     kind: 'system',
     rationale: 'Allowlist bookkeeping, keyed by an allowlist row id',
   },
+
+  // Storage object ownership (#469)
+  {
+    model: 'KvoxObjectOwnership',
+    kind: 'system',
+    orgReference: 'orgId',
+    rationale: 'Ownership marker for a storage object; org id is a reference for the composite key',
+  },
 ];

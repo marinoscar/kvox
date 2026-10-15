@@ -12,7 +12,7 @@ import {
   type CompletedCheck,
 } from '../../../deploy/checks/index.js';
 import { readEnvFile } from '../../../deploy/env-file.js';
-import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
+import { metadataFor, type EnvGroup, type Suggestion } from '../../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
 import { runCommand as defaultRunCommand } from '../../../deploy/executor.js';
 import type { StepResult } from '../../../deploy/hooks.js';
@@ -59,7 +59,6 @@ import {
   ABORTED_DETAIL,
   ABORT_DIALOG,
   ALL_FIELD,
-  GROUPS_FIELD,
   OPTION_MODE_PREFIX,
   APP_VERSION_FIELD,
   INSTALL_CRON_FIELD,
@@ -86,7 +85,6 @@ import {
   failedModel,
   formFieldsFor,
   formatDuration,
-  groupsOf,
   installSteps,
   isTrue,
   pipelineItems,
@@ -169,6 +167,14 @@ const IDLE: CheckRun = { results: [], running: false };
 
 /** One shared empty seed, so "nothing read yet" is a stable identity. */
 const EMPTY_PREFILL: ReadonlyMap<string, string> = new Map();
+
+/**
+ * The TUI no longer offers an optional variable group on Welcome: the only one
+ * it ever offered was object storage, which is runtime configuration now
+ * (/admin/settings/storage) and has no variable left to ask. `--group` on the
+ * non-interactive command still opts into the groups that remain.
+ */
+const NO_OPTIONAL_GROUPS: readonly EnvGroup[] = [];
 
 interface RunOutcome {
   done?: ReturnType<typeof doneModel> | undefined;
@@ -285,13 +291,12 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           ? 'bundled'
           : 'none';
 
-  // Memoised on the two answers that can CHANGE the step list, never on the
+  // Memoised on the one answer that can CHANGE the step list, never on the
   // whole `answers` object. A step list rebuilt on every keystroke hands every
   // effect keyed on `step` a new object identity each render — which would
   // clear the focus a failed check had just set, on the very next frame.
-  const groupsKey = answerOf(answers, GROUPS_FIELD);
   const reviewAll = isTrue(answers, ALL_FIELD);
-  const groups = useMemo(() => groupsOf({ [GROUPS_FIELD]: groupsKey }), [groupsKey]);
+  const groups = NO_OPTIONAL_GROUPS;
   const steps = useMemo(
     () => installSteps(specs, { groups, all: reviewAll }),
     [specs, groups, reviewAll],

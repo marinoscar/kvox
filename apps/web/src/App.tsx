@@ -171,6 +171,14 @@ const JobInsightsPage = lazy(() =>
 const WorkersPage = lazy(() =>
   import('@marinoscar/platform-web/nodes/ui').then((m) => ({ default: m.WorkersPage })),
 );
+// Issue #469, epic #467 — the platform storage slice's configuration page
+// (`@marinoscar/platform-web/storage/ui`). It takes no adapters: it reads the
+// platform host the app already mounts. Lazy like every other admin page.
+const StorageConfigPage = lazy(() =>
+  import('@marinoscar/platform-web/storage/ui').then((m) => ({
+    default: m.StorageConfigPage,
+  })),
+);
 // Issue #287, epic #254 — the backup policy, the run history and the restore
 // dialog. Lazy for the same reason: a DataTable, a policy form and the restore
 // dialog that nobody who never opens the Console will ever mount.
@@ -748,6 +756,22 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <EmailSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #469, epic #467. `storage_config:read`, the same string
+                      the `Storage` card declares and the platform's
+                      storage-config controller enforces on its GET. Saving, the
+                      connection test and bucket creation need
+                      `storage_config:write`, which the page gates internally. */}
+                  <Route
+                    path="/admin/settings/storage"
+                    element={
+                      <RequirePermission
+                        permission="storage_config:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <StorageConfigPage />
                       </RequirePermission>
                     }
                   />

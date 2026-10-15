@@ -68,6 +68,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
@@ -91,6 +92,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     private readonly objects: NoteObjectsService,
     private readonly searchIndex: SearchIndexService,
     private readonly jobScope: JobScope,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   onModuleInit(): void {
@@ -209,10 +211,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     }
 
     const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
-      tx.storageObject.findUnique({
-        where: { id: sourceObjectId },
-        select: { metadata: true },
-      }),
+      this.managedObjects.findFirst({ where: { id: sourceObjectId }, select: { metadata: true } }, { tx }),
     );
 
     const extractedObjectId = readExtractedObjectId(object?.metadata ?? null);

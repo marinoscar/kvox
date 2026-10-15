@@ -56,11 +56,6 @@
       "removeIn": "permanent"
     },
     {
-      "statement": "ALTER TABLE \"storage_objects\" DROP COLUMN \"managed_by\", DROP COLUMN \"part_size\";",
-      "reason": "Temporary deviation kvox:storage-managed-by-part-size: storage_objects.managed_by and part_size exist only in KVox migration 20260914120000_add_storage_part_size_and_managed_by, not in the platform schema.",
-      "removeIn": "#469"
-    },
-    {
       "statement": "ALTER TABLE \"transcript_segments\" ALTER COLUMN \"search_vector\" DROP DEFAULT;",
       "reason": "transcript_segments.search_vector is a GENERATED ALWAYS ... STORED tsvector column created in migration.sql (Unsupported(\"tsvector\") in the schema); the diff proposes dropping its generation expression. Intentional drift.",
       "removeIn": "permanent"

@@ -102,14 +102,22 @@ runPlatformConformance({
     // notes-housekeeping, storage-cleanup, transcripts-housekeeping.
     cronEnqueueOnly: { exempt: [], minCronFiles: 6 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
-    // provider). OPTED OUT until #469, with a reason: storage/processing/object-processing.service.ts
-    // still runs the post-upload processors inline from its @OnEvent body (`storageProvider.download`),
-    // and #469 replaces that listener with a platform ObjectProcessor. Every other listener
-    // (nine files, one body each) is already a dispatch or one bounded write. #469 MUST restore
-    // `onEventNoIo: { minListenerFiles: 9, minListenerBodies: 9, mustScan: [...the eight listener files
-    // from issue #468...] }` here when it deletes that listener.
+    // provider). Seven files hold a listener, one body each, every one a dispatch or one bounded
+    // write. The two transcript upload listeners and storage/processing/object-processing.service.ts
+    // are gone (#469): the pipeline starts from kvox-objects/transcript-upload.processor.ts, a
+    // platform ObjectProcessor that runs in the storage.object.process job.
     onEventNoIo: {
-      skip: 'PLATFORM-ADOPTION-SHIM(2.2): storage/processing/object-processing.service.ts runs processors inline until #469 replaces it',
+      minListenerFiles: 7,
+      minListenerBodies: 7,
+      mustScan: [
+        'graph/layout/graph-layout.listener.ts',
+        'graph/listeners/speaker-identified.listener.ts',
+        'graph/preferences/graph-preferences-change.forwarder.ts',
+        'graph/resolution/listeners/graph-preferences.listener.ts',
+        'notifications/ops/job-failure-notifier.ts',
+        'notifications/ops/node-offline-notifier.ts',
+        'transcripts/listeners/transcript-job-failure.listener.ts',
+      ],
     },
     userOwnedData: {
       schemaPath: join(API_DIR, 'prisma', 'schema'),

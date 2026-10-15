@@ -47,7 +47,7 @@ import {
 } from 'react';
 import {
   createTranscriptUpload,
-  fetchUploadStatus,
+  fetchUploadResumeState,
   resumeUpload as resumeUploadEngine,
   startUpload as startUploadEngine,
   type ResumableUpload,
@@ -93,8 +93,8 @@ export interface StartUploadInput {
    * optional convenience there: `POST /api/transcripts` creates the transcript
    * row AND initialises its multipart upload in ONE response, deliberately, so
    * that a client cannot end up with a transcript in `uploading` that has no
-   * upload behind it. The object it creates is `managed_by: 'transcripts'`,
-   * which a client is not permitted to ask for — so the generic init endpoint
+   * upload behind it. The object it creates is owned by the transcripts module
+   * (a `kvox_object_ownership` row), which a client is not permitted to ask for — so the generic init endpoint
    * cannot produce an equivalent one, and calling it as well would leave an
    * orphaned object behind for housekeeping to fail later.
    *
@@ -393,7 +393,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // (#30's `POST /api/transcripts`), or ask the generic endpoint for one.
       const { upload, init } = providedInit
         ? { upload: startUploadEngine(file, providedInit, engineOptions), init: providedInit }
-        : await createTranscriptUpload(file, { ...engineOptions, transcriptId });
+        : await createTranscriptUpload(file, engineOptions);
 
       const record: ManagedUpload = {
         id: init.objectId,
@@ -439,9 +439,12 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // THE SERVER IS THE AUTHORITY on what has landed — never the local
       // record, which describes what this browser believed it sent before it
       // stopped being able to observe anything.
-      let status;
+      let state;
       try {
-        status = await fetchUploadStatus(session.objectId);
+        state = await fetchUploadResumeState(session.objectId, {
+          partSize: session.partSize,
+          size: session.size,
+        });
       } catch (err) {
         // The object is gone (#339): the purge removed the transcript and its
         // upload together. Forget the session so its card disappears, and
@@ -452,7 +455,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
         }
         throw err;
       }
-      const upload = resumeUploadEngine(file, session.objectId, status, engineOptions);
+      const upload = resumeUploadEngine(file, session.objectId, state, engineOptions);
 
       const record: ManagedUpload = {
         id: session.objectId,
