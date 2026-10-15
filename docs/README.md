@@ -30,7 +30,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)) |
 | Baseline a database onto the platform history | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
-| Add a job type or any long-running work | [../apps/api/src/jobs/handlers/README.md](../apps/api/src/jobs/handlers/README.md), [specs/job-queue.md](specs/job-queue.md), the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)) |
+| Add a job type or any long-running work | the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)), [specs/job-queue.md](specs/job-queue.md); the queue itself is `@marinoscar/platform-api/jobs` (contract in the package README and the `JobHandler` TSDoc) |
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
 | Add a notification event | [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md), [specs/browser-notifications.md](specs/browser-notifications.md) |
 | Add a settings page (admin or per-user) | [specs/settings-ui.md](specs/settings-ui.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md), the `add-settings-page` skill ([../.claude/skills/add-settings-page/SKILL.md](../.claude/skills/add-settings-page/SKILL.md)) |
@@ -119,8 +119,8 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 
 | Recipe | What it covers |
 |---|---|
-| [../apps/api/src/jobs/handlers/README.md](../apps/api/src/jobs/handlers/README.md) | Adding a job type, with node-eligible worked examples |
-| [../apps/api/src/jobs/contracts/README.md](../apps/api/src/jobs/contracts/README.md) | Job contracts shared between the server and worker nodes |
+| [../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md) | Adding a job type on the packaged queue (`@marinoscar/platform-api/jobs`): handler, explicit `orgId`, labels, node eligibility |
+| [../apps/api/src/notes/contracts/README.md](../apps/api/src/notes/contracts/README.md) | Job contracts: the result shape a worker node posts back, kept beside the module that owns the job type |
 | [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md) | Adding a notification: event, templates, `notify()` |
 | [../apps/cli/README.md](../apps/cli/README.md) | `kvox`: install, `login`, `api`, `config`, `deploy`, `node`, CI usage |
 

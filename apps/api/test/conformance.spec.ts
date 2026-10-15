@@ -101,22 +101,15 @@ runPlatformConformance({
     // Six files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
     // notes-housekeeping, storage-cleanup, transcripts-housekeeping.
     cronEnqueueOnly: { exempt: [], minCronFiles: 6 },
-    // The listener half of queue rule 1: no @OnEvent body downloads, uploads or calls the storage
-    // provider. Nine files hold a listener today (the eight below plus
-    // graph/preferences/graph-preferences-change.forwarder.ts), one body each.
+    // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
+    // provider). OPTED OUT until #469, with a reason: storage/processing/object-processing.service.ts
+    // still runs the post-upload processors inline from its @OnEvent body (`storageProvider.download`),
+    // and #469 replaces that listener with a platform ObjectProcessor. Every other listener
+    // (nine files, one body each) is already a dispatch or one bounded write. #469 MUST restore
+    // `onEventNoIo: { minListenerFiles: 9, minListenerBodies: 9, mustScan: [...the eight listener files
+    // from issue #468...] }` here when it deletes that listener.
     onEventNoIo: {
-      minListenerFiles: 9,
-      minListenerBodies: 9,
-      mustScan: [
-        'graph/layout/graph-layout.listener.ts',
-        'graph/listeners/speaker-identified.listener.ts',
-        'graph/resolution/listeners/graph-preferences.listener.ts',
-        'transcripts/listeners/transcript-job-failure.listener.ts',
-        'transcripts/listeners/transcripts-upload.listener.ts',
-        'transcripts/listeners/transcripts-upload-aborted.listener.ts',
-        'notifications/ops/job-failure-notifier.ts',
-        'storage/processing/object-processing.service.ts',
-      ],
+      skip: 'PLATFORM-ADOPTION-SHIM(2.2): storage/processing/object-processing.service.ts runs processors inline until #469 replaces it',
     },
     userOwnedData: {
       schemaPath: join(API_DIR, 'prisma', 'schema'),

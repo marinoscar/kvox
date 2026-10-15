@@ -1,88 +1,62 @@
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import type { Job } from '@prisma/client';
 
 import { JobFailureNotifier } from './job-failure-notifier';
 import { NotificationsService } from '../notifications.service';
-import type { PrismaService } from '../../prisma/prisma.service';
-import { type JobClock, JobHandlerRegistry, JobTerminalService, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
+import { emitJobSettled, type Job } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
-// JobFailureNotifier — tests (issue #288, epic #254)
+// JobFailureNotifier — tests (issue #288, epic #254; re-based by #468)
 // =============================================================================
 //
-// ⚠ DRIVEN THROUGH THE REAL `JobTerminalService` AND A REAL `EventEmitter2`,
-// deliberately, because the claim this file has to prove is not "the listener
-// filters on `status === 'failed'`" — that is one comparison and a test of it
-// proves nothing. The claim is:
+// The claim this file proves is: `jobs.job_failed` is raised when a job reaches
+// the terminal `failed` status, and on nothing else that settles.
 //
-//   `jobs.job_failed` is raised on the GIVE-UP AND ON NOTHING ELSE.
+// WHAT MOVED. Until #468 this suite drove the queue's own terminal state machine
+// to prove that a retry and a rate-limit deferral emit no settled event at all.
+// The state machine is the platform's now (`@marinoscar/platform-api/jobs`) and
+// its emission rules are tested there. What stays here is the part this app owns:
+// the `@OnEvent(JOB_SETTLED_EVENT)` subscription (real `EventEmitterModule`, real
+// registration, dispatched through the platform's own `emitJobSettled`), the
+// filter, the audience, the payload and the containment of a throwing notifier.
 //
-// "Nothing else" includes an intermediate retry and a rate-limit deferral, and
-// whether those raise it is decided by the EMITTER, not by the listener: both
-// write `status: 'pending'` and never call `emitSettled` at all. A suite that
-// constructed `JobSettledEvent`s by hand would assert the listener's filter
-// against events the queue never emits, and would keep passing on the day
-// `JobTerminalService` started emitting on a deferral.
-//
-// So the wiring here is the production wiring: `EventEmitterModule.forRoot()`
-// registers the `@OnEvent` subscription (which is itself under test — a
-// listener nothing dispatches to is the other way this feature can be silently
-// broken), and the real terminal service settles real job rows through it.
-//
-// `NotificationsService` is the one stand-in: what it does with the event has
-// its own suite (`notify-permission-holders.spec.ts`), and a mock is what lets
-// the containment tests below make it throw.
+// `NotificationsService` is the one stand-in: what it does with the event has its
+// own suite (`notify-permission-holders.spec.ts`), and a mock is what lets the
+// containment tests below make it throw.
 // =============================================================================
 
 const NOW = 1_700_000_000_000;
 
 const CONFIG_VALUES: Record<string, unknown> = {
-  'jobs.maxAttempts': 3,
-  'jobs.retryBaseMs': 2_000,
-  'jobs.retryMaxMs': 60_000,
-  'jobs.rateLimitMaxHits': 10,
-  'jobs.rateLimitBaseMs': 30_000,
-  'jobs.rateLimitMaxMs': 900_000,
   appUrl: 'https://app.example.com/',
 };
 
-function fakeClock(): JobClock {
-  let current = NOW;
-
-  return {
-    now: () => current,
-    sleep: async (ms: number) => {
-      current += ms;
-    },
-  };
-}
-
-/** A claimed, currently-running job. `attempts: 1` is the claim's own charge. */
-function runningJob(overrides: Partial<Job> = {}): Job {
+/** A job row at the instant it settles. `attempts: 3` is a spent budget. */
+function settledJob(overrides: Partial<Job> = {}): Job {
   return {
     id: 'job-1',
     type: 'vision.describe',
     subjectType: null,
     subjectId: null,
     dedupKey: null,
-    status: 'running',
+    status: 'failed',
     reason: 'upload',
     priority: 0,
     providerKey: null,
     modelVersion: null,
     payload: null,
-    attempts: 1,
-    lastError: null,
+    attempts: 3,
+    lastError: 'handler blew up',
     createdAt: new Date(NOW - 60_000),
     startedAt: new Date(NOW - 1_000),
-    finishedAt: null,
+    finishedAt: new Date(NOW),
     scheduledFor: null,
     rateLimitedAt: null,
     rateLimitHits: 0,
     claimedByNodeId: null,
-    leaseExpiresAt: new Date(NOW + 30_000),
+    leaseExpiresAt: null,
     executor: 'server',
     ...overrides,
   } as Job;
@@ -90,21 +64,12 @@ function runningJob(overrides: Partial<Job> = {}): Job {
 
 describe('JobFailureNotifier, wired to the real settled event', () => {
   let module: TestingModule;
-  let terminal: JobTerminalService;
+  let emitter: EventEmitter2;
   let notifyPermissionHolders: jest.Mock;
-  let update: jest.Mock;
-  /** The pre-settle row the fake `update` merges over. Tests that care set it. */
-  let rowUnderTest: Job;
+  const logger = new Logger('job-failure-notifier.spec');
 
   beforeEach(async () => {
     notifyPermissionHolders = jest.fn().mockResolvedValue(undefined);
-    rowUnderTest = runningJob();
-
-    // Echo the merge back, so the row the settled event carries is the row
-    // that was written — the same fixture `job-terminal.service.spec.ts` uses.
-    update = jest.fn(({ where, data }) =>
-      Promise.resolve({ ...rowUnderTest, id: where.id, ...data }),
-    );
 
     module = await Test.createTestingModule({
       imports: [EventEmitterModule.forRoot()],
@@ -122,23 +87,11 @@ describe('JobFailureNotifier, wired to the real settled event', () => {
     }).compile();
 
     // `EventEmitterModule` attaches `@OnEvent` subscribers on init. Without
-    // this the notifier exists and hears nothing — which is precisely the
+    // this the notifier exists and hears nothing, which is precisely the
     // failure mode this suite is here to catch, so it must be the REAL
     // registration and not a hand-wired `emitter.on(...)`.
     await module.init();
-
-    terminal = new JobTerminalService(
-      { job: { update } } as unknown as PrismaService,
-      { get: (key: string) => CONFIG_VALUES[key] } as unknown as ConfigService,
-      {
-        trip: jest.fn(),
-        recordSuccess: jest.fn(),
-      } as unknown as ProviderThrottleService,
-      module.get(EventEmitter2),
-      new JobHandlerRegistry(),
-      fakeClock(),
-      () => 0,
-    );
+    emitter = module.get(EventEmitter2);
   });
 
   afterEach(async () => {
@@ -146,110 +99,38 @@ describe('JobFailureNotifier, wired to the real settled event', () => {
     jest.clearAllMocks();
   });
 
+  /** Settles a row the way the queue does. */
+  const settle = (job: Job): void => emitJobSettled(emitter, job, logger);
+
   /** The event keys the notifier raised, in order. */
   const raised = (): string[] =>
     notifyPermissionHolders.mock.calls.map((call) => call[0] as string);
 
-  // ---------------------------------------------------------------------------
-  // IT FIRES ON THE GIVE-UP — BOTH GIVE-UP BRANCHES
-  // ---------------------------------------------------------------------------
-
-  it('fires when the attempt budget runs out (failPermanently)', async () => {
-    // attempts: 3 of a max of 3 — the next settle is terminal.
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 3 }), new Error('handler blew up')),
-    ).resolves.toBe('failed');
+  it('fires when a job settles as failed', () => {
+    settle(settledJob());
 
     expect(raised()).toEqual(['jobs.job_failed']);
   });
 
-  it('fires when a caller declares the job permanently unrunnable, on the first attempt', async () => {
-    // `permanent` short-circuits the attempt budget: an unrunnable job must not
-    // spend three attempts discovering that. It is still a give-up, so it is
-    // still this event.
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 1 }), new Error('no such handler'), {
-        permanent: true,
-      }),
-    ).resolves.toBe('failed');
-
-    expect(raised()).toEqual(['jobs.job_failed']);
-  });
-
-  it('fires on the RATE-LIMIT give-up, past jobs.rateLimitMaxHits', async () => {
-    // 10 hits already recorded; the 11th is past the ceiling of 10 and is a
-    // give-up rather than another deferral.
-    await expect(
-      terminal.completeFailed(
-        runningJob({ rateLimitHits: 10 }),
-        new RateLimitError('429 Too Many Requests'),
-      ),
-    ).resolves.toBe('failed');
-
-    expect(raised()).toEqual(['jobs.job_failed']);
-  });
-
-  // ---------------------------------------------------------------------------
-  // AND ON NOTHING ELSE
-  // ---------------------------------------------------------------------------
-
-  it('does NOT fire on an intermediate retry — the job is going to run again', async () => {
-    // attempts: 1 of 3. The job goes back to `pending` with a backoff, and no
-    // settled event is emitted at all.
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 1 }), new Error('transient')),
-    ).resolves.toBe('retry-scheduled');
+  it('does NOT fire when the job succeeded', () => {
+    settle(settledJob({ status: 'succeeded', lastError: null }));
 
     expect(notifyPermissionHolders).not.toHaveBeenCalled();
   });
 
-  it('does NOT fire on a rate-limit DEFERRAL — waiting is expected to fix it', async () => {
-    await expect(
-      terminal.completeFailed(
-        runningJob({ rateLimitHits: 1 }),
-        new RateLimitError('429 Too Many Requests'),
-      ),
-    ).resolves.toBe('rate-limit-deferred');
-
-    expect(notifyPermissionHolders).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire when the job succeeded', async () => {
-    await expect(terminal.completeSucceeded(runningJob())).resolves.toBe('succeeded');
-
-    expect(notifyPermissionHolders).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire when the terminal write itself failed, because nothing settled', async () => {
-    update.mockRejectedValue(new Error('database is down'));
-
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 3 }), new Error('handler blew up')),
-    ).resolves.toBe('write-failed');
-
-    expect(notifyPermissionHolders).not.toHaveBeenCalled();
-  });
-
-  // ---------------------------------------------------------------------------
-  // THE AUDIENCE AND THE PAYLOAD
-  // ---------------------------------------------------------------------------
-
-  it('addresses the audience by the exact permission the job admin controller enforces', async () => {
-    await terminal.completeFailed(runningJob({ attempts: 3 }), new Error('boom'));
+  it('addresses the audience by the exact permission the job admin controller enforces', () => {
+    settle(settledJob());
 
     expect(notifyPermissionHolders.mock.calls[0][1]).toBe('jobs:read');
   });
 
-  it('carries the job type, id, error, attempts and executor into the payload', async () => {
-    rowUnderTest = runningJob({
-      attempts: 3,
-      type: 'admin.broadcast.chunk',
-      executor: 'node-7',
-    });
-
-    await terminal.completeFailed(
-      rowUnderTest,
-      new Error('the provider refused the request'),
+  it('carries the job type, id, error, attempts and executor into the payload', () => {
+    settle(
+      settledJob({
+        type: 'admin.broadcast.chunk',
+        executor: 'node-7',
+        lastError: 'the provider refused the request',
+      }),
     );
 
     const payload = notifyPermissionHolders.mock.calls[0][2];
@@ -267,45 +148,36 @@ describe('JobFailureNotifier, wired to the real settled event', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // CONTAINMENT — the acceptance criterion
+  // CONTAINMENT: the acceptance criterion
   // ---------------------------------------------------------------------------
 
-  it('a THROWING notifier does not fail the job, and the terminal row is unaffected', async () => {
+  it('a THROWING notifier does not escape the emission, so the settle is unaffected', () => {
     notifyPermissionHolders.mockImplementation(() => {
       throw new Error('the notifier exploded');
     });
 
-    // 1. The settle still reports `failed` rather than `write-failed` or a
-    //    rejection — `EventEmitter2` dispatches SYNCHRONOUSLY, so a listener
-    //    that threw uncontained would surface right here.
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 3 }), new Error('boom')),
-    ).resolves.toBe('failed');
-
-    // 2. The row was written exactly once, with the terminal status.
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(update.mock.calls[0][0].data).toMatchObject({ status: 'failed' });
+    // `EventEmitter2` dispatches SYNCHRONOUSLY, so a listener that threw
+    // uncontained would surface right here.
+    expect(() => settle(settledJob())).not.toThrow();
   });
 
   it('a notifier that REJECTS is caught rather than left as an unhandled rejection', async () => {
     notifyPermissionHolders.mockRejectedValue(new Error('dispatch blew up'));
 
-    await expect(
-      terminal.completeFailed(runningJob({ attempts: 3 }), new Error('boom')),
-    ).resolves.toBe('failed');
+    expect(() => settle(settledJob())).not.toThrow();
 
     // Let the rejected promise settle inside the listener's `.catch`.
     await Promise.resolve();
   });
 
-  it('a notifier that throws does not stop a SUBSEQUENT job from settling normally', async () => {
+  it('a notifier that throws does not stop a SUBSEQUENT settle from being heard', () => {
     notifyPermissionHolders.mockImplementationOnce(() => {
       throw new Error('the notifier exploded');
     });
 
-    await terminal.completeFailed(runningJob({ attempts: 3 }), new Error('first'));
-    await expect(terminal.completeSucceeded(runningJob({ id: 'job-2' }))).resolves.toBe(
-      'succeeded',
-    );
+    settle(settledJob({ id: 'job-1' }));
+    settle(settledJob({ id: 'job-2' }));
+
+    expect(notifyPermissionHolders).toHaveBeenCalledTimes(2);
   });
 });

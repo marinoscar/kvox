@@ -387,6 +387,7 @@ describe('BroadcastChunkHandler', () => {
       expect(enqueue).toHaveBeenCalledWith({
         type: BROADCAST_CHUNK_TYPE,
         reason: 'backfill',
+        orgId: null,
         subjectType: BROADCAST_SUBJECT_TYPE,
         subjectId: BROADCAST_ID,
         skipDedup: true,

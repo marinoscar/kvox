@@ -138,6 +138,10 @@ describe('Transcripts Integration', () => {
     setupBaseMocks();
     jest.clearAllMocks();
 
+    // `resolveOrgId` reads the default organization for storage-touching jobs
+    // (transcode, submit, ingest, snapshot, purge).
+    prismaMock.organization.findFirst.mockResolvedValue({ id: 'org-1' } as never);
+
     mockCredentials.describe.mockResolvedValue({ name: 'assemblyai' });
     mockCredentials.getSecret.mockResolvedValue('aai-key');
     mockStorage.getBucket.mockReturnValue('test-bucket');
