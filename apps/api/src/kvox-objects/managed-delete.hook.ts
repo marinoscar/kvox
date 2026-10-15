@@ -27,11 +27,11 @@
 //     be unmanaged.
 //
 // ABORT. `DELETE .../storage/objects/<uuid>/upload/abort` is forwarded, for a
-// managed object only, to KVox's own `DELETE .../upload/abort-managed` route
+// managed object only, to the app's own `DELETE .../upload/abort-managed` route
 // (`KvoxMultipartController.abortManaged`) with the caller's credentials, and its
 // answer is relayed. The platform abort DELETES the object row, and the owning
 // record's `source_object_id` is `onDelete: Restrict`, so it would abort the
-// provider upload and then fail on the foreign key. The KVox route keeps the row
+// provider upload and then fail on the foreign key. The app route keeps the row
 // (status `failed`) and fails the transcript. The forward is an in-process
 // `inject` through the full route, so authentication, permissions and the error
 // envelope are the real ones; an unmanaged object still reaches the platform
@@ -136,7 +136,7 @@ export class ManagedDeleteVeto {
     };
   }
 
-  /** Relays the answer of the in-process KVox abort route. */
+  /** Relays the answer of the in-process app abort route. */
   private async forwardAbort(
     request: FastifyRequest,
     reply: FastifyReply,

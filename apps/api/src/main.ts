@@ -92,10 +92,13 @@ async function bootstrap() {
   // Global prefix for all routes
   app.setGlobalPrefix('api');
 
-  // PLATFORM-ADOPTION-SHIM(#469): the platform's `DELETE /api/storage/objects/:id`
-  // has no seam for module ownership, so this `onRequest` hook answers 409
-  // `managed_by_module` for an object a domain module owns, before the handler
-  // runs. After `setGlobalPrefix` because it matches the prefixed path.
+  // Permanent until the platform adds a veto seam: the platform's
+  // `DELETE /api/storage/objects/:id` has no seam for module ownership, so this
+  // `onRequest` hook answers 409 `managed_by_module` for an object a domain
+  // module owns, before the handler runs. It also forwards
+  // `DELETE .../:id/upload/abort` of a managed object to the app's own abort
+  // route (the platform abort deletes the row the owning record restricts).
+  // After `setGlobalPrefix` because it matches the prefixed path.
   installManagedDeleteHook(app);
 
   // Enable CORS (same-origin by default, configurable)
