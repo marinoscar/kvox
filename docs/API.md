@@ -933,6 +933,14 @@ Served by the platform identity slice. The app runs in single-organization mode,
 
 ### Settings
 
+`/user-settings`, `/system-settings` and `/org-settings` are served by the platform settings slice (`SettingsModule.forRoot`, mounted in `apps/api/src/platform/settings/settings.config.ts`; issue #466). Which namespaces exist, their defaults and their merge rules are declared in registries, not in controllers: the platform's own namespaces plus the app's `transcription` and `ai` (system) and `onboarding` and `graph` (user), registered in `apps/api/src/settings/registry/`. The stored rows are unchanged. The profile-image routes below (`/user-settings/profile-image`) are still the app's. The shapes in the live document at `/api/docs` are authoritative.
+
+Conventions that hold on every route in this group:
+
+- `PATCH` accepts an optional `If-Match: <version>` header. When it is sent and stale the response is **409 Conflict**; when it is absent the write is not guarded. (The generated OpenAPI document lists the lowercase `if-match` header parameter as required; the controllers read it as optional.)
+- A system-settings `PUT` or `PATCH` writes an audit event (`system_settings:replace`, `system_settings:patch`). User-settings writes write none.
+- Permissions are `user_settings:read|write`, `system_settings:read|write` and, for `/org-settings`, `org_settings:read|write`.
+
 #### GET /user-settings
 **Requires Authentication** - Get current user's settings.
 
@@ -950,6 +958,8 @@ Served by the platform identity slice. The app runs in single-organization mode,
 }
 ```
 
+The optional namespaces (`dataTables`, `navigation`, `notifications`, `onboarding`, `graph`) appear **only when set**; a user who never changed one gets the shape above.
+
 **Fields:**
 | Field | Type | Description |
 |-------|------|-------------|
@@ -957,6 +967,11 @@ Served by the platform identity slice. The app runs in single-organization mode,
 | `profile.displayName` | string \| null | User's display name override (optional, max 100 chars) |
 | `profile.imageSource` | enum | Which picture represents the user: `none`, `provider` (OAuth sign-in provider's picture), or `upload` (a picture uploaded via `POST /user-settings/profile-image`) |
 | `profile.imageObjectId` | string \| null | The uploaded avatar's storage object ID; present only when relevant, `null` when no avatar has been uploaded/selected |
+| `dataTables` | object | Optional, platform namespace. Per-table layout, keyed by table id: `visibleColumns`, `density` (`compact`, `standard`, `comfortable`), `sort`, `pageSize`, `savedViews[]` and an open `extra` bag |
+| `navigation` | object | Optional, platform namespace. `railCollapsed` (boolean) |
+| `notifications` | object | Optional, platform namespace. Per-event, per-channel switches: `{ "<eventKey>": { "<channel>": boolean } }`. Channel names are no longer restricted to an enum |
+| `onboarding` | object | Optional, app namespace (issue #272): `welcomeSeenAt`, `dismissedAt`, `adminDismissedAt`, `skipped[]`. See [Onboarding](#onboarding) |
+| `graph` | object | Optional, app namespace (issue #369): connected-knowledge preferences, below |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 | `version` | number | Version number for optimistic concurrency control |
 
@@ -1066,6 +1081,11 @@ an unknown key, a non-boolean domain switch, or a threshold pair out of order �
 one only the merge with the stored value reveals. A write whose resolved
 preferences actually change emits the in-process `graph.preferences_changed`
 event (no audit event, consistent with every other user-settings namespace).
+The platform service emits no change event of its own, so a global interceptor
+(`apps/api/src/platform/settings/user-settings-change.interceptor.ts`,
+`PLATFORM-ADOPTION-SHIM(#466)`) re-emits `user-settings.namespace-changed` around
+`PUT`/`PATCH /api/user-settings`, which `GraphPreferencesChangeForwarder` turns
+into `graph.preferences_changed`.
 The `Knowledge graph` settings card (`/settings/knowledge-graph`, gated
 `graph:write`) is the UI over this namespace and #355's attribute definitions;
 its *Personal life* switch asks for confirmation before turning the domain on
@@ -1155,8 +1175,12 @@ Deletes the uploaded avatar object (if any) and clears `profile.imageObjectId`. 
 
 Get system-wide settings. The `ui` and `features` namespaces were removed as
 unused by issue #366 — nothing at runtime ever read either one. The stored
-value now models exactly five namespaces: `notifications`, `jobs`, `nodes`,
-`databaseBackup` and `maintenance`, plus the computed `security` block.
+value models exactly seven namespaces, in this order: the platform's
+`notifications`, `jobs`, `nodes`, `databaseBackup` and `maintenance`, then
+the app's `transcription` and `ai` (the same documents `GET /transcription-settings`
+and `GET /ai-settings` serve), plus the computed `security` block. Every
+namespace is always present in the response: an absent stored block reads as its
+default. Registration order is the stored key order; a new namespace is appended.
 
 **Response:**
 ```json
@@ -1204,6 +1228,32 @@ value now models exactly five namespaces: `notifications`, `jobs`, `nodes`,
     "startedAt": null,
     "startedById": null
   },
+  "transcription": {
+    "enabled": false,
+    "provider": null,
+    "providers": { "assemblyai": { "region": "us", "speechModel": "universal-3-5-pro, universal-2" } },
+    "audioDelivery": "presigned_url",
+    "presignedUrlTtlMinutes": 360,
+    "deleteRemoteAfterIngest": true,
+    "defaultLanguage": null,
+    "transcodeNodeOffloadEnabled": true,
+    "abandonedUploadHours": 3,
+    "playback": { "bitrateKbps": 64 }
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "openai",
+    "providers": {
+      "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [], "defaultModel": "gpt-5.4-mini" }
+    },
+    "maxInputTokens": null,
+    "maxOutputTokens": null,
+    "requestTimeoutMs": 600000,
+    "reasoningEffort": "none",
+    "maxDocumentBytes": 26214400,
+    "taskModels": {},
+    "graphEnabled": false
+  },
   "updatedAt": "2024-01-01T00:00:00.000Z",
   "updatedBy": {
     "id": "uuid",
@@ -1219,12 +1269,15 @@ value now models exactly five namespaces: `notifications`, `jobs`, `nodes`,
 | `security.jwtAccessTtlMinutes` | number | **Read-only.** JWT access token TTL in minutes, read from the `JWT_ACCESS_TTL_MINUTES` deploy-time environment variable — not stored settings, and not writable through this API |
 | `security.refreshTtlDays` | number | **Read-only.** Refresh token TTL in days, read from the `JWT_REFRESH_TTL_DAYS` deploy-time environment variable — not stored settings, and not writable through this API |
 | `notifications.browserEnabled` | boolean | Whether browser notifications are enabled deployment-wide. **Enforced** (issue #226): when `false`, the `browser` channel is dropped from `GET /notifications/events`'s advertised channels, from the dispatcher's channel resolution, and from delivery — the SSE stream's `toast` field is set to `false`. Mandatory events (e.g. `security.role_changed`) are the one exception: their channel list is never filtered and the `notifications` row is always written; only the browser toast is suppressed for them |
-| `notifications.disabledEvents` | string[] | Notification event keys (e.g. `security.role_changed`, from the notification event registry) suppressed deployment-wide, regardless of per-user preference. Max 100 entries. **Enforced** (issue #226) the same way as `browserEnabled` above — including the same mandatory-event exception |
+| `notifications.disabledEvents` | string[] | Notification event keys (e.g. `security.role_changed`, from the notification event registry) suppressed deployment-wide, regardless of per-user preference. Max 100 entries on the wire (each key lowercase, at most 64 characters). **Enforced** (issue #226) the same way as `browserEnabled` above — including the same mandatory-event exception |
+| `notifications.channels` | object | Optional per-channel switches, `{ "<channel>": { "enabled": boolean } }`, added by the platform declaration. Absent unless an administrator sets one |
 | `jobs.history.retentionDays` / `jobs.history.purgeEnabled` | number / boolean | How long completed job history is kept, and whether the purge cron runs at all |
 | `jobs.stuckThresholdMinutes` | number | How long a claimed job may go without progress before the lease reaper treats it as abandoned |
 | `nodes.staleHeartbeatSeconds` / `nodes.offlineStaleMultiplier` / `nodes.offlineRetentionDays` | number | Worker-node fleet health thresholds — see `docs/specs/worker-nodes.md` |
 | `nodes.jobSecretBrokerEnabled` | boolean | Whether a worker node may be issued short-lived, job-scoped database credentials at all (epic #345). Default off |
-| `databaseBackup.*` | — | Backup schedule and retention policy — see `GET /admin/db-backup/config` and `docs/specs/database-backup.md` |
+| `databaseBackup.*` | — | Backup schedule and retention policy — see `GET /admin/db-backup/config` and `docs/specs/database-backup.md`. The platform declaration is wider than the app's old one: `frequency` also accepts `cron`, and `cron` and `retention` (`count`, `maxAgeDays`) exist. `storageProvider` keeps the app's default `s3` (the platform's is empty). **Known behaviour change, closed by #467:** `PUT /admin/db-backup/config` now also accepts `frequency: "cron"`, without the minimum-interval validation the other frequencies get |
+| `transcription.*` | — | Speech-to-text policy. Registered by the app (`transcription/transcription.system-settings.ts`); see `GET /transcription-settings` and `docs/specs/transcription.md`. Carries no API key |
+| `ai.*` | — | AI policy. Registered by the app (`ai/ai.system-settings.ts`, `PLATFORM-ADOPTION-SHIM(3.1)` until #473); see `GET /ai-settings` and `docs/specs/notes.md`. Carries no API key |
 | `maintenance.*` | — | Maintenance-window state — see `GET /admin/maintenance` and `docs/specs/maintenance-mode.md` |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 | `updatedBy` | object | User who last updated settings |
@@ -1279,9 +1332,11 @@ block (see the GET fields table above). Sending it is not an error; the global
 `notifications` IS required in the PUT body — omitting it returns
 **400 VALIDATION_ERROR** rather than resetting it, because the value that
 would be reset is an operator's decision to turn a delivery channel off for
-everyone. `jobs`, `nodes`, `databaseBackup` and `maintenance` are each
-optional in the PUT body: omitting one leaves it at its stored value rather
-than resetting it to the default (see `SystemSettingsService.replaceSettings`).
+everyone. Every other namespace (`jobs`, `nodes`, `databaseBackup`,
+`maintenance`, `transcription`, `ai`) is optional in the PUT body: omitting one
+leaves it at its stored value rather than resetting it to the default (the
+platform's `SystemSettingsService.replaceSettings`). A stored key no registered
+namespace declares is preserved on a write, never dropped.
 
 **Response:**
 ```json
@@ -1364,9 +1419,10 @@ Or, to suppress one notification event without touching anything else:
 ```
 
 Every namespace (`notifications`, `jobs`, `nodes`, `databaseBackup`,
-`maintenance`) is optional in PATCH, and merges field by field — sending one
-field of one namespace leaves every other field, in every other namespace, at
-its stored value. `notifications.disabledEvents`, when sent, REPLACES the
+`maintenance`, `transcription`, `ai`) is optional in PATCH, and merges field by
+field through that namespace's own declared `merge` — sending one field of one
+namespace leaves every other field, in every other namespace, at its stored
+value (a `PATCH` to `transcription` leaves `ai` and the rest unchanged). `notifications.disabledEvents`, when sent, REPLACES the
 stored array wholesale rather than merging entries; send `disabledEvents: []`
 to lift every suppression.
 
@@ -1434,6 +1490,22 @@ If-Match: 1
 - Include `If-Match: <version>` header to ensure settings haven't been modified by another request
 - Returns **409 Conflict** if version mismatch detected
 - Prevents lost updates when multiple admins modify settings concurrently
+
+---
+
+#### GET /org-settings
+**Requires:** `org_settings:read` permission
+
+Per-organization overrides of the namespaces the platform lets an organization override. Mounted by the platform settings slice (`orgLayer: 'auto'`) but **unused in single-organization mode**: the `org_settings` table stays empty and no the app screen calls it.
+
+**Response:** `data` is `{ orgId, value, effective, version, namespaces, updatedAt }`: the stored overrides, the system value merged with them per namespace, the row version for `If-Match` (`0` while the organization has no row), and a descriptor of every org-overridable namespace (`key`, `description`, `merge` of `override` or `tighten`, `writable`, `fields[]`). A namespace whose own read permission the caller lacks is omitted.
+
+---
+
+#### PATCH /org-settings
+**Requires:** `org_settings:write` permission
+
+Partially update the active organization's overrides. Optional `If-Match: <version>` (`0` matches a missing row). Each namespace branch is validated against that namespace's org schema; `null` clears a namespace, or a field inside one, so the system value applies again. A namespace that is unknown or cannot be overridden per organization is **400**; one whose write permission the caller lacks is **403**; a stale `If-Match` is **409**. There is no `PUT`.
 
 ---
 
@@ -5294,7 +5366,7 @@ no route parameter naming a user, so there is no id for a caller to
 substitute.
 
 ⚠ **The key itself is never returned by any response, on any route, for any
-role.** It is encrypted at rest under `secret-cipher.ts`'s `'ai-key'` purpose,
+role.** It is encrypted at rest by the platform secret cipher (`@marinoscar/platform-api/core`) under the `'ai-key'` purpose,
 and no endpoint's presentation query even selects the ciphertext column.
 
 #### GET /ai-credentials

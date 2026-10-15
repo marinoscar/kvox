@@ -2174,7 +2174,7 @@ against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
 single source of truth for settings (the Adding a setting rule in [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md), and
-the settings-namespace registry that `settings-parity.spec.ts` iterates),
+the settings-namespace registry the platform settings slice composes its schemas from),
 and the same argument that makes it right for a system-settings namespace
 makes it right here: one declaration yields runtime validation of a `props`
 object, a JSON Schema for the extraction prompt's structured-output mode,
@@ -2450,7 +2450,7 @@ text a model reads, never a structural change a stored row depends on. A key
 is permanent once rows exist (§17.1); deprecate before delete, always.
 
 **Maintenance discipline.** A `CHANGELOG` lives in the definition file
-itself, and a parity test in the style of `settings-parity.spec.ts`
+itself, and a parity test in the style of the platform's registry-driven conformance suites
 (table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) checks the properties that keep the
 file internally honest: every type has a description, every relation
 declares its endpoint types, every attribute declares a `kind`, and no key

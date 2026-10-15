@@ -1059,7 +1059,7 @@ deployment silently never even queues a backup. See §10.6.
 
 **A `preRestoreRetentionHours` settings field.** One number, at the cost of
 `systemDatabaseBackupSchema`, the defaults, the PATCH schema, the response DTO,
-the admin UI and the settings-parity spec — to express a duration this
+the admin UI and the settings conformance suite — to express a duration this
 deployment has already expressed once, with a real risk that the two end up
 meaning different things on the same page. See §11.
 

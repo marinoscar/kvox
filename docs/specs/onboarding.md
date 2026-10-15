@@ -6,7 +6,8 @@
 > `admin-onboarding.controller.ts`, `dto/onboarding-state.dto.ts`,
 > `onboarding.module.ts`), the `onboarding` namespace of
 > `apps/api/src/common/schemas/user-settings-namespaces.schema.ts` and its
-> parity guard (`apps/api/src/common/schemas/user-settings-parity.spec.ts`),
+> declaration (`apps/api/src/onboarding/onboarding.user-settings.ts`, registered
+> in `apps/api/src/app-registrations/settings.ts`),
 > and on the web side `apps/web/src/services/onboarding.ts`,
 > `apps/web/src/contexts/OnboardingContext.tsx`,
 > `apps/web/src/components/onboarding/{SetupChecklist,OnboardingBanner,
@@ -29,7 +30,7 @@
 
 A brand-new instance is, on first login, a blank room with the lights off.
 The seed values that make it one are concrete, not rhetorical: `DEFAULT_SYSTEM_SETTINGS`
-(`apps/api/src/common/types/settings.types.ts`) ships `transcription.enabled:
+(`apps/api/src/settings/registry/default-system-settings.ts`, composed from the namespace declarations) ships `transcription.enabled:
 false`, `transcription.provider: null`, and `ai.allowedModels: []`. An
 administrator who logs in for the first time lands on Home, reads "You have
 no transcripts yet", and finds a **disabled** New-transcript button —
@@ -387,49 +388,23 @@ bounded (`ONBOARDING_MAX_SKIPPED = 40`, `ONBOARDING_MAX_STEP_KEY_LENGTH = 64`,
 control, not cosmetics: it is a user-supplied array landing in a JSONB blob,
 and the bound is what stops it becoming arbitrary storage.
 
-Adding a user-settings namespace used to be a **six-file change** (since issue #459 it is one declaration registered in `kvox.manifest.ts`, and the parity guard iterates the registry; the history that motivated the guard follows)
-(`userSettingsSchema`, `userSettingsPatchSchema` in
-`common/schemas/settings.schema.ts`; `updateUserSettingsSchema`,
-`patchUserSettingsSchema` in `settings/dto/update-user-settings.dto.ts`;
-`userSettingsResponseSchema` in `settings/dto/user-settings-response.dto.ts`;
-and the `UserSettingsValue` TypeScript interface in
-`common/types/settings.types.ts`), and `dataTables` and `navigation` were
-both added blind, with no guard. The nastiest of the six to miss is the
-PATCH request schema: a missing entry there means `PATCH { "onboarding": {
-"welcomeSeenAt": "..." } }` parses to `{}`, the service merges nothing, the
-row is rewritten unchanged, and the endpoint answers **200 with a body that
-looks correct** — no error, no log line, no audit entry, just a welcome
-dialog that will not stay dismissed and nothing anywhere saying why. This
-epic paid that six-file cost for the first time with a guard behind it:
-`user-settings-parity.spec.ts`, modelled on `settings-parity.spec.ts` but
-not copied from it, because user settings has a genuinely different amount
-of help from the compiler — every namespace here is optional in all six
-sources by design, so there is no required-field mismatch for TypeScript to
-catch on its own the way the system-settings guard's own header describes.
-Key sets are derived **programmatically** from the zod schemas (an
-`unwrap()` helper strips `.optional()`/`.nullable()`/`.default()`/`.pipe()`
-wrappers before comparing), never from a list written out by hand in the
-spec — a hand-maintained list would be the same class of defect one level
-up. The seventh place, the hand-written `mergeOnboarding` in
-`user-settings.service.ts`, is deliberately **not** checked by this guard: a
-merge is behaviour, not a key set, and is instead covered by
-`user-settings.service.spec.ts` and by
-`apps/api/test/settings/user-settings.integration.spec.ts`, which drives a
-real PATCH through the wire DTO.
+Adding a user-settings namespace used to be a **six-file change** (`userSettingsSchema` and `userSettingsPatchSchema` in `common/schemas/settings.schema.ts`; the PUT and PATCH request schemas; the response schema; and the `UserSettingsValue` interface), and `dataTables` and `navigation` were both added blind, with no guard. The nastiest of the six to miss was the PATCH request schema: a missing entry there means `PATCH { "onboarding": { "welcomeSeenAt": "..." } }` parses to `{}`, the service merges nothing, the row is rewritten unchanged, and the endpoint answers **200 with a body that looks correct** — no error, no log line, no audit entry, just a welcome dialog that will not stay dismissed and nothing anywhere saying why. This epic paid that cost once with a hand-written parity guard. Since issue #459 a namespace is one declaration, and since issue #466 the platform settings slice composes every request and response schema from the registry, so the six places and the guard no longer exist: `onboarding` is declared once, in `onboarding/onboarding.user-settings.ts` (stored and patch schemas, `merge`, `assertLimits`), and appended to `APP_USER_SETTINGS_NAMESPACES`. The `merge` is behaviour, not a key set: it is covered by `apps/api/test/settings/user-settings.integration.spec.ts`, which drives a real PATCH through the wire schema.
 
-`onboarding` is present on the `UserSettingsValue` **interface** but
-absent from `DEFAULT_USER_SETTINGS`, matching `dataTables`/`navigation`/`notifications`
+`onboarding` is a namespace of the user-settings document but has no default
+(its declaration carries none, and it is absent from a new user's document),
+matching `dataTables`/`navigation`/`notifications`
 exactly — seeding a default here would destroy the "absent means never
 onboarded" contract the rest of the epic reads.
 
 **Writes go through the existing `PATCH /api/user-settings`, not a new
 endpoint.** `dismiss`, `skip`, `unskip` and `markWelcomeSeen`
 (`OnboardingContext.tsx`) are each one PATCH into the `onboarding`
-namespace, through the existing `useUserSettings` hook, which already
+namespace, through the `useUserSettings` hook (since #466 the packaged one,
+`@marinoscar/platform-web/settings/headless`), which already
 carries `If-Match` optimistic concurrency. There is no dedicated onboarding
 write route to add or to re-earn that machinery for.
 
-⚠ **The 409 retry finding.** #276's own acceptance criteria state "a 409
+⚠ **The 409 retry finding** (written against the app's own hook, which #466 deleted in favour of the packaged one; the retry-once requirement it records still holds for any hook that carries this namespace). #276's own acceptance criteria state "a 409
 refetches and retries once, reusing `useUserSettings`'s existing handling."
 During this epic's build, that turned out to be only half true:
 `useUserSettings`'s conflict branch re-read the settings document and then
@@ -756,13 +731,13 @@ instead, for that reason.
 | A step whose destination permission the caller lacks is absent, not disabled; the response never publishes the permission a step guards | `apps/api/test/onboarding/onboarding.integration.spec.ts` |
 | A skipped step is returned, marked, and counted out of `requiredRemaining`/`totalRemaining`; `requiredRemaining` counts only unsatisfied `required` steps | `apps/api/test/onboarding/onboarding.integration.spec.ts` |
 | The admin route derives status on every read — nothing is stored and nothing is written | `apps/api/test/onboarding/onboarding.integration.spec.ts` ("derives status on every read...") |
-| The `onboarding` namespace is declared identically across all six sources, with no `.default()` anywhere, and is absent from `DEFAULT_USER_SETTINGS` | `apps/api/src/common/schemas/user-settings-parity.spec.ts` |
+| The `onboarding` namespace is registered once (no `.default()`), composed into the platform's request and response schemas, and absent from a new user's document | The platform `settings` conformance suite, run from `apps/api/test/conformance.spec.ts` |
 | A `PATCH` round-trips `welcomeSeenAt`, a per-field `null` clears one field and leaves the others, and an emptied namespace collapses back to absent | `apps/api/test/settings/user-settings.integration.spec.ts` |
-| `.strict()` rejects a misspelt field; PUT/PATCH null asymmetry; `skipped` bounds enforced exactly at the cap | `apps/api/src/settings/dto/update-user-settings.dto.spec.ts` |
+| `.strict()` rejects a misspelt field; PUT/PATCH null asymmetry; `skipped` bounds enforced exactly at the cap | `apps/api/test/settings/user-settings.integration.spec.ts` |
 | `OnboardingProvider` issues one `GET /api/onboarding` on mount, and `GET /api/admin/onboarding` only for a holder of `system_settings:read` | `apps/web/src/__tests__/contexts/OnboardingContext.test.tsx` ("the admin gate") |
 | `dismiss`/`skip`/`unskip`/`markWelcomeSeen` each issue exactly one PATCH touching only `onboarding` | `apps/web/src/__tests__/contexts/OnboardingContext.test.tsx` ("writes") |
 | No timer, interval or polling hook anywhere in the provider | `apps/web/src/__tests__/contexts/OnboardingContext.test.tsx` ("the no-polling rule") |
-| A re-read and a genuine retry (second PATCH, fresh `If-Match`) are distinguished, and the retry happens exactly once | `apps/web/src/__tests__/hooks/useUserSettings.test.ts` ("Version Conflict Handling (409 errors)") |
+| A re-read and a genuine retry (second PATCH, fresh `If-Match`) are distinguished, and the retry happens exactly once | The packaged hook's own suite (`@marinoscar/platform-web`, `settings/headless`); the app's `useUserSettings.test.ts` was deleted with the hook in #466 |
 | Status is rendered as words, not only icons or colour; a blocked step's action is disabled with its reason associated via `aria-describedby` | `apps/web/src/__tests__/components/onboarding/SetupChecklist.test.tsx` |
 | No `useMediaQuery` anywhere in this epic's components, context or pages | `apps/web/src/__tests__/components/onboarding/SetupChecklist.test.tsx` ("the breakpoint-gate rule") |
 | `vitest-axe` is clean in every checklist state (loading, satisfied, blocked, skipped) | `apps/web/src/__tests__/components/onboarding/SetupChecklist.test.tsx` ("accessibility") |

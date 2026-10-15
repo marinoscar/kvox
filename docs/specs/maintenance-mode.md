@@ -127,7 +127,7 @@ an outage and `MAINTENANCE_MODE=0` into an unplanned recovery; both directions
 are pinned by `maintenance-mode.service.spec.ts`.
 
 It is read from `process.env` rather than through `ConfigService`, the same way
-`SECRETS_ENCRYPTION_KEY` is read in `common/crypto/secret-cipher.ts`. A
+`SECRETS_ENCRYPTION_KEY` is read by the platform secret cipher (`@marinoscar/platform-api/core`). A
 break-glass control whose entire value is that it works when other things do
 not should not depend on a successful configuration load, and should not have a
 second, cached copy of its answer that can disagree with the environment the
