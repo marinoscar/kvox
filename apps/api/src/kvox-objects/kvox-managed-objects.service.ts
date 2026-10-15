@@ -326,6 +326,59 @@ export class KvoxManagedObjectsService implements KvoxManagedObjects {
     await this.run(scope, (tx) => tx.storageObject.deleteMany({ where: { id } }));
   }
 
+  /**
+   * Cancel an in-progress upload of a MANAGED object without deleting its row.
+   *
+   * The platform's abort deletes the `storage_objects` row, which the owning
+   * record's `source_object_id` (`onDelete: Restrict`) refuses. So the provider
+   * multipart upload is aborted, the row is set to `failed` and kept, and for a
+   * `transcripts` owner the referencing transcript still `uploading` is marked
+   * `failed / upload_aborted` (housekeeping purges it later). Idempotent: an
+   * already-`failed` object is reconciled again and answers normally.
+   *
+   * @throws NotFoundException when the object is missing, not the caller's, or not managed.
+   * @throws BadRequestException when the upload already settled (processing or ready).
+   */
+  async abortManaged(id: string, userId: string, scope?: KvoxObjectsScope): Promise<void> {
+    const { object, owner } = await this.run(scope, async (tx) => {
+      const row = await tx.storageObject.findUnique({ where: { id } });
+      const owned = row ? await this.ownership.managedBy(tx, [id]) : new Map<string, KvoxModule>();
+      return { object: row, owner: owned.get(id) ?? null };
+    });
+
+    if (!object || object.uploadedById !== userId || !owner) throw new NotFoundException('Upload not found');
+
+    const active = object.status === 'pending' || object.status === 'uploading';
+    if (!active && object.status !== 'failed') {
+      throw new BadRequestException(`Upload is no longer in progress (status: ${object.status})`);
+    }
+
+    if (active && object.s3UploadId) {
+      await this.storage.abortMultipartUpload(object.storageKey, object.s3UploadId).catch((error: unknown) => {
+        this.logger.warn(
+          `Could not abort multipart upload of ${id}: ${error instanceof Error ? error.name : 'unknown error'}`,
+        );
+      });
+    }
+
+    await this.run(scope, async (tx) => {
+      await tx.storageObject.updateMany({
+        where: { id, status: { in: ['pending', 'uploading'] } },
+        data: { status: 'failed', s3UploadId: null },
+      });
+
+      if (owner === 'transcripts') {
+        // Conditional on `uploading`, like the housekeeping reconcile (same reason string).
+        await tx.transcript.updateMany({
+          where: { sourceObjectId: id, deletedAt: null, status: 'uploading' },
+          data: { status: 'failed', failureReason: 'upload_aborted' },
+        });
+      }
+    });
+
+    this.logger.log(`Aborted ${owner}-managed upload ${id}`);
+  }
+
   /** The organization of a caller-held transaction: the explicit one, else the default. */
   private orgOfTx(orgId?: string | null): Promise<string> {
     return this.resolveOrg(orgId);

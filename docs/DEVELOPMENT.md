@@ -728,7 +728,7 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
    ```bash
    npm run db:compose:check   # prisma/schema/ equals a fresh compose
    npm run db:check           # installed platform migrations still match platform.lock
-   npm run db:drift           # migrations replayed in a shadow database equal the schema
+   npm run db:drift:kvox      # migrations replayed in a shadow database equal the schema (plain db:drift is not clean by design)
    ```
 
 6. **Update Seeds (if needed):**
@@ -747,10 +747,10 @@ Rules that keep this safe:
 
 - **KVox never authors platform migrations.** A platform package release brings new ones. Install them with `npm run db:sync`, review the new directories under `prisma/migrations/`, commit them with `platform.lock`, then `npm run prisma:migrate`. Never edit or rename an installed directory, comments included: the lock hashes the raw bytes.
 - **Raw-SQL objects stay in `migration.sql`.** Partial unique, trigram, HNSW and GiST indexes, generated `tsvector` columns, CHECK constraints and triggers cannot be declared in a fragment. Never add `@@unique` or `@@index` for one. List every new partial or expression index under `rawSqlIndexes` in `platform.lock`, with `definition` copied from `SELECT indexdef FROM pg_indexes WHERE indexname = '<name>'`.
-- **There is no drift allowlist.** `apps/api/prisma/drift-allowlist.json` and `db:drift:kvox` were removed in #469, when the last two deviation columns (`storage_objects.managed_by` and `part_size`) were dropped. Never add a filter to hide a real difference on a platform table; fix the cause. Intentional raw-SQL objects are declared under `rawSqlIndexes` in `platform.lock`.
+- **`db:drift:kvox` filters `apps/api/prisma/drift-allowlist.json`.** Each entry needs `statement`, `reason` and `removeIn` (an issue number, or `permanent`). Since #469 the file holds only the 13 permanent entries for indexes and generated-column defaults Prisma cannot declare; the platform's plain `db:drift` has no ignore list and fails on them. Never add an entry to hide a real difference on a platform table.
 - The first adoption of the platform history on an existing database is a one-off baseline: `docs/runbooks/database-baseline.md`. The day-to-day workflow is also in the `platform-migration` skill (`.claude/skills/platform-migration/SKILL.md`).
 
-**Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`, `db:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details. `db:drift` replays the history in a shadow database: set `SHADOW_DATABASE_URL` to an empty database, or use a role that may create databases. The shadow replay runs `CREATE EXTENSION vector`, which needs a superuser (see `docs/platform-adoption/local-exceptions.md`).
+**Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`, `db:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details. `db:drift:kvox` replays the history in a shadow database: set `SHADOW_DATABASE_URL` to an empty database, or use a role that may create databases. The shadow replay runs `CREATE EXTENSION vector`, which needs a superuser (see `docs/platform-adoption/local-exceptions.md`).
 
 ### Settings namespace registry
 

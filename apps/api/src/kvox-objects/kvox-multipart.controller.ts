@@ -28,6 +28,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -169,6 +170,30 @@ export class KvoxMultipartController {
     const object = await this.openUpload(objectId, userId, orgId);
     const parts = await this.lister.listParts(object.storageKey, object.s3UploadId as string);
     return { data: parts };
+  }
+
+  @Delete(':id/upload/abort-managed')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Auth({ permissions: ['storage:write'] })
+  @ApiOperation({
+    summary: 'Abort the upload of a module-managed object',
+    description:
+      'Reached by `DELETE :id/upload/abort` for an object a module owns (the managed-delete ' +
+      'hook forwards it here); not meant to be called directly. The platform abort deletes the ' +
+      'object row, which the owning record refuses, so this aborts the provider upload, keeps ' +
+      'the row as `failed` and, for a transcript source, marks the transcript failed ' +
+      '(`upload_aborted`). Answers 404 for an object that is not the caller\'s or not managed.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Object ID' })
+  @ApiResponse({ status: 204, description: 'Upload aborted' })
+  @ApiResponse({ status: 400, description: 'Upload already settled' })
+  @ApiResponse({ status: 404, description: 'Upload not found (or not the caller\'s, or not managed)' })
+  async abortManaged(
+    @Param('id', ParseUUIDPipe) objectId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
+  ): Promise<void> {
+    await this.managed.abortManaged(objectId, userId, { orgId });
   }
 
   /**

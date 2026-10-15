@@ -79,6 +79,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../transcription/transcription.system-settings';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
 import {
@@ -216,6 +217,7 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
     private readonly objects: TranscriptObjectsService,
     private readonly transcriptionSettings: TranscriptionSettingsService,
     private readonly jobScope: JobScope,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   onModuleInit(): void {
@@ -491,10 +493,13 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
     ids: string[],
   ): Promise<Map<string, SourceObjectFacts>> {
     const rows = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
-      tx.storageObject.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, status: true, createdAt: true, updatedAt: true },
-      }),
+      this.managedObjects.findMany(
+        {
+          where: { id: { in: ids } },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
+        },
+        { tx },
+      ),
     );
 
     return new Map(rows.map((row) => [row.id, row]));

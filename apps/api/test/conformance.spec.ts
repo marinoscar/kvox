@@ -89,7 +89,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
   { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
   { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
-  { file: 'storage/legacy-object-ownership.store.ts', why: 'Temporary storage_objects.managed_by deviation (#469) that the platform schema does not declare; keyed by storage object id.' },
   { file: 'transcripts/transcript-editing.service.ts', why: 'Row locks and ordered segment rewrites inside the edit transaction; scoped to a transcript the caller owns.' },
 ] as const;
 
@@ -98,9 +97,9 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Six files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
-    // notes-housekeeping, storage-cleanup, transcripts-housekeeping.
-    cronEnqueueOnly: { exempt: [], minCronFiles: 6 },
+    // Five files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
+    // notes-housekeeping, transcripts-housekeeping (the storage cleanup cron is the platform's since #469).
+    cronEnqueueOnly: { exempt: [], minCronFiles: 5 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
     // provider). Seven files hold a listener, one body each, every one a dispatch or one bounded
     // write. The two transcript upload listeners and storage/processing/object-processing.service.ts

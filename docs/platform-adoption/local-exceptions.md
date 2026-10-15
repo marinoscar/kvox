@@ -5,8 +5,8 @@ Every place where KVox deviates from `@marinoscar/platform-*` on purpose, and th
 ## How to use this page
 
 - **A shim in code** carries the comment `// PLATFORM-ADOPTION-SHIM(<issue>)`, where `<issue>` is the issue that removes it. List them all with `grep -rn "PLATFORM-ADOPTION-SHIM" apps/api/src`.
-- **A deviation in the database** is an entry under `deviations` in `apps/api/prisma/platform.lock`. (Until #469 each also had `DROP COLUMN` entries in `apps/api/prisma/drift-allowlist.json`; that file, `scripts/db-drift-kvox.mjs` and the `db:drift:kvox` script are deleted and plain `npm run db:drift` is used.)
-- **The PR that removes an exception deletes its row here.** It also removes the marker and the lock deviation it names.
+- **A deviation in the database** is an entry under `deviations` in `apps/api/prisma/platform.lock`. Since #469 no deviation adds an entry to `apps/api/prisma/drift-allowlist.json`; the 13 entries left there are permanent and are not deviations (see "Drift allowlist").
+- **The PR that removes an exception deletes its row here.** It also removes the marker, the lock deviation and any allowlist entries it names.
 - A new exception adds a row in the same PR, with an issue that removes it. If no issue exists, file one.
 
 How the baseline treats the deviations: `docs/runbooks/database-baseline.md`.
@@ -17,7 +17,7 @@ How the baseline treats the deviations: `docs/runbooks/database-baseline.md`.
 |---|---|---|---|---|
 | `kvox:domain-schema` | KVox domain tables, enums, indexes and extensions that platform `0001` to `0014` do not create. Not a change to a platform table. | The 22 app-only migrations | The baseline diff prints them, and the lock must declare them for `--through 14` to run clean. | Not removed. It is a record for the baseline. #489 (the `kvox-db` package) revisits it |
 
-The `kvox:storage-managed-by-part-size` deviation (`storage_objects.managed_by` and `part_size`) was **removed in #469**: migration `kvox_object_ownership` copies every non-null `managed_by` into the new `kvox_object_ownership` side table and drops both columns, so `storage_objects` matches the platform table again. Its lock entry, its two allowlist entries and `LegacyObjectOwnershipStore` are gone. `kvox_object_ownership` is a KVox table keyed `(object_id, org_id)` (the composite key the platform requires for a link into an organization table), not a change to a platform table, so it is not an exception; see "Storage differences" below.
+The `kvox:storage-managed-by-part-size` deviation (`storage_objects.managed_by` and `part_size`) was **removed in #469**: migration `kvox_object_ownership` copies every non-null `managed_by` into the new `kvox_object_ownership` side table and drops both columns, so `storage_objects` matches the platform table again. Its lock entry, its allowlist entry and `LegacyObjectOwnershipStore` are gone. `kvox_object_ownership` is a KVox table keyed `(object_id, org_id)` (the composite key the platform requires for a link into an organization table), not a change to a platform table, so it is not an exception; see "Storage differences" below.
 
 The `kvox:allowlist-reminders` deviation (two columns on `allowed_emails`) was removed by #465: reminder state moved to the KVox-owned side table `kvox_allowlist_reminders`, which is a KVox table keyed by an allowlist row id with no foreign key, not a change to a platform table, so it is not an exception. Its row, its shim (`LegacyAllowlistReminderStore`), its lock entry and its two allowlist entries are gone.
 
@@ -68,7 +68,7 @@ Listed so a reader who finds the old name in history or in a spec can see where 
 | Profile-image adapter and the KVox `settings/profile-image/` routes | KVox's profile normalisation and avatar routes. | The platform's `ProfileImageModule.forRoot()` serves the routes; `SETTINGS_PROFILE_IMAGES` and `IDENTITY_PROFILE_IMAGES` are ordinary bindings to the platform's helpers, not shims. |
 | `onEventNoIo` conformance suite opted out | `object-processing.service.ts` downloaded inside an `@OnEvent` body. Marker `PLATFORM-ADOPTION-SHIM(2.2)`. | The listener and the two transcript upload listeners are deleted; `TranscriptUploadProcessor` is a platform `ObjectProcessor`. The suite runs again with its `mustScan` list and listener-file count recounted. |
 | `JobScope.run` not wrapping handler storage access | Handlers reached `storage_objects` through five services with their own clients. | Every handler read and write of `storage_objects` goes through `KvoxManagedObjects`, inside `JobScope.run`, and a tripwire spec fails on any other `prisma.storageObject` use. |
-| `kvox:storage-managed-by-part-size`, `drift-allowlist.json`, `scripts/db-drift-kvox.mjs`, `db:drift:kvox` | The two columns and the filter that hid their `DROP COLUMN` from the drift check. | The migration above. Plain `npm run db:drift` is clean. |
+| `kvox:storage-managed-by-part-size` and its `DROP COLUMN` allowlist entry | The two columns and the allowlist entry that excused their drift. | The migration above. The deviation, its lock entry and its allowlist entry are gone; the other 13 allowlist entries stay (see "Drift allowlist"). |
 
 ### Storage exceptions (issue #469)
 
@@ -124,4 +124,11 @@ Not shims, but each one limits what you may do until the named issue lands.
 
 ## Drift allowlist
 
-Removed in #469. `apps/api/prisma/drift-allowlist.json`, `apps/api/scripts/db-drift-kvox.mjs`, `apps/api/test/prisma/drift-allowlist.spec.ts` and the `db:drift:kvox` script are deleted: the two deviation columns they hid are gone, so plain `npm run db:drift` and `npm run db:check:database` pass. The GIN, GiST and HNSW indexes and generated `tsvector` columns that Prisma cannot declare are covered by `rawSqlIndexes` in `platform.lock`. Never hide a real difference on a platform table; fix the cause.
+`apps/api/prisma/drift-allowlist.json` filters `npm run db:drift:kvox` (`apps/api/scripts/db-drift-kvox.mjs`, which runs the platform's `db drift` and removes the listed statements). The platform's `runDrift` has no ignore list of its own, and Prisma cannot declare the objects below, so **plain `npm run db:drift` is not clean and fails by design; `db:drift:kvox` is the check to run.**
+
+It holds **13 entries, all `permanent`, and none is a deviation from the platform**:
+
+- 10 `DROP INDEX` statements Prisma prints for indexes that exist only in `migration.sql`: the HNSW (`vector_cosine_ops`) indexes, the GIN trigram indexes, the GiST indexes on `tstzrange` columns and the GIN indexes on generated `tsvector` columns.
+- 3 `ALTER COLUMN ... DROP DEFAULT` statements for the generated `search_vector` and `title_search_vector` columns.
+
+#469 removed the one deviation entry it carried (`storage_objects.managed_by` and `part_size`). The proper fix for the rest is an ignore list on the platform side, so that KVox needs no filter; until then the file stays. `apps/api/test/prisma/drift-allowlist.spec.ts` fails when an entry has no `removeIn`. Never add an entry to hide a real difference on a platform table. Fix the cause.
