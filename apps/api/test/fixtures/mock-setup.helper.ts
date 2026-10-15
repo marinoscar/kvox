@@ -164,6 +164,16 @@ export function setupMockUser(
 }
 
 /**
+ * Register an already-built user record (any shape the platform principal
+ * graph loads: `userRoles` and `memberships`) so `user.findUnique` answers it.
+ * Used by `test/helpers/membership-user.helper.ts` to model a user whose
+ * domain permissions come ONLY from the membership's org role (#465).
+ */
+export function registerMockUserRecord(user: { id: string }): void {
+  mockUserRegistry.set(user.id, user);
+}
+
+/**
  * Setup multiple mock users for list queries
  * Adds them to the user registry so they work with other mock user functions
  * This does NOT clear existing users - it merges with them by replacing users with matching emails
