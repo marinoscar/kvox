@@ -1,6 +1,6 @@
 # Adding a Notification
 
-Developer recipe for registering a new notification event (moved here from the root `CLAUDE.md`). Design and rationale live in [`docs/specs/browser-notifications.md`](../../../../docs/specs/browser-notifications.md) and [`docs/specs/notification-broadcasts.md`](../../../../docs/specs/notification-broadcasts.md); the rules for calling `notify()` are in [`AGENTS.md`](../../../../AGENTS.md).
+Developer recipe for registering a new notification event. Design and rationale live in [`docs/specs/browser-notifications.md`](../../../../docs/specs/browser-notifications.md) and [`docs/specs/notification-broadcasts.md`](../../../../docs/specs/notification-broadcasts.md); the rules for calling `notify()` are in [`AGENTS.md`](../../../../AGENTS.md).
 
 Three steps, and no migration — the same "one registry entry" promise the
 settings hub makes on its own axis (epic #109, wired end to end by #128).

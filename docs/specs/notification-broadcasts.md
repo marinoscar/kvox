@@ -7,7 +7,7 @@
 > `admin.broadcast.chunk` fan-out handlers, #324 the admin API, #325 the
 > admin page, composer and visual baselines). Database-level tests for the
 > claim compare-and-swap and the audience under concurrency are tracked
-> separately as #326 — see [Verification](#verification).
+> separately as #326 — see [Verification](#11-verification).
 >
 > Implemented in `apps/api/prisma/schema.prisma` (the `NotificationBroadcast`
 > model and `NotificationBroadcastStatus` enum),

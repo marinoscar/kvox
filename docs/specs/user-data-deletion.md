@@ -16,9 +16,8 @@
 > `apps/web/src/hooks/useUserData.ts` and `apps/web/src/services/userData.ts`
 > on the web side, plus a `Danger Zone` group in
 > `apps/web/src/config/userSettingsSections.tsx`. The wire contract is
-> `docs/API.md`'s `### User Data` section; CLAUDE.md's own `### User Data`
-> endpoint group and `### Deleting Your Own Data` subsection point here
-> rather than restating it. Neither document repeats what the implementation
+> `docs/API.md`'s `### User Data` section; `apps/api/AGENTS.md`'s
+> `user.data.purge` rule points here rather than restating it. Neither document repeats what the implementation
 > files' own header comments already argue in full — this document is the
 > one place that argument is assembled end to end.
 
@@ -251,7 +250,9 @@ note about to be deleted below go with them.
    time this step runs, which is what makes an eventual real delete
    possible at all (see the gap in §6).
 5. **Unmanaged storage objects** — last, because it is the only step whose
-   rows nothing else in this list can point at.
+   rows nothing else in this list can point at. They go through
+   `ObjectsService.delete`; a transcript is soft-deleted and handed to
+   `transcript.purge`, a note to `note.purge`.
 
 Skipping the clear-first step and instead catching the resulting FK
 violation was not merely a style preference to reject: `Restrict` means the
@@ -278,8 +279,8 @@ anything had gone wrong with a deletion the user is entitled to know the
 outcome of.
 
 This is the identical relationship `note.generate` has with
-`POST /api/notes/{id}/regenerate` (`docs/specs/notes.md`, CLAUDE.md's own
-notes on that module): the retry of an irreversible, user-visible action
+`POST /api/notes/{id}/regenerate` (`docs/specs/notes.md`, `apps/api/AGENTS.md`'s
+rule on that job): the retry of an irreversible, user-visible action
 belongs to the user, as an explicit second request with its own fresh
 one-attempt budget, never to the queue's own retry loop. `POST
 /api/user-data/deletions` is that button here — pressing it again after a
@@ -296,7 +297,7 @@ own timeout and its own row in the admin job list.
 
 ## 6. Server-only, permanently
 
-CLAUDE.md's job-queue rule 2 makes node-eligibility the default posture for
+AGENTS.md's job-queue rule 2 makes node-eligibility the default posture for
 a new job type, so `user.data.purge` opting out permanently owes an
 argument, and it has two, either one sufficient on its own:
 
@@ -356,7 +357,7 @@ choices actually available:
 ## Rejected alternatives
 
 **Deleting inline, inside the request.** The obvious shortcut for "delete my
-stuff" is to just do it in the `POST` handler. It violates CLAUDE.md's
+stuff" is to just do it in the `POST` handler. It violates AGENTS.md's
 "Every Long-Running Activity Is a Queue Job" rule directly — this fan-out
 spans several tables and object storage and comfortably outlives one HTTP
 request — and it would mean a slow deployment's confirmation click either
@@ -373,6 +374,11 @@ in the application. A second implementation living here — even one that
 starts out correct — is a second thing to keep correct, and it would diverge
 silently the first time either module grows a new artifact kind. The handler
 fans out to the existing per-item jobs instead and deletes no bytes itself.
+
+Reimplementing byte deletion here is the shortcut a "simplify this" pass would
+reach for, and it would orphan multi-gigabyte objects with nothing left in the
+database that knows they exist — the exact failure
+`transcript-purge.handler.ts`'s own header argues against.
 
 **Honouring the per-item 409 guards in bulk.** It reads as the more careful
 choice and produces a worse, unfixable result: "delete my notes, except the

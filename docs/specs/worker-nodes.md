@@ -219,7 +219,7 @@ authenticate to this deployment.
 The listing is `nodes:read` and **not** a bare `@Auth()`, which is what the
 equivalent PAT listing uses. Two reasons:
 
-* The Settings UI Pattern (CLAUDE.md rule 3) requires a settings card's
+* The Settings UI Pattern (AGENTS.md rule 3) requires a settings card's
   `permission` to be the exact string the controller enforces. A Workers
   surface is gated on `nodes:read`/`nodes:write` — `src/openapi/tags.ts`
   already publishes that claim. An ungated listing would make the hub and the
