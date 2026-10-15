@@ -138,7 +138,7 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
         description:
           'One organization\'s overrides of the organization-overridable system settings (platform ' +
           '`/api/org-settings`, mounted by #466). Gated on `org_settings:read` / `org_settings:write`. ' +
-          'KVox runs a single organization with no overrides, so the stored document stays empty.',
+          'This app runs a single organization with no overrides, so the stored document stays empty.',
       },
       {
         name: 'Email Settings',
