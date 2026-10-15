@@ -64,7 +64,7 @@ export default defineConfig({
       // at build time and does not exist on disk. This config deliberately does
       // not run that plugin — a unit test should not depend on a Workbox build
       // — so without this alias the import in
-      // `src/components/pwa/UpdatePrompt.tsx` fails to resolve and takes every
+      // `src/App.tsx` fails to resolve and takes every
       // suite that renders `<App />` with it. The double is a real hook; see
       // its file header for why it is an alias rather than a `vi.mock()`.
       'virtual:pwa-register/react': resolve(__dirname, './src/__tests__/mocks/pwa-register.ts'),

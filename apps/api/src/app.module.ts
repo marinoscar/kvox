@@ -7,16 +7,20 @@ import './kvox.manifest';
 // that builds `AppModule` without `test/setup.ts` still needs them registered.
 import './app-registrations/registrations';
 
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { platformHostModule } from './platform/platform-host.module';
-import { doctorModule } from './platform/doctor.config';
+import { doctorModule } from './doctor/doctor.config';
+import { DoctorChecksModule } from './doctor/doctor-checks.module';
+import { hostCoreModule } from './platform/host-core.config';
+import { aboutModule } from './platform/about/about.config';
+import { AboutContributorsModule } from './platform/about/about-contributors.module';
 import { identityModule } from './platform/identity/identity.config';
 import { settingsModule } from './platform/settings/settings.config';
 import {
@@ -27,7 +31,6 @@ import {
 import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-reminders.module';
 import { CommonModule } from './common/common.module';
 import { ProfileImageModule } from './settings/profile-image/profile-image.module';
-import { HealthModule } from './health/health.module';
 import { StorageModule } from './storage/storage.module';
 import { NodeCredentialModule } from './nodes/node-credential.module';
 import { NodesModule } from './nodes/nodes.module';
@@ -52,14 +55,8 @@ import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
-import { MaintenanceModule } from './common/maintenance/maintenance.module';
-import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
-import { AboutModule } from './about/about.module';
 
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { NotModifiedInterceptor } from './platform/http/not-modified.interceptor';
 import { UserSettingsChangeInterceptor } from './platform/settings/user-settings-change.interceptor';
 
 import configuration from './config/configuration';
@@ -115,7 +112,15 @@ import configuration from './config/configuration';
     // Uploaded profile pictures (#367): its own module because it needs the
     // storage provider and SettingsModule must not (see the module).
     ProfileImageModule,
-    HealthModule,
+    // The platform host core (#464, epic #462): the event bus, the app metrics,
+    // maintenance mode (`GET|PUT /api/admin/maintenance` and the application's
+    // ONLY global guard, `MaintenanceGuard`), `/api/health/*`, the `{ data }`
+    // envelope, the request log line, `HttpExceptionFilter` and request ids.
+    // Replaces this app's HealthModule, MaintenanceModule and its own
+    // APP_GUARD / APP_FILTER / APP_INTERCEPTOR providers and request-id
+    // middleware. Sits where HealthModule sat so the OpenAPI path order is
+    // stable. GLOBAL.
+    hostCoreModule,
     StorageModule,
     // Worker node credentials (#267, epic #254): the `nod_` token family the
     // node fleet authenticates with, and its `/api/node-credentials` admin
@@ -208,19 +213,16 @@ import configuration from './config/configuration';
     // holding the single active backup slot forever.
     DbBackupModule,
 
-    // Maintenance mode (#257, epic #254): the three-layer switch, its admin
-    // endpoints, and the global guard registered below. Imported here — rather
-    // than left to whichever module happened to need it — because the guard it
-    // provides runs in front of every route in this application, and that
-    // belongs in the module that owns the application.
-    MaintenanceModule,
+    // About (#124, epic #118; the platform's since #464): `GET /api/admin/about`,
+    // the deployment record the CLI wrote plus live runtime and database facts,
+    // with this app's "Transcription" and "Deployment" groups
+    // (`app-registrations/host.ts`). Gated on `system_settings:read`.
+    aboutModule,
+    AboutContributorsModule,
 
-    // About (#124, epic #118): `GET /api/admin/about` — the deployment record
-    // the CLI wrote, plus live runtime and database facts. Beside
-    // MaintenanceModule because it is gated on the same `system_settings:read`
-    // and is the other admin surface that must answer while the operator is
-    // diagnosing a broken deployment.
-    AboutModule,
+    // This app's Doctor checks (#464): `<slug>.db.extensions` and
+    // `<slug>.transcription.configured`, registered with the platform Doctor.
+    DoctorChecksModule,
 
     // Transcription (#23, epic #19): the provider framework, the AssemblyAI
     // provider, the admin settings surface and the non-admin capability probe.
@@ -332,51 +334,22 @@ import configuration from './config/configuration';
     OnboardingModule,
   ],
   providers: [
-    // ------------------------------------------------------------------------
-    // The application's ONLY global guard (#257, epic #254)
-    // ------------------------------------------------------------------------
-    //
-    // It runs on every Nest route, before any route-level `UseGuards`, and
-    // answers exactly one question: is this deployment deliberately out of
-    // service? Routes carrying `@AllowDuringMaintenance()` are exempt — health,
-    // sign-in, token refresh, device activation, the test-auth routes, and the
-    // maintenance endpoints themselves. Everything else is a 503 while a window
-    // is open.
-    //
-    // `useExisting`, not `useClass`: the instance is constructed in
-    // `MaintenanceModule`, which is where its `JwtService` lives (that module
-    // registers its own rather than importing `AuthModule` — see the module for
-    // why). `useClass` here would try to construct the guard in THIS context
-    // and would need the whole auth graph exported into it.
-    //
-    // NOT COVERED, and documented rather than discovered: `/api/docs` and
-    // `/api/openapi.json` are mounted directly on the Fastify instance by
-    // `openapi/register-docs-routes.ts`, outside Nest's router, so they never
-    // reach this guard and stay readable during a window. See
-    // docs/specs/maintenance-mode.md.
-    {
-      provide: APP_GUARD,
-      useExisting: MaintenanceGuard,
-    },
+    // The global guard, exception filter, logging and envelope interceptors and
+    // the request-id middleware are the platform host core's (`hostCoreModule`
+    // above, #464). `MaintenanceGuard` is the application's ONLY `APP_GUARD`: if
+    // another global guard is ever added, list it under the `host` conformance
+    // suite's `allowedAppGuards` with a reason.
     // Global validation pipe (Zod)
     {
       provide: APP_PIPE,
       useClass: ZodValidationPipe,
     },
-    // Global exception filter
-    {
-      provide: APP_FILTER,
-      useClass: HttpExceptionFilter,
-    },
-    // Global logging interceptor
+    // PLATFORM-ADOPTION-SHIM(#464): a 304 leaves with no payload, as it did under
+    // this app's own envelope interceptor. Registered here so it wraps the host
+    // core's `TransformInterceptor` (see the interceptor).
     {
       provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
-    // Global response transform interceptor
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TransformInterceptor,
+      useClass: NotModifiedInterceptor,
     },
     // PLATFORM-ADOPTION-SHIM(#466): `user-settings.namespace-changed` around
     // `PUT|PATCH /api/user-settings`, which the platform's service does not
@@ -387,10 +360,4 @@ import configuration from './config/configuration';
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(RequestIdMiddleware)
-      .forRoutes('*');
-  }
-}
+export class AppModule {}

@@ -36,7 +36,8 @@ Source of truth for every claim below:
   vhost rendering, `docker run certbot/certbot` issuance, `docker exec`
   validate/reload, and the ACME self-probe.
 - `apps/cli/src/deploy/deploy-info.ts` and
-  `apps/api/src/about/deploy-info.schema.ts` — the deployment record the CLI
+  `apps/api/src/platform/about/deploy-extras.ts` (with the platform About reader
+  in `@marinoscar/platform-api/host`) — the deployment record the CLI
   writes and the API reads; the full schema is
   [`docs/specs/vps-deploy.md` §19](../specs/vps-deploy.md#19-the-deploy-infoinfojson-schema).
 - `apps/cli/bootstrap-vps.sh` — the fresh-server bootstrap script.

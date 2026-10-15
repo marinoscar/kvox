@@ -8,8 +8,8 @@
 // answer. Every case here fails for a reason a direct call to the service could
 // not produce:
 //
-//   1. ⚠ THE ERROR BODY ON THE WIRE. `common/filters/http-exception.filter.ts`
-//      REBUILDS every error response from a fixed set of keys — it reads
+//   1. ⚠ THE ERROR BODY ON THE WIRE. The platform `HttpExceptionFilter`
+//      (`@marinoscar/platform-api/core`) REBUILDS every error response from a fixed set of keys — it reads
 //      `message` and `details` off the thrown payload, DERIVES `code` from the
 //      status code (discarding any the exception supplied), and adds
 //      `statusCode`, `timestamp` and `path`. A field placed at the TOP LEVEL of

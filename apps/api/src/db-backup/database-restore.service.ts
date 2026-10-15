@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import type { DatabaseBackupRun, Job, Prisma } from '@prisma/client';
 
 import { PERMISSIONS } from '../common/constants/roles.constants';
-import { MaintenanceModeService } from '../common/maintenance/maintenance-mode.service';
+import { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import type { RestoreCompletedEmailData } from '../email';
 import { JobsService } from '../jobs/jobs.service';

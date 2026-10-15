@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { MaintenanceModule } from '../common/maintenance/maintenance.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
@@ -155,17 +154,13 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 // endpoints, and a service that can replace the production database must not be
 // reachable over HTTP before the route that authorizes it has been reviewed.
 //
-// ⚠ `MaintenanceModule` IS THE ONE NEW IMPORT, and it is not optional. The swap
-// renames the live database out from under this process, so for those seconds
-// the PERSISTED maintenance flag — which lives inside that database — cannot be
-// read. `MaintenanceModeService`'s IN-MEMORY override layer exists for this one
-// caller and says so in its own header; without this import the swap would have
+// ⚠ `MaintenanceModeService` IS NOT OPTIONAL HERE, though it needs no import
+// (since #464 it comes from the platform host core, which is `@Global()`). The
+// swap renames the live database out from under this process, so for those
+// seconds the PERSISTED maintenance flag — which lives inside that database —
+// cannot be read. `MaintenanceModeService`'s IN-MEMORY override layer exists for
+// this one caller and says so in its own header; without it the swap would have
 // no way to hold traffic back at the only moment it must.
-//
-// It is a plain import rather than a re-export: the module is NOT `@Global()`
-// (unlike `PrismaModule`), it exports `MaintenanceModeService` explicitly, and
-// the dependency direction stays acyclic — maintenance depends on settings and
-// JWT, and on nothing here.
 //
 // `DATABASE_RESTORE_SEAM` joins the list of OPTIONAL tokens deliberately left
 // unbound, and it is the most important member of that list: it carries
@@ -266,7 +261,6 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 @Module({
   imports: [
     StorageProvidersModule,
-    MaintenanceModule,
     NotificationsModule,
     JobsModule,
   ],

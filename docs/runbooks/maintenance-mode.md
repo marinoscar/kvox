@@ -7,16 +7,19 @@ administrators out. It does not cover the design — see
 [`docs/specs/maintenance-mode.md`](../specs/maintenance-mode.md) for the three
 layers, why each exists, and what is deliberately left uncovered.
 
-Source of truth for every claim below:
+Source of truth for every claim below. Since #464 the maintenance code is the
+platform's, in `@marinoscar/platform-api/host`; the routes, the stored settings
+and the `MAINTENANCE_MODE` variable are unchanged:
 
-- `apps/api/src/common/maintenance/maintenance-mode.service.ts` — the three
+- The packaged maintenance service (`MaintenanceModeService`) — the three
   layers and how they are resolved.
-- `apps/api/src/common/maintenance/maintenance.guard.ts` — what a blocked
-  caller receives, and who is let through.
-- `apps/api/src/common/maintenance/maintenance.controller.ts` —
-  `GET`/`PUT /api/admin/maintenance`.
-- `apps/api/src/common/maintenance/allow-during-maintenance.decorator.ts` —
-  the exemption, and every controller that carries it.
+- The packaged `MaintenanceGuard` — what a blocked caller receives, and who is
+  let through. It is the application's only `APP_GUARD`.
+- The packaged maintenance controller — `GET`/`PUT /api/admin/maintenance`.
+- `apps/api/src/common/maintenance/allow-during-maintenance.decorator.ts` — a
+  one-line re-export of the exemption decorator from
+  `@marinoscar/platform-api/core`, and every controller that carries it.
+- `apps/api/src/platform/host-core.config.ts` — where the host core is mounted.
 - `infra/compose/.env.example` — `MAINTENANCE_MODE`, commented out by default.
 
 **Maintenance mode ships off.** A fresh deployment has

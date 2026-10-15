@@ -91,7 +91,7 @@ export function ApiDataResponse(
   // (`POST /admin/db-backup/runs/{id}/restore`'s `mode`, #286).
   //
   // ⚠ IT MUST GO THROUGH THIS DECORATOR RATHER THAN A BARE `@ApiResponse`.
-  // `openapi/data-envelope.ts` deliberately leaves composed schemas (`oneOf`,
+  // the platform's OpenAPI envelope pass (`@marinoscar/platform-api/host`) deliberately leaves composed schemas (`oneOf`,
   // `allOf`, `anyOf`) alone rather than guessing at them, so a hand-written
   // `oneOf` response would be published WITHOUT the `{ data: … }` envelope the
   // global interceptor actually adds. Building the envelope here — as every

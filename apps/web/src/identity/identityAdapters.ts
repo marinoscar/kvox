@@ -14,11 +14,10 @@
  *     MUI fallback. The packaged `IdentityDataTableProps` is declared as
  *     assignable to and from this app's `DataTableProps` (same filter-operator
  *     union), so no wrapper is needed; `tsc` is the proof.
- *   - `api`: the identity calls over this app's one `PlatformHttpClient`. Passed
- *     explicitly (rather than through a `PlatformHostProvider`) because the host
- *     provider arrives with the settings slice (#466); until then nothing else
- *     needs it. The adapters' `api` takes precedence over a host's, so mounting
- *     the host later changes nothing here.
+ *   - `api`: the identity calls over this app's one `PlatformHttpClient`
+ *     (`appPlatformApi`, `platform/platformHost.tsx`). Passed explicitly rather
+ *     than through the `PlatformHostProvider`; the adapters' `api` takes
+ *     precedence over a host's, and both are the same client.
  *
  * Inferred, not copied: the reference app's `platform/identityAdapters.ts` is
  * not reachable from this environment, so this file is derived from the
@@ -26,7 +25,6 @@
  */
 
 import { APP_NAME } from '@app/shared';
-import { createPlatformApiClient } from '@marinoscar/platform-web/core';
 import { createIdentityApi } from '@marinoscar/platform-web/identity/headless';
 import type {
   IdentityDataTableComponent,
@@ -34,17 +32,11 @@ import type {
 } from '@marinoscar/platform-web/identity/headless';
 import { DataTable } from '../components/datatable';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { api } from '../services/api';
-
-/**
- * The packaged `PlatformApiClient` over this app's HTTP client. Built ONCE, at
- * module scope: packaged hooks key on its identity.
- */
-export const platformApi = createPlatformApiClient(api);
+import { appPlatformApi } from '../platform/platformHost';
 
 export const appIdentityAdapters: IdentityWebAdapters = {
   appName: APP_NAME,
   Spinner: LoadingSpinner,
   DataTable: DataTable as IdentityDataTableComponent,
-  api: createIdentityApi(platformApi),
+  api: createIdentityApi(appPlatformApi),
 };

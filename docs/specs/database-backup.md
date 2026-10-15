@@ -819,10 +819,10 @@ reason `updateConfig` calls `nextFireAt` itself rather than routing through
 
 ### 13.5 Machine-readable error data lives under `details`, and nowhere else
 
-`common/filters/http-exception.filter.ts` rebuilds every error body from a
+The platform `HttpExceptionFilter` (`@marinoscar/platform-api/host`, since #464) rebuilds every error body from a
 **fixed key allowlist** — it reads `message` and `details` off the thrown
-payload, *derives* `code` from the status (discarding any the exception
-supplied), and adds `statusCode`, `timestamp` and `path` itself. A field
+payload, *derives* `code` from the status (unless the exception carries a
+registered error code), and adds `statusCode`, `timestamp` and `path` itself. A field
 placed at the top level of a thrown payload is therefore silently dropped and
 never reaches the client.
 
@@ -839,7 +839,7 @@ reaches the client — it would pass unchanged even if a field were moved to the
 top level and silently started being dropped. Assertions have to go through
 the real filter. `test/db-backup/db-backup-admin.integration.spec.ts` drives
 every route through the real Nest router and the real
-`HttpExceptionFilter` rather than calling the service directly, for exactly
+platform `HttpExceptionFilter` rather than calling the service directly, for exactly
 this reason.
 
 ### 13.6 `sizeBytes`/`bytesWritten` go through one `toRunDto`, always
@@ -1078,7 +1078,7 @@ identical argument at the engine layer.
 
 **A top-level `activeRunId` on the `409`.** The obvious way to hand the
 caller the id of the run already in flight, and silently stripped by
-`HttpExceptionFilter`, which rebuilds every error body from `message` and
+the platform `HttpExceptionFilter`, which rebuilds every error body from `message` and
 `details` only. A caller would see "a backup is already running" with no way
 to find out which. See §13.5.
 

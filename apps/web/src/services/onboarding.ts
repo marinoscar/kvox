@@ -312,7 +312,7 @@ export async function getOnboardingState(): Promise<OnboardingState> {
  * ⚠ CALL THIS ONLY BEHIND `hasPermission('system_settings:read')`. For anyone
  * else it is a guaranteed 403, and the session in memory already knows the
  * answer before the request would be made — the same reasoning
- * `MaintenanceBanner` gives for not firing `GET /api/admin/maintenance` on
+ * the packaged `MaintenanceBanner` gives for not firing `GET /api/admin/maintenance` on
  * behalf of every viewer in the shell. The gate lives in
  * `contexts/OnboardingContext.tsx`; there is nothing to check here, because a
  * function that checked would have to be given the permission set and would

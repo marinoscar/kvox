@@ -471,7 +471,7 @@ describe('the Operations group (#266)', () => {
     ]);
   });
 
-  it('registers all four of the epic’s cards at once, and epic #319 appends a fifth', () => {
+  it('registers all four of the epic’s cards at once, epic #319 appends a fifth and #464 the Doctor', () => {
     // Declared together on purpose: the hub is under visual-regression testing
     // at `maxDiffPixels: 4`, so every change to the card grid needs baselines
     // regenerated in a pinned container. Four cards across four issues would
@@ -489,6 +489,9 @@ describe('the Operations group (#266)', () => {
       'Worker Nodes',
       'Database Backup',
       'Broadcasts',
+      // #464, epic #462 — the platform's Doctor, APPENDED for the same reason
+      // Broadcasts was: an insertion would move five cards a reader has learnt.
+      'Doctor',
     ]);
   });
 
@@ -656,8 +659,12 @@ describe('the Operations group (#266)', () => {
         ['system_settings:read', 'system_settings:write', 'users:read'].includes(permission),
       );
 
-      expect(result.map((section) => section.label)).toEqual(['General', 'Access']);
-      expect(titlesOf(result)).toEqual([
+      // #464, epic #462: Operations is present too, but only for the Doctor card,
+      // which carries `system_settings:read`; every other Operations card is
+      // gated on a permission this admin does not hold.
+      expect(result.map((section) => section.label)).toEqual(['General', 'Access', 'Operations']);
+      expect(result.find((section) => section.label === 'Operations')?.cards.map((c) => c.title)).toEqual(['Doctor']);
+      expect(titlesOf(result.filter((section) => section.label !== 'Operations'))).toEqual([
         // #278, epic #271 — FIRST in General on purpose: on a fresh deployment
         // this is the card that says which two settings the product cannot run
         // without, and a hub is the wrong shape for someone on minute one. It
@@ -1050,7 +1057,13 @@ describe('the About card (#126)', () => {
     resolve(API_SRC, '../prisma/catalog/permissions.json'),
     'utf8',
   );
-  const aboutController = readFileSync(resolve(API_SRC, 'about/about.controller.ts'), 'utf8');
+  // Issue #464: the About controller is the platform's
+  // (`@marinoscar/platform-api/host`), so the string it enforces is read off the
+  // installed package rather than off `apps/api/src/about/` (deleted).
+  const aboutController = readFileSync(
+    resolve(API_SRC, '../../../node_modules/@marinoscar/platform-api/dist/host/about/about.controller.js'),
+    'utf8',
+  );
 
   it('is the last General card, directly after Maintenance', () => {
     // Appended, not inserted: the hub, the rail and the drill-down list all
@@ -1077,7 +1090,7 @@ describe('the About card (#126)', () => {
     expect(about?.permission).toBe('system_settings:read');
     expect(permissionCatalog).toContain('"system_settings:read"');
     // The mechanical half of rule 3: the controller really does gate on it.
-    expect(aboutController).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
+    expect(aboutController).toContain('SYSTEM_SETTINGS_READ');
     // And the permission the card would have invented does not exist anywhere
     // the API could seed it.
     expect(permissionCatalog).not.toMatch(/about:read/);
@@ -1101,5 +1114,57 @@ describe('the About card (#126)', () => {
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/about'),
     ).toBe('About');
+  });
+});
+
+/**
+ * The Doctor card (#464, epic #462). The card is the PACKAGE'S entry
+ * (`doctorSettingsPage.card`), appended to Operations; what this app owns is
+ * that it is registered, routed, and gated on the string the API enforces.
+ */
+describe('the Doctor card (#464)', () => {
+  const operations = ADMIN_SECTIONS.find((section) => section.label === 'Operations');
+  const doctor = operations?.cards.find((card) => card.title === 'Doctor');
+
+  // The Doctor controller is the platform's (`@marinoscar/platform-api/doctor`),
+  // so the string it enforces is read off the installed package.
+  const doctorModule = readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../node_modules/@marinoscar/platform-api/dist/doctor/doctor.module.js',
+    ),
+    'utf8',
+  );
+
+  it('is the last Operations card, routed to /admin/settings/doctor and not inert', () => {
+    expect(operations?.cards.at(-1)?.title).toBe('Doctor');
+    expect(doctor?.path).toBe('/admin/settings/doctor');
+    expect(doctor?.disabled).toBeUndefined();
+    expect(doctor?.Icon).toBeDefined();
+  });
+
+  it('binds to system_settings:read, the permission the platform controller defaults to', () => {
+    expect(doctor?.permission).toBe('system_settings:read');
+    expect(doctorModule).toContain("exports.DEFAULT_DOCTOR_PERMISSION = 'system_settings:read'");
+  });
+
+  it('is visible to a system_settings:read holder and to nobody without it', () => {
+    const settingsOnly = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'system_settings:read',
+    );
+    expect(titlesOf(settingsOnly)).toContain('Doctor');
+
+    const usersOnly = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'users:read',
+    );
+    expect(titlesOf(usersOnly)).not.toContain('Doctor');
+  });
+
+  it('titles the compact AppBar "Doctor" at its route', () => {
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/doctor'),
+    ).toBe('Doctor');
   });
 });

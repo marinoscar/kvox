@@ -84,7 +84,7 @@ import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeCont
 // Issue #466, epic #462. The packaged Profile and Appearance pages and the
 // headless settings hooks read the platform host; the hubs read the registered
 // feature keys. Both are the app's own wiring, mounted exactly as `App.tsx` does.
-import { PlatformHost } from '../src/platform/PlatformHost';
+import { AppPlatformHostProvider } from '../src/platform/platformHost';
 import '../src/config/settingsFeatures';
 import { Layout } from '../src/components/common/Layout';
 // Issue #30, epic #19. The New-transcript screen reads the app-wide upload
@@ -540,9 +540,9 @@ createRoot(document.getElementById('root')!).render(
             identity client from the adapters, exactly as `App.tsx` provides. */}
         <IdentityWebAdaptersProvider adapters={appIdentityAdapters}>
           <ThemeContextProvider>
-            <PlatformHost>
+            <AppPlatformHostProvider>
               <Inner />
-            </PlatformHost>
+            </AppPlatformHostProvider>
           </ThemeContextProvider>
         </IdentityWebAdaptersProvider>
       </AuthContext.Provider>

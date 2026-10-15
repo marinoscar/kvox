@@ -103,7 +103,7 @@
 // ⚠ MACHINE-READABLE ERROR DATA GOES UNDER `details`, AND NOWHERE ELSE
 // -----------------------------------------------------------------------------
 //
-// `common/filters/http-exception.filter.ts` REBUILDS every error body from a
+// The platform's `HttpExceptionFilter` REBUILDS every error body from a
 // fixed set of keys: it reads `message` and `details` off the thrown payload,
 // DERIVES `code` from the status (discarding any the exception supplied), and
 // adds `statusCode`, `timestamp` and `path`. A field added at the TOP LEVEL of

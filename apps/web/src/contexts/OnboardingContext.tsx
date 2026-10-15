@@ -33,8 +33,8 @@
  * call and never an early return that skips a hook — the number and order of
  * hooks here does not depend on the permission set, so a user whose session
  * resolves after the first render cannot change this component's hook order.
- * `MaintenanceBanner` makes the same call for the same reason, through
- * `useMaintenance({ enabled })`.
+ * the packaged `MaintenanceBanner` (`@marinoscar/platform-web/host/ui`) makes
+ * the same call for the same reason, through its `useMaintenance({ enabled })`.
  *
  * =============================================================================
  * ⚠ NO POLLING. NO INTERVAL. NO TIMER OF ANY KIND. EVER.

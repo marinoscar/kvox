@@ -36,8 +36,9 @@ Source of truth for every claim below:
   gets rebuilt from `POSTGRES_*`, and the encoding inconsistency between them.
 - `apps/api/prisma/seed.ts` — the idempotent seed the update pipeline
   deliberately re-runs by default.
-- `apps/api/src/health/health.controller.ts` — `/api/health/ready`, and why
-  it is not evidence a migration ran.
+- The packaged health controller (`@marinoscar/platform-api/host`, mounted by
+  `apps/api/src/platform/host-core.config.ts`; KVox's own copy was deleted by
+  #464) — `/api/health/ready`, and why it is not evidence a migration ran.
 - `apps/api/scripts/smoke-test.mjs` — the closest existing thing to a
   deploy-verification script, and the model for `health.ts`'s external check.
 - `.github/workflows/deploy.yml` — the GHCR build pipeline whose deploy jobs
@@ -1118,7 +1119,8 @@ every place a decision governs.
    read, the same standing as every other `system_settings:read` surface.
    *Rules out* a dedicated `about:read` permission that every existing
    deployment's seed would need re-running to grant before anyone could open
-   the card. (`apps/api/src/about/about.controller.ts`)
+   the card. (the packaged About controller, `AboutModule.forRoot` in
+   `apps/api/src/platform/about/about.config.ts`)
 9. **A server-derived value (port, worker slots, memory limit) is always
    shown with its reason, and is always overridable.** Since issue #257 the
    four keys carrying `autoAccept` are *applied* rather than asked — they are
@@ -1153,8 +1155,9 @@ every place a decision governs.
 
 One document, two independent implementations that must agree on its shape:
 the CLI writes it (`apps/cli/src/deploy/deploy-info.ts`) and the API reads it
-back (`apps/api/src/about/deploy-info.schema.ts`, consumed by
-`apps/api/src/about/about.service.ts`). This section is the one place both
+back (the platform's About reader in `@marinoscar/platform-api/host`, plus
+`apps/api/src/platform/about/deploy-extras.ts` for the fields it drops; the
+app's own `about/deploy-info.schema.ts` was deleted by #464). This section is the one place both
 are described together, so neither drifts from the other without a reader of
 this section noticing.
 
@@ -1190,8 +1193,8 @@ optional on both sides breaks neither direction by construction. The version
 is therefore reserved for a change that alters what an existing field
 **means**, exactly as `DEPLOY_STATE_VERSION` is (§22.1).
 
-**Shape**, as the CLI's `DeployInfo` interface and the API's
-`deployInfoSchema` both describe it:
+**Shape**, as the CLI's `DeployInfo` interface and the API's reader (the
+platform's, plus `apps/api/src/platform/about/deploy-extras.ts` since #464) both describe it:
 
 ```ts
 interface DeployInfo {
@@ -1283,7 +1286,20 @@ API container's unprivileged user has to read through it, and nothing in it
 is secret), then a `wx`-flagged temp file at `0644` and `renameSync` over the
 target, inside the same directory the mount points at.
 
-**Read path.** `AboutService.readDeployInfo` (`apps/api/src/about/about.service.ts`)
+**Read path.** Since #464 the platform About service (`AboutModule.forRoot`,
+`DEPLOY_INFO_PATH`) reads the file, and the response shape described in the rest
+of this paragraph is the pre-#464 one, kept as the design record. The platform
+response differs: `runtime.apiVersion`, `uptimeSeconds`, `serverTimeUtc`,
+`database.serverVersion`, `migrations` and `updateAvailable` are gone, and
+`run.outcome` is always null for this CLI's files. The fields the platform
+reader drops (`app.repoUrl`, `remote.sha`, the boolean `run.completed`,
+`run.attemptedAt`, `adoptedAt`, `host.cpuModel|diskBytes|nodeVersion`) are
+recovered into a "Deployment" About group by
+`apps/api/src/platform/about/deploy-extras.ts`. `kvox deploy about` cannot read
+the new response yet; that is a known gap owned by #482
+([`platform-adoption/local-exceptions.md`](../platform-adoption/local-exceptions.md)).
+
+The pre-#464 reader (`AboutService.readDeployInfo`)
 reads the file on every `GET /api/admin/about` request, parses it against
 `deployInfoSchema`, and always answers **200**: no file is
 `deployInfoStatus: "absent"`; unreadable (permissions, a torn write outside
@@ -1308,9 +1324,11 @@ defense against a future CLI, or a hand-edited file, putting something
 secret-shaped into a document this design otherwise promises is safe to show
 every admin.
 
-**Test fixture.** `apps/api/src/about/__fixtures__/deploy-info.json` is the
-shared vector both sides are tested against, so the writer and the reader
-cannot drift without one of the two suites noticing.
+**Test fixture.** The shared vector both sides were tested against,
+`apps/api/src/about/__fixtures__/deploy-info.json`, was deleted with the app's
+About module (#464). The API side is now tested through
+`apps/api/src/platform/about/deploy-extras.ts` and the platform's About suite,
+and the CLI side by its own deploy-info tests.
 
 ## 20. Creating the database, on request only (issue #238)
 

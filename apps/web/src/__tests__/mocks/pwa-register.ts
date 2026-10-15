@@ -8,8 +8,8 @@ import type { Dispatch, SetStateAction } from 'react';
  * THAT MODULE DOES NOT EXIST ON DISK. It is synthesised by `VitePWA()` during
  * a real build, and `vitest.config.ts` does not (and should not) run that
  * plugin — doing so would make every unit test depend on a Workbox build. So
- * without a stand-in, importing `components/pwa/UpdatePrompt.tsx` fails to
- * resolve, which takes `App.test.tsx` down with it.
+ * without a stand-in, importing `App.tsx` (which hands `useRegisterSW` to the packaged
+ * `UpdatePrompt`) fails to resolve, which takes `App.test.tsx` down with it.
  *
  * This file is wired in as a `resolve.alias` in `vitest.config.ts` rather than
  * through `vi.mock()` in each suite, for two reasons:

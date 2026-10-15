@@ -67,7 +67,7 @@ surfaces that work the same way, added since that table was written:
   variable isn't set, so it follows a renamed product automatically in every
   span and every log line.
 - The **OpenAPI document's repository link** — `apps/api/src/openapi/document.ts`
-  and `description.ts` both import `REPO_URL` from `@app/shared` rather than
+  imports `REPO_URL` from `@app/shared` rather than
   writing out a GitHub URL, so the published API reference always points at
   the fork's own repository.
 
