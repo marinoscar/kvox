@@ -40,8 +40,9 @@
 // =============================================================================
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import type { Job, Prisma } from '@prisma/client';
+import type { Job } from '@prisma/client';
 
+import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
@@ -185,7 +186,7 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
     // have waited while a rendition finished, and pointing the provider at a
     // decision made minutes ago is a decision made against stale state.
     // -------------------------------------------------------------------------
-    const [source, rendition] = await this.jobScope.run(job, (tx: Prisma.TransactionClient) =>
+    const [source, rendition] = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
       Promise.all([
         tx.storageObject.findUnique({ where: { id: transcript.sourceObjectId } }),
         transcript.playbackObjectId

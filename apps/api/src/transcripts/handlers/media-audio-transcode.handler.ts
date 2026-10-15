@@ -61,7 +61,7 @@
 // =============================================================================
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import type { Job, Prisma, Transcript } from '@prisma/client';
+import type { Job, Transcript } from '@prisma/client';
 import { createReadStream } from 'node:fs';
 import { rm, stat } from 'node:fs/promises';
 
@@ -69,6 +69,7 @@ import {
   type MediaAudioTranscodeResult,
   mediaAudioTranscodeResultSchema,
 } from '../contracts/media-audio-transcode.contract';
+import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   STORAGE_PROVIDER,
@@ -245,7 +246,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
     }
 
     const subjectId = job.subjectId;
-    const object = await this.jobScope.run(job, (tx: Prisma.TransactionClient) =>
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
       tx.storageObject.findUnique({ where: { id: subjectId } }),
     );
 

@@ -6,31 +6,26 @@
 > `SKIP LOCKED` claim, #261 the terminal state machine, #262 the in-process
 > worker pool and worker modes, #263 queue hygiene, #264 the admin API,
 > #265 insights and ETA).
-> Implemented in
-> `apps/api/prisma/schema.prisma` (the `Job` and `JobStatsRollup` models),
-> `apps/api/src/jobs/job-keys.ts`,
-> `apps/api/src/jobs/job-handler.interface.ts`,
-> `apps/api/src/jobs/job-handler.registry.ts`,
-> `apps/api/src/jobs/job-type-labels.ts`,
-> `apps/api/src/jobs/jobs.service.ts`,
-> `apps/api/src/jobs/job-claim.service.ts`,
-> `apps/api/src/jobs/job-terminal.service.ts`,
-> `apps/api/src/jobs/backoff.util.ts`,
-> `apps/api/src/jobs/rate-limit.error.ts`,
-> `apps/api/src/jobs/provider-throttle.service.ts`,
-> `apps/api/src/jobs/job-clock.ts`,
-> `apps/api/src/jobs/job.worker.ts`,
-> `apps/api/src/jobs/events/job-settled.event.ts`,
-> `apps/api/src/jobs/job-stuck.service.ts`,
-> `apps/api/src/jobs/job-temp.ts`,
-> `apps/api/src/jobs/tasks/`,
-> `apps/api/src/jobs/job-admin.service.ts`,
-> `apps/api/src/jobs/job-insights.service.ts`,
-> `apps/api/src/jobs/job-counts.util.ts`,
-> `apps/api/src/jobs/job-admin.controller.ts`,
-> `apps/api/src/jobs/dto/`,
-> `apps/api/src/jobs/jobs.module.ts` and
-> `apps/api/src/jobs/handlers/`.
+> Implementation: **`@marinoscar/platform-api/jobs`** (the queue) and
+> **`@marinoscar/platform-api/nodes`** (the worker-node fleet; see
+> [worker-nodes.md](worker-nodes.md)). KVox no longer holds the queue code:
+> issue #468 (epic #467) deleted `apps/api/src/jobs` and `apps/api/src/nodes`
+> and mounted the packaged slices, composed in
+> `apps/api/src/platform/jobs/jobs.config.ts` with the host ports in
+> `apps/api/src/platform/jobs/jobs-host.module.ts`. The `Job` and
+> `JobStatsRollup` models come from the platform's database fragments. KVox
+> keeps its own handlers, its job type strings and this document's rules.
+>
+> **How to read the file paths below.** The sections were written when the
+> code lived in this repository. A path written `platform-api/jobs/...` or
+> `platform-api/nodes/...` (and the older bare `jobs/...` and `platform-api/jobs/...`
+> forms) names a file in the package `@marinoscar/platform-api`: the compiled
+> output is under `node_modules/@marinoscar/platform-api/dist/jobs/`, and each
+> exported symbol's TSDoc is the contract. The spec files in the verification
+> tables ran in this repository before #468 and are now the package's own
+> suites; KVox's side is the conformance run in `apps/api/test/conformance.spec.ts`
+> (`cron-enqueue-only`, `on-event-no-io`, jobs server-only) and the type
+> snapshot in `apps/api/test/jobs/job-type-snapshot.spec.ts`.
 >
 > **On what is merged today.** Sections 1–3 describe what #259 shipped: the
 > contract, the registry, the labels map, the example handler and the module.
@@ -66,7 +61,7 @@
 > moving a row through the table — enqueue, claim, settle — and no timer;
 > #262 adds the timer. The lifecycle constraint §1.3 places on the worker is
 > now satisfied rather than merely required, and it is verified by
-> `src/jobs/job.worker.bootstrap.spec.ts`.
+> `platform-api/jobs/job.worker.bootstrap.spec.ts`.
 >
 > **Epic #345 extends three of the phases above rather than adding new ones.**
 > §5.10 (per-type execution profiles, #346), §6.9–6.10 (in-process lease
@@ -114,7 +109,7 @@ type appears in the admin dashboard on its own.
 
 ## 1. The handler contract
 
-`apps/api/src/jobs/job-handler.interface.ts` is the entire public surface of
+`platform-api/jobs/job-handler.interface.ts` is the entire public surface of
 the queue for a feature author:
 
 ```ts
@@ -179,7 +174,7 @@ strictly worse.
 
 ### 1.2 Explicit self-registration, not decorator discovery
 
-`apps/api/src/jobs/job-handler.registry.ts` holds a `Map<string, JobHandler>`
+`platform-api/jobs/job-handler.registry.ts` holds a `Map<string, JobHandler>`
 and offers four methods: `register`, `get`, `types`, `serverOnlyTypes`. A
 handler puts itself in it, from its own `OnModuleInit`:
 
@@ -318,7 +313,7 @@ narrow it. It is a trust boundary, not a convenience.
 
 ## 3. Display labels, and why they are not on the interface
 
-`apps/api/src/jobs/job-type-labels.ts` maps a machine `type` to a human
+`platform-api/jobs/job-type-labels.ts` maps a machine `type` to a human
 phrase for the admin dashboard, with `jobTypeLabel(type)` falling back to the
 raw type string.
 
@@ -339,8 +334,8 @@ render that historical row.
 
 ## 4. Enqueue, dedup, and the atomic claim
 
-`apps/api/src/jobs/jobs.service.ts` writes rows into `jobs`;
-`apps/api/src/jobs/job-claim.service.ts` takes them out. They are two
+`platform-api/jobs/jobs.service.ts` writes rows into `jobs`;
+`platform-api/jobs/job-claim.service.ts` takes them out. They are two
 services rather than one because they have different callers — every feature
 enqueues, only a worker or the node control plane claims — and different
 failure modes.
@@ -373,7 +368,7 @@ on `dedup_key` filtered to `status IN ('pending','running') AND dedup_key IS
 NOT NULL`, hand-written in
 `prisma/migrations/20260906120000_add_jobs/migration.sql` because Prisma's
 `@@index` DSL cannot express a `WHERE` clause. The key's *format* is defined
-once, in `buildDedupKey()` (`src/jobs/job-keys.ts`); the index has no opinion
+once, in `buildDedupKey()` (`platform-api/jobs/job-keys.ts`); the index has no opinion
 on how the string was built, only that it is unique among still-active jobs.
 
 **The caller cannot tell which happened, and that is the point.** `enqueue`
@@ -564,7 +559,7 @@ compile until the map covers it, and renaming one fails to compile on the
 stale key. Written out by hand instead, the same rename would produce a row
 missing a field — silently `undefined` at every call site, surfacing as a
 null-ish value somewhere downstream rather than at the line that caused it.
-`test/jobs/job-model-fields.spec.ts` locks the same pairing down from the test
+`platform-api/jobs/job-model-fields.spec.ts` locks the same pairing down from the test
 side, comparing the map's key set against the generated
 `Prisma.JobScalarFieldEnum`.
 
@@ -601,7 +596,7 @@ gets. See the Verification table below for the mapping from claim to test.
 ## 5. The terminal state machine
 
 Once a job stops running, **exactly one component decides what happens to the
-row**: `apps/api/src/jobs/job-terminal.service.ts`. It has two entry points —
+row**: `platform-api/jobs/job-terminal.service.ts`. It has two entry points —
 `completeSucceeded(job)` and `completeFailed(job, error, opts?)` — and both
 executors funnel through them: the in-process worker (#262) after its handler
 returns or throws, and the node control plane (#268) when a remote node posts
@@ -992,7 +987,7 @@ the backup-specific case each number answers.
 ## 6. The in-process worker and worker modes
 
 This is the first thing in the epic that **runs on its own**. Everything
-before it moves a row when something calls it; `apps/api/src/jobs/job.worker.ts`
+before it moves a row when something calls it; `platform-api/jobs/job.worker.ts`
 is the thing that calls.
 
 It writes **nothing** to the `jobs` table itself. Every row it touches goes in
@@ -1041,7 +1036,7 @@ extracted from, and it is why the constraint is written down in three places —
 `job-handler.registry.ts` (the file that creates the hazard), `job.worker.ts`
 (the file that must respect it), and here.
 
-`src/jobs/job.worker.bootstrap.spec.ts` proves it behaviourally rather than by
+`platform-api/jobs/job.worker.bootstrap.spec.ts` proves it behaviourally rather than by
 asserting the hook is spelled right: a handler that stalls 40ms inside its own
 `onModuleInit` before registering is nonetheless present in the **first**
 claim's `eligibleTypes`.
@@ -1141,7 +1136,7 @@ That leaves one trap, and it is the reason `withTimeout` is not a bare
 
 So the reactions are attached unconditionally, before the race can be decided,
 and stay attached forever; settling an already-settled promise is a harmless
-no-op. `src/jobs/job.worker.spec.ts` asserts this directly by listening for
+no-op. `platform-api/jobs/job.worker.spec.ts` asserts this directly by listening for
 `unhandledRejection` and rejecting the abandoned work after the timeout has
 already failed the job.
 
@@ -1634,8 +1629,9 @@ produce a configuration that contradicts itself, which is the same argument
 
 ### 7.10 All long-running work is a job — the rule, the exemptions, the limit
 
-> #353, epic #345. `apps/api/test/jobs/cron-enqueue-only.spec.ts` is the
-> executable form of this section.
+> #353, epic #345. The `cron-enqueue-only` suite of the platform's conformance
+> harness (`runPlatformConformance()`, run by `apps/api/test/conformance.spec.ts`)
+> is the executable form of this section.
 
 §7.5 makes the argument for one job type. Epic #345 decision 1 generalises it:
 **every long-running activity in this application is a queue job.** #351 and
@@ -1664,13 +1660,13 @@ the dispatcher already contracts never to reject, and its failures are recorded
 as `notification_deliveries` rows rather than lost.
 
 **The exemptions. Three, and adding a fourth means editing this list and the
-array in `cron-enqueue-only.spec.ts` in a pull request that argues for it.**
+platform's `cron-enqueue-only` suite in a pull request that argues for it.**
 
 | Cron | Why it must not be a job |
 |---|---|
-| `jobs/tasks/job-stuck-reset.task.ts` | The lease reaper is **what recovers abandoned jobs**. Recovery that depends on the thing it recovers is not recovery: a queue wedged badly enough to strand a reaper job is exactly the queue that needs reaping. |
-| `jobs/tasks/temp-file-janitor.task.ts` | It cleans up after a SIGKILLed worker and sweeps **this process's local disk** (§7.8). A node — or another replica — claiming that job would sweep the wrong filesystem and leave the full one untouched. |
-| `nodes/tasks/node-secret-sweep.task.ts` | It destroys the short-lived PostgreSQL roles brokered to worker nodes (#349), and its own header lists three cases the settle-event path structurally cannot cover — the first being "a job settled by the reaper". Making credential revocation depend on the queue means a wedged queue leaks live database credentials for as long as it stays wedged. The reaper's argument, applied to a security control. |
+| `platform-api/jobs/tasks/job-stuck-reset.task.ts` | The lease reaper is **what recovers abandoned jobs**. Recovery that depends on the thing it recovers is not recovery: a queue wedged badly enough to strand a reaper job is exactly the queue that needs reaping. |
+| `platform-api/jobs/tasks/temp-file-janitor.task.ts` | It cleans up after a SIGKILLed worker and sweeps **this process's local disk** (§7.8). A node — or another replica — claiming that job would sweep the wrong filesystem and leave the full one untouched. |
+| `platform-api/nodes/tasks/node-secret-sweep.task.ts` | It destroys the short-lived PostgreSQL roles brokered to worker nodes (#349), and its own header lists three cases the settle-event path structurally cannot cover — the first being "a job settled by the reaper". Making credential revocation depend on the queue means a wedged queue leaks live database credentials for as long as it stays wedged. The reaper's argument, applied to a security control. |
 
 **The honest cost, stated once.** Every converted type is server-only by
 derivation (§2), so a `JOBS_WORKER_MODE=system` process still runs all of them
@@ -1692,15 +1688,15 @@ the boundary every tick, which is the same property that recovers a window
 missed by a process that was down.
 
 **The limit of the test, stated rather than hidden.**
-`cron-enqueue-only.spec.ts` reads the *body* of every `@Cron` method and
+The `cron-enqueue-only` suite reads the *body* of every `@Cron` method and
 requires it to queue something and to contain none of the markers of doing work
 itself. It does not follow calls into helper methods — a cron calling
 `this.fireDueBackup(...)` is trusted, and that method's own spec is what pins
 that it only enqueues. It is a tripwire on the shape of a cron body, not a proof
 about the whole call graph.
 
-**The reference cron and the shared helper.** `jobs/tasks/job-history-purge.task.ts`
-is the reference `@Cron`, and `jobs/housekeeping.enqueue.ts` is the shared
+**The reference cron and the shared helper.** `platform-api/jobs/tasks/job-history-purge.task.ts`
+is the reference `@Cron`, and `platform-api/jobs/housekeeping.enqueue.ts` is the shared
 helper several of the converted crons enqueue through. A detached
 `void this.doSomething()`, an `@OnEvent` body that downloads or spawns, and a
 `@Cron` body that does work inline are all violations of the rule above.
@@ -1717,7 +1713,7 @@ The other three, as stated in the repository's top-level rules
    the canonical example: it renames the live database and stays server-only
    permanently). Eligibility stays **derived** from those two members; there
    is no `nodeEligible` flag and there never will be
-   (`apps/api/src/jobs/job-handler.interface.ts`). A deployment declines the
+   (`platform-api/jobs/job-handler.interface.ts`). A deployment declines the
    offload with a system setting consulted at claim time
    (`NodeOffloadService.offeredTypes()` and a handler's own
    `nodeOffloadEnabled()`) — never by editing the handler.
@@ -1729,7 +1725,7 @@ The other three, as stated in the repository's top-level rules
    when the job settles or by the sweep above. The server stores the
    credential's **handle** in `job_node_secrets`, never its material — that
    table has no column able to hold one. A handler declares the need by
-   carrying a `nodeSecretBroker` (`apps/api/src/jobs/job-secret-broker.ts`);
+   carrying a `nodeSecretBroker` (`platform-api/jobs/job-secret-broker.ts`);
    presence is the declaration, exactly as `nodeResultSchema` +
    `persistNodeResult` declare eligibility. The node's own `nod_` identity
    token is the single exception to "never persisted" — it is an identity a
@@ -1738,7 +1734,7 @@ The other three, as stated in the repository's top-level rules
 4. **A job type declares its execution profile, or takes the global default.**
    `JobHandler.profile` is optional and, when present, carries exactly
    `{ maxRuntimeMs, maxAttempts }` — **and only those two numbers**
-   (`apps/api/src/jobs/job-execution-profile.ts`). The lease, the renewal
+   (`platform-api/jobs/job-execution-profile.ts`). The lease, the renewal
    interval, and the reaper's patience for an implausible lease are all
    *derived* from `maxRuntimeMs`, so a lease that contradicts a declared
    timeout is unrepresentable rather than merely avoided. Do not add
@@ -1748,8 +1744,8 @@ The other three, as stated in the repository's top-level rules
 
 ## 8. The admin surface
 
-> #264. `apps/api/src/jobs/job-admin.controller.ts`,
-> `apps/api/src/jobs/job-admin.service.ts`, `apps/api/src/jobs/dto/`.
+> #264. `platform-api/jobs/job-admin.controller.ts`,
+> `platform-api/jobs/job-admin.service.ts`, `platform-api/jobs/dto/`.
 
 Six routes under `/api/admin/jobs`, and they are the first HTTP surface this
 module has ever had — everything through §7 is machinery with no controller.
@@ -1997,7 +1993,7 @@ Transposing them has no boot-time error and no log line. `POST
 /admin/jobs/reset-stuck` would simply be captured as `:id`, and the operator
 pressing "reset stuck jobs" would get a 400 about a malformed UUID — or, in a
 version where `:id` took a plain string, a 404 for a job whose id is the
-literal text `reset-stuck`. `test/jobs/job-admin.integration.spec.ts` drives
+literal text `reset-stuck`. `platform-api/jobs/job-admin.integration.spec.ts` drives
 that URL through the real router and asserts the **sweep ran**, so a re-order
 fails a test rather than an incident.
 
@@ -2012,9 +2008,9 @@ collision sends `details: { jobId, reason: 'active_dedup_conflict' }`.
 
 ## 9. Insights and ETA
 
-> #265. `apps/api/src/jobs/job-insights.service.ts`,
-> `apps/api/src/jobs/dto/job-insights.dto.ts`,
-> `apps/api/src/jobs/job-counts.util.ts`, and two more routes on the §8
+> #265. `platform-api/jobs/job-insights.service.ts`,
+> `platform-api/jobs/dto/job-insights.dto.ts`,
+> `platform-api/jobs/job-counts.util.ts`, and two more routes on the §8
 > controller.
 
 §8's `stats` answers *what is the queue doing right now*. It structurally
@@ -2062,10 +2058,10 @@ The rules that keep it that way, for anyone extending the file:
   service and it is a separate, separately authorized route.
 - **No `$executeRaw`.** Raw SQL is a `$queryRaw` starting with `SELECT`.
 
-Both halves are proved. `src/jobs/job-insights.service.spec.ts` asserts that no
+Both halves are proved. `platform-api/jobs/job-insights.service.spec.ts` asserts that no
 statement the service issues *contains* a lock or a mutating verb — the half a
 database cannot prove, since it never sees SQL that was not sent.
-`test/jobs/job-insights.db.spec.ts` asserts the other half against real
+`platform-api/jobs/job-insights.db.spec.ts` asserts the other half against real
 Postgres: it holds `FOR UPDATE` row locks open on claimed rows in one
 transaction and runs the entire computation from a second connection, which
 must return complete, correct numbers without waiting.
@@ -2264,36 +2260,126 @@ staging database seeded with fictional history, has an all-time average that is
 wrong forever, and starting the accumulators again is the only available
 repair.
 
+## What the port to the platform changed (#468, epic #467)
+
+The rules in this document are unchanged; the machinery moved. What a reader
+of the older sections needs to know:
+
+- **Where the code is.** `@marinoscar/platform-api/jobs` (queue, worker pool,
+  reaper, janitor, history purge, labels, `JobScope`, `enqueueHousekeepingJob`,
+  `job.settled`, `/api/admin/jobs`) and `@marinoscar/platform-api/nodes`
+  (fleet; [worker-nodes.md](worker-nodes.md)). KVox supplies the host ports in
+  `apps/api/src/platform/jobs/` and its handlers.
+- **Jobs carry `org_id`.** Null for housekeeping and other system jobs; the
+  default organization's id for a job whose handler touches `storage_objects`.
+  There is no ambient organization in this app (`JOBS_ORG_SCOPE` answers
+  null), so **every enqueue passes `orgId` explicitly**. A handler runs its
+  organization-scoped database work through `JobScope.run(job, fn)`, which
+  refuses a null `orgId`.
+- **Packaged admin pages.** Admin, Operations: Jobs (`/admin/settings/jobs`),
+  Job Insights (`/admin/settings/jobs/insights`) and Worker Nodes
+  (`/admin/settings/workers`) are the platform's pages
+  (`@marinoscar/platform-web/jobs/ui`), bound to this app's `DataTable`, spinner
+  and HTTP client in `apps/web/src/platform/jobsAdapters.ts` and declared in
+  the section registry (`adminSections.tsx`). Their permissions are unchanged
+  (`jobs:read`, `nodes:read`).
+- **A `retention` system-settings namespace and a nightly purge.** The jobs
+  slice registers `retention` (one `{ enabled, days }` policy per growing table,
+  such as the notification inbox, the delivery log, the audit trail and AI runs). `RetentionPurgeTask` runs at **01:00** (after
+  `job.history.purge` at midnight) and, like every cron here, **only enqueues**:
+  one global purge job per enabled policy whose handler is mounted. It needs no
+  exemption from §7.10. KVox registers no policy of its own
+  (`APP_RETENTION_POLICIES` in `apps/api/src/app-registrations/jobs.ts`).
+- **`JOBS_WORKER_MODE=system`** claims exactly what no node may claim right
+  now, which the platform computes in `NodeOffloadService.serverOnlyRightNow()`
+  (the complement of `offeredTypes()`, §6.4), plus
+  `JOBS_SYSTEM_MODE_EXTRA_TYPES`. The registry's static `serverOnlyTypes()` is
+  still what the server-only conformance specs assert against.
+- **Retired template types.** `example.echo` and `example.checksum` (the
+  template's demonstration handlers) have no handler any more. Their labels stay
+  (`RETIRED_JOB_TYPE_LABELS` in `apps/api/src/app-registrations/jobs.ts`) so
+  historical rows render as a phrase. Do not enqueue them.
+- **Type strings are pinned.** `apps/api/test/jobs/job-type-snapshot.spec.ts`
+  holds the literal list below and fails if the app stops registering one.
+
+## The job types
+
+Forty-two type strings are pinned. A type string is permanent once rows exist.
+"Node" means node-eligible (derived from `nodeResultSchema` +
+`persistNodeResult`, §2); every other type is server-only.
+
+| Type | Owner | Notes |
+|---|---|---|
+| `media.audio.transcode` | transcripts | Node-eligible (worker-nodes.md §20.2) |
+| `transcription.submit`, `transcription.poll`, `transcription.ingest` | transcripts | Provider round trips; server-only |
+| `transcript.snapshot`, `transcript.export`, `transcript.purge` | transcripts | Server-only |
+| `transcript.name_check` | transcripts | AI job, the requesting user's own key; server-only |
+| `transcripts.housekeeping` | transcripts | Enqueued by a cron; `orgId` null |
+| `note.generate`, `note.retitle` | notes | AI jobs, the requesting user's own key; server-only |
+| `note.source.extract` | notes | Node-eligible |
+| `note.export`, `note.purge` | notes | Server-only |
+| `notes.housekeeping` | notes | Enqueued by a cron; `orgId` null |
+| `kg.purge`, `kg.resolve`, `kg.embed`, `kg.speaker_link`, `kg.export`, `kg.import`, `kg.graph_layout`, `kg.migrate` | graph | Server-only |
+| `kg.extract`, `kg.entity_digest` | graph | AI jobs, the requesting user's own key; server-only |
+| `ask.respond` | ask | AI job; server-only |
+| `search.index` | search | Server-only |
+| `user.data.purge` | user-data | Server-only |
+| `job.history.purge` | platform jobs | Queue housekeeping; `orgId` null |
+| `nodes.fleet.sweep`, `nodes.fleet.prune` | platform nodes | Fleet housekeeping; `orgId` null |
+| `storage.cleanup.stale-uploads` | KVox storage | Housekeeping; `orgId` null |
+| `admin.broadcast.start`, `admin.broadcast.chunk` | notifications | Admin broadcasts |
+| `db.backup.run` | db-backup | Node-eligible; brokered database credential (worker-nodes.md §20.1) |
+| `db.backup.sweep`, `db.restore.old-db-drop` | db-backup | Housekeeping; server-only |
+| `db.restore.run` | db-backup | Server-only permanently |
+| `auth.token.cleanup`, `device-auth.code.cleanup` | platform identity | Registered through `IDENTITY_JOBS` (`identity-jobs.adapter.ts`), strings unchanged |
+| `example.echo`, `example.checksum` | retired | Handler deleted; label kept |
+
 ## The extension recipe
 
-The operational version of this lives in
-`apps/api/src/jobs/handlers/README.md`, which is where a fork's author will
-actually look. In summary:
+The operational version is the `add-job-type` skill
+([`.claude/skills/add-job-type/SKILL.md`](../../.claude/skills/add-job-type/SKILL.md)),
+which is where an author will actually look; the contract itself is the TSDoc
+of `JobHandler` in the installed package. In summary:
 
-1. **Write the class.** Implement `JobHandler`: a unique `type` string and a
+1. **Write the class.** Implement `JobHandler` (from
+   `@marinoscar/platform-api/jobs`): a unique `type` string, a `label`, and a
    `process(job)` that throws to fail.
 2. **Self-register.** `this.registry.register(this)` in the handler's own
-   `onModuleInit()`.
+   `onModuleInit()`, with an injected `JobHandlerRegistry`.
 3. **Provide it.** Add the class to the `providers` of the module that owns
-   the feature, and `imports: [JobsModule]` for the registry.
+   the feature. `JobsModule.forRoot` is global, so no import is needed for the
+   registry or `JobsService`.
 4. **Enqueue.** Call `JobsService.enqueue()` at the real trigger, with a
-   `payload` of **identifiers**, not copies of data — the job may run minutes
-   later, and a row it names should be re-read at run time rather than carried
-   inside a payload that can go stale. Jobs of the same type against the same
-   subject collapse onto one active row by default; pass `skipDedup: true`
-   when several such jobs are legitimately distinct work (§4.1–4.2).
+   `payload` of **identifiers**, not copies of data, and an **explicit
+   `orgId`** (below). Jobs of the same type against the same subject collapse
+   onto one active row by default; pass `skipDedup: true` when several such
+   jobs are legitimately distinct work (§4.1–4.2).
 
 No migration, no enum arm, no queue wiring, and the type appears in the admin
-dashboard automatically. Optionally add a display label in
-`job-type-labels.ts`; an unmapped type renders as itself (§3).
+dashboard automatically. Declare the display `label` on the handler; a type
+with no handler in the process (a retired one) registers its label with
+`registerJobTypeLabel` in `apps/api/src/app-registrations/jobs.ts`. An
+unlabelled type renders as itself (§3).
 
 To make a type node-eligible, add **both** `nodeResultSchema` and
 `persistNodeResult` — and nothing else (§2).
 
-The worked examples are `handlers/example-echo.handler.ts` (the smallest thing
-a handler can be) and `handlers/job-history-purge.handler.ts` (§7.5), which is
-the same four steps applied to work that actually does something: a settings
-read, a batched loop, a transaction, and a scheduling task that enqueues it.
+**Organization on the row.** The platform's `jobs` table carries `org_id`.
+KVox has no ambient organization (`JOBS_ORG_SCOPE` answers null in
+`jobs-host.module.ts`), so every enqueue states it: `null` for housekeeping and
+other system jobs, and the default organization's id for a job whose handler
+touches `storage_objects`, which the handler then reaches through
+`JobScope.run(job, fn)`. A row queued before the port has a null `orgId`;
+`apps/api/src/notes/job-org-scope.ts` falls back to the payload's organization,
+then the default organization (`resolveJobOrgId` from
+`@marinoscar/platform-api/identity`).
+
+The worked example for a handler that does real work is KVox's own
+`apps/api/src/transcripts/tasks/transcripts-housekeeping.task.ts` with its
+handler (a scheduling task that only enqueues), and the platform's
+`job-history-purge.handler` (§7.5) for a batched loop in a transaction. The
+template's `example.echo` and `example.checksum` demonstration handlers are
+retired (below).
 
 ## Notifying somebody a job gave up
 
@@ -2554,28 +2640,28 @@ What #260 proves, and by what. Everything in the first block runs against a
 
 | Claim | Covered by |
 |---|---|
-| Two claimers racing for one row: exactly one wins, every round | `test/jobs/job-claim.db.spec.ts` — two independent `PrismaClient`s, ten rounds, deterministic |
-| Concurrent claimers over a seeded batch get a disjoint partition: no id twice, none lost | `test/jobs/job-claim.db.spec.ts` — an eight-way overlapping burst, then a drain; the union is asserted against what was seeded |
-| `ORDER BY priority ASC, created_at ASC` is honoured: a priority-0 job enqueued later is claimed before a priority-100 job enqueued earlier | `test/jobs/job-claim.db.spec.ts` |
-| Oldest-first within one priority (asserted as a **set** — see §4.4 on `RETURNING` ordering) | `test/jobs/job-claim.db.spec.ts` |
-| A job scheduled for the future is not claimed; the same job is once that time passes | `test/jobs/job-claim.db.spec.ts` |
-| `attempts` is 1 immediately after the claim, before any handler runs, and is durable | `test/jobs/job-claim.db.spec.ts` |
-| A claimed row carries `running`, `startedAt`, the lease, the executor and the node id | `test/jobs/job-claim.db.spec.ts` |
-| Every `RETURNING` alias matches a generated `Job` field | `test/jobs/job-claim.db.spec.ts` (key set of a row Postgres produced) and `test/jobs/job-model-fields.spec.ts` (key set of `JOB_CLAIM_COLUMNS` against `Prisma.JobScalarFieldEnum`) |
-| Concurrent `enqueue` of one dedup key yields ONE row and BOTH callers receive it | `test/jobs/jobs-enqueue.db.spec.ts` — two clients head-to-head, plus a ten-way burst |
-| `skipDedup: true` yields two rows, both with a NULL key | `test/jobs/jobs-enqueue.db.spec.ts` |
-| Dedup collapses onto a `running` job, and a settled job frees its key | `test/jobs/jobs-enqueue.db.spec.ts` |
+| Two claimers racing for one row: exactly one wins, every round | `platform-api/jobs/job-claim.db.spec.ts` — two independent `PrismaClient`s, ten rounds, deterministic |
+| Concurrent claimers over a seeded batch get a disjoint partition: no id twice, none lost | `platform-api/jobs/job-claim.db.spec.ts` — an eight-way overlapping burst, then a drain; the union is asserted against what was seeded |
+| `ORDER BY priority ASC, created_at ASC` is honoured: a priority-0 job enqueued later is claimed before a priority-100 job enqueued earlier | `platform-api/jobs/job-claim.db.spec.ts` |
+| Oldest-first within one priority (asserted as a **set** — see §4.4 on `RETURNING` ordering) | `platform-api/jobs/job-claim.db.spec.ts` |
+| A job scheduled for the future is not claimed; the same job is once that time passes | `platform-api/jobs/job-claim.db.spec.ts` |
+| `attempts` is 1 immediately after the claim, before any handler runs, and is durable | `platform-api/jobs/job-claim.db.spec.ts` |
+| A claimed row carries `running`, `startedAt`, the lease, the executor and the node id | `platform-api/jobs/job-claim.db.spec.ts` |
+| Every `RETURNING` alias matches a generated `Job` field | `platform-api/jobs/job-claim.db.spec.ts` (key set of a row Postgres produced) and `platform-api/jobs/job-model-fields.spec.ts` (key set of `JOB_CLAIM_COLUMNS` against `Prisma.JobScalarFieldEnum`) |
+| Concurrent `enqueue` of one dedup key yields ONE row and BOTH callers receive it | `platform-api/jobs/jobs-enqueue.db.spec.ts` — two clients head-to-head, plus a ten-way burst |
+| `skipDedup: true` yields two rows, both with a NULL key | `platform-api/jobs/jobs-enqueue.db.spec.ts` |
+| Dedup collapses onto a `running` job, and a settled job frees its key | `platform-api/jobs/jobs-enqueue.db.spec.ts` |
 
 | Claim | Covered by |
 |---|---|
-| Both claim short circuits return `[]` **without a round trip** | `src/jobs/job-claim.service.spec.ts` — asserts `$queryRaw` was never called, which a database test cannot see |
-| Every runtime value is a bound parameter; none appears in the SQL text | `src/jobs/job-claim.service.spec.ts` — asserts on `Prisma.Sql`'s `values` and `sql` |
-| A P2002 on any other constraint propagates; a non-conflict error propagates | `src/jobs/jobs.service.spec.ts` |
-| The re-read losing its own race retries rather than returning a settled job | `src/jobs/jobs.service.spec.ts` |
-| The retry is bounded and gives up loudly | `src/jobs/jobs.service.spec.ts` |
-| `recordProvider` swallows a failed audit write | `src/jobs/jobs.service.spec.ts`, and end to end in `test/jobs/jobs-enqueue.db.spec.ts` |
-| Enqueue never pre-checks with `findFirst` before inserting | `src/jobs/jobs.service.spec.ts` |
-| `JOB_CLAIM_COLUMNS` covers exactly the generated `Job` field set | `test/jobs/job-model-fields.spec.ts` (the compile-time half is the `Record<keyof Job, string>` type itself) |
+| Both claim short circuits return `[]` **without a round trip** | `platform-api/jobs/job-claim.service.spec.ts` — asserts `$queryRaw` was never called, which a database test cannot see |
+| Every runtime value is a bound parameter; none appears in the SQL text | `platform-api/jobs/job-claim.service.spec.ts` — asserts on `Prisma.Sql`'s `values` and `sql` |
+| A P2002 on any other constraint propagates; a non-conflict error propagates | `platform-api/jobs/jobs.service.spec.ts` |
+| The re-read losing its own race retries rather than returning a settled job | `platform-api/jobs/jobs.service.spec.ts` |
+| The retry is bounded and gives up loudly | `platform-api/jobs/jobs.service.spec.ts` |
+| `recordProvider` swallows a failed audit write | `platform-api/jobs/jobs.service.spec.ts`, and end to end in `platform-api/jobs/jobs-enqueue.db.spec.ts` |
+| Enqueue never pre-checks with `findFirst` before inserting | `platform-api/jobs/jobs.service.spec.ts` |
+| `JOB_CLAIM_COLUMNS` covers exactly the generated `Job` field set | `platform-api/jobs/job-model-fields.spec.ts` (the compile-time half is the `Record<keyof Job, string>` type itself) |
 
 What #263 proves, and by what. The split between the two blocks is the point.
 The first runs against a **real Postgres** (`npm run test:db`), because both of
@@ -2591,36 +2677,36 @@ throws, and a filesystem sweep.
 
 | Claim | Covered by |
 |---|---|
-| Each of the three stuck signals reclaims its own row, with the other two unable to fire | `test/jobs/job-stuck-reset.db.spec.ts` — one test per signal, including the `startedAt IS NULL` zombie aged by `createdAt` with a NULL lease |
-| A healthy `running` job — young, stamped, holding a live lease — is left alone | `test/jobs/job-stuck-reset.db.spec.ts` |
-| `pending`, `succeeded` and `failed` rows are never touched, however old | `test/jobs/job-stuck-reset.db.spec.ts` |
-| A row at (or over) the attempt cap becomes `failed`, with its own attempt count in the message, keeping `executor` | `test/jobs/job-stuck-reset.db.spec.ts` |
-| A row under the cap returns to `pending` with claim, lease and executor cleared, and `attempts` untouched | `test/jobs/job-stuck-reset.db.spec.ts` |
-| A mixed sweep splits between the two phases in one pass, and a second sweep is a no-op | `test/jobs/job-stuck-reset.db.spec.ts` |
-| Only terminal rows past the cutoff are deleted; a terminal row with no `finishedAt` is aged by `createdAt` | `test/jobs/job-history-purge.db.spec.ts` |
-| A batch failing **mid-transaction** leaves counts and rows consistent: nothing deleted uncounted, nothing counted undeleted | `test/jobs/job-history-purge.db.spec.ts` — the delete is rigged to throw from inside the real transaction, and the rollup is read *through the transaction* first, so the assertion cannot pass vacuously |
-| A pre-existing rollup survives a failed batch unchanged, and the retry counts each row exactly once | `test/jobs/job-history-purge.db.spec.ts` |
-| Lifetime totals (rollup + live rows) are identical before and after a purge, and after three purges | `test/jobs/job-history-purge.db.spec.ts` |
+| Each of the three stuck signals reclaims its own row, with the other two unable to fire | `platform-api/jobs/job-stuck-reset.db.spec.ts` — one test per signal, including the `startedAt IS NULL` zombie aged by `createdAt` with a NULL lease |
+| A healthy `running` job — young, stamped, holding a live lease — is left alone | `platform-api/jobs/job-stuck-reset.db.spec.ts` |
+| `pending`, `succeeded` and `failed` rows are never touched, however old | `platform-api/jobs/job-stuck-reset.db.spec.ts` |
+| A row at (or over) the attempt cap becomes `failed`, with its own attempt count in the message, keeping `executor` | `platform-api/jobs/job-stuck-reset.db.spec.ts` |
+| A row under the cap returns to `pending` with claim, lease and executor cleared, and `attempts` untouched | `platform-api/jobs/job-stuck-reset.db.spec.ts` |
+| A mixed sweep splits between the two phases in one pass, and a second sweep is a no-op | `platform-api/jobs/job-stuck-reset.db.spec.ts` |
+| Only terminal rows past the cutoff are deleted; a terminal row with no `finishedAt` is aged by `createdAt` | `platform-api/jobs/job-history-purge.db.spec.ts` |
+| A batch failing **mid-transaction** leaves counts and rows consistent: nothing deleted uncounted, nothing counted undeleted | `platform-api/jobs/job-history-purge.db.spec.ts` — the delete is rigged to throw from inside the real transaction, and the rollup is read *through the transaction* first, so the assertion cannot pass vacuously |
+| A pre-existing rollup survives a failed batch unchanged, and the retry counts each row exactly once | `platform-api/jobs/job-history-purge.db.spec.ts` |
+| Lifetime totals (rollup + live rows) are identical before and after a purge, and after three purges | `platform-api/jobs/job-history-purge.db.spec.ts` |
 
 | Claim | Covered by |
 |---|---|
-| `stuckRunningWhere` carries all four signals, OR'd, each compared against its own instant (ages against the threshold, an expired lease against `now`, an implausible one against the lease horizon), and no age clause ever matches a leased row | `src/jobs/job-stuck.service.spec.ts`, and against real rows in `test/jobs/job-lease-renewal.db.spec.ts` |
-| A continuously renewed job is never requeued at any age; renewal refuses an expired lease, a requeued row and a row a node now holds | `test/jobs/job-lease-renewal.db.spec.ts`, `src/jobs/job-lease.service.spec.ts` |
-| The in-process worker renews for the whole of `process()`, on the type's own lease, and its ticker is cancelled by `stop()` | `src/jobs/job.worker.spec.ts` |
-| The give-up phase runs one row at a time so each message names that job's attempts; neither phase writes `attempts` | `src/jobs/job-stuck.service.spec.ts` |
-| A settings read that throws falls back to the shipped threshold; a missing `jobs.maxAttempts` falls back to 3 rather than `NaN` | `src/jobs/job-stuck.service.spec.ts` |
-| The reaper runs under **every** worker mode, including `off`, and stops only for `JOBS_REAPER_ENABLED=false` | `src/jobs/tasks/job-stuck-reset.task.spec.ts` |
-| A failed sweep is swallowed rather than rejecting out of the `@Cron` handler | `src/jobs/tasks/job-stuck-reset.task.spec.ts`, and the same for the purge scheduler |
-| The purge selects terminal statuses only, and both age arms | `src/jobs/handlers/job-history-purge.handler.spec.ts` |
-| Duration samples come from succeeded rows only; a negative duration drops both the sum and the sample | `src/jobs/handlers/job-history-purge.handler.spec.ts` |
-| The batch counts and deletes inside one `$transaction`, deleting the exact ids it counted | `src/jobs/handlers/job-history-purge.handler.spec.ts` |
-| A disabled purge is a no-op in the handler as well as in the task | `src/jobs/handlers/job-history-purge.handler.spec.ts`, `src/jobs/tasks/job-history-purge.task.spec.ts` |
-| The purge is enqueued globally, at priority 100 (low), and skipped when one is already pending or running | `src/jobs/tasks/job-history-purge.task.spec.ts` |
-| The janitor removes an aged prefixed file and leaves a fresh one **and** an unrelated one alone | `src/jobs/tasks/temp-file-janitor.task.spec.ts` — a real filesystem in a disposable directory; the unrelated file is aged too, so only the prefix saves it |
-| It sweeps on module init, in every mode that runs jobs, and not at all when the mode is `off` | `src/jobs/tasks/temp-file-janitor.task.spec.ts` |
-| One entry that cannot be removed does not stop the sweep; an unlistable directory is one warning | `src/jobs/tasks/temp-file-janitor.task.spec.ts` |
-| The prefix is derived from `APP_NAME` and is never empty | `src/jobs/job-temp.spec.ts` |
-| The module graph still boots with the three tasks and the purge handler wired | `src/jobs/job-handler.registry.spec.ts`, `src/jobs/job.worker.bootstrap.spec.ts`, plus `npm run openapi:dump` |
+| `stuckRunningWhere` carries all four signals, OR'd, each compared against its own instant (ages against the threshold, an expired lease against `now`, an implausible one against the lease horizon), and no age clause ever matches a leased row | `platform-api/jobs/job-stuck.service.spec.ts`, and against real rows in `platform-api/jobs/job-lease-renewal.db.spec.ts` |
+| A continuously renewed job is never requeued at any age; renewal refuses an expired lease, a requeued row and a row a node now holds | `platform-api/jobs/job-lease-renewal.db.spec.ts`, `platform-api/jobs/job-lease.service.spec.ts` |
+| The in-process worker renews for the whole of `process()`, on the type's own lease, and its ticker is cancelled by `stop()` | `platform-api/jobs/job.worker.spec.ts` |
+| The give-up phase runs one row at a time so each message names that job's attempts; neither phase writes `attempts` | `platform-api/jobs/job-stuck.service.spec.ts` |
+| A settings read that throws falls back to the shipped threshold; a missing `jobs.maxAttempts` falls back to 3 rather than `NaN` | `platform-api/jobs/job-stuck.service.spec.ts` |
+| The reaper runs under **every** worker mode, including `off`, and stops only for `JOBS_REAPER_ENABLED=false` | `platform-api/jobs/tasks/job-stuck-reset.task.spec.ts` |
+| A failed sweep is swallowed rather than rejecting out of the `@Cron` handler | `platform-api/jobs/tasks/job-stuck-reset.task.spec.ts`, and the same for the purge scheduler |
+| The purge selects terminal statuses only, and both age arms | `platform-api/jobs/handlers/job-history-purge.handler.spec.ts` |
+| Duration samples come from succeeded rows only; a negative duration drops both the sum and the sample | `platform-api/jobs/handlers/job-history-purge.handler.spec.ts` |
+| The batch counts and deletes inside one `$transaction`, deleting the exact ids it counted | `platform-api/jobs/handlers/job-history-purge.handler.spec.ts` |
+| A disabled purge is a no-op in the handler as well as in the task | `platform-api/jobs/handlers/job-history-purge.handler.spec.ts`, `platform-api/jobs/tasks/job-history-purge.task.spec.ts` |
+| The purge is enqueued globally, at priority 100 (low), and skipped when one is already pending or running | `platform-api/jobs/tasks/job-history-purge.task.spec.ts` |
+| The janitor removes an aged prefixed file and leaves a fresh one **and** an unrelated one alone | `platform-api/jobs/tasks/temp-file-janitor.task.spec.ts` — a real filesystem in a disposable directory; the unrelated file is aged too, so only the prefix saves it |
+| It sweeps on module init, in every mode that runs jobs, and not at all when the mode is `off` | `platform-api/jobs/tasks/temp-file-janitor.task.spec.ts` |
+| One entry that cannot be removed does not stop the sweep; an unlistable directory is one warning | `platform-api/jobs/tasks/temp-file-janitor.task.spec.ts` |
+| The prefix is derived from `APP_NAME` and is never empty | `platform-api/jobs/job-temp.spec.ts` |
+| The module graph still boots with the three tasks and the purge handler wired | `platform-api/jobs/job-handler.registry.spec.ts`, `platform-api/jobs/job.worker.bootstrap.spec.ts`, plus `npm run openapi:dump` |
 
 What #262 proves, and by what. All of it runs **without a database**, for the
 same reason #261's does: every claim below is about a decision the worker
@@ -2633,28 +2719,28 @@ about Nest's phase ordering and therefore needs a real module graph:
 
 | Claim | Covered by |
 |---|---|
-| A handler registering **slowly** in its own `onModuleInit` is present in the worker's **first** claim | `src/jobs/job.worker.bootstrap.spec.ts` — a real `Test.createTestingModule(...).init()`, a handler that awaits 40ms before registering, and `eligibleTypes` recorded at claim time |
-| The same holds across module boundaries (`example.echo` from `JobsModule`, the slow handler from another) | `src/jobs/job.worker.bootstrap.spec.ts` |
-| `JobWorker` implements `onApplicationBootstrap` and **not** `onModuleInit` | `src/jobs/job.worker.spec.ts` — the cheap structural guard against renaming the hook back |
-| `all` claims node-eligible types too; `system` claims only server-only ones; `off` claims nothing and starts no pool | `src/jobs/job.worker.spec.ts` |
-| An unrecognised mode behaves as `all` and warns **exactly once** across 50 reads and across two worker instances | `src/jobs/job.worker.spec.ts` — the module-level latch, reset per case so the assertion cannot pass vacuously |
-| `JOBS_SYSTEM_MODE_EXTRA_TYPES` adds a registered type; an unregistered entry is dropped with one warning per type | `src/jobs/job.worker.spec.ts` |
-| `system` mode claims a node-eligible type whose deployment gates are closed, and stops the moment they open — the two executors are an exact partition of the registry | `src/jobs/job.worker.spec.ts`, and end to end over the real module graph in `test/db-backup/db-backup-node-offload.integration.spec.ts` |
-| Eligible types are re-resolved per claim: a handler registered *after* the pool started appears in a later claim | `src/jobs/job.worker.spec.ts` |
-| A job exceeding its timeout frees the slot promptly and settles through `completeFailed` with a `JobTimeoutError` | `src/jobs/job.worker.spec.ts` |
-| The abandoned work rejecting later produces **no** `unhandledRejection` | `src/jobs/job.worker.spec.ts` — an explicit `process.on('unhandledRejection', …)` listener, because this is the part a bare `Promise.race` gets wrong |
-| A late *success* does not retroactively mark the timed-out job succeeded | `src/jobs/job.worker.spec.ts` |
-| The timeout timer is cleared the moment a job finishes | `src/jobs/job.worker.spec.ts` — asserts the tracked timer set is empty |
-| A slow job in one slot does not delay a fast job in another | `src/jobs/job.worker.spec.ts` — the fast job is finished while the slow one is still running, which is exactly what a batch barrier would prevent |
-| A busy queue never sleeps between jobs | `src/jobs/job.worker.spec.ts` — three jobs drained with a ten-minute poll interval configured |
-| `onModuleDestroy` resolves in milliseconds from a sleeping pool, leaving no timer behind | `src/jobs/job.worker.spec.ts` |
-| Shutdown stops claiming immediately, and gives up on a job that outlives the grace | `src/jobs/job.worker.spec.ts` |
-| A claim query that throws backs off instead of spinning | `src/jobs/job.worker.spec.ts` |
-| A job with no registered handler is failed **permanently** through the chokepoint, with `{ permanent: true }` | `src/jobs/job.worker.spec.ts`, and the terminal behaviour itself in `src/jobs/job-terminal.service.spec.ts` |
-| `permanent` beats the rate-limit classification, never schedules a retry, and still emits `job.settled` | `src/jobs/job-terminal.service.spec.ts` |
-| The worker goes through the real `ProviderThrottleService.acquire` before processing | `src/jobs/job.worker.spec.ts` — the real gate, a tripped cooldown, and a fake `JobClock` |
-| The claim is one row, as `executor: 'server'` with a `null` node id and a lease longer than the timeout | `src/jobs/job.worker.spec.ts` and `src/jobs/job.worker.bootstrap.spec.ts` |
-| A missing setting degrades to the shipped default rather than `NaN` (a `setTimeout(NaN)` poll loop spins the event loop flat out) | `src/jobs/job.worker.spec.ts` |
+| A handler registering **slowly** in its own `onModuleInit` is present in the worker's **first** claim | `platform-api/jobs/job.worker.bootstrap.spec.ts` — a real `Test.createTestingModule(...).init()`, a handler that awaits 40ms before registering, and `eligibleTypes` recorded at claim time |
+| The same holds across module boundaries (`example.echo` from `JobsModule`, the slow handler from another) | `platform-api/jobs/job.worker.bootstrap.spec.ts` |
+| `JobWorker` implements `onApplicationBootstrap` and **not** `onModuleInit` | `platform-api/jobs/job.worker.spec.ts` — the cheap structural guard against renaming the hook back |
+| `all` claims node-eligible types too; `system` claims only server-only ones; `off` claims nothing and starts no pool | `platform-api/jobs/job.worker.spec.ts` |
+| An unrecognised mode behaves as `all` and warns **exactly once** across 50 reads and across two worker instances | `platform-api/jobs/job.worker.spec.ts` — the module-level latch, reset per case so the assertion cannot pass vacuously |
+| `JOBS_SYSTEM_MODE_EXTRA_TYPES` adds a registered type; an unregistered entry is dropped with one warning per type | `platform-api/jobs/job.worker.spec.ts` |
+| `system` mode claims a node-eligible type whose deployment gates are closed, and stops the moment they open — the two executors are an exact partition of the registry | `platform-api/jobs/job.worker.spec.ts`, and end to end over the real module graph in `test/db-backup/db-backup-node-offload.integration.spec.ts` |
+| Eligible types are re-resolved per claim: a handler registered *after* the pool started appears in a later claim | `platform-api/jobs/job.worker.spec.ts` |
+| A job exceeding its timeout frees the slot promptly and settles through `completeFailed` with a `JobTimeoutError` | `platform-api/jobs/job.worker.spec.ts` |
+| The abandoned work rejecting later produces **no** `unhandledRejection` | `platform-api/jobs/job.worker.spec.ts` — an explicit `process.on('unhandledRejection', …)` listener, because this is the part a bare `Promise.race` gets wrong |
+| A late *success* does not retroactively mark the timed-out job succeeded | `platform-api/jobs/job.worker.spec.ts` |
+| The timeout timer is cleared the moment a job finishes | `platform-api/jobs/job.worker.spec.ts` — asserts the tracked timer set is empty |
+| A slow job in one slot does not delay a fast job in another | `platform-api/jobs/job.worker.spec.ts` — the fast job is finished while the slow one is still running, which is exactly what a batch barrier would prevent |
+| A busy queue never sleeps between jobs | `platform-api/jobs/job.worker.spec.ts` — three jobs drained with a ten-minute poll interval configured |
+| `onModuleDestroy` resolves in milliseconds from a sleeping pool, leaving no timer behind | `platform-api/jobs/job.worker.spec.ts` |
+| Shutdown stops claiming immediately, and gives up on a job that outlives the grace | `platform-api/jobs/job.worker.spec.ts` |
+| A claim query that throws backs off instead of spinning | `platform-api/jobs/job.worker.spec.ts` |
+| A job with no registered handler is failed **permanently** through the chokepoint, with `{ permanent: true }` | `platform-api/jobs/job.worker.spec.ts`, and the terminal behaviour itself in `platform-api/jobs/job-terminal.service.spec.ts` |
+| `permanent` beats the rate-limit classification, never schedules a retry, and still emits `job.settled` | `platform-api/jobs/job-terminal.service.spec.ts` |
+| The worker goes through the real `ProviderThrottleService.acquire` before processing | `platform-api/jobs/job.worker.spec.ts` — the real gate, a tripped cooldown, and a fake `JobClock` |
+| The claim is one row, as `executor: 'server'` with a `null` node id and a lease longer than the timeout | `platform-api/jobs/job.worker.spec.ts` and `platform-api/jobs/job.worker.bootstrap.spec.ts` |
+| A missing setting degrades to the shipped default rather than `NaN` (a `setTimeout(NaN)` poll loop spins the event loop flat out) | `platform-api/jobs/job.worker.spec.ts` |
 
 What #261 proves, and by what. All of it runs **without a database**, and
 that is a deliberate choice rather than a gap: everything asserted here is a
@@ -2669,28 +2755,28 @@ recorded payload *is* the assertion.
 
 | Claim | Covered by |
 |---|---|
-| A rate-limit deferral leaves `attempts` unchanged NET of the claim increment, and increments `rateLimitHits` | `src/jobs/job-terminal.service.spec.ts` — asserts the exact written payload, plus an eight-deferral loop that re-charges the claim each round and ends with `attempts` still 1 |
-| The un-charge is written as an ABSOLUTE value, never a relative decrement | `src/jobs/job-terminal.service.spec.ts` — asserts `typeof attempts === 'number'`, and that a forced write-retry sends a byte-identical payload twice |
-| A normal failure consumes an attempt; the row is `failed` once the budget is spent | `src/jobs/job-terminal.service.spec.ts` — attempts 1 and 2 retry with growing backoff, attempt 3 fails terminally |
-| `Retry-After` parses as integer seconds AND as an HTTP-date; absent or unparseable yields `null` and pure backoff | `src/jobs/rate-limit.error.spec.ts` (ten unparseable forms, both valid forms, a past date) and `src/jobs/job-terminal.service.spec.ts` (both forms end to end, as an exact `scheduledFor`) |
-| A provider's `Retry-After` is a floor, not an override | `src/jobs/backoff.util.spec.ts` and `src/jobs/job-terminal.service.spec.ts` |
-| A node-reported `{ rateLimited: true }` follows the IDENTICAL path to a thrown `RateLimitError` | `src/jobs/job-terminal.service.spec.ts` — the two write payloads and the two throttle-gate calls are compared field for field |
-| `instanceof RateLimitError` survives transpilation | `src/jobs/rate-limit.error.spec.ts` |
-| 429/503/529 and the AWS throttle names (including with a 400 status) classify as rate limits; 500/502/400 and a plain `Error` do not | `src/jobs/rate-limit.error.spec.ts` |
-| `classifyRateLimit` never throws, even on an exploding getter | `src/jobs/rate-limit.error.spec.ts` |
-| Tripping the gate for a provider delays a sibling job of the same provider and does NOT delay an unrelated one | `src/jobs/provider-throttle.service.spec.ts`, and again in `src/jobs/job-terminal.service.spec.ts` against the **real** `ProviderThrottleService` driven by a node-reported 429 |
-| A type with no provider key is a zero-cost no-op | `src/jobs/provider-throttle.service.spec.ts` |
-| A trip extends a cooldown but never shortens one; a success clears it | `src/jobs/provider-throttle.service.spec.ts` |
-| `acquire` genuinely suspends, and is capped at `JOBS_RATELIMIT_MAX_MS` | `src/jobs/provider-throttle.service.spec.ts` — the cap with a fake clock, the suspension with the **real** clock under jest fake timers |
-| Backoff doubles per attempt, caps at `maxMs`, and jitters within `[exp/2, exp]` | `src/jobs/backoff.util.spec.ts` — every case pins the RNG, so each is an exact number |
-| `job.settled` fires on success and on give-up (both budgets), NEVER on a deferral or an intermediate retry | `src/jobs/job-terminal.service.spec.ts` |
-| A THROWING listener does not affect the row or the outcome | `src/jobs/job-terminal.service.spec.ts`, on both terminal branches |
-| The event fires AFTER the write, and not at all when the write failed | `src/jobs/job-terminal.service.spec.ts` — call-order assertion |
-| A simulated write failure frees the slot and leaves the row `running` | `src/jobs/job-terminal.service.spec.ts` — both writes rejected, `write-failed` returned rather than thrown, on all four branches |
-| The terminal write retries exactly once, after 250ms, with an identical payload | `src/jobs/job-terminal.service.spec.ts` |
-| `executor` is never cleared, on success or on failure | `src/jobs/job-terminal.service.spec.ts` |
-| Missing config degrades to the shipped defaults, not to `NaN` dates | `src/jobs/job-terminal.service.spec.ts`, `src/jobs/provider-throttle.service.spec.ts` |
-| The module graph still boots with the new providers wired | `src/jobs/job-handler.registry.spec.ts` — boots `JobsModule` for real, so a missing provider or a broken injection fails here |
+| A rate-limit deferral leaves `attempts` unchanged NET of the claim increment, and increments `rateLimitHits` | `platform-api/jobs/job-terminal.service.spec.ts` — asserts the exact written payload, plus an eight-deferral loop that re-charges the claim each round and ends with `attempts` still 1 |
+| The un-charge is written as an ABSOLUTE value, never a relative decrement | `platform-api/jobs/job-terminal.service.spec.ts` — asserts `typeof attempts === 'number'`, and that a forced write-retry sends a byte-identical payload twice |
+| A normal failure consumes an attempt; the row is `failed` once the budget is spent | `platform-api/jobs/job-terminal.service.spec.ts` — attempts 1 and 2 retry with growing backoff, attempt 3 fails terminally |
+| `Retry-After` parses as integer seconds AND as an HTTP-date; absent or unparseable yields `null` and pure backoff | `platform-api/jobs/rate-limit.error.spec.ts` (ten unparseable forms, both valid forms, a past date) and `platform-api/jobs/job-terminal.service.spec.ts` (both forms end to end, as an exact `scheduledFor`) |
+| A provider's `Retry-After` is a floor, not an override | `platform-api/jobs/backoff.util.spec.ts` and `platform-api/jobs/job-terminal.service.spec.ts` |
+| A node-reported `{ rateLimited: true }` follows the IDENTICAL path to a thrown `RateLimitError` | `platform-api/jobs/job-terminal.service.spec.ts` — the two write payloads and the two throttle-gate calls are compared field for field |
+| `instanceof RateLimitError` survives transpilation | `platform-api/jobs/rate-limit.error.spec.ts` |
+| 429/503/529 and the AWS throttle names (including with a 400 status) classify as rate limits; 500/502/400 and a plain `Error` do not | `platform-api/jobs/rate-limit.error.spec.ts` |
+| `classifyRateLimit` never throws, even on an exploding getter | `platform-api/jobs/rate-limit.error.spec.ts` |
+| Tripping the gate for a provider delays a sibling job of the same provider and does NOT delay an unrelated one | `platform-api/jobs/provider-throttle.service.spec.ts`, and again in `platform-api/jobs/job-terminal.service.spec.ts` against the **real** `ProviderThrottleService` driven by a node-reported 429 |
+| A type with no provider key is a zero-cost no-op | `platform-api/jobs/provider-throttle.service.spec.ts` |
+| A trip extends a cooldown but never shortens one; a success clears it | `platform-api/jobs/provider-throttle.service.spec.ts` |
+| `acquire` genuinely suspends, and is capped at `JOBS_RATELIMIT_MAX_MS` | `platform-api/jobs/provider-throttle.service.spec.ts` — the cap with a fake clock, the suspension with the **real** clock under jest fake timers |
+| Backoff doubles per attempt, caps at `maxMs`, and jitters within `[exp/2, exp]` | `platform-api/jobs/backoff.util.spec.ts` — every case pins the RNG, so each is an exact number |
+| `job.settled` fires on success and on give-up (both budgets), NEVER on a deferral or an intermediate retry | `platform-api/jobs/job-terminal.service.spec.ts` |
+| A THROWING listener does not affect the row or the outcome | `platform-api/jobs/job-terminal.service.spec.ts`, on both terminal branches |
+| The event fires AFTER the write, and not at all when the write failed | `platform-api/jobs/job-terminal.service.spec.ts` — call-order assertion |
+| A simulated write failure frees the slot and leaves the row `running` | `platform-api/jobs/job-terminal.service.spec.ts` — both writes rejected, `write-failed` returned rather than thrown, on all four branches |
+| The terminal write retries exactly once, after 250ms, with an identical payload | `platform-api/jobs/job-terminal.service.spec.ts` |
+| `executor` is never cleared, on success or on failure | `platform-api/jobs/job-terminal.service.spec.ts` |
+| Missing config degrades to the shipped defaults, not to `NaN` dates | `platform-api/jobs/job-terminal.service.spec.ts`, `platform-api/jobs/provider-throttle.service.spec.ts` |
+| The module graph still boots with the new providers wired | `platform-api/jobs/job-handler.registry.spec.ts` — boots `JobsModule` for real, so a missing provider or a broken injection fails here |
 
 Be honest about the limits of #263 too. Nothing here proves the `@Cron`
 decorators actually fire — `ScheduleModule` is Nest's, and a test of it would
@@ -2716,34 +2802,34 @@ exception a status becomes — and each is made in-process before any SQL is
 generated. What a mock uniquely CAN do here is capture the `where` verbatim,
 which is exactly what a filter assertion needs; what it cannot do — decide
 which rows that `where` matches — is already asked of Postgres one level down,
-in `test/jobs/job-stuck-reset.db.spec.ts`, against the predicate §8.1 borrows
+in `platform-api/jobs/job-stuck-reset.db.spec.ts`, against the predicate §8.1 borrows
 rather than copies. The clock is pinned through `JOB_CLOCK` in every case, so
 the cache TTL and the two time windows are exact timestamps rather than ranges.
 
 | Claim | Covered by |
 |---|---|
-| Every filter works alone — `status`, `type`, `subjectType`, `subjectId`, `scheduled`, each `processedWithin` window | `src/jobs/job-admin.service.spec.ts` — one case each, asserting the captured `where` in full |
-| The filters combine, all six at once, into one AND-ed `where` | `src/jobs/job-admin.service.spec.ts` |
-| `scheduled=true` OVERRIDES a conflicting `status` rather than intersecting with it | `src/jobs/job-admin.service.spec.ts`, and again over the wire in `test/jobs/job-admin.integration.spec.ts` |
-| `scheduled=false` is the opt-OUT, not the opt-in (`Boolean('false')` is `true`) | `src/jobs/job-admin.service.spec.ts` |
-| `processedWithin` is `COALESCE(finished_at, created_at)` as two DISJOINT arms, so a `count` is not inflated | `src/jobs/job-admin.service.spec.ts` |
-| `stats.stuckRunning` uses the reaper's own `stuckRunningWhere`, zombie arm included | `src/jobs/job-admin.service.spec.ts` — compared against `stuckRunningWhere()` itself, not a literal, so the assertion fails if the reaper's predicate changes and this service does not follow |
-| The stats cache serves a second caller inside the TTL and does NOT serve one past it | `src/jobs/job-admin.service.spec.ts` — the pinned clock advanced to exactly `STATS_CACHE_TTL_MS`, plus a re-query assertion |
-| A settings change to the stuck threshold lands on the next cache miss | `src/jobs/job-admin.service.spec.ts` |
-| Both `groupBy` aggregates are unfiltered, so the covering index can serve them, and `total` is summed from the first rather than counted separately | `src/jobs/job-admin.service.spec.ts` |
-| Every status key is zero-filled; a `groupBy` row with no `_count` reads as 0, never `NaN` | `src/jobs/job-admin.service.spec.ts` |
-| `byType` is labelled through `jobTypeLabel` and ordered busiest-first with an alphabetical tie-break | `src/jobs/job-admin.service.spec.ts` — the tie case is fed in reverse-alphabetical order, as a database is free to return it |
-| Retry writes the complete reset, and never touches `dedupKey` | `src/jobs/job-admin.service.spec.ts` — asserts the exact `data` payload on both the single and the bulk path |
-| Retry and delete both 400 on a running job and 404 on a missing one | `src/jobs/job-admin.service.spec.ts` and `test/jobs/job-admin.integration.spec.ts` |
-| The 400 also wins the RACE: a job that starts running between the read and the write is refused by the conditional write | `src/jobs/job-admin.service.spec.ts`, both routes |
-| A dedup collision is a 409 on the single retry and a `skipped` on the bulk sweep — and a P2002 on any OTHER constraint still propagates | `src/jobs/job-admin.service.spec.ts` |
-| `retry-failed` scopes by type when given, is idempotent when nothing is failed, and caps the batch while reporting `remaining` | `src/jobs/job-admin.service.spec.ts` |
-| `reset-stuck` DELEGATES — it issues no query of its own — and an explicit `0` is honoured rather than falling back to the setting | `src/jobs/job-admin.service.spec.ts` |
-| An empty `reset-stuck` body defers to `jobs.stuckThresholdMinutes` | `src/jobs/job-admin.service.spec.ts`, and end to end (as the shipped default, 30) in `test/jobs/job-admin.integration.spec.ts` |
-| Literal routes resolve before `:id` | `test/jobs/job-admin.integration.spec.ts` — `POST /api/admin/jobs/reset-stuck` through the real router, asserting the SWEEP RAN rather than merely that the status was not 400 |
-| Every route is Admin-only and rejects an anonymous caller and a viewer | `test/jobs/job-admin.integration.spec.ts` — all six routes, both cases |
-| The query parameters survive the real `ZodValidationPipe`: bounds, enums and the boolean | `test/jobs/job-admin.integration.spec.ts` |
-| The running-job refusal's machine-readable half survives the exception filter's key allowlist | `test/jobs/job-admin.integration.spec.ts` — asserts `details` on the wire |
+| Every filter works alone — `status`, `type`, `subjectType`, `subjectId`, `scheduled`, each `processedWithin` window | `platform-api/jobs/job-admin.service.spec.ts` — one case each, asserting the captured `where` in full |
+| The filters combine, all six at once, into one AND-ed `where` | `platform-api/jobs/job-admin.service.spec.ts` |
+| `scheduled=true` OVERRIDES a conflicting `status` rather than intersecting with it | `platform-api/jobs/job-admin.service.spec.ts`, and again over the wire in `platform-api/jobs/job-admin.integration.spec.ts` |
+| `scheduled=false` is the opt-OUT, not the opt-in (`Boolean('false')` is `true`) | `platform-api/jobs/job-admin.service.spec.ts` |
+| `processedWithin` is `COALESCE(finished_at, created_at)` as two DISJOINT arms, so a `count` is not inflated | `platform-api/jobs/job-admin.service.spec.ts` |
+| `stats.stuckRunning` uses the reaper's own `stuckRunningWhere`, zombie arm included | `platform-api/jobs/job-admin.service.spec.ts` — compared against `stuckRunningWhere()` itself, not a literal, so the assertion fails if the reaper's predicate changes and this service does not follow |
+| The stats cache serves a second caller inside the TTL and does NOT serve one past it | `platform-api/jobs/job-admin.service.spec.ts` — the pinned clock advanced to exactly `STATS_CACHE_TTL_MS`, plus a re-query assertion |
+| A settings change to the stuck threshold lands on the next cache miss | `platform-api/jobs/job-admin.service.spec.ts` |
+| Both `groupBy` aggregates are unfiltered, so the covering index can serve them, and `total` is summed from the first rather than counted separately | `platform-api/jobs/job-admin.service.spec.ts` |
+| Every status key is zero-filled; a `groupBy` row with no `_count` reads as 0, never `NaN` | `platform-api/jobs/job-admin.service.spec.ts` |
+| `byType` is labelled through `jobTypeLabel` and ordered busiest-first with an alphabetical tie-break | `platform-api/jobs/job-admin.service.spec.ts` — the tie case is fed in reverse-alphabetical order, as a database is free to return it |
+| Retry writes the complete reset, and never touches `dedupKey` | `platform-api/jobs/job-admin.service.spec.ts` — asserts the exact `data` payload on both the single and the bulk path |
+| Retry and delete both 400 on a running job and 404 on a missing one | `platform-api/jobs/job-admin.service.spec.ts` and `platform-api/jobs/job-admin.integration.spec.ts` |
+| The 400 also wins the RACE: a job that starts running between the read and the write is refused by the conditional write | `platform-api/jobs/job-admin.service.spec.ts`, both routes |
+| A dedup collision is a 409 on the single retry and a `skipped` on the bulk sweep — and a P2002 on any OTHER constraint still propagates | `platform-api/jobs/job-admin.service.spec.ts` |
+| `retry-failed` scopes by type when given, is idempotent when nothing is failed, and caps the batch while reporting `remaining` | `platform-api/jobs/job-admin.service.spec.ts` |
+| `reset-stuck` DELEGATES — it issues no query of its own — and an explicit `0` is honoured rather than falling back to the setting | `platform-api/jobs/job-admin.service.spec.ts` |
+| An empty `reset-stuck` body defers to `jobs.stuckThresholdMinutes` | `platform-api/jobs/job-admin.service.spec.ts`, and end to end (as the shipped default, 30) in `platform-api/jobs/job-admin.integration.spec.ts` |
+| Literal routes resolve before `:id` | `platform-api/jobs/job-admin.integration.spec.ts` — `POST /api/admin/jobs/reset-stuck` through the real router, asserting the SWEEP RAN rather than merely that the status was not 400 |
+| Every route is Admin-only and rejects an anonymous caller and a viewer | `platform-api/jobs/job-admin.integration.spec.ts` — all six routes, both cases |
+| The query parameters survive the real `ZodValidationPipe`: bounds, enums and the boolean | `platform-api/jobs/job-admin.integration.spec.ts` |
+| The running-job refusal's machine-readable half survives the exception filter's key allowlist | `platform-api/jobs/job-admin.integration.spec.ts` — asserts `details` on the wire |
 | Every route carries `x-rbac` and the document still lints | `npm run openapi:dump` + `npm run openapi:lint`, plus the platform's OpenAPI document spec (the app's own `test/openapi/` was deleted by #464) |
 
 Be honest about the limits of #264. No test here asks Postgres whether the
@@ -2753,7 +2839,7 @@ aggregates — that is a planner question, and asserting it would mean pinning a
 asserted instead is the property the plan depends on: that neither aggregate
 carries a `where`. Likewise no test drives two admins into a real dedup
 collision; the P2002 is injected, because Postgres raising it on that index is
-already proved by `test/jobs/jobs-enqueue.db.spec.ts`.
+already proved by `platform-api/jobs/jobs-enqueue.db.spec.ts`.
 
 What #265 proves, and by what. The split follows the shape of the claims. The
 first block runs against a **real Postgres** (`npm run test:db`) because each
@@ -2766,32 +2852,32 @@ and assert that a statement the service never sent contains nothing dangerous:
 
 | Claim | Covered by |
 |---|---|
-| The whole computation completes, promptly and correctly, while another connection holds `FOR UPDATE` locks on claimed rows in an open transaction | `test/jobs/job-insights.db.spec.ts` — a second `PrismaClient`, the claim's own `SELECT … FOR UPDATE SKIP LOCKED` shape, insights run from inside the lock's lifetime with an elapsed-time bound so a conflicting lock fails as an assertion rather than as a hang |
-| p50 and p95 equal the hand-computed `PERCENTILE_CONT` interpolations on a seeded fixture (p95 = 4800 over 1000…5000 ms, which `PERCENTILE_DISC` would answer 5000) | `test/jobs/job-insights.db.spec.ts` |
-| Only jobs inside the window count; failed and untimed rows are excluded from the distribution | `test/jobs/job-insights.db.spec.ts` — the same fixture read at two window sizes |
-| `throughputPerMin` counts the last hour, not the window | `test/jobs/job-insights.db.spec.ts` |
-| `retried` and `rateLimited` match the partial-index predicates against real rows, terminal rate-limited rows excluded | `test/jobs/job-insights.db.spec.ts` — asserted as deltas, because the suite owns its type prefix and not the table |
-| Lifetime totals are **identical** before and after a real purge, and unchanged by a second purge (no double counting) | `test/jobs/job-insights.db.spec.ts` — the real `JobHistoryPurgeHandler` over real rows, with the rollup read back |
-| A type whose live rows are all purged still appears in `lifetime` | `test/jobs/job-insights.db.spec.ts` |
-| `reset-history` clears the rollup, leaves every job row and every live-derived block byte-identical, and leaves lifetime reporting the survivors alone | `test/jobs/job-insights.db.spec.ts` — foreign rollup rows are captured and restored, because the control is deliberately not scoped by type |
-| `basis` is `live` when the type has its own history and `partial` when it falls back to the overall average | `test/jobs/job-insights.db.spec.ts` (both survive unrelated rows) and `src/jobs/job-insights.service.spec.ts` |
+| The whole computation completes, promptly and correctly, while another connection holds `FOR UPDATE` locks on claimed rows in an open transaction | `platform-api/jobs/job-insights.db.spec.ts` — a second `PrismaClient`, the claim's own `SELECT … FOR UPDATE SKIP LOCKED` shape, insights run from inside the lock's lifetime with an elapsed-time bound so a conflicting lock fails as an assertion rather than as a hang |
+| p50 and p95 equal the hand-computed `PERCENTILE_CONT` interpolations on a seeded fixture (p95 = 4800 over 1000…5000 ms, which `PERCENTILE_DISC` would answer 5000) | `platform-api/jobs/job-insights.db.spec.ts` |
+| Only jobs inside the window count; failed and untimed rows are excluded from the distribution | `platform-api/jobs/job-insights.db.spec.ts` — the same fixture read at two window sizes |
+| `throughputPerMin` counts the last hour, not the window | `platform-api/jobs/job-insights.db.spec.ts` |
+| `retried` and `rateLimited` match the partial-index predicates against real rows, terminal rate-limited rows excluded | `platform-api/jobs/job-insights.db.spec.ts` — asserted as deltas, because the suite owns its type prefix and not the table |
+| Lifetime totals are **identical** before and after a real purge, and unchanged by a second purge (no double counting) | `platform-api/jobs/job-insights.db.spec.ts` — the real `JobHistoryPurgeHandler` over real rows, with the rollup read back |
+| A type whose live rows are all purged still appears in `lifetime` | `platform-api/jobs/job-insights.db.spec.ts` |
+| `reset-history` clears the rollup, leaves every job row and every live-derived block byte-identical, and leaves lifetime reporting the survivors alone | `platform-api/jobs/job-insights.db.spec.ts` — foreign rollup rows are captured and restored, because the control is deliberately not scoped by type |
+| `basis` is `live` when the type has its own history and `partial` when it falls back to the overall average | `platform-api/jobs/job-insights.db.spec.ts` (both survive unrelated rows) and `platform-api/jobs/job-insights.service.spec.ts` |
 
 | Claim | Covered by |
 |---|---|
-| Every raw statement begins with `SELECT` and contains no `INSERT`/`UPDATE`/`DELETE`/`FOR UPDATE`/`FOR SHARE`/`LOCK TABLE`/advisory lock | `src/jobs/job-insights.service.spec.ts` — asserted on the SQL text, which is the half a database cannot prove: it never sees a statement that was not sent |
-| A read writes nothing at all | `src/jobs/job-insights.service.spec.ts` |
-| The window is a bound parameter, not interpolated text | `src/jobs/job-insights.service.spec.ts` — asserts `Prisma.Sql`'s `values` and `sql`, as `job-claim.service.spec.ts` does for the claim |
-| `basis` is `none` with no history anywhere | `src/jobs/job-insights.service.spec.ts` — a statement about the *whole table*, which a prefix-scoped database suite cannot own |
-| Out-of-range, zero, negative, fractional and non-numeric `windowDays` are 400s; 90 is accepted; a direct service call is clamped | `src/jobs/job-insights.service.spec.ts` and `test/jobs/job-admin.integration.spec.ts` (through the real pipe, asserting no query ran) |
-| Both `groupBy` aggregates stay unfiltered, so the covering index can serve them | `src/jobs/job-insights.service.spec.ts` |
-| The three live counts carry exactly the predicates the partial indexes are built on | `src/jobs/job-insights.service.spec.ts` — the captured `where`s in full |
-| An empty window publishes nulls, not zeroes | `src/jobs/job-insights.service.spec.ts` |
-| Running jobs count as remaining; types with nothing outstanding are omitted; the longest wait is first | `src/jobs/job-insights.service.spec.ts` |
-| The ETA divides by the configured concurrency, floors the divisor at 1, publishes the raw value, and degrades to the shipped default rather than `NaN` | `src/jobs/job-insights.service.spec.ts` |
-| The lifetime merge adds rollup and live without double counting, includes a purged-only type and a rollup-less type, and reports `null` rather than `NaN` for a type that has only failed | `src/jobs/job-insights.service.spec.ts` |
-| All eight queries are in flight at once | `src/jobs/job-insights.service.spec.ts` — a peak-concurrency counter, which is what makes `Promise.all` an assertion rather than a comment |
-| `resetHistory` deletes every rollup row and touches no job query | `src/jobs/job-insights.service.spec.ts` |
-| Both insights routes resolve ahead of `:id`, and both are Admin-only against an anonymous caller and a viewer | `test/jobs/job-admin.integration.spec.ts` — driven through the real router, asserting the COMPUTATION RAN rather than merely that the status was not 400 |
+| Every raw statement begins with `SELECT` and contains no `INSERT`/`UPDATE`/`DELETE`/`FOR UPDATE`/`FOR SHARE`/`LOCK TABLE`/advisory lock | `platform-api/jobs/job-insights.service.spec.ts` — asserted on the SQL text, which is the half a database cannot prove: it never sees a statement that was not sent |
+| A read writes nothing at all | `platform-api/jobs/job-insights.service.spec.ts` |
+| The window is a bound parameter, not interpolated text | `platform-api/jobs/job-insights.service.spec.ts` — asserts `Prisma.Sql`'s `values` and `sql`, as `job-claim.service.spec.ts` does for the claim |
+| `basis` is `none` with no history anywhere | `platform-api/jobs/job-insights.service.spec.ts` — a statement about the *whole table*, which a prefix-scoped database suite cannot own |
+| Out-of-range, zero, negative, fractional and non-numeric `windowDays` are 400s; 90 is accepted; a direct service call is clamped | `platform-api/jobs/job-insights.service.spec.ts` and `platform-api/jobs/job-admin.integration.spec.ts` (through the real pipe, asserting no query ran) |
+| Both `groupBy` aggregates stay unfiltered, so the covering index can serve them | `platform-api/jobs/job-insights.service.spec.ts` |
+| The three live counts carry exactly the predicates the partial indexes are built on | `platform-api/jobs/job-insights.service.spec.ts` — the captured `where`s in full |
+| An empty window publishes nulls, not zeroes | `platform-api/jobs/job-insights.service.spec.ts` |
+| Running jobs count as remaining; types with nothing outstanding are omitted; the longest wait is first | `platform-api/jobs/job-insights.service.spec.ts` |
+| The ETA divides by the configured concurrency, floors the divisor at 1, publishes the raw value, and degrades to the shipped default rather than `NaN` | `platform-api/jobs/job-insights.service.spec.ts` |
+| The lifetime merge adds rollup and live without double counting, includes a purged-only type and a rollup-less type, and reports `null` rather than `NaN` for a type that has only failed | `platform-api/jobs/job-insights.service.spec.ts` |
+| All eight queries are in flight at once | `platform-api/jobs/job-insights.service.spec.ts` — a peak-concurrency counter, which is what makes `Promise.all` an assertion rather than a comment |
+| `resetHistory` deletes every rollup row and touches no job query | `platform-api/jobs/job-insights.service.spec.ts` |
+| Both insights routes resolve ahead of `:id`, and both are Admin-only against an anonymous caller and a viewer | `platform-api/jobs/job-admin.integration.spec.ts` — driven through the real router, asserting the COMPUTATION RAN rather than merely that the status was not 400 |
 | Both routes carry `x-rbac` and the document still lints | `npm run openapi:dump` + `npm run openapi:lint` |
 
 Be honest about the limits of #265. No test asks Postgres whether the two

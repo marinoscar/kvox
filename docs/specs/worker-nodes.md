@@ -1,32 +1,55 @@
 # Worker Nodes
 
+> **Implementation: `@marinoscar/platform-api/nodes`** (with the queue it
+> claims from in `@marinoscar/platform-api/jobs`, see [job-queue.md](job-queue.md)).
+> Issue #468 (epic #467) deleted `apps/api/src/nodes` and `apps/api/src/jobs`
+> from this repository and mounted the packaged slices:
+> `NodesModule.forRoot` and `NodeCredentialModule` in
+> `apps/api/src/platform/jobs/jobs.config.ts`, with the host ports
+> `NODE_JOB_INPUTS` (`apps/api/src/platform/jobs/node-job-inputs.adapter.ts`,
+> over `apps/api/src/storage/storage-job-input.ts`) and `NODE_OBJECT_STORE`
+> (`apps/api/src/platform/jobs/node-object-store.adapter.ts`, a temporary shim
+> until #469) bound in `jobs-host.module.ts`. Packaged `/admin/settings/workers`
+> is the fleet's admin page; jobs now carry `org_id` (job-queue.md). KVox keeps
+> the handlers of the node-eligible types (`db.backup.run`,
+> `media.audio.transcode`, `note.source.extract`) and their result contracts in
+> the owning module's `contracts/` folder.
+>
+> **File paths in this document.** Sections were written when the code lived
+> here. A path written `platform-api/nodes/...` or `platform-api/jobs/...` names
+> a file in the package `@marinoscar/platform-api` (compiled output under
+> `node_modules/@marinoscar/platform-api/dist/`). The spec files in the
+> verification list ran in this repository before #468 and are now the
+> package's own suites.
+>
 > Issues #267, #268 and #269, epic #254. The schema — `WorkerNode`, `NodeCredential`,
 > the `NodeStatus` enum and the `Job.claimedByNode` relation deferred by #255 —
-> lives in `apps/api/prisma/schema.prisma`, whose block comments carry the
+> comes from the platform's database fragments (composed into
+> `apps/api/prisma/schema.prisma`; `platform-migration` skill), whose block comments carry the
 > per-column reasoning and are not restated here.
 >
 > **Part one (§1–§7)** is the credential a node authenticates with and the
 > boundary that keeps it from being able to do anything else:
-> `apps/api/src/nodes/node-credential.service.ts`, its controller and module,
+> `platform-api/nodes/node-credential.service.ts`, its controller and module,
 > and the `Bearer nod_` branch in
 > the platform's `JwtAuthGuard` (`@marinoscar/platform-api/identity`; KVox's copy at `apps/api/src/auth/guards/jwt-auth.guard.ts` was deleted by #465).
 >
 > **Part two (§8–§14)** is the control plane those credentials reach —
 > register, heartbeat, claim, lease renewal, result and failure —
-> `apps/api/src/nodes/nodes.service.ts`,
-> `apps/api/src/nodes/nodes.controller.ts`,
-> `apps/api/src/nodes/nodes.module.ts` and
-> `apps/api/src/nodes/dto/node-control-plane.dto.ts`.
+> `platform-api/nodes/nodes.service.ts`,
+> `platform-api/nodes/nodes.controller.ts`,
+> `platform-api/nodes/nodes.module.ts` and
+> `platform-api/nodes/dto/node-control-plane.dto.ts`.
 >
 > **Part three (§15–§22)** is the data plane — how a node with no storage
 > credentials reads input bytes and writes output bytes — plus the reference
 > node-eligible job type that makes the whole fleet reachable end to end:
-> `apps/api/src/nodes/node-data-plane.service.ts`,
-> `apps/api/src/nodes/dto/node-data-plane.dto.ts`,
+> `platform-api/nodes/node-data-plane.service.ts`,
+> `platform-api/nodes/dto/node-data-plane.dto.ts`,
 > `apps/api/src/storage/storage-job-input.ts`,
-> `apps/api/src/jobs/handlers/example-checksum.handler.ts` and
-> `apps/api/src/jobs/contracts/` (base types) and the owning module's `contracts/`
-> folder (`transcripts/contracts/`, `notes/contracts/`).
+> `platform-api/jobs/handlers/example-checksum.handler.ts` (retired, §21) and
+> the owning module's `contracts/` folder (`transcripts/contracts/`,
+> `notes/contracts/`, `db-backup/contracts/`).
 >
 > The fleet lifecycle cron (liveness, pruning, auto-drain) is **#270** and is
 > not described here.
@@ -544,7 +567,7 @@ thing to get wrong, and its only correct values are already inside that range.
 **The URL is never logged**, at any level, by any component: the storage
 provider names the key only, `NodeDataPlaneService` names the job and the
 object, and the platform request logger (the host core's `LoggingInterceptor`) records method, url and duration — never a
-response body. `test/nodes/node-data-plane.integration.spec.ts` asserts that
+response body. `platform-api/nodes/node-data-plane.integration.spec.ts` asserts that
 across a real request, because it is a property of the whole pipeline rather
 than of one service.
 
@@ -755,7 +778,7 @@ as ugly code:
    "optimise" into two parts.
 
 The cost of the chosen option is one method every implementation must provide.
-`test/nodes/node-checksum-data-plane.db.spec.ts` implements the whole interface
+`platform-api/nodes/node-checksum-data-plane.db.spec.ts` implements the whole interface
 in its local provider precisely so that the day somebody adds a method without
 implementing it everywhere, a file stops compiling.
 
@@ -858,8 +881,14 @@ correctly returned an empty list. The entire data plane could be wrong in any
 way at all and nothing in this repository would notice, because nothing could
 reach it.
 
-`example.checksum` (`apps/api/src/jobs/handlers/example-checksum.handler.ts`)
-takes `subjectType: 'storage_object'` and a `StorageObject.id`, and exercises
+> **Retired in #468.** The handler was a template demonstration and was deleted
+> with the queue code; its type string `example.checksum` keeps a label only
+> (`RETIRED_JOB_TYPE_LABELS` in `apps/api/src/app-registrations/jobs.ts`) so old
+> rows render. The path it proved is now exercised by the three real
+> node-eligible types and the package's own data-plane suites. The section is
+> kept for the reasoning, which still applies to any node-eligible type.
+
+`example.checksum` (formerly `example-checksum.handler.ts`) takes `subjectType: 'storage_object'` and a `StorageObject.id`, and exercises
 the complete path: claim → download URL → stream → SHA-256 → submit → schema
 validation → `persistNodeResult` writing `{ sha256, bytes }` into
 `StorageObject.metadata`, plus the failure and lease-renewal branches.
@@ -887,9 +916,9 @@ on its own.
 `GET /api/nodes/job-types` lists every node-eligible type with its
 `nodeResultSchema` converted by `z.toJSONSchema()`, so a client validates a
 result before posting it, against the definition this server will actually
-enforce. The schemas live in `apps/api/src/jobs/contracts/` for the base types and in the
-owning module's `contracts/` folder for a domain type (`transcripts/contracts/`,
-`notes/contracts/`).
+enforce. The schemas live in the owning module's `contracts/` folder
+(`transcripts/contracts/`, `notes/contracts/`, `db-backup/contracts/`); the
+base folder `jobs/contracts/` no longer exists.
 
 **Rejected: a shared `packages/job-contracts` workspace.** The reasons are
 already written down in `packages/shared/index.js`, which is the one package
@@ -1087,12 +1116,12 @@ clears the pointer and the reaper's existing signals do the rest.
 ## 27. Verification for this part
 
 Both crons are covered twice on purpose.
-`apps/api/test/nodes/node-fleet-lifecycle.spec.ts` drives them **in sequence**
+`platform-api/nodes/node-fleet-lifecycle.spec.ts` drives them **in sequence**
 against a narrow in-memory Prisma emulation, so the void-retention regression
 is covered on every ordinary `npm test`; the fixture supports only the
 operators these two queries use and throws on anything else, so adding a `NOT`
 or a `gte` fails loudly rather than quietly returning the wrong rows.
-`apps/api/test/nodes/node-fleet-lifecycle.db.spec.ts` proves the three things
+`platform-api/nodes/node-fleet-lifecycle.db.spec.ts` proves the three things
 only Postgres can: that `NULL < cutoff` is not true, that
 `Job.claimedByNode` really is `SetNull`, and that the reaper requeues a job
 whose node was deleted.
@@ -1155,7 +1184,7 @@ receiving the same row. A specialised copy would start identical to
 `JobClaimService`'s single `UPDATE … FOR UPDATE SKIP LOCKED … RETURNING` and
 diverge on the first fix applied to one side, and it would pass every mocked
 test in the repository while double-claiming the first time a node and the API
-server polled within the same millisecond. `test/nodes/node-claim-contention.db.spec.ts`
+server polled within the same millisecond. `platform-api/nodes/node-claim-contention.db.spec.ts`
 exists to hold that line against real Postgres.
 
 **Writing terminal rows from the node plane.** §9 and the header of
@@ -1279,66 +1308,66 @@ excludes.
 
 The load-bearing suites:
 
-* `apps/api/src/nodes/nodes.service.spec.ts` — register-or-reattach including
+* `platform-api/nodes/nodes.service.spec.ts` — register-or-reattach including
   the simulated `P2002`, the three claim filters (asserted on the arguments
   handed to `JobClaimService`, because a filter that is wrong still returns
   jobs), and the lease guard's four conditions sabotaged one at a time.
-* `apps/api/test/nodes/nodes.integration.spec.ts` — the same decisions over the
+* `platform-api/nodes/nodes.integration.spec.ts` — the same decisions over the
   real router, guards, Zod pipe, response envelope and exception filter: the
   `409` a late submission actually receives, the validation issues surviving
   inside `details`, and the `{ job, params }` shape a node's entire view of its
   work depends on.
-* `apps/api/test/nodes/node-claim-contention.db.spec.ts` — **real Postgres
+* `platform-api/nodes/node-claim-contention.db.spec.ts` — **real Postgres
   only.** A node claiming through `NodesService` and the in-process worker
   claiming through `JobClaimService`, over two independent clients, never
   receive the same row. Unprovable against a mock, which is why it is a
   `*.db.spec.ts`.
-* `apps/api/src/nodes/node-data-plane.service.spec.ts` — the guard being
+* `platform-api/nodes/node-data-plane.service.spec.ts` — the guard being
   REACHED rather than reimplemented, the key being derived server-side (asserted
   on the argument handed to the provider, because a service that reported one
   key while signing another would pass any body-only assertion), the expiry
   clamp in both directions, and the three input-resolution reasons.
-* `apps/api/test/nodes/node-data-plane.integration.spec.ts` — the same over the
+* `platform-api/nodes/node-data-plane.integration.spec.ts` — the same over the
   real router: `GET /api/nodes/job-types` being reachable at all (route order),
   valid JSON Schema for every node-eligible type, `409` without a lease, `400`
   naming a node-supplied `key`, `422` with `details.reason`, and a `Logger` spy
   proving no signed URL reaches a log line.
-* `apps/api/src/jobs/handlers/example-checksum.handler.spec.ts` — both
+* `platform-api/jobs/handlers/example-checksum.handler.spec.ts` — both
   executors leaving the same row, `persistNodeResult` never touching the
   provider, the merge into `metadata`, and the near-miss digests (upper case,
   prefixed, truncated) a fork's own node would produce.
 * `apps/api/src/storage/storage-job-input.spec.ts` — the three failures one at
   a time, each asserting the message names the job and is not `open ''`.
-* `apps/api/test/nodes/node-checksum-data-plane.db.spec.ts` — **real Postgres
+* `platform-api/nodes/node-checksum-data-plane.db.spec.ts` — **real Postgres
   only.** `example.checksum` from enqueue to persisted metadata, with a local
   signing storage provider: the "node" is handed nothing but the job and the
   URL it asked for, so it can only succeed if the data plane really works.
   Covers the lease-renewal and failure branches, the malformed result refused
   before `persistNodeResult`, and a node-supplied key refused against the job's
   own input object.
-* `apps/api/src/nodes/node-credential.service.spec.ts` — the four rejection
+* `platform-api/nodes/node-credential.service.spec.ts` — the four rejection
   paths one at a time, and the `expiresAt: null` group.
-* `apps/api/test/nodes/node-fleet-lifecycle.spec.ts` — the two crons run **in
+* `platform-api/nodes/node-fleet-lifecycle.spec.ts` — the two crons run **in
   sequence** (§27): the crashed node that the prune alone can never reach, the
   never-heartbeated node aged by `registered_at`, the `disabled` node the sweep
   must not touch, and the busy node deferred until its job settles.
-* `apps/api/test/nodes/node-fleet-lifecycle.db.spec.ts` — **real Postgres
+* `platform-api/nodes/node-fleet-lifecycle.db.spec.ts` — **real Postgres
   only.** The same sequence plus what only a database proves: `NULL < cutoff`
   is not true, `Job.claimedByNode` is `SetNull`, and the lease reaper requeues
   a job whose node was deleted.
-* `apps/api/src/nodes/tasks/node-stale-offline.task.spec.ts` and
+* `platform-api/nodes/tasks/node-stale-offline.task.spec.ts` and
   `node-offline-prune.task.spec.ts` — the statements each cron sends, the
   fail-open kill switches, and that neither rejects out of its `@Cron` handler.
-* `apps/api/src/nodes/nodes-admin.service.spec.ts` — the single `groupBy`
+* `platform-api/nodes/nodes-admin.service.spec.ts` — the single `groupBy`
   asserted as a **call count**, and the list and detail reads agreeing on
   health.
-* `apps/api/test/nodes/nodes-admin.integration.spec.ts` — `/api/admin/nodes/
+* `platform-api/nodes/nodes-admin.integration.spec.ts` — `/api/admin/nodes/
   credentials` resolving to the credentials route rather than `:id`, over the
   real router, and the Admin-only RBAC on all five routes.
 * `jwt-auth.guard.spec.ts` (was `apps/api/src/auth/guards/`; the guard is now the platform's `JwtAuthGuard` from `@marinoscar/platform-api/identity` since #465) — the allowlist, the
   prefix-boundary paths, the ordering assertion (spy on `validateToken`), and
   regression coverage for the untouched `pat_` and JWT branches.
-* `apps/api/test/nodes/node-credential.integration.spec.ts` — the `403`s over
+* `platform-api/nodes/node-credential.integration.spec.ts` — the `403`s over
   real HTTP on `/api/users`, `/api/admin/jobs` and `/api/node-credentials`
   **with an admin owner**, the endpoints' RBAC and show-once contract, and the
   allowed side of the boundary driven through the real service.

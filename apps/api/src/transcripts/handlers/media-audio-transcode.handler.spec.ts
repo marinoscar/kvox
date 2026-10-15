@@ -89,7 +89,9 @@ describe('MediaAudioTranscodeHandler', () => {
   let prisma: {
     transcript: { update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
     storageObject: { findUnique: jest.Mock };
+    organization: { findFirst: jest.Mock };
   };
+  let scopeRun: jest.Mock;
   let ffmpeg: { probe: jest.Mock; transcode: jest.Mock };
   let objects: { recordUploaded: jest.Mock };
   let pipeline: { loadForJob: jest.Mock; markFailed: jest.Mock; enqueueSubmit: jest.Mock };
@@ -126,7 +128,10 @@ describe('MediaAudioTranscodeHandler', () => {
           mimeType: 'audio/wav',
         }),
       },
+      // The default organization, for a job queued before it carried an `orgId`.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-default' }) },
     };
+    scopeRun = jest.fn((_job, fn) => fn(prisma));
 
     ffmpeg = {
       probe: jest.fn().mockResolvedValue({
@@ -177,7 +182,7 @@ describe('MediaAudioTranscodeHandler', () => {
         { provide: TranscriptionRuntimeService, useValue: runtime },
         { provide: STORAGE_PROVIDER, useValue: storage },
         // The scoped transaction client is the Prisma stub itself.
-        { provide: JobScope, useValue: { run: jest.fn((_job, fn) => fn(prisma)) } },
+        { provide: JobScope, useValue: { run: scopeRun } },
       ],
     }).compile();
 
@@ -274,6 +279,18 @@ describe('MediaAudioTranscodeHandler', () => {
         }),
       }),
     );
+  });
+
+  it('runs a job queued before it carried an orgId, in the default organization', async () => {
+    await handler.process(job({ orgId: null }));
+
+    // `JobScope.run` refuses a null org, so the handler names one for it.
+    expect(scopeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ id: JOB_ID, orgId: 'org-default' }),
+      expect.any(Function),
+    );
+    expect(ffmpeg.transcode).toHaveBeenCalled();
+    expect(objects.recordUploaded).toHaveBeenCalled();
   });
 
   it('takes the target bitrate from the JOB, not from the current setting', async () => {
