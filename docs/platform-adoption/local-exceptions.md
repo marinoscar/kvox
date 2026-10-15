@@ -35,15 +35,10 @@ The extensions `vector` and `pg_trgm` are part of `kvox:domain-schema`. `CREATE 
 | Storage-object test fixtures | `apps/api/test/helpers/storage-object.helper.ts`, `apps/api/test/helpers/fake-ownership-store.helper.ts`, and the `jest.mock` of `prisma/default-org` in the mocked-database specs | Real-database fixtures insert through `createStorageObject` (default org, then `managed_by` / `part_size` in SQL). Mocked-database specs answer the legacy store from their own fixture rows. | #469 deletes them with the store |
 | Platform columns in model-field tests | `apps/api/test/nodes/worker-node-model-fields.spec.ts` (`lastVitals`, `lastVitalsAt`), `apps/api/test/broadcasts/broadcast-model.db.spec.ts` (`targetOrgId`) | The documented field lists include columns the platform added to `worker_nodes` and `notification_broadcasts`. Marked `PLATFORM-ADOPTION-SHIM(#470)`. | #470 |
 | Ask-eval fixture seeder | `apps/api/scripts/ask-eval/seed-graph.ts` | Inserts storage objects with the default organization and stamps `managed_by` with raw SQL. | #469 |
+| RLS bypass on dump connections | `apps/api/src/db-backup/pg-dump.util.ts` (`buildPgDumpArgs`, `pgDumpEnv`, `assertRlsBypassCoupled`, used by `spawnPgDump`) and `apps/cli/src/node/pg-dump.ts` (`buildPgDumpArgs`, `pgClientEnv`, `assertRlsBypassCoupled`) | Every `pg_dump` runs with `--enable-row-security` AND `PGOPTIONS=-c app.rls_bypass=on` (server: merged with any existing `PGOPTIONS`; node: replaces the inherited value, which is cleared on purpose). The platform forces RLS on its tables and the minted dump role is NOSUPERUSER; `pg_dump` otherwise sends `SET row_security = off` and fails on every protected table ("query would be affected by row-level security policy"). The two are one mechanism: the flag alone would silently filter the archive to the rows the policies allow, so a dump with one and not the other is refused before it spawns. `app.rls_bypass` is the platform's own system-client setting, scoped to the dump connection: no `BYPASSRLS` on the role, no `ALTER ROLE ... SET`. | Revisit in #471 / #467 |
 | Escaped `Unsupported("vector(1536)")` | `apps/api/prisma/fragments/graph.prisma` and `search.prisma`: the three embedding fields (`KgEntity`, `KgItem`, `SearchEmbedding`) | The composer in `@marinoscar/platform-db` `0.1.0-next.5` cannot read the literal `Unsupported("vector(1536)")`. The fragments write the quotes escaped so the composed schema is valid. | The platform release that fixes the composer. Then write the plain literal and re-run `db:compose` |
 
 Any other compile error that a platform model change causes is fixed the same way. Add its row to this table.
-
-## Known failing tests
-
-| Test | Cause | Related |
-|---|---|---|
-| `apps/api/src/db-backup/pg-job-role.broker.db.spec.ts` ("produces an archive `readTocEntryCount` accepts when pg_dump runs AS the minted role") | `pg_dump` fails with "query would be affected by row-level security policy for table ai_runs". The platform forces row-level security on `ai_runs`, and the NOSUPERUSER dump role the broker mints is subject to it. Superusers ignore the policy. | #471. Not a shim: left failing on purpose until the role switch is decided. |
 
 ## Standing constraints
 
