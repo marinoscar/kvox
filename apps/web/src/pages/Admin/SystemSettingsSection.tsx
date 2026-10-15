@@ -33,7 +33,7 @@ import type { ReactNode } from 'react';
 import { Alert, Box, Container, Paper, Snackbar, Typography } from '@mui/material';
 import { Navigate } from 'react-router-dom';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useSystemSettings } from '../../hooks/useSystemSettings';
+import { useSystemSettings } from '@marinoscar/platform-web/settings/headless';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import type { SystemSettings } from '../../types';
 
@@ -77,7 +77,7 @@ export function SystemSettingsSection({
   children,
 }: SystemSettingsSectionProps) {
   const { hasPermission } = usePermissions();
-  const { settings, isLoading, error, isSaving, updateSettings } = useSystemSettings();
+  const { settings, isLoading, error, isSaving, updateSettings } = useSystemSettings<SystemSettings>();
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);

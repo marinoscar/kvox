@@ -171,7 +171,7 @@ export function BroadcastComposer({
   onSendTest,
 }: BroadcastComposerProps) {
   const theme = useTheme();
-  // The `down('sm')` compact-window convention, shared with `SettingsHub.tsx`
+  // The `down('sm')` compact-window convention, shared with `SettingsHub` (the packaged hub, `@marinoscar/platform-web/settings/ui`)
   // and `AppBar.tsx` — one of the five coupled gates CLAUDE.md rule 5 names.
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
 

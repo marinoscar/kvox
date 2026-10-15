@@ -20,7 +20,8 @@ import userEvent from '@testing-library/user-event';
 import { render, mockAdminUser } from '../../utils/test-utils';
 import type { NotificationEventDef } from '../../../types';
 
-vi.mock('../../../hooks/useSystemSettings', () => ({
+vi.mock('@marinoscar/platform-web/settings/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/settings/headless')>()),
   useSystemSettings: vi.fn(),
 }));
 
@@ -33,7 +34,7 @@ vi.mock('../../../hooks/useNotificationEvents', () => ({
   useNotificationEvents: vi.fn(),
 }));
 
-import { useSystemSettings } from '../../../hooks/useSystemSettings';
+import { useSystemSettings } from '@marinoscar/platform-web/settings/headless';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useNotificationEvents } from '../../../hooks/useNotificationEvents';
 import NotificationSettingsPage from '../../../pages/Admin/NotificationSettingsPage';

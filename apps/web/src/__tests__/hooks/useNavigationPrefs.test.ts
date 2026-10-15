@@ -14,11 +14,12 @@ import type { UserSettings, UserSettingsUpdate } from '../../types';
  *     PATCH would no-op and the UI would be showing a change never sent.
  */
 
-vi.mock('../../hooks/useUserSettings', () => ({
+vi.mock('@marinoscar/platform-web/settings/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/settings/headless')>()),
   useUserSettings: vi.fn(),
 }));
 
-import { useUserSettings } from '../../hooks/useUserSettings';
+import { useUserSettings } from '@marinoscar/platform-web/settings/headless';
 
 const mockUseUserSettings = vi.mocked(useUserSettings);
 

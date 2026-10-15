@@ -1,50 +1,49 @@
 /**
  * Settings (`/settings`) — the per-user hub.
  *
- * Issue #96, epic #90. This replaces the stacked `UserSettingsPage`, which
- * rendered Theme, Profile and Personal Access Tokens as three cards in one
- * scrolling `Container`. A stack has no group structure, no search, and no
- * per-section URL, so nothing in it could be linked to — and settings is the
- * surface that grows fastest in apps built on this baseline. Shipping the admin
- * hub (#93) while leaving this one a stack would also have left the baseline
- * demonstrating TWO settings patterns, which is the exact thing epic #90 exists
- * to prevent.
- *
- * DELIBERATELY THIN, and the twin of `pages/Admin/SettingsHubPage.tsx`. All of
- * the behaviour — the card grid, the drill-down list below `sm`, the search
- * field, the empty state, the scroll restoration — is in
- * `components/settings/SettingsHub.tsx`, which was parameterised over
- * `(sections, hubKey, title, subtitle)` from the start precisely so this file
- * could be a binding rather than a second hub. A hub COPIED from the admin one
- * would duplicate two responsive treatments and an empty state: four places to
- * fix every future bug. This file contributes exactly three things — the
- * registry, its scroll key, and its prose — and must never grow user-specific
- * rendering.
+ * Issue #96, epic #90; since #466 (epic #462) a four-prop binding over the
+ * packaged `SettingsHub` (`@marinoscar/platform-web/settings/ui`), the twin of
+ * `pages/Admin/SettingsHubPage.tsx`. All of the behaviour — the card grid, the
+ * drill-down list below `sm`, the search field, the empty state — is the
+ * package's; this file contributes the registry, its scroll key, its prose and
+ * the three app seams the package takes as props (the permission check, the
+ * feature map and the scroll restoration), and the version line
+ * (`AppVersionLine`, #296) the packaged hub has no slot for. It must never grow
+ * user-specific rendering, and the hub must never be forked.
  *
  * NO `RequirePermission` ON THIS ROUTE, unlike `/admin/settings`. Every
  * authenticated user owns their own settings; `USER_SETTINGS_SECTIONS` declares
- * no `permission` on any card, and `visibleSettingsSections` passes everything
- * through when none is declared. Adding a gate would invent an authorization
- * rule the API does not enforce.
+ * no gate on the cards every user needs, and the hub's own
+ * `visibleSettingsSections` filters the rest.
+ *
+ * The hub's `down('sm')` compact gate is breakpoint gate 4 of the five coupled
+ * gates (root AGENTS.md); it moved into the package unchanged.
  */
 
-import { SettingsHub } from '../components/settings/SettingsHub';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
+import { SettingsHub } from '@marinoscar/platform-web/settings/ui';
 import { USER_SETTINGS_SECTIONS, USER_HUB_TITLE } from '../config/userSettingsSections';
+import { AppVersionLine } from '../components/settings/AppVersionLine';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
 
 export default function UserSettingsHubPage() {
+  const { hasPermission } = usePermissions();
   return (
-    <SettingsHub
-      sections={USER_SETTINGS_SECTIONS}
-      // NOT `admin-settings-hub`. The two hubs are different documents of
-      // different heights; a shared key would restore one page's scroll offset
-      // onto the other, landing the user at an arbitrary point in whichever
-      // surface they opened second.
-      hubKey="user-settings-hub"
-      title={USER_HUB_TITLE}
-      // The stacked page's own subtitle, kept verbatim rather than mirroring
-      // the admin hub's system-configuration copy: these are the user's
-      // preferences, not the deployment's.
-      subtitle="Manage your account preferences"
-    />
+    <>
+      <SettingsHub
+        sections={USER_SETTINGS_SECTIONS}
+        // NOT `admin-settings-hub`. The two hubs are different documents of
+        // different heights; a shared key would restore one page's scroll offset
+        // onto the other.
+        hubKey="user-settings-hub"
+        title={USER_HUB_TITLE}
+        subtitle="Manage your account preferences"
+        hasPermission={hasPermission}
+        features={useSettingsFeatures()}
+        useScrollRestoration={useScrollRestoration}
+      />
+      <AppVersionLine />
+    </>
   );
 }

@@ -5,6 +5,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 // route guards and the identity pages come from `@marinoscar/platform-web`.
 import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
 import { IdentityProviders } from './identity/IdentityProviders';
+// Issue #466, epic #462. The platform host (api, viewer, applyTheme) the
+// packaged settings pages and hooks read, and KVox's settings-hub feature keys
+// (a side-effect import: it registers them at module scope, before first render).
+import { PlatformHost } from './platform/PlatformHost';
+import './config/settingsFeatures';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
@@ -76,10 +81,17 @@ const GraphImportPage = lazy(() => import('./pages/GraphImportPage'));
 // Ask — the read-only graph agent (#380, epic #348). One page for both routes.
 const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
-const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
+// Profile and Appearance are the platform's (#466, epic #462): the packaged
+// pages over the packaged `useUserSettings`, themed through the host's
+// `applyTheme` (`platform/PlatformHost.tsx`).
+const UserProfilePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserProfilePage })),
+);
 // `User`-prefixed to make explicit that it edits the signed-in user's own
 // theme, not anything under the Console.
-const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
+const UserAppearancePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserAppearancePage })),
+);
 // Issue #126, epic #109 — the per-user event x channel notification matrix.
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() =>
@@ -1027,7 +1039,9 @@ export default function App() {
   return (
     <ThemeContextProvider>
       <IdentityProviders>
-        <AppRoutes />
+        <PlatformHost>
+          <AppRoutes />
+        </PlatformHost>
       </IdentityProviders>
     </ThemeContextProvider>
   );
