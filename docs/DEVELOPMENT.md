@@ -12,6 +12,7 @@ This document provides essential information for developers working on this proj
 6. [Testing Guidelines](#testing-guidelines)
 7. [Debugging Tips](#debugging-tips)
 8. [Environment variables](#environment-variables)
+9. [Repository tooling](#repository-tooling)
 
 ---
 
@@ -778,6 +779,91 @@ The declarations sit on a small registry primitive, [`apps/api/src/common/regist
    ```
 
 3. **Index frequently queried fields** - Already done in schema for email, provider combinations
+
+---
+
+## Repository tooling
+
+Root-level tooling added for the platform adoption (epic #457, issue #461). Nothing here changes runtime behaviour: it pins the `@marinoscar/platform-*` packages, guards against duplicate copies of singleton libraries, and prepares the (still empty) `@marinoscar/kvox-*` package pipeline. The adoption baselines are in [platform-adoption/README.md](platform-adoption/README.md).
+
+### Pinned platform packages
+
+Every `@marinoscar/platform-*` dependency is pinned to one exact version, currently `0.1.0-next.5`. The same version appears in every entry:
+
+| Where | Entries |
+|---|---|
+| Root `package.json` `devDependencies` | `@marinoscar/platform-contract` |
+| `apps/api/package.json` `dependencies` | `@marinoscar/platform-contract`, `@marinoscar/platform-api`, `@marinoscar/platform-db` |
+| `apps/web/package.json` `dependencies` | `@marinoscar/platform-contract`, `@marinoscar/platform-web` |
+
+Application code does not import a platform package yet; only the resolution smoke tests (`apps/api/test/platform-pin.spec.ts`, `apps/web/src/__tests__/platform-pin.test.ts`) touch them.
+
+**Rules**
+
+- Never use a caret, tilde, tag or range. A bump is a reviewed change, and `check:platform-pin` is strict because of it.
+- Never hand-merge `package-lock.json`. Regenerate it with `npm install`. If re-pinning the same version misbehaves, delete the `@marinoscar/platform-*` entries from the lockfile and reinstall.
+- The npm `latest` dist-tag points at the old bootstrap release (`0.1.0-next.3`). Always install with an explicit version (`npm install @marinoscar/platform-api@0.1.0-next.5`), never `npm install @marinoscar/platform-api`.
+
+**How to bump**
+
+1. Find the new version: `npm view @marinoscar/platform-api dist-tags` (use the `next` value). Confirm all six packages publish it: `for p in contract api web db cli infra; do npm view @marinoscar/platform-$p@<version> version; done`.
+2. Change **every** `@marinoscar/platform-*` entry in the root, `apps/api` and `apps/web` `package.json` files to the new version. A partial change fails the pin check.
+3. Run `npm install` to regenerate the lockfile.
+4. Run `npm run check:platform-pin` and `npm run check:single-instance`, then `npm ls @marinoscar/platform-contract` (one deduped version).
+
+**GitHub-release tarball fallback.** When npm is unreachable, an entry may instead be the release tarball URL of the same version. The pin check accepts this form and extracts the version from the `platform-v<version>` path segment:
+
+```text
+https://github.com/marinoscar/EnterpriseAppBase/releases/download/platform-v0.1.0-next.5/marinoscar-platform-api-0.1.0-next.5.tgz
+```
+
+The same pattern applies to `contract`, `web` and `db`. A URL pin has no registry signature and Renovate cannot bump it, so prefer npm and say so in the PR when the fallback is used.
+
+### The contract override
+
+The root `package.json` carries `"overrides": { "@marinoscar/platform-contract": "$@marinoscar/platform-contract", ... }`. The `$` reference resolves against the root's own devDependency, which is why that devDependency exists: without it `npm install` fails with "Unable to resolve reference". Together they force one copy of `@marinoscar/platform-contract` for the API, the web app and the platform packages that depend on it. `check:platform-pin` fails if the override entry is missing or is neither the `$` reference nor the pin.
+
+### Check scripts
+
+| Command | What it does |
+|---|---|
+| `npm run check:platform-pin` | Runs `scripts/check-platform-pin.mjs`. Reads the root and every workspace `package.json` and fails (exit 1) when a `@marinoscar/platform-*` spec is not an exact version or a release tarball URL, when two entries differ, when `package-lock.json` resolves any `node_modules/@marinoscar/platform-*` (at any depth) to another version, or when the contract override is missing. Success prints `platform pin: <version> (N entries)`. Exit 2 is a usage error. |
+| `node scripts/check-platform-pin.mjs --self-test` | Runs three inline fixtures (ok, caret range, mismatch) to prove the checker itself still detects what it should. Accepts `--root <dir>` for the normal mode. |
+| `npm run check:single-instance` | Runs `scripts/check-single-instance.mjs`. Fails (exit 1) when a library with module-level state resolves to more than one copy: Nest, Fastify, Prisma client, Zod, `reflect-metadata`, `@opentelemetry/api`, React, React Router, MUI, Emotion, `ink`, plus any `packages/platform-*` workspace. It scans the lockfile and, after `npm ci`, resolves each name from every workspace and compares real paths. Flags: `--lockfile-only` (no `node_modules` needed), `--json`, `--lockfile <path>`, `--root <dir>`, `--guard <name>`. A duplicate is usually fixed by aligning a range in the workspace that drifted. |
+| `npm run check:platform-imports` | ESLint over `apps/{api,web,cli}/src/**/*.{ts,tsx}` with `--max-warnings=0`. Only the deep-import ban applies: app code may not reach into a platform or `@marinoscar/kvox-*` package's `src/`, `dist/` or `internal/` paths. |
+| `npm run lint:packages` | ESLint over `packages/kvox-*/src/**/*.{ts,tsx}` (`--no-error-on-unmatched-pattern`, so it passes while no such package exists). Enforces the no-deep-import rule and the slice-direction rule. |
+| `npm run build:packages`, `typecheck:packages`, `test:packages`, `docs:packages` | Run the `build`, `typecheck`, `test:run` and `docs` script of every `@marinoscar/kvox-*` workspace through `scripts/run-kvox-packages.mjs`. |
+
+`scripts/run-kvox-packages.mjs <script> [--if-present]` lists the workspaces whose name starts with `@marinoscar/kvox-` and runs `npm run <script> -w <name>...` for all of them in one call. While none exist it prints `no @marinoscar/kvox-* packages yet; nothing to <script>` and exits 0, so the four `*:packages` scripts are safe no-ops until Phase 2.
+
+### Lint, TSDoc and TypeDoc configuration
+
+| File | Purpose |
+|---|---|
+| `eslint.config.mjs` | Flat ESLint 10 config adapted from EnterpriseAppBase. Rule A: no deep imports into a package (only its `exports` map; no relative path that leaves the package, no app code, no `@app/shared`). Rule B: a slice under `packages/kvox-<pkg>/src/` may import another slice only when `packages/kvox-slices.json` lists it, and only through that slice's `index.ts`. Also applies the app deep-import ban. The apps' own `lint` scripts are untouched, and ESLint 10 ignores the legacy `.eslintrc.js`. |
+| `packages/kvox-slices.json` | The slice dependency graph, `{ "kvox-<pkg>": { "<slice>": ["<allowed dependency slice>"] } }`. Currently empty for `kvox-contract`, `kvox-api` and `kvox-web`. Append-only. |
+| `tsdoc.json` | TSDoc configuration. Extends TypeDoc's and declares the custom `@stability` and `@extensionPoint` block tags. |
+| `typedoc.base.json` | Shared TypeDoc options for the `@marinoscar/kvox-*` packages. Each package's own `typedoc.json` extends it and sets its tsconfig, entry points and output. The generated `docs-api/` folder is git-ignored. |
+
+### Changesets and pre mode
+
+Releases of the `@marinoscar/kvox-*` packages use [Changesets](https://github.com/changesets/changesets) in pre mode: `.changeset/pre.json` has `"mode": "pre"` and `"tag": "next"`, so releases are `x.y.z-next.N` on the `next` dist-tag. Do not edit or delete `pre.json` by hand.
+
+**There is nothing to do until Phase 2 (Epic 5, issue 5.1) publishes the first `@marinoscar/kvox-*` package.** Until then:
+
+- No pull request needs a changeset, and `npx changeset status` reports nothing to release.
+- `fixed` in `.changeset/config.json` stays empty, because Changesets rejects package names that do not exist yet. Issue 5.1 adds the `@marinoscar/kvox-*` group.
+- `api`, `web`, `cli` and `@app/shared` are listed under `ignore`: they are versioned by their own rules (the CLI by the version bump in [AGENTS.md](../AGENTS.md)), never through a changeset.
+
+Once a package exists, run `npx changeset` in any pull request that changes it. Writing guidance is in [`.changeset/README.md`](../.changeset/README.md). `npm run version-packages` and `npm run release` are maintainer steps at release time.
+
+### CI: the `tooling` job
+
+`.github/workflows/ci.yml` has a `tooling` job (Repository tooling) that runs concurrently with the others (no `needs:`). After `npm ci` it runs, in order: `check:platform-pin`, `node scripts/check-platform-pin.mjs --self-test`, `check:single-instance`, `check:platform-imports`, `lint:packages`, `build:packages`, `typecheck:packages`, `test:packages` and `npx changeset status`. To reproduce a failure locally, run the same commands from the repository root.
+
+### The `MonoRepo` tag
+
+`MonoRepo` is an annotated git tag on the pre-adoption commit `6e44e43`, created and pushed by a maintainer before any platform-adoption code change merged. It is the rollback point for the whole platform adoption: undoing the adoption means resetting to this tag. Never move it, re-create it or delete it. Verify it exists with `git ls-remote --tags origin MonoRepo` (one line expected).
 
 ---
 

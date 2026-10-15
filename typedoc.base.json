@@ -1,0 +1,89 @@
+{
+  // Shared TypeDoc options for the @marinoscar/kvox-* packages (Epic 5).
+  // Each package's typedoc.json extends this file and sets its own tsconfig,
+  // entry points and output (paths in an options file resolve against that
+  // file, so they cannot live here). `npm run docs:packages` runs every
+  // @marinoscar/kvox-* package.
+  //
+  // The API reference itself (docs-api/) is generated, never committed; the
+  // JSON half (docs-api/api.json) is what scripts/check-package-docs.mjs
+  // (added by issue 5.1) reads. The authoring rules follow the platform
+  // packages' (docs/PACKAGES.md in the EAB repository).
+  "$schema": "https://typedoc.org/schema.json",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "readme": "none",
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "treatWarningsAsErrors": false,
+  "treatValidationWarningsAsErrors": true,
+  // TypeDoc's default block tags plus the two tags declared in the
+  // root tsdoc.json (`@stability`, `@extensionPoint`). Setting `blockTags`
+  // replaces TypeDoc's list, so the defaults are repeated here.
+  "blockTags": [
+    "@defaultValue",
+    "@deprecated",
+    "@example",
+    "@jsx",
+    "@param",
+    "@privateRemarks",
+    "@remarks",
+    "@returns",
+    "@see",
+    "@throws",
+    "@typeParam",
+    "@author",
+    "@callback",
+    "@category",
+    "@categoryDescription",
+    "@default",
+    "@document",
+    "@extends",
+    "@augments",
+    "@yields",
+    "@group",
+    "@groupDescription",
+    "@import",
+    "@inheritDoc",
+    "@license",
+    "@module",
+    "@mergeModuleWith",
+    "@prop",
+    "@property",
+    "@return",
+    "@satisfies",
+    "@since",
+    "@sortStrategy",
+    "@template",
+    "@this",
+    "@type",
+    "@typedef",
+    "@summary",
+    "@preventInline",
+    "@inlineType",
+    "@preventExpand",
+    "@expandType",
+    "@stability",
+    "@extensionPoint"
+  ],
+  // Every kind of exported declaration and every public member needs TSDoc.
+  // Constructors and modules (entry points) are not listed: a constructor is
+  // documented on its class, and an entry point is documented by its README.
+  "requiredToBeDocumented": [
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Property",
+    "Method",
+    "Accessor",
+    "TypeAlias"
+  ]
+}

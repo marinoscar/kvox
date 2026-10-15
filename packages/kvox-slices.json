@@ -1,0 +1,6 @@
+{
+  "$comment": "Slice dependency graph for @marinoscar/kvox-* (Epic 5). A slice may import only the slices listed for it. Append-only.",
+  "kvox-contract": {},
+  "kvox-api": {},
+  "kvox-web": {}
+}
