@@ -4,7 +4,7 @@
 //
 // Platform migration `0024_split_system_org_roles` moved `contributor` and
 // `viewer` from `user_roles` onto `memberships.role_id`: they are ORG roles now,
-// and `admin` is the only SYSTEM role (it reaches the eight KVox domain
+// and `admin` is the only SYSTEM role (it reaches the eight domain
 // permissions through its `org_admin` membership, not through `admin`).
 //
 // `createMockTestUser` (auth-mock.helper.ts) still builds the old shape (every
@@ -33,7 +33,7 @@ const CATALOG: Catalog = JSON.parse(
   readFileSync(join(__dirname, '..', '..', 'prisma', 'catalog', 'permissions.json'), 'utf8'),
 );
 
-/** The eight domain permissions KVox registers as org-scoped (#465). */
+/** The eight domain permissions this app registers as org-scoped (#465). */
 export const KVOX_DOMAIN_PERMISSIONS = [
   'transcripts:read',
   'transcripts:write',
