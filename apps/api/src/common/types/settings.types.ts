@@ -32,7 +32,7 @@ import type { UserProfileSettingsValue } from '../schemas/settings.schema';
  * The fields every user's settings document carries, whatever namespaces are
  * registered.
  */
-export interface CoreUserSettingsValue {
+export type CoreUserSettingsValue = {
   theme: 'light' | 'dark' | 'system';
   /**
    * Profile preferences (#367). `imageSource` chooses which picture represents
@@ -46,17 +46,23 @@ export interface CoreUserSettingsValue {
    * (common/profile-image/profile-image.ts), never migrated.
    */
   profile: UserProfileSettingsValue;
-}
+};
 
 /**
  * User settings schema - stored in user_settings.value JSONB.
+ *
+ * Written as a mapped type over the augmentable `UserSettingsNamespaces`
+ * interface (not the interface itself) so the result is an anonymous object
+ * type, which TypeScript accepts where a `Record<string, unknown>` is wanted;
+ * an interface would not be.
  *
  * Every registered namespace is OPTIONAL, and absent is load-bearing: it means
  * "the user has expressed no preference", which is not the same thing as an
  * empty object (see `user-settings-namespaces.schema.ts`).
  */
-export type UserSettingsValue = CoreUserSettingsValue &
-  Partial<UserSettingsNamespaces>;
+export type UserSettingsValue = CoreUserSettingsValue & {
+  [K in keyof UserSettingsNamespaces]?: UserSettingsNamespaces[K];
+};
 
 /**
  * The fields every system settings document carries, whatever namespaces are
@@ -76,8 +82,9 @@ export type CoreSystemSettingsValue = Record<never, never>;
  * a contradiction, because `readKnownSettings` is the boundary where "what is
  * on disk" becomes "what this type promises".
  */
-export type SystemSettingsValue = CoreSystemSettingsValue &
-  SystemSettingsNamespaces;
+export type SystemSettingsValue = CoreSystemSettingsValue & {
+  [K in keyof SystemSettingsNamespaces]: SystemSettingsNamespaces[K];
+};
 
 /**
  * Default user settings

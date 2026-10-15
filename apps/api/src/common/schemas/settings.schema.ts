@@ -73,9 +73,16 @@ export type {
  * `Record<string, ZodType>` (the key set is only known at run time); the cast
  * restores the static type without touching the schema.
  */
-export type TypedObjectSchema<V> = Omit<ComposedObjectSchema, 'parse' | 'safeParse'> & {
+export type TypedObjectSchema<V> = Omit<
+  ComposedObjectSchema,
+  'parse' | 'safeParse' | '_zod'
+> & {
   parse(data: unknown): V;
   safeParse(data: unknown): z.ZodSafeParseResult<V>;
+  _zod: Omit<ComposedObjectSchema['_zod'], 'output' | 'input'> & {
+    output: V;
+    input: V;
+  };
 };
 
 /**

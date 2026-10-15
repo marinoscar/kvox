@@ -14,6 +14,7 @@ import {
 import {
   SystemSettingsDto,
   systemSettingsSchema,
+  systemNotificationsSchema,
   MAX_DISABLED_NOTIFICATION_EVENTS,
   type SystemNotificationsValue,
   type SystemMaintenanceValue,
