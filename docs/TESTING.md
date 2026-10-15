@@ -1151,7 +1151,7 @@ assume when they build their own connection string from the job's
 The `smoke` job is the only other place in CI with a real PostgreSQL, but it
 no longer runs these suites: it builds the API, migrates, seeds twice and boots
 the compiled artifact. The `*.db.spec.ts` files are likewise absent from the
-sharded `api-test` job (`npm test --workspace=api -- --shard=N/3`), which has
+sharded `api-test` job (`npm test --workspace=api -- --shard=N/4`), which has
 no database.
 
 ### Running Them Locally
