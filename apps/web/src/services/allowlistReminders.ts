@@ -1,8 +1,8 @@
 /**
- * Allowlist reminders (issue #301), the KVox-only half of the Users page.
+ * Allowlist reminders (issue #301), the app-only half of the Users page.
  *
  * Issue #465, epic #462. The platform's identity slice owns `/api/allowlist`,
- * but it has no reminder feature, so KVox serves two routes of its own next to
+ * but it has no reminder feature, so this app serves two routes of its own next to
  * the platform's (`apps/api/src/allowlist-reminders/`):
  *
  *   - `GET  /api/allowlist/reminders?ids=a,b` (`allowlist:read`): the reminder

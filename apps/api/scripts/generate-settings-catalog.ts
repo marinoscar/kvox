@@ -8,7 +8,7 @@
  * administrator edited.
  *
  * PLATFORM-ADOPTION-SHIM(#466): until the settings slice moves to the platform
- * this renders KVox's own registry (src/settings/registry). #466 swaps the
+ * this renders this app's own registry (src/settings/registry). #466 swaps the
  * import for `renderSystemSettingsCatalog` from `@marinoscar/platform-api/settings`.
  *
  *   npm run catalog:settings            write the file

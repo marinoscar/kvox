@@ -5,7 +5,7 @@
 // IMPORT THIS BEFORE ANYTHING THAT READS THE ROLE, PERMISSION OR OWNERSHIP
 // REGISTRIES: `main.ts`, `app.module.ts`, the seed and catalog scripts and the
 // test setup all import it first. It fills core's static registries with the
-// platform's roles and permissions plus KVox's, the user-owned model inventory
+// platform's roles and permissions plus this app's, the user-owned model inventory
 // and the model ownership classification. The registries freeze when the
 // application bootstraps, so a late registration fails loudly.
 //

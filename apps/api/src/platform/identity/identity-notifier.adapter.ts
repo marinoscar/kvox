@@ -10,7 +10,7 @@ import type {
 import { NotificationsService } from '../../notifications/notifications.service';
 
 /**
- * Identity's `IDENTITY_NOTIFIER` over KVox's CURRENT `NotificationsService`
+ * Identity's `IDENTITY_NOTIFIER` over this app's CURRENT `NotificationsService`
  * (PLATFORM-ADOPTION-SHIM(#468): #468 moves notifications into the platform and
  * changes only the binding in `identity-host.module.ts`).
  *
@@ -19,7 +19,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
  * failure becomes a `notification_deliveries` row), so a mail outage cannot fail
  * a sign-in, a role change or an allowlist insert.
  *
- * Event keys are KVox's historical ones, unchanged, so users' stored
+ * Event keys are this app's historical ones, unchanged, so users' stored
  * notification preferences keep applying:
  *   roleChanged         -> `security.role_changed`  (mandatory)
  *   userWelcomed        -> `user.welcome`
@@ -65,7 +65,7 @@ export class IdentityNotifierAdapter implements IdentityNotifier {
     // routes are unreachable, so nothing should arrive here. Never log the
     // address; the organization name is enough to find the caller.
     this.logger.debug(
-      `Dropping an organization invitation to "${notice.orgName}": KVox runs in single-organization mode`,
+      `Dropping an organization invitation to "${notice.orgName}": this app runs in single-organization mode`,
     );
   }
 }

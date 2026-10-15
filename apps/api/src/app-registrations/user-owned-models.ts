@@ -1,8 +1,8 @@
 // =============================================================================
-// KVox's user-owned models (issue #465, epic #462)
+// This app's user-owned models (issue #465, epic #462)
 // =============================================================================
 //
-// Every KVox model with a foreign key to `User`, classified for the platform's
+// Every this app model with a foreign key to `User`, classified for the platform's
 // user-data machinery (the scoped client, the user-data export and purge
 // planner, and the `user-owned-data` conformance suite, which fails when this
 // list and `prisma/schema/` disagree).

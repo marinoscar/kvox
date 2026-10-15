@@ -3,7 +3,7 @@
  *
  * The packaged `UsersPage` (`@marinoscar/platform-web/identity/ui`) owns the
  * Users and Allowlist tabs, but the platform has no "remind an invitee" feature:
- * `POST /api/allowlist/:id/reminder` and its bookkeeping are KVox's (a side
+ * `POST /api/allowlist/:id/reminder` and its bookkeeping are this app's (a side
  * table, `apps/api/src/allowlist-reminders/`). This panel is how that feature
  * stays reachable. It is appended to the page through `slots.Tabs`, with
  * `permission: 'allowlist:read'`, in `identity/usersPageSlots.ts`.
@@ -16,7 +16,7 @@
  * WHAT IT SHOWS. The PENDING allowlist entries (invited, not yet signed in),
  * each with how often it has been chased and when, and a "Send reminder"
  * button. The entries come from the platform's `GET /api/allowlist?status=pending`
- * (the packaged `useAllowlist` hook); the counts come from KVox's
+ * (the packaged `useAllowlist` hook); the counts come from this app's
  * `GET /api/allowlist/reminders?ids=` for just the ids on screen and are joined
  * here by id. A failed counts request degrades to "no history shown" with a
  * warning, never to an empty list.

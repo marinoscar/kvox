@@ -30,7 +30,7 @@ import { Suspense, lazy } from 'react';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 // Issue #465, epic #462. The identity pages are the platform's
-// (`@marinoscar/platform-web/identity/ui`). Login is KVox's thin binding that
+// (`@marinoscar/platform-web/identity/ui`). Login is this app's thin binding that
 // puts the brand mark in the package's `Logo` slot; the callback, device
 // activation and Access Tokens pages are used as packaged. Lazy like every
 // other page: the package barrel is split into its own chunk.
@@ -154,7 +154,7 @@ const BroadcastsPage = lazy(() => import('./pages/Admin/BroadcastsPage'));
 // not carry it in the entry chunk, and neither should a Viewer, who cannot
 // reach the route at all.
 const SetupPage = lazy(() => import('./pages/Admin/SetupPage'));
-// The packaged Users & Allowlist page plus KVox's Reminders tab (`slots.Tabs`).
+// The packaged Users & Allowlist page plus this app's Reminders tab (`slots.Tabs`).
 const AdminUsersPage = lazy(() => import('./identity/UsersPage'));
 
 // Test login page (development only)

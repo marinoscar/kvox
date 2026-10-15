@@ -33,7 +33,7 @@ async function bootstrap() {
 
   // `TENANCY_MODE` (#465): parsed and logged once, BEFORE the application
   // exists, so a typo never opens a database connection. Unset is `single`, the
-  // only mode KVox runs in.
+  // only mode this app runs in.
   verifyTenancyModeAtStartup(process.env, logger);
 
   const app = await NestFactory.create<NestFastifyApplication>(

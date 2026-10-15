@@ -8,15 +8,15 @@ import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * Identity's `IDENTITY_JOBS` over KVox's CURRENT job queue
+ * Identity's `IDENTITY_JOBS` over this app's CURRENT job queue
  * (PLATFORM-ADOPTION-SHIM(#470): #470 moves the queue into the platform and
  * changes only the binding in `identity-host.module.ts`).
  *
- * The two identity job types keep KVox's type strings, because rows outlive
+ * The two identity job types keep this app's type strings, because rows outlive
  * handlers and a renamed type would orphan the history:
  * `auth.token.cleanup` and `device-auth.code.cleanup`. Both are SERVER-ONLY
  * (they delete credential rows, a privilege a worker node must never hold), so
- * the handlers declare no `nodeResultSchema` / `persistNodeResult`, and KVox's
+ * the handlers declare no `nodeResultSchema` / `persistNodeResult`, and this app's
  * derived node eligibility treats them as such.
  *
  * The crons that enqueue them live in the platform and ONLY enqueue (root rule

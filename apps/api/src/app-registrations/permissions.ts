@@ -1,5 +1,5 @@
 // =============================================================================
-// KVox's own permissions (issue #465, epic #462)
+// This app's own permissions (issue #465, epic #462)
 // =============================================================================
 //
 // The eight domain permissions the product adds on top of the platform's.

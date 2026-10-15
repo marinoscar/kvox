@@ -77,7 +77,7 @@ import configuration from './config/configuration';
     PrismaModule,
 
     // The platform's DI-time host ports (audit sink, system settings store,
-    // `PLATFORM_PRISMA`), bound to KVox's current services (#465). Global.
+    // `PLATFORM_PRISMA`), bound to this app's current services (#465). Global.
     platformHostModule,
     // The platform Doctor: the identity slice registers its health checks with
     // it, so it cannot boot without it (#465). One read-only admin route.
@@ -91,11 +91,11 @@ import configuration from './config/configuration';
     // The platform's identity slice (#465, epic #462): `/api/auth/*`,
     // `/api/users`, `/api/roles`, `/api/allowlist`, `/api/pat`,
     // `/api/auth/device/*` and, outside production, `/api/auth/test/login`, in
-    // single-organization mode. Replaces KVox's own AuthModule, UsersModule,
+    // single-organization mode. Replaces this app's own AuthModule, UsersModule,
     // AllowlistModule, PatModule, DeviceAuthModule and TestAuthModule. Global:
     // it provides `PatService` and the guards' dependencies to every module.
     identityModule,
-    // The KVox-only allowlist reminder routes (`POST /api/allowlist/:id/reminder`,
+    // The app-only allowlist reminder routes (`POST /api/allowlist/:id/reminder`,
     // `GET /api/allowlist/reminders`), a side table beside the platform's
     // allowlist, which has no seam for them (#301, moved by #465).
     AllowlistRemindersModule,

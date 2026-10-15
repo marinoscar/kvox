@@ -4,7 +4,7 @@
 //
 // DERIVED, NOT DECLARED. The roles and permissions the platform's slices
 // enforce are declared by `@marinoscar/platform-api` (`PLATFORM_ROLES`,
-// `PLATFORM_PERMISSIONS`); KVox's own eight domain permissions are declared in
+// `PLATFORM_PERMISSIONS`); this app's own eight domain permissions are declared in
 // `app-registrations/permissions.ts`. This file only turns those declaration
 // maps into the `ROLES` / `PERMISSIONS` constants the rest of the codebase
 // imports, so a permission string can never drift from what the seed writes

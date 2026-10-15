@@ -1,10 +1,10 @@
 // =============================================================================
-// KVox's model ownership classification (issue #465, epic #462)
+// This app's model ownership classification (issue #465, epic #462)
 // =============================================================================
 //
-// Every KVox model is classified (`user`, `org`, `org-optional` or `system`);
+// Every this app model is classified (`user`, `org`, `org-optional` or `system`);
 // the `user-owned-data` conformance suite fails on any model it cannot find
-// here. Single-organization deployment: KVox content belongs to a USER, not to
+// here. Single-organization deployment: this app content belongs to a USER, not to
 // an organization, so every domain model is `user`. The org-isolated models are
 // the platform's (storage, AI runs, groups, ...).
 //

@@ -7,7 +7,7 @@
  * `seedPlatform(prisma, platformSeedInputFrom(readSeedSnapshot('prisma/catalog'), env))`.
  *
  * The catalog is whatever the registries hold after the app's registrations
- * ran: the platform roles and permission sets plus KVox's own org-scoped
+ * ran: the platform roles and permission sets plus this app's own org-scoped
  * domain permissions (src/app-registrations). Add a permission by registering
  * it there and re-running this script, never by editing the JSON.
  *
@@ -17,7 +17,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-// Side effect: fills the role and permission registries (platform + KVox).
+// Side effect: fills the role and permission registries (platform + this app).
 import '../src/app-registrations/registrations';
 import { buildPermissionCatalog } from '@marinoscar/platform-api/core';
 

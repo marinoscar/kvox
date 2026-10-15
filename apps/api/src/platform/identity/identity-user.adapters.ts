@@ -9,7 +9,7 @@ import { DEFAULT_USER_SETTINGS } from '../../common/types/settings.types';
 
 /**
  * Identity's `USER_DEFAULTS`: what a new user's `user_settings.value` holds at
- * creation, over KVox's current default document (PLATFORM-ADOPTION-SHIM(#466):
+ * creation, over this app's current default document (PLATFORM-ADOPTION-SHIM(#466):
  * #466 moves the settings slice into the platform, which then owns it).
  */
 @Injectable()
@@ -22,7 +22,7 @@ export class KvoxUserDefaults implements UserDefaults {
 
 /**
  * Identity's `IDENTITY_PROFILE_IMAGES`: which picture `/api/auth/me` and
- * `/api/users` report, over KVox's profile-image helpers
+ * `/api/users` report, over this app's profile-image helpers
  * (`common/profile-image/profile-image.ts`, issue #367). The picture lives in
  * the user's settings (`profile.imageSource`) and in object storage, neither of
  * which identity owns.

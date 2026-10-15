@@ -1,11 +1,11 @@
 // =============================================================================
-// KVox's own seed rows (issue #465, epic #462)
+// This app's own seed rows (issue #465, epic #462)
 // =============================================================================
 //
 // `prisma/seed.ts` runs the platform seed first (`seedPlatform`: roles,
 // permissions, default grants, the `global` system settings row, the initial
 // administrator's allowlist row, the default organization) and then `seedApp`
-// from this file: the rows that belong to KVox alone. Today that is the
+// from this file: the rows that belong to this app alone. Today that is the
 // built-in note templates, which used to live in `seed-data.ts` together with
 // the role and permission tables the platform seed now owns.
 //
@@ -187,7 +187,7 @@ export const NOTE_TEMPLATES = [
 
 
 /**
- * Upsert KVox's own seed rows. Idempotent: a second run changes nothing.
+ * Upsert this app's own seed rows. Idempotent: a second run changes nothing.
  *
  * @param prisma - The seed script's client.
  */

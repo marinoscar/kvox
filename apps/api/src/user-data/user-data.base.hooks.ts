@@ -136,7 +136,7 @@ export class FilesUserDataHooks {
 /**
  * Revokes every active personal access token of a user.
  *
- * PLATFORM-ADOPTION-SHIM(#465): KVox's own `PatService.revokeAllForUser` went
+ * PLATFORM-ADOPTION-SHIM(#465): this app's own `PatService.revokeAllForUser` went
  * with the identity module, and the platform's `PatService` has no revoke-all
  * (its `revokeToken` is per token, per caller). This is the same one
  * `updateMany` the old method ran: it REVOKES (stamps `revoked_at`) rather than

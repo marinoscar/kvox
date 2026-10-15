@@ -136,7 +136,7 @@ function MockAuthProvider({
   providers = defaultMockProviders,
 }: MockAuthProviderProps) {
   // The packaged `AuthContextValue` (issue #465): beyond the session and the
-  // actions KVox's own context had, it carries the expiry flag, the token setter
+  // actions this app's own context had, it carries the expiry flag, the token setter
   // the callback page uses and the single-org organization fields.
   const contextValue: AuthContextValue = {
     user: authenticated ? user : null,

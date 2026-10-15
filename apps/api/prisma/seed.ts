@@ -24,7 +24,7 @@ import { seedApp } from './seed-app';
 //      registries by `npm run catalog:permissions` and `npm run catalog:settings`.
 //      The seed never imports `src/`: the production image carries `prisma/`
 //      but not `src/`.
-//   2. `seedApp`: KVox's own rows (the built-in note templates), `seed-app.ts`.
+//   2. `seedApp`: this app's own rows (the built-in note templates), `seed-app.ts`.
 //
 // Neither step deletes anything or overwrites a value an administrator edited.
 // This script stays Nest-free so it runs under ts-node.

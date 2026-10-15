@@ -7,11 +7,11 @@ import type {
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
 
 /**
- * The platform's `SYSTEM_SETTINGS_STORE` over KVox's CURRENT
+ * The platform's `SYSTEM_SETTINGS_STORE` over this app's CURRENT
  * `SystemSettingsService` (PLATFORM-ADOPTION-SHIM(#466)).
  *
  * #466 moves the settings slice into the platform; until then a packaged slice
- * that reads or patches a settings namespace goes through KVox's service, which
+ * that reads or patches a settings namespace goes through this app's service, which
  * keeps its validation, `If-Match` check and audit trail. #466 deletes this
  * file.
  */

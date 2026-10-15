@@ -1,9 +1,9 @@
 /**
- * The login route (issue #465, epic #462): the packaged `LoginPage` with KVox's
+ * The login route (issue #465, epic #462): the packaged `LoginPage` with this app's
  * mark in its `Logo` slot.
  *
  * The page owns the flow (redirect once signed in, the session-expired notice,
- * one button per provider the API offers); KVox owns only what identifies the
+ * one button per provider the API offers); this app owns only what identifies the
  * product. The mark sits ABOVE the heading rather than beside it: this is the
  * one screen with no top bar, so it is the only place the brand has to identify
  * itself before the user has anything else to go on. It is decorative

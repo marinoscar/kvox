@@ -613,7 +613,7 @@ export interface AuthProvider {
 // The allowlist, users, device-activation and personal-access-token shapes live
 // in `@marinoscar/platform-web/identity/headless` since the identity slice moved
 // there (issue #465, epic #462). The allowlist reminder shapes, which are
-// KVox's, are in `services/allowlistReminders.ts`.
+// This app's, are in `services/allowlistReminders.ts`.
 
 // ---------------------------------------------------------------------------
 // Email settings — issue #124, epic #109.

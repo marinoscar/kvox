@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // Every packaged slice takes its route decorators from the app instead of
-// shipping its own, so a packaged route is never public by accident. KVox's
+// shipping its own, so a packaged route is never public by accident. This app's
 // answer is the identity slice's `@Auth` and `@Public`.
 // =============================================================================
 

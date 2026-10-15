@@ -25,7 +25,7 @@ import {
  * (`@marinoscar/platform-web/core`): the access-token holder, the one-shot
  * 401 -> refresh -> retry, the cross-page refresh lock and the "session expired"
  * signal that the packaged `AuthProvider` drives sessions through. It is the
- * former `ApiService` of this file, moved to the package; what stays KVox's is
+ * former `ApiService` of this file, moved to the package; what stays this app's is
  * what it is configured with.
  *
  * `ApiError` is re-exported so the ~30 call sites that import it from

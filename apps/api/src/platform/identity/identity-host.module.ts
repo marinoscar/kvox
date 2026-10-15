@@ -1,5 +1,5 @@
 // =============================================================================
-// Identity's host ports, bound to KVox's CURRENT services (issue #465)
+// Identity's host ports, bound to this app's CURRENT services (issue #465)
 // =============================================================================
 //
 // The identity slice reaches the app through ports. This module binds them. It
@@ -13,7 +13,7 @@
 //   IDENTITY_PROFILE_IMAGES   -> common/profile-image     (moves in #466/#469)
 //   IDENTITY_NODE_CREDENTIALS -> NodeCredentialService    (moves in #470)
 //
-// IDENTITY_METRICS is deliberately UNBOUND: KVox has no metrics service, and
+// IDENTITY_METRICS is deliberately UNBOUND: this app has no metrics service, and
 // the port is optional (identity then records nothing). IDENTITY_EVENT_BUS and
 // IDENTITY_AUTH_CREDENTIALS are unbound for the same reason (the principal
 // cache invalidates in this process only; Google reads the environment).

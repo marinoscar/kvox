@@ -21,7 +21,7 @@ import {
 } from './dto/allowlist-reminder.dto';
 
 /**
- * KVox-owned routes beside the platform's `/api/allowlist` (list, add, remove).
+ * app-owned routes beside the platform's `/api/allowlist` (list, add, remove).
  * The paths do not collide with the platform's: `GET /allowlist` and
  * `DELETE /allowlist/:id` there, `GET /allowlist/reminders` and
  * `POST /allowlist/:id/reminder` here.

@@ -44,7 +44,7 @@
  *     is about.
  *
  * So it reuses `components/admin/AddEmailDialog.tsx` UNCHANGED — the dialog the
- * packaged Users & Allowlist page also draws (#465 kept KVox's copy because the
+ * packaged Users & Allowlist page also draws (#465 kept this app's copy because the
  * package does not export it), with the same validation and the same
  * endpoint — and calls `refresh()` afterwards so `admin.access` flips without a
  * reload. Gated on `allowlist:write`, the string `allowlist.controller.ts`

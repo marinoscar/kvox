@@ -5,7 +5,7 @@
 // Binds the DI-time host ports every packaged slice reaches the app through:
 //
 //   AUDIT_SINK             -> `audit_events` (PrismaAuditSink)
-//   SYSTEM_SETTINGS_STORE  -> KVox's CURRENT SystemSettingsService until #466
+//   SYSTEM_SETTINGS_STORE  -> this app's CURRENT SystemSettingsService until #466
 //   PLATFORM_PRISMA        -> the existing PrismaService
 //
 // `PlatformHostModule.forRoot` is GLOBAL, so the identity slice (which injects

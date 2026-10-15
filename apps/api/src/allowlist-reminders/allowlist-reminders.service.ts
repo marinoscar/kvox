@@ -15,7 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 /** Rows of orphan clean-up per read: bounded so the sweep never holds a long lock. */
 const ORPHAN_SWEEP_LIMIT = 500;
 
-/** The audit action, KVox-owned (the platform's allowlist writes its own). */
+/** The audit action, app-owned (the platform's allowlist writes its own). */
 export const ALLOWLIST_REMINDER_SENT_ACTION = 'allowlist.reminder_sent';
 
 export interface AllowlistReminderState {

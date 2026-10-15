@@ -79,7 +79,7 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
       {
         name: 'Organizations',
         description:
-          'Organizations, members and invitations, served by the platform identity slice. KVox runs in ' +
+          'Organizations, members and invitations, served by the platform identity slice. This app runs in ' +
           'single-organization mode: the web app does not surface these routes, and the deployment has one ' +
           'organization everyone joins on first sign-in.',
       },
