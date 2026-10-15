@@ -1,10 +1,10 @@
 import request from 'supertest';
-import { DatabaseHealthIndicator } from '../../src/health/indicators/database.indicator';
 import {
+  DatabaseHealthIndicator,
   MAINTENANCE_ERROR_MARKER,
   MAINTENANCE_RETRY_AFTER_SECONDS,
-} from '../../src/common/maintenance/maintenance.guard';
-import { MaintenanceModeService } from '../../src/common/maintenance/maintenance-mode.service';
+  MaintenanceModeService,
+} from '@marinoscar/platform-api/host';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import type { SystemMaintenanceValue } from '@marinoscar/platform-api/host';
 import {

@@ -82,7 +82,7 @@ import {
   DatabaseRestorePreflightService,
   defaultRestorePreflightSeam,
 } from '../../src/db-backup/restore-preflight.service';
-import { MaintenanceModeService } from '../../src/common/maintenance/maintenance-mode.service';
+import { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { NotificationsService } from '../../src/notifications/notifications.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';

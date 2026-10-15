@@ -30,7 +30,8 @@ import { dirname, resolve } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
-import { createOpenApiDocument } from '../src/openapi/document';
+import { createOpenApiDocument } from '@marinoscar/platform-api/host';
+import { APP_OPENAPI } from '../src/openapi/document';
 
 async function main(): Promise<void> {
   const outfile = resolve(process.argv[2] ?? 'openapi.json');
@@ -50,7 +51,7 @@ async function main(): Promise<void> {
   // every single route.
   app.setGlobalPrefix('api');
 
-  const document = createOpenApiDocument(app);
+  const document = createOpenApiDocument(app, APP_OPENAPI);
   await app.close();
 
   mkdirSync(dirname(outfile), { recursive: true });

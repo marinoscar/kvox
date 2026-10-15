@@ -55,7 +55,6 @@ const CRON_EXEMPT = [
  * principal or from a row the caller was already authorised to read, never from a raw request id.
  */
 const RAW_SQL_ALLOWLIST = [
-  { file: 'about/about.service.ts', why: 'Reads `server_version()` and `_prisma_migrations` for the About page; no user data, no request input.' },
   { file: 'allowlist-reminders/allowlist-reminders.service.ts', why: 'The kvox_allowlist_reminders side table: atomic INSERT .. ON CONFLICT counter, a join to allowed_emails and a bounded orphan DELETE. Allowlist bookkeeping, no user-owned rows; ids are bound uuid parameters.' },
   { file: 'ask/ask-conversations.service.ts', why: 'Conversation summaries and the running-turn partial-unique-index paths Prisma cannot express; every statement filters on the authenticated owner_id.' },
   { file: 'ask/citations.ts', why: 'Resolves citation sources across transcripts and notes with a join Prisma cannot express; bound by the owner id of the conversation.' },
@@ -81,11 +80,11 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'graph/read/graph-read.service.ts', why: 'Graph reads using trigram and as-of (tstzrange) predicates; scoped by owner_id.' },
   { file: 'graph/resolution/adjudication.service.ts', why: 'Entity-resolution adjudication reads; scoped by owner_id.' },
   { file: 'graph/resolution/candidate.service.ts', why: 'Trigram and pgvector candidate retrieval for entity resolution; scoped by owner_id.' },
+  { file: 'doctor/checks/db-extensions.doctor-check.ts', why: 'Doctor check: one read-only `SELECT` on the `pg_extension` catalog (are `vector` and `pg_trgm` installed); no user data, no request input.' },
   { file: 'graph/resolution/distinct-pair.service.ts', why: 'Distinct-pair lookups with ordered-pair predicates; scoped by owner_id.' },
   { file: 'graph/resolution/merge.service.ts', why: 'Entity merge with row locks across several tables; scoped by owner_id.' },
   { file: 'graph/speaker-link/speaker-link.reconciler.ts', why: 'Takes a per-transcript advisory lock (`pg_advisory_xact_lock`); touches no rows.' },
   { file: 'graph/write/graph-write.service.ts', why: 'GraphWriteService is the single graph write path; its raw statements use the live-statement and speaker-link partial unique indexes and are scoped by owner_id.' },
-  { file: 'health/indicators/database.indicator.ts', why: 'Health probe: `SELECT 1`.' },
   { file: 'jobs/job-claim.service.ts', why: 'Atomic claim with `FOR UPDATE SKIP LOCKED`; no user-owned rows.' },
   { file: 'jobs/job-insights.service.ts', why: 'Read-only aggregates over the jobs table for the admin console; no user-owned rows.' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },

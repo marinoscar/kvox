@@ -36,7 +36,7 @@ import type { DatabaseBackupRun, Job } from '@prisma/client';
 
 import type { ConfigService } from '@nestjs/config';
 
-import type { MaintenanceModeService } from '../common/maintenance/maintenance-mode.service';
+import type { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import { JOB_TEMP_PREFIX } from '../jobs/job-temp';
 import type { NotificationsService } from '../notifications/notifications.service';

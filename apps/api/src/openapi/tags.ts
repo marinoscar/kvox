@@ -13,14 +13,21 @@
 // One rule this file exists to enforce: NO undeclared and NO orphaned tags. A
 // tag used by a controller but not listed here would render with no description
 // and land outside every group; a tag listed here but used by nobody would
-// render an empty section. Both are failed assertions in
-// `test/openapi/openapi-document.spec.ts` rather than something a reviewer has
-// to notice.
+// render an empty section. Both are failed assertions in the OpenAPI document
+// tests rather than something a reviewer has to notice.
 //
 // Ordering is deliberate: `TAG_GROUPS` is emitted as `x-tagGroups`, and the
 // flattened tag order becomes the document's `tags` array, which is what a
 // renderer falls back to when it has no group support.
+//
+// SINCE #464 the document is built by the platform (`createOpenApiDocument` in
+// `@marinoscar/platform-api/host`), which publishes the taxonomy held in core's
+// `openApiTags` registry and prunes tags no operation uses. This file registers
+// every tag into it when it is first imported (`./document.ts` imports it), which
+// must happen before the application bootstraps: the registry freezes then.
 // =============================================================================
+
+import { openApiTags } from '@marinoscar/platform-api/core';
 
 export interface OpenApiTag {
   /** Must match the controller's `@ApiTags(...)` argument byte-for-byte. */
@@ -395,11 +402,8 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
   },
 ];
 
-/** Flattened, in group order. Emitted as the document's `tags` array. */
-export const OPENAPI_TAGS: OpenApiTag[] = TAG_GROUPS.flatMap((group) => group.tags);
-
-/** Emitted as `x-tagGroups`, the extension Scalar and Redoc read. */
-export const OPENAPI_TAG_GROUPS = TAG_GROUPS.map((group) => ({
-  name: group.name,
-  tags: group.tags.map((tag) => tag.name),
-}));
+for (const group of TAG_GROUPS) {
+  for (const tag of group.tags) {
+    openApiTags.register({ name: tag.name, description: tag.description, group: group.name });
+  }
+}

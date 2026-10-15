@@ -654,9 +654,9 @@ function jobNotFound(id: string): NotFoundException {
  * The 400 both repair routes answer for a `running` job.
  *
  * The machine-readable half goes in `details` and nowhere else:
- * `common/filters/http-exception.filter.ts` rebuilds every error body from a
- * fixed allowlist of keys (`code`, `message`, `details`) and DERIVES `code`
- * from the status, discarding any that an exception supplied. A field added at
+ * the platform's `HttpExceptionFilter` (`@marinoscar/platform-api/core`) rebuilds
+ * every error body from a fixed allowlist of keys (`code`, `message`, `details`)
+ * and keeps a `code` only when it is registered for the response status. A field added at
  * the top level of this payload would simply not reach the client.
  */
 function jobIsRunning(id: string, action: 'retried' | 'deleted'): BadRequestException {
