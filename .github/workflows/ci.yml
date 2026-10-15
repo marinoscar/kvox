@@ -130,6 +130,10 @@ jobs:
       - run: npm run build:packages
       - run: npm run typecheck:packages
       - run: npm run test:packages
+      # A PR checkout has no local `main` branch, which `changeset status`
+      # diffs against (`baseBranch` in .changeset/config.json). When `main`
+      # itself is checked out (a push to main) the branch already exists.
+      - run: git fetch origin main && (git branch --force main origin/main || true)
       - run: npx changeset status
 
   web-test:
