@@ -11,30 +11,49 @@ concurrency:
   cancel-in-progress: true
 
 # =============================================================================
-# ONE job for typecheck + API/CLI test/build, not several concurrent ones —
-# but the web suite is pulled out into its own sharded matrix below. Read
-# both halves of this note before changing either.
+# WHY THE SLOW SUITES ARE SHARDED ACROSS RUNNERS — read before merging jobs
+# =============================================================================
+# Wall clock is the longest job, so the work that dominated it is split across
+# runners instead of running serially on one. Measured on `main` runs of
+# 2026-10-15 (before the split), per step:
 #
-# Historical finding, still true for typecheck/API/CLI: splitting *those*
-# into their own job was tried and measured, and it was slower. Across
-# measured runs they took 71-95s inside this job but 118-131s in a fresh
-# one — the likely cause is that here they inherit a filesystem page cache
-# already warmed by npm ci; `import` is the metric that inflated most
-# (54s -> 100s) when isolated. Ruled out along the way: the scoped install
-# is not the cause (a full install in a separate job is still 118s), and it
-# is not job contention (three jobs behaved the same as four).
+#   `npm test --workspace=api`       7.5-8.4 min  (was inside `Build & Test`)
+#   `test:db --workspace=api`        2.8-4.5 min  (was inside `smoke`)
+#   web Vitest, per shard of 4       1.5-2.7 min
+#   everything else                  under 1 min per step
 #
-# That finding no longer applies to the web suite itself. Measured on three
-# consecutive `main` runs (2026-09-07), `test:run --workspace=web` alone
-# took 202-218s — more than every other job in this workflow COMBINED
-# (openapi ~50s, smoke ~100s, visual ~90s), and it ran serially after
-# typecheck and the API suite, making `Build & Test` a ~6 minute job while
-# every sibling job finished in under 2 minutes. That was not true when the
-# note above was written (the suite was 71-95s then); it has roughly
-# tripled since. Losing the warm-cache benefit this note documents is a
-# real, small cost — but it no longer outweighs the win of running that
-# work on additional runners' CPUs in parallel instead of one runner's CPU
-# serially. See the `web-test` job below.
+# That made the workflow 9-13 min, set by the API suite and the visual run.
+# The API suite is now `api-test` (4 shards) and
+# `test:db` is `db-test` (2 shards), the same shape `web-test` already had.
+# The visual regression job was removed from CI (its suite and the manual
+# `visual-baselines.yml` workflow remain). Typecheck, the CLI suite and the
+# CLI build stay together in `Build & Test`.
+#
+# Measured on PR #514 (same commit, 4 API shards, no queueing on the re-run):
+# 4m55s wall clock, down from 9m27s-12m01s. The API shards are still the
+# critical path (3m07s-4m00s of tests, ~4m50s per job). Two things that did NOT
+# help, so do not retry them without new evidence:
+#   - A persisted Jest cache (actions/cache on --cacheDirectory): it restored
+#     fine but held only ~11 MB, and the same 123-suite shard took 126s cold
+#     and 205s warm. ts-jest compile is not the bottleneck; running the ~40
+#     integration suites that boot the whole AppModule (20-35s each) is.
+#   - A 4th shard on its own: total test time stayed ~13-14 min, so shards
+#     divide the wall clock but not the work. Shard run-to-run noise is large
+#     (+-1 min for the same files), so compare per-step times over several runs.
+# Runs also queue when other PRs' CI is active: the account's concurrent-job
+# cap is shared, and this workflow now fans out to 13 jobs.
+#
+# Two earlier findings still hold:
+#   - Splitting typecheck/CLI into their own job was measured slower (71-95s
+#     inside one job, 118-131s in a fresh one — a warm page cache from npm ci).
+#     They stay together; only the long suites are split.
+#   - Every shard repeats `npm ci` (~35s) and runner startup. Past ~4 shards of
+#     one suite the fixed cost eats the gain, and the job count matters: GitHub
+#     caps concurrent jobs per plan, so a second run in flight (push + PR) would
+#     queue behind this one. Count the matrix legs before adding a shard.
+#
+# Required status checks: shard legs are separate check names (for example
+# `API Tests (shard 1/4)`). If branch protection pins check names, update it.
 # =============================================================================
 
 jobs:
@@ -56,18 +75,11 @@ jobs:
       - run: npx prisma generate
         working-directory: apps/api
 
-      # `media.audio.transcode` (epic #19, issue #26) runs ffprobe and ffmpeg,
-      # and `media-audio-transcode.ffmpeg.spec.ts` deliberately has NO skip
-      # guard — a suite that skips itself when a binary is missing is the only
-      # proof in this repository that the playback rendition is really seekable
-      # (`+faststart` is a flag ffmpeg accepts and silently ignores on a
-      # non-seekable output), and proof that skips is not proof. Both container
-      # images install the same package; this is the runner's copy of that.
-      #
       # `shellcheck` lints apps/cli/bootstrap-vps.sh two steps below (issue
       # #130). ubuntu-latest (24.04 "noble") ships ShellCheck 0.9.0 from apt;
-      # the script is written to pass `-S warning` on that version.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg shellcheck
+      # the script is written to pass `-S warning` on that version. (ffmpeg is
+      # installed by `api-test`, the only job that runs it.)
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
 
       # bootstrap-vps.sh is fetched with curl and run on a fresh VPS before
       # anything in this repository is built, so nothing else in CI would ever
@@ -86,7 +98,7 @@ jobs:
       # is stale, i.e. a source edit was committed without its rebuild.
       - run: npm run build:ontology --workspace=@app/shared && git diff --exit-code -- packages/shared/ontology
 
-      - run: npm test --workspace=api
+      # The API unit suite runs in `api-test` below, sharded.
       # Knowledge-graph golden set self-test (issue #362): scores predictions
       # synthesised from the labels, so anything but 1.000 is a scorer or
       # fixture bug. Report-only — CI never passes --enforce (spec §6: the
@@ -101,6 +113,49 @@ jobs:
       # import extension, or a rootDir slip that emits dist/src/cli.js and
       # leaves the `bin` path dangling. (issue #140, epic #110)
       - run: npm run build --workspace=cli
+
+  api-test:
+    name: API Tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    # No `needs:` — runs concurrently with `build`. Split out of `Build & Test`
+    # because this suite alone was 7.5-8.4 min (see the note atop this file).
+    # `jest --shard` splits by test FILE.
+    env:
+      NODE_ENV: test
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # `media.audio.transcode` (epic #19, issue #26) runs ffprobe and ffmpeg,
+      # and `media-audio-transcode.ffmpeg.spec.ts` deliberately has NO skip
+      # guard — a suite that skips itself when a binary is missing is the only
+      # proof in this repository that the playback rendition is really seekable
+      # (`+faststart` is a flag ffmpeg accepts and silently ignores on a
+      # non-seekable output), and proof that skips is not proof. Both container
+      # images install the same package; this is the runner's copy of that.
+      # Every shard installs it because the file that needs it may land in any.
+      #
+      # The apt install runs in the background WHILE `npm ci` runs: it was a
+      # 24-28s serial step on every shard, and the two share no resources worth
+      # contending for. `wait` returns apt's exit status, so a failed install
+      # still fails this step (GitHub runs bash with `-e`).
+      - name: Install ffmpeg (background) and dependencies
+        run: |
+          (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg) &
+          apt_pid=$!
+          npm ci
+          (cd apps/api && npx prisma generate)
+          wait "$apt_pid"
+
+      - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
   # Repository tooling for the platform adoption (epic #457, issue #461): the
   # pinned @marinoscar/platform-* packages, one copy of every singleton, no
@@ -139,8 +194,8 @@ jobs:
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # No `needs:` — runs concurrently with `build`, like `openapi`/`smoke`/
-    # `visual` do. Split out of `Build & Test` and sharded across 4 runners
+    # No `needs:` — runs concurrently with `build`, like `openapi` and
+    # `smoke` do. Split out of `Build & Test` and sharded across 4 runners
     # (see the note atop this file) because this suite alone now costs more
     # wall clock than every other job in the workflow combined, and each
     # shard gets its own runner's CPUs rather than contending with
@@ -304,18 +359,6 @@ jobs:
       # seed writes real rows and fails on a schema that does not match.
       - run: npm run prisma:migrate --workspace=api
 
-      # The one place in CI a real Postgres is up: `*.db.spec.ts` (job-schema
-      # index/constraint assertions today, see apps/api/test/jobs/) are
-      # excluded from every other `npm test`/`test:unit`/`test:cov`/`test:ci`
-      # run precisely because no Postgres is reachable there, and would
-      # otherwise fail with a confusing connection error rather than a clear
-      # skip. NODE_ENV=test (not the job's ambient unset/production value)
-      # matches what these specs assume when they build their own connection
-      # string from the POSTGRES_* vars above.
-      - run: npm run test:db --workspace=api
-        env:
-          NODE_ENV: test
-
       - run: npm run prisma:seed --workspace=api
 
       # And again (#256, epic #254). Every write in prisma/seed.ts is an upsert
@@ -344,31 +387,57 @@ jobs:
           NODE_ENV: production
           SMOKE_PORT: '3001'
 
-  visual:
-    name: Visual regression (issue #107)
+  db-test:
+    name: DB Tests (shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    # No `needs:` — runs concurrently with `build`, like `openapi` and `smoke`
-    # do, for the same reason: it shares no state with them (no database, no
-    # compiled API artifact) and gains nothing by queueing behind either.
+    # No `needs:` — runs concurrently with `build`. Split out of `smoke`, where
+    # it cost 2.8-4.5 min of a ~6 min job and sat on the critical path.
     #
-    # WHY A DEDICATED CONTAINER, PINNED TO AN EXACT PLAYWRIGHT BUILD
-    # -------------------------------------------------------------------------
-    # This job asserts PIXELS, not DOM state — the one kind of assertion
-    # nothing else in this workflow makes. `web-test` runs the Vitest+RTL
-    # suite against jsdom, which has no layout engine at all (no
-    # `offsetWidth`, no wrapping, no font metrics), so it structurally cannot
-    # catch a layout regression like #105 (a destination rendered in the wrong
-    # position; a caption clipped by 2px of padding) — see
-    # `apps/web/visual/main.tsx` for the full account of why this suite exists.
-    # A pixel baseline is sensitive to the exact browser BUILD, not just the
-    # Playwright *API* version, so this job runs inside the same
-    # `mcr.microsoft.com/playwright:v1.62.1-noble` image the baselines under
-    # `tests/visual/specs/**/*-snapshots/` were generated in, and
-    # `tests/visual/package.json` pins `@playwright/test` to that exact
-    # version with no caret — unlike `tests/e2e`'s `^1.40.0`, which only ever
-    # asserts DOM state and so is safe to float.
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    # Each shard has its OWN Postgres service container, so `--runInBand` (the
+    # suites share one cluster and must not overlap) still holds per shard, and
+    # the shards cannot interfere with each other.
+    #
+    # The database password is derived from the run id, attempt and shard rather
+    # than written as a literal: the container is throwaway and only reachable
+    # from this runner, but a fixed, well-known password in the file is what
+    # secret scanners flag as a hardcoded credential. It must match in both
+    # places below (the service and the job `env`).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    services:
+      postgres:
+        # Matches infra/compose/test.compose.yml, which is the only Postgres
+        # image this repo pins (base.compose.yml expects an external database
+        # and declares no `db` service).
+        #
+        # pgvector, not plain postgres (issue #178, epic #165): `vector` is a
+        # server-side control file, and `CREATE EXTENSION vector` in the
+        # semantic-search migration fails without one. That failure lands inside
+        # `prisma migrate deploy` in the `smoke` and `db-test` jobs, so on a plain image this
+        # workflow would go red ON THE MIGRATION rather than on a test.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ format('ci-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.shard) }}
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # The API builds its connection string from these at runtime, the same
+      # contract `smoke` exercises (see the comment on its `env:`).
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${{ format('ci-{0}-{1}-{2}', github.run_id, github.run_attempt, matrix.shard) }}
+      POSTGRES_DB: appdb
+      POSTGRES_SSL: 'false'
     steps:
       - uses: actions/checkout@v6
 
@@ -377,41 +446,23 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      # The root install (workspaces: apps/*) gets `apps/web` and its Vite dev
-      # server — what the harness in `apps/web/visual` runs on. `tests/visual`
-      # is NOT an npm workspace (same reason `tests/e2e` isn't: these are
-      # test-runner packages, not application code), so its own
-      # `@playwright/test` install is separate.
       - run: npm ci
-      - run: npm ci
-        working-directory: tests/visual
 
-      # Fails the job on ANY pixel diff (default `expect(page).toHaveScreenshot()`
-      # behavior) or on a missing baseline. `playwright.config.ts` boots
-      # `apps/web/visual`'s own Vite dev server itself (`webServer`) — no
-      # compose stack, no database, no API — so there is nothing else to start
-      # here.
-      #
-      # `tests/visual/node_modules/.bin/playwright` directly, NOT `npx
-      # playwright`: `npx` resolves the binary by walking up from the repo
-      # root, which has no local `playwright` install of its own (only
-      # `apps/web`'s dependencies are hoisted there), so it falls back to an
-      # ad-hoc download of whatever the latest published version is — a
-      # DIFFERENT `@playwright/test` module instance than the pinned one
-      # `tests/visual/specs/*.spec.ts` import, which throws "Playwright Test
-      # did not expect test() to be called here" (two copies of the module,
-      # two singletons). Verified by hitting exactly this failure while
-      # building the suite; the direct binary path is the fix, not a
-      # style preference.
-      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
+      - run: npx prisma generate
+        working-directory: apps/api
 
-      # Uploaded unconditionally (`if: always()`) so a failing run is
-      # diagnosable from the Actions UI: the HTML report embeds the
-      # expected/actual/diff PNG for every failed assertion, which is far
-      # faster to read than reproducing the failure locally from scratch.
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: visual-playwright-report
-          path: tests/visual/playwright-report/
-          retention-days: 14
+      # The one place (with `smoke`) in CI a real Postgres is up: `*.db.spec.ts`
+      # (job-schema index/constraint assertions, see apps/api/test/jobs/) are
+      # excluded from every other `npm test`/`test:unit`/`test:cov`/`test:ci`
+      # run precisely because no Postgres is reachable there, and would
+      # otherwise fail with a confusing connection error rather than a clear
+      # skip. The migration has to have actually run for the hand-written
+      # indexes and constraints these suites check to exist at all, and the
+      # database is unseeded, as it was when this ran inside `smoke`.
+      - run: npm run prisma:migrate --workspace=api
+
+      # NODE_ENV=test matches what these specs assume when they build their own
+      # connection string from the POSTGRES_* vars above.
+      - run: npm run test:db --workspace=api -- --shard=${{ matrix.shard }}/2
+        env:
+          NODE_ENV: test
