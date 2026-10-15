@@ -15,7 +15,7 @@
 //     check is scoped to the subject TYPE (`kg_export_sweep`, null id) and a
 //     pending render never suppresses the sweep; the payload is `{ mode: 'sweep' }`.
 //
-// It is the old KVox helper's subject handling, kept as a single function with
+// It is the former in-repo helper's subject handling, kept as a single function with
 // the same shape: look for an active job, enqueue at housekeeping priority as a
 // system job (`orgId: null`), never throw. It is an object with an `enqueue`
 // method so a `@Cron` body reads `.enqueue(` and the cron-enqueue-only suite

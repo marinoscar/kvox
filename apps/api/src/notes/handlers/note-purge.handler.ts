@@ -72,7 +72,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
-import { runInJobOrg } from '../job-org-scope';
+import { runInJobOrg } from '../../common/job-org-scope';
 import { NoteObjectsService } from '../note-objects.service';
 import { readExtractedObjectId } from '../source-metadata';
 import { type JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';

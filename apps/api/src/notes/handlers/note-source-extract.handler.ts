@@ -93,7 +93,7 @@ import {
 } from '../extraction/extraction-result';
 import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../job-types';
-import { runInJobOrg } from '../job-org-scope';
+import { runInJobOrg } from '../../common/job-org-scope';
 import { NoteObjectsService } from '../note-objects.service';
 import {
   EXTRACTED_OBJECT_ID_KEY,

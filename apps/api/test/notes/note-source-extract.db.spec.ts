@@ -45,6 +45,7 @@ import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-sys
 import {
   ClaimJobsDto,
   NodeDataPlaneService,
+  NodeDownloadUrlDto,
   NodeJobResultDto,
   NodesService,
   NodeUploadUrlDto,
@@ -372,7 +373,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
    * out through the two URLs the server minted for it.
    */
   async function runNode(job: Job, mimeType: 'application/pdf' | 'text/markdown') {
-    const grant = await dataPlane.createDownloadUrl(ownerId, nodeId, job.id);
+    const grant = await dataPlane.createDownloadUrl(ownerId, nodeId, job.id, {} as NodeDownloadUrlDto);
 
     // What a node receives must already be short-lived, whatever the
     // deployment configured — asserted here because this is the moment it
