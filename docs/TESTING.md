@@ -1037,15 +1037,15 @@ Baselines are generated and verified **only** inside the pinned container, `mcr.
 
 ### CI Integration
 
-A `visual` job in `.github/workflows/ci.yml` runs concurrently with the other CI jobs (no `needs:` dependency), inside `container: mcr.microsoft.com/playwright:v1.62.1-noble`. It invokes the pinned Playwright binary directly:
+A `visual` job in `.github/workflows/ci.yml` runs concurrently with the other CI jobs (no `needs:` dependency), inside `container: mcr.microsoft.com/playwright:v1.62.1-noble`. It is a matrix of 3 shards (`--shard=N/3`), and each shard keeps `workers: 1` so pixel determinism is unchanged. It invokes the pinned Playwright binary directly:
 
 ```bash
-tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
+tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --shard=N/3
 ```
 
 It does **not** use `npx playwright`, which resolves a different, unpinned Playwright module instance from the repo root and throws a `"did not expect test() to be called here"` error from having two copies of the Playwright module loaded in the same process.
 
-The job uploads `tests/visual/playwright-report/` via `actions/upload-artifact@v4` unconditionally (`if: always()`), so a failing run's HTML report — which embeds the expected, actual, and diff PNGs for every failed assertion — is downloadable directly from the Actions run without needing to reproduce the failure locally.
+Each shard uploads `tests/visual/playwright-report/` via `actions/upload-artifact@v4` unconditionally (`if: always()`), as an artifact named `visual-playwright-report-<shard>`, so a failing run's HTML report — which embeds the expected, actual, and diff PNGs for every failed assertion — is downloadable directly from the Actions run (from the failing shard's artifact) without needing to reproduce the failure locally.
 
 ### Running Tests Locally
 
@@ -1129,23 +1129,28 @@ run.
 
 ### Where They Run in CI
 
-The `smoke` job in `.github/workflows/ci.yml` is the only place in this
-repository's CI where a real PostgreSQL is running (`pgvector/pgvector:pg16`,
-as a service container — see issue #178 for why that image and not plain
-`postgres:16-alpine`). That job runs the compiled API artifact end to end —
-build, migrate, seed, boot — and `npm run test:db --workspace=api` is one
-step in that sequence, positioned deliberately: **after** `npm run
-prisma:migrate --workspace=api` and **before** `npm run prisma:seed
---workspace=api`. The migration has to have actually run for the
-hand-written indexes and constraints these suites check to exist at all; the
-step runs before seeding so the suites see a freshly-migrated, unseeded
-database, not one with the application's default rows already in it. It runs
-with `NODE_ENV=test` explicitly set for that one step — overriding the job's
-ambient (otherwise unset/production) value — because that is the
-`NODE_ENV` these suites assume when they build their own connection string
-from the job's `POSTGRES_*` environment variables (see
+The `db-test` job in `.github/workflows/ci.yml` is where these suites run in
+CI. It is a matrix of 2 shards, and each shard gets its own
+`pgvector/pgvector:pg16` service container (see issue #178 for why that image
+and not plain `postgres:16-alpine`), so `--runInBand` still holds per shard
+and the shards cannot interfere with each other. Each shard runs `npm run
+prisma:migrate --workspace=api` and then `npm run test:db --workspace=api --
+--shard=N/2`, positioned deliberately: **after** the migration and with no
+seed step at all. The migration has to have actually run for the hand-written
+indexes and constraints these suites check to exist at all; the database is
+left unseeded so the suites see a freshly-migrated database, not one with the
+application's default rows already in it. The test step runs with
+`NODE_ENV=test` explicitly set, because that is the `NODE_ENV` these suites
+assume when they build their own connection string from the job's
+`POSTGRES_*` environment variables (see
 `apps/api/test/helpers/scratch-database.helper.ts` and
 `apps/api/test/jobs/db-test-support.ts`).
+
+The `smoke` job is the only other place in CI with a real PostgreSQL, but it
+no longer runs these suites: it builds the API, migrates, seeds twice and boots
+the compiled artifact. The `*.db.spec.ts` files are likewise absent from the
+sharded `api-test` job (`npm test --workspace=api -- --shard=N/3`), which has
+no database.
 
 ### Running Them Locally
 
@@ -1193,7 +1198,7 @@ one must too:
 
 1. **Scope every row behind a distinct type/name prefix, and clean up after
    yourself.** These suites all share one database (locally, `appdb`; in CI,
-   the `smoke` job's service container), so nothing may assume it has that
+   the `db-test` shard's service container), so nothing may assume it has that
    database to itself. The established pattern is a prefix keyed on the
    suite and the running process id — e.g. `` `test.claim.${process.pid}.` ``
    in `job-claim.db.spec.ts` — used for every job `type`, user `email` or
