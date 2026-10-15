@@ -23,23 +23,30 @@ concurrency:
 #   everything else                  under 1 min per step
 #
 # That made the workflow 9-13 min, set by the API suite and the visual run.
-# The API suite is now `api-test` (3 shards) and `test:db` is `db-test`
-# (2 shards), the same shape `web-test` already had. The visual regression
-# job was removed from CI (its suite and the manual `visual-baselines.yml`
-# workflow remain). Typecheck, the CLI suite
-# and the CLI build stay together in `Build & Test`.
+# The API suite is now `api-test` (4 shards, with a persisted Jest cache) and
+# `test:db` is `db-test` (2 shards), the same shape `web-test` already had.
+# The visual regression job was removed from CI (its suite and the manual
+# `visual-baselines.yml` workflow remain). Typecheck, the CLI suite and the
+# CLI build stay together in `Build & Test`.
+#
+# First sharded run (3 API shards, cold Jest cache): 6m22s wall clock, set by
+# the API shards (4m44s-6m20s). Sharding did NOT divide the work evenly: the
+# shards summed to ~13 min of test time against 7.5-8.4 min serial, because
+# each one recompiles and type-checks the files it loads from a cold cache
+# (~40 integration suites load the whole AppModule, 20-35s each). Hence the
+# Jest cache and the 4th shard. Everything else finished by 3m36s.
 #
 # Two earlier findings still hold:
 #   - Splitting typecheck/CLI into their own job was measured slower (71-95s
 #     inside one job, 118-131s in a fresh one — a warm page cache from npm ci).
 #     They stay together; only the long suites are split.
-#   - Every shard repeats `npm ci` (~35s) and runner startup. Past ~3 shards of
+#   - Every shard repeats `npm ci` (~35s) and runner startup. Past ~4 shards of
 #     one suite the fixed cost eats the gain, and the job count matters: GitHub
 #     caps concurrent jobs per plan, so a second run in flight (push + PR) would
 #     queue behind this one. Count the matrix legs before adding a shard.
 #
 # Required status checks: shard legs are separate check names (for example
-# `API Tests (shard 1/3)`). If branch protection pins check names, update it.
+# `API Tests (shard 1/4)`). If branch protection pins check names, update it.
 # =============================================================================
 
 jobs:
@@ -101,17 +108,17 @@ jobs:
       - run: npm run build --workspace=cli
 
   api-test:
-    name: API Tests (shard ${{ matrix.shard }}/3)
+    name: API Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # No `needs:` — runs concurrently with `build`. Split out of `Build & Test`
     # because this suite alone was 7.5-8.4 min (see the note atop this file).
-    # `jest --shard` splits by test FILE, balanced on file size/past duration.
+    # `jest --shard` splits by test FILE.
     env:
       NODE_ENV: test
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
 
@@ -119,11 +126,6 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-
-      - run: npm ci
-
-      - run: npx prisma generate
-        working-directory: apps/api
 
       # `media.audio.transcode` (epic #19, issue #26) runs ffprobe and ffmpeg,
       # and `media-audio-transcode.ffmpeg.spec.ts` deliberately has NO skip
@@ -133,9 +135,38 @@ jobs:
       # non-seekable output), and proof that skips is not proof. Both container
       # images install the same package; this is the runner's copy of that.
       # Every shard installs it because the file that needs it may land in any.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      #
+      # The apt install runs in the background WHILE `npm ci` runs: it was a
+      # 24-28s serial step on every shard, and the two share no resources worth
+      # contending for. `wait` returns apt's exit status, so a failed install
+      # still fails this step (GitHub runs bash with `-e`).
+      - name: Install ffmpeg (background) and dependencies
+        run: |
+          (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg) &
+          apt_pid=$!
+          npm ci
+          (cd apps/api && npx prisma generate)
+          wait "$apt_pid"
 
-      - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/3
+      # Persist Jest's transform cache between runs. The API suite compiles and
+      # TYPE-CHECKS every TypeScript file through ts-jest (the specs under
+      # `test/` are checked nowhere else: `tsc --noEmit` only includes `src/`),
+      # and ~40 of the integration suites each load the whole AppModule graph,
+      # so a cold cache made the 3-shard run cost ~13 min of CPU against ~8 min
+      # serial. Jest keys cache entries by file content and config, so a hit is
+      # always valid and a stale entry is only dead weight. One cache per shard,
+      # newest entry restored by prefix; the primary key carries the commit so
+      # every run saves a fresh copy (entries are immutable).
+      - name: Restore Jest cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-api-${{ runner.os }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            jest-api-${{ runner.os }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
+            jest-api-${{ runner.os }}-${{ matrix.shard }}-
+
+      - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4 --cacheDirectory=${{ runner.temp }}/jest-cache
 
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
