@@ -62,8 +62,8 @@ vi.mock('../../../components/settings/ImageUpload', () => ({
 }));
 
 // Mock the AuthContext - need to import original to get AuthContext
-vi.mock('../../../contexts/AuthContext', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../contexts/AuthContext')>();
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>();
   return {
     ...actual,
     useAuth: vi.fn(),
@@ -89,7 +89,7 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 import { ApiError, deleteProfileImage, fetchProfileImagePreview } from '../../../services/api';
 
 const mockUseAuth = vi.mocked(useAuth);

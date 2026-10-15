@@ -1,0 +1,78 @@
+{
+  "notifications": {
+    "browserEnabled": true,
+    "disabledEvents": []
+  },
+  "jobs": {
+    "history": {
+      "retentionDays": 30,
+      "purgeEnabled": true
+    },
+    "stuckThresholdMinutes": 30
+  },
+  "nodes": {
+    "staleHeartbeatSeconds": 90,
+    "offlineStaleMultiplier": 4,
+    "offlineRetentionDays": 30,
+    "jobSecretBrokerEnabled": false
+  },
+  "databaseBackup": {
+    "enabled": false,
+    "frequency": "daily",
+    "dayOfWeek": 0,
+    "dayOfMonth": 1,
+    "timeOfDay": "02:00",
+    "timezone": "UTC",
+    "retentionCount": 7,
+    "storageProvider": "s3",
+    "runStaleMinutes": 120,
+    "compressionLevel": 6,
+    "restoreRollbackMode": "retain_database",
+    "oldDatabaseRetentionHours": 48,
+    "nodeOffloadEnabled": false
+  },
+  "maintenance": {
+    "enabled": false,
+    "message": "This service is temporarily unavailable for scheduled maintenance. Please try again shortly.",
+    "allowAdmins": true,
+    "startedAt": null,
+    "startedById": null
+  },
+  "transcription": {
+    "enabled": false,
+    "provider": null,
+    "providers": {
+      "assemblyai": {
+        "region": "us",
+        "speechModel": "universal-3-5-pro, universal-2"
+      }
+    },
+    "audioDelivery": "presigned_url",
+    "presignedUrlTtlMinutes": 360,
+    "deleteRemoteAfterIngest": true,
+    "defaultLanguage": null,
+    "transcodeNodeOffloadEnabled": true,
+    "abandonedUploadHours": 3,
+    "playback": {
+      "bitrateKbps": 64
+    }
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "openai",
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "allowedModels": [],
+        "defaultModel": "gpt-5.4-mini"
+      }
+    },
+    "maxInputTokens": null,
+    "maxOutputTokens": null,
+    "requestTimeoutMs": 600000,
+    "reasoningEffort": "none",
+    "maxDocumentBytes": 26214400,
+    "taskModels": {},
+    "graphEnabled": false
+  }
+}

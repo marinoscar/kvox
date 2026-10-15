@@ -50,13 +50,14 @@ describe('prisma/drift-allowlist.json', () => {
     expect(new Set(normalised).size).toBe(normalised.length);
   });
 
-  it('removes the four deviation columns with the issues that move them', () => {
+  it('names the issue that removes each temporary deviation, and no #465 entry survives', () => {
     const byStatement = (needle: string) => entries.find((e) => e.statement.includes(needle));
-    expect(byStatement('"allowed_emails" DROP COLUMN')?.removeIn).toBe('#465');
+    // #465 moved the allowlist reminder bookkeeping to kvox_allowlist_reminders
+    // and dropped the two allowed_emails columns, so the entry is gone for good.
+    expect(byStatement('"allowed_emails"')).toBeUndefined();
+    expect(entries.filter((e) => e.removeIn === '#465')).toEqual([]);
+    // The one remaining temporary deviation, with the issue that moves it.
     expect(byStatement('"storage_objects" DROP COLUMN')?.removeIn).toBe('#469');
-    for (const col of ['reminder_count', 'last_reminder_at']) {
-      expect(byStatement('"allowed_emails" DROP COLUMN')?.statement).toContain(col);
-    }
     for (const col of ['managed_by', 'part_size']) {
       expect(byStatement('"storage_objects" DROP COLUMN')?.statement).toContain(col);
     }
@@ -65,7 +66,7 @@ describe('prisma/drift-allowlist.json', () => {
   it('never excuses a DROP of anything but an index, a deviation column or a generation expression', () => {
     for (const e of entries) {
       expect(e.statement).toMatch(
-        /^(DROP INDEX "[a-z_0-9]+";|ALTER TABLE "(allowed_emails|storage_objects)" DROP COLUMN [^;]+;|ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]*search_vector" DROP DEFAULT;)$/,
+        /^(DROP INDEX "[a-z_0-9]+";|ALTER TABLE "storage_objects" DROP COLUMN [^;]+;|ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]*search_vector" DROP DEFAULT;)$/,
       );
     }
   });
@@ -101,12 +102,17 @@ describe('scripts/db-drift-kvox.mjs (filter, no database)', () => {
 
   it('passes the multi-line form Prisma prints for a two-column drop', () => {
     const res = run(
-      driftReport([
-        'ALTER TABLE "storage_objects" DROP COLUMN "managed_by",\nDROP COLUMN "part_size";',
-        'ALTER TABLE "allowed_emails" DROP COLUMN "last_reminder_at",\nDROP COLUMN "reminder_count";',
-      ]),
+      driftReport(['ALTER TABLE "storage_objects" DROP COLUMN "managed_by",\nDROP COLUMN "part_size";']),
     );
     expect(res.status).toBe(0);
+  });
+
+  it('fails on the allowed_emails reminder columns now that #465 dropped them', () => {
+    const res = run(
+      driftReport(['ALTER TABLE "allowed_emails" DROP COLUMN "last_reminder_at",\nDROP COLUMN "reminder_count";']),
+    );
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('"allowed_emails"');
   });
 
   it('fails on a statement the allowlist does not name', () => {
@@ -115,7 +121,7 @@ describe('scripts/db-drift-kvox.mjs (filter, no database)', () => {
     expect(res.stderr).toContain('"users"');
   });
 
-  it('fails on a platform-column drop that is not one of the allowlisted four', () => {
+  it('fails on a platform-column drop that is not one of the allowlisted two', () => {
     const res = run(driftReport(['ALTER TABLE "storage_objects" DROP COLUMN "bucket";']));
     expect(res.status).toBe(1);
   });

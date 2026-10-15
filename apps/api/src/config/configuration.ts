@@ -1,3 +1,5 @@
+import { identityConfiguration } from '@marinoscar/platform-api/identity';
+
 import { buildDatabaseUrl } from '../common/database-url';
 import { resolveServiceName } from '../common/otel/service-name';
 
@@ -37,12 +39,24 @@ export default () => {
       url: databaseUrl,
     },
 
-  // JWT
-  jwt: {
-    secret: process.env.JWT_SECRET,
-    accessTtlMinutes: parseInt(process.env.JWT_ACCESS_TTL_MINUTES || '15', 10),
-    refreshTtlDays: parseInt(process.env.JWT_REFRESH_TTL_DAYS || '14', 10),
-  },
+  // Identity (#465, epic #462): `jwt`, `auth`, `google`, `initialAdminEmail`,
+  // `deviceAuth` and `tenancy`, built by the platform so the keys the packaged
+  // identity slice reads with `ConfigService.get(...)` cannot drift from what it
+  // expects. The environment variable names are unchanged: `JWT_SECRET`,
+  // `JWT_ACCESS_TTL_MINUTES`, `JWT_REFRESH_TTL_DAYS`, `GOOGLE_CLIENT_ID`,
+  // `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `INITIAL_ADMIN_EMAIL`,
+  // `DEVICE_CODE_EXPIRY_MINUTES`, `DEVICE_CODE_POLL_INTERVAL`,
+  // `DEVICE_TOKEN_EXPIRY_DAYS`, `DEVICE_PAT_EXPIRY_DAYS`; `TENANCY_MODE` stays
+  // unset (single-organization mode) and `AUTH_PRINCIPAL_CACHE_TTL_SECONDS` is
+  // new and optional.
+  //
+  // Device flow lifetimes, for the record, because the comment that used to sit
+  // here is still the reason there are two: `tokenExpiryDays` is the session
+  // credential the activation page produces (a JWT, not revocable, so short);
+  // `patExpiryDays` is the lifetime of the personal access token minted when a
+  // device asks for `clientInfo.tokenType: 'pat'` (revocable, so it can be 90
+  // days). Conflating them would weaken every device session to serve the CLI.
+  ...identityConfiguration(),
 
   // SECRETS_ENCRYPTION_KEY is DELIBERATELY ABSENT from this object (#116,
   // epic #108). It is read directly from process.env by
@@ -52,13 +66,6 @@ export default () => {
   // with the cached one, and would put raw key material into the ConfigService
   // object — a structure that is far easier to log, dump to a debug endpoint or
   // serialise wholesale than a module-private Buffer. Do not add it.
-
-  // OAuth - Google
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackUrl: process.env.GOOGLE_CALLBACK_URL,
-  },
 
   // Web Push (issue #229, epic #215) — deploy-time VAPID key pair.
   //
@@ -90,33 +97,6 @@ export default () => {
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY,
     vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
     vapidSubject: process.env.VAPID_SUBJECT,
-  },
-
-  // Admin bootstrap
-  initialAdminEmail: process.env.INITIAL_ADMIN_EMAIL,
-
-  // Device Authorization Flow (RFC 8628)
-  //
-  // Two independent lifetimes live here, and conflating them is the mistake to
-  // avoid (#141, epic #110):
-  //
-  //   tokenExpiryDays (DEVICE_TOKEN_EXPIRY_DAYS) — the SESSION credential the
-  //     browser-driven activation page has always produced. Short by design;
-  //     it is a JWT, so it cannot be revoked before it expires. Raising it to
-  //     CLI-friendly lengths would weaken every device session in the app to
-  //     serve one client, which is exactly the alternative epic #110 rejected.
-  //
-  //   patExpiryDays (DEVICE_PAT_EXPIRY_DAYS) — the lifetime of the personal
-  //     access token minted when a device asks for `clientInfo.tokenType:
-  //     'pat'`. It can be far longer precisely BECAUSE a PAT is revocable
-  //     server-side: a stolen laptop is handled by deleting one row in the
-  //     Access Tokens page, with nothing else to rotate. 90 days matches the
-  //     epic's suggestion and MemoriaHub's reference CLI.
-  deviceAuth: {
-    expiryMinutes: parseInt(process.env.DEVICE_CODE_EXPIRY_MINUTES || '15', 10),
-    pollInterval: parseInt(process.env.DEVICE_CODE_POLL_INTERVAL || '5', 10),
-    tokenExpiryDays: parseInt(process.env.DEVICE_TOKEN_EXPIRY_DAYS || '7', 10),
-    patExpiryDays: parseInt(process.env.DEVICE_PAT_EXPIRY_DAYS || '90', 10),
   },
 
   // Background job queue — the terminal state machine's budgets and backoff

@@ -1030,7 +1030,7 @@ Scheduling backups and replacing the production database are **not the same
 authority**. A deployment must be able to grant the first to somebody it does
 not trust with the second — the operator who configures the nightly dump, the
 on-call engineer who takes an ad-hoc backup before a deploy — and that is the
-entire reason `prisma/seed-data.ts` seeds a third permission.
+entire reason the permission catalog (`apps/api/prisma/catalog/permissions.json`, generated from the registries) seeds a third permission.
 
 Folding these two routes under `db_backup:write` would spend it, and would do so
 *invisibly*: every existing holder of `db_backup:write` would silently acquire

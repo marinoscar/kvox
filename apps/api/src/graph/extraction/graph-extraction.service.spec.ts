@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { IDS, makeInput, schemaFor } from '../../../test/graph/extraction-fixtures';
+import { memberHolding } from '../../../test/fixtures/principal-user.fixture';
 import { GraphExtractionService, KG_EXTRACT_PRIORITY } from './graph-extraction.service';
 
 const USER = { id: IDS.owner, email: 'o@example.test', roles: ['Viewer'], permissions: ['graph:write', 'graph:read'], isActive: true };
@@ -47,7 +48,11 @@ function harness() {
   const prisma = {
     note: { findUnique: jest.fn(async () => noteRow()) },
     kgEntity: { findMany: jest.fn(async () => [] as Array<{ id: string }>) },
-    user: { findFirst: jest.fn(async () => ({ id: IDS.owner }) as { id: string } | null) },
+    // The owner as the platform's principal graph loads them: `graph:write`
+    // is held through the membership's org role (#465).
+    user: {
+      findFirst: jest.fn(async () => memberHolding(['graph:write'], { id: IDS.owner }) as unknown),
+    },
     auditEvent: { create: jest.fn(async () => ({})) },
     $transaction: jest.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
   };
@@ -277,17 +282,21 @@ describe('GraphExtractionService.enqueueForReadyNote (#363)', () => {
     expect(h.prisma.auditEvent.create).not.toHaveBeenCalled();
   });
 
-  it('checks graph:write through the role-permission join', async () => {
+  it('checks graph:write against the owner’s EFFECTIVE permissions (membership org role included)', async () => {
     const { service, prisma } = harness();
     await service.enqueueForReadyNote(IDS.note, IDS.owner);
     expect(prisma.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          id: IDS.owner,
-          userRoles: { some: { role: { rolePermissions: { some: { permission: { name: 'graph:write' } } } } } },
-        }),
+        where: expect.objectContaining({ id: IDS.owner, isActive: true }),
+        include: expect.objectContaining({ userRoles: expect.anything(), memberships: expect.anything() }),
       }),
     );
+  });
+
+  it('is a silent no-op when the owner holds other permissions but not graph:write', async () => {
+    const h = harness();
+    h.prisma.user.findFirst.mockResolvedValueOnce(memberHolding(['graph:read'], { id: IDS.owner }));
+    await expect(h.service.enqueueForReadyNote(IDS.note, IDS.owner)).resolves.toBeNull();
   });
 
   it('an unexpected failure propagates (the caller logs it)', async () => {

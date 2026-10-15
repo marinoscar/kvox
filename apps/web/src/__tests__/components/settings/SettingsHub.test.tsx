@@ -37,11 +37,12 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import SettingsHubPage from '../../../pages/Admin/SettingsHubPage';
 import UserSettingsHubPage from '../../../pages/UserSettingsHubPage';
 

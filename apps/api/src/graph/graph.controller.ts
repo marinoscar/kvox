@@ -2,9 +2,8 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { EffectiveSchemaPayload } from '@app/shared/ontology';
 
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { ApiDataResponse } from '../common/decorators/api-data-response.decorator';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { GraphOntologyDto } from './dto/graph-ontology.dto';

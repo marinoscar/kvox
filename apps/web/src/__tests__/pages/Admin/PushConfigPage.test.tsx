@@ -21,7 +21,8 @@ vi.mock('../../../hooks/usePushConfig', () => ({
   usePushConfig: vi.fn(),
 }));
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
@@ -34,7 +35,7 @@ vi.mock('../../../components/admin/PushTestPanel', () => ({
 }));
 
 import { usePushConfig } from '../../../hooks/usePushConfig';
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import PushConfigPage from '../../../pages/Admin/PushConfigPage';
 
 const mockUsePushConfig = vi.mocked(usePushConfig);

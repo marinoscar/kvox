@@ -1,6 +1,6 @@
 import { APP_GUARD } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import { AuthModule } from '../../auth/auth.module';
+import { AuthModule } from '@marinoscar/platform-api/identity';
 import { MaintenanceGuard } from './maintenance.guard';
 import { MaintenanceModeService } from './maintenance-mode.service';
 import { MaintenanceModule } from './maintenance.module';

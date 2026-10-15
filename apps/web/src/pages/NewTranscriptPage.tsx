@@ -50,7 +50,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { KeytermsField } from '../components/transcripts/KeytermsField';
 import { KeepScreenAwakeToggle } from '../components/upload/KeepScreenAwakeToggle';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useUploadManager } from '../hooks/useUploadManager';
 import { ApiError } from '../services/api';

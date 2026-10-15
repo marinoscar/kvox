@@ -3,9 +3,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EmailSettingsController } from './email-settings.controller';
 import { EmailSettingsService } from './email-settings.service';
 import { EmailTestSendService } from './email-test-send.service';
-import { PatService } from '../pat/pat.service';
-import { NodeCredentialService } from '../nodes/node-credential.service';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import { IDENTITY_NODE_CREDENTIALS, PatService } from '@marinoscar/platform-api/identity';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 
 // =============================================================================
 // EmailSettingsController — tests (issue #124, epic #109)
@@ -55,7 +54,7 @@ describe('EmailSettingsController', () => {
         // (the `nod_` family). Stubbed the same way PatService is: this suite
         // never sends a bearer token, so neither validator is ever reached —
         // the provider exists only so the guard can be constructed.
-        { provide: NodeCredentialService, useValue: { validateToken: jest.fn() } },
+        { provide: IDENTITY_NODE_CREDENTIALS, useValue: { validateToken: jest.fn() } },
       ],
     }).compile();
 

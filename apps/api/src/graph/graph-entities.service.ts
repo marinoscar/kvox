@@ -33,7 +33,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../ai/ai-settings.service';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';

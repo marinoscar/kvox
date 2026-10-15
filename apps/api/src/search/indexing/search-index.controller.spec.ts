@@ -1,7 +1,6 @@
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 
-import { PERMISSIONS_KEY } from '../../auth/decorators/permissions.decorator';
-import { ROLES_KEY } from '../../auth/decorators/roles.decorator';
+import { PERMISSIONS_KEY, ROLES_KEY } from '@marinoscar/platform-api/identity';
 import { SearchIndexController } from './search-index.controller';
 import { SearchIndexStatusService } from './search-index-status.service';
 

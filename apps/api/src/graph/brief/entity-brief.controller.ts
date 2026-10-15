@@ -2,9 +2,8 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
-import { Auth } from '../../auth/decorators/auth.decorator';
-import { CurrentUser } from '../../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { ApiDataResponse } from '../../common/decorators/api-data-response.decorator';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import {

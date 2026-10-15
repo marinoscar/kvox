@@ -63,8 +63,7 @@ import {
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useEmailSettings } from '../../hooks/useEmailSettings';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import type {

@@ -2,7 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Note } from '@prisma/client';
 
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '../jobs/jobs.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import { PrismaService } from '../prisma/prisma.service';

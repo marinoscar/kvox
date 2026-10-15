@@ -17,8 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { AiModelDiscoveryService } from './ai-model-discovery.service';
 import { AiSettingsService } from './ai-settings.service';

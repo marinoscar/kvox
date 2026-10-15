@@ -8,7 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 
-import { Public } from '../../auth/decorators/public.decorator';
+import { Public } from '@marinoscar/platform-api/identity';
 import { AvatarService } from './avatar.service';
 
 /**

@@ -31,7 +31,7 @@ import { UnknownPropertiesPanel } from '../components/graph/import/UnknownProper
 import { ValidationReportTable } from '../components/graph/import/ValidationReportTable';
 import { ProposalReviewSheet } from '../components/graph/review/ProposalReviewSheet';
 import { useGraphImport } from '../hooks/useGraphImport';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { ApiError } from '../services/api';
 import type { GraphImportFailureReason, GraphImportFormat, GraphImportOffer } from '../services/graph';
 

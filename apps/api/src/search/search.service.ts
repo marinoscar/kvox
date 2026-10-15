@@ -128,7 +128,7 @@ import {
   toRequestUser,
   type AuthenticatedUser,
   type RequestUser,
-} from '../auth/interfaces/authenticated-user.interface';
+} from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MAX_CANDIDATE_DOCUMENTS,

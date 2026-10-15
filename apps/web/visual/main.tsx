@@ -71,10 +71,16 @@ import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
-import { AuthContext } from '../src/contexts/AuthContext';
+// Issue #465: the auth context and the route guards are the identity slice's.
+import {
+  AuthContext,
+  IdentityWebAdaptersProvider,
+  RequireAuth,
+  RequirePermission,
+} from '@marinoscar/platform-web/identity/headless';
+import type { AuthContextValue } from '@marinoscar/platform-web/identity/headless';
+import { appIdentityAdapters } from '../src/identity/identityAdapters';
 import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeContext';
-import { ProtectedRoute } from '../src/components/common/ProtectedRoute';
-import { RequirePermission } from '../src/components/common/RequirePermission';
 import { Layout } from '../src/components/common/Layout';
 // Issue #30, epic #19. The New-transcript screen reads the app-wide upload
 // manager, and `useUploadManager` THROWS without a provider — deliberately, so
@@ -97,7 +103,9 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 const GettingStartedPage = lazy(() => import('../src/pages/GettingStartedPage'));
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
-const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
+const UserTokensPage = lazy(() =>
+  import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
+);
 // Issue #369, epic #346. Registered for the same reason every route in this
 // file is: a route the harness cannot reach is one this suite cannot capture.
 const UserKnowledgeGraphPage = lazy(() => import('../src/pages/UserKnowledgeGraphPage'));
@@ -128,7 +136,7 @@ const GraphOverviewPage = lazy(() => import('../src/pages/GraphOverviewPage'));
 // Ask (#380), mirroring `App.tsx`: one optional-segment route, `graph:read`.
 const AskPage = lazy(() => import('../src/pages/AskPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
-const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
+const AdminUsersPage = lazy(() => import('../src/identity/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
 // import above for why this is registered at all.
 const SetupPage = lazy(() => import('../src/pages/Admin/SetupPage'));
@@ -254,14 +262,19 @@ const harnessUser: User = {
   createdAt: new Date('2024-01-01T00:00:00.000Z').toISOString(),
 };
 
-const fakeAuth = {
+const fakeAuth: AuthContextValue = {
   user: harnessUser,
   isLoading: false,
   isAuthenticated: true,
   providers: [],
+  sessionExpired: false,
   login: () => {},
   logout: async () => {},
   refreshUser: async () => {},
+  setAccessToken: () => {},
+  activeOrg: null,
+  memberships: [],
+  switchOrg: async () => {},
 };
 
 /**
@@ -275,7 +288,7 @@ const fakeAuth = {
 function HarnessRoutes() {
   return (
     <Routes>
-      <Route element={<ProtectedRoute />}>
+      <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
         <Route
           element={
             <UploadManagerProvider>
@@ -514,9 +527,13 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <MemoryRouter initialEntries={[route]}>
       <AuthContext.Provider value={fakeAuth}>
-        <ThemeContextProvider>
-          <Inner />
-        </ThemeContextProvider>
+        {/* The packaged Access Tokens page (`/settings/tokens`) reads its
+            identity client from the adapters, exactly as `App.tsx` provides. */}
+        <IdentityWebAdaptersProvider adapters={appIdentityAdapters}>
+          <ThemeContextProvider>
+            <Inner />
+          </ThemeContextProvider>
+        </IdentityWebAdaptersProvider>
       </AuthContext.Provider>
     </MemoryRouter>
   </React.StrictMode>,

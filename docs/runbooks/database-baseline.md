@@ -11,7 +11,7 @@ Source of truth for every claim below:
 - `docs/platform-adoption/local-exceptions.md` (what each deviation is and which issue removes it).
 - `docs/runbooks/database-restore.md` and `docs/runbooks/maintenance-mode.md` (the two procedures this one leans on).
 
-This is KVox's version of the EnterpriseAppBase baseline procedure. KVox adds three things: the `--through 14` cut, 22 app-only migrations, and three declared deviations.
+This is KVox's version of the EnterpriseAppBase baseline procedure. KVox adds three things: the `--through 14` cut, 22 app-only migrations, and two declared deviations (`kvox:storage-managed-by-part-size` and `kvox:domain-schema`; `kvox:allowlist-reminders` was removed by #465, see section 5).
 
 ## 1. What the baseline does
 
@@ -32,7 +32,7 @@ Facts that follow from the code, and that the older notes get wrong:
 
 - The 23 installed directories sort **after** KVox's 22. A migration above `--through` is placed at the end by the `db:sync` naming rule.
 - On a database KVox has always run, all 14 mapped directories are already in the ledger. So `--apply` resolves nothing there. It installs files and writes the lock. The database itself changes only when `prisma:migrate` runs.
-- The B3 diff compares **platform history to `0014`** with the live database. It prints every KVox domain object and the four deviation columns. That is expected. Section 5 explains how to declare them.
+- The B3 diff compares **platform history to `0014`** with the live database. It prints every KVox domain object and the two deviation columns (`storage_objects.managed_by` and `part_size`). That is expected. Section 5 explains how to declare them.
 
 ## 2. Before you start
 
@@ -95,7 +95,9 @@ Any `[normalised]` or `[map]` match is a surprise. Read its note before going on
 The `DIFF_BLOCKING` list holds two kinds of statement:
 
 - (a) KVox domain objects: tables, enums, foreign keys, indexes and `CREATE EXTENSION` from the 22 app-only migrations.
-- (b) The four deviation columns: `storage_objects.managed_by`, `storage_objects.part_size`, `allowed_emails.reminder_count`, `allowed_emails.last_reminder_at`.
+- (b) The two deviation columns: `storage_objects.managed_by` and `storage_objects.part_size`.
+
+  A database that has not yet applied the #465 migration `kvox_allowlist_reminders` still has `allowed_emails.reminder_count` and `allowed_emails.last_reminder_at`, and the diff prints them as a third blocking statement, because the lock no longer declares `kvox:allowlist-reminders`. Run `prisma:migrate` first (the migration moves the counts to `kvox_allowlist_reminders`, then drops the columns); do not re-declare the deviation.
 
 ## 4. Raw-SQL indexes in the lock
 
@@ -111,7 +113,7 @@ The list: `transcript_speakers_transcript_id_label_key`, `kg_items_live_statemen
 
 A blocking statement has three possible fixes: a forward migration, a declared deviation, or a lower `--through`. For KVox the answer is a declared deviation, and only for these.
 
-`scripts/baseline-deviations.mjs` does the declaring. It reads the `BLOCKING:` lines of a saved report and checks that each one names a table or type created or altered by one of the 22 app-only migrations. It exits 1 on any statement that does not. It prints three `deviations` entries for `platform.lock`.
+`scripts/baseline-deviations.mjs` does the declaring. It reads the `BLOCKING:` lines of a saved report and checks that each one names a table or type created or altered by one of the 22 app-only migrations. It exits 1 on any statement that does not. It prints the `deviations` entries for `platform.lock`: three in the rehearsal of section 12, which ran before #465; the committed lock has two.
 
 ```bash
 cd apps/api
@@ -124,20 +126,20 @@ Options: `--migrations <dir>` (default `prisma/migrations`). With `--write`, ent
 | Deviation id | Statements | Removed by |
 |---|---|---|
 | `kvox:storage-managed-by-part-size` | 1 statement: the `ALTER TABLE "storage_objects" ADD COLUMN` that adds `managed_by` and `part_size` | #469 |
-| `kvox:allowlist-reminders` | 1 statement: the `ALTER TABLE "allowed_emails" ADD COLUMN` that adds `reminder_count` and `last_reminder_at` | #465 |
+| ~~`kvox:allowlist-reminders`~~ | Removed by #465. It was 1 statement, the `ALTER TABLE "allowed_emails" ADD COLUMN` that added `reminder_count` and `last_reminder_at`; the #465 migration moves the data to `kvox_allowlist_reminders` and drops both columns | #465 (done) |
 | `kvox:domain-schema` | every other statement (258 in the rehearsal). Reason: "KVox domain tables created by app-only migrations; not a change to a platform table" | stays as a record (see `local-exceptions.md`) |
 
 Rules:
 
 - **Never paste the list by hand.** The script proves each statement comes from an app-only migration.
-- **A statement that touches a platform table and is not one of the four deviation columns is a real difference.** Stop. Report it in #463. Do not declare it. The script refuses it by design.
-- Paste the three entries into `apps/api/prisma/platform.lock`, then re-run the dry run until it ends with:
+- **A statement that touches a platform table and is not one of the two deviation columns is a real difference.** Stop. Report it in #463. Do not declare it. The script refuses it by design.
+- Paste the entries into `apps/api/prisma/platform.lock`, then re-run the dry run until it ends with:
 
   `dry run clean: re-run with --apply to write the lock and resolve`
 
-  At that point `B3 diff` reads `0 blocking, 260 declared` (1 + 1 + 258). The count must match section 12.
+  At that point `B3 diff` reads `0 blocking, 260 declared` (1 + 1 + 258) in the #463 rehearsal. #465 removed the `kvox:allowlist-reminders` entry, so on a current database the declared count is that sum minus one; the count must match the dry run you rehearsed, not the figure here.
 
-Statements are matched after normalisation. A deviation whose statement the diff no longer prints produces a `note:` telling you to remove it. Keep that note in mind when #465 and #469 land.
+Statements are matched after normalisation. A deviation whose statement the diff no longer prints produces a `note:` telling you to remove it. Keep that note in mind when #469 lands (#465 already removed its entry).
 
 ## 6. Apply on the rehearsal copy
 
@@ -257,7 +259,7 @@ Platform `0025_org_scoped_rls` forces row-level security on `storage_objects` an
 | `RLS_OPT_IN_REQUIRED` | Add `--allow-rls` after reading section 10 |
 | `LEDGER_FAILED_ROW` | Section 8 |
 | `LEDGER_ROW_MISSING`, `LEDGER_CHECKSUM_MISMATCH` | A KVox directory was edited or never applied. Restore it from Git, or lower `--through` |
-| `DIFF_BLOCKING` | Section 5. A platform-table statement outside the four columns is a real difference: stop |
+| `DIFF_BLOCKING` | Section 5. A platform-table statement outside the two columns is a real difference: stop |
 | `INDEX_MISSING`, `INDEX_DEFINITION_DIFFERS` | The lock's `definition` is not what `pg_indexes` prints, or the index is gone. Fix the lock entry from `pg_indexes`. If the index is gone, add a forward migration |
 | `LOCK_NOT_EMPTY` | `--force-remap`, after reading the dry run |
 | `PLACEMENT_IMPOSSIBLE`, `MAP_INVALID` | Do not rename an applied directory. Read the message and ask in #463 |
@@ -268,6 +270,8 @@ Platform `0025_org_scoped_rls` forces row-level security on `storage_objects` an
 ## 12. Rehearsal record
 
 Run during #463 on 2026-10-15 by database-dev. The production dry run in section 7 is compared with it.
+
+**Historical record.** Taken before #465, so it still shows the `kvox:allowlist-reminders` deviation and the `260` declared statements. #465 removed that deviation (section 5), so repeat the rehearsal to get the current figures; the structure of the procedure is unchanged.
 
 **Stand-in, not a production backup.** No production backup was available. The restored copy was a `pg_dump` of a database migrated with KVox's 36 migrations and seeded. **The rehearsal must be repeated on a real production backup before the window.** Replace or extend this record then.
 

@@ -29,7 +29,7 @@ import { PassThrough, Readable } from 'node:stream';
 import type { KgExport, PrismaClient } from '@prisma/client';
 import { ONTOLOGY } from '@app/shared/ontology';
 
-import type { RequestUser } from '../../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { GraphAccessService } from '../../../src/graph/access/graph-access.service';
 import { GraphAttributeDefsService } from '../../../src/graph/attribute-defs/graph-attribute-defs.service';
 import { GraphExportSource } from '../../../src/graph/export/graph-export.source';

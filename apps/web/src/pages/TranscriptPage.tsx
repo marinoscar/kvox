@@ -155,8 +155,7 @@ import {
   TranscriptPlayer,
 } from '../components/transcripts/TranscriptPlayer';
 import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatusChip';
-import { useAuth } from '../contexts/AuthContext';
-import { usePermissions } from '../hooks/usePermissions';
+import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useGraphTranscriptPeople } from '../hooks/useGraphTranscriptPeople';
 import { usePlaybackEngine, SKIP_MS } from '../hooks/usePlaybackEngine';
 import { useNameCheck } from '../hooks/useNameCheck';

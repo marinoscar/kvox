@@ -233,7 +233,7 @@ import CloudDownloadOutlinedIcon from '@mui/icons-material/CloudDownloadOutlined
 import KeyOffOutlinedIcon from '@mui/icons-material/KeyOffOutlined';
 import { Navigate } from 'react-router-dom';
 
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useAiSettings } from '../../hooks/useAiSettings';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AiModelDiscoveryDialog } from '../../components/admin/AiModelDiscoveryDialog';

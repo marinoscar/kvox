@@ -76,8 +76,10 @@ Endpoints returning lists support pagination with the following query parameters
 
 ### Authentication
 
+> **Packaged routes.** Everything under `/api/auth`, plus `/api/users`, `/api/allowlist` (except the two reminder routes), `/api/pat`, `/api/roles`, `/api/org/*` and `/api/admin/organizations`, is served by the platform identity slice (`IdentityModule.forRoot`, from the platform's identity package), not by the app's own controllers. The app runs it in single-organization mode (`TENANCY_MODE` unset). The generated reference at `/api/docs` is the source of truth for field names; the shapes below are checked against it. Do not pin a platform response with an exact-equality assertion in an app test: assert the fields you rely on.
+
 #### GET /auth/providers
-**Public endpoint** - List enabled OAuth providers.
+**Public endpoint** - List enabled sign-in providers. `google` is listed when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set.
 
 **Response:**
 ```json
@@ -93,10 +95,17 @@ Endpoints returning lists support pagination with the following query parameters
 }
 ```
 
+A provider an app registered with `mode: 'custom'` also carries `"mode": "custom"`. This app registers none.
+
 ---
 
 #### GET /auth/google
 **Public endpoint** - Initiate Google OAuth flow. Redirects to Google consent screen.
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `select_account` | `1` | No | Make Google show its account chooser instead of re-using the signed-in account |
 
 **Response:** HTTP 302 redirect to Google
 
@@ -105,17 +114,20 @@ Endpoints returning lists support pagination with the following query parameters
 #### GET /auth/google/callback
 **Public endpoint** - OAuth callback handler (called by Google).
 
-**Query Parameters:**
-- `code` (string) - Authorization code from Google
-- `state` (string, optional) - CSRF protection state
+**Response:** HTTP 302 redirect to the frontend `/auth/callback` page
+- On success: `/auth/callback?token=<accessToken>&expiresIn=<seconds>`, and the HttpOnly `refresh_token` cookie is set
+- On any failure: `/auth/callback?error=<code>`, where `<code>` is one of `not_allowlisted`, `account_disabled`, `access_denied`, `authentication_failed`, `server_misconfigured` or `no_organization`
 
-**Response:** HTTP 302 redirect to frontend with access token in query parameter
-- Sets HttpOnly refresh token cookie
-- Redirects to `/auth/callback?accessToken=<token>`
+**Error Cases (redirect `error` codes):**
+- Email not in allowlist: `not_allowlisted`
+- Account disabled: `account_disabled`
+- The user declined at Google: `access_denied`
+- Any other OAuth failure: `authentication_failed`
 
-**Error Cases:**
-- Email not in allowlist → Redirects to `/auth/error?error=not_authorized`
-- OAuth failure → Redirects to `/auth/error?error=oauth_failed`
+---
+
+#### GET /auth/{providerId} and GET /auth/{providerId}/callback
+**Public endpoints** - Initiate sign-in with, and handle the callback of, any extra provider an app registered with `registerAuthProvider` in `redirect` mode. 404 for an unknown, `custom` or not configured provider. The app registers no extra provider, so every id other than the built-in `google` answers 404. The callback redirects exactly as the Google callback does, with the same refresh cookie.
 
 ---
 
@@ -125,27 +137,36 @@ Endpoints returning lists support pagination with the following query parameters
 **Response:**
 ```json
 {
-  "id": "uuid",
-  "email": "user@example.com",
-  "displayName": "John Doe",
-  "profileImageUrl": "/api/users/uuid/avatar/uuid",
-  "providerProfileImageUrl": "https://lh3.googleusercontent.com/a/example",
-  "hasUploadedProfileImage": false,
-  "isActive": true,
-  "roles": [
-    {
-      "id": "uuid",
-      "name": "admin",
-      "description": "Administrator with full access"
-    }
-  ],
-  "permissions": ["users:read", "users:write", "system_settings:read", ...]
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "John Doe",
+    "profileImageUrl": "/api/users/uuid/avatar/uuid",
+    "providerProfileImageUrl": "https://lh3.googleusercontent.com/a/example",
+    "hasUploadedProfileImage": false,
+    "isActive": true,
+    "roles": [
+      { "name": "admin" }
+    ],
+    "permissions": ["users:read", "users:write", "system_settings:read", ...],
+    "tenancyMode": "single",
+    "activeOrg": { "id": "uuid", "name": "Default", "slug": "default" },
+    "memberships": [
+      { "orgId": "uuid", "name": "Default", "slug": "default", "role": "org_admin" }
+    ]
+  }
 }
 ```
 
 **Fields:**
 | Field | Type | Description |
 |-------|------|-------------|
+| `roles` | `{ name }[]` | The system roles (`admin`) plus the role on the active organization's membership (`org_admin`, `contributor`, `viewer`). An admin therefore lists `admin` and `org_admin` |
+| `permissions` | string[] | The union of the permissions of those roles. The app's domain permissions (`transcripts:*`, `notes:*`, `note_templates:*`, `graph:*`) are org-scoped and appear here only through the membership role |
+| `tenancyMode` | `single` \| `multi` | Always `single` in this app |
+| `activeOrg` | object \| null | The organization this session acts in (the default organization in single-org mode) |
+| `memberships` | object[] | The organizations the user can switch to, each with the user's org role |
+| `extensions` | object | Optional app extension data |
 | `profileImageUrl` | string \| null | The picture representing the user, resolved from `profile.imageSource`: `null` for `none`, the provider picture for `provider`, or a same-origin `/api/users/:userId/avatar/:objectId` path for `upload`. May be an absolute URL or a root-relative path. |
 | `providerProfileImageUrl` | string \| null | The OAuth provider's picture, regardless of the currently selected source; refreshed from the provider on each login. |
 | `hasUploadedProfileImage` | boolean | Whether the caller has an uploaded picture stored (`profile.imageObjectId` is set), regardless of the currently selected source. To preview those bytes, fetch `GET /user-settings/profile-image` (bearer auth) rather than building a URL from this field. |
@@ -157,19 +178,26 @@ Endpoints returning lists support pagination with the following query parameters
 
 **Request:** No body required (uses HttpOnly cookie)
 
-**Response:**
-```json
-{
-  "accessToken": "new_jwt_access_token",
-  "expiresIn": 900
-}
-```
+**Response:** a new access token (`accessToken`, `expiresIn`, in seconds), inside the `data` envelope.
 
-Sets new refresh token in HttpOnly cookie (token rotation).
+Sets a new refresh token in the HttpOnly cookie (token rotation; reuse of a rotated token is detected).
 
 **Error Cases:**
-- 401 Unauthorized - Missing or invalid refresh token
+- 401 Unauthorized - Missing, invalid or expired refresh token
 - 403 Forbidden - User is disabled
+
+---
+
+#### POST /auth/switch-org
+**Requires Authentication** - Re-issue the session for another organization the caller is an active member of: the presented refresh token is revoked, a new one bound to `orgId` is set, and a new access token whose `org` claim is `orgId` is returned (same shape as `POST /auth/refresh`). Writes the `auth:org_switched` audit event. In single-organization mode only the default organization qualifies, so switching to it is a no-op re-issue.
+
+**Request Body:** `{ "orgId": "uuid" }`
+
+**Error Cases:**
+- 400 Bad Request - `orgId` is not a UUID
+- 401 Unauthorized - Missing or invalid access token or refresh token
+- 403 Forbidden - The credential is a personal access token or a device credential, which is bound to one organization for life
+- 404 Not Found - Not an organization the caller is an active member of
 
 ---
 
@@ -193,7 +221,7 @@ Sets new refresh token in HttpOnly cookie (token rotation).
 - Clears refresh token cookie
 - Revokes ALL refresh tokens for the current user across all devices
 
-**Use Case:** Security feature to force re-authentication on all sessions (e.g., after password change or suspected compromise).
+**Use Case:** Security feature to force re-authentication on all sessions (e.g., after a suspected compromise).
 
 ---
 
@@ -208,9 +236,9 @@ The Device Authorization Flow enables input-constrained devices (CLI tools, IoT 
 ```json
 {
   "clientInfo": {
-    "name": "My CLI Tool",
-    "version": "1.0.0",
-    "platform": "linux"
+    "deviceName": "My CLI Tool",
+    "userAgent": "my-cli/1.0.0",
+    "tokenType": "pat"
   }
 }
 ```
@@ -218,10 +246,10 @@ The Device Authorization Flow enables input-constrained devices (CLI tools, IoT 
 **Fields:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `clientInfo` | object | No | Optional metadata about client device |
-| `clientInfo.name` | string | No | Application name |
-| `clientInfo.version` | string | No | Application version |
-| `clientInfo.platform` | string | No | Platform identifier |
+| `clientInfo` | object | No | Optional metadata about client device. Only the three fields below are accepted; unknown keys are silently stripped |
+| `clientInfo.deviceName` | string | No | Human-readable device/app name (untrusted: the route is unauthenticated) |
+| `clientInfo.userAgent` | string | No | Free-form client identifier |
+| `clientInfo.tokenType` | `session` \| `pat` | No | Credential minted when the device polls after approval. Defaults to `session`; `pat` mints a long-lived revocable personal access token. An unrecognised value is a 400 |
 
 **Response:**
 ```json
@@ -229,8 +257,8 @@ The Device Authorization Flow enables input-constrained devices (CLI tools, IoT 
   "data": {
     "deviceCode": "a4f3b8c9d2e1f5a6b7c8d9e0f1a2b3c4",
     "userCode": "ABCD-1234",
-    "verificationUri": "http://localhost:3535/device",
-    "verificationUriComplete": "http://localhost:3535/device?code=ABCD-1234",
+    "verificationUri": "http://localhost:3535/activate",
+    "verificationUriComplete": "http://localhost:3535/activate?code=ABCD-1234",
     "expiresIn": 900,
     "interval": 5
   }
@@ -259,7 +287,7 @@ The Device Authorization Flow enables input-constrained devices (CLI tools, IoT 
 }
 ```
 
-**Response (200 OK - Authorized):**
+**Response (200 OK - Authorized, `session` credential):**
 ```json
 {
   "data": {
@@ -271,7 +299,12 @@ The Device Authorization Flow enables input-constrained devices (CLI tools, IoT 
 }
 ```
 
+**Response (200 OK - Authorized, `pat` credential, when `clientInfo.tokenType` was `pat`):** `accessToken` is a `pat_...` token, there is no `refreshToken`, and `credentialType: "pat"`, `expiresAt`, `tokenId` and `tokenName` are present. Branch on `credentialType`, never on the absence of `refreshToken`. The credential is minted on this poll, not at approval. See [DEVICE-AUTH.md](DEVICE-AUTH.md#credential-kinds-session-vs-pat).
+
 **Error Responses (400 Bad Request):**
+
+These error bodies (400 and 401) are the **only** responses in the API that are not the shared error envelope: RFC 8628 fixes the body as top-level `{ error, error_description }`, with no `statusCode` or `code`. Read `error`.
+
 
 While authorization is pending:
 ```json
@@ -342,7 +375,7 @@ Authorization: Bearer <token>
 ```json
 {
   "data": {
-    "verificationUri": "http://localhost:3535/device"
+    "verificationUri": "http://localhost:3535/activate"
   }
 }
 ```
@@ -357,12 +390,11 @@ Authorization: Bearer <token>
 ```json
 {
   "data": {
-    "verificationUri": "http://localhost:3535/device",
+    "verificationUri": "http://localhost:3535/activate",
     "userCode": "ABCD-1234",
     "clientInfo": {
-      "name": "My CLI Tool",
-      "version": "1.0.0",
-      "platform": "linux"
+      "deviceName": "My CLI Tool",
+      "userAgent": "my-cli/1.0.0"
     },
     "expiresAt": "2024-01-01T12:15:00.000Z"
   }
@@ -409,7 +441,7 @@ Authorization: Bearer <token>
 ---
 
 #### GET /auth/device/sessions
-**Requires Authentication** - List current user's approved device sessions.
+**Requires Authentication** - List the current user's live device sessions: requests approved but not yet collected by the device, and sessions whose device has collected its credential and whose credential has not expired. Revoked sessions are not listed.
 
 **Query Parameters:**
 | Parameter | Type | Required | Default | Description |
@@ -427,12 +459,14 @@ Authorization: Bearer <token>
         "userCode": "ABCD-1234",
         "status": "approved",
         "clientInfo": {
-          "name": "My CLI Tool",
-          "version": "1.0.0",
-          "platform": "linux"
+          "deviceName": "My CLI Tool",
+          "userAgent": "my-cli/1.0.0"
         },
         "createdAt": "2024-01-01T12:00:00.000Z",
-        "expiresAt": "2024-01-01T12:15:00.000Z"
+        "expiresAt": "2024-01-01T12:15:00.000Z",
+        "collectedAt": "2024-01-01T12:00:30.000Z",
+        "credentialExpiresAt": "2024-01-08T12:00:30.000Z",
+        "credentialType": "session"
       }
     ],
     "total": 5,
@@ -441,6 +475,8 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+`status` is `pending`, `approved`, `denied` or `expired`. `collectedAt` and `credentialExpiresAt` are `null` until the device has collected its credential; `credentialType` is `pat`, `session` or `null`.
 
 **Use Case:** View all devices that have been authorized to access the account.
 
@@ -452,7 +488,7 @@ Authorization: Bearer <token>
 **Parameters:**
 - `id` (UUID) - Session ID to revoke
 
-**Response:**
+**Response:** HTTP 200
 ```json
 {
   "data": {
@@ -461,6 +497,8 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+Revokes the session together with the credential it issued: an uncollected request is denied, a collected PAT is revoked, and a collected `session` credential stops working immediately (its access token is rejected on the next request and its refresh tokens are revoked). Revoking an already-revoked session succeeds.
 
 **Error Cases:**
 - 404 Not Found - Session not found or doesn't belong to current user
@@ -471,12 +509,10 @@ Authorization: Bearer <token>
 
 ### Test Authentication (Development/Test Only)
 
-**Security Notice:** These endpoints are completely disabled in production. They exist solely to enable automated E2E testing without requiring real OAuth credentials.
+**Security Notice:** This endpoint exists solely to enable automated E2E testing without requiring real OAuth credentials. It is mounted by `IdentityModule.forRoot({ enableTestAuth: process.env.NODE_ENV !== 'production' })`, and the slice refuses to start with it enabled when `NODE_ENV` is `production`.
 
 #### POST /auth/test/login
 **Development/Test Only** - Authenticate as a test user without OAuth.
-
-**Availability:** Only when `NODE_ENV !== 'production'`
 
 **Request Body:**
 ```json
@@ -491,16 +527,15 @@ Authorization: Bearer <token>
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | Email address for test user |
-| `role` | enum | No | Role to assign: `admin`, `contributor`, `viewer` (default: `viewer`) |
+| `role` | string | No | A registered role: `admin`, `contributor` or `viewer` (the app's default is `viewer`) |
 | `displayName` | string | No | Display name for the user |
 
-**Response:** HTTP 302 redirect to `/auth/callback?token=<accessToken>&expiresIn=900`
-- Sets HttpOnly refresh token cookie (same as OAuth flow)
-- Creates user if not exists, assigns specified role
+**Response:** HTTP **302**. The access token is in the `Location` header, not in a JSON body: `Location: <APP_URL>/auth/callback?token=<accessToken>&expiresIn=<seconds>`. Read it without following the redirect, for example `curl -s -o /dev/null -D - -X POST .../api/auth/test/login ...` and take the `token` query parameter. The HttpOnly refresh cookie is set as in the OAuth flow.
+- Creates the user if not exists and assigns the role the same way `PUT /users/:id/roles` does in single-org mode: `admin` is the system `admin` role plus `org_admin` on the default-organization membership; `contributor` and `viewer` are that membership's role with no system role. Logging the same email in under another role replaces the previous one.
 
 **Error Cases:**
-- 403 Forbidden - Endpoint disabled (production environment)
-- 400 Bad Request - Invalid email or role
+- 400 Bad Request - Invalid email, or a role nothing registered
+- Not mounted in production (the route does not exist there)
 
 **Use Case:** Playwright E2E tests use this endpoint to authenticate without Google OAuth.
 
@@ -508,10 +543,12 @@ Authorization: Bearer <token>
 
 ### Users
 
-**All user endpoints require Admin role (`users:read` or `users:write` permissions)**
+**User endpoints require `users:read` (reads) or `users:write` (updates), and `rbac:manage` for role changes.** Served by the platform identity slice; list responses are `{ "data": { "items": [...], "total", "page", "pageSize", "totalPages" } }` (the items are under `data.items`, not a bare array with a `meta` block).
 
 #### GET /users
 List all users with pagination and filtering.
+
+**Requires:** `users:read` permission
 
 **Query Parameters:**
 | Parameter | Type | Default | Description |
@@ -519,33 +556,29 @@ List all users with pagination and filtering.
 | `page` | number | 1 | Page number |
 | `pageSize` | number | 20 | Items per page (max 100) |
 | `search` | string | - | Search by email or display name |
-| `isActive` | boolean | - | Filter by active status |
+| `isActive` | `true` \| `false` | - | Filter by active status |
 | `role` | string | - | Filter by role name |
-| `sortBy` | enum | `createdAt` | Sort field: `email`, `createdAt`, `updatedAt` |
-| `sortOrder` | enum | `desc` | Sort order: `asc`, `desc` |
+| `sortBy` | enum | - | Sort field: `email`, `createdAt`, `updatedAt` |
+| `sortOrder` | enum | - | Sort order: `asc`, `desc` |
 
 **Response:**
 ```json
 {
-  "data": [
-    {
-      "id": "uuid",
-      "email": "user@example.com",
-      "displayName": "John Doe",
-      "profileImageUrl": "https://...",
-      "providerDisplayName": "John Doe",
-      "providerProfileImageUrl": "https://lh3.googleusercontent.com/...",
-      "isActive": true,
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "roles": [
-        {
-          "id": "uuid",
-          "name": "contributor"
-        }
-      ]
-    }
-  ],
-  "meta": {
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "email": "user@example.com",
+        "displayName": "John Doe",
+        "providerDisplayName": "John Doe",
+        "profileImageUrl": "https://...",
+        "providerProfileImageUrl": "https://lh3.googleusercontent.com/...",
+        "isActive": true,
+        "roles": ["contributor"],
+        "createdAt": "2024-01-01T00:00:00.000Z",
+        "updatedAt": "2024-01-01T00:00:00.000Z"
+      }
+    ],
     "total": 50,
     "page": 1,
     "pageSize": 20,
@@ -554,45 +587,42 @@ List all users with pagination and filtering.
 }
 ```
 
-**Note:** `providerDisplayName` and `providerProfileImageUrl` may be null if not available from OAuth provider. `profileImageUrl` is resolved from each user's settings the same way `GET /auth/me` resolves it (not a directly stored URL) — see the Settings section's `profile.imageSource` fields below.
+**Note:** `roles` is an array of role names (strings): the user's system roles plus the role on their organization membership. `providerDisplayName` and `providerProfileImageUrl` may be null if not available from the OAuth provider. `profileImageUrl` is resolved from each user's settings the same way `GET /auth/me` resolves it (not a directly stored URL) — see the Settings section's `profile.imageSource` fields below.
 
 ---
 
 #### GET /users/:id
 Get user by ID.
 
+**Requires:** `users:read` permission
+
 **Parameters:**
 - `id` (UUID) - User ID
 
-**Response:**
+**Response:** the list item above plus `identities`:
 ```json
 {
-  "id": "uuid",
-  "email": "user@example.com",
-  "displayName": "John Doe",
-  "profileImageUrl": "https://...",
-  "providerDisplayName": "John Doe",
-  "providerProfileImageUrl": "https://lh3.googleusercontent.com/...",
-  "isActive": true,
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "updatedAt": "2024-01-01T00:00:00.000Z",
-  "roles": [
-    {
-      "id": "uuid",
-      "name": "contributor",
-      "description": "Standard user capabilities"
-    }
-  ],
-  "identities": [
-    {
-      "provider": "google",
-      "providerEmail": "user@example.com"
-    }
-  ]
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "John Doe",
+    "providerDisplayName": "John Doe",
+    "profileImageUrl": "https://...",
+    "providerProfileImageUrl": "https://lh3.googleusercontent.com/...",
+    "isActive": true,
+    "roles": ["contributor"],
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "identities": [
+      {
+        "provider": "google",
+        "providerEmail": "user@example.com",
+        "createdAt": "2024-01-01T00:00:00.000Z"
+      }
+    ]
+  }
 }
 ```
-
-**Note:** `providerDisplayName` and `providerProfileImageUrl` may be null if not available from OAuth provider. `profileImageUrl` is resolved from the user's settings the same way `GET /auth/me` resolves it (not a directly stored URL) — see the Settings section's `profile.imageSource` fields below.
 
 **Error Cases:**
 - 404 Not Found - User not found
@@ -602,7 +632,7 @@ Get user by ID.
 #### PATCH /users/:id
 Update user properties (activation status, display name).
 
-**Requires:** `users:write` permission
+**Requires:** `users:read` and `users:write` permissions
 
 **Parameters:**
 - `id` (UUID) - User ID
@@ -619,33 +649,22 @@ Update user properties (activation status, display name).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `isActive` | boolean | No | Activate or deactivate user |
-| `displayName` | string | No | Update user's display name |
+| `displayName` | string | No | Update user's display name (max 100 characters) |
 
-**Response:**
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "displayName": "New Name",
-  "isActive": false,
-  "roles": [
-    {
-      "id": "uuid",
-      "name": "viewer"
-    }
-  ]
-}
-```
+**Response:** the updated user (the list item shape), inside `data`.
 
 **Error Cases:**
+- 403 Forbidden - Cannot deactivate yourself, or missing permission
 - 404 Not Found - User not found
 
 ---
 
 #### PUT /users/:id/roles
-Update user roles (replaces all current roles).
+Update user roles.
 
 **Requires:** `rbac:manage` permission
+
+**Role semantics.** `admin` is a **system** role; `org_admin`, `contributor` and `viewer` are **organization** roles. In this single-organization deployment the route maps the names onto both: `admin` sets the system administrator role **and** `org_admin` on the default-organization membership; `contributor` or `viewer` set the membership role (the highest named wins). In multi-organization mode the route changes system roles only, and an organization role name is refused with 400. `GET /roles` lists which roles are assignable.
 
 **Parameters:**
 - `id` (UUID) - User ID
@@ -653,46 +672,26 @@ Update user roles (replaces all current roles).
 **Request Body:**
 ```json
 {
-  "roleNames": ["admin", "contributor"]
+  "roleNames": ["admin"]
 }
 ```
 
 **Fields:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `roleNames` | string[] | Yes | Array of role names to assign (min: 1) |
+| `roleNames` | string[] | Yes | Role names to assign (min: 1) |
 
-**Response:**
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "displayName": "John Doe",
-  "isActive": true,
-  "roles": [
-    {
-      "id": "uuid",
-      "name": "admin",
-      "description": "Administrator with full access"
-    },
-    {
-      "id": "uuid",
-      "name": "contributor",
-      "description": "Standard user capabilities"
-    }
-  ]
-}
-```
+**Response:** HTTP 200, the updated user with its new `roles`, inside `data`.
 
 **Validation Rules:**
 - Cannot remove own admin role (prevents accidental lockout)
 - At least one role must be assigned
-- Role names must exist in the system
+- Role names must be registered
 
 **Error Cases:**
-- 400 Bad Request - Invalid role names, empty array, or attempting to remove own admin role
+- 400 Bad Request - Invalid role names, empty array, or (multi-org mode) an organization role name
 - 401 Unauthorized - Not authenticated
-- 403 Forbidden - Missing `rbac:manage` permission
+- 403 Forbidden - Missing `rbac:manage` permission, or attempting to remove own admin role
 - 404 Not Found - User not found
 
 ---
@@ -723,14 +722,45 @@ Update user roles (replaces all current roles).
 
 ---
 
+### Roles
+
+#### GET /roles
+**Requires Authentication only** (any signed-in user) - List the roles the application knows.
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `scope` | `system` \| `org` | No | Only that scope. `system` needs `users:read`, `org` needs `org_members:read`; a scope the caller may not read answers 403. Without `scope`, every scope the caller may read is listed |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "viewer",
+      "label": "Viewer",
+      "description": "Read-only organization member - view content and manage own settings",
+      "scope": "org",
+      "assignable": true
+    }
+  ]
+}
+```
+
+`assignable` says whether the invite, member and user-role routes may assign the role. The roles are `admin` (system), `org_admin`, `contributor` and `viewer` (org).
+
+---
+
 ### Allowlist
 
-**All allowlist endpoints require Admin role (`allowlist:read` or `allowlist:write` permissions)**
+**Allowlist endpoints require `allowlist:read` (reads) or `allowlist:write` (changes)**
 
-The allowlist restricts application access to pre-authorized email addresses. Users must have their email in the allowlist before they can complete OAuth login.
+The allowlist restricts application access to pre-authorized email addresses. Users must have their email in the allowlist before they can complete OAuth login; `INITIAL_ADMIN_EMAIL` always bypasses it. `GET`, `POST` and `DELETE` on `/allowlist` are the platform's. The two **reminder routes** below are **app-owned** (`apps/api/src/allowlist-reminders/`) because the platform has no seam for them; their paths do not collide with the platform's.
 
 #### GET /allowlist
 List allowlisted emails with pagination, filtering, and sorting.
+
+**Requires:** `allowlist:read` permission
 
 **Query Parameters:**
 | Parameter | Type | Default | Description |
@@ -739,43 +769,26 @@ List allowlisted emails with pagination, filtering, and sorting.
 | `pageSize` | number | 20 | Items per page (max 100) |
 | `search` | string | - | Search by email |
 | `status` | enum | `all` | Filter by status: `all`, `pending`, `claimed` |
-| `sortBy` | enum | `addedAt` | Sort by: `email`, `addedAt`, `claimedAt` |
-| `sortOrder` | enum | `desc` | Sort order: `asc`, `desc` |
+| `sortBy` | enum | - | Sort by: `email`, `addedAt`, `claimedAt` |
+| `sortOrder` | enum | - | Sort order: `asc`, `desc` |
 
 **Response:**
 ```json
 {
-  "data": [
-    {
-      "id": "uuid",
-      "email": "user@example.com",
-      "addedBy": {
-        "id": "uuid",
-        "email": "admin@example.com"
-      },
-      "addedAt": "2024-01-01T00:00:00.000Z",
-      "claimedBy": {
+  "data": {
+    "items": [
+      {
         "id": "uuid",
         "email": "user@example.com",
-        "displayName": "John Doe"
-      },
-      "claimedAt": "2024-01-02T00:00:00.000Z",
-      "notes": "New team member"
-    },
-    {
-      "id": "uuid",
-      "email": "pending@example.com",
-      "addedBy": {
-        "id": "uuid",
-        "email": "admin@example.com"
-      },
-      "addedAt": "2024-01-03T00:00:00.000Z",
-      "claimedBy": null,
-      "claimedAt": null,
-      "notes": null
-    }
-  ],
-  "meta": {
+        "addedById": "uuid",
+        "addedAt": "2024-01-01T00:00:00.000Z",
+        "claimedById": "uuid",
+        "claimedAt": "2024-01-02T00:00:00.000Z",
+        "notes": "New team member",
+        "addedBy": { "id": "uuid", "email": "admin@example.com" },
+        "claimedBy": { "id": "uuid", "email": "user@example.com" }
+      }
+    ],
     "total": 100,
     "page": 1,
     "pageSize": 20,
@@ -784,12 +797,12 @@ List allowlisted emails with pagination, filtering, and sorting.
 }
 ```
 
-**Note:** `addedBy` object contains only `id` and `email` (no `displayName`). `claimedBy` object contains `id`, `email`, and `displayName` when not null.
+A pending entry has `claimedById`, `claimedAt` and `claimedBy` set to `null`. The platform entry carries **no** reminder fields: read them from `GET /allowlist/reminders`.
 
 **Status Filters:**
 - `all` - All allowlist entries
-- `pending` - Emails not yet claimed by a user (claimedBy is null)
-- `claimed` - Emails claimed by registered users (claimedBy is not null)
+- `pending` - Emails not yet claimed by a user
+- `claimed` - Emails claimed by registered users
 
 ---
 
@@ -810,25 +823,9 @@ Add email to allowlist.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | Valid email address (case-insensitive) |
-| `notes` | string | No | Optional notes about this user |
+| `notes` | string | No | Optional notes about this user (max 500 characters) |
 
-**Response:**
-```json
-{
-  "id": "uuid",
-  "email": "newuser@example.com",
-  "addedBy": {
-    "id": "uuid",
-    "email": "admin@example.com"
-  },
-  "addedAt": "2024-01-01T00:00:00.000Z",
-  "claimedBy": null,
-  "claimedAt": null,
-  "notes": "Marketing team member - starts next week"
-}
-```
-
-**Note:** `addedBy` object contains only `id` and `email` (no `displayName`).
+**Response:** HTTP 201, the new entry (the list item shape) inside `data`.
 
 **Error Cases:**
 - 409 Conflict - Email already exists in allowlist
@@ -837,24 +834,64 @@ Add email to allowlist.
 ---
 
 #### POST /allowlist/:id/reminder
-Email the invitee again about an invitation they have not yet used (issue #301).
+**App-owned.** Email the invitee again about an invitation they have not yet used (issue #301).
 
 **Requires:** `allowlist:write` permission — the same permission that adds an entry; sending a reminder is that authority exercised again, not a new one.
 
 **Parameters:**
 - `id` (UUID) - Allowlist entry ID
 
-**Response:** HTTP 200, the updated entry (same shape as `POST /allowlist`), with `reminderCount` incremented and `lastReminderAt` set to the send time.
+**Response:** HTTP 200
+```json
+{
+  "data": {
+    "reminderCount": 2,
+    "lastReminderAt": "2024-01-05T00:00:00.000Z"
+  }
+}
+```
+
+`reminderCount` is incremented in the database and `lastReminderAt` is set to the send time. The response no longer carries the allowlist entry itself (it did before the platform identity slice took over `/allowlist`).
 
 **Error Cases:**
+- 401 Unauthorized / 403 Forbidden - Not authenticated, or missing `allowlist:write`
 - 404 Not Found - Allowlist entry not found
-- 409 Conflict - Entry already claimed - there is nobody left to remind
+- 409 Conflict - Entry already claimed - there is nobody left to remind (`details.reason` is `already_claimed`)
+
+**Side effects:** one `allowlist.reminder_sent` audit row through the platform audit sink, and the `allowlist.invitation_reminder` notification, fired **after** the write commits (outside any transaction).
 
 **Note:** Manual by design - there is no cron, no job type and no settings namespace behind this endpoint. An administrator presses the button once per send; the bounds an automated sweep would need (a maximum count, a minimum gap between sends, a delay before the first reminder, an off switch) all collapse into "somebody decided to send this one," so none of them exist.
 
 ⚠ **`reminderCount`/`lastReminderAt` record that a reminder was requested and handed to the notification dispatcher, not that it was delivered.** The email is sent through `notifyAddress`, which is detached, never rejects, and turns a send failure into a row in the notification delivery log rather than an exception here. Read this pair as "an admin asked for N reminders," never as "N reminders arrived" — delivery status lives in the delivery log, not on this row.
 
 The reminder is a separate notification event (`allowlist.invitation_reminder`), not a flag on the original `allowlist.invitation` event: a recipient who wants the invitation but not the chasing has no way to say so under one shared key, and the copy genuinely differs ("you were invited" vs. "you were invited a while ago and haven't signed in"). Like the invitation, it is email-only — the recipient still has no account and no open tab.
+
+---
+
+#### GET /allowlist/reminders
+**App-owned.** Reminder state for a page of allowlist entries.
+
+**Requires:** `allowlist:read` permission
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `ids` | string | Yes | Comma-separated allowlist entry ids (UUIDs, at most 200) |
+
+**Response:** HTTP 200
+```json
+{
+  "data": [
+    {
+      "allowedEmailId": "uuid",
+      "reminderCount": 2,
+      "lastReminderAt": "2024-01-05T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+Only entries reminded at least once are returned; an entry never reminded is absent (read that as count 0). The state lives in the side table `kvox_allowlist_reminders`, which has no foreign key to `allowed_emails`, so the route first deletes rows whose entry no longer exists, with one bounded `DELETE ... WHERE NOT EXISTS`, and then reads. The web app's Reminders tab on `/admin/settings/users` is the consumer.
 
 ---
 
@@ -873,6 +910,24 @@ Remove email from allowlist.
 - 400 Bad Request - Cannot remove entry that has been claimed by a user
 
 **Note:** Entries that have been claimed (user has logged in) cannot be removed. This prevents accidentally removing access for existing users.
+
+---
+
+### Organizations
+
+Served by the platform identity slice. The app runs in single-organization mode, so the web app's organization pages stay hidden (`feature: 'orgs'` is off), but the routes are mounted. `/api/docs` (group "Organizations") has the request and response shapes.
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| `GET` | `/org/members` | `org_members:read` | List the active organization's members |
+| `PATCH` | `/org/members/:userId` | `org_members:write` | Change a member's org role or status |
+| `DELETE` | `/org/members/:userId` | `org_members:write` | Remove a member from the active organization |
+| `GET` | `/org/invites` | `org_invites:read` | List the active organization's invitations |
+| `POST` | `/org/invites` | `org_invites:write` | Invite someone to the active organization |
+| `DELETE` | `/org/invites/:id` | `org_invites:write` | Revoke an invitation |
+| `GET` | `/admin/organizations` | `organizations:read` | List organizations |
+| `POST` | `/admin/organizations` | `organizations:write` | Create an organization |
+| `PATCH` | `/admin/organizations/:id` | `organizations:write` | Rename an organization |
 
 ---
 
@@ -1778,7 +1833,7 @@ row and losing the only record of the upload to abort.
 
 ### Personal Access Tokens
 
-Long-lived, user-created bearer tokens (`pat_…`) for non-browser clients such as the CLI or CI. Three routes, all `@Auth()` with **no permission string** — deliberately: the resource is the caller's own token, scoped by `userId` in the query itself, the same ownership-scoped posture `/api/user-settings`, `/api/ai-credentials` and `/api/user-data` take. A PAT presents as `Authorization: Bearer pat_…` and carries the permissions of the user who minted it. Only a SHA-256 hash of the token is stored.
+Long-lived, user-created bearer tokens (`pat_…`) for non-browser clients such as the CLI or CI. Served by the platform identity slice (`/api/pat`). Three routes, all `@Auth()` with **no permission string** — deliberately: the resource is the caller's own token, scoped by `userId` in the query itself, the same ownership-scoped posture `/api/user-settings`, `/api/ai-credentials` and `/api/user-data` take. A PAT presents as `Authorization: Bearer pat_…` and carries the permissions of the user who minted it. Only a SHA-256 hash of the token is stored.
 
 #### POST /pat
 Create a new personal access token.
@@ -1793,6 +1848,7 @@ Create a new personal access token.
 | `name` | string | Yes | 1–100 characters (trimmed) |
 | `durationValue` | integer | Yes | 1–999 |
 | `durationUnit` | `minutes` \| `days` \| `months` | Yes | Unit for `durationValue`; `expiresAt` is computed from them at creation |
+| `orgId` | uuid | No | Organization to bind the token to; defaults to the caller's. A value the caller is not an active member of is a 400 |
 
 **Response:** HTTP 201. The raw token is **shown exactly once** — store it securely; it cannot be retrieved again.
 ```json
@@ -1803,15 +1859,16 @@ Create a new personal access token.
     "name": "ci-deploy",
     "tokenPrefix": "pat_1a2b",
     "expiresAt": "2024-04-01T00:00:00.000Z",
-    "createdAt": "2024-01-01T00:00:00.000Z"
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "orgId": "uuid"
   }
 }
 ```
 
 #### GET /pat
-List the current user's tokens. The raw token is never returned — only `tokenPrefix` for identification.
+List the current user's tokens, across every organization. The raw token is never returned — only `tokenPrefix` for identification.
 
-**Response:** an array of `{ id, name, tokenPrefix, durationValue, durationUnit, expiresAt, lastUsedAt (null if never used), createdAt, revokedAt (null if active) }`.
+**Response:** an array of `{ id, name, tokenPrefix, durationValue, durationUnit, expiresAt, lastUsedAt (null if never used), createdAt, revokedAt (null if active), orgId }`. The list is not filtered: a revoked or expired token stays until the `auth.token.cleanup` job deletes it (expired, or revoked more than 30 days ago).
 
 #### DELETE /pat/:id
 Revoke a token.
@@ -3076,8 +3133,8 @@ design, including the three state machines, the provider contract and the
 access model this section only summarises, is
 [`docs/specs/transcription.md`](specs/transcription.md).
 
-Two permissions, `transcripts:read` and `transcripts:write`, both **seeded to
-all three roles including Viewer**: creating a transcript is the action this
+Two permissions, `transcripts:read` and `transcripts:write`, both **org-scoped and
+granted to all three org roles (`org_admin`, `contributor`, `viewer`; the system `admin` reaches them through its `org_admin` membership)**: creating a transcript is the action this
 whole feature exists to enable, and a brand-new account's default role is
 Viewer. A permission model that made a fresh signup unable to record their
 first conversation would contradict the product's own onboarding.
@@ -4057,8 +4114,8 @@ provider is chosen at all.
 not the delivery mode, and no part of the API key. A capability probe hands out
 the capability, not the configuration behind it.
 
-**Requires:** `transcripts:read` — which is seeded to **all three roles**,
-Admin, Contributor and Viewer (`prisma/seed-data.ts`), so this stays readable
+**Requires:** `transcripts:read` — which is org-scoped and granted to **all three org roles**,
+`org_admin`, `contributor` and `viewer` (`apps/api/src/app-registrations/permissions.ts`), so this stays readable
 by every ordinary account. That is the property the argument above depends on:
 naming a real permission rather than "authenticated and nothing else" costs
 nothing here precisely because the permission is universal, while
@@ -4097,8 +4154,8 @@ the token budget, the streaming contract, the access model, and the full
 privacy statement of what leaves this deployment and under whose account — is
 [`docs/specs/notes.md`](specs/notes.md); this section only summarises it.
 
-Two permissions, `notes:read` and `notes:write`, both **seeded to all three
-roles including Viewer**: generating a note is the core product action this
+Two permissions, `notes:read` and `notes:write`, both **org-scoped and granted to
+all three org roles including `viewer`**: generating a note is the core product action this
 epic exists to enable, and a brand-new account's default role is Viewer. A
 permission model that made a fresh signup unable to make their first note
 would contradict the product's own onboarding.
@@ -4684,7 +4741,7 @@ field. Every note generated from a template snapshots that template's
 `bodyFormat` at generation time — see `### Notes` above.
 
 Two permissions, `note_templates:read` and `note_templates:write`, both
-seeded to all three roles — a **separate pair from `notes:*`**, not folded
+org-scoped and granted to all three org roles — a **separate pair from `notes:*`**, not folded
 in: templates and notes are governed by two different controllers with two
 different write surfaces (editing a recipe versus generating content).
 
@@ -5315,7 +5372,7 @@ reason: the deployment policy (`GET /ai-settings` above) is gated on
 hold — so the users this capability affects are precisely the users who
 cannot read it.
 
-**Requires:** `notes:read` — seeded to all three roles, exactly like
+**Requires:** `notes:read` — org-scoped and granted to all three org roles, exactly like
 `transcripts:read` gates `GET /transcription/config`, rather than left merely
 authenticated: naming a real permission the feature actually has, since the
 permission is universal here.
@@ -5447,7 +5504,7 @@ Two routes, one reader:
 Both resolve to a single `note_generations` row and hand it to the same
 reader; the bytes they emit are identical. **Requires:** `notes:read` on
 both — watching a note being written is reading it, and `notes:read` is
-seeded to all three roles precisely because generating a note is the core
+granted to all three org roles precisely because generating a note is the core
 product action in this epic. A note (or generation) the caller cannot see
 answers **404**, never 403, on both routes.
 
@@ -5531,8 +5588,8 @@ N-Quads (issue #386); all follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
-managing attribute definitions). Both are seeded to **all three roles**,
-Viewer included, the same posture as `notes:*`, and reach existing
+managing attribute definitions). Both are org-scoped and granted to **all three org roles**,
+`viewer` included, the same posture as `notes:*`, and reach existing
 deployments through the idempotent seed rather than a migration. There is
 deliberately **no `graph:read_any`**, not even for an administrator: a graph
 is derived from somebody's private conversations and notes.
@@ -7117,7 +7174,7 @@ job that answers it are #378; the answer stream is #379. Full design is
 
 **Permissions.** Every route is `graph:read` — asking is a read of your own
 graph, so there is deliberately **no `ask:*` permission pair**, and
-`graph:read` is seeded to every role. Conversations are **owner-only**: a
+`graph:read` is granted to every org role (`org_admin`, `contributor`, `viewer`). Conversations are **owner-only**: a
 conversation id you do not own answers the **same 404, with the same
 message,** as one that does not exist — never a 403 — and there is no admin
 read path, because a conversation is derived from your private recordings.
@@ -7861,6 +7918,50 @@ on those two alone.
 **Error Cases:**
 - `401 Unauthorized` - No valid token (both routes)
 - `403 Forbidden` - Caller lacks `system_settings:read` (`GET /admin/onboarding` only)
+
+---
+
+### Doctor (Admin-only)
+
+#### GET /admin/doctor
+Packaged by the platform (its `doctor` slice) and mounted because the identity slice registers its checks with the doctor registry; the checks the app configures are in `apps/api/src/platform/doctor.config.ts`.
+
+**Requires:** `system_settings:read` permission
+
+Runs a read-only check of every capability this deployment has (database, authentication, maintenance mode, object storage, email, Web Push, AI, the job queue, worker nodes, database backups, telemetry) and returns one row per check.
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | string | No | Only the checks of that category (`^[a-z0-9][a-z0-9_-]{0,63}$`; anything else is a 400) |
+| `refresh` | `true` \| `false` | No | Run the checks again now instead of the report cached for 15 s per `category` |
+
+**Response:** HTTP 200 **always**; a failing check is a row, not an error status.
+```json
+{
+  "data": {
+    "verdict": "warn",
+    "generatedAt": "2024-01-01T00:00:00.000Z",
+    "durationMs": 120,
+    "checks": [
+      {
+        "id": "database",
+        "category": "database",
+        "label": "Database",
+        "settingsPath": null,
+        "status": "pass",
+        "detail": "One-line result",
+        "remedy": null,
+        "error": null,
+        "data": null,
+        "durationMs": 4
+      }
+    ]
+  }
+}
+```
+
+The values above are illustrative. `status` and `verdict` are `pass`, `warn`, `fail` or `skip`; `verdict` is the worst status present, ordered `pass` < `skip` < `warn` < `fail`. On `warn` and `fail`, `remedy` says what to do and `settingsPath` names the page that fixes it. The route is read-only (no row, object or audit event is written, no mail or push is sent, no model is called), each check is cut off after 5000 ms unless it declares otherwise, and a check whose dependency failed or was skipped is reported as `skip` without running.
 
 ---
 

@@ -11,9 +11,9 @@
 > `apps/api/src/common/maintenance/allow-during-maintenance.decorator.ts`, and
 > `apps/api/src/common/maintenance/dto/update-maintenance.dto.ts`, with
 > exemptions applied in `apps/api/src/health/health.controller.ts`,
-> `apps/api/src/auth/auth.controller.ts`,
-> `apps/api/src/device-auth/device-auth.controller.ts` and
-> `apps/api/src/test-auth/test-auth.controller.ts`, and the global registration
+> the identity slice's auth, device-auth and test-auth controllers (the app's own
+> `apps/api/src/auth/`, `device-auth/` and `test-auth/` copies were deleted by
+> #465; the platform's controllers carry the exemption), and the global registration
 > in `apps/api/src/app.module.ts`.
 >
 > Operator procedures — turning a window on and off, the environment

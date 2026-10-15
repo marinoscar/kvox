@@ -41,7 +41,8 @@ vi.mock('../../../services/ai', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
@@ -59,7 +60,7 @@ vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
 
 import { render, mockAdminUser } from '../../utils/test-utils';
 import AiSettingsPage from '../../../pages/Admin/AiSettingsPage';
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   discoverAiModels,
   getAiSettings,

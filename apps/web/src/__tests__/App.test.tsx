@@ -47,7 +47,8 @@ vi.mock('../pages/Admin/AboutPage', () => ({
   default: () => <h1>Admin About</h1>,
 }));
 
-vi.mock('../pages/Admin/UsersPage', () => ({
+// Issue #465: the route renders KVox's binding of the packaged Users page.
+vi.mock('../identity/UsersPage', () => ({
   default: () => <h1>Admin Users</h1>,
 }));
 
@@ -71,8 +72,12 @@ vi.mock('../pages/UserAppearancePage', () => ({
   default: () => <h1>User Appearance Page</h1>,
 }));
 
-vi.mock('../pages/UserTokensPage', () => ({
-  default: () => <h1>User Tokens Page</h1>,
+// Issue #465: the Access Tokens page is the packaged one. The registries in
+// `config/` import their cards from the same module, so only the page is
+// replaced and the rest of the barrel stays real.
+vi.mock('@marinoscar/platform-web/identity/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/ui')>()),
+  UserTokensPage: () => <h1>User Tokens Page</h1>,
 }));
 
 // Issue #80. Same rationale as the stand-ins above, plus one specific to this

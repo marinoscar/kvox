@@ -43,6 +43,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { EffectiveSchema } from '@app/shared/ontology';
 import { Prisma } from '@prisma/client';
 
+import { activeUserHoldsPermission } from '../../common/auth/principal-permissions';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import {
   applyIdentities,
@@ -194,16 +195,9 @@ export class SpeakerLinkReconciler {
       return emptySummary('not_owner', ownerId);
     }
 
-    const canWrite = await tx.user.findFirst({
-      where: {
-        id: ownerId,
-        isActive: true,
-        userRoles: {
-          some: { role: { rolePermissions: { some: { permission: { name: PERMISSIONS.GRAPH_WRITE } } } } },
-        },
-      },
-      select: { id: true },
-    });
+    // The owner's EFFECTIVE permissions (system grants plus their membership's
+    // org role), through the platform principal (#465).
+    const canWrite = await activeUserHoldsPermission(tx, ownerId, PERMISSIONS.GRAPH_WRITE);
     if (!canWrite) return emptySummary('no_permission', ownerId);
 
     // 3. speakerId → the name's comparable form, for speakers still in the transcript.

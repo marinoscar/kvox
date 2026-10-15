@@ -29,7 +29,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { EMBEDDING_DIMENSIONS } from '../ai/providers/ai-provider.interface';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import type { PrismaService } from '../prisma/prisma.service';
 import { MAX_CANDIDATE_DOCUMENTS, type SearchQueryDto } from './dto/search.dto';

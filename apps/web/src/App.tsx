@@ -1,14 +1,15 @@
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+// Issue #465, epic #462. Identity is the platform's: the session provider, the
+// route guards and the identity pages come from `@marinoscar/platform-web`.
+import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
+import { IdentityProviders } from './identity/IdentityProviders';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
-import { ProtectedRoute } from './components/common/ProtectedRoute';
-import { RequirePermission } from './components/common/RequirePermission';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 // Issue #258, epic #254. Eagerly imported, not lazy: it renders on the error
@@ -28,9 +29,18 @@ import { InstallPrompt } from './components/pwa/InstallPrompt';
 import { Suspense, lazy } from 'react';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
-const ActivateDevicePage = lazy(() => import('./pages/ActivateDevicePage'));
+// Issue #465, epic #462. The identity pages are the platform's
+// (`@marinoscar/platform-web/identity/ui`). Login is this app's thin binding that
+// puts the brand mark in the package's `Logo` slot; the callback, device
+// activation and Access Tokens pages are used as packaged. Lazy like every
+// other page: the package barrel is split into its own chunk.
+const LoginPage = lazy(() => import('./identity/LoginPage'));
+const AuthCallbackPage = lazy(() =>
+  import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.AuthCallbackPage })),
+);
+const ActivateDevicePage = lazy(() =>
+  import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.ActivateDevicePage })),
+);
 const HomePage = lazy(() => import('./pages/HomePage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
@@ -72,7 +82,9 @@ const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 // Issue #126, epic #109 — the per-user event x channel notification matrix.
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
-const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
+const UserTokensPage = lazy(() =>
+  import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
+);
 // Issue #80. The one `/settings/*` destination whose every action is
 // permanent — its own `Danger Zone` group in `userSettingsSections.tsx`, and
 // ungated here like every sibling below.
@@ -142,7 +154,8 @@ const BroadcastsPage = lazy(() => import('./pages/Admin/BroadcastsPage'));
 // not carry it in the entry chunk, and neither should a Viewer, who cannot
 // reach the route at all.
 const SetupPage = lazy(() => import('./pages/Admin/SetupPage'));
-const AdminUsersPage = lazy(() => import('./pages/Admin/UsersPage'));
+// The packaged Users & Allowlist page plus this app's Reminders tab (`slots.Tabs`).
+const AdminUsersPage = lazy(() => import('./identity/UsersPage'));
 
 // Test login page (development only)
 const TestLoginPage = import.meta.env.PROD
@@ -186,14 +199,14 @@ function AppRoutes() {
               )}
 
               {/* Protected routes */}
-              <Route element={<ProtectedRoute />}>
+              <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
                 {/* Device activation page - without layout for full-screen experience */}
                 <Route path="/activate" element={<ActivateDevicePage />} />
 
                 {/* The notification centre (#127, epic #109) wraps the SHELL,
                     not the whole app, and that scoping is the point:
 
-                      * It is INSIDE `ProtectedRoute`, so it only ever mounts for
+                      * It is INSIDE `RequireAuth`, so it only ever mounts for
                         an authenticated user. Every endpoint it calls is
                         `@Auth()`-guarded and every one resolves the recipient from
                         the JWT, so mounting it on `/login` would buy a burst of
@@ -224,7 +237,7 @@ function AppRoutes() {
                           say so. Mounted here, the engines live in a ref that
                           survives every navigation inside `Layout`.
 
-                          INSIDE `ProtectedRoute`, like `NotificationProvider`:
+                          INSIDE `RequireAuth`, like `NotificationProvider`:
                           every endpoint it calls is `@Auth()`-guarded, and
                           `/activate` deliberately sits outside the shell (a
                           full-screen device flow with no upload affordance).
@@ -500,7 +513,7 @@ function AppRoutes() {
 
                       NONE OF THESE IS WRAPPED IN `RequirePermission`, and that is
                       the deliberate difference from the `/admin/settings/*` block
-                      below rather than an oversight. `ProtectedRoute` above
+                      below rather than an oversight. `RequireAuth` above
                       establishes that someone is signed in, and that is the only
                       question these routes have: they edit the caller's OWN
                       settings, which the API grants to all three roles, and
@@ -587,7 +600,7 @@ function AppRoutes() {
                       authorization. */}
                   <Route path="/settings/danger-zone" element={<UserDangerZonePage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
-                      `ProtectedRoute` above only establishes that someone is
+                      `RequireAuth` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`
                       reached the page and only then watched every API call 403.
                       `RequirePermission` was already in the codebase but had zero
@@ -614,7 +627,7 @@ function AppRoutes() {
                       Back returns to wherever the user came from rather than
                       bouncing through the redirect again.
 
-                      They sit INSIDE `ProtectedRoute` so an unauthenticated
+                      They sit INSIDE `RequireAuth` so an unauthenticated
                       bookmark goes to login and arrives here afterwards, rather
                       than being redirected first and losing the destination. */}
                   <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
@@ -1013,9 +1026,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeContextProvider>
-      <AuthProvider>
+      <IdentityProviders>
         <AppRoutes />
-      </AuthProvider>
+      </IdentityProviders>
     </ThemeContextProvider>
   );
 }

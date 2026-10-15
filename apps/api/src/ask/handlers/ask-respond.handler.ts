@@ -88,7 +88,12 @@ import {
   type AiUsage,
 } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { toRequestUser, type AuthenticatedUser, type RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import {
+  PRINCIPAL_USER_INCLUDE,
+  toRequestUser,
+  type AuthenticatedUser,
+  type RequestUser,
+} from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { resolveServiceName } from '../../common/otel/service-name';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
@@ -653,7 +658,9 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   private async loadUser(userId: string): Promise<RequestUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { userRoles: { include: { role: { include: { rolePermissions: { include: { permission: true } } } } } } },
+      // The platform's principal graph (system roles AND membership org roles),
+      // so a Contributor or Viewer's `graph:read` is found (#465).
+      include: PRINCIPAL_USER_INCLUDE,
     });
     if (!user || !user.isActive) throw new AskTurnFailure('other', 'This account is not active.');
     const requestUser = toRequestUser(user as unknown as AuthenticatedUser);

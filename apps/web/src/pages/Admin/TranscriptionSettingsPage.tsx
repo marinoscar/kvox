@@ -67,7 +67,7 @@ import {
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import { Navigate } from 'react-router-dom';
 
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useTranscriptionSettings } from '../../hooks/useTranscriptionSettings';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import type {
