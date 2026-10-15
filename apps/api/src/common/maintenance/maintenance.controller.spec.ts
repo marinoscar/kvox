@@ -1,4 +1,4 @@
-import { PERMISSIONS_KEY } from '../../auth/decorators/permissions.decorator';
+import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../constants/roles.constants';
 import { ALLOW_DURING_MAINTENANCE_KEY } from './allow-during-maintenance.decorator';
 import { MaintenanceController } from './maintenance.controller';

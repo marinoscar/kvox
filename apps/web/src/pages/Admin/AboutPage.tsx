@@ -105,7 +105,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Navigate } from 'react-router-dom';
 import { APP_NAME } from '@app/shared';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useAbout } from '../../hooks/useAbout';
 import { formatUtc } from '../../utils/formatUtc';
 import { formatRelativeTime } from '../../utils/relativeTime';

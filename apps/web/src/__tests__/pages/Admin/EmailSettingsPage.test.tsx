@@ -22,12 +22,13 @@ vi.mock('../../../hooks/useEmailSettings', () => ({
   useEmailSettings: vi.fn(),
 }));
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
 import { useEmailSettings } from '../../../hooks/useEmailSettings';
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import EmailSettingsPage from '../../../pages/Admin/EmailSettingsPage';
 
 const mockUseEmailSettings = vi.mocked(useEmailSettings);

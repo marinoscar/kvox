@@ -85,7 +85,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   ApplyOperationsDto,

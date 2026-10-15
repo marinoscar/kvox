@@ -61,7 +61,7 @@
 > `apps/web/src/components/notifications/NotificationPermissionBanner.tsx`,
 > `apps/web/src/components/common/Layout.tsx`,
 > `apps/web/src/services/browserNotifications.ts`,
-> `apps/web/src/contexts/AuthContext.tsx`,
+> `AuthProvider` from the platform's web identity package (the app's `apps/web/src/contexts/AuthContext.tsx` was deleted by #465; `apps/web/src/identity/IdentityProviders.tsx` binds the push-unsubscribe `onBeforeLogout`),
 > `apps/web/src/components/settings/NotificationSettings.tsx`, and
 > `apps/web/src/pages/UserNotificationsPage.tsx`.
 
@@ -273,7 +273,7 @@ this true rather than merely convenient:
   instance in `apps/web/src/services/api.ts`, never written anywhere the
   worker's separate execution context can read.
 - The refresh cookie is scoped to `path: '/api/auth'`
-  (`apps/api/src/auth/auth.controller.ts:40`) and **rotated on every use**. A
+  (the platform identity slice's auth controller; the app's own copy was deleted by #465) and **rotated on every use**. A
   worker that refreshed on its own would spend the one-shot refresh token
   behind the page's back; the page's next refresh would then present a token
   the server has already retired, and the user would be logged out **by their

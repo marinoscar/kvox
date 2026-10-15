@@ -50,7 +50,8 @@ vi.mock('react-router-dom', async () => {
  */
 
 const isAuthenticatedMock = vi.fn<() => boolean>();
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   useAuth: () => ({ isAuthenticated: isAuthenticatedMock() }),
 }));
 

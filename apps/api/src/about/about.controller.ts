@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Auth } from '../auth/decorators/auth.decorator';
+import { Auth } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { ABOUT_RESPONSE_EXAMPLE, AboutResponseDto } from './about.dto';
 import { AboutService } from './about.service';

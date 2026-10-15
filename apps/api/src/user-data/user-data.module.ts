@@ -14,6 +14,7 @@ import {
 } from './user-data.base';
 import {
   CredentialsUserDataHooks,
+  PatRevoker,
   FilesUserDataHooks,
   OnboardingUserDataHooks,
 } from './user-data.base.hooks';
@@ -48,9 +49,9 @@ import { UserDataService } from './user-data.service';
 //     except that this one is also the reason the import list is worth reading:
 //     a module that can touch a user's settings row should say so.
 //
-// `PatModule` is absent from this list and `PatService` is nevertheless
-// injected: that module is `@Global()`, so importing it again would be a second
-// declaration of a provider Nest already resolves everywhere.
+// `PatRevoker` (PLATFORM-ADOPTION-SHIM(#465)) is provided here: the platform's
+// `PatService` has no revoke-all, so the one `updateMany` it needs lives beside
+// the hook that calls it.
 //
 // ⚠ IT IMPORTS NO DOMAIN MODULE (issue #460). The transcripts, notes, note
 // templates, knowledge graph and Ask categories are declared by their own
@@ -90,6 +91,7 @@ import { UserDataService } from './user-data.service';
     // The base categories' hooks (`user-data.base.ts`). The domain categories'
     // hooks are provided by their own modules.
     { provide: FILES_USER_DATA_HOOKS, useClass: FilesUserDataHooks },
+    PatRevoker,
     { provide: CREDENTIALS_USER_DATA_HOOKS, useClass: CredentialsUserDataHooks },
     { provide: ONBOARDING_USER_DATA_HOOKS, useClass: OnboardingUserDataHooks },
   ],

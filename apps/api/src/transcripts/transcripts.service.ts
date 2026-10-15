@@ -51,7 +51,7 @@ import type { Prisma, Transcript, TranscriptSegment } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectsService } from '../storage/objects/objects.service';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import {
   DEFAULT_WORDS_WINDOW_MS,
   MAX_WORDS_WINDOW_MS,

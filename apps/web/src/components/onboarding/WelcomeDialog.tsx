@@ -127,7 +127,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { APP_NAME } from '@app/shared';
 
 import { ONBOARDING_ADMIN_PERMISSION, useOnboarding } from '../../contexts/OnboardingContext';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { ADMIN_SETUP_PATH, GETTING_STARTED_PATH } from './onboardingPaths';
 
 /** The DOM ids the dialog is named and described by. Fixed: there is at most one. */

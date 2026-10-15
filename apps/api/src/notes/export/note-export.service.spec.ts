@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { hashExportRequest } from '../../export/export-options';
 import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';

@@ -35,7 +35,7 @@ import {
 import { Prisma, type KgProposal } from '@prisma/client';
 import type { EffectiveSchema } from '@app/shared/ontology';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';

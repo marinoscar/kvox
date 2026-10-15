@@ -62,8 +62,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-import { Auth } from '../../auth/decorators/auth.decorator';
-import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS, ROLES } from '../../common/constants/roles.constants';
 import { ApiDataResponse } from '../../common/decorators/api-data-response.decorator';
 import { BROADCAST_CHUNK_SIZE } from './broadcast-audience';

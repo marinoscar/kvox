@@ -11,7 +11,7 @@ import {
   toRequestUser,
   type AuthenticatedUser,
   type RequestUser,
-} from '../auth/interfaces/authenticated-user.interface';
+} from '@marinoscar/platform-api/identity';
 import {
   type OnboardingAdminContext,
   type OnboardingAudience,

@@ -74,6 +74,8 @@ apps/api/
 **Test Types:**
 - **Unit tests** (`*.spec.ts`): Located alongside source files, test individual services/controllers/guards in isolation
 - **E2E tests** (`*.e2e.spec.ts`): Located in `test/` directory, test full request-response cycles with real database
+- **Platform conformance** (`test/conformance.spec.ts`): `runPlatformConformance` from the platform's testing entry point runs the platform's suites against the app's real composition: `identity` (every route carries `@Auth` or `@Public()`, plus the sign-in, session, PAT, device-flow, users and allowlist behaviour), `user-owned-data` (every app model is registered and classified) and `cron-enqueue-only` (a `@Cron` only enqueues; the three permanent exemptions are listed in the spec). The app no longer keeps its own copies of the identity tests (`test/auth/`, `test/test-auth/`, `test/users.integration.spec.ts`, `test/allowlist.integration.spec.ts`, `test/pat.integration.spec.ts` and the device-auth integration specs are gone): a case that still matters lives in the conformance run or in an app-specific spec. Do not pin a platform response with `toEqual` in an app test; assert the fields you rely on.
+- **RBAC** (`test/rbac/`): asserts that the org roles hold the eight domain permissions through the membership, and that the system role `admin` reaches them through its `org_admin` membership
 
 ### Frontend Test Organization
 
@@ -400,7 +402,7 @@ The mock factory provides Jest mock functions for all Prisma operations (findUni
 
 #### 2. OAuth Strategy Mocking
 
-Google OAuth is mocked using a custom Passport strategy:
+Google sign-in is the platform identity package's, and its behaviour is covered by the `identity` conformance suite. App tests that need a signed-in user authenticate through the test login (`POST /api/auth/test/login`, which answers 302 with the token in the `Location` header) or through `test/helpers/auth-mock.helper.ts`, rather than mocking a Passport strategy. The mock below is kept only where a spec still imports it:
 
 ```typescript
 import { MockGoogleStrategy, createMockGoogleProfile } from '../../test/mocks/google-oauth.mock';

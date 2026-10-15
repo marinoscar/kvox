@@ -27,7 +27,7 @@ import { graphReader, noGraphUser } from '../utils/graphTestUsers';
 import type { MockUser } from '../utils/test-utils';
 import type { AskStreamHandlers, AskStreamResume } from '../../services/askStream';
 import { clearEvidenceCache } from '../../hooks/useGraphEvidence';
-import { RequirePermission } from '../../components/common/RequirePermission';
+import { RequirePermission } from '@marinoscar/platform-web/identity/headless';
 import { AskMessageBubble } from '../../components/ask/AskMessageBubble';
 import { ASK_ERROR_CLASS_COPY } from '../../components/ask/askErrorCopy';
 

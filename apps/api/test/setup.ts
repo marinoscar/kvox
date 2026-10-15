@@ -2,6 +2,8 @@
 // `DEFAULT_SYSTEM_SETTINGS` are built from (issue #459). `setupFilesAfterEnv`
 // runs before each test file's own imports, so this must come first.
 import '../src/kvox.manifest';
+// Role, permission, user-owned-model and model-ownership registrations (#465).
+import '../src/app-registrations/registrations';
 
 import { config } from 'dotenv';
 import { resolve } from 'path';

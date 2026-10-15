@@ -37,7 +37,7 @@ import { ConfigService } from '@nestjs/config';
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { NotificationsService } from '../../src/notifications/notifications.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { ObjectsService } from '../../src/storage/objects/objects.service';

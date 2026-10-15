@@ -6,10 +6,14 @@ import {
 } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { authHeader } from '../helpers/auth-mock.helper';
+// Roles are built the way production stores them since platform migration
+// 0024 (#465): viewer/contributor are ORG roles on a membership, admin is the
+// only system role (plus an `org_admin` membership).
 import {
-  createMockTestUser,
-  authHeader,
-} from '../helpers/auth-mock.helper';
+  createMembershipAdmin,
+  createMembershipViewer,
+} from '../helpers/membership-user.helper';
 
 describe('Guard Integration (Integration)', () => {
   let context: TestContext;
@@ -38,7 +42,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should return 403 when authenticated but wrong role', async () => {
-      const viewer = await createMockTestUser(context, { roleName: 'viewer' });
+      const viewer = await createMembershipViewer(context);
 
       const response = await request(context.app.getHttpServer())
         .get('/api/users')
@@ -49,7 +53,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should return 200 when authenticated with correct role', async () => {
-      const admin = await createMockTestUser(context, { roleName: 'admin' });
+      const admin = await createMembershipAdmin(context);
 
       context.prismaMock.user.findMany.mockResolvedValue([]);
       context.prismaMock.user.count.mockResolvedValue(0);
@@ -90,7 +94,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should return clear message for forbidden', async () => {
-      const viewer = await createMockTestUser(context, { roleName: 'viewer' });
+      const viewer = await createMembershipViewer(context);
 
       const response = await request(context.app.getHttpServer())
         .get('/api/users')
@@ -104,7 +108,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should include helpful details in forbidden message', async () => {
-      const viewer = await createMockTestUser(context, { roleName: 'viewer' });
+      const viewer = await createMembershipViewer(context);
 
       const response = await request(context.app.getHttpServer())
         .get('/api/users')
@@ -140,7 +144,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should reject request without Bearer prefix', async () => {
-      const admin = await createMockTestUser(context, { roleName: 'admin' });
+      const admin = await createMembershipAdmin(context);
 
       const response = await request(context.app.getHttpServer())
         .get('/api/auth/me')
@@ -151,7 +155,7 @@ describe('Guard Integration (Integration)', () => {
     });
 
     it('should accept valid token', async () => {
-      const admin = await createMockTestUser(context, { roleName: 'admin' });
+      const admin = await createMembershipAdmin(context);
 
       const response = await request(context.app.getHttpServer())
         .get('/api/auth/me')
@@ -165,7 +169,7 @@ describe('Guard Integration (Integration)', () => {
 
   describe('Dynamic Role Changes', () => {
     it('should not reflect role changes in existing JWT', async () => {
-      const viewer = await createMockTestUser(context, { roleName: 'viewer' });
+      const viewer = await createMembershipViewer(context);
 
       // Verify can't access users with viewer role
       await request(context.app.getHttpServer())

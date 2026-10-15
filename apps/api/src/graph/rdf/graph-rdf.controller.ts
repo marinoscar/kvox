@@ -2,9 +2,8 @@ import { Controller, Get, HttpStatus, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { Auth } from '../../auth/decorators/auth.decorator';
-import { CurrentUser } from '../../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { matchesETag } from '../../transcripts/transcripts.controller';
 import { GraphRdfService, type RdfArtefact } from './graph-rdf.service';

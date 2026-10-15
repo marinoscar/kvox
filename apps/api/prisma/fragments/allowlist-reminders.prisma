@@ -1,0 +1,30 @@
+// =============================================================================
+// Allowlist invitation reminders (issue #301, moved by issue #465, epic #462)
+// =============================================================================
+//
+// Bookkeeping for `POST /api/allowlist/:id/reminder`, which re-emails an
+// invitee who has not signed in yet. It used to live in two KVox-only columns
+// on `allowed_emails` (`reminder_count`, `last_reminder_at`), declared as the
+// temporary deviation `kvox:allowlist-reminders`. The platform's `AllowedEmail`
+// model is not `@extensible`, so KVox can neither add a column to it nor hang a
+// back-relation on it. This side table, keyed by the allowlist row id, replaces
+// those columns.
+//
+// NO FOREIGN KEY. `allowed_email_id` points at `allowed_emails.id` by value
+// only. A SQL-only constraint would show up as schema drift (Prisma cannot
+// declare a relation to a model it cannot extend), and a Prisma relation
+// needs a back-relation field on `AllowedEmail`, which the platform forbids.
+// An orphan is therefore possible (an allowlist row was deleted); the read
+// path deletes orphans with one bounded `DELETE ... WHERE NOT EXISTS`, and no
+// caller may trust a row without joining `allowed_emails`.
+//
+// Model ownership: `system` ("Allowlist bookkeeping, keyed by an allowlist row
+// id"). It holds no user data of its own.
+model KvoxAllowlistReminder {
+  allowedEmailId String    @id @map("allowed_email_id") @db.Uuid
+  reminderCount  Int       @default(0) @map("reminder_count")
+  lastReminderAt DateTime? @map("last_reminder_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("kvox_allowlist_reminders")
+}

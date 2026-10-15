@@ -37,7 +37,7 @@ import { BadRequestException, HttpException, Injectable, Logger, NotFoundExcepti
 import type { KgEntityDigest } from '@prisma/client';
 
 import { AI_CONFLICT_REASONS, AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';

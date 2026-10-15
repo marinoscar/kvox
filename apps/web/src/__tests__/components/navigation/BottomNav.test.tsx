@@ -18,11 +18,12 @@ import { BottomNav } from '../../../components/navigation/BottomNav';
  * missing.
  */
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 // The `knowledge` tab is gated on connected knowledge being ON (#438). The
 // suites below run with it on unless they say otherwise.

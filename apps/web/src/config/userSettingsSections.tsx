@@ -22,7 +22,7 @@
 import PersonIcon from '@mui/icons-material/Person';
 import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
@@ -224,14 +224,10 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
   },
   {
     label: 'Security',
-    cards: [
-      {
-        title: 'Access Tokens',
-        description: 'Create and revoke personal access tokens for API and CLI access.',
-        Icon: VpnKeyIcon,
-        path: '/settings/tokens',
-      },
-    ],
+    // Issue #465, epic #462. `Access Tokens` is the identity slice's own
+    // registry entry (`/settings/tokens`, no permission), spread where the
+    // literal card was.
+    cards: [...identityUserSettingsSections.security],
   },
   {
     // Issue #80. A THIRD GROUP, LAST, AND ON ITS OWN — not a fourth card under

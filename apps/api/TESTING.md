@@ -91,24 +91,24 @@ In CI environments, E2E tests should be run with a dedicated test database servi
 
 ### Unit Test Example
 ```typescript
-// src/auth/auth.service.spec.ts
+// src/notes/notes.service.spec.ts (illustrative)
 import { Test } from '@nestjs/testing';
-import { AuthService } from './auth.service';
+import { NotesService } from './notes.service';
 import { createMockPrismaService } from '../test/mocks/prisma.mock';
 
-describe('AuthService', () => {
-  let service: AuthService;
+describe('NotesService', () => {
+  let service: NotesService;
   let prisma: MockPrismaService;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
-        AuthService,
+        NotesService,
         { provide: PrismaService, useValue: createMockPrismaService() },
       ],
     }).compile();
 
-    service = module.get(AuthService);
+    service = module.get(NotesService);
     prisma = module.get(PrismaService);
   });
 
@@ -120,7 +120,7 @@ describe('AuthService', () => {
 
 ### E2E Test Example
 ```typescript
-// test/auth/auth.e2e.spec.ts
+// test/rbac/example.e2e.spec.ts (illustrative; identity routes are the platform's and covered by the conformance suite)
 import request from 'supertest';
 import { createTestApp, closeTestApp } from '../helpers/test-app.helper';
 

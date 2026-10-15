@@ -58,8 +58,7 @@ import {
 } from '@nestjs/swagger';
 import type { Observable } from 'rxjs';
 
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteGenerationStreamService } from './generation/note-generation-stream.service';

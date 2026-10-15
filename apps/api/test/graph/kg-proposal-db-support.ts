@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { NoteOriginService } from '../../src/notes/note-origin.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';

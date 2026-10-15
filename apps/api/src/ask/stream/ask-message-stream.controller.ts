@@ -30,8 +30,7 @@ import {
 } from '@nestjs/swagger';
 import type { Observable } from 'rxjs';
 
-import { Auth } from '../../auth/decorators/auth.decorator';
-import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { resolveStreamOffset } from '../../notes/generation/note-stream';
 import { ASK_MESSAGE_NOT_FOUND, AskAccessService } from '../ask-access.service';

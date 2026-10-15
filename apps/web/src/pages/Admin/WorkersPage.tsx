@@ -99,7 +99,7 @@ import { Navigate } from 'react-router-dom';
 import { DataTable } from '../../components/datatable';
 import type { DataTableRowAction } from '../../components/datatable';
 import { NodeCredentials } from '../../components/admin/NodeCredentials';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   WORKER_NODES_POLL_INTERVAL_MS,
   useNodeActions,

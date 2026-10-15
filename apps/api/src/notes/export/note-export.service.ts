@@ -56,7 +56,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Note, NoteExport, Prisma } from '@prisma/client';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '../../jobs/jobs.service';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';

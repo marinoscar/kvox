@@ -74,9 +74,8 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodValidationPipe } from 'nestjs-zod';
 
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { ApiDataResponse } from '../common/decorators/api-data-response.decorator';
 import { matchesETag, versionETag } from '../transcripts/transcripts.controller';

@@ -153,6 +153,15 @@ const MIGRATIONS_AT_288 = [
   '20260926231512_add_kg_exports',
   // #436: clears the two old default AI token ceilings so limits follow the model. Not about notifications.
   '20260927050000_ai_token_limits_follow_model',
+  // #465 (epic #462): the allowlist reminder bookkeeping moves to the
+  // `kvox_allowlist_reminders` side table and `allowed_emails` loses its two
+  // deviation columns. Allowlist data, not notifications; the reminder email
+  // itself is still an event in `notification-events.ts`.
+  '20261015125136_kvox_allowlist_reminders',
+  // #465 (epic #462): scopes the eight KVox domain permissions to `org` and
+  // drops the `admin` grants (admins reach them through `org_admin`). RBAC
+  // data, not notifications.
+  '20261015125334_kvox_scope_domain_permissions',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

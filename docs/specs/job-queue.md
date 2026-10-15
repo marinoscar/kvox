@@ -1766,7 +1766,7 @@ the same permission split and the same declaration-order rule.)
 | `DELETE /api/admin/jobs/{id}` | `jobs:write` | Deletes one job |
 
 Every route is `@Auth({ roles: [ROLES.ADMIN], permissions: [...] })`, and both
-permissions are seeded to Admin alone (`prisma/seed-data.ts`). The read/write
+permissions are seeded to Admin alone (`apps/api/prisma/catalog/permissions.json`). The read/write
 split is not decoration: a read of this surface exposes subject ids, provider
 keys and the shape of a deployment's workload, and a write can requeue the
 entire failed backlog. A later issue that wants to give an operations role

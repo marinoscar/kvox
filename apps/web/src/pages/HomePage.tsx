@@ -144,10 +144,9 @@ import { NeedsAttention } from '../components/home/NeedsAttention';
 import { RecentNotes } from '../components/home/RecentNotes';
 import { RecentTranscripts } from '../components/home/RecentTranscripts';
 import { SharedWithMe } from '../components/home/SharedWithMe';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteSummary } from '../hooks/useNotes';
-import { usePermissions } from '../hooks/usePermissions';
 import { useTranscriptSummary } from '../hooks/useTranscripts';
 import { getTranscriptionConfig } from '../services/transcription';
 

@@ -40,7 +40,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { PrismaClient } from '@prisma/client';
 
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { JobsService } from '../../src/jobs/jobs.service';

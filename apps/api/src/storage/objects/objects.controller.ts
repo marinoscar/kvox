@@ -25,9 +25,8 @@ import {
 import { FastifyRequest } from 'fastify';
 import { ZodValidationPipe } from 'nestjs-zod';
 
-import { Auth } from '../../auth/decorators/auth.decorator';
+import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiDataResponse } from '../../common/decorators/api-data-response.decorator';
-import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { ObjectsService } from './objects.service';
 import {
   InitUploadBodyDto,

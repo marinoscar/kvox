@@ -60,7 +60,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 import { useIsMounted } from '../hooks/useIsMounted';
 import {
   ApiError,

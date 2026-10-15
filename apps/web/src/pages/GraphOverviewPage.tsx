@@ -71,7 +71,7 @@ import {
 } from '../components/graph/overview/overviewModel';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { useGraphOverview } from '../hooks/useGraphOverview';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import type { GraphOverview } from '../services/graph';
 import { formatRelativeTime } from '../utils/relativeTime';
 

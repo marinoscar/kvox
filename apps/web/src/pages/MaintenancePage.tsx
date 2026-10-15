@@ -24,7 +24,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { APP_NAME } from '@app/shared';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { MAINTENANCE_ADMIN_PATH } from '../services/maintenance';
 import type { MaintenanceBlock } from '../services/maintenance';
 

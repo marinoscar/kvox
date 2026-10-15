@@ -10,7 +10,7 @@ import { JobHandler } from './job-handler.interface';
 import { JobHandlerRegistry } from './job-handler.registry';
 import { JobWorker } from './job.worker';
 import { JobsModule } from './jobs.module';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '@marinoscar/platform-api/identity';
 import configuration from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';

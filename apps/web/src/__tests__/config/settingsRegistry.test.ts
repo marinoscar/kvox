@@ -549,8 +549,12 @@ describe('the Operations group (#266)', () => {
       dirname(fileURLToPath(import.meta.url)),
       '../../../../api/src',
     );
-    const rolesConstants = readFileSync(
-      resolve(API_SRC, 'common/constants/roles.constants.ts'),
+    // Issue #465: the permission ids are no longer literals in
+  // `roles.constants.ts` (derived from the platform registries); the committed
+  // catalog `apps/api/prisma/catalog/permissions.json` is the file that lists
+  // every permission the API seeds and enforces, and CI keeps it in sync.
+  const permissionCatalog = readFileSync(
+      resolve(API_SRC, '../prisma/catalog/permissions.json'),
       'utf8',
     );
     const jobsController = readFileSync(
@@ -573,7 +577,7 @@ describe('the Operations group (#266)', () => {
     it('binds both Jobs cards to jobs:read, which job-admin.controller.ts enforces on its reads', () => {
       expect(cardsByTitle.get('Jobs')?.permission).toBe('jobs:read');
       expect(cardsByTitle.get('Job Insights')?.permission).toBe('jobs:read');
-      expect(rolesConstants).toContain("JOBS_READ: 'jobs:read'");
+      expect(permissionCatalog).toContain('"jobs:read"');
       expect(jobsController).toContain('PERMISSIONS.JOBS_READ');
     });
 
@@ -583,7 +587,7 @@ describe('the Operations group (#266)', () => {
       // checks, so the hub would decide reachability on unrelated evidence.
       expect(cardsByTitle.get('Worker Nodes')?.permission).toBe('nodes:read');
       expect(cardsByTitle.get('Worker Nodes')?.permission).not.toBe('jobs:read');
-      expect(rolesConstants).toContain("NODES_READ: 'nodes:read'");
+      expect(permissionCatalog).toContain('"nodes:read"');
       // And the controller really does enforce it — the mechanical half of
       // CLAUDE.md Settings UI Pattern rule 3, now that the card is routed and
       // the string gates a page somebody can actually open (#271).
@@ -597,8 +601,8 @@ describe('the Operations group (#266)', () => {
       // `system_settings:read` here would quietly undo that.
       expect(cardsByTitle.get('Broadcasts')?.permission).toBe('broadcasts:read');
       expect(cardsByTitle.get('Broadcasts')?.permission).not.toBe('system_settings:read');
-      expect(rolesConstants).toContain("BROADCASTS_READ: 'broadcasts:read'");
-      expect(rolesConstants).toContain("BROADCASTS_WRITE: 'broadcasts:write'");
+      expect(permissionCatalog).toContain('"broadcasts:read"');
+      expect(permissionCatalog).toContain('"broadcasts:write"');
       // And the controller really does enforce it — the mechanical half of
       // CLAUDE.md Settings UI Pattern rule 3.
       expect(broadcastsController).toContain('PERMISSIONS.BROADCASTS_READ');
@@ -609,7 +613,7 @@ describe('the Operations group (#266)', () => {
       const card = cardsByTitle.get('Database Backup');
       expect(card?.permission).toBe('db_backup:read');
       expect(card?.permission).not.toBe('system_settings:read');
-      expect(rolesConstants).toContain("DB_BACKUP_READ: 'db_backup:read'");
+      expect(permissionCatalog).toContain('"db_backup:read"');
       // And the controller really does enforce it — the mechanical half of
       // CLAUDE.md Settings UI Pattern rule 3, now that the card is routed and
       // the string gates a page somebody can actually open (#287).
@@ -619,7 +623,7 @@ describe('the Operations group (#266)', () => {
       // schedule backups but must not be able to replace the database. The card
       // must NOT mirror it — a reachability gate on `restore` would hide the
       // history from the read-only admin the page is most useful to.
-      expect(rolesConstants).toContain("DB_BACKUP_RESTORE: 'db_backup:restore'");
+      expect(permissionCatalog).toContain('"db_backup:restore"');
       expect(dbBackupController).toContain('PERMISSIONS.DB_BACKUP_RESTORE');
       expect(card?.permission).not.toBe('db_backup:restore');
     });
@@ -941,13 +945,17 @@ describe('the AI cards (#55, epic #45)', () => {
         '../../../../api/src',
       );
       const controller = readFileSync(resolve(API_SRC, 'ai/ai-settings.controller.ts'), 'utf8');
-      const rolesConstants = readFileSync(
-        resolve(API_SRC, 'common/constants/roles.constants.ts'),
+      // Issue #465: the permission ids are no longer literals in
+  // `roles.constants.ts` (derived from the platform registries); the committed
+  // catalog `apps/api/prisma/catalog/permissions.json` is the file that lists
+  // every permission the API seeds and enforces, and CI keeps it in sync.
+  const permissionCatalog = readFileSync(
+        resolve(API_SRC, '../prisma/catalog/permissions.json'),
         'utf8',
       );
 
       expect(controller).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
-      expect(rolesConstants).toContain("SYSTEM_SETTINGS_READ: 'system_settings:read'");
+      expect(permissionCatalog).toContain('"system_settings:read"');
     });
 
     it('lives under General, not Operations', () => {
@@ -1034,8 +1042,12 @@ describe('the About card (#126)', () => {
   const about = general?.cards.find((card) => card.title === 'About');
 
   const API_SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../api/src');
-  const rolesConstants = readFileSync(
-    resolve(API_SRC, 'common/constants/roles.constants.ts'),
+  // Issue #465: the permission ids are no longer literals in
+  // `roles.constants.ts` (derived from the platform registries); the committed
+  // catalog `apps/api/prisma/catalog/permissions.json` is the file that lists
+  // every permission the API seeds and enforces, and CI keeps it in sync.
+  const permissionCatalog = readFileSync(
+    resolve(API_SRC, '../prisma/catalog/permissions.json'),
     'utf8',
   );
   const aboutController = readFileSync(resolve(API_SRC, 'about/about.controller.ts'), 'utf8');
@@ -1063,12 +1075,12 @@ describe('the About card (#126)', () => {
 
   it('binds to system_settings:read, which about.controller.ts enforces — and to no about:read', () => {
     expect(about?.permission).toBe('system_settings:read');
-    expect(rolesConstants).toContain("SYSTEM_SETTINGS_READ: 'system_settings:read'");
+    expect(permissionCatalog).toContain('"system_settings:read"');
     // The mechanical half of rule 3: the controller really does gate on it.
     expect(aboutController).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
     // And the permission the card would have invented does not exist anywhere
     // the API could seed it.
-    expect(rolesConstants).not.toMatch(/about:read/);
+    expect(permissionCatalog).not.toMatch(/about:read/);
   });
 
   it('is visible to a system_settings:read holder and to nobody without it', () => {

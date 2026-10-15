@@ -52,7 +52,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma, TranscriptExport } from '@prisma/client';
 
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateTranscriptExportDto } from '../dto/transcript-export.dto';

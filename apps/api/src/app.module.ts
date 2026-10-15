@@ -2,6 +2,10 @@
 // settings DTOs below are composed from the registries this fills (see
 // kvox.manifest.ts). Must stay the first import.
 import './kvox.manifest';
+// Fills core's role, permission, user-owned-model and model-ownership registries
+// (issue #465). Imported here for the same reason as the manifest above: a test
+// that builds `AppModule` without `test/setup.ts` still needs them registered.
+import './app-registrations/registrations';
 
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -11,16 +15,15 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaModule } from './prisma/prisma.module';
+import { platformHostModule } from './platform/platform-host.module';
+import { doctorModule } from './platform/doctor.config';
+import { identityModule } from './platform/identity/identity.config';
+import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-reminders.module';
 import { CommonModule } from './common/common.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
 import { ProfileImageModule } from './settings/profile-image/profile-image.module';
 import { HealthModule } from './health/health.module';
-import { AllowlistModule } from './allowlist/allowlist.module';
-import { DeviceAuthModule } from './device-auth/device-auth.module';
 import { StorageModule } from './storage/storage.module';
-import { PatModule } from './pat/pat.module';
 import { NodeCredentialModule } from './nodes/node-credential.module';
 import { NodesModule } from './nodes/nodes.module';
 import { CredentialsModule } from './credentials/credentials.module';
@@ -30,7 +33,6 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
-import { TestAuthModule } from './test-auth/test-auth.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
@@ -74,28 +76,40 @@ import configuration from './config/configuration';
     // Database
     PrismaModule,
 
+    // The platform's DI-time host ports (audit sink, system settings store,
+    // `PLATFORM_PRISMA`), bound to this app's current services (#465). Global.
+    platformHostModule,
+    // The platform Doctor: the identity slice registers its health checks with
+    // it, so it cannot boot without it (#465). One read-only admin route.
+    doctorModule,
+
     // Logger
     LoggerModule,
 
     // Feature modules
     CommonModule,
-    AuthModule,
-    UsersModule,
+    // The platform's identity slice (#465, epic #462): `/api/auth/*`,
+    // `/api/users`, `/api/roles`, `/api/allowlist`, `/api/pat`,
+    // `/api/auth/device/*` and, outside production, `/api/auth/test/login`, in
+    // single-organization mode. Replaces this app's own AuthModule, UsersModule,
+    // AllowlistModule, PatModule, DeviceAuthModule and TestAuthModule. Global:
+    // it provides `PatService` and the guards' dependencies to every module.
+    identityModule,
+    // The app-only allowlist reminder routes (`POST /api/allowlist/:id/reminder`,
+    // `GET /api/allowlist/reminders`), a side table beside the platform's
+    // allowlist, which has no seam for them (#301, moved by #465).
+    AllowlistRemindersModule,
     SettingsModule,
     // Uploaded profile pictures (#367): its own module because it needs the
     // storage provider and SettingsModule must not (see the module).
     ProfileImageModule,
     HealthModule,
-    AllowlistModule,
-    DeviceAuthModule,
     StorageModule,
-    PatModule,
     // Worker node credentials (#267, epic #254): the `nod_` token family the
     // node fleet authenticates with, and its `/api/node-credentials` admin
-    // endpoints. Registered here beside `PatModule` and for the same reason —
-    // both are @Global providers of a service `JwtAuthGuard` injects, so the
-    // module that owns the application is where they belong rather than
-    // scattered through whichever feature module happened to need one.
+    // endpoints. @Global because the identity slice's `JwtAuthGuard` resolves a
+    // `nod_` token through it (`IDENTITY_NODE_CREDENTIALS`, bound in
+    // `platform/identity/identity-host.module.ts`).
     //
     // DELIBERATELY NOT the (much heavier) nodes module #268 will add; see the
     // block comment in `nodes/node-credential.module.ts` for why splitting by
@@ -300,9 +314,6 @@ import configuration from './config/configuration';
     // epic is the user's INTENT, which lives in `SettingsModule`'s `onboarding`
     // user-settings namespace (#272).
     OnboardingModule,
-
-    // Test modules (non-production only)
-    ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
   ],
   providers: [
     // ------------------------------------------------------------------------

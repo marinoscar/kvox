@@ -1,7 +1,7 @@
 import type { ModuleRef } from '@nestjs/core';
 
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { AiConfigService } from '../../src/ai/ai-config.service';
 import type { EmailSettingsService } from '../../src/email/email-settings.service';
 import type { PushConfigService } from '../../src/notifications/push-config.service';

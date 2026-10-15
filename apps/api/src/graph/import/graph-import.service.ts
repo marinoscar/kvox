@@ -39,7 +39,7 @@ import type { AttributeKind, AttributeOptions } from '@app/shared/ontology';
 import { Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../../ai/ai-settings.service';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';

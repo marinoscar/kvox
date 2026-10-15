@@ -7,7 +7,7 @@ import {
 } from '../../src/openapi/document';
 import { OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from '../../src/openapi/tags';
 import { REQUIREMENTS_MARKER } from '../../src/openapi/rbac-docs';
-import { RBAC_EXTENSION_KEY } from '../../src/auth/decorators/auth.decorator';
+import { RBAC_EXTENSION_KEY } from '@marinoscar/platform-api/identity';
 import { DocOperation, forEachOperation, MutableDocument } from '../../src/openapi/types';
 
 /**

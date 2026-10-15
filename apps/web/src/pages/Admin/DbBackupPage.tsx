@@ -126,7 +126,7 @@ import type { DataTableFilterModel, DataTableRowAction } from '../../components/
 import { DbBackupConfigPanel } from '../../components/admin/DbBackupConfigPanel';
 import { DbBackupRestoreDialog } from '../../components/admin/DbBackupRestoreDialog';
 import type { RestoreDialogIntent } from '../../components/admin/DbBackupRestoreDialog';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   DB_BACKUP_POLL_INTERVAL_MS,
   useDbBackupActions,

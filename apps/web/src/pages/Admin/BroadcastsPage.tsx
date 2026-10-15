@@ -86,7 +86,7 @@ import { DataTable } from '../../components/datatable';
 import type { DataTableFilterModel, DataTableRowAction } from '../../components/datatable';
 import { BroadcastComposer } from '../../components/admin/BroadcastComposer';
 import { BroadcastDetailDialog } from '../../components/admin/BroadcastDetailDialog';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   BROADCASTS_POLL_INTERVAL_MS,
   useBroadcastActions,

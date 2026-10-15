@@ -4,11 +4,13 @@
 
 This document provides a comprehensive overview of the security architecture for this web application foundation. The system implements defense-in-depth security through multiple layers: OAuth 2.0 authentication with Google, JWT-based session management with token rotation, email allowlist access control, Role-Based Access Control (RBAC), and comprehensive audit logging.
 
+> **Who owns what.** Sign-in, sessions, refresh-token rotation, personal access tokens, the device flow, users, roles and the allowlist are implemented by the platform identity slice (`IdentityModule.forRoot`, from the platform's identity package), which the app mounts in `apps/api/src/platform/identity/` in single-organization mode. The app has no `auth`, `users`, `allowlist`, `pat`, `device-auth` or `test-auth` module of its own. The design below describes the behaviour of that slice as this app runs it; the code is in the package, and the app's own pieces are the host-port bindings, the org-scoped domain permissions (`apps/api/src/app-registrations/permissions.ts`) and the allowlist reminder routes (`apps/api/src/allowlist-reminders/`). A missing `JWT_SECRET` is a boot error.
+
 **Key Security Technologies:**
 - **Authentication**: OAuth 2.0 / OpenID Connect (Google)
 - **Access Control**: Email allowlist restricts access to pre-authorized users
 - **Session Management**: JWT access tokens + HttpOnly refresh tokens with rotation
-- **Authorization**: Role-Based Access Control (RBAC) with three roles (Admin, Contributor, Viewer)
+- **Authorization**: Role-Based Access Control (RBAC) with one system role (`admin`) and three organization roles (`org_admin`, `contributor`, `viewer`)
 - **Token Storage**: SHA256 hashed refresh tokens in PostgreSQL
 - **Infrastructure**: Nginx reverse proxy with security headers
 - **Audit**: Comprehensive event logging for all security-relevant actions
@@ -242,23 +244,12 @@ const COOKIE_OPTIONS = {
 
 ### Token Cleanup Task
 
-Expired and revoked refresh tokens are automatically cleaned up to reduce database size:
+Expired and revoked refresh tokens, and expired or long-revoked personal access tokens, are cleaned up by the `auth.token.cleanup` queue job:
 
-```typescript
-@Cron(CronExpression.EVERY_DAY_AT_3AM)
-async handleCron() {
-  const count = await this.authService.cleanupExpiredTokens();
-  logger.log(`Token cleanup: ${count} tokens removed`);
-}
-```
-
-**Cleanup Logic:**
-- Runs daily at 3:00 AM
-- Deletes tokens where:
-  - `expiresAt < NOW()` (expired)
-  - `revokedAt IS NOT NULL` (revoked)
-- Removes sensitive data from database
-- Improves query performance
+- The platform's cron only **enqueues** the job; the handler runs through the app's job queue (registered by `apps/api/src/platform/identity/identity-jobs.adapter.ts`, which keeps the app's original type string so job history survives). A cron that worked inline would violate the queue rule in `AGENTS.md`.
+- The job is **server-only**: it deletes credential rows, a privilege a worker node must never hold, so it declares no node-result members.
+- It deletes refresh tokens that are expired or revoked, and personal access tokens that are expired or were revoked more than 30 days ago.
+- The device-code counterpart is `device-auth.code.cleanup`, with the same shape.
 
 ---
 
@@ -266,7 +257,7 @@ async handleCron() {
 
 ### Roles and Permissions Model
 
-The system implements a flexible Role-Based Access Control (RBAC) model with three predefined roles:
+The system implements a Role-Based Access Control (RBAC) model with two scopes of role. `admin` is a **system** role, held in `user_roles`. `org_admin`, `contributor` and `viewer` are **organization** roles, held on the user's membership of the (single, default) organization (`memberships.role_id`); platform migration `0024_split_system_org_roles` moved `contributor` and `viewer` there from `user_roles`. A user's effective permissions are the union of the permissions of their system roles and of the role on their active membership.
 
 ```mermaid
 erDiagram
@@ -315,18 +306,25 @@ erDiagram
 | `rbac:manage` | Assign roles to users | ✅ | ❌ | ❌ |
 | `allowlist:read` | View allowlisted email addresses | ✅ | ❌ | ❌ |
 | `allowlist:write` | Add/remove emails from allowlist | ✅ | ❌ | ❌ |
-| `user_settings:read` | View own user settings | ✅ | ✅ | ✅ |
-| `user_settings:write` | Modify own user settings | ✅ | ✅ | ✅ |
+| `user_settings:read` | View own user settings (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+| `user_settings:write` | Modify own user settings (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+| `transcripts:read/write` | Transcripts (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+| `notes:read/write` | Notes (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+| `note_templates:read/write` | Note templates (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+| `graph:read/write` | Connected-knowledge graph (org-scoped) | ✅ (via `org_admin`) | ✅ | ✅ |
+
+The matrix is abridged; the full catalog with each permission's scope and each role's grants is `apps/api/prisma/catalog/permissions.json`. The **Admin** column is the system role plus the `org_admin` membership every admin holds: the system role `admin` itself carries only the system-scoped permissions, and reaches the org-scoped rows (including all eight domain permissions) through `org_admin`. There is deliberately no `*:read_any` for transcripts, notes or the graph, for any role.
 
 **Role Descriptions:**
-- **Admin**: Full system access - manage users, roles, and all settings
-- **Contributor**: Standard user capabilities - manage own settings (ready for future feature expansion)
+- **Admin** (system): operate the deployment - manage users, roles, and all system settings
+- **Org admin** (org): everything a contributor can do, plus manage the organization's members and invites
+- **Contributor** (org): standard user capabilities - manage own settings (ready for future feature expansion)
 - **Viewer**: Read-only access - minimal privileges, manage own settings (default role for new users)
 
 **Default Role Assignment:**
 - New users are assigned the `viewer` role automatically
 - First user matching `INITIAL_ADMIN_EMAIL` receives `admin` role (bootstrap)
-- Additional roles can be assigned by admins via `/api/users/{id}` endpoint
+- Roles are assigned by admins via `PUT /api/users/{id}/roles` (`rbac:manage`): `admin` sets the system role and `org_admin` on the default-organization membership, `contributor` or `viewer` set the membership role. `GET /api/roles` lists the roles and which are assignable
 
 ### Guard Execution Flow
 
@@ -363,10 +361,11 @@ flowchart TD
 
 **Guard Logic:**
 
-1. **JwtAuthGuard** (Global, Required by default)
-   - Checks for `@Public()` decorator - if present, skip all auth
+1. **JwtAuthGuard** (applied per route by `@Auth()`; there is **no global JWT guard**)
+   - A route carries `@Auth(...)` or `@Public()`; the `identity` conformance suite fails on a route with neither
+   - `@Public()` skips all auth
    - Validates JWT token from `Authorization: Bearer <token>` header
-   - Loads user with roles and permissions from database
+   - Loads the user and builds the principal: system roles from `user_roles`, the org role from the active membership, and the permissions of both
    - Verifies user is active
    - Attaches `AuthenticatedUser` object to `request.user`
 
@@ -393,7 +392,8 @@ flowchart TD
 
 **Combined `@Auth()` Decorator (Recommended):**
 ```typescript
-import { Auth } from './auth/decorators';
+// Auth, CurrentUser and RequestUser come from the platform identity package
+import { Auth, CurrentUser, type RequestUser } from '<platform identity package>';
 import { ROLES, PERMISSIONS } from './common/constants/roles.constants';
 
 // Just authentication, no role/permission requirements
@@ -401,7 +401,7 @@ import { ROLES, PERMISSIONS } from './common/constants/roles.constants';
 @Get('profile')
 async getProfile(@CurrentUser() user: RequestUser) { }
 
-// Require admin role
+// Require the system admin role (a deployment operator; an org role never satisfies it)
 @Auth({ roles: [ROLES.ADMIN] })
 @Get('users')
 async listUsers() { }
@@ -423,8 +423,7 @@ async updateUser() { }
 **Individual Decorators:**
 ```typescript
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, RolesGuard } from './auth/guards';
-import { Roles } from './auth/decorators';
+import { JwtAuthGuard, RolesGuard, Roles } from '<platform identity package>';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin', 'contributor')
@@ -434,7 +433,7 @@ async getDashboard() { }
 
 **Public Endpoints:**
 ```typescript
-import { Public } from './auth/decorators';
+import { Public } from '<platform identity package>';
 
 @Public()
 @Get('auth/providers')
@@ -465,7 +464,7 @@ flowchart TD
     B -->|Yes| J[Bypass Allowlist Check]
     B -->|No| C{Email in allowed_emails?}
     C -->|No| D[Reject Login]
-    D --> E[Redirect to /auth/error?error=not_authorized]
+    D --> E[Redirect to /auth/callback?error=not_allowlisted]
     C -->|Yes| F{User Already Exists?}
     F -->|Yes| K[Load Existing User]
     F -->|No| G[Create New User]
@@ -621,6 +620,16 @@ All allowlist operations are logged to the `audit_events` table:
 | `allowlist.added` | Admin User ID | Allowlist Entry ID | Admin added email to allowlist |
 | `allowlist.removed` | Admin User ID | Allowlist Entry ID | Admin removed pending entry |
 | `allowlist.claimed` | User ID | Allowlist Entry ID | User claimed allowlist entry on first login |
+| `allowlist.reminder_sent` | Admin User ID | Allowlist Entry ID | Admin re-sent an invitation (app-owned route, written through the platform audit sink) |
+
+### Invitation Reminders (app-owned)
+
+`POST /api/allowlist/{id}/reminder` (`allowlist:write`) re-emails an unclaimed invitee, and `GET /api/allowlist/reminders?ids=` (`allowlist:read`) reports the counts. The platform has no seam for them, so the app owns the routes (`apps/api/src/allowlist-reminders/`) and keeps the state in the side table `kvox_allowlist_reminders` (no foreign key to `allowed_emails`; orphans are deleted on read). Security properties:
+
+- Both routes are `@Auth({ permissions })`-gated; an unauthenticated call is 401 and a missing permission is 403.
+- A missing entry is 404 and a claimed entry is 409 (`details.reason: 'already_claimed'`): nothing is sent to an address that already has an account.
+- Manual only: an administrator presses the button. There is no scheduler, so no automated mail loop exists to abuse.
+- The `allowlist.invitation_reminder` notification is fired **after** the count write commits, outside any transaction, and the count means "requested", not "delivered".
 
 ### Security Considerations
 
@@ -1470,7 +1479,7 @@ Passport expects to work with Node.js `http.IncomingMessage` and `http.ServerRes
 
 The `GoogleOAuthGuard` uses NestJS's execution context to provide Passport with the raw Node.js objects it expects, then copies the authenticated user back to the Fastify request.
 
-**Implementation (`apps/api/src/auth/guards/google-oauth.guard.ts`):**
+**Implementation (the platform identity package's `GoogleOAuthGuard`; the app no longer carries a copy):**
 
 ```typescript
 import { ExecutionContext, Injectable } from '@nestjs/common';
@@ -1598,16 +1607,16 @@ The application provides a test authentication bypass mechanism that enables aut
 | Layer | Protection | Implementation |
 |-------|------------|----------------|
 | **Build-time** | Frontend route excluded from production bundle | `import.meta.env.PROD` check in App.tsx |
-| **Module-level** | Backend module not imported in production | Conditional import in `app.module.ts` |
-| **Runtime guard** | Request rejected in production | `TestEnvironmentGuard` validates `NODE_ENV` |
-| **Bootstrap validation** | App fails to start if misconfigured | Error thrown if `TEST_AUTH_ENABLED=true` in production |
+| **Module-level** | Backend route not mounted in production | `IdentityModule.forRoot({ enableTestAuth: process.env.NODE_ENV !== 'production' })` in `apps/api/src/platform/identity/identity.config.ts` |
+| **Runtime guard** | Request rejected in production | The platform's `TestEnvironmentGuard` validates `NODE_ENV` |
+| **Bootstrap validation** | App fails to start if misconfigured | The identity slice refuses `enableTestAuth` as a boot error when `NODE_ENV` is `production` |
 
 ### How It Works
 
 1. Playwright navigates to `/testing/login` (frontend test page)
 2. Test fills email and selects role (admin/contributor/viewer)
 3. Form submits POST to `/api/auth/test/login`
-4. Backend finds/creates user with specified role
+4. Backend finds/creates user with the specified role (`admin` also becomes `org_admin` of the default organization; `contributor` and `viewer` become the membership's role)
 5. Backend generates real JWT tokens (same as OAuth flow)
 6. Backend sets HttpOnly refresh cookie and redirects to `/auth/callback?token=X`
 7. Frontend handles callback (existing flow) and app is authenticated
@@ -1625,7 +1634,7 @@ The application provides a test authentication bypass mechanism that enables aut
 }
 ```
 
-**Response:** HTTP 302 redirect to `/auth/callback?token=<accessToken>&expiresIn=900`
+**Response:** HTTP 302. The access token is in the `Location` header: `/auth/callback?token=<accessToken>&expiresIn=<seconds>`; there is no JSON body.
 - Sets HttpOnly refresh token cookie (same as OAuth)
 
 ### Security Considerations
@@ -1642,60 +1651,54 @@ The application provides a test authentication bypass mechanism that enables aut
 
 ### Key Security Files
 
-**Authentication & Authorization:**
+**Authentication & Authorization** (the implementation is the platform's; the app's bindings are):
 ```
-apps/api/src/auth/
-├── auth.controller.ts              # Auth endpoints (login, logout, refresh)
-├── auth.service.ts                 # Core auth logic (tokens, validation)
-├── auth.module.ts                  # Auth module configuration
-├── strategies/
-│   ├── google.strategy.ts          # Google OAuth strategy
-│   └── jwt.strategy.ts             # JWT validation strategy
-├── guards/
-│   ├── jwt-auth.guard.ts           # Global JWT authentication guard
-│   ├── roles.guard.ts              # RBAC roles guard (OR logic)
-│   ├── permissions.guard.ts        # RBAC permissions guard (AND logic)
-│   └── google-oauth.guard.ts       # Google OAuth flow guard
-├── decorators/
-│   ├── auth.decorator.ts           # Combined @Auth() decorator
-│   ├── public.decorator.ts         # @Public() to skip auth
-│   ├── roles.decorator.ts          # @Roles() for RBAC
-│   ├── permissions.decorator.ts    # @Permissions() for RBAC
-│   └── current-user.decorator.ts   # @CurrentUser() parameter decorator
-├── tasks/
-│   └── token-cleanup.task.ts       # Scheduled token cleanup (daily 3 AM)
-└── interfaces/
-    └── authenticated-user.interface.ts  # User object types
+apps/api/src/platform/
+├── platform-host.ts                # definePlatformHost (Auth, Public)
+├── platform-host.module.ts         # PlatformHostModule.forRoot (audit sink, settings store, PLATFORM_PRISMA)
+├── audit-sink.adapter.ts           # AUDIT_SINK -> audit_events
+├── system-settings-store.adapter.ts
+├── doctor.config.ts                # checks behind GET /api/admin/doctor
+└── identity/
+    ├── identity.config.ts          # IdentityModule.forRoot
+    ├── identity-host.module.ts     # binds the host ports
+    ├── identity-notifier.adapter.ts   # IDENTITY_NOTIFIER -> NotificationsService
+    ├── identity-jobs.adapter.ts       # IDENTITY_JOBS -> JobHandlerRegistry / JobsService
+    └── identity-user.adapters.ts      # USER_DEFAULTS, IDENTITY_PROFILE_IMAGES
+apps/api/src/app-registrations/
+├── permissions.ts                  # KVOX_PERMISSIONS (org-scoped domain permissions)
+├── registrations.ts                # registerPlatform* calls, imported first by every entry point
+├── user-owned-models.ts            # user-owned model inventory (purge/export policy)
+└── model-ownership.ts              # classification of every app model
 ```
 
-**Allowlist Access Control:**
+**Allowlist Reminders (app-owned):**
 ```
-apps/api/src/allowlist/
-├── allowlist.controller.ts         # Allowlist endpoints (list, add, remove)
-├── allowlist.service.ts            # Allowlist business logic
-├── allowlist.module.ts             # Allowlist module configuration
+apps/api/src/allowlist-reminders/
+├── allowlist-reminders.controller.ts   # POST /allowlist/:id/reminder, GET /allowlist/reminders
+├── allowlist-reminders.service.ts      # side-table writes, audit, notification after commit
+├── allowlist-reminders.module.ts
 └── dto/
-    ├── add-email.dto.ts            # Add email request validation
-    └── allowlist-query.dto.ts      # List query parameters validation
+apps/api/prisma/fragments/allowlist-reminders.prisma   # model KvoxAllowlistReminder
 ```
 
 **Database & RBAC:**
 ```
 apps/api/prisma/
-├── schema.prisma                   # Database schema (security tables, allowlist)
-├── seed.ts                         # RBAC seed data (roles, permissions, initial allowlist)
+├── fragments/, schema/             # the app's models and the composed schema (security tables are the platform's)
+├── catalog/permissions.json        # roles, permissions and grants (generated: npm run catalog:permissions)
+├── seed.ts                         # seedPlatform, then seedApp
+├── seed-app.ts                     # app rows (built-in note templates)
 └── migrations/                     # Database migration history
 ```
 
 **Configuration:**
 ```
 apps/api/src/
-├── main.ts                         # Application bootstrap (global guards)
+├── main.ts                         # Application bootstrap (imports app-registrations first)
 └── common/
     ├── constants/
-    │   └── roles.constants.ts      # Role and permission constants
-    └── services/
-        └── admin-bootstrap.service.ts  # Initial admin setup
+    │   └── roles.constants.ts      # ROLES / PERMISSIONS derived from the registries
 ```
 
 **Credential Encryption (see section 14):**
@@ -1722,12 +1725,12 @@ infra/
 **Frontend (Security-Related):**
 ```
 apps/web/src/
-├── contexts/
-│   └── AuthContext.tsx             # Auth state management
-├── services/
-│   └── api.ts                      # API client (token interceptors)
-└── utils/
-    └── auth.ts                     # Token storage utilities
+├── identity/
+│   ├── IdentityProviders.tsx       # AuthProvider (platform) + app adapters
+│   ├── LoginPage.tsx               # packaged login with the BrandMark logo slot
+│   └── UsersPage.tsx               # packaged Users page + Reminders tab
+└── services/
+    └── api.ts                      # PlatformHttpClient (token handling, refresh)
 ```
 
 ---

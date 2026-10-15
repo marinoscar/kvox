@@ -1251,8 +1251,9 @@ email lookup (§6.3): a system that answers "no such thing" identically for
 ### 6.2 What `transcripts:read`/`write` gate — and why there is no `read_any`
 
 `transcripts:read` and `transcripts:write` are seeded to **all three roles**
-— Admin, Contributor and **Viewer** (`apps/api/prisma/seed-data.ts`
-`ROLE_PERMISSIONS`) — because creating a transcript is the core action this
+— `org_admin`, `contributor` and **`viewer`** (org-scoped, declared in
+`apps/api/src/app-registrations/permissions.ts`; the system `admin` reaches them through
+its `org_admin` membership) — because creating a transcript is the core action this
 whole epic exists to enable, and a brand-new user's default role is
 `Viewer`; a permission model that made a fresh signup unable to record their
 first conversation until an admin promoted them would contradict the

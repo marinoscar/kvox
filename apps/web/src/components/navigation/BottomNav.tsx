@@ -44,7 +44,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import {
   BOTTOM_BAR_DESTINATIONS,

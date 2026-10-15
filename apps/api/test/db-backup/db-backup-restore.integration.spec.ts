@@ -61,8 +61,8 @@
 
 import request from 'supertest';
 
-import { PERMISSIONS_KEY } from '../../src/auth/decorators/permissions.decorator';
-import { ROLES_KEY } from '../../src/auth/decorators/roles.decorator';
+import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
+import { ROLES_KEY } from '@marinoscar/platform-api/identity';
 import { DatabaseRestoreService } from '../../src/db-backup/database-restore.service';
 import { DatabaseBackupController } from '../../src/db-backup/db-backup.controller';
 import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';

@@ -79,7 +79,7 @@ import { Navigate } from 'react-router-dom';
 import { DataTable } from '../../components/datatable';
 import type { DataTableColumn } from '../../components/datatable';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   DEFAULT_INSIGHTS_WINDOW_DAYS,
   INSIGHTS_WINDOW_OPTIONS,

@@ -51,11 +51,6 @@
       "removeIn": "permanent"
     },
     {
-      "statement": "ALTER TABLE \"allowed_emails\" DROP COLUMN \"last_reminder_at\", DROP COLUMN \"reminder_count\";",
-      "reason": "Temporary deviation kvox:allowlist-reminders: allowed_emails.reminder_count and last_reminder_at exist only in KVox migration 20260918120000_add_allowlist_reminder_tracking, not in the platform schema.",
-      "removeIn": "#465"
-    },
-    {
       "statement": "ALTER TABLE \"notes\" ALTER COLUMN \"search_vector\" DROP DEFAULT;",
       "reason": "notes.search_vector is a GENERATED ALWAYS ... STORED tsvector column created in migration.sql (Unsupported(\"tsvector\") in the schema); the diff proposes dropping its generation expression. Intentional drift.",
       "removeIn": "permanent"

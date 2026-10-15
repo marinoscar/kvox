@@ -32,7 +32,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, Box, Container, Paper, Snackbar, Typography } from '@mui/material';
 import { Navigate } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSystemSettings } from '../../hooks/useSystemSettings';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import type { SystemSettings } from '../../types';

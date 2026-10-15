@@ -31,7 +31,7 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 import type { ZodError } from 'zod';
 
 import type { AiToolDefinition } from '../../ai/providers/ai-provider.interface';
-import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { GraphPreferencesService } from '../../graph/preferences/graph-preferences.service';
 import { AskToolError, type AskTool, type AskToolContext, type AskToolResult } from './ask-tool';
 import { ASK_TOOL_RESULT_MAX_TOKENS, compactToBudget, estimateTokens, toolMessageBody } from './compact-result';

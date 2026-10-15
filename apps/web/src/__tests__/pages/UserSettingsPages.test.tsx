@@ -62,19 +62,9 @@ vi.mock('../../components/settings/ProfileSettings', () => ({
   )),
 }));
 
-// `PersonalAccessTokens` owns its own hook and API calls (`/api/pat`), none
-// of which this file's mocked `useUserSettings` should ever gate — see
-// `UserTokensPage` below. Stubbed for the same reason `ThemeSettings` and
-// `ProfileSettings` are: it has its own test file, and the page under test
-// here is thin wiring.
-vi.mock('../../components/settings/PersonalAccessTokens', () => ({
-  PersonalAccessTokens: vi.fn(() => <div data-testid="personal-access-tokens" />),
-}));
-
 import { useUserSettings } from '../../hooks/useUserSettings';
 import UserProfilePage from '../../pages/UserProfilePage';
 import UserAppearancePage from '../../pages/UserAppearancePage';
-import UserTokensPage from '../../pages/UserTokensPage';
 
 const mockUseUserSettings = vi.mocked(useUserSettings);
 
@@ -346,48 +336,5 @@ describe('Per-page save snackbars (issue #96)', () => {
       });
       expect(screen.queryByText('Profile updated')).not.toBeInTheDocument();
     });
-  });
-});
-
-/**
- * Issue #96. `UserTokensPage` is the one `/settings/*` page that does NOT
- * wrap its content in `UserSettingsSection` — personal access tokens are not
- * part of the user settings document, and `PersonalAccessTokens` already owns
- * its own loading/error state behind `/api/pat`. These pin that it stays that
- * way: the page must render without ever touching `useUserSettings`.
- */
-describe('UserTokensPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('displays its title and description', () => {
-    render(<UserTokensPage />);
-
-    expect(screen.getByRole('heading', { name: /access tokens/i })).toBeInTheDocument();
-    expect(
-      screen.getByText(/create and revoke personal access tokens/i),
-    ).toBeInTheDocument();
-  });
-
-  it('renders PersonalAccessTokens, and not the profile or appearance sections', () => {
-    render(<UserTokensPage />);
-
-    expect(screen.getByTestId('personal-access-tokens')).toBeInTheDocument();
-    expect(screen.queryByTestId('profile-settings')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('theme-settings')).not.toBeInTheDocument();
-  });
-
-  it('never calls useUserSettings — it is not wrapped in UserSettingsSection', () => {
-    // Mocked to be perpetually loading, so that if this page were ever
-    // (re)wrapped in `UserSettingsSection` it would render a spinner instead
-    // of the page — the failure this test exists to catch.
-    mockSettings({ settings: null, isLoading: true });
-
-    render(<UserTokensPage />);
-
-    expect(mockUseUserSettings).not.toHaveBeenCalled();
-    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /access tokens/i })).toBeInTheDocument();
   });
 });

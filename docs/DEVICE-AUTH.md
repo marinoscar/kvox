@@ -2,13 +2,19 @@
 
 This guide covers the Device Authorization Flow implementation in this web application foundation.
 
-> **This flow has two documents.** This one is the narrative guide — concepts,
-> a walkthrough, and copy-pasteable integration examples (Node.js, Python,
-> React Native, Scalar). For the authoritative request/response schema, exact
-> field names, and the security rationale behind the PAT-minting design, see
-> [`apps/api/src/device-auth/README.md`](../apps/api/src/device-auth/README.md),
-> which lives next to the code and is the source of truth when the two
-> disagree.
+> **The flow is the platform's, not KVox's.** The device flow is served by the
+> platform identity slice (`IdentityModule.forRoot` from
+> `@marinoscar/platform-api/identity`, mounted in
+> `apps/api/src/platform/identity/identity.config.ts`). KVox no longer carries
+> its own `device-auth` module or README. This page is the narrative guide:
+> concepts, a walkthrough and copy-pasteable integration examples (Node.js,
+> Python, React Native, Scalar). For the authoritative schema and the security
+> rationale behind the PAT-minting design, read the platform's
+> [identity README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md)
+> and this deployment's generated reference at `/api/docs` (group "Device
+> Authorization"), which is the source of truth for field names. The routes,
+> the `DEVICE_*` variables and the wire format are unchanged from what this
+> page describes.
 
 ## Table of Contents
 
@@ -198,7 +204,6 @@ Content-Type: application/json
 **While Pending:**
 ```json
 {
-  "statusCode": 400,
   "error": "authorization_pending",
   "error_description": "User has not yet authorized this device"
 }
@@ -252,8 +257,8 @@ Generate a new device code pair to initiate the device authorization flow.
 | `clientInfo.userAgent` | string | No | Free-form client identifier (e.g. `my-cli/1.0.0`) |
 | `clientInfo.tokenType` | `"session"` \| `"pat"` | No | Credential kind to mint when the device polls after approval (see the mint-on-poll note below). Defaults to `session` (a short-lived JWT + refresh token, the same behavior as before this field existed). `"pat"` mints a long-lived, revocable personal access token instead — see [Credential Kinds](#credential-kinds-session-vs-pat). An unrecognized value is rejected with `400`, not silently defaulted |
 
-> **These are the only three fields the schema accepts** (`ClientInfoSchema` in
-> `apps/api/src/device-auth/dto/device-code-request.dto.ts`). This document
+> **These are the only three fields the schema accepts** (`clientInfo` of
+> `DeviceCodeRequestDto` in the platform identity slice, shown in `/api/docs`). This document
 > previously documented `clientInfo.name`, `clientInfo.version` and
 > `clientInfo.platform`, none of which exist. That mistake was easy to miss in
 > practice: the global `ZodValidationPipe` combined with zod's default
@@ -532,7 +537,7 @@ A device chooses what kind of credential it wants when it requests the code, via
 | What it is | Signed JWT access token + refresh token | Opaque personal access token (`pat_...`) |
 | Default lifetime | `DEVICE_TOKEN_EXPIRY_DAYS` (7 days) | `DEVICE_PAT_EXPIRY_DAYS` (90 days, clamped 1-999) |
 | Refresh token | Yes | No |
-| Revocable before expiry | No — a JWT is valid until it expires | Yes — `DELETE /api/pat/{id}`, or the Access Tokens page in the web UI |
+| Revocable before expiry | Yes — revoking the device session (`DELETE /api/auth/device/sessions/{id}`) rejects the access token on its next request and revokes its refresh tokens | Yes — `DELETE /api/pat/{id}`, or the Access Tokens page in the web UI |
 | Used by | The browser-driven activation page (sends no `tokenType`) | CLI and other headless clients — see `apps/cli` |
 
 The PAT lifetime can be much longer than the session lifetime precisely *because*
@@ -553,7 +558,7 @@ table anyone can write a row into (`POST /auth/device/code` is public). Minting
 on the poll means the raw token exists only in the API process's memory and in
 the HTTPS response body, and it matches how the `session` credential has always
 worked (tokens generated at poll time as well). See
-[`apps/api/src/device-auth/README.md`](../apps/api/src/device-auth/README.md#why-the-pat-is-minted-on-the-poll-not-at-approval)
+the [platform identity README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md)
 for the full security rationale, including why the PAT branch claims the
 device code atomically before minting.
 
@@ -894,20 +899,13 @@ DEVICE_PAT_EXPIRY_DAYS=90
 
 ### Backend Configuration
 
-Device auth configuration is loaded in `apps/api/src/config/configuration.ts`:
-
-```typescript
-deviceAuth: {
-  expiryMinutes: parseInt(process.env.DEVICE_CODE_EXPIRY_MINUTES || '15', 10),
-  pollInterval: parseInt(process.env.DEVICE_CODE_POLL_INTERVAL || '5', 10),
-  tokenExpiryDays: parseInt(process.env.DEVICE_TOKEN_EXPIRY_DAYS || '7', 10),
-  patExpiryDays: parseInt(process.env.DEVICE_PAT_EXPIRY_DAYS || '90', 10),
-}
-```
-
-`patExpiryDays` is read and clamped by
-`DeviceAuthService.resolvePatExpiryDays()`, not by the `configuration.ts`
-loader itself — see [Credential Kinds](#credential-kinds-session-vs-pat) above.
+The `deviceAuth` configuration key (`expiryMinutes`, `pollInterval`,
+`tokenExpiryDays`, `patExpiryDays`) is built by `identityConfiguration()` from
+`@marinoscar/platform-api/identity`, which `apps/api/src/config/configuration.ts`
+spreads into the app configuration. The environment variable names above are
+unchanged. `patExpiryDays` is read and clamped by the platform's device-auth
+service when it mints the PAT, not by the configuration loader — see
+[Credential Kinds](#credential-kinds-session-vs-pat) above.
 
 ---
 
@@ -975,7 +973,7 @@ Authorization: Bearer <token>
 ### Expiration
 - **Time-based expiration**: Default 15 minutes
 - **Single-use codes**: Marked as expired after token issuance
-- **Automatic cleanup**: Expired codes removed by scheduled task
+- **Automatic cleanup**: expired codes are removed by the `device-auth.code.cleanup` queue job. The platform's cron only enqueues it; the handler is registered into KVox's job registry through the identity jobs adapter (`apps/api/src/platform/identity/identity-jobs.adapter.ts`), and it is server-only (a worker node never deletes credential rows)
 
 ### User Control
 - **Explicit approval required**: Users must actively approve each device
@@ -1001,9 +999,16 @@ Device authorization uses standard OAuth 2.0 error codes as defined in RFC 8628.
 
 ### Error Response Format
 
+The two token-endpoint error statuses (400 and 401) are the **only** responses in
+this API that are not the shared `{ statusCode, code, message, details, timestamp,
+path }` error envelope. RFC 8628 section 3.5 fixes the body as `{ error,
+error_description }` at the top level, and the `error` value is the whole
+protocol, so the platform's exception filter passes it through verbatim. Read
+`error`, never `code` or `statusCode`, from the body. Every other device route
+(`/code`, `/activate`, `/authorize`, `/sessions`) uses the shared envelope.
+
 ```json
 {
-  "statusCode": 400,
   "error": "authorization_pending",
   "error_description": "User has not yet authorized this device"
 }
@@ -1199,7 +1204,7 @@ async function pollForToken(deviceCode, interval) {
 - **API Documentation:** http://localhost:3535/api/docs
 - **Security Architecture:** [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md)
 - **API Reference:** [API.md](API.md)
-- **Authoritative schema & security rationale:** [`apps/api/src/device-auth/README.md`](../apps/api/src/device-auth/README.md)
+- **Authoritative schema & security rationale:** the platform [identity README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md) and `/api/docs`
 - **Reference PAT-flow consumer:** [`apps/cli/README.md`](../apps/cli/README.md) — the first-party CLI (`kvox`), which logs in through this exact flow requesting a `pat` credential
 
 ---

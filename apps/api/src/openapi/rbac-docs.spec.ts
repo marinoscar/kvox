@@ -1,4 +1,4 @@
-import { RBAC_EXTENSION_KEY } from '../auth/decorators/auth.decorator';
+import { RBAC_EXTENSION_KEY } from '@marinoscar/platform-api/identity';
 import { applyRbacDocs, describeRequirements, REQUIREMENTS_MARKER } from './rbac-docs';
 import { DocOperation, MutableDocument } from './types';
 

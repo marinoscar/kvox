@@ -82,7 +82,7 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import { Navigate } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { usePushConfig } from '../../hooks/usePushConfig';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import {

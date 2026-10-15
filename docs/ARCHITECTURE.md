@@ -48,7 +48,8 @@ This is a production-grade web application template that establishes:
 | **Architecture Style** | Monorepo with API-first design |
 | **Hosting Model** | Same-origin (UI and API share base URL) |
 | **Auth Strategy** | OAuth 2.0 + JWT with refresh token rotation |
-| **Access Control** | Email allowlist + RBAC (Admin/Contributor/Viewer) |
+| **Access Control** | Email allowlist + RBAC: the system role `admin` plus the organization roles `org_admin`, `contributor` and `viewer` (single-organization mode) |
+| **Identity** | The platform identity slice (`@marinoscar/platform-api/identity`), mounted by `IdentityModule.forRoot`; KVox owns no auth, users, allowlist, PAT or device-auth code (see §7.6) |
 | **Data Storage** | PostgreSQL with Prisma ORM |
 | **Extensibility** | JSONB settings, modular NestJS structure |
 
@@ -80,8 +81,8 @@ This is a production-grade web application template that establishes:
 │  │                              │  │  │                                  │  │
 │  │  ┌────────────────────────┐  │  │  │  ┌────────────────────────────┐  │  │
 │  │  │      Pages/Routes      │  │  │  │  │    Controllers/Guards      │  │  │
-│  │  │  • Login               │  │  │  │  │  • AuthController          │  │  │
-│  │  │  • Home                │  │  │  │  │  • UsersController         │  │  │
+│  │  │  • Login               │  │  │  │  │  • AuthController (pkg)    │  │  │
+│  │  │  • Home                │  │  │  │  │  • UsersController (pkg)   │  │  │
 │  │  │  • User Settings       │  │  │  │  │  • SettingsController      │  │  │
 │  │  │  • System Settings     │  │  │  │  │  • HealthController        │  │  │
 │  │  │  • Device Activation   │  │  │  │  └────────────────────────────┘  │  │
@@ -89,10 +90,10 @@ This is a production-grade web application template that establishes:
 │  │                              │  │  │  ┌────────────────────────────┐  │  │
 │  │  ┌────────────────────────┐  │  │  │  │    Services/Business       │  │  │
 │  │  │  Contexts/State        │  │  │  │  │    Logic Layer             │  │  │
-│  │  │  • AuthContext         │  │  │  │  │  • AuthService             │  │  │
-│  │  │  • ThemeContext        │  │  │  │  │  • UsersService            │  │  │
+│  │  │  • AuthProvider (pkg)  │  │  │  │  │  • AuthService (pkg)       │  │  │
+│  │  │  • ThemeContext        │  │  │  │  │  • UsersService (pkg)      │  │  │
 │  │  │  • SettingsContext     │  │  │  │  │  • SettingsService         │  │  │
-│  │  └────────────────────────┘  │  │  │  │  • AllowlistService        │  │  │
+│  │  └────────────────────────┘  │  │  │  │  • AllowlistService (pkg)  │  │  │
 │  │                              │  │  │  └────────────────────────────┘  │  │
 │  │  ┌────────────────────────┐  │  │  │                                  │  │
 │  │  │  Material UI (MUI)     │  │  │  │  ┌────────────────────────────┐  │  │
@@ -114,11 +115,13 @@ This is a production-grade web application template that establishes:
                                      │  • users, user_identities      │
                                      │  • roles, permissions          │
                                      │  • user_roles, role_permissions│
+                                     │  • organizations, memberships  │
                                      │  • user_settings               │
                                      │  • system_settings             │
                                      │  • refresh_tokens              │
                                      │  • device_codes                │
                                      │  • allowed_emails              │
+                                     │  • kvox_allowlist_reminders    │
                                      │  • audit_events                │
                                      │                                │
                                      │           Port 5432            │
@@ -136,6 +139,8 @@ This is a production-grade web application template that establishes:
                                      └────────────────────────────────┘
 ```
 
+`(pkg)` marks the parts that ship in the `@marinoscar/platform-*` packages and are mounted by KVox rather than written in it (§7.6).
+
 ### Request Flow
 
 ```
@@ -147,6 +152,10 @@ This is a production-grade web application template that establishes:
                          Validate JWT       Check Roles/        Business Logic
                          Load User          Permissions         Response
 ```
+
+The guards are the platform's (`@marinoscar/platform-api/identity`), applied by the
+`@Auth(...)` decorator on every KVox controller; there is no global JWT guard, so a route
+with neither `@Auth` nor `@Public()` is refused by the `identity` conformance suite.
 
 ---
 
@@ -265,15 +274,16 @@ All components served from the same base URL via Nginx reverse proxy:
 ├── apps/
 │   ├── api/                          # Backend API (NestJS + Fastify)
 │   │   ├── src/
-│   │   │   ├── auth/                 # Authentication module
-│   │   │   │   ├── controllers/
-│   │   │   │   ├── services/
-│   │   │   │   ├── guards/
-│   │   │   │   ├── strategies/
-│   │   │   │   └── decorators/
-│   │   │   ├── users/                # User management module
+│   │   │   ├── platform/             # Bindings of the platform packages
+│   │   │   │   ├── platform-host.ts          # definePlatformHost (Auth, Public)
+│   │   │   │   ├── platform-host.module.ts   # PlatformHostModule.forRoot
+│   │   │   │   ├── audit-sink.adapter.ts     # AUDIT_SINK -> audit_events
+│   │   │   │   ├── system-settings-store.adapter.ts
+│   │   │   │   ├── doctor.config.ts
+│   │   │   │   └── identity/         # IdentityModule.forRoot + its host ports
+│   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership
+│   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
 │   │   │   ├── settings/             # Settings module (user + system)
-│   │   │   ├── allowlist/            # Email allowlist module
 │   │   │   ├── health/               # Health check module
 │   │   │   ├── prisma/               # Prisma service
 │   │   │   ├── common/               # Shared utilities
@@ -283,9 +293,12 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   ├── config/               # Configuration module
 │   │   │   └── main.ts               # Application entry
 │   │   ├── prisma/
-│   │   │   ├── schema.prisma         # Database schema
+│   │   │   ├── fragments/            # KVox's own models (composed with the platform's)
+│   │   │   ├── schema/               # The composed Prisma schema (platform.* and app.*)
 │   │   │   ├── migrations/           # Migration history
-│   │   │   └── seed.ts               # Database seeding
+│   │   │   ├── catalog/              # permissions.json, system-settings-defaults.json
+│   │   │   ├── seed.ts               # seedPlatform, then seedApp
+│   │   │   └── seed-app.ts           # KVox rows (built-in note templates)
 │   │   ├── test/                     # Integration tests
 │   │   └── Dockerfile
 │   │
@@ -293,7 +306,8 @@ All components served from the same base URL via Nginx reverse proxy:
 │       ├── src/
 │       │   ├── components/           # Reusable UI components
 │       │   ├── pages/                # Page components
-│       │   ├── contexts/             # React context providers
+│       │   ├── identity/             # Bindings of the packaged identity UI (AuthProvider, Login, Users)
+│       │   ├── contexts/             # React context providers (no auth context: it is the platform's)
 │       │   ├── hooks/                # Custom hooks
 │       │   ├── services/             # API client
 │       │   ├── theme/                # MUI theme configuration
@@ -546,6 +560,15 @@ apps/api/src/storage/
 └────────────────────┘       │ last_polled_at     │
                              └────────────────────┘
 
+┌─────────────────────────────┐
+│  kvox_allowlist_reminders   │   no foreign key: keyed by allowed_emails.id,
+├─────────────────────────────┤   orphans are swept on read
+│ allowed_email_id (PK, UUID) │
+│ reminder_count              │
+│ last_reminder_at            │
+│ updated_at                  │
+└─────────────────────────────┘
+
 ┌────────────────────┐
 │    audit_events    │
 ├────────────────────┤
@@ -698,7 +721,8 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `users` - User accounts with profile info
 - `user_identities` - OAuth provider identities (provider + subject)
 - `roles` / `permissions` / `role_permissions` - RBAC
-- `user_roles` - User-to-role assignments
+- `user_roles` - User-to-system-role assignments. Only the system role `admin` lives here now; `contributor`, `viewer` and `org_admin` are **organization** roles held on `memberships.role_id` (platform migration `0024_split_system_org_roles` moved them; see §7.3)
+- `organizations` / `memberships` - The platform's tenancy tables. KVox runs in single-organization mode (`TENANCY_MODE` unset): one default organization, and every user has one membership in it whose role is their org role
 - `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one means declaring it in its module and adding it to `apps/api/src/kvox.manifest.ts` (parity specs iterate the registries) — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry). `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
 - `user_settings` - Per-user settings (JSONB). Namespaces include `onboarding` (issue #272, epic
   #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
@@ -712,11 +736,8 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   `GraphPreferencesService`; see `docs/specs/ontology.md` §10
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
-- `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue
-  #301) track `POST /api/allowlist/{id}/reminder`: a manual, admin-pressed resend, not a
-  scheduler — there is deliberately no cron or job type behind it. `reminder_count` is
-  incremented in the database (`increment`, not a read-modify-write) so two admins pressing
-  the button at once can't both write the same count
+- `allowed_emails` - Allowlist for access control. A platform table: KVox does not extend it. It no longer has the `reminder_count` / `last_reminder_at` columns (dropped by the `kvox_allowlist_reminders` migration, issue #465)
+- `kvox_allowlist_reminders` - Allowlist invitation-reminder bookkeeping (issue #301, moved by #465): `allowed_email_id` (UUID primary key), `reminder_count`, `last_reminder_at`, `updated_at`. Keyed by an allowlist row id with **no foreign key**, because the platform's `AllowedEmail` model cannot be extended and a SQL-only FK would show as drift. Orphans are therefore possible: `GET /api/allowlist/reminders` deletes rows whose entry no longer exists (one bounded `DELETE ... WHERE NOT EXISTS`) before it reads, and no caller trusts a row without the join. Written by the KVox-owned `POST /api/allowlist/:id/reminder` with an `INSERT ... ON CONFLICT` that increments in the database, so two admins pressing the button at once cannot both write the same count. A manual, admin-pressed resend, not a scheduler: there is deliberately no cron or job type behind it
 - `device_codes` - Device authorization codes (RFC 8628)
 - `storage_objects` - File metadata, status, storage references. `part_size` (#21) is
   the part size an upload was initialised with, **persisted rather than recomputed**:
@@ -1042,6 +1063,13 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 
 ### 7.1 Authentication Flow
 
+Sign-in, sessions, personal access tokens, the device flow, users and the allowlist
+are served by the **platform identity slice**, not by KVox code (§7.6). The sequence
+below is the Google flow that slice implements. `GET /api/auth/providers` lists
+`google` when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set; Google is built in,
+and an extra provider would use the platform's `registerAuthProvider`
+(`GET /api/auth/{providerId}` and `.../callback`).
+
 ```
 ┌─────────┐          ┌─────────┐          ┌─────────┐          ┌─────────┐
 │  User   │          │ Frontend│          │   API   │          │ Google  │
@@ -1102,55 +1130,77 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 
 ### 7.3 RBAC Model
 
+Roles come in two scopes, and a permission is held through exactly one of them.
+
+| Role | Scope | Held in | Meaning |
+|------|-------|---------|---------|
+| `admin` | system | `user_roles` | Deployment operator: users, roles, system settings, jobs, nodes, backups |
+| `org_admin` | org | `memberships.role_id` | Everything a contributor can do, plus manage the organization's members and invites |
+| `contributor` | org | `memberships.role_id` | Standard member: own settings and storage, AI, the KVox product features |
+| `viewer` | org | `memberships.role_id` | Least privilege (the default for a new user): the KVox product features, own settings |
+
 ```
-                    ┌─────────────────────────────────────────────┐
-                    │                 PERMISSIONS                  │
-                    ├─────────────────────────────────────────────┤
-                    │ system_settings:read  │ system_settings:write│
-                    │ user_settings:read    │ user_settings:write  │
-                    │ users:read            │ users:write          │
-                    │ rbac:manage           │ allowlist:read       │
-                    │ allowlist:write       │                      │
-                    └────────────┬───────────┴──────────────────────┘
-                                 │
-        ┌────────────────────────┼────────────────────────┐
-        │                        │                        │
-        ▼                        ▼                        ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│     ADMIN     │      │  CONTRIBUTOR  │      │    VIEWER     │
-├───────────────┤      ├───────────────┤      ├───────────────┤
-│ ALL           │      │ user_settings:│      │ user_settings:│
-│ PERMISSIONS   │      │   read/write  │      │   read        │
-│               │      │               │      │               │
-│ (Full Access) │      │ (Standard     │      │ (Least        │
-│               │      │  User)        │      │  Privilege)   │
-└───────────────┘      └───────────────┘      └───────────────┘
-        │                        │                        │
-        └────────────────────────┼────────────────────────┘
-                                 │
-                                 ▼
-                        ┌───────────────┐
-                        │     USERS     │
-                        │  (Many-to-Many│
-                        │   Assignment) │
-                        └───────────────┘
+        SYSTEM SCOPE (user_roles)                  ORG SCOPE (memberships.role_id)
+
+        ┌───────────────┐             ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+        │     ADMIN     │             │   ORG_ADMIN   │ │  CONTRIBUTOR  │ │    VIEWER     │
+        │ system perms: │             │ org perms +   │ │ own settings, │ │ own settings, │
+        │ users, rbac,  │             │ members,      │ │ storage, AI,  │ │ read storage, │
+        │ allowlist,    │             │ invites,      │ │ sharing,      │ │ + the KVox    │
+        │ jobs, nodes,  │             │ groups admin  │ │ + the KVox    │ │ domain perms  │
+        │ settings ...  │             │ + KVox domain │ │ domain perms  │ │ (below)       │
+        └───────┬───────┘             └───────┬───────┘ └───────┬───────┘ └───────┬───────┘
+                │                             └─────────────────┴─────────────────┘
+                │                                               │
+                └──────────── a user holds both ────────────────┘
+                     (an admin is also org_admin of the default organization)
 ```
+
+**How a user's permissions are computed.** The principal's permission set is the union of the
+permissions of its system roles (`user_roles`) and the permissions of the role on its membership
+in the active organization. An org-scoped permission is therefore only ever reached through a
+membership. The system role `admin` carries **no** org-scoped permission of its own: an admin
+reaches them through the `org_admin` membership that platform migration
+`0024_split_system_org_roles` gave them, and a new admin gets that membership from the platform
+(`PUT /api/users/:id/roles` with `admin` sets the system role and `org_admin` on the default
+organization's membership; `contributor` or `viewer` set the membership role, the highest named
+winning). `@Auth({ roles: ['admin'] })` therefore means "a deployment operator"; an org role never
+satisfies it.
+
+**KVox's domain permissions are org-scoped app permissions.** `transcripts:read|write`,
+`notes:read|write`, `note_templates:read|write` and `graph:read|write` are declared in
+`apps/api/src/app-registrations/permissions.ts` (`KVOX_PERMISSIONS`, each `scope: 'org'` with
+`defaultGrants: ['org_admin', 'contributor', 'viewer']`) and registered with
+`registerPlatformPermissions` in `app-registrations/registrations.ts`, which every entry point
+imports first. `common/constants/roles.constants.ts` derives `ROLES`, `PERMISSIONS` and
+`PermissionName` from the registries, so a permission string cannot drift from what the seed
+writes and what the guards check. The seed (`prisma/seed.ts`: `seedPlatform`, then `seedApp`) writes
+roles, permissions and grants from the committed catalog `prisma/catalog/permissions.json`,
+regenerated with `npm run catalog:permissions`; migration `kvox_scope_domain_permissions` set the
+eight rows to scope `org` and removed `admin`'s direct grants on them. Roles are listed by
+`GET /api/roles` (any signed-in user), each with its scope and whether the role-assignment routes
+may assign it.
+
+The same registrations declare the user-owned model inventory
+(`app-registrations/user-owned-models.ts`) and the classification of every KVox model
+(`app-registrations/model-ownership.ts`), which the `user-owned-data` conformance suite checks.
 
 #### Permission catalog
 
-The complete set of roles and permission strings the API enforces. The diagram above shows the original MVP subset; this list is the current catalog.
+The complete set of roles and permission strings the API enforces. The machine-readable catalog, with each permission's scope and each role's grants, is `apps/api/prisma/catalog/permissions.json`; this list explains the ones with a design decision behind them.
 
 ##### Roles
-- **Admin**: Full access, manage users and system settings
-- **Contributor**: Standard capabilities, manage own settings
-- **Viewer**: Least privilege (default), manage own settings
+- **Admin** (system): operate the deployment: users, roles, the allowlist and all system settings
+- **Org admin** (org): everything a contributor can do, plus manage the organization's members and invites
+- **Contributor** (org): standard capabilities, manage own settings
+- **Viewer** (org): least privilege (default), manage own settings
 
 ##### Key permissions
 - `system_settings:read/write` - System settings access
 - `user_settings:read/write` - User settings access
 - `users:read/write` - User management
 - `rbac:manage` - Role assignment
-- `allowlist:read/write` - Allowlist management (Admin only)
+- `allowlist:read/write` - Allowlist management (Admin only). `allowlist:write` also gates `POST /api/allowlist/:id/reminder` and `allowlist:read` gates `GET /api/allowlist/reminders` (KVox-owned routes, §7.5)
 - `storage:read/write/delete` - Storage object access (own objects)
 - `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
 - `jobs:read/write` - Background job queue: inspect vs. retry/reset/delete
@@ -1172,8 +1222,8 @@ The complete set of roles and permission strings the API enforces. The diagram a
   `broadcasts:*` and `nodes:*` were split out rather than folded into
   `system_settings:*`/`jobs:*`
 - `transcripts:read/write` - Audio transcription (issue #24, epic #19): read your own
-  transcripts and shares vs. create/edit/delete them. **Seeded to all three roles — Admin,
-  Contributor and Viewer** — the opposite posture from every pair above: recording and
+  transcripts and shares vs. create/edit/delete them. **Org-scoped, granted to `org_admin`,
+  `contributor` and `viewer`** (an `admin` reaches them through the `org_admin` membership) — the opposite posture from every pair above: recording and
   correcting a transcript is the core product action, not an operational surface, and this
   app's default role is Viewer. `transcripts:write` is the *additional* check
   `TranscriptAccessService` applies for `edit`-level access on top of a share — a viewer
@@ -1205,17 +1255,22 @@ The complete set of roles and permission strings the API enforces. The diagram a
   — a built-in's `PATCH`/`DELETE` answers **403**, a deliberate divergence from `notes:*`'s
   404-never-403 posture, because a built-in template's existence is public by design (it is
   in every account's own catalogue) while another user's template's existence is private.
-  Both permissions are seeded to all three roles.
+  Both permissions are org-scoped and granted to all three org roles.
 - `graph:read/write` - Connected knowledge (issue #354, epic #344): read your own graph
   (entities, relations, facts, proposals, the effective ontology) vs. curate it (commit
-  proposals, edit/merge/forget entities, manage attribute definitions). **Seeded to all three
-  roles**, mirroring `notes:*`, and delivered through the idempotent seed, never a migration.
+  proposals, edit/merge/forget entities, manage attribute definitions). **Org-scoped and granted to all three
+  org roles**, mirroring `notes:*`, and delivered through the idempotent seed, never a migration.
   **There is deliberately no `graph:read_any`**, for the notes/transcripts reason: a graph is
   derived from somebody's private conversations. `GraphAccessService.require` answers no
   access with a byte-identical **404** per kind; `edit` on the caller's own row without
   `graph:write` is the one **403**.
 
 ### 7.4 Access Control Layers
+
+The guards and the decorators that drive them (`@Auth`, `@Public`, `@CurrentUser`) come from
+`@marinoscar/platform-api/identity`. `@Auth()` means any signed-in user, `@Auth({ permissions: [...] })`
+requires all of the listed permissions, `@Auth({ roles: [...] })` any of the listed roles, and
+`@Public()` opts a route out. There is no global JWT guard: every KVox route carries one of them.
 
 ```
 Request → Nginx → JwtAuthGuard → RolesGuard → PermissionsGuard → Controller
@@ -1234,11 +1289,11 @@ Request → Nginx → JwtAuthGuard → RolesGuard → PermissionsGuard → Contr
 
 ### 7.5 Email Allowlist
 
-Before OAuth authentication completes:
+The allowlist is the platform's (`allowed_emails`, `/api/allowlist`). Before sign-in completes:
 
 1. Check if email matches `INITIAL_ADMIN_EMAIL` (bypass check)
 2. Check if email exists in `allowed_emails` table
-3. If not found, reject with "Email not authorized"
+3. If not found, reject with "Email not authorized" (the callback redirects with `error=not_allowlisted`)
 4. If found, proceed with user provisioning
 5. Mark allowlist entry as "claimed" with user ID
 
@@ -1249,12 +1304,57 @@ Before OAuth authentication completes:
 - `INITIAL_ADMIN_EMAIL` is automatically added to the allowlist during database seeding
 
 **Admin UI:**
-- Manage the allowlist at `/admin/settings/users` (Allowlist tab; `/admin/users` still redirects here)
-- Two tabs: **Users** (existing registered users) and **Allowlist** (pre-authorize email addresses for future logins)
+- Manage the allowlist at `/admin/settings/users` (`/admin/users` still redirects here)
+- Three tabs: **Users** (existing registered users), **Allowlist** (pre-authorize email addresses for future logins) and **Reminders** (KVox's own tab, below)
 
 **Status tracking:**
 - **Pending**: email added to the allowlist but the user has not logged in yet
 - **Claimed**: the user has logged in and created an account
+
+**Invitation reminders (KVox-owned, issue #301).** The one allowlist feature with no platform seam.
+`POST /api/allowlist/:id/reminder` (`allowlist:write`) re-emails an unclaimed invitee, and
+`GET /api/allowlist/reminders?ids=` (`allowlist:read`) reports the counts. They live in
+`apps/api/src/allowlist-reminders/` (`AllowlistRemindersModule`, controller, service) and keep their
+state in the side table `kvox_allowlist_reminders` (§6.4). The service reads the entry through
+`PrismaService.allowedEmail` (read only), answers 404 for a missing entry and 409 with
+`details.reason: 'already_claimed'` for a claimed one, increments the count in the database, writes the audit
+action `allowlist.reminder_sent` through the platform `AUDIT_SINK`, and fires the
+`allowlist.invitation_reminder` notification **after** the write commits, outside any transaction.
+The paths do not collide with the platform's `/api/allowlist` routes. In the web app the Reminders
+tab is appended to the packaged Users page through `slots.Tabs`
+(`apps/web/src/identity/usersPageSlots.ts`).
+
+### 7.6 Platform identity slice
+
+KVox carries no identity code of its own. `IdentityModule.forRoot` (`apps/api/src/platform/identity/identity.config.ts`)
+serves `/api/auth/*`, `/api/users`, `/api/allowlist`, `/api/pat`, `/api/auth/device/*`, `/api/roles`, the organization
+routes and, outside production, `POST /api/auth/test/login`, in single-organization mode (`TENANCY_MODE` unset). It reads
+the unchanged environment variables (`JWT_SECRET`, `GOOGLE_*`, `INITIAL_ADMIN_EMAIL`, `DEVICE_*`) through
+`identityConfiguration()` in `config/configuration.ts`; a missing `JWT_SECRET` is a boot error.
+
+The slice reaches KVox through host ports, bound in `apps/api/src/platform/identity/identity-host.module.ts`. The
+bindings are deliberately thin, so the issues that move the underlying services into the platform change only
+the binding:
+
+| Port | KVox binding | Replaced by |
+|------|--------------|-------------|
+| `IDENTITY_NOTIFIER` | `IdentityNotifierAdapter` over `NotificationsService` (`security.role_changed`, `user.welcome`, `allowlist.invitation`; org invitations log and drop in single-org mode) | #468 |
+| `IDENTITY_JOBS` | `IdentityJobsAdapter`: registers `auth.token.cleanup` and `device-auth.code.cleanup` into `JobHandlerRegistry`, enqueues through `JobsService` | #470 |
+| `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the default user-settings document) and the profile-image helpers | #466 |
+| `IDENTITY_NODE_CREDENTIALS` | `NodeCredentialService` | #470 |
+
+`PlatformHostModule.forRoot` (`apps/api/src/platform/platform-host.module.ts`) supplies the core ports identity needs:
+`AUDIT_SINK` (`audit-sink.adapter.ts`, writes `audit_events`), the system-settings store
+(`system-settings-store.adapter.ts`, over `SystemSettingsService` until #466) and `PLATFORM_PRISMA`. Because identity
+needs the doctor check registry, the packaged `GET /api/admin/doctor` (`system_settings:read`, read-only) is mounted
+too; its checks are configured in `platform/doctor.config.ts`. The shims are listed in
+[`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
+
+On the web, `AuthProvider` comes from `@marinoscar/platform-web/identity/headless` (mounted by
+`apps/web/src/identity/IdentityProviders.tsx` with `client={api}` and the push-unsubscribe `onBeforeLogout`), and
+Login, Callback, Activate, Tokens and Users are the packaged pages from `@marinoscar/platform-web/identity/ui`. KVox
+binds only the Login page (`identity/LoginPage.tsx`, the `BrandMark` in the `Logo` slot), the Users page (the Reminders
+tab) and the test login page (`/testing/login`).
 
 ---
 
@@ -1275,16 +1375,22 @@ Before OAuth authentication completes:
 
 #### Authentication Endpoints
 
+All of the routes in this subsection through "Allowlist" below are served by the platform identity slice (§7.6)
+except the two reminder routes, which KVox owns.
+
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `GET` | `/api/auth/providers` | Public | List enabled OAuth providers |
 | `GET` | `/api/auth/google` | Public | Initiate Google OAuth |
 | `GET` | `/api/auth/google/callback` | Public | OAuth callback handler |
+| `GET` | `/api/auth/{providerId}` | Public | Initiate sign-in with an extra registered provider (404 for an unknown one) |
+| `GET` | `/api/auth/{providerId}/callback` | Public | Callback of an extra registered provider |
+| `POST` | `/api/auth/switch-org` | JWT | Re-issue the session for another organization the caller belongs to (in single-org mode only the default organization qualifies, a no-op re-issue) |
 | `POST` | `/api/auth/refresh` | Cookie | Refresh access token |
 | `POST` | `/api/auth/logout` | JWT | Single session logout |
 | `POST` | `/api/auth/logout-all` | JWT | All sessions logout |
 | `GET` | `/api/auth/me` | JWT | Current user info |
-| `POST` | `/api/auth/test/login` | Public | Test login bypass (dev only) |
+| `POST` | `/api/auth/test/login` | Public | Test login bypass (dev only; answers 302 with the token in the `Location` header) |
 
 #### Device Authorization (RFC 8628)
 
@@ -1304,7 +1410,35 @@ Before OAuth authentication completes:
 | `GET` | `/api/users` | `users:read` | List users (paginated) |
 | `GET` | `/api/users/:id` | `users:read` | Get user details |
 | `PATCH` | `/api/users/:id` | `users:write` | Update user |
-| `PUT` | `/api/users/:id/roles` | `rbac:manage` | Update user roles |
+| `PUT` | `/api/users/:id/roles` | `rbac:manage` | Update user roles (system role `admin`, or the membership's org role) |
+| `GET` | `/api/roles` | JWT | List the roles, with scope and whether each may be assigned |
+
+#### Organizations (packaged)
+
+The routes are mounted, but KVox runs in single-organization mode and the web app's organization pages stay hidden (`feature: 'orgs'` is off).
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| `GET` | `/api/org/members` | `org_members:read` | List the active organization's members |
+| `PATCH` / `DELETE` | `/api/org/members/:userId` | `org_members:write` | Change a member's org role or status / remove a member |
+| `GET` / `POST` | `/api/org/invites` | `org_invites:read` / `org_invites:write` | List / create invitations |
+| `DELETE` | `/api/org/invites/:id` | `org_invites:write` | Revoke an invitation |
+| `GET` / `POST` | `/api/admin/organizations` | `organizations:read` / `organizations:write` | List / create organizations |
+| `PATCH` | `/api/admin/organizations/:id` | `organizations:write` | Rename an organization |
+
+#### Personal Access Tokens
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/pat` | JWT | Create a token (raw token shown once) |
+| `GET` | `/api/pat` | JWT | List the caller's tokens |
+| `DELETE` | `/api/pat/:id` | JWT | Revoke a token |
+
+#### Doctor (Admin)
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| `GET` | `/api/admin/doctor` | `system_settings:read` | Read-only configuration and health checks (packaged) |
 
 #### Settings
 
@@ -1324,6 +1458,8 @@ Before OAuth authentication completes:
 | `GET` | `/api/allowlist` | `allowlist:read` | List allowlisted emails |
 | `POST` | `/api/allowlist` | `allowlist:write` | Add email |
 | `DELETE` | `/api/allowlist/:id` | `allowlist:write` | Remove email (if pending) |
+| `POST` | `/api/allowlist/:id/reminder` | `allowlist:write` | **KVox-owned.** Re-send an invitation to an unclaimed invitee |
+| `GET` | `/api/allowlist/reminders?ids=` | `allowlist:read` | **KVox-owned.** Reminder counts for the listed entries |
 
 #### Health
 
@@ -1380,22 +1516,22 @@ for genuinely parallel content only.
 
 | Page | Route | Auth | Permission | Purpose |
 |------|-------|------|------------|---------|
-| Login | `/login` | Public | - | OAuth provider selection |
-| Auth Callback | `/auth/callback` | Public | - | Token handling |
+| Login | `/login` | Public | - | OAuth provider selection (packaged `LoginPage` with the KVox `BrandMark` in its `Logo` slot) |
+| Auth Callback | `/auth/callback` | Public | - | Token handling (packaged) |
 | Home | `/` | Required | Any | Dashboard |
 | User Settings hub | `/settings` | Required | Any (authenticated) | Searchable hub over the user's own settings |
 | — Profile | `/settings/profile` | Required | Any (authenticated) | Display name, avatar, email |
 | — Appearance | `/settings/appearance` | Required | Any (authenticated) | Personal theme preference |
-| — Access Tokens | `/settings/tokens` | Required | Any (authenticated) | Personal access token management |
+| — Access Tokens | `/settings/tokens` | Required | Any (authenticated) | Personal access token management (packaged `UserTokensPage`) |
 | Console / Settings hub | `/admin/settings` | Required | `system_settings:read` OR `users:read` | Searchable hub over admin settings |
 | — Email | `/admin/settings/email` | Required | `system_settings:read` | Outbound email configuration |
 | — Notifications | `/admin/settings/notifications` | Required | `system_settings:read` | Turn browser notifications on/off deployment-wide and suppress individual events |
 | — Web Push | `/admin/settings/push` | Required | `push:read` | VAPID key generation/rotation for Web Push |
 | — Maintenance | `/admin/settings/maintenance` | Required | `system_settings:read` | Open/close the maintenance window |
-| — Users & Allowlist | `/admin/settings/users` | Required | `users:read` | User accounts, roles, and allowlist |
+| — Users & Allowlist | `/admin/settings/users` | Required | `users:read` | User accounts, roles, and allowlist (packaged page, plus the KVox Reminders tab) |
 | `/admin` (redirect) | `/admin` | Required | — | `<Navigate replace>` to `/admin/settings` |
 | `/admin/users` (redirect) | `/admin/users` | Required | — | `<Navigate replace>` to `/admin/settings/users` |
-| Device Activation | `/activate` | Required | Any | Device auth approval |
+| Device Activation | `/activate` | Required | Any | Device auth approval (packaged `ActivateDevicePage`) |
 | Test Login | `/testing/login` | Public | - | Test auth bypass (dev only) |
 
 The `General` group above is not the whole Console: the `Operations` group
@@ -1417,7 +1553,7 @@ silently on `/`.
 ```tsx
 <App>
   <ThemeProvider>        {/* MUI theme + dark mode */}
-    <AuthProvider>       {/* Authentication state */}
+    <AuthProvider>       {/* Authentication state: @marinoscar/platform-web/identity/headless */}
       <SettingsProvider> {/* User settings */}
         <RouterProvider> {/* React Router */}
           <Layout>
@@ -1432,23 +1568,34 @@ silently on `/`.
 
 ### 9.3 Authentication State
 
+The auth context is the platform's. `AuthProvider`, `useAuth`, `usePermissions`, `RequireAuth` and
+`RequirePermission` come from `@marinoscar/platform-web/identity/headless`; KVox has no `AuthContext` of its own.
+`apps/web/src/identity/IdentityProviders.tsx` mounts the provider with KVox's one `PlatformHttpClient`
+(`client={api}`) and an `onBeforeLogout` that drops this device's push subscription while the access token is still valid.
+
 ```typescript
-interface AuthContext {
-  user: User | null;
-  isAuthenticated: boolean;
+// The shape useAuth() returns (AuthContextValue), abridged
+interface AuthContextValue {
+  user: AuthUser | null;
   isLoading: boolean;
-  accessToken: string | null;
-  login: (provider: string) => void;
+  isAuthenticated: boolean;
+  providers: AuthProviderInfo[];
+  sessionExpired: boolean;
+  login: (provider: string, options?: LoginOptions) => void;
   logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  setAccessToken: (token: string | null) => void;
+  activeOrg: OrgSummary | null;
+  memberships: OrgMembershipSummary[];
+  switchOrg: (orgId: string) => Promise<void>;
 }
 ```
 
 ### 9.4 Protected Routes
 
 Route-level **authorization**, not just authentication, is enforced with
-`RequirePermission` (`apps/web/src/components/common/RequirePermission.tsx`),
-wrapped around the page element inside the `<Route>`. `ProtectedRoute` above
+`RequirePermission` (from `@marinoscar/platform-web/identity/headless`),
+wrapped around the page element inside the `<Route>`. `RequireAuth` (same package) above
 it in the tree only establishes that someone is signed in; `RequirePermission`
 is what denies the page itself to a signed-in user who lacks the permission,
 rather than letting them land on the page and watch every API call return
@@ -1464,15 +1611,15 @@ to render when the check fails. The real pattern, taken directly from
   path="/admin/settings/users"
   element={
     <RequirePermission permission="users:read" fallback={<Navigate to="/" replace />}>
-      <AdminUsersPage />
+      <AdminUsersPage />   {/* apps/web/src/identity/UsersPage.tsx: the packaged page + the Reminders tab */}
     </RequirePermission>
   }
 />
 ```
 
 The permission named here is the same string the card declares in
-`config/adminSections.tsx` and the same string `users.controller.ts`
-enforces — so the hub card, the Console rail row, and the route itself
+`config/adminSections.tsx` and the same string the platform's users controller
+(`GET /api/users`) enforces — so the hub card, the Console rail row, and the route itself
 cannot disagree about who may go where. See
 [`docs/specs/settings-ui.md`](specs/settings-ui.md) for the full registry
 pattern this route belongs to.
@@ -1920,7 +2067,7 @@ The project uses a **mocked database approach** for all tests by default. This p
 │  │                             │       │  • MSW for API mocking      │  │
 │  │  Integration Tests          │       │                             │  │
 │  │  (*.integration.spec.ts)    │       │  Context Tests              │  │
-│  │  • In test/ directory       │       │  • AuthContext              │  │
+│  │  • In test/ directory       │       │  • IdentityProviders        │  │
 │  │  • Full HTTP cycle          │       │  • ThemeContext             │  │
 │  │  • Mocked PrismaService     │       │                             │  │
 │  │                             │       │                             │  │
@@ -1937,18 +2084,6 @@ The project uses a **mocked database approach** for all tests by default. This p
 ```
 apps/api/
 ├── src/
-│   ├── auth/
-│   │   ├── auth.service.spec.ts          # Unit test (co-located)
-│   │   ├── auth.controller.spec.ts
-│   │   ├── guards/
-│   │   │   ├── jwt-auth.guard.spec.ts
-│   │   │   ├── roles.guard.spec.ts
-│   │   │   └── permissions.guard.spec.ts
-│   │   └── strategies/
-│   │       ├── jwt.strategy.spec.ts
-│   │       └── google.strategy.spec.ts
-│   ├── users/
-│   │   └── users.service.spec.ts
 │   ├── settings/
 │   │   ├── user-settings/
 │   │   │   └── user-settings.service.spec.ts
@@ -1960,8 +2095,9 @@ apps/api/
 │
 └── test/
     ├── jest.config.js                    # Jest configuration
-    ├── setup.ts                          # Global test setup
+    ├── setup.ts                          # Global test setup (imports app-registrations first)
     ├── teardown.ts                       # Global cleanup
+    ├── conformance.spec.ts               # runPlatformConformance: identity, user-owned-data, cron-enqueue-only
     ├── helpers/
     │   ├── test-app.helper.ts            # Creates test NestJS app
     │   ├── auth-mock.helper.ts           # Creates mock users with JWTs
@@ -1973,24 +2109,21 @@ apps/api/
     │   ├── test-data.factory.ts          # Factory functions
     │   └── mock-setup.helper.ts          # Base mock configuration
     ├── mocks/
-    │   ├── prisma.mock.ts                # Mocked PrismaService
-    │   └── google-oauth.mock.ts          # Mocked OAuth strategy
-    ├── auth/
-    │   ├── auth.integration.spec.ts      # Auth endpoint tests
-    │   ├── oauth.integration.spec.ts     # OAuth flow tests
-    │   └── allowlist-enforcement.integration.spec.ts
+    │   └── prisma.mock.ts                # Mocked PrismaService
+    ├── users/                            # KVox-side checks on the packaged users routes
     ├── rbac/
-    │   ├── rbac.integration.spec.ts
+    │   ├── rbac.integration.spec.ts      # Org roles hold the KVox permissions through the membership
     │   └── guard-integration.integration.spec.ts
     ├── settings/
     │   ├── user-settings.integration.spec.ts
     │   └── system-settings.integration.spec.ts
-    ├── users.integration.spec.ts
-    ├── health/
-    │   └── health.integration.spec.ts
-    └── integration/
-        └── device-auth.integration.spec.ts
+    └── health/
+        └── health.integration.spec.ts
 ```
+
+The identity behaviour itself (sign-in, refresh rotation, PATs, the device flow, users, the allowlist, the test login) is
+tested by the platform's `identity` conformance suite, which `test/conformance.spec.ts` runs against KVox's composition,
+not by KVox-owned copies. The KVox-owned reminder routes have their own specs next to `src/allowlist-reminders/` and under `test/`. KVox tests assert KVox fields only and never pin a platform response with `toEqual`.
 
 ### 13.3 Backend Mocking Strategy
 
@@ -2037,8 +2170,8 @@ export async function createTestApp(
 #### Integration Test Pattern
 
 ```typescript
-// test/auth/auth.integration.spec.ts
-describe('Auth Controller (Integration)', () => {
+// test/rbac/rbac.integration.spec.ts (illustrative)
+describe('RBAC (Integration)', () => {
   let context: TestContext;
 
   beforeAll(async () => {
@@ -2086,21 +2219,19 @@ apps/web/src/
     │   └── hook-utils.tsx                # Hook testing utilities
     ├── components/
     │   ├── common/
-    │   │   ├── LoadingSpinner.test.tsx
-    │   │   └── ProtectedRoute.test.tsx
+    │   │   └── LoadingSpinner.test.tsx
     │   ├── navigation/
     │   │   ├── AppBar.test.tsx
     │   │   ├── Sidebar.test.tsx
     │   │   └── UserMenu.test.tsx
-    │   └── admin/
-    │       ├── UserList.test.tsx
-    │       ├── AllowlistTable.test.tsx
-    │       └── AddEmailDialog.test.tsx
+    │   └── admin/                        # incl. the Reminders panel
+    ├── identity/
+    │   ├── IdentityProviders.test.tsx
+    │   ├── LoginPage.test.tsx            # the packaged page with the KVox Logo slot
+    │   └── UsersPage.test.tsx            # the packaged page with the Reminders tab
     ├── contexts/
-    │   ├── AuthContext.test.tsx
     │   └── ThemeContext.test.tsx
     ├── pages/
-    │   ├── LoginPage.test.tsx
     │   ├── UserSettingsPages.test.tsx
     │   └── UserNotificationsPage.test.tsx
     └── services/
@@ -2169,7 +2300,7 @@ afterAll(() => server.close());
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '../../contexts/ThemeContext';
-import { AuthProvider } from '../../contexts/AuthContext';
+import { AuthProvider } from '@marinoscar/platform-web/identity/headless';
 
 export function renderWithProviders(ui: React.ReactElement, options = {}) {
   return render(ui, {

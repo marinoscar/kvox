@@ -115,7 +115,7 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    ```
 
    **Why this is critical:**
-   - Seeds create the RBAC roles (admin, contributor, viewer)
+   - Seeds create the RBAC roles (the system role `admin`; the organization roles `org_admin`, `contributor`, `viewer`)
    - Seeds create permissions (users:read, users:write, etc.)
    - Without seeds, user creation will fail with "Default role not found"
    - Seeds are idempotent - safe to run multiple times
@@ -169,7 +169,7 @@ Key variables (see `infra/compose/.env.example` for the full list). This section
 Note: `DATABASE_URL` is constructed automatically from these variables at runtime.
 
 **Authentication:**
-- `JWT_SECRET` - JWT signing secret (min 32 chars)
+- `JWT_SECRET` - JWT signing secret (min 32 chars). Required: the identity slice treats a missing value as a boot error
 - `JWT_ACCESS_TTL_MINUTES` - Access token TTL (default: 15)
 - `JWT_REFRESH_TTL_DAYS` - Refresh token TTL (default: 14)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - Google OAuth credentials
@@ -486,10 +486,16 @@ npm run prisma:seed --workspace=api
 ```
 
 **What Gets Seeded:**
-- RBAC roles (admin, contributor, viewer)
-- RBAC permissions (users:read, users:write, system_settings:read, etc.)
-- Role-permission assignments
-- Default system settings
+
+`prisma/seed.ts` calls `seedPlatform` (from `@marinoscar/platform-db/seed`) with the two committed catalogs in `apps/api/prisma/catalog/`, then `seedApp` (`prisma/seed-app.ts`):
+
+- RBAC roles (the system role `admin`; the organization roles `org_admin`, `contributor`, `viewer`), from `catalog/permissions.json`
+- RBAC permissions (users:read, users:write, system_settings:read, the KVox domain permissions, etc.) with their scope, and the role-permission assignments
+- Default system settings, from `catalog/system-settings-defaults.json`
+- The initial admin allowlist entry (`INITIAL_ADMIN_EMAIL`)
+- KVox's own rows (`seedApp`): the built-in note templates
+
+**Changing the catalogs.** The two JSON files are generated from the registries, not edited by hand: `npm run catalog:permissions` and `npm run catalog:settings` (from `apps/api`). A new KVox permission is declared in `apps/api/src/app-registrations/permissions.ts` (an org-scoped permission names the org roles it is granted to in `defaultGrants`), registered through `app-registrations/registrations.ts`, then the catalog is regenerated and the seed re-run. `src/common/constants/roles.constants.ts` derives `ROLES` and `PERMISSIONS` from the registries, so it needs no edit. `app-registrations/registrations` must be the first import of every entry point (like `kvox.manifest`, below); `main.ts` and the test setup already do.
 
 **When to Run Seeds:**
 - Before first login
@@ -720,7 +726,8 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
 
 6. **Update Seeds (if needed):**
    ```bash
-   # Edit prisma/seed.ts
+   # KVox rows: edit prisma/seed-app.ts. Roles and permissions: edit
+   # src/app-registrations/permissions.ts, then npm run catalog:permissions
 
    # Using npm script (recommended)
    npm run prisma:seed
@@ -767,9 +774,11 @@ The declarations sit on a small registry primitive, [`apps/api/src/common/regist
 
 ### Adding New Guards
 
-1. Create guard in `apps/api/src/auth/guards/`
+Authentication and the role and permission guards are the platform's (`@Auth`, `@Public`, `JwtAuthGuard`, `RolesGuard`, `PermissionsGuard` from `@marinoscar/platform-api/identity`); do not write a competing one. A guard that checks something KVox-specific:
+
+1. Create it next to the module that needs it (for example `apps/api/src/<module>/guards/`)
 2. Implement `canActivate()` method
-3. Register in module if not global
+3. Register it in that module
 4. Add tests for guard logic
 5. Document usage in SECURITY.md
 

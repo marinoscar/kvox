@@ -124,7 +124,7 @@ import {
 } from 'react';
 
 import { useIsMounted } from '../hooks/useIsMounted';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { ApiError } from '../services/api';
 import {

@@ -118,7 +118,7 @@ Choose the duration that matches how long the token needs to remain valid. Prefe
 
 ## API Reference
 
-All PAT endpoints require a valid JWT Bearer token or a PAT token.
+The PAT routes are served by the platform identity slice (`/api/pat`), not by the app's own code; `/api/docs` (group "Personal Access Tokens") is the generated source of truth for field names. All PAT endpoints require a valid JWT Bearer token or a PAT. A PAT can be created and revoked by any signed-in user (no permission string).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -134,7 +134,7 @@ Create a new personal access token.
 ```json
 {
   "name": "CI Pipeline",
-  "duration": 90,
+  "durationValue": 90,
   "durationUnit": "days"
 }
 ```
@@ -143,9 +143,10 @@ Create a new personal access token.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | Yes | Descriptive label for the token |
-| `duration` | integer | Yes | Length of validity (1-999) |
+| `name` | string | Yes | Descriptive label for the token (1-100 characters) |
+| `durationValue` | integer | Yes | Length of validity (1-999) |
 | `durationUnit` | string | Yes | Unit of duration: `minutes`, `days`, or `months` |
+| `orgId` | uuid | No | Organization the token is bound to. Defaults to the caller's organization; in this single-organization deployment that is the default organization. A value the caller is not an active member of answers 400 |
 
 **Response (201 Created):**
 ```json
@@ -154,9 +155,10 @@ Create a new personal access token.
     "id": "uuid-1234",
     "name": "CI Pipeline",
     "token": "pat_a1b2c3d4e5f6...",
-    "prefix": "pat_a1b2",
+    "tokenPrefix": "pat_a1b2",
     "expiresAt": "2026-06-27T00:00:00.000Z",
-    "createdAt": "2026-03-29T00:00:00.000Z"
+    "createdAt": "2026-03-29T00:00:00.000Z",
+    "orgId": "uuid-org"
   }
 }
 ```
@@ -167,7 +169,7 @@ The `token` field is only present in this response. It is not returned by any ot
 
 ### GET /api/pat
 
-List all personal access tokens belonging to the current user.
+List the personal access tokens belonging to the current user, across every organization (`orgId` names the one each is bound to).
 
 **Request:**
 ```http
@@ -182,16 +184,20 @@ Authorization: Bearer <token>
     {
       "id": "uuid-1234",
       "name": "CI Pipeline",
-      "prefix": "pat_a1b2",
+      "tokenPrefix": "pat_a1b2",
+      "durationValue": 90,
+      "durationUnit": "days",
       "createdAt": "2026-03-29T00:00:00.000Z",
       "expiresAt": "2026-06-27T00:00:00.000Z",
-      "lastUsedAt": "2026-03-29T12:00:00.000Z"
+      "lastUsedAt": "2026-03-29T12:00:00.000Z",
+      "revokedAt": null,
+      "orgId": "uuid-org"
     }
   ]
 }
 ```
 
-Expired and revoked tokens are not included in the list.
+The list is not filtered: a revoked or expired token stays in it, with `revokedAt` set or `expiresAt` in the past, until the cleanup job deletes it (see "Cleanup" below).
 
 ---
 
@@ -205,17 +211,10 @@ DELETE /api/pat/uuid-1234
 Authorization: Bearer <token>
 ```
 
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "success": true
-  }
-}
-```
+**Response:** `204 No Content`.
 
 **Error Responses:**
-- **404 Not Found** - Token not found or does not belong to the current user
+- **404 Not Found** - Token not found, does not belong to the current user, or is already revoked
 
 ---
 
@@ -235,7 +234,7 @@ Authorization: Bearer <token>
 - Revoke tokens immediately when they are no longer needed or if they may have been exposed.
 
 **Cleanup:**
-- Expired and revoked tokens are removed from the database by an automated daily cleanup job.
+- Expired tokens, and tokens revoked more than 30 days ago, are deleted by the `auth.token.cleanup` queue job (registered through the identity jobs adapter; the platform's cron only enqueues it).
 
 **Scope:**
-- PATs carry the full permissions of the user who created them. A token created by an Admin user can perform Admin-level operations. Prefer using Contributor or Viewer accounts for automated access when full Admin permissions are not required.
+- PATs carry the full permissions of the user who created them. A token created by an Admin user can perform Admin-level operations. Prefer using accounts whose organization role is `contributor` or `viewer` for automated access when full Admin permissions are not required.

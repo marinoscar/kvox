@@ -13,7 +13,7 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import { PERMISSIONS_KEY } from '../../src/auth/decorators/permissions.decorator';
+import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
 import { CredentialsService } from '../../src/credentials/credentials.service';
 import { PushConfigController } from '../../src/notifications/push-config.controller';
 import { PushConfigService } from '../../src/notifications/push-config.service';

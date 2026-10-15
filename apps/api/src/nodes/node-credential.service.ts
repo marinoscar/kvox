@@ -63,7 +63,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { PRINCIPAL_USER_INCLUDE, type AuthenticatedUser } from '@marinoscar/platform-api/identity';
 import { CreateNodeCredentialDto } from './dto/create-node-credential.dto';
 
 /**
@@ -393,23 +393,10 @@ export class NodeCredentialService {
     // which matters because this runs on every authenticated worker request.
     const credential = await this.prisma.nodeCredential.findUnique({
       where: { tokenHash },
-      include: {
-        user: {
-          include: {
-            userRoles: {
-              include: {
-                role: {
-                  include: {
-                    rolePermissions: {
-                      include: { permission: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      // The owning user is loaded with the platform's principal graph (system
+      // roles AND memberships with their org roles), so the permissions a
+      // node's owner holds are resolved exactly as for a browser session (#465).
+      include: { user: { include: PRINCIPAL_USER_INCLUDE } },
     });
 
     // Unknown token. Also covers a token from a deleted user: the row went
@@ -458,6 +445,6 @@ export class NodeCredentialService {
       .update({ where: { id: credential.id }, data: { lastUsedAt: new Date() } })
       .catch(() => {});
 
-    return credential.user as AuthenticatedUser;
+    return credential.user as unknown as AuthenticatedUser;
   }
 }

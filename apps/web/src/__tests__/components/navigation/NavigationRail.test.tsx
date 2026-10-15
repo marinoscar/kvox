@@ -12,7 +12,8 @@ import { NavigationRail, RAIL_WIDTH_COLLAPSED } from '../../../components/naviga
  * preference, and real links.
  */
 
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
@@ -30,7 +31,7 @@ vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
   useNavigationFeatures: () => ({ features: { graph: graphFeatureEnabled }, refresh: vi.fn() }),
 }));
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useNavigationPrefs } from '../../../hooks/useNavigationPrefs';
 
 const mockUsePermissions = vi.mocked(usePermissions);

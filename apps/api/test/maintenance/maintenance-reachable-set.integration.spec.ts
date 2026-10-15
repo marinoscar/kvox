@@ -69,6 +69,14 @@ const EXPECTED_REACHABLE = [
   'POST /api/auth/logout-all',
   'POST /api/auth/refresh',
 
+  // Added by the platform identity slice (#465): the generic redirect sign-in
+  // routes of any registered provider (Google has its own routes above) and the
+  // organization switch. All are exempt in the package, for the same reason as
+  // the routes above (signing in and staying signed in must work in a window).
+  'GET /api/auth/{providerId}',
+  'GET /api/auth/{providerId}/callback',
+  'POST /api/auth/switch-org',
+
   // Device ACTIVATION: the browser half of RFC 8628, driven by a signed-in
   // human. The polling half (`device/code`, `device/token`) is deliberately
   // absent — those belong to unattended clients, which is what a window is

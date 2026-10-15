@@ -1,4 +1,4 @@
-import { RBAC_EXTENSION_KEY, RbacExtension } from '../auth/decorators/auth.decorator';
+import { RBAC_EXTENSION_KEY, RbacExtension } from '@marinoscar/platform-api/identity';
 import { DocOperation, MutableDocument, forEachOperation } from './types';
 
 /**

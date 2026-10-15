@@ -60,7 +60,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 import { EMBEDDING_DIMENSIONS } from '../../src/ai/providers/ai-provider.interface';
-import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
+import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { MAX_CANDIDATE_DOCUMENTS } from '../../src/search/dto/search.dto';

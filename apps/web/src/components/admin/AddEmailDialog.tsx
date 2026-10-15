@@ -1,4 +1,18 @@
-import { useState, FormEvent } from 'react';
+/**
+ * "Add Email to Allowlist" dialog.
+ *
+ * KEPT BY #465 (epic #462) THOUGH THE IDENTITY SLICE MOVED THE ALLOWLIST. The
+ * packaged Users & Allowlist page draws its own copy of this dialog, but the
+ * package does not export it, and the Setup checklist (`pages/Admin/SetupPage.tsx`)
+ * needs the same "invite somebody" control without sending an administrator
+ * through the Users page. It is the dialog the package moved out of this file,
+ * restored here verbatim in behaviour: same validation, same copy, same
+ * `onAdd(email, notes)` contract. Delete it the day the package exports its own.
+ *
+ * PLATFORM-ADOPTION-SHIM(#465)
+ */
+
+import { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -22,21 +36,16 @@ export function AddEmailDialog({ open, onClose, onAdd }: AddEmailDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const validateEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validate email
     if (!email.trim()) {
       setError('Email is required');
       return;
     }
-
     if (!validateEmail(email.trim())) {
       setError('Please enter a valid email address');
       return;
@@ -45,7 +54,7 @@ export function AddEmailDialog({ open, onClose, onAdd }: AddEmailDialogProps) {
     setIsSubmitting(true);
     try {
       await onAdd(email.trim(), notes.trim() || undefined);
-      // Reset form and close on success
+      // Reset the form and close on success.
       setEmail('');
       setNotes('');
       setError(null);

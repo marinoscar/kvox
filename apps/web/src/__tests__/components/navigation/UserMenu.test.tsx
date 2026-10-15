@@ -6,11 +6,12 @@ import { UserMenu } from '../../../components/navigation/UserMenu';
 import { DESTINATIONS } from '../../../config/destinations';
 
 // Mock usePermissions hook
-vi.mock('../../../hooks/usePermissions', () => ({
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>()),
   usePermissions: vi.fn(),
 }));
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 // Connected knowledge ON, so the feature-gated `knowledge` row is listed
 // (#438) and the derived expectation below covers the whole table.

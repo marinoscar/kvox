@@ -71,6 +71,19 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'cannot complete OAuth sign-in at all. Admin only.',
       },
       {
+        name: 'Roles',
+        description:
+          'The roles the invite, member and user-role routes may assign (`GET /api/roles?scope=system|org`), ' +
+          'with their display labels. Served by the platform identity slice.',
+      },
+      {
+        name: 'Organizations',
+        description:
+          'Organizations, members and invitations, served by the platform identity slice. This app runs in ' +
+          'single-organization mode: the web app does not surface these routes, and the deployment has one ' +
+          'organization everyone joins on first sign-in.',
+      },
+      {
         name: 'Test Authentication',
         description:
           'Token minting for automated tests. The module is registered only when ' +
@@ -353,6 +366,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
         description:
           'The maintenance window: turning it on, the message callers see while it is open, and ' +
           'whether administrators keep access. Gated on `system_settings:write`.',
+      },
+      {
+        name: 'Doctor',
+        description:
+          'The deployment health report: read-only checks of the identity configuration (JWT secret, ' +
+          'sign-in providers, initial administrator, principal cache, tenancy mode). Served by the ' +
+          'platform Doctor and gated on `system_settings:read`.',
       },
       {
         name: 'About',

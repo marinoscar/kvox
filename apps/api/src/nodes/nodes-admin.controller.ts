@@ -65,7 +65,7 @@
 import { Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-import { Auth } from '../auth/decorators/auth.decorator';
+import { Auth } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS, ROLES } from '../common/constants/roles.constants';
 import { AdminNodeCredentialDto, AdminNodeDto } from './dto/node-admin.dto';
 import { NodesAdminService } from './nodes-admin.service';

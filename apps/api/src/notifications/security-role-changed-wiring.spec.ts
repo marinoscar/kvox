@@ -13,7 +13,7 @@ import {
   createMockPrismaService,
   MockPrismaService,
 } from '../../test/mocks/prisma.mock';
-import { UsersService } from '../users/users.service';
+import { IdentityNotifierAdapter } from '../platform/identity/identity-notifier.adapter';
 import { EmailNotificationChannel } from './channels/email-notification.channel';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { DEFAULT_NOTIFICATION_POLICY } from './notification-policy';
@@ -30,14 +30,15 @@ import {
 // =============================================================================
 //
 // The sibling of notification-failure-containment.spec.ts's suite: that file
-// proves failure cannot roll back or fail `UsersService.updateUserRoles`. This
-// file proves the HAPPY PATH properties #128 calls out for `security.role_changed`
-// specifically, wired at the same real seam — the real `UsersService`, the real
-// `NotificationsService` (dispatcher, preference resolution, `mandatory`
-// override), and the real `EmailNotificationChannel`, all against a mocked
-// Prisma:
+// proves failure cannot fail the platform identity slice's `roleChanged` port.
+// This file proves the HAPPY PATH properties #128 calls out for
+// `security.role_changed` specifically, wired at the same real seam — the real
+// `IdentityNotifierAdapter` (#465: the port identity calls after a role change
+// committed), the real `NotificationsService` (dispatcher, preference
+// resolution, `mandatory` override), and the real `EmailNotificationChannel`,
+// all against a mocked Prisma:
 //
-//   1. It fires on a real role update and the payload carries the BEFORE state
+//   1. It fires on a role change and the payload carries the BEFORE state
 //      as well as the after — a delta, not just the new roles.
 //   2. Being `mandatory: true`, it is delivered even with an explicit stored
 //      `false` for BOTH declared channels.
@@ -54,8 +55,6 @@ const RECIPIENT = {
   email: 'target@example.com',
 };
 
-const ADMIN_USER_ID = 'admin-user-id';
-
 const WORKING_EMAIL_SETTINGS: EmailSettings = {
   enabled: true,
   provider: 'ses',
@@ -63,13 +62,8 @@ const WORKING_EMAIL_SETTINGS: EmailSettings = {
   fromName: 'Enterprise App Foundation',
 };
 
-const ROLES = {
-  admin: { id: 'admin-role-id', name: 'admin' },
-  viewer: { id: 'viewer-role-id', name: 'viewer' },
-};
-
 describe('security.role_changed: mandatory, both channels, and the before/after delta', () => {
-  let users: UsersService;
+  let notifier: IdentityNotifierAdapter;
   let prisma: MockPrismaService;
   let notifications: NotificationsService;
   let ses: { send: jest.Mock };
@@ -82,54 +76,23 @@ describe('security.role_changed: mandatory, both channels, and the before/after 
     // mock Prisma serves both the trigger (`updateUserRoles`) and the
     // (detached) dispatch, so `user.findUnique` is keyed on the SHAPE of the
     // call rather than on call order.
-    prisma.user.findUnique.mockImplementation((args: any) => {
-      // The dispatcher's `loadRecipient` — a `select`, not an `include`.
-      // BOTH channels are explicitly muted here — the property under test is
-      // that `mandatory` ignores this entirely.
-      if (args?.select) {
-        return Promise.resolve({
-          id: RECIPIENT.id,
-          email: RECIPIENT.email,
-          userSettings: {
-            value: {
-              notifications: {
-                email: { 'security.role_changed': false },
-                browser: { 'security.role_changed': false },
-              },
+    prisma.user.findUnique.mockImplementation(() =>
+      // The dispatcher's `loadRecipient`. BOTH channels are explicitly muted
+      // here — the property under test is that `mandatory` ignores this
+      // entirely.
+      Promise.resolve({
+        id: RECIPIENT.id,
+        email: RECIPIENT.email,
+        userSettings: {
+          value: {
+            notifications: {
+              email: { 'security.role_changed': false },
+              browser: { 'security.role_changed': false },
             },
           },
-        }) as any;
-      }
-
-      // `getUserById`, at the end of `updateUserRoles`.
-      if (args?.include?.identities) {
-        return Promise.resolve({
-          ...RECIPIENT,
-          displayName: null,
-          providerDisplayName: null,
-          profileImageUrl: null,
-          providerProfileImageUrl: null,
-          isActive: true,
-          userRoles: [{ role: ROLES.viewer }],
-          identities: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }) as any;
-      }
-
-      // The validation lookup at the top of `updateUserRoles`, carrying the
-      // BEFORE state of the roles — `admin`, about to become `viewer`.
-      return Promise.resolve({
-        ...RECIPIENT,
-        isActive: true,
-        userRoles: [{ role: ROLES.admin }],
-      }) as any;
-    });
-
-    prisma.role.findMany.mockResolvedValue([ROLES.viewer] as any);
-    prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-    prisma.userRole.deleteMany.mockResolvedValue({ count: 1 } as any);
-    prisma.userRole.createMany.mockResolvedValue({ count: 1 } as any);
+        },
+      }) as any,
+    );
     prisma.auditEvent.create.mockResolvedValue({} as any);
     prisma.notificationDelivery.create.mockResolvedValue({
       id: 'delivery-id',
@@ -148,7 +111,7 @@ describe('security.role_changed: mandatory, both channels, and the before/after 
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        UsersService,
+        IdentityNotifierAdapter,
         NotificationsService,
         NotificationDeliveryService,
         EmailNotificationChannel,
@@ -182,7 +145,7 @@ describe('security.role_changed: mandatory, both channels, and the before/after 
       ],
     }).compile();
 
-    users = module.get(UsersService);
+    notifier = module.get(IdentityNotifierAdapter);
     notifications = module.get(NotificationsService);
   });
 
@@ -191,13 +154,12 @@ describe('security.role_changed: mandatory, both channels, and the before/after 
   });
 
   it('is delivered over BOTH channels despite an explicit stored false on both, and the payload carries the before/after delta', async () => {
-    const result = await users.updateUserRoles(
-      RECIPIENT.id,
-      { roleNames: ['viewer'] },
-      ADMIN_USER_ID,
-    );
-
-    expect(result.roles).toEqual(['viewer']);
+    await notifier.roleChanged(RECIPIENT.id, {
+      recipientEmail: RECIPIENT.email,
+      previousRoles: ['admin'],
+      currentRoles: ['viewer'],
+      changedAt: new Date(),
+    });
 
     await notifications.flush();
 
@@ -234,17 +196,15 @@ describe('security.role_changed: mandatory, both channels, and the before/after 
   });
 
   it('reaches an admin who changes their OWN roles too — no self-suppression', async () => {
-    // Admin keeps the admin role but also grants themselves contributor —
-    // allowed by the self-prevention rule (`admin` stays present).
-    prisma.role.findMany.mockResolvedValue([ROLES.admin] as any);
-
-    const result = await users.updateUserRoles(
-      ADMIN_USER_ID,
-      { roleNames: ['admin'] },
-      ADMIN_USER_ID,
-    );
-
-    expect(result).toBeDefined();
+    // No self-suppression: the notifier does not know who made the change, and
+    // the alerting case is precisely the one where actor and owner are believed
+    // to be the same person and are not.
+    await notifier.roleChanged(RECIPIENT.id, {
+      recipientEmail: RECIPIENT.email,
+      previousRoles: ['admin'],
+      currentRoles: ['admin', 'contributor'],
+      changedAt: new Date(),
+    });
 
     await notifications.flush();
 
