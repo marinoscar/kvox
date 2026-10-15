@@ -37,7 +37,7 @@ import {
   assertWithinBudget,
   computeTokenBudget,
   outputTokensForPrompt,
-} from '../generation/token-budget';
+} from '../../ai/ai-token-budget';
 
 // =============================================================================
 // `note.generate` (issue #49, epic #45) — the heart of the epic
@@ -383,7 +383,7 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     // ⚠ THROWS `AiBudgetError` — never truncates, and never after a request has
     // been made. Once the provider has been called the input tokens are billed
     // to the user whether or not the answer is any good, so this is the last
-    // moment a refusal is free. See `token-budget.ts`.
+    // moment a refusal is free. See `ai/ai-token-budget.ts`.
     assertWithinBudget({
       promptTokens,
       availableInputTokens: budget.availableInputTokens,

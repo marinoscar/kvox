@@ -711,6 +711,24 @@ const response = await request(app.getHttpServer())
 
 **Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details.
 
+### Settings namespace registry
+
+Every top-level key of the system settings document (the `global` row) and every optional key of a user's settings document is a **namespace**. A namespace is declared once, in the module that owns it, and composed into the wire schemas and defaults at startup. It no longer costs hand-edits in six places, and the settings module imports no domain code (issue #459).
+
+To add a namespace:
+
+1. **Write a declaration** next to the owning module. Use `SystemSettingsNamespace` ([`system-settings-namespace.ts`](../apps/api/src/settings/registry/system-settings-namespace.ts)) for the `global` row or `UserSettingsNamespace` ([`user-settings-namespace.ts`](../apps/api/src/settings/registry/user-settings-namespace.ts)) for per-user settings. A system declaration carries the stored, patch, PUT and wire-PATCH schemas, the response schema (or `null`) and the defaults. A user declaration carries the stored and patch schemas, `merge` and an optional `assertLimits`. Worked examples: [`transcription.system-settings.ts`](../apps/api/src/transcription/transcription.system-settings.ts) and [`graph.user-settings.ts`](../apps/api/src/graph/preferences/graph.user-settings.ts). The registration refuses a secret-named field, and a user namespace never uses `.default()` (absent means "use the defaults").
+2. **Augment the type map** in the same file so `SystemSettingsValue` / `UserSettingsValue` know the key: `declare module '../settings/registry' { interface SystemSettingsNamespaces { myKey: MyValue } }` (or `UserSettingsNamespaces`).
+3. **Add it to [`apps/api/src/kvox.manifest.ts`](../apps/api/src/kvox.manifest.ts)**. Registration order is the stored key order and the OpenAPI property order, so **append, never insert**.
+
+The manifest must be the **first import of every entry point** (`main.ts`, `scripts/dump-openapi.ts`, `scripts/ask-eval/run.ts`, `app.module.ts`, `test/setup.ts`), because the request DTOs are composed from the registries at import time. The composers throw `Settings namespaces are not registered: import apps/api/src/kvox.manifest first` when it was not loaded, so a mis-wired entry point fails on start instead of silently stripping a namespace from every PATCH.
+
+The parity specs (`common/schemas/settings-parity.spec.ts`, `user-settings-parity.spec.ts`) iterate the registries, so a registered namespace is checked automatically. The system settings service's hand-written merge is still behaviour, not a key set: cover a new system namespace there with a service test.
+
+**Reacting to a user-namespace change.** After a PUT or PATCH of `/api/user-settings`, the service emits `USER_SETTINGS_NAMESPACE_CHANGED_EVENT` (`user-settings.namespace-changed`, [`user-settings.events.ts`](../apps/api/src/settings/user-settings/user-settings.events.ts)) once per namespace whose stored value changed, with `{ userId, key, previous, next }`. A module that cares about one namespace subscribes and filters on `key`; the graph module's forwarder ([`graph-preferences-change.forwarder.ts`](../apps/api/src/graph/preferences/graph-preferences-change.forwarder.ts)) is the example. A listener must only enqueue work, never do it inline.
+
+The declarations sit on a small registry primitive, [`apps/api/src/common/registry/`](../apps/api/src/common/registry/) (`defineRegistry`, `RegistryError`, `freezeAllRegistries`). Registries are frozen at application bootstrap, so a late `register` throws `FROZEN`.
+
 ### Adding New API Endpoints
 
 1. Create DTO with Zod schema

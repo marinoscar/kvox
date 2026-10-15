@@ -1,5 +1,8 @@
 // IMPORTANT: Load instrumentation before anything else
 import './instrumentation';
+// Registers the settings namespaces the DTOs below are composed from. Must stay
+// the first import after instrumentation (see kvox.manifest.ts).
+import './kvox.manifest';
 
 import { NestFactory } from '@nestjs/core';
 import {

@@ -32,6 +32,7 @@ import { GraphLayoutListener } from './layout/graph-layout.listener';
 import { GraphOverviewController } from './layout/graph-overview.controller';
 import { GraphOverviewService } from './layout/graph-overview.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { GraphPreferencesChangeForwarder } from './preferences/graph-preferences-change.forwarder';
 import { GraphPreferencesService } from './preferences/graph-preferences.service';
 import { GraphRdfController } from './rdf/graph-rdf.controller';
 import { GraphRdfService } from './rdf/graph-rdf.service';
@@ -86,6 +87,9 @@ import { GraphWriteService } from './write/graph-write.service';
     NoteAccessService,
     // #369 — the `graph` user-settings namespace, resolved with defaults.
     GraphPreferencesService,
+    // #459 — turns the settings module's generic `user-settings.namespace-changed`
+    // event for `graph` into `graph.preferences_changed`.
+    GraphPreferencesChangeForwarder,
     GraphOntologyService,
     EvidenceValidator,
     GraphWriteService,

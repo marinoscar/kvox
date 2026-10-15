@@ -2,8 +2,10 @@
 // `graph.preferences_changed` (#369, epic #346)
 // =============================================================================
 //
-// Emitted by `UserSettingsService` after a successful PUT/PATCH of
-// `/api/user-settings` whose EFFECTIVE graph preferences changed — i.e. the
+// Emitted by `GraphPreferencesChangeForwarder` (#459) when the settings module
+// announces that the `graph` user-settings namespace changed
+// (`user-settings.namespace-changed`) after a successful PUT/PATCH of
+// `/api/user-settings`, and only when the EFFECTIVE graph preferences changed — i.e. the
 // resolved values differ, not merely the stored spelling of them (writing the
 // default value explicitly over an absent one is not a change).
 //

@@ -352,7 +352,7 @@ bounded (`ONBOARDING_MAX_SKIPPED = 40`, `ONBOARDING_MAX_STEP_KEY_LENGTH = 64`,
 control, not cosmetics: it is a user-supplied array landing in a JSONB blob,
 and the bound is what stops it becoming arbitrary storage.
 
-Adding a user-settings namespace is a **six-file change**
+Adding a user-settings namespace used to be a **six-file change** (since issue #459 it is one declaration registered in `kvox.manifest.ts`, and the parity guard iterates the registry; the history that motivated the guard follows)
 (`userSettingsSchema`, `userSettingsPatchSchema` in
 `common/schemas/settings.schema.ts`; `updateUserSettingsSchema`,
 `patchUserSettingsSchema` in `settings/dto/update-user-settings.dto.ts`;
@@ -365,7 +365,7 @@ PATCH request schema: a missing entry there means `PATCH { "onboarding": {
 row is rewritten unchanged, and the endpoint answers **200 with a body that
 looks correct** — no error, no log line, no audit entry, just a welcome
 dialog that will not stay dismissed and nothing anywhere saying why. This
-epic pays that six-file cost for the first time with a guard behind it:
+epic paid that six-file cost for the first time with a guard behind it:
 `user-settings-parity.spec.ts`, modelled on `settings-parity.spec.ts` but
 not copied from it, because user settings has a genuinely different amount
 of help from the compiler — every namespace here is optional in all six

@@ -26,6 +26,10 @@
 // other user's Ask conversation runs on).
 // =============================================================================
 
+// Registers the settings namespaces the DTOs are composed from. Must be the
+// first import (see src/kvox.manifest.ts).
+import '../../src/kvox.manifest';
+
 import { NestFactory } from '@nestjs/core';
 import type { INestApplicationContext } from '@nestjs/common';
 import type { Job, PrismaClient } from '@prisma/client';

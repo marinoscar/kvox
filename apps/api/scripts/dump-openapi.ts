@@ -22,6 +22,9 @@
 
 process.env.NODE_ENV = 'production';
 
+// Registers the settings namespaces the DTOs are composed from. Must be the
+// first import (see src/kvox.manifest.ts).
+import '../src/kvox.manifest';
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { NestFactory } from '@nestjs/core';

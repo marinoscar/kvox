@@ -21,6 +21,10 @@
 // key, an unsafe database).
 // =============================================================================
 
+// Registers the settings namespaces the DTOs are composed from. Must be the
+// first import (see src/kvox.manifest.ts).
+import '../src/kvox.manifest';
+
 import { mkdirSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { parseArgs } from 'util';

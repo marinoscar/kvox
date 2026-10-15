@@ -12,81 +12,100 @@ import {
   DEFAULT_USER_SETTINGS,
   type UserSettingsValue,
 } from '../types/settings.types';
+import {
+  userSettingsNamespaceRegistry,
+  type UserSettingsNamespace,
+} from '../../settings/registry';
 
 // =============================================================================
-// User settings parity guard (#272, epic #271)
+// User settings parity guard (#272, epic #271; rewritten over the registry, #459)
 // =============================================================================
 //
-// WHAT A FAILURE HERE MEANS. A namespace, or a field inside one, exists in some
-// of the places that define `user_settings` and not in the others. The failure
-// message names the key and the two sources that disagree; the fix is always to
-// add it to the source that is missing it, never to loosen this test.
+// WHAT A FAILURE HERE MEANS. A registered namespace, or a field inside one, is
+// missing from (or extra in) one of the places that define `user_settings`. The
+// failure message names the key and the two sources that disagree; the fix is
+// always to repair the declaration or the composition, never to loosen this
+// test.
 //
 // The counterpart guard for `system_settings` is settings-parity.spec.ts, and
 // this file is modelled on it. It is NOT a copy: the two settings documents
 // have different sources, different shapes, and — see the warning below — a
 // different amount of help from the compiler.
 //
-// THE PLACES, AND WHAT EACH ONE BREAKS WHEN IT IS THE ONE THAT WAS MISSED:
+// WHAT CHANGED IN #459. These places used to be written out by hand, one after
+// the other, and this file's job was to notice a namespace added to some of them
+// and not the others. A namespace is now DECLARED ONCE (`UserSettingsNamespace`,
+// beside the module that owns it, registered from `kvox.manifest.ts`) and every
+// place but the TypeScript interface is DERIVED from the registry by a composer
+// (`settings/registry/compose.ts`). So this file iterates the REGISTRY instead
+// of one schema: for every registered namespace it asserts that the composed
+// schemas and the DTO bodies the app actually uses all carry its key, and that
+// the declaration's own branches agree about its fields (a `patchSchema` that
+// forgot a field the `schema` has is the same silent failure, one level down).
+// A namespace a fork registers is checked without touching this file.
 //
-//   1. `userSettingsSchema`             common/schemas/settings.schema.ts
+// THE PLACES, AND WHAT EACH ONE BREAKS WHEN IT IS THE ONE THAT DOES NOT CARRY
+// A NAMESPACE (each is the composed form of one field of the declaration):
+//
+//   1. `userSettingsSchema`             from `schema`
 //        The canonical stored shape. Missing here → `UserSettingsService`'s own
 //        `parse` STRIPS the key on the way to the database (the call is
 //        annotated in that service precisely because it is silent), so nothing
 //        is ever persisted and no subsequent GET can return it.
-//   2. `userSettingsPatchSchema`        same file
+//   2. `userSettingsPatchSchema`        from `patchSchema`
 //        The canonical partial. Missing here → the namespace can never be
 //        partially updated, or the merged value fails to validate.
-//   3. `updateUserSettingsSchema`       settings/dto/update-user-settings.dto.ts
+//   3. `updateUserSettingsSchema`       from `putSchema ?? schema`
 //        The PUT REQUEST BODY. Missing here → the global ZodValidationPipe
 //        strips the key BEFORE the service is called, so a full replacement
 //        silently drops the namespace.
-//   4. `patchUserSettingsSchema`        same file
-//        The PATCH REQUEST BODY, and the nastiest of the six. Missing here →
+//   4. `patchUserSettingsSchema`        from `wirePatchSchema ?? patchSchema`
+//        The PATCH REQUEST BODY, and the nastiest of the lot. Missing here →
 //        `PATCH { "onboarding": { "welcomeSeenAt": "..." } }` parses to `{}`,
 //        the service merges nothing, the row is rewritten unchanged and the
 //        endpoint returns 200 with a body that looks correct. No error, no log
 //        line, no audit entry: a welcome dialog that will not stay dismissed
 //        and nothing anywhere saying why.
-//   5. `userSettingsResponseSchema`     settings/dto/user-settings-response.dto.ts
+//   5. `userSettingsResponseSchema`     from `responseSchema ?? schema`
 //        The GET/PUT/PATCH RESPONSE BODY. Missing here → the namespace is
 //        writable but never readable back: it persists correctly and is then
 //        stripped on the way out, so the client concludes its own write did
-//        nothing. `system_settings` has no equivalent source, which is why this
-//        guard checks six places against that one's five.
+//        nothing. (A declaration may opt out with `responseSchema: null`; that
+//        is a decision, and the response check below honours it.)
 //   6. `UserSettingsValue`              common/types/settings.types.ts
-//        The TypeScript view of the stored value. Missing here → the type and
-//        the schema disagree; the service cannot assign the merged namespace
-//        without a cast, and every consumer is told the key does not exist.
+//        The TypeScript view of the stored value, now
+//        `CoreUserSettingsValue & Partial<UserSettingsNamespaces>`. Missing
+//        here → the declaration did not augment `UserSettingsNamespaces`, so
+//        the type and the schema disagree and every consumer is told the key
+//        does not exist. The only place checked by `tsc` rather than by jest.
 //
 // ⚠ THE SECOND NET THAT EXISTS FOR SYSTEM SETTINGS DOES NOT EXIST HERE.
 // settings-parity.spec.ts notes that a namespace REQUIRED in its source (1) and
 // merged by name also fails to compile when it is missing elsewhere — "a
-// welcome second net", it says, "but it is a consequence of how these four
-// happen to be written, not a property of the design". EVERY USER-SETTINGS
-// NAMESPACE IS OPTIONAL, by design and permanently: absent is what "the user
-// has expressed no preference" is spelled as (see
-// user-settings-namespaces.schema.ts). So there is nothing for the compiler to
-// notice. `dataTables` and `navigation` were both added with no guard at all,
-// and would have been silent in exactly this way. That makes this file MORE
-// load-bearing than its system-settings sibling, not less — it is the only
-// mechanism of any kind that catches the omission.
+// welcome second net". EVERY USER-SETTINGS NAMESPACE IS OPTIONAL, by design and
+// permanently: absent is what "the user has expressed no preference" is spelled
+// as (see user-settings-namespaces.schema.ts). So there is nothing for the
+// compiler to notice. `dataTables` and `navigation` were both added with no
+// guard at all, and would have been silent in exactly this way. That makes this
+// file MORE load-bearing than its system-settings sibling, not less — with the
+// registry it is the mechanism that proves the composition did not drop or add
+// a key.
 //
-// The seventh place — the hand-written merge in
-// `settings/user-settings/user-settings.service.ts` (`mergeOnboarding` and its
-// neighbours) — is deliberately NOT checked here. It cannot be: a merge is
-// behaviour, not a key set, and a merge that reads the right key and applies it
-// wrongly has exactly the same shape as one that is correct. That one is
-// covered where behaviour is covered, by `user-settings.service.spec.ts` and by
+// The merge and the caps (`merge`, `assertLimits` on the declaration) are
+// deliberately NOT checked here. They cannot be: a merge is behaviour, not a
+// key set, and a merge that reads the right key and applies it wrongly has
+// exactly the same shape as one that is correct. They are covered where
+// behaviour is covered, by `user-settings.service.spec.ts`, by
+// `test/settings/registry-declarations.spec.ts` and by
 // `test/settings/user-settings.integration.spec.ts` (which drives a real PATCH
-// through the wire DTO). If you added a namespace and this file is green, you
-// are six-sevenths done.
+// through the wire DTO).
 //
-// HOW THE KEY SETS ARE OBTAINED. Programmatically, from the zod schemas
-// themselves — never from a list written out in this file. A hand-maintained
-// list is the same defect one level up: it would be an eighth place to forget,
-// and the day someone forgot it this test would go green while the endpoint was
-// broken.
+// HOW THE KEY SETS ARE OBTAINED. Programmatically, from the registry and from
+// the zod schemas themselves — never from a list written out in this file. A
+// hand-maintained list is the same defect one level up: it would be one more
+// place to forget, and the day someone forgot it this test would go green while
+// the endpoint was broken. The registry is filled by `test/setup.ts` importing
+// `kvox.manifest`; the first case below fails loudly if it is not.
 // =============================================================================
 
 /**
@@ -213,6 +232,8 @@ const responseSource = (): Source => {
  * below — the one source in this file that is checked by `tsc` rather than by
  * jest, because it is the one source that does not exist at runtime.
  */
+const RESPONSE = responseSource();
+
 const SOURCES: Source[] = [
   schemaSource('userSettingsSchema', userSettingsSchema),
   schemaSource('userSettingsPatchSchema', userSettingsPatchSchema),
@@ -224,12 +245,24 @@ const SOURCES: Source[] = [
     'patchUserSettingsSchema (PATCH body)',
     patchUserSettingsSchema,
   ),
-  responseSource(),
+  RESPONSE,
 ];
 
-// The canonical stored shape is the reference every other source is compared
+// The canonical stored shape is the reference the field-level comparison runs
 // against, because it is the one a stored value has to satisfy.
-const [REFERENCE, ...OTHERS] = SOURCES;
+const REFERENCE = SOURCES[0];
+
+/**
+ * The fields every user settings document carries that are not namespaces:
+ * `theme` and `profile`, required, placed ahead of the namespaces by the
+ * composers. Derived from the defaults (which hold exactly these, asserted
+ * below), not written out.
+ */
+const CORE_KEYS = Object.keys(DEFAULT_USER_SETTINGS);
+
+/** Every registered declaration, in registration order. Read when the cases run. */
+const registered = (): readonly UserSettingsNamespace[] =>
+  userSettingsNamespaceRegistry.list();
 
 // =============================================================================
 // Source 6: `UserSettingsValue`, checked by the compiler
@@ -288,30 +321,75 @@ function expectSameKeys(actual: string[], expected: string[], context: string) {
 }
 
 describe('user settings parity across the places a namespace must be declared', () => {
+  it('has the namespaces registered, which is what the composed schemas are built from', () => {
+    // An empty registry would make every assertion below vacuous. It also means
+    // `test/setup.ts` stopped importing `src/kvox.manifest`, and the composers
+    // would already have thrown while the schemas above were being imported.
+    expect(registered().length).toBeGreaterThan(0);
+  });
+
   // AGGREGATED ACROSS SOURCES, not one `expect` per source in a loop. Missing a
-  // namespace in several places at once is the NORMAL failure — someone adds it
-  // to the canonical schema and stops — and a loop of assertions reports only
-  // whichever source it reached first, sending the reader back for another run
-  // after each fix. One report names every place that is missing it.
-  it('declares the same top-level namespaces everywhere', () => {
-    const disagreements = OTHERS.map((source) => ({
+  // namespace in several places at once is the NORMAL failure, and a loop of
+  // assertions reports only whichever source it reached first, sending the
+  // reader back for another run after each fix. One report names every place
+  // that disagrees with the registry.
+  it('carries exactly the core fields plus the registered namespaces, in registration order, in every place', () => {
+    const expectedTop = [...CORE_KEYS, ...registered().map((ns) => ns.key)];
+
+    const disagreements = SOURCES.map((source) => ({
       source: source.name,
-      missing: REFERENCE.top.filter((key) => !source.top.includes(key)),
-      unexpected: source.top.filter((key) => !REFERENCE.top.includes(key)),
+      missing: expectedTop.filter((key) => !source.top.includes(key)),
+      unexpected: source.top.filter((key) => !expectedTop.includes(key)),
     })).filter(
       (report) => report.missing.length > 0 || report.unexpected.length > 0,
     );
 
     expect({
-      comparedAgainst: REFERENCE.name,
+      comparedAgainst: 'userSettingsNamespaceRegistry',
       disagreements,
-    }).toEqual({ comparedAgainst: REFERENCE.name, disagreements: [] });
+    }).toEqual({
+      comparedAgainst: 'userSettingsNamespaceRegistry',
+      disagreements: [],
+    });
+
+    // Order is wire-visible (stored JSON, OpenAPI).
+    for (const source of SOURCES.filter((s) => s !== RESPONSE)) {
+      expect({ source: source.name, order: source.top }).toEqual({
+        source: source.name,
+        order: expectedTop,
+      });
+    }
+  });
+
+  it('documents in the response exactly the namespaces whose declaration does not opt out', () => {
+    const documented = [
+      ...CORE_KEYS,
+      ...registered()
+        .filter((ns) => ns.responseSchema !== null)
+        .map((ns) => ns.key),
+    ];
+
+    expect({
+      source: RESPONSE.name,
+      order: RESPONSE.top,
+    }).toEqual({ source: RESPONSE.name, order: documented });
+  });
+
+  it('gives every declaration a merge, which is how a PATCH reaches it', () => {
+    // A key set cannot say whether a namespace merges anything; the behaviour
+    // is covered elsewhere (see the header). That it HAS a merge is structural.
+    for (const ns of registered()) {
+      expect({ key: ns.key, merge: typeof ns.merge }).toEqual({
+        key: ns.key,
+        merge: 'function',
+      });
+    }
   });
 
   describe.each(
-    // Driven off the reference schema, so a namespace added there is
+    // Driven off the registry, so a namespace registered anywhere is
     // automatically checked one level deep without touching this file.
-    Object.keys(userSettingsSchema.shape).map((namespace) => [namespace]),
+    userSettingsNamespaceRegistry.list().map((ns) => [ns.key]),
   )('%s', (namespace: string) => {
     it('declares the same fields in every source that models it', () => {
       const expected = REFERENCE.children(namespace);
@@ -323,7 +401,7 @@ describe('user settings parity across the places a namespace must be declared', 
         return;
       }
 
-      for (const source of OTHERS) {
+      for (const source of SOURCES.filter((s) => s !== REFERENCE)) {
         const actual = source.children(namespace);
 
         // A source that does not model this namespace as an object at all is
@@ -340,6 +418,22 @@ describe('user settings parity across the places a namespace must be declared', 
           `${source.name} vs ${REFERENCE.name}: fields of "${namespace}"`,
         );
       }
+    });
+
+    it('is optional in the stored schema, so absent keeps meaning "the user has not chosen"', () => {
+      const declaration = registered().find((ns) => ns.key === namespace)!;
+
+      expect({
+        key: namespace,
+        declarationAcceptsUndefined: declaration.schema.safeParse(undefined).success,
+        composedAcceptsUndefined: (
+          userSettingsSchema.shape as Record<string, z.ZodType>
+        )[namespace].safeParse(undefined).success,
+      }).toEqual({
+        key: namespace,
+        declarationAcceptsUndefined: false,
+        composedAcceptsUndefined: true,
+      });
     });
   });
 

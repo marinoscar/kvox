@@ -17,6 +17,10 @@
 // and is never printed or written anywhere.
 // =============================================================================
 
+// Registers the settings namespaces `DEFAULT_SYSTEM_SETTINGS` is composed from.
+// Must be the first import (see src/kvox.manifest.ts).
+import '../src/kvox.manifest';
+
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { parseArgs } from 'util';

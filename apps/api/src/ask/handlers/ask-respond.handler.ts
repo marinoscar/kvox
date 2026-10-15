@@ -98,7 +98,7 @@ import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { RateLimitError } from '../../jobs/rate-limit.error';
 import { StreamFlusher } from '../../notes/generation/stream-flusher';
-import { budgetRefusalMessage, computeTokenBudget } from '../../notes/generation/token-budget';
+import { budgetRefusalMessage, computeTokenBudget } from '../../ai/ai-token-budget';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fitToBudget, messageTokens, MESSAGE_OVERHEAD_TOKENS, selectHistory, type AskHistoryRow } from '../ask-history';

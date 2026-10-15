@@ -313,7 +313,7 @@ under-state a thorough run's true cost, never over-state it.
 Both modes run entirely on **the requesting user's own AI provider key**
 (`user_ai_credentials`, never a deployment-wide credential — `docs/specs/
 notes.md` §9's bring-your-own-key posture, reused verbatim). `assertWithinBudget`
-/ `computeTokenBudget` (`apps/notes/generation/token-budget.ts`, shared with
+/ `computeTokenBudget` (`apps/api/src/ai/ai-token-budget.ts`, shared with
 note generation) refuse a request that would not fit the resolved model's
 context window **before** any call is made — a batch too large to fit is
 split in half rather than the whole run being refused, and only a *single*

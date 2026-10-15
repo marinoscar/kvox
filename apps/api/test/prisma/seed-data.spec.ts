@@ -6,7 +6,7 @@ import {
   NOTE_TEMPLATES,
 } from '../../prisma/seed-data';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { composeDefaultSystemSettings } from '../../src/settings/registry';
 import { systemSettingsSchema } from '../../src/common/schemas/settings.schema';
 
 // =============================================================================
@@ -314,17 +314,20 @@ describe('seed data', () => {
 
   describe('seeded system settings', () => {
     /**
-     * The seed cannot import `DEFAULT_SYSTEM_SETTINGS` from `src/` — it runs
-     * under ts-node outside the Nest build — so the two are a deliberate
-     * duplicate, and a duplicate nobody checks is a duplicate that drifts. The
-     * consequence of drift is mild but real: `readKnownSettings` degrades a
+     * The seed cannot import the API's defaults from `src/` — it runs under
+     * ts-node outside the Nest build — so the two are a deliberate duplicate.
+     * The API's defaults are no longer one literal: they are composed from the
+     * settings namespace registry (`composeDefaultSystemSettings()`, filled by
+     * `kvox.manifest`, which `test/setup.ts` imports), so that is what the seed
+     * is compared against. A duplicate nobody checks is a duplicate that
+     * drifts. The consequence of drift is mild but real: `readKnownSettings` degrades a
      * missing block to the API's defaults, so a seeded row that disagrees means
      * a fresh deployment's stored value and its effective value differ until the
      * first write, and an admin reading the row directly sees something the
      * application does not believe.
      */
     it('matches the API defaults exactly', () => {
-      expect(SEEDED_SYSTEM_SETTINGS).toEqual(DEFAULT_SYSTEM_SETTINGS);
+      expect(SEEDED_SYSTEM_SETTINGS).toEqual(composeDefaultSystemSettings());
     });
 
     it('is a value the API would accept', () => {

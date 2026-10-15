@@ -352,7 +352,7 @@ export const systemAiSchema = z.object({
    *
    * A typed cap bounds the ANSWER: the headroom the call's reasoning effort
    * needs is added on top of it, bounded by the model's own maximum (see
-   * `notes/generation/token-budget.ts`). Same nullable-merge caveat as
+   * `ai/ai-token-budget.ts`). Same nullable-merge caveat as
    * `maxInputTokens` above.
    */
   maxOutputTokens: z.number().int().min(64).max(200_000).nullable(),
@@ -383,7 +383,7 @@ export const systemAiSchema = z.object({
    * ⚠ REASONING TOKENS ARE OUTPUT TOKENS. They are billed as output, counted as
    * output, and drawn from the SAME `max_completion_tokens` ceiling the visible
    * answer is drawn from. Since issue #436 the budget accounts for that
-   * (`notes/generation/token-budget.ts`): with no typed `maxOutputTokens` the
+   * (`ai/ai-token-budget.ts`): with no typed `maxOutputTokens` the
    * ceiling is the model's own maximum, which already covers the thinking; with
    * a typed cap, `REASONING_HEADROOM_TOKENS[effort]` is added ON TOP of it,
    * bounded by the model's own maximum — so raising this field can no longer

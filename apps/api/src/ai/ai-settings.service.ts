@@ -34,7 +34,7 @@ import {
 import type { AiModelLimitSource } from './ai-model-resolution';
 import type { AiConfigModel } from './dto/ai-config.dto';
 import type { AiEffectiveLimit } from './dto/ai-settings.dto';
-import { computeTokenBudget } from '../notes/generation/token-budget';
+import { computeTokenBudget } from './ai-token-budget';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
 import { OPENAI_FETCH, type FetchLike } from './providers/openai.provider';
 

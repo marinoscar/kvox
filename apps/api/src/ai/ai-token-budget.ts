@@ -48,8 +48,8 @@
 // letting a raised effort silently eat the answer's share.
 // =============================================================================
 
-import type { AiReasoningEffort } from '../../ai/ai-settings.schema';
-import { AiBudgetError } from '../../ai/ai-errors';
+import type { AiReasoningEffort } from './ai-settings.schema';
+import { AiBudgetError } from './ai-errors';
 
 /**
  * Tokens held back for the framing a provider adds beyond the literal text —

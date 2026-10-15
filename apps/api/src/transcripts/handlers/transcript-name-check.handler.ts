@@ -29,7 +29,7 @@ import {
   computeTokenBudget,
   outputTokensForPrompt,
   type TokenBudget,
-} from '../../notes/generation/token-budget';
+} from '../../ai/ai-token-budget';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';

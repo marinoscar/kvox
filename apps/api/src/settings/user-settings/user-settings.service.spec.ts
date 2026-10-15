@@ -3,7 +3,7 @@ import { ConflictException, BadRequestException } from '@nestjs/common';
 import { UserSettingsService } from './user-settings.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GRAPH_PREFERENCES_CHANGED_EVENT } from '../../graph/preferences/graph-preferences.events';
+import { USER_SETTINGS_NAMESPACE_CHANGED_EVENT } from './user-settings.events';
 import {
   createMockPrismaService,
   MockPrismaService,
@@ -656,110 +656,179 @@ describe('UserSettingsService', () => {
   });
 
   // ===========================================================================
-  // dataTables / navigation namespace merge logic (JSON Merge Patch semantics)
+  // Namespace merge and limit semantics, driven through the public API
   // ===========================================================================
   //
-  // mergeDataTables, mergeNavigation and assertDataTableLimit are private -
-  // reached here via `(service as any)` rather than by adding a public export,
-  // since their contract is an internal implementation detail of PATCH
-  // semantics, not part of the service's public surface.
+  // Since #459 each namespace's PATCH merge and its caps live in the user
+  // settings namespace registry (`settings/registry/core-user-namespaces.ts`),
+  // not in private methods of this service. What this service owns, and what
+  // these cases pin, is the loop around them: every registered namespace
+  // merges its own patch, an emptied namespace is left OUT of the stored value
+  // (absent means "use built-in defaults"; `{}` would not), the caps are
+  // checked against the MERGED result, and the post-merge
+  // `userSettingsSchema.parse` does not strip a registered key. Each case
+  // therefore asserts against what actually reached Prisma, which is the only
+  // place all four behaviours are visible together.
 
-  describe('mergeDataTables (private)', () => {
-    const mergeDataTables = (current: unknown, patch: unknown) =>
-      (service as any).mergeDataTables(current, patch);
+  const BASE_VALUE = { theme: 'system', profile: { imageSource: 'provider' } };
 
-    it('patch absent leaves the namespace untouched', () => {
+  /** Make Prisma hold `BASE_VALUE` plus the given namespaces. */
+  function stored(namespaces: Record<string, unknown>) {
+    mockPrisma.userSettings.findUnique.mockResolvedValue({
+      ...mockUserSettings,
+      value: { ...BASE_VALUE, ...namespaces } as any,
+    } as any);
+  }
+
+  /** Capture what a PATCH writes (`update`) and echo it back as the row. */
+  function captureStoredValue() {
+    const captured: { value?: any } = {};
+    (mockPrisma.userSettings.update as any).mockImplementation(
+      async ({ data }: any) => {
+        captured.value = data.value;
+        return { ...mockUserSettings, value: data.value, version: 2 };
+      },
+    );
+    mockPrisma.user.update.mockResolvedValue({} as any);
+    return captured;
+  }
+
+  /** Capture what a PUT writes (`upsert`) and echo it back as the row. */
+  function captureUpsertedValue() {
+    const captured: { value?: any } = {};
+    (mockPrisma.userSettings.upsert as any).mockImplementation(
+      async ({ update }: any) => {
+        captured.value = update.value;
+        return { ...mockUserSettings, value: update.value, version: 2 };
+      },
+    );
+    mockPrisma.user.update.mockResolvedValue({} as any);
+    return captured;
+  }
+
+  /**
+   * PATCH `patch` on top of a stored value holding `current`, and resolve to
+   * the value that reached Prisma.
+   */
+  async function patchOn(
+    current: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ): Promise<Record<string, any>> {
+    stored(current);
+    const captured = captureStoredValue();
+    await service.patchSettings(mockUserId, patch as any);
+    return captured.value;
+  }
+
+  describe('dataTables namespace merge (JSON Merge Patch semantics)', () => {
+    it('a patch that omits the namespace leaves it untouched', async () => {
       const current = { jobs: { density: 'compact' as const } };
 
-      expect(mergeDataTables(current, undefined)).toEqual(current);
+      const result = await patchOn({ dataTables: current }, { theme: 'dark' });
+
+      expect(result.dataTables).toEqual(current);
     });
 
-    it('a non-null entry REPLACES the stored entry wholesale, leaving other entries untouched', () => {
+    it('a non-null entry REPLACES the stored entry wholesale, leaving other entries untouched', async () => {
       const current = {
         jobs: { density: 'compact' as const, pageSize: 10 },
         users: { pageSize: 50 },
       };
 
-      const result = mergeDataTables(current, { jobs: { pageSize: 25 } });
+      const result = await patchOn(
+        { dataTables: current },
+        { dataTables: { jobs: { pageSize: 25 } } },
+      );
 
       // The previously stored `density` for jobs is gone - not deep-merged.
-      expect(result.jobs).toEqual({ pageSize: 25 });
-      expect(result.jobs).not.toHaveProperty('density');
+      expect(result.dataTables.jobs).toEqual({ pageSize: 25 });
+      expect(result.dataTables.jobs).not.toHaveProperty('density');
       // The `users` entry was never touched.
-      expect(result.users).toEqual({ pageSize: 50 });
+      expect(result.dataTables.users).toEqual({ pageSize: 50 });
     });
 
-    it('{ jobs: null } deletes only the jobs entry, leaving other entries untouched', () => {
-      const current = {
-        jobs: { pageSize: 10 },
-        users: { pageSize: 50 },
-      };
+    it('{ jobs: null } deletes only the jobs entry, leaving other entries untouched', async () => {
+      const current = { jobs: { pageSize: 10 }, users: { pageSize: 50 } };
 
-      const result = mergeDataTables(current, { jobs: null });
+      const result = await patchOn(
+        { dataTables: current },
+        { dataTables: { jobs: null } },
+      );
 
-      expect(result).toEqual({ users: { pageSize: 50 } });
+      expect(result.dataTables).toEqual({ users: { pageSize: 50 } });
     });
 
-    it('dataTables: null clears the whole namespace', () => {
-      const current = {
-        jobs: { pageSize: 10 },
-        users: { pageSize: 50 },
-      };
+    it('dataTables: null clears the whole namespace', async () => {
+      const current = { jobs: { pageSize: 10 }, users: { pageSize: 50 } };
 
-      expect(mergeDataTables(current, null)).toBeUndefined();
+      const result = await patchOn(
+        { dataTables: current },
+        { dataTables: null },
+      );
+
+      expect('dataTables' in result).toBe(false);
     });
 
-    it('emptying the last entry collapses the namespace back to absent (undefined), not {}', () => {
-      const current = { jobs: { pageSize: 10 } };
+    it('emptying the last entry collapses the namespace back to absent, not {}', async () => {
+      const result = await patchOn(
+        { dataTables: { jobs: { pageSize: 10 } } },
+        { dataTables: { jobs: null } },
+      );
 
-      const result = mergeDataTables(current, { jobs: null });
-
-      expect(result).toBeUndefined();
+      expect('dataTables' in result).toBe(false);
     });
   });
 
-  describe('mergeNavigation (private)', () => {
-    const mergeNavigation = (current: unknown, patch: unknown) =>
-      (service as any).mergeNavigation(current, patch);
+  describe('navigation namespace merge', () => {
+    it('a patch that omits the namespace leaves it untouched', async () => {
+      const result = await patchOn(
+        { navigation: { railCollapsed: true } },
+        { theme: 'dark' },
+      );
 
-    it('patch absent leaves the namespace untouched', () => {
-      const current = { railCollapsed: true };
-
-      expect(mergeNavigation(current, undefined)).toEqual(current);
+      expect(result.navigation).toEqual({ railCollapsed: true });
     });
 
-    it('an omitted field is left untouched', () => {
-      const current = { railCollapsed: true };
+    it('an omitted field is left untouched', async () => {
+      const result = await patchOn(
+        { navigation: { railCollapsed: true } },
+        { navigation: {} },
+      );
 
-      expect(mergeNavigation(current, {})).toEqual({ railCollapsed: true });
+      expect(result.navigation).toEqual({ railCollapsed: true });
     });
 
-    it('a listed field is replaced', () => {
-      const current = { railCollapsed: true };
+    it('a listed field is replaced', async () => {
+      const result = await patchOn(
+        { navigation: { railCollapsed: true } },
+        { navigation: { railCollapsed: false } },
+      );
 
-      expect(mergeNavigation(current, { railCollapsed: false })).toEqual({
-        railCollapsed: false,
-      });
+      expect(result.navigation).toEqual({ railCollapsed: false });
     });
 
-    it('railCollapsed: null deletes the field', () => {
-      const current = { railCollapsed: true };
+    it('railCollapsed: null deletes the field, and with it the emptied namespace', async () => {
+      const result = await patchOn(
+        { navigation: { railCollapsed: true } },
+        { navigation: { railCollapsed: null } },
+      );
 
-      expect(
-        mergeNavigation(current, { railCollapsed: null }),
-      ).toBeUndefined();
+      expect('navigation' in result).toBe(false);
     });
 
-    it('navigation: null clears the whole namespace', () => {
-      const current = { railCollapsed: true };
+    it('navigation: null clears the whole namespace', async () => {
+      const result = await patchOn(
+        { navigation: { railCollapsed: true } },
+        { navigation: null },
+      );
 
-      expect(mergeNavigation(current, null)).toBeUndefined();
+      expect('navigation' in result).toBe(false);
     });
 
-    it('emptying the namespace collapses it back to absent (undefined), not {}', () => {
-      const result = mergeNavigation(undefined, { railCollapsed: null });
+    it('nulling a field of an absent namespace stays absent, not {}', async () => {
+      const result = await patchOn({}, { navigation: { railCollapsed: null } });
 
-      expect(result).toBeUndefined();
+      expect('navigation' in result).toBe(false);
     });
   });
 
@@ -767,40 +836,46 @@ describe('UserSettingsService', () => {
   // onboarding namespace merge logic (issue #272, epic #271)
   // ===========================================================================
   //
-  // Field-wise like mergeNavigation, NOT wholesale like mergeDataTables: the
-  // four fields are independent decisions about four different surfaces, and
-  // the client writes exactly the one that just happened. A wholesale replace
-  // would drop the stored `skipped` list the first time a dialog was closed.
+  // Field-wise like navigation, NOT wholesale like dataTables: the four fields
+  // are independent decisions about four different surfaces, and the client
+  // writes exactly the one that just happened. A wholesale replace would drop
+  // the stored `skipped` list the first time a dialog was closed.
   //
   // Collapsing matters more here than anywhere else in this service: the epic
   // reads the PRESENCE of the namespace to decide whether this user has ever
   // been onboarded, so a stored `{}` would say "already onboarded" while
   // containing nothing.
 
-  describe('mergeOnboarding (private)', () => {
-    const mergeOnboarding = (current: unknown, patch: unknown) =>
-      (service as any).mergeOnboarding(current, patch);
-
+  describe('onboarding namespace merge', () => {
     const SEEN = '2026-09-17T10:00:00.000Z';
     const DISMISSED = '2026-09-17T11:00:00.000Z';
     const ADMIN_DISMISSED = '2026-09-17T12:00:00.000Z';
 
-    it('patch absent leaves the namespace untouched', () => {
+    it('a patch that omits the namespace leaves it untouched', async () => {
       const current = { welcomeSeenAt: SEEN };
 
-      expect(mergeOnboarding(current, undefined)).toEqual(current);
+      const result = await patchOn({ onboarding: current }, { theme: 'dark' });
+
+      expect(result.onboarding).toEqual(current);
     });
 
-    it('an omitted field is left untouched', () => {
+    it('an omitted field is left untouched', async () => {
       const current = { welcomeSeenAt: SEEN, dismissedAt: DISMISSED };
 
-      expect(mergeOnboarding(current, {})).toEqual(current);
+      const result = await patchOn({ onboarding: current }, { onboarding: {} });
+
+      expect(result.onboarding).toEqual(current);
     });
 
-    it('setting one field leaves the other three alone', () => {
+    it('setting one field leaves the other three alone', async () => {
       const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
 
-      expect(mergeOnboarding(current, { dismissedAt: DISMISSED })).toEqual({
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { dismissedAt: DISMISSED } },
+      );
+
+      expect(result.onboarding).toEqual({
         welcomeSeenAt: SEEN,
         dismissedAt: DISMISSED,
         skipped: ['configure_oauth'],
@@ -810,7 +885,7 @@ describe('UserSettingsService', () => {
     // THE `!== undefined` CONVENTION, not `??`. With `??` an explicit `null`
     // would read as "not provided" and the stored value would survive - an
     // un-dismiss request that returns 200 and changes nothing.
-    it('dismissedAt: null deletes ONLY that field, leaving the others', () => {
+    it('dismissedAt: null deletes ONLY that field, leaving the others', async () => {
       const current = {
         welcomeSeenAt: SEEN,
         dismissedAt: DISMISSED,
@@ -818,82 +893,102 @@ describe('UserSettingsService', () => {
         skipped: ['configure_oauth'],
       };
 
-      expect(mergeOnboarding(current, { dismissedAt: null })).toEqual({
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { dismissedAt: null } },
+      );
+
+      expect(result.onboarding).toEqual({
         welcomeSeenAt: SEEN,
         adminDismissedAt: ADMIN_DISMISSED,
         skipped: ['configure_oauth'],
       });
     });
 
-    it('adminDismissedAt: null does not disturb dismissedAt - the two surfaces are separate', () => {
+    it('adminDismissedAt: null does not disturb dismissedAt - the two surfaces are separate', async () => {
       const current = {
         dismissedAt: DISMISSED,
         adminDismissedAt: ADMIN_DISMISSED,
       };
 
-      expect(mergeOnboarding(current, { adminDismissedAt: null })).toEqual({
-        dismissedAt: DISMISSED,
-      });
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { adminDismissedAt: null } },
+      );
+
+      expect(result.onboarding).toEqual({ dismissedAt: DISMISSED });
     });
 
-    it('skipped is REPLACED wholesale when present - it is one list, not a set of independent keys', () => {
+    it('skipped is REPLACED wholesale when present - it is one list, not a set of independent keys', async () => {
       const current = { skipped: ['configure_oauth', 'invite_users'] };
 
-      expect(mergeOnboarding(current, { skipped: ['add_ai_key'] })).toEqual({
-        skipped: ['add_ai_key'],
-      });
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { skipped: ['add_ai_key'] } },
+      );
+
+      expect(result.onboarding).toEqual({ skipped: ['add_ai_key'] });
     });
 
-    it('skipped: null deletes the list, leaving the timestamps', () => {
+    it('skipped: null deletes the list, leaving the timestamps', async () => {
       const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
 
-      expect(mergeOnboarding(current, { skipped: null })).toEqual({
-        welcomeSeenAt: SEEN,
-      });
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { skipped: null } },
+      );
+
+      expect(result.onboarding).toEqual({ welcomeSeenAt: SEEN });
     });
 
     // "Has skipped nothing" and "has never skipped anything" are the same
     // fact; storing `[]` would be a second spelling of it for the read path to
     // disagree with.
-    it('an empty skipped array is normalised to absent rather than stored as []', () => {
+    it('an empty skipped array is normalised to absent rather than stored as []', async () => {
       const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
 
-      const result = mergeOnboarding(current, { skipped: [] });
+      const result = await patchOn(
+        { onboarding: current },
+        { onboarding: { skipped: [] } },
+      );
 
-      expect(result).toEqual({ welcomeSeenAt: SEEN });
-      expect(result).not.toHaveProperty('skipped');
+      expect(result.onboarding).toEqual({ welcomeSeenAt: SEEN });
+      expect(result.onboarding).not.toHaveProperty('skipped');
     });
 
-    it('onboarding: null clears the whole namespace, restoring "never onboarded"', () => {
+    it('onboarding: null clears the whole namespace, restoring "never onboarded"', async () => {
+      const result = await patchOn(
+        { onboarding: { welcomeSeenAt: SEEN, dismissedAt: DISMISSED } },
+        { onboarding: null },
+      );
+
+      expect('onboarding' in result).toBe(false);
+    });
+
+    it('emptying the namespace collapses it back to absent, not {}', async () => {
+      const result = await patchOn(
+        { onboarding: { welcomeSeenAt: SEEN } },
+        { onboarding: { welcomeSeenAt: null } },
+      );
+
+      expect('onboarding' in result).toBe(false);
+    });
+
+    it('a patch of only nulls against an absent namespace stays absent', async () => {
+      const result = await patchOn(
+        {},
+        { onboarding: { welcomeSeenAt: null, skipped: null } },
+      );
+
+      expect('onboarding' in result).toBe(false);
+    });
+
+    it('does not mutate the stored value it read', async () => {
       const current = { welcomeSeenAt: SEEN, dismissedAt: DISMISSED };
 
-      expect(mergeOnboarding(current, null)).toBeUndefined();
-    });
+      await patchOn({ onboarding: current }, { onboarding: { dismissedAt: null } });
 
-    it('emptying the namespace collapses it back to absent (undefined), not {}', () => {
-      const current = { welcomeSeenAt: SEEN };
-
-      expect(mergeOnboarding(current, { welcomeSeenAt: null })).toBeUndefined();
-    });
-
-    it('a patch of only nulls against an absent namespace stays absent', () => {
-      expect(
-        mergeOnboarding(undefined, { welcomeSeenAt: null, skipped: null }),
-      ).toBeUndefined();
-    });
-
-    it('does not mutate the current value it read', () => {
-      const current = {
-        welcomeSeenAt: SEEN,
-        dismissedAt: DISMISSED,
-      };
-
-      mergeOnboarding(current, { dismissedAt: null });
-
-      expect(current).toEqual({
-        welcomeSeenAt: SEEN,
-        dismissedAt: DISMISSED,
-      });
+      expect(current).toEqual({ welcomeSeenAt: SEEN, dismissedAt: DISMISSED });
     });
   });
 
@@ -901,206 +996,200 @@ describe('UserSettingsService', () => {
   // notifications namespace merge logic (issue #126, epic #109)
   // ===========================================================================
   //
-  // mergeNotifications is private for the same reason mergeDataTables and
-  // mergeNavigation are - reached here via `(service as any)` rather than a
-  // public export, since PATCH merge semantics are an implementation detail,
-  // not part of the service's public surface.
-  //
-  // The load-bearing difference from mergeDataTables: a channel's preferences
-  // are DEEP-MERGED per event key, not replaced wholesale. See the extensive
-  // comment on mergeNotifications itself for why a wholesale replace here
-  // would be a regression (it would silently re-enable mail a user had
-  // already turned off on every unrelated toggle).
+  // The load-bearing difference from dataTables: a channel's preferences are
+  // DEEP-MERGED per event key, not replaced wholesale. A wholesale replace here
+  // would be a regression (it would silently re-enable mail a user had already
+  // turned off on every unrelated toggle).
 
-  describe('mergeNotifications (private)', () => {
-    const mergeNotifications = (current: unknown, patch: unknown) =>
-      (service as any).mergeNotifications(current, patch);
-
-    it('patch absent leaves the namespace untouched', () => {
+  describe('notifications namespace merge', () => {
+    it('a patch that omits the namespace leaves it untouched', async () => {
       const current = { email: { 'user.welcome': false } };
 
-      expect(mergeNotifications(current, undefined)).toEqual(current);
+      const result = await patchOn({ notifications: current }, { theme: 'dark' });
+
+      expect(result.notifications).toEqual(current);
     });
 
-    it('setting one key writes only that key - other channels and events remain absent', () => {
-      const result = mergeNotifications(undefined, {
-        email: { 'user.welcome': false },
-      });
+    it('setting one key writes only that key - other channels and events remain absent', async () => {
+      const result = await patchOn(
+        {},
+        { notifications: { email: { 'user.welcome': false } } },
+      );
 
-      expect(result).toEqual({ email: { 'user.welcome': false } });
-      expect(result).not.toHaveProperty('browser');
+      expect(result.notifications).toEqual({ email: { 'user.welcome': false } });
+      expect(result.notifications).not.toHaveProperty('browser');
     });
 
-    it("{ email: { 'user.welcome': null } } deletes that key, leaving sibling event keys on the same channel untouched", () => {
+    it("{ email: { 'user.welcome': null } } deletes that key, leaving sibling event keys on the same channel untouched", async () => {
       const current = {
         email: { 'user.welcome': false, 'security.role_changed': true },
       };
 
-      const result = mergeNotifications(current, {
-        email: { 'user.welcome': null },
-      });
+      const result = await patchOn(
+        { notifications: current },
+        { notifications: { email: { 'user.welcome': null } } },
+      );
 
-      expect(result).toEqual({ email: { 'security.role_changed': true } });
+      expect(result.notifications).toEqual({
+        email: { 'security.role_changed': true },
+      });
     });
 
-    it('deleting the last key in a channel removes the channel entirely, not {}', () => {
+    it('deleting the last key in a channel removes the channel entirely, not {}', async () => {
       const current = {
         email: { 'user.welcome': false },
         browser: { 'security.role_changed': true },
       };
 
-      const result = mergeNotifications(current, {
-        email: { 'user.welcome': null },
-      });
+      const result = await patchOn(
+        { notifications: current },
+        { notifications: { email: { 'user.welcome': null } } },
+      );
 
-      expect(result).toEqual({ browser: { 'security.role_changed': true } });
-      expect(result).not.toHaveProperty('email');
+      expect(result.notifications).toEqual({
+        browser: { 'security.role_changed': true },
+      });
+      expect(result.notifications).not.toHaveProperty('email');
     });
 
-    it('deleting the last key in the whole namespace collapses the result to undefined, not {}', () => {
-      const current = { email: { 'user.welcome': false } };
+    it('deleting the last key in the whole namespace collapses it to absent, not {}', async () => {
+      const result = await patchOn(
+        { notifications: { email: { 'user.welcome': false } } },
+        { notifications: { email: { 'user.welcome': null } } },
+      );
 
-      const result = mergeNotifications(current, {
-        email: { 'user.welcome': null },
-      });
-
-      expect(result).toBeUndefined();
+      expect('notifications' in result).toBe(false);
     });
 
-    it('{ email: null } clears one channel, leaving other channels untouched', () => {
+    it('{ email: null } clears one channel, leaving other channels untouched', async () => {
       const current = {
         email: { 'user.welcome': false },
         browser: { 'security.role_changed': true },
       };
 
-      const result = mergeNotifications(current, { email: null });
+      const result = await patchOn(
+        { notifications: current },
+        { notifications: { email: null } },
+      );
 
-      expect(result).toEqual({ browser: { 'security.role_changed': true } });
+      expect(result.notifications).toEqual({
+        browser: { 'security.role_changed': true },
+      });
     });
 
-    it('notifications: null clears the whole namespace', () => {
-      const current = { email: { 'user.welcome': false } };
+    it('notifications: null clears the whole namespace', async () => {
+      const result = await patchOn(
+        { notifications: { email: { 'user.welcome': false } } },
+        { notifications: null },
+      );
 
-      expect(mergeNotifications(current, null)).toBeUndefined();
+      expect('notifications' in result).toBe(false);
     });
 
-    // THE DIVERGENCE FROM mergeDataTables. A data table entry is replaced
-    // wholesale because it is one coherent view state; a channel's
-    // preferences are the opposite - a row of INDEPENDENT per-event choices -
-    // so setting one key must never disturb another already stored on the
-    // same channel. Modelled as two separate PATCHes through the full
-    // patchSettings flow (not two arguments to one merge call) because that
-    // is the actual shape #126's UI produces: one PATCH per toggle.
+    // THE DIVERGENCE FROM dataTables. A data table entry is replaced wholesale
+    // because it is one coherent view state; a channel's preferences are the
+    // opposite - a row of INDEPENDENT per-event choices - so setting one key
+    // must never disturb another already stored on the same channel. Modelled
+    // as two separate PATCHes because that is the actual shape #126's UI
+    // produces: one PATCH per toggle.
     it('a channel is deep-merged per event across two separate PATCHes, not replaced wholesale', async () => {
-      mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-        ...mockUserSettings,
-        value: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-        } as any,
-      } as any);
+      const first = await patchOn(
+        {},
+        { notifications: { email: { 'user.welcome': false } } },
+      );
 
-      let storedValue: any;
-      (mockPrisma.userSettings.update as any).mockImplementationOnce(async ({ data }: any) => {
-        storedValue = data.value;
-        return { ...mockUserSettings, value: data.value, version: 2 };
-      });
-      mockPrisma.user.update.mockResolvedValue({} as any);
+      expect(first.notifications).toEqual({ email: { 'user.welcome': false } });
 
-      await service.patchSettings(mockUserId, {
-        notifications: { email: { 'user.welcome': false } },
-      } as any);
-
-      expect(storedValue.notifications).toEqual({
-        email: { 'user.welcome': false },
-      });
-
-      // Second, independent PATCH - a different key on the SAME channel.
-      mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-        ...mockUserSettings,
-        value: storedValue,
-      } as any);
-      (mockPrisma.userSettings.update as any).mockImplementationOnce(async ({ data }: any) => {
-        storedValue = data.value;
-        return { ...mockUserSettings, value: data.value, version: 3 };
-      });
-
-      await service.patchSettings(mockUserId, {
-        notifications: { email: { 'security.role_changed': false } },
-      } as any);
+      // Second, independent PATCH - a different key on the SAME channel,
+      // on top of what the first one stored.
+      const second = await patchOn(
+        { notifications: first.notifications },
+        { notifications: { email: { 'security.role_changed': false } } },
+      );
 
       // Both keys survive - a wholesale replace would have dropped the first.
-      expect(storedValue.notifications).toEqual({
+      expect(second.notifications).toEqual({
         email: { 'user.welcome': false, 'security.role_changed': false },
       });
     });
 
-    // The implementation copies the stored namespace ONE LEVEL DEEP before
-    // mutating, precisely because a shallow `{ ...current }` would still
-    // share each per-channel object by reference, and `delete` on the copy
-    // would then mutate the caller's `current` in place.
-    it('does not mutate the current value it read - the per-channel object is copied before delete', () => {
+    // The merge copies the stored namespace ONE LEVEL DEEP before mutating,
+    // because a shallow `{ ...current }` would still share each per-channel
+    // object by reference, and `delete` on the copy would then mutate the
+    // caller's stored value in place.
+    it('does not mutate the stored value it read - the per-channel object is copied before delete', async () => {
       const current = {
         email: { 'user.welcome': false, 'security.role_changed': true },
       };
       const originalEmailRef = current.email;
 
-      const result = mergeNotifications(current, {
-        email: { 'user.welcome': null },
-      });
+      const result = await patchOn(
+        { notifications: current },
+        { notifications: { email: { 'user.welcome': null } } },
+      );
 
-      // `current` itself, and specifically the object reference for its
-      // `email` channel, must be exactly what was passed in.
       expect(current.email).toBe(originalEmailRef);
       expect(current.email).toEqual({
         'user.welcome': false,
         'security.role_changed': true,
       });
-      // The result's `email` is a DIFFERENT object from the one that was read.
-      expect(result.email).not.toBe(originalEmailRef);
-      expect(result).toEqual({ email: { 'security.role_changed': true } });
+      // What was written is a DIFFERENT object from the one that was read.
+      expect(result.notifications.email).not.toBe(originalEmailRef);
+      expect(result.notifications).toEqual({
+        email: { 'security.role_changed': true },
+      });
     });
 
-    // A stored preference disabling a mandatory event is accepted by the
-    // merge without complaint - `mandatory` is enforced only at read time by
-    // the dispatcher's resolver (#125), never here. See the extensive comment
-    // on mergeNotifications ("`mandatory` IS NOT ENFORCED HERE, DELIBERATELY").
-    it('merges a false preference for a mandatory event key without throwing - it is simply never consulted here', () => {
-      const result = mergeNotifications(undefined, {
+    // A stored preference disabling a mandatory event is accepted by the merge
+    // without complaint - `mandatory` is enforced only at read time by the
+    // dispatcher's resolver (#125), never here.
+    it('stores a false preference for a mandatory event key without complaint - it is simply never consulted here', async () => {
+      const result = await patchOn(
+        {},
+        { notifications: { email: { 'security.role_changed': false } } },
+      );
+
+      expect(result.notifications).toEqual({
         email: { 'security.role_changed': false },
       });
-
-      expect(result).toEqual({ email: { 'security.role_changed': false } });
     });
   });
 
-  describe('assertDataTableLimit (private)', () => {
-    const assertDataTableLimit = (dataTables: unknown) =>
-      (service as any).assertDataTableLimit(dataTables);
-
+  describe('dataTables cap (checked against the merged result)', () => {
     function buildTables(count: number): Record<string, {}> {
       return Object.fromEntries(
         Array.from({ length: count }, (_, i) => [`table${i}`, {}]),
       );
     }
 
-    it('does not throw at exactly the cap (40 entries)', () => {
-      expect(() => assertDataTableLimit(buildTables(40))).not.toThrow();
+    it('accepts exactly the cap (40 entries) on PATCH', async () => {
+      const result = await patchOn({}, { dataTables: buildTables(40) });
+
+      expect(Object.keys(result.dataTables)).toHaveLength(40);
     });
 
-    it('does not throw when dataTables is undefined', () => {
-      expect(() => assertDataTableLimit(undefined)).not.toThrow();
+    it('accepts exactly the cap (40 entries) on PUT', async () => {
+      stored({});
+      const captured = captureUpsertedValue();
+
+      await service.replaceSettings(mockUserId, {
+        theme: 'light',
+        profile: { imageSource: 'provider' },
+        dataTables: buildTables(40),
+      } as any);
+
+      expect(Object.keys(captured.value.dataTables)).toHaveLength(40);
     });
 
-    it('throws BadRequestException (400) - not a ZodError/500 - when the cap is exceeded', () => {
-      let caught: unknown;
-      try {
-        assertDataTableLimit(buildTables(41));
-      } catch (e) {
-        caught = e;
-      }
+    it('answers 400 - not a ZodError/500 - when the cap is exceeded', async () => {
+      stored({});
+      captureStoredValue();
 
-      expect(caught).toBeInstanceOf(BadRequestException);
+      await expect(
+        service.patchSettings(mockUserId, {
+          dataTables: buildTables(41),
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     // This is the scenario the cap actually exists for: the REQUEST BODY
@@ -1108,21 +1197,10 @@ describe('UserSettingsService', () => {
     // stored pushes the total over. The check therefore has to run on the
     // service's merged result, not on the incoming DTO.
     it('fires on the PATCH path: a 3-entry patch on top of 39 stored entries exceeds the cap', async () => {
-      mockPrisma.userSettings.findUnique.mockResolvedValue({
-        ...mockUserSettings,
-        value: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-          dataTables: buildTables(39),
-        } as any,
-      } as any);
+      stored({ dataTables: buildTables(39) });
 
       const patch = {
-        dataTables: {
-          newtable0: {},
-          newtable1: {},
-          newtable2: {},
-        },
+        dataTables: { newtable0: {}, newtable1: {}, newtable2: {} },
       };
 
       await expect(
@@ -1152,90 +1230,85 @@ describe('UserSettingsService', () => {
   // notifications namespace cap enforcement (issue #126, epic #109)
   // ===========================================================================
   //
-  // Same rationale as assertDataTableLimit above: the event key level of
+  // Same rationale as the dataTables cap above: the event key level of
   // `notifications` is an OPEN map (see the schema file's header on why event
   // keys are not validated against the registry), so without a cap a user can
   // inflate their own row without limit. Enforced PER CHANNEL, since the
   // channel level is closed by the enum and therefore already bounded.
 
-  describe('assertNotificationLimit (private)', () => {
-    const assertNotificationLimit = (notifications: unknown) =>
-      (service as any).assertNotificationLimit(notifications);
-
+  describe('notifications cap (checked against the merged result)', () => {
     function buildEvents(count: number): Record<string, boolean> {
       return Object.fromEntries(
         Array.from({ length: count }, (_, i) => [`area.event${i}`, true]),
       );
     }
 
-    it('does not throw at exactly the cap (100 events for one channel)', () => {
-      expect(() =>
-        assertNotificationLimit({ email: buildEvents(100) }),
-      ).not.toThrow();
+    it('accepts exactly the cap (100 events for one channel)', async () => {
+      const result = await patchOn(
+        {},
+        { notifications: { email: buildEvents(100) } },
+      );
+
+      expect(Object.keys(result.notifications.email)).toHaveLength(100);
     });
 
-    it('does not throw when notifications is undefined', () => {
-      expect(() => assertNotificationLimit(undefined)).not.toThrow();
+    it('answers 400 - not a ZodError/500 - when one channel exceeds the cap', async () => {
+      stored({});
+
+      await expect(
+        service.patchSettings(mockUserId, {
+          notifications: { email: buildEvents(101) },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('throws BadRequestException (400) - not a ZodError/500 - when one channel exceeds the cap', () => {
-      let caught: unknown;
-      try {
-        assertNotificationLimit({ email: buildEvents(101) });
-      } catch (e) {
-        caught = e;
-      }
+    it('checks each channel independently - one channel over the cap is refused even while another stays small', async () => {
+      stored({});
 
-      expect(caught).toBeInstanceOf(BadRequestException);
-    });
-
-    it('checks each channel independently - one channel over the cap throws even while another stays small', () => {
-      expect(() =>
-        assertNotificationLimit({
-          email: buildEvents(101),
-          browser: buildEvents(1),
-        }),
-      ).toThrow(BadRequestException);
+      await expect(
+        service.patchSettings(mockUserId, {
+          notifications: { email: buildEvents(101), browser: buildEvents(1) },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     // Issue #228 (epic #215) widened NOTIFICATION_CHANNELS from 2 members
     // (email, browser) to 3 (adding push), which moves the EFFECTIVE ceiling
     // on a user's total persisted notification preferences from 200 (100 x 2)
-    // to 300 (100 x 3). That is not a bug: `assertNotificationLimit` has no
-    // aggregate/total check anywhere - see the loop above, which enforces the
-    // cap PER CHANNEL and never sums across channels - so a third channel
-    // simply adds its own independent 100-item budget rather than eating into
-    // a shared one. This test pins that behaviour down: every channel sitting
-    // exactly at the per-channel cap simultaneously (300 preferences total)
-    // must not throw.
-    it('has no aggregate cap across channels - all three channels at the 100 cap simultaneously (300 total) does not throw', () => {
-      expect(() =>
-        assertNotificationLimit({
-          email: buildEvents(100),
-          browser: buildEvents(100),
-          push: buildEvents(100),
-        }),
-      ).not.toThrow();
+    // to 300 (100 x 3). That is not a bug: the cap has no aggregate/total
+    // check anywhere - it is enforced PER CHANNEL and never sums across
+    // channels - so a third channel simply adds its own independent 100-item
+    // budget rather than eating into a shared one. This test pins that
+    // behaviour down: every channel sitting exactly at the per-channel cap
+    // simultaneously (300 preferences total) must be accepted.
+    it('has no aggregate cap across channels - all three channels at the 100 cap simultaneously (300 total) is accepted', async () => {
+      const result = await patchOn(
+        {},
+        {
+          notifications: {
+            email: buildEvents(100),
+            browser: buildEvents(100),
+            push: buildEvents(100),
+          },
+        },
+      );
+
+      expect(Object.keys(result.notifications)).toEqual([
+        'email',
+        'browser',
+        'push',
+      ]);
     });
 
-    // Same scenario as assertDataTableLimit's PATCH test: the REQUEST BODY
-    // alone is under the cap, but merging it on top of what is already stored
-    // pushes the channel's total over, so the check has to run on the
-    // service's MERGED result rather than the incoming DTO.
+    // Same scenario as the dataTables PATCH test: the REQUEST BODY alone is
+    // under the cap, but merging it on top of what is already stored pushes
+    // the channel's total over, so the check has to run on the MERGED result
+    // rather than the incoming DTO.
     it('fires on the PATCH path: a 2-key patch on top of 99 stored email preferences exceeds the cap', async () => {
-      mockPrisma.userSettings.findUnique.mockResolvedValue({
-        ...mockUserSettings,
-        value: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-          notifications: { email: buildEvents(99) },
-        } as any,
-      } as any);
+      stored({ notifications: { email: buildEvents(99) } });
 
       const patch = {
-        notifications: {
-          email: { 'new.event1': true, 'new.event2': true },
-        },
+        notifications: { email: { 'new.event1': true, 'new.event2': true } },
       };
 
       await expect(
@@ -1261,6 +1334,7 @@ describe('UserSettingsService', () => {
     });
   });
 
+
   describe('toResponse (private, exercised via getSettings)', () => {
     it('omits dataTables and navigation from the response body when absent, rather than emitting them as undefined', async () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(
@@ -1277,7 +1351,7 @@ describe('UserSettingsService', () => {
       );
       // `'notifications' in result`, not a truthiness check on
       // `result.notifications` - `{}` and absent are two different states
-      // (see mergeNotifications), so the assertion has to distinguish them
+      // (see the notifications merge), so the assertion has to distinguish them
       // too, not just accept `undefined` either way.
       expect('notifications' in result).toBe(false);
       // The same distinction, and the one the whole of epic #271 reads: a
@@ -1315,11 +1389,10 @@ describe('UserSettingsService', () => {
   // Full PATCH round trip through the namespace-collapse rule (issue #126)
   // ===========================================================================
   //
-  // The unit-level `mergeNotifications` tests above prove the private method
-  // returns `undefined` when the last key is deleted. This test proves that
-  // result actually reaches the PERSISTED value: `patchSettings` only assigns
-  // `merged.notifications` when the merge produced something (see the
-  // `if (mergedNotifications !== undefined)` guard), so an emptied namespace
+  // The merge cases above prove an emptied notifications namespace is left out
+  // of the stored value. This test pins the same thing on the full-object
+  // collapse: `patchSettings` only assigns a namespace when its merge produced
+  // something (see the `mergedNamespace !== undefined` guard), so an emptied one
   // must be genuinely ABSENT from what is written to Prisma - not merely
   // falsy, and not `{}`, which the read path treats as a different state.
   describe('notifications: full-object collapse on the PATCH path (issue #126)', () => {
@@ -1352,8 +1425,8 @@ describe('UserSettingsService', () => {
   // onboarding on the full PATCH path (issue #272, epic #271)
   // ===========================================================================
   //
-  // The `mergeOnboarding` cases above test the private method. These drive the
-  // whole of `patchSettings`, which is where the namespace has to survive the
+  // The onboarding merge cases above cover the merge rules. These cover the
+  // rest of `patchSettings`, which is where the namespace has to survive the
   // step the merge cannot see: `userSettingsSchema.parse(merged)`. That call
   // silently STRIPS any key the canonical schema does not declare, so a
   // namespace wired into the merge but missing from the schema would pass every
@@ -1491,40 +1564,23 @@ describe('UserSettingsService', () => {
       });
     });
   });
-
   // ===========================================================================
-  // graph namespace (issue #369, epic #346)
+  // graph namespace (issue #369, epic #346; declared in the graph module, #459)
   // ===========================================================================
   //
   // Driven through the whole of `patchSettings`/`replaceSettings`, asserting
-  // against what reached Prisma — the post-merge `userSettingsSchema.parse`
-  // would silently strip a namespace the canonical schema forgot.
+  // against what reached Prisma - the post-merge `userSettingsSchema.parse`
+  // would silently strip a namespace the composed schema forgot. This service
+  // knows `graph` only as a key the registry hands it; its `graph.preferences_
+  // changed` emission is the graph module's forwarder's job and is specified in
+  // `graph/preferences/graph-preferences-change.forwarder.spec.ts`.
   describe('graph preferences namespace (issue #369)', () => {
-    const BASE = { theme: 'system', profile: { imageSource: 'provider' } };
     const DEFAULT_RESOLUTION = {
       mode: 'precheck_confident',
       autoLinkThreshold: 0.9,
       newThreshold: 0.55,
       adjudication: 'llm',
     };
-
-    function stored(value: Record<string, unknown>) {
-      mockPrisma.userSettings.findUnique.mockResolvedValue({
-        ...mockUserSettings,
-        value: { ...BASE, ...value } as any,
-      } as any);
-    }
-
-    function captureStoredValue() {
-      const captured: { value?: any } = {};
-      (mockPrisma.userSettings.update as any).mockImplementation(
-        async ({ data }: any) => {
-          captured.value = data.value;
-          return { ...mockUserSettings, value: data.value, version: 2 };
-        },
-      );
-      return captured;
-    }
 
     it('persists a single threshold, filling the rest of the sub-object from defaults', async () => {
       stored({});
@@ -1610,7 +1666,7 @@ describe('UserSettingsService', () => {
       expect('graph' in captured.value).toBe(false);
     });
 
-    it('an unrelated PATCH leaves the stored graph namespace alone and emits nothing', async () => {
+    it('an unrelated PATCH leaves the stored graph namespace alone and announces no change', async () => {
       const graph = { extraction: { autoExtract: false } };
       stored({ graph });
       const captured = captureStoredValue();
@@ -1636,6 +1692,19 @@ describe('UserSettingsService', () => {
       expect(mockEvents.emit).not.toHaveBeenCalled();
     });
 
+    it('keeps the 400 message for crossed thresholds', async () => {
+      stored({});
+      captureStoredValue();
+
+      await expect(
+        service.patchSettings(mockUserId, {
+          graph: { resolution: { autoLinkThreshold: 0.8, newThreshold: 0.8 } },
+        } as any),
+      ).rejects.toThrow(
+        'graph.resolution: newThreshold must be at least 0.05 below autoLinkThreshold (would store newThreshold 0.8, autoLinkThreshold 0.8).',
+      );
+    });
+
     it('accepts the exact 0.05 boundary despite floating-point subtraction', async () => {
       stored({});
       const captured = captureStoredValue();
@@ -1647,36 +1716,6 @@ describe('UserSettingsService', () => {
       expect(captured.value.graph.resolution.newThreshold).toBe(0.85);
     });
 
-    it('emits graph.preferences_changed naming the changed sub-objects, with resolved values', async () => {
-      stored({});
-      captureStoredValue();
-
-      await service.patchSettings(mockUserId, {
-        graph: {
-          resolution: { autoLinkThreshold: 0.93 },
-          domains: { work: false },
-        },
-      } as any);
-
-      expect(mockEvents.emit).toHaveBeenCalledTimes(1);
-      const [name, payload] = mockEvents.emit.mock.calls[0];
-      expect(name).toBe(GRAPH_PREFERENCES_CHANGED_EVENT);
-      expect(payload).toEqual({
-        userId: mockUserId,
-        changed: ['resolution', 'domains'],
-        previous: {
-          extraction: { autoExtract: true },
-          resolution: DEFAULT_RESOLUTION,
-          domains: { core: true, work: true, personal: false },
-        },
-        next: {
-          extraction: { autoExtract: true },
-          resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.93 },
-          domains: { core: true, work: false, personal: false },
-        },
-      });
-    });
-
     it('merges domains.personal like work: true enables it, null restores the default (#383)', async () => {
       stored({ graph: { domains: { work: false, personal: false } } });
       const captured = captureStoredValue();
@@ -1686,10 +1725,6 @@ describe('UserSettingsService', () => {
       } as any);
 
       expect(captured.value.graph.domains).toEqual({ work: false, personal: true });
-      const [name, payload] = mockEvents.emit.mock.calls[0];
-      expect(name).toBe(GRAPH_PREFERENCES_CHANGED_EVENT);
-      expect(payload.changed).toEqual(['domains']);
-      expect(payload.next.domains).toEqual({ core: true, work: false, personal: true });
 
       stored({ graph: { domains: { work: true, personal: true } } });
       const again = captureStoredValue();
@@ -1710,13 +1745,168 @@ describe('UserSettingsService', () => {
       expect(captured.value.graph).toEqual({ domains: { work: true, personal: true } });
     });
 
-    it('does not emit when the effective values are unchanged (explicit default over absent)', async () => {
+    it('PUT stores the namespace', async () => {
+      stored({ graph: { extraction: { autoExtract: false } } });
+      captureUpsertedValue();
+
+      const result = await service.replaceSettings(mockUserId, {
+        theme: 'system',
+        profile: { imageSource: 'provider' },
+        graph: { domains: { work: false, personal: false } },
+      } as any);
+
+      expect(result.graph).toEqual({ domains: { work: false, personal: false } });
+    });
+  });
+
+  // ===========================================================================
+  // user-settings.namespace-changed (issue #459)
+  // ===========================================================================
+  //
+  // The service no longer knows what any namespace means. After a successful
+  // PUT or PATCH it announces ONCE per registered namespace whose stored value
+  // changed (compared on `JSON.stringify` before and after), and subscribers
+  // (the graph module's forwarder) decide whether the change matters to them.
+  describe('namespace change event', () => {
+    const emitted = () =>
+      mockEvents.emit.mock.calls.map(([name, payload]) => ({ name, payload }));
+
+    it('PATCH emits once for the namespace it changed, carrying the stored before and after', async () => {
+      stored({ navigation: { railCollapsed: false } });
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        navigation: { railCollapsed: true },
+      } as any);
+
+      expect(emitted()).toEqual([
+        {
+          name: USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
+          payload: {
+            userId: mockUserId,
+            key: 'navigation',
+            previous: { railCollapsed: false },
+            next: { railCollapsed: true },
+          },
+        },
+      ]);
+    });
+
+    it('announces a namespace that was absent as previous: undefined', async () => {
       stored({});
       captureStoredValue();
 
       await service.patchSettings(mockUserId, {
-        graph: { extraction: { autoExtract: true } },
+        graph: { extraction: { autoExtract: false } },
       } as any);
+
+      expect(emitted()).toHaveLength(1);
+      expect(emitted()[0].payload).toEqual({
+        userId: mockUserId,
+        key: 'graph',
+        previous: undefined,
+        next: { extraction: { autoExtract: false } },
+      });
+    });
+
+    it('announces a cleared namespace as next: undefined', async () => {
+      stored({ navigation: { railCollapsed: true } });
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, { navigation: null } as any);
+
+      expect(emitted()).toHaveLength(1);
+      expect(emitted()[0].payload).toMatchObject({
+        key: 'navigation',
+        previous: { railCollapsed: true },
+        next: undefined,
+      });
+    });
+
+    it('emits once per changed namespace, in registration order, and not for the untouched ones', async () => {
+      stored({ navigation: { railCollapsed: true } });
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        // Deliberately listed out of registration order.
+        graph: { extraction: { autoExtract: false } },
+        dataTables: { jobs: { pageSize: 25 } },
+      } as any);
+
+      expect(emitted().map((e) => e.name)).toEqual([
+        USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
+        USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
+      ]);
+      expect(emitted().map((e: any) => e.payload.key)).toEqual([
+        'dataTables',
+        'graph',
+      ]);
+    });
+
+    it('emits nothing for a PATCH that changes no namespace (a theme toggle)', async () => {
+      stored({ navigation: { railCollapsed: true } });
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, { theme: 'dark' } as any);
+
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits nothing when a PATCH restates the stored value', async () => {
+      stored({ navigation: { railCollapsed: true } });
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        navigation: { railCollapsed: true },
+      } as any);
+
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('PUT emits for each namespace it changes, including one it drops', async () => {
+      stored({
+        navigation: { railCollapsed: true },
+        graph: { extraction: { autoExtract: false } },
+      });
+      captureUpsertedValue();
+
+      await service.replaceSettings(mockUserId, {
+        theme: 'system',
+        profile: { imageSource: 'provider' },
+        graph: { domains: { work: false, personal: false } },
+      } as any);
+
+      expect(emitted().map((e: any) => e.payload.key)).toEqual([
+        'navigation',
+        'graph',
+      ]);
+      expect(emitted()[0].payload).toMatchObject({
+        previous: { railCollapsed: true },
+        next: undefined,
+      });
+    });
+
+    it('PUT emits nothing when it restates the stored namespaces', async () => {
+      stored({ navigation: { railCollapsed: true } });
+      captureUpsertedValue();
+
+      await service.replaceSettings(mockUserId, {
+        theme: 'system',
+        profile: { imageSource: 'provider' },
+        navigation: { railCollapsed: true },
+      } as any);
+
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits only after the write succeeded: a refused write announces nothing', async () => {
+      stored({});
+
+      await expect(
+        service.patchSettings(mockUserId, {
+          graph: { resolution: { autoLinkThreshold: 0.8, newThreshold: 0.8 } },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(mockEvents.emit).not.toHaveBeenCalled();
     });
@@ -1733,27 +1923,6 @@ describe('UserSettingsService', () => {
           graph: { extraction: { autoExtract: false } },
         } as any),
       ).resolves.toMatchObject({ graph: { extraction: { autoExtract: false } } });
-    });
-
-    it('PUT stores the namespace and emits for the sub-objects it changed', async () => {
-      stored({ graph: { extraction: { autoExtract: false } } });
-      (mockPrisma.userSettings.upsert as any).mockImplementation(async ({ update }: any) => ({
-        ...mockUserSettings,
-        value: update.value,
-        version: 2,
-      }));
-
-      const result = await service.replaceSettings(mockUserId, {
-        theme: 'system',
-        profile: { imageSource: 'provider' },
-        graph: { domains: { work: false, personal: false } },
-      } as any);
-
-      expect(result.graph).toEqual({ domains: { work: false, personal: false } });
-      expect(mockEvents.emit).toHaveBeenCalledWith(
-        GRAPH_PREFERENCES_CHANGED_EVENT,
-        expect.objectContaining({ changed: ['extraction', 'domains'] }),
-      );
     });
   });
 });

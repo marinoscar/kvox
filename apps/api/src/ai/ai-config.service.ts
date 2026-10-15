@@ -6,7 +6,7 @@ import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
 import { AI_TASK_KEYS, type SystemAiValue } from './ai-settings.schema';
 import { chooseTaskModel, taskDefinition } from './ai-task-models';
-import { computeTokenBudget } from '../notes/generation/token-budget';
+import { computeTokenBudget } from './ai-token-budget';
 import type {
   AiConfigResponse,
   AiConfigModel,

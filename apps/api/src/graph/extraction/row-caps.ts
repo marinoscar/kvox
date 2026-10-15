@@ -18,7 +18,7 @@
 // =============================================================================
 
 import type { AiReasoningEffort } from '../../ai/ai-settings.schema';
-import { REASONING_HEADROOM_TOKENS } from '../../notes/generation/token-budget';
+import { REASONING_HEADROOM_TOKENS } from '../../ai/ai-token-budget';
 
 /** A generous estimate of what one cited extraction row costs in output tokens. */
 export const EXTRACTION_TOKENS_PER_ROW = 160;
