@@ -43,6 +43,7 @@ describe.each(GENERATION_CASES)('resolveForGeneration ≡ resolveModel: $name', 
       resolver,
       {} as never, // TranscriptAccessService
       {} as never, // NoteAccessService
+      {} as never, // LegacyObjectOwnershipStore (PLATFORM-ADOPTION-SHIM(#469))
     );
 
     const outcome = await outcomeOf(notes.resolveModel('u1', c.requested, c.intent));
@@ -58,6 +59,7 @@ describe('NoteGenerationRequestService.resolveModel — the resolution it return
     const notes = new NoteGenerationRequestService(
       {} as never,
       resolver,
+      {} as never,
       {} as never,
       {} as never,
     );

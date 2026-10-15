@@ -59,6 +59,8 @@ import { PdfTranscriptExporter } from '../../src/transcripts/export/pdf.exporter
 import { ORDINAL_GAP, OP_TYPES } from '../../src/transcripts/editing';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
+import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('transcript-export.db.spec');
 
@@ -113,6 +115,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       } as unknown as ObjectsService,
       new ConfigService({}),
       storage,
+      new LegacyObjectOwnershipStore(service as never),
     );
 
     const materialize = new TranscriptMaterializeService(service, objects);
@@ -198,7 +201,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       isActive: true,
     };
 
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),
@@ -506,7 +509,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       // of not buffering the document.
       expect(Number(object.size)).toBeGreaterThan(1_000);
       expect(object.mimeType).toBe('application/pdf');
-      expect(object.managedBy).toBe('transcripts');
+      expect(await managedByOf(prisma, object.id)).toBe('transcripts');
       // Attributed to the requester, not to whoever ran the worker.
       expect(object.uploadedById).toBe(ownerId);
 

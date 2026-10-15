@@ -54,6 +54,8 @@ import { resolveDbSuite } from '../../jobs/db-test-support';
 import { buildServices } from '../kg-proposal-db-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { importFixture, type ImportFixture } from './import-fixtures';
+import { LegacyObjectOwnershipStore } from '../../../src/storage/legacy-object-ownership.store';
+import { createStorageObject } from '../../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('import-roundtrip.db.spec');
 
@@ -77,8 +79,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
       const done = new Promise((resolve, reject) => {
         body.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
-          prisma.storageObject
-            .create({
+          createStorageObject(prisma, {
               data: {
                 name: input.name,
                 size: BigInt(Buffer.byteLength(text)),
@@ -132,7 +133,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const users = await prisma.user.findMany({ where: { email: { startsWith: EMAIL_PREFIX } }, select: { id: true } });
     for (const { id } of users) {
       await prisma.kgExport.deleteMany({ where: { ownerId: id } });
-      await new KgPurgeService(db, objects).purgeAll(id);
+      await new KgPurgeService(db, objects, new LegacyObjectOwnershipStore(db as never)).purgeAll(id);
       await prisma.auditEvent.deleteMany({ where: { actorUserId: id } });
     }
     await prisma.kgAttributeDef.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
@@ -305,8 +306,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
         const done = new Promise((resolve, reject) => {
           body.on('end', () => {
             uploads.set(input.storageKey, Buffer.concat(chunks).toString('utf8'));
-            prisma.storageObject
-              .create({ data: { name: input.name, size: 1n, mimeType: input.mimeType, storageKey: input.storageKey, managedBy: 'graph', status: 'ready', uploadedById: input.ownerId } })
+            createStorageObject(prisma, { data: { name: input.name, size: 1n, mimeType: input.mimeType, storageKey: input.storageKey, managedBy: 'graph', status: 'ready', uploadedById: input.ownerId } })
               .then(resolve, reject);
           });
         });

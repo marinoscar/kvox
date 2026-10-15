@@ -39,9 +39,12 @@
 // other schema in this API reaches the OpenAPI document.
 // =============================================================================
 
-import { JobReason, JobStatus } from '@prisma/client';
+import { JobStatus } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+
+// PLATFORM-ADOPTION-SHIM(#468): `JobReason` is no longer a Prisma export.
+import type { JobReason } from '../jobs.service';
 
 /**
  * The four `JobStatus` values, as a tuple Zod can build an enum from.

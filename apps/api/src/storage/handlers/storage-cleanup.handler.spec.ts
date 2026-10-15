@@ -17,6 +17,7 @@ import type { Job } from '@prisma/client';
 
 import { StorageCleanupHandler } from './storage-cleanup.handler';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
 import type { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { StorageProvider } from '../providers';
 
@@ -36,7 +37,19 @@ function makeHandler(options: {
   abort?: jest.Mock;
   deleteRow?: jest.Mock;
 }) {
-  const findMany = jest.fn().mockResolvedValue(options.candidates ?? []);
+  const candidates = options.candidates ?? [];
+
+  // PLATFORM-ADOPTION-SHIM(#469): the legacy store picks the stale, unmanaged
+  // ids (honouring `updatedBefore` the way the SQL does); Prisma loads them.
+  const selectObjectIds = jest.fn(async (filter: { updatedBefore?: Date }) =>
+    candidates
+      .filter((c) => !filter.updatedBefore || c.updatedAt < filter.updatedBefore)
+      .map((c) => c.id),
+  );
+  const findMany = jest.fn(async (args: { where: { id: { in: string[] } } }) =>
+    candidates.filter((c) => args.where.id.in.includes(c.id)),
+  );
+  const ownership = { selectObjectIds } as unknown as LegacyObjectOwnershipStore;
   const deleteRow = options.deleteRow ?? jest.fn().mockResolvedValue({});
 
   const prisma = {
@@ -61,9 +74,10 @@ function makeHandler(options: {
     prisma,
     storageProvider,
     config,
+    ownership,
   );
 
-  return { handler, findMany, deleteRow, abortMultipartUpload, registry };
+  return { handler, findMany, selectObjectIds, deleteRow, abortMultipartUpload, registry };
 }
 
 const stale = (hoursAgo: number, overrides: Partial<Candidate> = {}): Candidate => ({
@@ -93,44 +107,44 @@ describe('StorageCleanupHandler', () => {
 
   // ⚠ THE CENTRAL ASSERTION. On `updatedAt`, not `createdAt`.
   it('selects candidates by last activity, not by when the upload started', async () => {
-    const { handler, findMany } = makeHandler({ staleUploadHours: 72 });
+    const { handler, selectObjectIds } = makeHandler({ staleUploadHours: 72 });
 
     await handler.sweep();
 
-    const where = findMany.mock.calls[0][0].where;
+    const filter = selectObjectIds.mock.calls[0][0] as Record<string, unknown>;
 
-    expect(where.status).toEqual({ in: ['pending', 'uploading'] });
-    expect(where.updatedAt).toEqual({ lt: new Date(NOW.getTime() - 72 * HOUR) });
-    expect(where.createdAt).toBeUndefined();
+    expect(filter.statuses).toEqual(['pending', 'uploading']);
+    expect(filter.updatedBefore).toEqual(new Date(NOW.getTime() - 72 * HOUR));
+    expect(filter.createdAt).toBeUndefined();
   });
 
   // Issue #322: a managed object belongs to its module, whose `Restrict` FK
   // would reject the delete; that module reconciles its own uploads.
   it('never selects managed objects', async () => {
-    const { handler, findMany } = makeHandler({ staleUploadHours: 72 });
+    const { handler, selectObjectIds } = makeHandler({ staleUploadHours: 72 });
 
     await handler.sweep();
 
-    expect(findMany.mock.calls[0][0].where.managedBy).toBeNull();
+    expect(selectObjectIds.mock.calls[0][0]).toMatchObject({ managed: 'unmanaged' });
   });
 
   it('defaults the window to 72 hours when nothing is configured', async () => {
-    const { handler, findMany } = makeHandler({});
+    const { handler, selectObjectIds } = makeHandler({});
 
     await handler.sweep();
 
-    expect(findMany.mock.calls[0][0].where.updatedAt).toEqual({
-      lt: new Date(NOW.getTime() - 72 * HOUR),
+    expect(selectObjectIds.mock.calls[0][0]).toMatchObject({
+      updatedBefore: new Date(NOW.getTime() - 72 * HOUR),
     });
   });
 
   it('honours a shorter configured window', async () => {
-    const { handler, findMany } = makeHandler({ staleUploadHours: 6 });
+    const { handler, selectObjectIds } = makeHandler({ staleUploadHours: 6 });
 
     await handler.sweep();
 
-    expect(findMany.mock.calls[0][0].where.updatedAt).toEqual({
-      lt: new Date(NOW.getTime() - 6 * HOUR),
+    expect(selectObjectIds.mock.calls[0][0]).toMatchObject({
+      updatedBefore: new Date(NOW.getTime() - 6 * HOUR),
     });
   });
 
@@ -141,18 +155,11 @@ describe('StorageCleanupHandler', () => {
     const recent = stale(2); // touched two hours ago
     const abandoned = stale(100); // untouched for four days
 
-    const findMany = jest.fn().mockImplementation(async (args: any) => {
-      const cutoff: Date = args.where.updatedAt.lt;
-
-      return [recent, abandoned].filter((row) => row.updatedAt < cutoff);
-    });
-
+    // The fake store applies `updatedBefore` the way the SQL does.
     const { handler, deleteRow, abortMultipartUpload } = makeHandler({
+      candidates: [recent, abandoned],
       staleUploadHours: 72,
     });
-
-    (handler as unknown as { prisma: { storageObject: { findMany: jest.Mock } } })
-      .prisma.storageObject.findMany = findMany;
 
     const result = await handler.sweep();
 

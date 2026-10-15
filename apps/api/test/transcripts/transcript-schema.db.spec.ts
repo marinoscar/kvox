@@ -48,6 +48,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const HAND_WRITTEN_INDEX_NAMES = ['transcript_speakers_transcript_id_label_key'];
 
@@ -152,7 +153,7 @@ describeWithDb('Transcript schema (real Postgres)', () => {
   }
 
   async function createSourceObject(uploadedById: string, suffix: string) {
-    return prisma.storageObject.create({
+    return createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),

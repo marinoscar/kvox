@@ -48,14 +48,25 @@ function harness() {
   // destroys rather than trusting the per-item purge jobs to get there.
   const searchIndex = { forgetOwnerDocuments: jest.fn().mockResolvedValue(0) };
 
+  // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is read from the legacy store;
+  // by default every object is owned by the notes module.
+  const ownership = {
+    getManagedBy: jest.fn(async (ids: readonly string[]) => {
+      const owners = new Map<string, string | null>();
+      for (const id of ids) owners.set(id, NOTES_MANAGED_BY);
+      return owners;
+    }),
+  };
+
   const hooks = new NotesUserDataHooks(
     prisma as never,
     notes as never,
     templates as never,
     searchIndex as never,
+    ownership as never,
   );
 
-  return { hooks, prisma, notes, templates, searchIndex };
+  return { hooks, prisma, notes, templates, searchIndex, ownership };
 }
 
 // -----------------------------------------------------------------------------
@@ -104,7 +115,7 @@ describe('NotesUserDataHooks — notes summary', () => {
   // no foreign key — so its ids are collected first and folded into the same
   // `OR`. Leaving it out would understate the figure by the text of every PDF.
   it('folds the extracted-text sidecar objects into the same aggregate, scoped to the notes module', async () => {
-    const { hooks, prisma } = harness();
+    const { hooks, prisma, ownership } = harness();
     prisma.note.findMany.mockResolvedValue([
       { sourceObject: { metadata: { extractedObjectId: 'extracted-1' } } },
       { sourceObject: { metadata: {} } },
@@ -119,8 +130,22 @@ describe('NotesUserDataHooks — notes summary', () => {
     });
 
     const { where } = prisma.storageObject.aggregate.mock.calls[0][0];
-    expect(where.OR).toContainEqual({ id: { in: ['extracted-1'] }, managedBy: NOTES_MANAGED_BY });
+    expect(ownership.getManagedBy).toHaveBeenCalledWith(['extracted-1']);
+    expect(where.OR).toContainEqual({ id: { in: ['extracted-1'] } });
     expect(where.OR).toHaveLength(3);
+  });
+
+  it('drops a sidecar id the notes module does not own', async () => {
+    const { hooks, prisma, ownership } = harness();
+    prisma.note.findMany.mockResolvedValue([
+      { sourceObject: { metadata: { extractedObjectId: 'foreign-1' } } },
+    ]);
+    ownership.getManagedBy.mockResolvedValue(new Map([['foreign-1', 'transcripts']]));
+
+    await hooks.summarizeNotes(USER_ID);
+
+    const { where } = prisma.storageObject.aggregate.mock.calls[0][0];
+    expect(where.OR).toHaveLength(2);
   });
 
   it('omits the sidecar branch entirely when there is none — never an empty `in` list inside an OR', async () => {

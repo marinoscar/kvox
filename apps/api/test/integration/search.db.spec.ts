@@ -72,6 +72,7 @@ import type {
 } from '../../src/search/search-semantic';
 import { MIN_SEMANTIC_SIMILARITY, SearchService } from '../../src/search/search.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb } = resolveDbSuite('search.db.spec');
 
@@ -197,7 +198,7 @@ describeWithDb('GET /api/search (real Postgres)', () => {
     title: string,
     options: { deletedAt?: Date } = {},
   ) {
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),

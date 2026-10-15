@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { LegacyAllowlistReminderStore } from './legacy-allowlist-reminder.store';
 import { AddEmailDto } from './dto/add-email.dto';
 import { AllowlistQueryDto } from './dto/allowlist-query.dto';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -23,7 +24,24 @@ export class AllowlistService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly reminders: LegacyAllowlistReminderStore,
   ) {}
+
+  /**
+   * PLATFORM-ADOPTION-SHIM(#465): the composed Prisma client has no
+   * `reminderCount` / `lastReminderAt`, so the response's two reminder fields
+   * are joined in from the legacy store.
+   */
+  private async withReminders<T extends { id: string }>(
+    entries: T[],
+  ): Promise<Array<T & { reminderCount: number; lastReminderAt: Date | null }>> {
+    const state = await this.reminders.get(entries.map((entry) => entry.id));
+    return entries.map((entry) => ({
+      ...entry,
+      reminderCount: state.get(entry.id)?.reminderCount ?? 0,
+      lastReminderAt: state.get(entry.id)?.lastReminderAt ?? null,
+    }));
+  }
 
   /**
    * List allowed emails with pagination and filtering
@@ -71,7 +89,7 @@ export class AllowlistService {
     ]);
 
     return {
-      items,
+      items: await this.withReminders(items),
       total,
       page,
       pageSize,
@@ -177,7 +195,8 @@ export class AllowlistService {
     // can surface it.
     await this.notifications.notifyAddress('allowlist.invitation', email, payload);
 
-    return entry;
+    const [withReminder] = await this.withReminders([entry]);
+    return withReminder;
   }
 
   /**
@@ -246,12 +265,12 @@ export class AllowlistService {
     // and the row would record one reminder where two were sent. `increment`
     // is resolved by PostgreSQL against the row it is updating, which has no
     // such window.
-    const updated = await this.prisma.allowedEmail.update({
+    // PLATFORM-ADOPTION-SHIM(#465): the increment goes through the legacy
+    // store (raw SQL, still `reminder_count = reminder_count + 1`), then the
+    // entry is re-read for the relations.
+    const reminder = await this.reminders.increment(id, new Date());
+    const refreshed = await this.prisma.allowedEmail.findUniqueOrThrow({
       where: { id },
-      data: {
-        reminderCount: { increment: 1 },
-        lastReminderAt: new Date(),
-      },
       include: {
         addedBy: {
           select: {
@@ -267,6 +286,7 @@ export class AllowlistService {
         },
       },
     });
+    const updated = { ...refreshed, ...reminder };
 
     // Audited, exactly as `addEmail` and `removeEmail` are: sending mail to
     // somebody outside this deployment on an administrator's authority is an

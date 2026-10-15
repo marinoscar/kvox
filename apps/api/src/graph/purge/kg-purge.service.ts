@@ -82,6 +82,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { LegacyObjectOwnershipStore } from '../../storage/legacy-object-ownership.store';
 import { GraphObjectsService } from '../graph-objects.service';
 import { graphImportStoragePrefix } from '../import/graph-import.constants';
 import { GRAPH_MANAGED_BY } from '../job-types';
@@ -210,6 +211,8 @@ export class KgPurgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly objects: GraphObjectsService,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   // ===========================================================================
@@ -572,16 +575,19 @@ export class KgPurgeService {
    */
   private async purgeImports(userId: string, counts: KgPurgeCounts): Promise<void> {
     for (let batch = 0; batch < KG_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.storageObject.findMany({
-        where: { uploadedById: userId, managedBy: GRAPH_MANAGED_BY, storageKey: { startsWith: graphImportStoragePrefix(userId) } },
-        select: { id: true },
-        orderBy: { id: 'asc' },
-        take: KG_PURGE_BATCH,
-      });
-      if (rows.length === 0) return;
+      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is filtered by the legacy store.
+      const ids = await this.ownership.selectObjectIds(
+        {
+          managed: { by: GRAPH_MANAGED_BY },
+          uploadedById: userId,
+          storageKeyPrefix: graphImportStoragePrefix(userId),
+        },
+        { orderBy: 'id', order: 'asc', take: KG_PURGE_BATCH },
+      );
+      if (ids.length === 0) return;
       let deleted = 0;
-      for (const row of rows) {
-        if (await this.objects.deleteIfPresent(row.id)) deleted += 1;
+      for (const id of ids) {
+        if (await this.objects.deleteIfPresent(id)) deleted += 1;
       }
       counts.imports += deleted;
       // Nothing could be deleted this round: stop rather than spin on the same rows.

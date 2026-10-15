@@ -29,7 +29,19 @@ describe('Allowlist (Integration)', () => {
   beforeEach(async () => {
     resetPrismaMock();
     setupBaseMocks();
+    // PLATFORM-ADOPTION-SHIM(#465): the reminder columns are read and written
+    // with raw SQL by `LegacyAllowlistReminderStore`; no reminders by default.
+    context.prismaMock.$queryRaw.mockResolvedValue([]);
   });
+
+  // PLATFORM-ADOPTION-SHIM(#465): the reminder write is the store's
+  // `UPDATE ... RETURNING` (a raw query); the entry is then re-read.
+  const mockReminderWrite = (updated: { reminderCount: number; lastReminderAt: Date | null }) => {
+    context.prismaMock.$queryRaw.mockResolvedValue([
+      { reminder_count: updated.reminderCount, last_reminder_at: updated.lastReminderAt },
+    ]);
+    context.prismaMock.allowedEmail.findUniqueOrThrow.mockResolvedValue(updated as never);
+  };
 
   describe('GET /api/allowlist', () => {
     it('should return 401 if not authenticated', async () => {
@@ -506,7 +518,7 @@ describe('Allowlist (Integration)', () => {
       });
 
       context.prismaMock.allowedEmail.findUnique.mockResolvedValue(entry);
-      context.prismaMock.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...entry,
         reminderCount: 2,
         lastReminderAt: new Date('2026-02-01T09:00:00Z'),
@@ -519,15 +531,13 @@ describe('Allowlist (Integration)', () => {
 
       expect(response.body.data).toHaveProperty('reminderCount', 2);
       expect(response.body.data).toHaveProperty('lastReminderAt');
-      expect(context.prismaMock.allowedEmail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: entry.id },
-          data: expect.objectContaining({
-            reminderCount: { increment: 1 },
-            lastReminderAt: expect.any(Date),
-          }),
-        }),
-      );
+      // One `UPDATE ... SET reminder_count = reminder_count + 1` through the
+      // legacy store, not a Prisma `update`.
+      expect(context.prismaMock.allowedEmail.update).not.toHaveBeenCalled();
+      const [strings] = context.prismaMock.$queryRaw.mock.calls.find(([q]: any) =>
+        Array.isArray(q) && q.join('?').includes('reminder_count + 1'),
+      ) as [string[]];
+      expect(strings.join('?')).toContain('reminder_count = reminder_count + 1');
     });
 
     it('should return 409 when the entry has already been claimed', async () => {
@@ -550,7 +560,7 @@ describe('Allowlist (Integration)', () => {
         .set(authHeader(admin.accessToken))
         .expect(409);
 
-      expect(context.prismaMock.allowedEmail.update).not.toHaveBeenCalled();
+      expect(context.prismaMock.$queryRaw).not.toHaveBeenCalledWith(expect.arrayContaining([expect.stringContaining('reminder_count + 1')]));
     });
 
     it('should return 404 for an id that does not exist', async () => {
@@ -563,7 +573,7 @@ describe('Allowlist (Integration)', () => {
         .set(authHeader(admin.accessToken))
         .expect(404);
 
-      expect(context.prismaMock.allowedEmail.update).not.toHaveBeenCalled();
+      expect(context.prismaMock.$queryRaw).not.toHaveBeenCalledWith(expect.arrayContaining([expect.stringContaining('reminder_count + 1')]));
     });
 
     it('should create an audit event naming the administrator who asked', async () => {
@@ -575,7 +585,7 @@ describe('Allowlist (Integration)', () => {
       });
 
       context.prismaMock.allowedEmail.findUnique.mockResolvedValue(entry);
-      context.prismaMock.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...entry,
         reminderCount: 1,
         lastReminderAt: new Date(),

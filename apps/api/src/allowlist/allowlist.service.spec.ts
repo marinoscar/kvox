@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AllowlistService } from './allowlist.service';
+import { LegacyAllowlistReminderStore } from './legacy-allowlist-reminder.store';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   createMockPrismaService,
@@ -20,6 +21,8 @@ describe('AllowlistService', () => {
   let mockPrisma: MockPrismaService;
   let mockNotifications: { notify: jest.Mock; notifyAddress: jest.Mock };
   let mockConfig: { get: jest.Mock };
+  // PLATFORM-ADOPTION-SHIM(#465): the reminder columns live behind a legacy store.
+  let mockReminders: { get: jest.Mock; increment: jest.Mock };
 
   const mockAddedBy = {
     id: 'admin-id',
@@ -62,6 +65,13 @@ describe('AllowlistService', () => {
       providers: [
         AllowlistService,
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: LegacyAllowlistReminderStore,
+          useValue: (mockReminders = {
+            get: jest.fn().mockResolvedValue(new Map()),
+            increment: jest.fn().mockResolvedValue({ reminderCount: 1, lastReminderAt: new Date() }),
+          }),
+        },
         // #128 wired real notification triggers into this service. The
         // dispatcher is mocked here because these tests are about the
         // service's own behaviour, not about delivery — and because `notify`
@@ -113,7 +123,13 @@ describe('AllowlistService', () => {
       const result = await service.listAllowedEmails(query);
 
       expect(result).toEqual({
-        items: [mockPendingEntry, mockClaimedEntry],
+        // PLATFORM-ADOPTION-SHIM(#465): the reminder fields come from the
+        // legacy store (none recorded here, so zero and null).
+        items: [mockPendingEntry, mockClaimedEntry].map((entry) => ({
+          ...entry,
+          reminderCount: 0,
+          lastReminderAt: null,
+        })),
         total: 2,
         page: 1,
         pageSize: 10,
@@ -295,7 +311,7 @@ describe('AllowlistService', () => {
         },
       });
 
-      expect(result).toEqual(mockPendingEntry);
+      expect(result).toEqual({ ...mockPendingEntry, reminderCount: 0, lastReminderAt: null });
     });
 
     it('should create audit event', async () => {
@@ -528,6 +544,21 @@ describe('AllowlistService', () => {
   // or not the send later succeeds.
   // ===========================================================================
   describe('sendReminder', () => {
+    // PLATFORM-ADOPTION-SHIM(#465): the write is the legacy store's `increment`
+    // (it returns the resulting count and timestamp); the entry with its
+    // relations is then re-read.
+    const mockReminderWrite = (updated: {
+      reminderCount: number;
+      lastReminderAt?: Date | null;
+      [key: string]: unknown;
+    }) => {
+      mockReminders.increment.mockResolvedValue({
+        reminderCount: updated.reminderCount,
+        lastReminderAt: updated.lastReminderAt ?? null,
+      });
+      mockPrisma.allowedEmail.findUniqueOrThrow.mockResolvedValue(updated as any);
+    };
+
     const pendingWithReminders = {
       ...mockPendingEntry,
       reminderCount: 2,
@@ -538,29 +569,26 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         lastReminderAt: new Date(),
         claimedBy: null,
-      } as any);
+      });
       mockPrisma.auditEvent.create.mockResolvedValue({} as any);
 
       const before = Date.now();
       await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
       const after = Date.now();
 
-      expect(mockPrisma.allowedEmail.update).toHaveBeenCalledTimes(1);
+      // The increment is the store's single `UPDATE ... reminder_count + 1`:
+      // two administrators pressing the button at the same moment must not
+      // both write 3.
+      expect(mockReminders.increment).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.allowedEmail.update).not.toHaveBeenCalled();
 
-      const [args] = mockPrisma.allowedEmail.update.mock.calls[0];
-      expect(args.where).toEqual({ id: pendingWithReminders.id });
-      // `increment`, not `entry.reminderCount + 1`: two administrators pressing
-      // the button at the same moment must not both write 3.
-      expect(args.data.reminderCount).toEqual({ increment: 1 });
-      // Prisma's update input widens this to `string | Date | {set: …}`; the
-      // service passes a `Date`, which is what the instanceof pins before the
-      // window check narrows it.
-      const stamped = args.data.lastReminderAt as Date;
+      const [id, stamped] = mockReminders.increment.mock.calls[0];
+      expect(id).toBe(pendingWithReminders.id);
       expect(stamped).toBeInstanceOf(Date);
       expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
       expect(stamped.getTime()).toBeLessThanOrEqual(after);
@@ -577,7 +605,7 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue(updated as any);
+      mockReminderWrite(updated as any);
       mockPrisma.auditEvent.create.mockResolvedValue({} as any);
 
       const result = await service.sendReminder(
@@ -585,7 +613,7 @@ describe('AllowlistService', () => {
         mockAddedBy.id,
       );
 
-      expect(result).toBe(updated);
+      expect(result).toEqual(updated);
     });
 
     it('throws ConflictException (409) for an entry that has already been claimed', async () => {
@@ -599,7 +627,7 @@ describe('AllowlistService', () => {
         service.sendReminder(mockClaimedEntry.id, mockAddedBy.id),
       ).rejects.toThrow(ConflictException);
 
-      expect(mockPrisma.allowedEmail.update).not.toHaveBeenCalled();
+      expect(mockReminders.increment).not.toHaveBeenCalled();
       expect(mockNotifications.notifyAddress).not.toHaveBeenCalled();
       expect(mockPrisma.auditEvent.create).not.toHaveBeenCalled();
     });
@@ -611,7 +639,7 @@ describe('AllowlistService', () => {
         service.sendReminder('missing-id', mockAddedBy.id),
       ).rejects.toThrow(NotFoundException);
 
-      expect(mockPrisma.allowedEmail.update).not.toHaveBeenCalled();
+      expect(mockReminders.increment).not.toHaveBeenCalled();
       expect(mockNotifications.notifyAddress).not.toHaveBeenCalled();
     });
 
@@ -620,7 +648,7 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         lastReminderAt: new Date(),
@@ -652,7 +680,7 @@ describe('AllowlistService', () => {
         ...pendingWithReminders,
         notes: 'contractor, ends in March',
       } as any);
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         claimedBy: null,
@@ -673,7 +701,7 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         claimedBy: null,
@@ -692,7 +720,7 @@ describe('AllowlistService', () => {
         ...pendingWithReminders,
         addedBy: null,
       } as any);
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         addedBy: null,
         reminderCount: 3,
@@ -710,7 +738,7 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         claimedBy: null,
@@ -740,7 +768,7 @@ describe('AllowlistService', () => {
       mockPrisma.allowedEmail.findUnique.mockResolvedValue(
         pendingWithReminders as any,
       );
-      mockPrisma.allowedEmail.update.mockResolvedValue({
+      mockReminderWrite({
         ...pendingWithReminders,
         reminderCount: 3,
         claimedBy: null,
@@ -749,7 +777,7 @@ describe('AllowlistService', () => {
 
       await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
 
-      const updateOrder = mockPrisma.allowedEmail.update.mock.invocationCallOrder[0];
+      const updateOrder = mockReminders.increment.mock.invocationCallOrder[0];
       const auditOrder = mockPrisma.auditEvent.create.mock.invocationCallOrder[0];
       const notifyOrder =
         mockNotifications.notifyAddress.mock.invocationCallOrder[0];
@@ -1132,7 +1160,13 @@ describe('AllowlistService', () => {
       const result = await service.listAllowedEmails(query);
 
       expect(result).toEqual({
-        items: [mockPendingEntry, mockClaimedEntry],
+        // PLATFORM-ADOPTION-SHIM(#465): the reminder fields come from the
+        // legacy store (none recorded here, so zero and null).
+        items: [mockPendingEntry, mockClaimedEntry].map((entry) => ({
+          ...entry,
+          reminderCount: 0,
+          lastReminderAt: null,
+        })),
         total: 2,
         page: 1,
         pageSize: 10,

@@ -31,6 +31,7 @@ import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import { NO_EXPORT_FILES } from './graph-read.fixtures';
 import { statementHash } from '../../src/graph/write/normalize';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-dedup.db.spec');
 const EMAIL_PREFIX = 'kg-dedup-test';
@@ -65,7 +66,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(env)) });
     await prisma.$connect();
     db = prisma as unknown as PrismaService;
-    purge = new KgPurgeService(db, NO_EXPORT_FILES);
+    purge = new KgPurgeService(db, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(db as never));
     const registry = new ProposalStageRegistry();
     const ontology = { effectiveSchemaFor: async () => SCHEMA };
     const candidates = new ItemCandidateService(db);

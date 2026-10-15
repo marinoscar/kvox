@@ -85,6 +85,13 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`, which the mocked client cannot answer.
+jest.mock('../../src/prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('Transcripts Integration', () => {
   let context: TestContext;
   let mockCredentials: { describe: jest.Mock; getSecret: jest.Mock };
@@ -187,11 +194,11 @@ describe('Transcripts Integration', () => {
       // The upload object is claimed by this module, which makes it invisible
       // to the generic storage listing and undeletable through the generic
       // DELETE (spec §9.3).
-      expect(prismaMock.storageObject.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ managedBy: 'transcripts' }),
-        }),
-      );
+      //
+      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is stamped by the legacy
+      // ownership store (the init-upload call is what claims the object).
+      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
+      expect(ownership.setManagedBy.mock.calls.map((call: unknown[]) => call[1])).toContain('transcripts');
     });
 
     it('is 400 for a file above the active provider\'s ceiling', async () => {

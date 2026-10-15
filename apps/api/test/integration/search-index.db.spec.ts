@@ -43,6 +43,7 @@ import {
 import { SearchIndexHandler } from '../../src/search/indexing/search-index.handler';
 import { SearchIndexService } from '../../src/search/indexing/search-index.service';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb } = resolveDbSuite('search-index.db.spec');
 
@@ -105,7 +106,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     });
     createdUserIds.push(user.id);
 
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),
