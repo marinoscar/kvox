@@ -64,6 +64,7 @@ import type {
 } from './dto/user-data.dto';
 import { userDataCategories } from './user-data.registries';
 import { resolveUserDataHook } from './user-data.support';
+import { resolveOrgId } from '@marinoscar/platform-api/identity';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 /** The job statuses that mean "a deletion is in flight for this user". */
@@ -174,6 +175,9 @@ export class UserDataService {
 
     const job = await this.jobs.enqueue({
       type: USER_DATA_PURGE_JOB_TYPE,
+      // The purge deletes the caller's `storage_objects` rows, so it runs in an
+      // organization: the default one in single-org mode.
+      orgId: await resolveOrgId(this.prisma, null, `${USER_DATA_PURGE_JOB_TYPE} enqueue`),
       reason: 'rerun',
       subjectType: USER_DATA_SUBJECT_TYPE,
       subjectId: userId,

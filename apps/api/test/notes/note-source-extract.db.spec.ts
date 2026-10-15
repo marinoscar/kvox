@@ -42,10 +42,15 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { ClaimJobsDto, NodeJobResultDto } from '../../src/nodes/dto/node-control-plane.dto';
-import { NodeUploadUrlDto } from '../../src/nodes/dto/node-data-plane.dto';
-import { NodeDataPlaneService } from '../../src/nodes/node-data-plane.service';
-import { NodesService } from '../../src/nodes/nodes.service';
+import {
+  ClaimJobsDto,
+  NodeDataPlaneService,
+  NodeJobResultDto,
+  NodesService,
+  NodeUploadUrlDto,
+} from '@marinoscar/platform-api/nodes';
+import { NodeJobInputsAdapter } from '../../src/platform/jobs/node-job-inputs.adapter';
+import { NodeObjectStoreAdapter } from '../../src/platform/jobs/node-object-store.adapter';
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../../src/notes/job-types';
 import { extractDocumentText } from '../../src/notes/extraction';
 import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
@@ -71,7 +76,7 @@ import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
 import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
 import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
+import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobScope, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 
@@ -242,6 +247,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
   let dataPlane: NodeDataPlaneService;
   let ownerId: string;
   let nodeId: string;
+  let defaultOrgId: string;
 
   const config = {
     get: (key: string, fallback?: unknown) =>
@@ -256,11 +262,14 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
     registry = new JobHandlerRegistry();
 
     const service = prisma as unknown as PrismaService;
+    const jobScope = new JobScope(prisma as never);
+    defaultOrgId = (await prisma.organization.findFirstOrThrow({ where: { isDefault: true } })).id;
 
     handler = new NoteSourceExtractHandler(
       registry,
       service,
       new NoteObjectsService(service, { deleteManagedObject: jest.fn() } as never, storage, new LegacyObjectOwnershipStore(service as never)),
+      jobScope,
       storage,
     );
 
@@ -286,7 +295,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
         getNodesPolicy: async () => ({ ...DEFAULT_SYSTEM_SETTINGS.nodes }),
       } as unknown as SystemSettingsService),
     );
-    dataPlane = new NodeDataPlaneService(service, config, nodes, storage, registry);
+    dataPlane = new NodeDataPlaneService(service, config, nodes, new NodeObjectStoreAdapter(storage), registry, new NodeJobInputsAdapter(jobScope));
 
     const owner = await prisma.user.create({
       data: { email: OWNER_EMAIL, displayName: 'note source suite' },
@@ -353,6 +362,8 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
       subjectType: STORAGE_OBJECT_SUBJECT_TYPE,
       subjectId: objectId,
       payload: { objectId },
+      // The extraction touches `storage_objects`, so the job runs in an organization.
+      orgId: defaultOrgId,
     });
 
   /**

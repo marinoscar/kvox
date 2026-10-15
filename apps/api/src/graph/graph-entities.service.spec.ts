@@ -20,6 +20,7 @@ import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-
 // =============================================================================
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
+const ORG_ID = '22222222-2222-4222-8222-222222222222';
 const ENTITY = '22222222-2222-4222-8222-222222222222';
 
 const entityRow = {
@@ -45,6 +46,7 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
   const prisma = {
     $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
     auditEvent: { create: jest.fn(async () => ({})) },
+    organization: { findFirst: jest.fn(async () => ({ id: ORG_ID })) },
   };
   const write = {
     updateEntityDetailed: jest.fn(async () => ({
@@ -109,6 +111,7 @@ describe('GraphEntitiesService', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: 'kg.embed',
       reason: 'rerun',
+      orgId: null,
       subjectType: 'user',
       subjectId: OWNER,
       skipDedup: true,
@@ -127,6 +130,7 @@ describe('GraphEntitiesService', () => {
     expect(on.jobs.enqueue).toHaveBeenCalledWith({
       type: 'kg.entity_digest',
       reason: 'backfill',
+      orgId: null,
       subjectType: 'kg_entity',
       subjectId: ENTITY,
       payload: { entityId: ENTITY, ownerId: OWNER },
@@ -216,6 +220,7 @@ describe('GraphEntitiesService.forget (#357)', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: KG_PURGE_JOB_TYPE,
       reason: 'rerun',
+      orgId: ORG_ID,
       subjectType: 'kg_entity',
       subjectId: ENTITY,
       payload: { userId: OWNER, scope: 'person', entityId: ENTITY },

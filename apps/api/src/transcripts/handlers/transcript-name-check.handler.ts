@@ -167,6 +167,8 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPT_NAME_CHECK_JOB_TYPE;
 
+  readonly label = 'Transcript name check';
+
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: TRANSCRIPT_NAME_CHECK_MAX_RUNTIME_MS,

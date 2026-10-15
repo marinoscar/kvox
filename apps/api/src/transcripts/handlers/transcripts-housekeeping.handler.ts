@@ -150,6 +150,8 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
 
   readonly type = TRANSCRIPTS_HOUSEKEEPING_JOB_TYPE;
 
+  readonly label = 'Transcript housekeeping';
+
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,

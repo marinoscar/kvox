@@ -72,6 +72,8 @@ export class TranscriptSnapshotHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPT_SNAPSHOT_JOB_TYPE;
 
+  readonly label = 'Transcript snapshot';
+
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: SNAPSHOT_MAX_RUNTIME_MS,
     maxAttempts: 3,

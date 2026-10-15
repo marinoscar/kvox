@@ -79,7 +79,13 @@ import { Prisma, type AskErrorClass, type AskFinishReason, type Job } from '@pri
 
 import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai/ai-errors';
 import { AiTaskModelResolver, type AiModelResolution } from '../../ai/ai-task-model-resolver.service';
-import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
+import {
+  type JobExecutionProfile,
+  type JobHandler,
+  JobHandlerRegistry,
+  ProviderThrottleService,
+  RateLimitError,
+} from '@marinoscar/platform-api/jobs';
 import {
   createProviderContext,
   type AiChatMessage,
@@ -200,6 +206,8 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(AskRespondHandler.name);
 
   readonly type = ASK_RESPOND_JOB_TYPE;
+
+  readonly label = 'Ask answer';
 
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = { maxRuntimeMs: ASK_RESPOND_MAX_RUNTIME_MS, maxAttempts: 1 };

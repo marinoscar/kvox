@@ -206,6 +206,7 @@ export class NoteTemplatePreviewService {
       const job = await this.jobs.enqueueWithin(tx, {
         type: NOTE_GENERATE_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: NOTE_SUBJECT_TYPE,
         subjectId: generation.id,
         payload: {

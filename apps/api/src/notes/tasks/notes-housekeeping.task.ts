@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // ⚠ THIS FILE ENQUEUES. IT DOES NOT WORK. That is CLAUDE.md rule 1, and
-// `test/jobs/cron-enqueue-only.spec.ts` reads the body of every `@Cron` method
-// under `apps/api/src` and fails the build if one of them queries, updates,
+// the platform `cron-enqueue-only` conformance suite (`test/conformance.spec.ts`)
+// reads the body of every `@Cron` method under `apps/api/src` and fails the build if one of them queries, updates,
 // deletes, or touches a storage provider. The work lives in
 // `handlers/notes-housekeeping.handler.ts`; this is the timer.
 //

@@ -29,6 +29,7 @@ describe('GraphPreferencesListener', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith({
       type: 'kg.resolve',
       reason: 'rerun',
+      orgId: null,
       subjectType: 'user',
       subjectId: USER,
       payload: { userId: USER, scope: 'all', reason: 'threshold_change' },

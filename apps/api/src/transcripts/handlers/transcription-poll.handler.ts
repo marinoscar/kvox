@@ -54,7 +54,12 @@ import {
   TranscriptPipelineService,
 } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
-import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
+import {
+  type JobExecutionProfile,
+  JobHandler,
+  JobHandlerRegistry,
+  ProviderThrottleService,
+} from '@marinoscar/platform-api/jobs';
 
 /** Two minutes. One poll is one HTTP round trip; see the file header. */
 export const POLL_MAX_RUNTIME_MS = 2 * 60 * 1000;
@@ -64,6 +69,8 @@ export class TranscriptionPollHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(TranscriptionPollHandler.name);
 
   readonly type = TRANSCRIPTION_POLL_JOB_TYPE;
+
+  readonly label = 'Transcription poll';
 
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: POLL_MAX_RUNTIME_MS,

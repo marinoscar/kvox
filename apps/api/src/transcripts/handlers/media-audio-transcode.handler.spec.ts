@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { mediaAudioTranscodeResultSchema } from '../contracts/media-audio-transcode.contract';
-import * as jobTemp from '../../jobs/job-temp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
@@ -16,7 +15,19 @@ import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { MediaAudioTranscodeHandler } from './media-audio-transcode.handler';
-import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import {
+  type JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  jobTempPath,
+} from '@marinoscar/platform-api/jobs';
+
+// `jobTempPath` is a re-export getter on the package, which `jest.spyOn` cannot
+// replace; mock the one function and keep the rest of the package real.
+jest.mock('@marinoscar/platform-api/jobs', () => ({
+  ...jest.requireActual('@marinoscar/platform-api/jobs'),
+  jobTempPath: jest.fn(),
+}));
 
 // =============================================================================
 // `media.audio.transcode` — the acceptance criteria (issue #26)
@@ -44,6 +55,7 @@ const job = (overrides: Partial<Job> = {}): Job =>
     attempts: 1,
     subjectType: 'storage_object',
     subjectId: 'obj-1',
+    orgId: 'org-1',
     payload: { transcriptId: TRANSCRIPT_ID, bitrateKbps: 96 },
     ...overrides,
   }) as unknown as Job;
@@ -93,9 +105,9 @@ describe('MediaAudioTranscodeHandler', () => {
     // never creates it either — ffmpeg does — so the mocked transcode has to,
     // and this directory is where.
     tempDir = mkdtempSync(join(tmpdir(), 'transcode-spec-'));
-    jest
-      .spyOn(jobTemp, 'jobTempPath')
-      .mockImplementation((suffix = '') => join(tempDir, `out${suffix}`));
+    (jobTempPath as jest.Mock).mockImplementation(
+      (suffix = '') => join(tempDir, `out${suffix}`),
+    );
 
     prisma = {
       transcript: {
@@ -164,6 +176,8 @@ describe('MediaAudioTranscodeHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: TranscriptionRuntimeService, useValue: runtime },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        // The scoped transaction client is the Prisma stub itself.
+        { provide: JobScope, useValue: { run: jest.fn((_job, fn) => fn(prisma)) } },
       ],
     }).compile();
 

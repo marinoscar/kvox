@@ -41,6 +41,7 @@ export class SpeakerIdentifiedListener {
       await this.jobs.enqueue({
         type: KG_SPEAKER_LINK_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: KG_SUBJECT_TRANSCRIPT,
         subjectId: event.transcriptId,
         payload: { transcriptId: event.transcriptId, actorUserId: event.actorUserId },

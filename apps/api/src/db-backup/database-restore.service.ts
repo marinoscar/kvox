@@ -1147,6 +1147,8 @@ export class DatabaseRestoreService {
         // archive to be replayed. It is not a response to an upload and it is
         // not scheduled maintenance.
         reason: 'rerun',
+        // A system job: it replays the whole database, for no organization.
+        orgId: null,
         // The SUBJECT is the backup being replayed, which is what makes the
         // dedup key refuse a second restore of the same archive. See the
         // three-guard note above for what it deliberately does NOT refuse.

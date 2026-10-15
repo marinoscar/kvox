@@ -76,6 +76,8 @@ export class TranscriptExportHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPT_EXPORT_JOB_TYPE;
 
+  readonly label = 'Transcript export';
+
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: EXPORT_MAX_RUNTIME_MS,
     maxAttempts: 2,

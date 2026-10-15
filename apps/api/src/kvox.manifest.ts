@@ -51,16 +51,6 @@ import {
   registerUserDataScope,
 } from './user-data/user-data.registries';
 
-import { ASK_JOB_TYPE_LABELS } from './ask/job-type-labels';
-import { GRAPH_JOB_TYPE_LABELS } from './graph/job-type-labels';
-import {
-  BASE_JOB_TYPE_LABELS,
-  USER_DATA_JOB_TYPE_LABELS,
-} from './jobs/job-type-labels';
-import { NOTES_JOB_TYPE_LABELS } from './notes/job-type-labels';
-import { SEARCH_JOB_TYPE_LABELS } from './search/job-type-labels';
-import { TRANSCRIPTS_JOB_TYPE_LABELS } from './transcripts/job-type-labels';
-
 import {
   BASE_ADMIN_ONBOARDING_STEPS,
   BASE_USER_ONBOARDING_STEPS,
@@ -93,7 +83,6 @@ import {
   TRANSCRIPTS_EMAIL_TEMPLATES,
   TRANSCRIPTS_NOTIFICATIONS,
 } from './transcripts/notifications/transcripts.notifications';
-import { registerJobTypeLabels } from '@marinoscar/platform-api/jobs';
 
 let registered = false;
 
@@ -108,15 +97,9 @@ if (!registered) {
   // `push_vapid`) are registered by `app-registrations/registrations.ts`.
   registerCredentialPurpose(TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF);
   // [registry:job-labels]
-  // Enumeration order reproduces the pre-registry map: base, transcripts, notes,
-  // `user.data.purge`, search, graph, ask.
-  registerJobTypeLabels(BASE_JOB_TYPE_LABELS);
-  registerJobTypeLabels(TRANSCRIPTS_JOB_TYPE_LABELS);
-  registerJobTypeLabels(NOTES_JOB_TYPE_LABELS);
-  registerJobTypeLabels(USER_DATA_JOB_TYPE_LABELS);
-  registerJobTypeLabels(SEARCH_JOB_TYPE_LABELS);
-  registerJobTypeLabels(GRAPH_JOB_TYPE_LABELS);
-  registerJobTypeLabels(ASK_JOB_TYPE_LABELS);
+  // None: since #468 every job handler declares its own `label`, which the
+  // platform registry records when the handler registers. The labels of the
+  // retired example types are registered in `app-registrations/jobs.ts`.
   // [registry:email-templates]
   // Base templates, then each domain's; notifications (next) may only bind a
   // template that is already registered. Order = `Object.keys(EMAIL_TEMPLATES)`.

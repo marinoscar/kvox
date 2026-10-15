@@ -13,6 +13,7 @@ import { NotificationStreamService } from './notification-stream.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { JobFailureNotifier } from './ops/job-failure-notifier';
+import { NodeOfflineNotifier } from './ops/node-offline-notifier';
 import { PushConfigController } from './push-config.controller';
 import { PushConfigService } from './push-config.service';
 import { PushSubscriptionService } from './push-subscription.service';
@@ -182,6 +183,8 @@ import {
     // this module keeps none on the queue. See the file's own header for why a
     // listener rather than a `notify()` inside `JobTerminalService`.
     JobFailureNotifier,
+    // PLATFORM-ADOPTION-SHIM(2.3): see the file; #470 adopts the platform's.
+    NodeOfflineNotifier,
     PushNotificationChannel,
     {
       provide: NOTIFICATION_CHANNEL_SENDERS,

@@ -45,6 +45,8 @@ describe('SearchIndexService', () => {
       expect(jobs.enqueue).toHaveBeenCalledWith({
         type: SEARCH_INDEX_JOB_TYPE,
         reason: 'upload',
+        // An AI job that touches no `storage_objects` row.
+        orgId: null,
         // The same string the chunks are stored under, and the same one every
         // other transcript job already uses for `subject_type`.
         subjectType: 'transcript',

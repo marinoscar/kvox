@@ -157,6 +157,8 @@ export class TranscriptNameCheckService {
 
     const job = await this.jobs.enqueue({
       type: TRANSCRIPT_NAME_CHECK_JOB_TYPE,
+      // An AI job: server-only, touches no `storage_objects` row.
+      orgId: null,
       // No "a user asked" member exists; `upload` would claim a lineage this
       // job does not have. Same choice `transcript.export` makes.
       reason: 'rerun',

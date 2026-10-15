@@ -58,6 +58,8 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPT_PURGE_JOB_TYPE;
 
+  readonly label = 'Transcript purge';
+
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,

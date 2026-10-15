@@ -92,6 +92,8 @@ export class SearchIndexService {
     await this.jobs.enqueue({
       type: SEARCH_INDEX_JOB_TYPE,
       reason,
+      // Embeds chunks with the owner's own AI key and touches no `storage_objects` row.
+      orgId: null,
       // The document IS the subject, and the subject type string is the same
       // one the chunks are stored under — see `SEARCH_DOC_TRANSCRIPT`.
       subjectType: documentType,

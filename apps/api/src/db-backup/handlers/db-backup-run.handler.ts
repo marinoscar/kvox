@@ -1,4 +1,4 @@
-import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, type JobSecretBroker } from '@marinoscar/platform-api/jobs';
+import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, type JobSecretBroker, type Job } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `db.backup.run` — the database dump as a queue job (issue #351, epic #345)
 // =============================================================================
@@ -137,12 +137,11 @@ import { type JobExecutionProfile, JobHandler, JobHandlerRegistry, type JobSecre
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Job } from '@prisma/client';
 
 import {
   dbBackupRunResultSchema,
   type DbBackupRunResult,
-} from '../../jobs/contracts/db-backup-run.contract';
+} from '../contracts/db-backup-run.contract';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import {
@@ -180,6 +179,7 @@ export class DatabaseBackupRunHandler implements JobHandler, OnModuleInit {
    * one of the two can own the definition. See `BACKUP_JOB_TYPE`.
    */
   readonly type = BACKUP_JOB_TYPE;
+  readonly label = 'Database backup';
 
   /**
    * The two numbers this type is unlike the rest of the queue in — and there

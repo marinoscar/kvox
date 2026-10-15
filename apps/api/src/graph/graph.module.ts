@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
-import { JobsModule } from '../jobs/jobs.module';
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchModule } from '../search/search.module';
@@ -83,7 +82,7 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, SearchModule, StorageModule, StorageProvidersModule],
+  imports: [PrismaModule, TranscriptsModule, AiModule, SearchModule, StorageModule, StorageProvidersModule],
   providers: [
     GraphAccessService,
     // #460 — the `graph` user-data category's hooks (registered by `kvox.manifest.ts`).

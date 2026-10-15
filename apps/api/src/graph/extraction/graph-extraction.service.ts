@@ -412,6 +412,7 @@ export class GraphExtractionService {
         const job = await this.jobs.enqueueWithin(tx, {
           type: KG_EXTRACT_JOB_TYPE,
           reason: reason === 'note_ready' ? 'upload' : 'rerun',
+          orgId: null,
           subjectType: KG_SUBJECT_NOTE,
           subjectId: note.id,
           priority: KG_EXTRACT_PRIORITY,

@@ -30,7 +30,7 @@
 // IT IS A JOB, AND THE `@Cron` ONLY ENQUEUES IT
 // -----------------------------------------------------------------------------
 //
-// CLAUDE.md rule 1, and `test/jobs/cron-enqueue-only.spec.ts` is its executable
+// CLAUDE.md rule 1, and the platform `cron-enqueue-only` conformance suite (`test/conformance.spec.ts`) is its executable
 // form: a `@Cron` may decide WHETHER work is due and enqueue it, never do it.
 // Everything in this file is the work; `tasks/notes-housekeeping.task.ts` is
 // six lines that queue it — with NO new exemption, because there is nothing

@@ -39,7 +39,7 @@
 //      is not. It is deliberately NOT silent truncation's error type: nothing
 //      in this module truncates.
 //
-//   5. `RateLimitError` (429) — REUSED FROM `jobs/rate-limit.error.ts`,
+//   5. `RateLimitError` (429) — REUSED FROM `@marinoscar/platform-api/jobs`,
 //      deliberately not redefined here, for the reason `transcription/errors.ts`
 //      states at length: the queue's deferral path keys off
 //      `err instanceof RateLimitError`, and a second class of the same name in
@@ -67,7 +67,7 @@
 // provider's own status/message, and token counts.
 // =============================================================================
 
-export { RateLimitError, parseRetryAfterMs } from '../jobs/rate-limit.error';
+export { RateLimitError, parseRetryAfterMs } from '@marinoscar/platform-api/jobs';
 
 /**
  * Marker carried by every terminal AI failure.

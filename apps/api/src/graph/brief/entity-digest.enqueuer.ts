@@ -49,6 +49,7 @@ export class EntityDigestEnqueuer {
     return this.jobs.enqueue({
       type: KG_ENTITY_DIGEST_JOB_TYPE,
       reason: 'backfill',
+      orgId: null,
       subjectType: KG_SUBJECT_ENTITY,
       subjectId: entityId,
       payload: { ...payload },

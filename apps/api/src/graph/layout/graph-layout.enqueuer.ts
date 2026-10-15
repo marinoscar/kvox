@@ -63,6 +63,7 @@ export class GraphLayoutEnqueuer {
     const job = await this.jobs.enqueue({
       type: KG_GRAPH_LAYOUT_JOB_TYPE,
       reason: 'rerun',
+      orgId: null,
       subjectType: KG_SUBJECT_USER,
       subjectId: ownerId,
       payload: { ownerId },
@@ -84,6 +85,7 @@ export class GraphLayoutEnqueuer {
     return this.jobs.enqueue({
       type: KG_GRAPH_LAYOUT_JOB_TYPE,
       reason: 'backfill',
+      orgId: null,
       subjectType: KG_SUBJECT_USER,
       subjectId: ownerId,
       payload: { ownerId },

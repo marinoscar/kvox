@@ -82,6 +82,8 @@ describe('KgMigrateSchedulerTask', () => {
       subjectId: A,
       payload: { ownerId: A, targetVersion: '2.0.0' },
       priority: HOUSEKEEPING_PRIORITY,
+      // A system job: housekeeping is deployment-wide work, never an organization's.
+      orgId: null,
     });
   });
 

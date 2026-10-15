@@ -86,6 +86,8 @@ export class TranscriptionIngestHandler implements JobHandler, OnModuleInit {
 
   readonly type = TRANSCRIPTION_INGEST_JOB_TYPE;
 
+  readonly label = 'Transcription ingest';
+
   readonly profile: JobExecutionProfile = {
     maxRuntimeMs: INGEST_MAX_RUNTIME_MS,
     maxAttempts: 3,

@@ -53,12 +53,11 @@
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
 import { STORAGE_PROVIDER, StorageProvider } from '../providers';
-import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { JobHandler, JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 
 /**
  * The handler key, and therefore the `Job.type` every stale-upload sweep row
@@ -89,6 +88,7 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(StorageCleanupHandler.name);
 
   readonly type = STORAGE_CLEANUP_TYPE;
+  readonly label = 'Stale upload cleanup';
 
   constructor(
     private readonly registry: JobHandlerRegistry,

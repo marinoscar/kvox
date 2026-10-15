@@ -204,9 +204,11 @@ export class BroadcastsService {
       // `backfill`, reused rather than extended, exactly as the start handler
       // does when it enqueues the first chunk: `JobReason` is a Prisma enum,
       // so a `broadcast` member would be a migration plus web-side churn for a
-      // display string. The friendly label in `job-type-labels.ts` is what
+      // display string. The handler's `label` is what
       // carries the meaning to a human reading the dashboard.
       reason: 'backfill',
+      // An announcement to every user, for no one organization.
+      orgId: null,
       subjectType: BROADCAST_SUBJECT_TYPE,
       subjectId: broadcast.id,
       // `undefined`, not `null`: the queue reads `undefined` as "let the column

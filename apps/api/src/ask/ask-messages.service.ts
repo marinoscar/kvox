@@ -118,6 +118,8 @@ export class AskMessagesService {
       const job = await this.jobs.enqueueWithin(tx, {
         type: ASK_RESPOND_JOB_TYPE,
         reason: 'upload',
+        // An AI job on the asker's own key; it touches no `storage_objects` row.
+        orgId: null,
         subjectType: ASK_MESSAGE_SUBJECT,
         subjectId: assistantRow.id,
         priority: ASK_RESPOND_PRIORITY,

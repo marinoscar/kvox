@@ -72,9 +72,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
+import { runInJobOrg } from '../job-org-scope';
 import { NoteObjectsService } from '../note-objects.service';
 import { readExtractedObjectId } from '../source-metadata';
-import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { type JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
 export class NotePurgeHandler implements JobHandler, OnModuleInit {
@@ -89,6 +90,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly objects: NoteObjectsService,
     private readonly searchIndex: SearchIndexService,
+    private readonly jobScope: JobScope,
   ) {}
 
   onModuleInit(): void {
@@ -161,7 +163,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     // The source document — ONLY if nothing else names it.
     // ------------------------------------------------------------------------
     if (sourceObjectId) {
-      removed += await this.purgeSourceDocument(note.id, sourceObjectId);
+      removed += await this.purgeSourceDocument(job, note.id, sourceObjectId);
     }
 
     // ⚠ THE SOURCE CLAUSE IS ONLY TRUE FOR THE TWO POINTERS THIS HANDLER NEVER
@@ -192,7 +194,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
    * (`{ extractedObjectId }`, spec §4.7) rather than in a sixth table, so it is
    * read back from there with the same total reader `note.generate` uses.
    */
-  private async purgeSourceDocument(noteId: string, sourceObjectId: string): Promise<number> {
+  private async purgeSourceDocument(job: Job, noteId: string, sourceObjectId: string): Promise<number> {
     const others = await this.prisma.note.count({
       where: { sourceObjectId, id: { not: noteId } },
     });
@@ -206,10 +208,12 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
       return 0;
     }
 
-    const object = await this.prisma.storageObject.findUnique({
-      where: { id: sourceObjectId },
-      select: { metadata: true },
-    });
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
+      tx.storageObject.findUnique({
+        where: { id: sourceObjectId },
+        select: { metadata: true },
+      }),
+    );
 
     const extractedObjectId = readExtractedObjectId(object?.metadata ?? null);
 

@@ -119,7 +119,7 @@ describe('db.backup.run node offload (Integration)', () => {
     expect(types).not.toContain(BACKUP_JOB_TYPE);
     // …and the fleet is otherwise unaffected: this is an intersection on one
     // type, not a switch on the node plane.
-    expect(types).toContain('example.checksum');
+    expect(types).toContain('media.audio.transcode');
   });
 
   it('is still absent with brokering ON but offload OFF — the two switches are not one switch', async () => {

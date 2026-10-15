@@ -437,6 +437,7 @@ export class ProposalCommitService {
       await this.jobs.enqueue({
         type: KG_EMBED_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: KG_SUBJECT_USER,
         subjectId: ownerId,
         skipDedup: true,
@@ -454,6 +455,7 @@ export class ProposalCommitService {
       await this.jobs.enqueue({
         type: KG_ENTITY_DIGEST_JOB_TYPE,
         reason: 'backfill',
+        orgId: null,
         subjectType: KG_SUBJECT_ENTITY,
         subjectId: entityId,
         payload: { entityId, ownerId },

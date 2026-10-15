@@ -50,12 +50,11 @@
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Job } from '@prisma/client';
 
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BROADCAST_SUBJECT_TYPE, audienceWhere } from '../broadcast-audience';
 import { BROADCAST_CHUNK_TYPE } from './broadcast-chunk.handler';
-import { JobHandler, JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
+import { JobHandler, JobHandlerRegistry, JobsService, type Job } from '@marinoscar/platform-api/jobs';
 
 /**
  * The handler key, and therefore the `Job.type` every broadcast start row
@@ -77,6 +76,7 @@ export class BroadcastStartHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(BroadcastStartHandler.name);
 
   readonly type = BROADCAST_START_TYPE;
+  readonly label = 'Broadcast start';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -238,9 +238,10 @@ export class BroadcastStartHandler implements JobHandler, OnModuleInit {
       // adding `broadcast` would be a migration, plus the web-side
       // `JOB_REASONS` array, plus DTO and OpenAPI churn — all for a display
       // string. `job-history-purge.task.ts` already makes this trade for the
-      // same reason; the friendly type label in `job-type-labels.ts` is what
+      // same reason; the handler's `label` is what
       // actually carries the meaning to a human reading the dashboard.
       reason: 'backfill',
+      orgId: null,
       subjectType: BROADCAST_SUBJECT_TYPE,
       subjectId: broadcastId,
       skipDedup: true,

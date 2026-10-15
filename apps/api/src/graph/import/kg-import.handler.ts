@@ -443,7 +443,7 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
   private async enqueueMigration(ownerId: string): Promise<void> {
     try {
       const fields = kgMigrateEnqueueFields(ownerId, this.definition.targetVersion);
-      await this.jobs.enqueue({ ...fields, reason: 'rerun', payload: fields.payload as Prisma.InputJsonValue });
+      await this.jobs.enqueue({ ...fields, reason: 'rerun', orgId: null, payload: fields.payload as Prisma.InputJsonValue });
     } catch (error) {
       this.logger.warn(`Could not queue kg.migrate for owner ${ownerId}: ${error instanceof Error ? error.message : String(error)}`);
     }

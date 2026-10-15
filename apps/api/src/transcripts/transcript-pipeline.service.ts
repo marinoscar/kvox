@@ -53,6 +53,7 @@ import {
 } from './job-types';
 import { resolveTargetBitrateKbps } from './media/audio-transcode';
 import { firstPollDelayMs } from './poll-schedule';
+import { resolveOrgId } from '@marinoscar/platform-api/identity';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /**
@@ -247,6 +248,7 @@ export class TranscriptPipelineService {
 
     await this.jobs.enqueue({
       type: TRANSCODE_JOB_TYPE,
+      orgId: await this.jobOrgId(TRANSCODE_JOB_TYPE),
       reason: 'upload',
       subjectType: 'storage_object',
       subjectId: transcript.sourceObjectId,
@@ -270,6 +272,7 @@ export class TranscriptPipelineService {
 
     await this.jobs.enqueue({
       type: TRANSCRIPTION_SUBMIT_JOB_TYPE,
+      orgId: await this.jobOrgId(TRANSCRIPTION_SUBMIT_JOB_TYPE),
       reason,
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
@@ -307,6 +310,7 @@ export class TranscriptPipelineService {
   ): Promise<void> {
     await this.jobs.enqueue({
       type: TRANSCRIPTION_POLL_JOB_TYPE,
+      orgId: null,
       reason,
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
@@ -330,6 +334,7 @@ export class TranscriptPipelineService {
   async enqueueIngest(transcriptId: string): Promise<void> {
     await this.jobs.enqueue({
       type: TRANSCRIPTION_INGEST_JOB_TYPE,
+      orgId: await this.jobOrgId(TRANSCRIPTION_INGEST_JOB_TYPE),
       reason: 'upload',
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
@@ -355,6 +360,7 @@ export class TranscriptPipelineService {
 
     await this.jobs.enqueue({
       type: TRANSCRIPT_SNAPSHOT_JOB_TYPE,
+      orgId: await this.jobOrgId(TRANSCRIPT_SNAPSHOT_JOB_TYPE),
       reason: 'upload',
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
@@ -406,6 +412,7 @@ export class TranscriptPipelineService {
   async enqueuePurge(transcriptId: string): Promise<void> {
     await this.jobs.enqueue({
       type: TRANSCRIPT_PURGE_JOB_TYPE,
+      orgId: await this.jobOrgId(TRANSCRIPT_PURGE_JOB_TYPE),
       reason: 'rerun',
       subjectType: TRANSCRIPT_SUBJECT_TYPE,
       subjectId: transcriptId,
@@ -416,6 +423,18 @@ export class TranscriptPipelineService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * The organization a storage-touching job runs in: the deployment's default
+   * organization in single-org mode, a named failure in multi-org mode (no
+   * caller organization reaches this service yet).
+   *
+   * Poll jobs pass `orgId: null` instead: they make one provider round trip
+   * and touch no `storage_objects` row.
+   */
+  private jobOrgId(jobType: string): Promise<string> {
+    return resolveOrgId(this.prisma, null, `${jobType} enqueue`);
+  }
 
   /**
    * The deployment's playback target bitrate, in kbit/s.

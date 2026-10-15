@@ -11,7 +11,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import type { DbBackupRunResult } from '../jobs/contracts/db-backup-run.contract';
+import type { DbBackupRunResult } from './contracts/db-backup-run.contract';
 import { DB_BACKUP_SWEEP_TYPE } from './handlers/db-backup-sweep.handler';
 import { resolveApiVersion } from '../openapi/version';
 import { PrismaService } from '../prisma/prisma.service';
@@ -734,6 +734,8 @@ export class DatabaseBackupRunnerService {
             // precisely by `DatabaseBackupRun.trigger`
             // (`manual`/`scheduled`/`pre_restore`).
             reason: 'backfill',
+            // A system job: it dumps the whole database, for no organization.
+            orgId: null,
             // No subject, which is what makes the dedup key constant — see
             // BACKUP_JOB_DEDUP_KEY. Dedup is deliberately left ON.
             payload: {

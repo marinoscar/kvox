@@ -34,7 +34,12 @@ import {
   type SearchDocumentType,
 } from './job-types';
 import { SearchIndexService } from './search-index.service';
-import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
+import {
+  type JobExecutionProfile,
+  type JobHandler,
+  JobHandlerRegistry,
+  ProviderThrottleService,
+} from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `search.index` (issue #188, epic #165) — the job that makes a document
@@ -184,6 +189,8 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(SearchIndexHandler.name);
 
   readonly type = SEARCH_INDEX_JOB_TYPE;
+
+  readonly label = 'Semantic indexing';
 
   /** See the header. Two numbers, and deliberately only two. */
   readonly profile: JobExecutionProfile = {

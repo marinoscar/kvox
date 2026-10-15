@@ -12,7 +12,13 @@ import {
   readSpeakersExpected,
   TranscriptionSubmitHandler,
 } from './transcription-submit.handler';
-import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
+import {
+  type JobHandler,
+  JobHandlerRegistry,
+  JobScope,
+  ProviderThrottleService,
+  RateLimitError,
+} from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcription.submit` — the four acceptance criteria (issue #25)
@@ -121,6 +127,8 @@ describe('TranscriptionSubmitHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: ProviderThrottleService, useValue: throttle },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        // The scoped transaction client is the Prisma stub itself.
+        { provide: JobScope, useValue: { run: jest.fn((_job, fn) => fn(prisma)) } },
       ],
     }).compile();
 

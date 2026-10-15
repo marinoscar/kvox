@@ -93,6 +93,7 @@ export class KgSpeakerLinkHandler implements JobHandler, OnModuleInit {
       await this.jobs.enqueue({
         type: KG_EMBED_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: KG_SUBJECT_USER,
         subjectId: ownerId,
         skipDedup: true,

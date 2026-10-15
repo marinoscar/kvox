@@ -36,6 +36,7 @@ import type { CreateGraphExportResponse, GraphExportList, KgExportView } from '.
 import { GraphExportSource } from './graph-export.source';
 import { graphExportFilename, type GraphExportFormat } from './graph-export-formats';
 import { graphFingerprint } from './graph-fingerprint';
+import { resolveOrgId } from '@marinoscar/platform-api/identity';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
 /** An export and its file live this long (spec §18.2, notes.md §8). */
@@ -127,6 +128,8 @@ export class GraphExportService {
     const job = await this.jobs.enqueue({
       type: KG_EXPORT_JOB_TYPE,
       reason: 'rerun',
+      // The render writes the file as a `storage_objects` row, so it runs in an organization.
+      orgId: await resolveOrgId(this.prisma, null, `kg.export enqueue for export ${row.id}`),
       subjectType: KG_SUBJECT_EXPORT,
       subjectId: row.id,
       payload: { mode: 'render', exportId: row.id },

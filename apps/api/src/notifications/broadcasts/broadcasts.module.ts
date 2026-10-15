@@ -66,7 +66,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
-import { JobsModule } from '../../jobs/jobs.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { NotificationsModule } from '../notifications.module';
 import { BroadcastsController } from './broadcasts.controller';
@@ -75,7 +74,7 @@ import { BroadcastChunkHandler } from './handlers/broadcast-chunk.handler';
 import { BroadcastStartHandler } from './handlers/broadcast-start.handler';
 
 @Module({
-  imports: [PrismaModule, JobsModule, NotificationsModule, ConfigModule],
+  imports: [PrismaModule, NotificationsModule, ConfigModule],
   controllers: [BroadcastsController],
   providers: [BroadcastStartHandler, BroadcastChunkHandler, BroadcastsService],
 })

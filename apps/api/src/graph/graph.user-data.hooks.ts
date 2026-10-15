@@ -13,6 +13,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { auditUserData } from '../user-data/user-data.support';
 import { KG_PURGE_JOB_TYPE, KG_SUBJECT_USER } from './job-types';
+import { resolveOrgId } from '@marinoscar/platform-api/identity';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 @Injectable()
@@ -58,6 +59,8 @@ export class GraphUserDataHooks {
     const job = await this.jobs.enqueue({
       type: KG_PURGE_JOB_TYPE,
       reason: 'rerun',
+      // The purge deletes the graph's export and import `storage_objects`, so it runs in an organization.
+      orgId: await resolveOrgId(this.prisma, null, `kg.purge enqueue for user ${userId}`),
       subjectType: KG_SUBJECT_USER,
       subjectId: userId,
       payload: { userId, scope: 'all' },

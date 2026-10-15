@@ -47,6 +47,7 @@ import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 const OBJECT_ID = 'source-object-1';
 const OWNER_ID = 'owner-1';
 const JOB_ID = 'job-1';
+const ORG_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('NoteSourceExtractHandler', () => {
   let prisma: MockPrismaService;
@@ -57,6 +58,7 @@ describe('NoteSourceExtractHandler', () => {
     recordUploaded: jest.Mock;
   };
   let handler: NoteSourceExtractHandler;
+  let jobScope: { run: jest.Mock };
 
   /** Whatever `put`/`recordUploaded` was asked to store, for the diff below. */
   let stored: { storageKey: string; text: string | null; via: 'put' | 'recordUploaded' } | null;
@@ -68,6 +70,7 @@ describe('NoteSourceExtractHandler', () => {
       subjectType: STORAGE_OBJECT_SUBJECT_TYPE,
       subjectId: OBJECT_ID,
       payload: { objectId: OBJECT_ID },
+      orgId: ORG_ID,
       ...overrides,
     } as Job;
   }
@@ -119,10 +122,13 @@ describe('NoteSourceExtractHandler', () => {
       }),
     };
 
+    jobScope = { run: jest.fn((_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma)) };
+
     handler = new NoteSourceExtractHandler(
       registry,
       prisma as never,
       objects as never,
+      jobScope as never,
       storage,
     );
   });
@@ -168,6 +174,25 @@ describe('NoteSourceExtractHandler', () => {
   // ===========================================================================
   // The server path
   // ===========================================================================
+
+  describe('organization scope', () => {
+    it('runs its `storage_objects` access in the job\'s organization', async () => {
+      prisma.storageObject.findUnique.mockResolvedValue(makeObject({ metadata: { extractedObjectId: 'x' } as never }));
+
+      await handler.process(makeJob());
+
+      expect(jobScope.run).toHaveBeenCalledWith({ id: JOB_ID, orgId: ORG_ID }, expect.any(Function));
+    });
+
+    it('resolves the default organization for a job queued before the platform queue (orgId null)', async () => {
+      prisma.organization.findFirst.mockResolvedValue({ id: ORG_ID } as never);
+      prisma.storageObject.findUnique.mockResolvedValue(makeObject({ metadata: { extractedObjectId: 'x' } as never }));
+
+      await handler.process(makeJob({ orgId: null }));
+
+      expect(jobScope.run).toHaveBeenCalledWith({ id: JOB_ID, orgId: ORG_ID }, expect.any(Function));
+    });
+  });
 
   describe('process', () => {
     it('extracts a multi-page PDF and records the link the generator reads', async () => {
@@ -438,6 +463,7 @@ describe('NoteSourceExtractHandler', () => {
         new JobHandlerRegistry(),
         prisma as never,
         objects as never,
+        jobScope as never,
         storage,
       );
       objects.recordUploaded.mockClear();

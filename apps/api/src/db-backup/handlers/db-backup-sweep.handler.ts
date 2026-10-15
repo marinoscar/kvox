@@ -1,4 +1,4 @@
-import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { JobHandler, JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 // `db.backup.sweep` — the backup subsystem's housekeeping, as a queue job
 // (issue #353, epic #345)
@@ -91,7 +91,7 @@ import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { DatabaseBackupStatus, DatabaseBackupTrigger, Job } from '@prisma/client';
+import type { DatabaseBackupStatus, DatabaseBackupTrigger } from '@prisma/client';
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
@@ -123,6 +123,7 @@ export class DatabaseBackupSweepHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(DatabaseBackupSweepHandler.name);
 
   readonly type = DB_BACKUP_SWEEP_TYPE;
+  readonly label = 'Backup sweep';
 
   constructor(
     private readonly registry: JobHandlerRegistry,

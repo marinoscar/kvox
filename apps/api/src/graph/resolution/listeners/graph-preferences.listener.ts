@@ -39,6 +39,7 @@ export class GraphPreferencesListener {
       await this.jobs.enqueue({
         type: KG_RESOLVE_JOB_TYPE,
         reason: 'rerun',
+        orgId: null,
         subjectType: KG_SUBJECT_USER,
         subjectId: event.userId,
         payload: { userId: event.userId, scope: 'all', reason: 'threshold_change' },

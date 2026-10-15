@@ -416,6 +416,7 @@ export class MergeService {
         await this.jobs.enqueue({
           type: KG_RESOLVE_JOB_TYPE,
           reason: 'rerun',
+          orgId: null,
           subjectType: KG_SUBJECT_USER,
           subjectId: input.ownerId,
           payload: { userId: input.ownerId, scope: 'entity', entityId: result.merge.mergedId, reason: 'merge_reversed' },

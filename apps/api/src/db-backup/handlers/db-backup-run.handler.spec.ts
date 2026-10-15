@@ -35,7 +35,6 @@ import { ConfigService } from '@nestjs/config';
 import { Job } from '@prisma/client';
 import { z } from 'zod';
 
-import { JOB_TYPE_LABELS } from '../../jobs/job-type-labels';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { BACKUP_JOB_TYPE } from '../db-backup-runner.service';
 import type { DatabaseBackupRunnerService } from '../db-backup-runner.service';
@@ -116,7 +115,7 @@ describe('DatabaseBackupRunHandler', () => {
   });
 
   it('has a dashboard label, so a 2am reader sees a phrase and not a dotted key', () => {
-    expect(JOB_TYPE_LABELS[BACKUP_JOB_TYPE]).toBe('Database backup');
+    expect(handler.label).toBe('Database backup');
   });
 
   describe('the profile the queue actually reads', () => {

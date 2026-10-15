@@ -19,6 +19,7 @@ import { JobsService } from '@marinoscar/platform-api/jobs';
 // =============================================================================
 
 const EXPORT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ORG_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function stripPermission(userId: string, permission: string): void {
   const original = prismaMock.user.findUnique.getMockImplementation();
@@ -76,6 +77,8 @@ describe('/api/graph/exports (integration)', () => {
     setupBaseMocks();
     enqueue?.mockRestore();
     sign?.mockRestore();
+    // The export job runs in an organization: the enqueue resolves the default one.
+    prismaMock.organization.findFirst.mockResolvedValue({ id: ORG_ID } as never);
     enqueue = jest.spyOn(context.app.get(JobsService), 'enqueue').mockResolvedValue({ id: 'job-1' } as never);
     sign = jest
       .spyOn(context.app.get(GraphObjectsService), 'signedUrlFor')
@@ -133,6 +136,7 @@ describe('/api/graph/exports (integration)', () => {
     expect(enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'kg.export',
+        orgId: ORG_ID,
         subjectType: 'kg_export',
         subjectId: EXPORT,
         payload: { mode: 'render', exportId: EXPORT },

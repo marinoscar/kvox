@@ -323,6 +323,8 @@ function harness(world: World) {
     new JobHandlerRegistry(),
     prisma as never,
     objects,
+    // The handler's `storage_objects` access runs through the job's organization scope.
+    { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) } as never,
     storage as never,
   );
 

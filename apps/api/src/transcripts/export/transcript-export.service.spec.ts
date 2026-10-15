@@ -2,7 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Transcript, TranscriptExport } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import type { JobsService } from '../../jobs/jobs.service';
+import type { JobsService } from '@marinoscar/platform-api/jobs';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TranscriptAccessService } from '../transcript-access.service';
 import { identitiesFingerprint } from '../editing/speaker-identity';
@@ -69,6 +69,8 @@ function build() {
     transcript: { findUnique: jest.fn() },
     transcriptVersion: { findUnique: jest.fn() },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    // `resolveOrgId` reads the default organization for the job's `orgId`.
+    organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-1' }) },
   };
 
   const access = {
@@ -220,6 +222,7 @@ describe('requestExport', () => {
     expect(jobs.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'transcript.export',
+        orgId: 'org-1',
         subjectType: 'transcript',
         subjectId: 'tr-1',
         priority: EXPORT_JOB_PRIORITY,

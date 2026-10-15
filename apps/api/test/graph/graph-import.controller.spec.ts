@@ -26,6 +26,7 @@ import { JobsService } from '@marinoscar/platform-api/jobs';
 const PROPOSAL = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OBJECT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const JOB = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const IMPORT_ORG = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
 function stripPermission(userId: string, permission: string): void {
   const original = prismaMock.user.findUnique.getMockImplementation();
@@ -72,6 +73,7 @@ describe('/api/graph/imports (integration)', () => {
     remove = jest.spyOn(context.app.get(GraphObjectsService), 'deleteIfPresent').mockResolvedValue(true);
     enqueueWithin = jest.spyOn(context.app.get(JobsService), 'enqueueWithin').mockResolvedValue({ id: JOB } as never);
     settings = jest.spyOn(context.app.get(AiSettingsService), 'get').mockResolvedValue({ graphEnabled: true } as never);
+    prismaMock.organization.findFirst.mockResolvedValue({ id: IMPORT_ORG } as never);
     prismaMock.kgProposal.findFirst.mockResolvedValue(null as never);
     prismaMock.kgProposal.create.mockResolvedValue({ id: PROPOSAL } as never);
     prismaMock.kgProposal.update.mockResolvedValue({ id: PROPOSAL, jobId: JOB } as never);
@@ -113,6 +115,8 @@ describe('/api/graph/imports (integration)', () => {
     expect(enqueueWithin.mock.calls[0][1]).toEqual(
       expect.objectContaining({
         type: 'kg.import',
+        // The import reads the uploaded file's `storage_objects` row, so the job runs in an organization.
+        orgId: IMPORT_ORG,
         subjectType: 'kg_proposal',
         subjectId: PROPOSAL,
         payload: { proposalId: PROPOSAL, ownerId: user.id, objectId: OBJECT, format: 'turtle' },

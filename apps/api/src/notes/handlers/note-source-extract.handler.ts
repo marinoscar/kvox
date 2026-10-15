@@ -91,8 +91,9 @@ import {
   describeExtractionFailure,
   type ExtractionOutcome,
 } from '../extraction/extraction-result';
-import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../job-types';
+import { runInJobOrg } from '../job-org-scope';
 import { NoteObjectsService } from '../note-objects.service';
 import {
   EXTRACTED_OBJECT_ID_KEY,
@@ -155,6 +156,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     private readonly objects: NoteObjectsService,
+    private readonly jobScope: JobScope,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
 
@@ -181,7 +183,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
    * longer names, which nothing would ever delete.
    */
   async process(job: Job): Promise<void> {
-    const object = await resolveStorageObjectInput(this.prisma, job);
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) => resolveStorageObjectInput(tx, job));
 
     if (this.alreadySettled(object)) {
       this.logger.log(
@@ -233,7 +235,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
    * the same key rather than orphaning the first upload.
    */
   async deriveOutputKey(job: Job): Promise<string> {
-    const object = await resolveStorageObjectInput(this.prisma, job);
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) => resolveStorageObjectInput(tx, job));
 
     return extractedTextStorageKey(object.id, job.id);
   }
@@ -255,7 +257,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
   async persistNodeResult(job: Job, result: unknown): Promise<void> {
     const parsed: NoteSourceExtractResult = this.nodeResultSchema.parse(result);
 
-    const object = await resolveStorageObjectInput(this.prisma, job);
+    const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) => resolveStorageObjectInput(tx, job));
 
     if (this.alreadySettled(object)) {
       this.logger.log(
@@ -304,7 +306,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
     extractedBy: NoteSourceExtractionMetadata['extractedBy'],
   ): Promise<void> {
     if (outcome.outcome === 'unextractable') {
-      await this.writeMetadata(source, null, {
+      await this.writeMetadata(job, source, null, {
         status: 'unextractable',
         reason: outcome.reason,
         message: describeExtractionFailure(outcome.reason),
@@ -345,7 +347,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
             metadata: { sourceObjectId: source.id, jobId: job.id, extractedBy },
           });
 
-    await this.writeMetadata(source, extracted.id, {
+    await this.writeMetadata(job, source, extracted.id, {
       status: 'extracted',
       pageCount: outcome.pageCount,
       encoding: outcome.encoding,
@@ -370,6 +372,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
    * additive — the same shape `example-checksum.handler.ts` uses.
    */
   private async writeMetadata(
+    job: Job,
     source: StorageObject,
     extractedObjectId: string | null,
     block: NoteSourceExtractionMetadata,
@@ -385,13 +388,15 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
       metadata[EXTRACTED_OBJECT_ID_KEY] = extractedObjectId;
     }
 
-    await this.prisma.storageObject.update({
-      where: { id: source.id },
-      // Cast through `unknown`: `InputJsonValue` is a recursive union a
-      // structurally-typed `Record<string, unknown>` cannot be narrowed to, and
-      // `ObjectsService.updateMetadata` writes the same column the same way.
-      data: { metadata: metadata as unknown as Prisma.InputJsonValue },
-    });
+    await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
+      tx.storageObject.update({
+        where: { id: source.id },
+        // Cast through `unknown`: `InputJsonValue` is a recursive union a
+        // structurally-typed `Record<string, unknown>` cannot be narrowed to, and
+        // `ObjectsService.updateMetadata` writes the same column the same way.
+        data: { metadata: metadata as unknown as Prisma.InputJsonValue },
+      }),
+    );
   }
 
   /** Has some executor already settled this source document? */

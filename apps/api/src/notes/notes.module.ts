@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { GraphExtractionModule } from '../graph/extraction/extraction.module';
-import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
@@ -95,7 +94,6 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 @Module({
   imports: [
     PrismaModule,
-    JobsModule,
     AiModule,
     NotificationsModule,
     TranscriptsModule,
