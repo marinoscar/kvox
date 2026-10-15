@@ -2,12 +2,17 @@ import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
-import { PrismaService } from '../../prisma/prisma.service';
+import { lastValueFrom, from } from 'rxjs';
+import { PLATFORM_PRISMA } from '@marinoscar/platform-api/core';
+import { PrincipalCache } from '@marinoscar/platform-api/identity';
+
+import { normalizeProfileSettings } from '../../common/profile-image/profile-image';
+import { UserSettingsChangeInterceptor } from '../../platform/settings/user-settings-change.interceptor';
 import {
   USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
   type UserSettingsNamespaceChangedEvent,
 } from '../../platform/settings/user-settings.events';
-import { UserSettingsService } from '@marinoscar/platform-api/settings';
+import { SETTINGS_PROFILE_IMAGES, UserSettingsService } from '@marinoscar/platform-api/settings';
 import {
   createMockPrismaService,
   type MockPrismaService,
@@ -32,7 +37,9 @@ import { GraphPreferencesChangeForwarder } from './graph-preferences-change.forw
 //
 // Two layers:
 //   1. the forwarder alone, fed namespace-changed events directly;
-//   2. the real `UserSettingsService` and a real `EventEmitter2` with the
+//   2. the platform's real `UserSettingsService` behind KVox's
+//      `UserSettingsChangeInterceptor` (which announces the namespace changes
+//      the platform service does not) and a real `EventEmitter2` with the
 //      forwarder subscribed, driven by PATCH/PUT calls - the acceptance
 //      criterion "changing `graph.resolution` through PATCH /api/user-settings
 //      still emits `graph.preferences_changed` once with the same payload, and
@@ -166,9 +173,35 @@ describe('GraphPreferencesChangeForwarder', () => {
   // End to end through the real settings service (no database, no Nest app)
   // ---------------------------------------------------------------------------
   describe('through UserSettingsService PATCH/PUT', () => {
-    let service: UserSettingsService;
+    let userSettings: UserSettingsService;
+    let interceptor: UserSettingsChangeInterceptor;
     let mockPrisma: MockPrismaService;
     let graphChanged: jest.Mock;
+
+    /**
+     * What `PATCH|PUT /api/user-settings` does: the interceptor reads the
+     * settings before, runs the platform service, and announces each namespace
+     * that differs. An error from the service propagates out of the observable.
+     */
+    function through(method: 'PATCH' | 'PUT', write: () => Promise<unknown>): Promise<unknown> {
+      const context = {
+        getType: () => 'http',
+        switchToHttp: () => ({
+          getRequest: () => ({ method, url: '/api/user-settings', requestUser: { id: USER_ID } }),
+        }),
+      };
+      const handler = { handle: () => from(write().then((data) => ({ data }))) };
+      return lastValueFrom(interceptor.intercept(context as never, handler as never)).then(
+        (r) => (r as { data: unknown }).data,
+      );
+    }
+
+    const service = {
+      patchSettings: (userId: string, dto: unknown) =>
+        through('PATCH', () => userSettings.patchSettings(userId, dto as never)),
+      replaceSettings: (userId: string, dto: unknown) =>
+        through('PUT', () => userSettings.replaceSettings(userId, dto as never)),
+    };
 
     const BASE = { theme: 'system', profile: { imageSource: 'provider' } };
     const row = (value: Record<string, unknown>) => ({
@@ -208,11 +241,18 @@ describe('GraphPreferencesChangeForwarder', () => {
       const module = await Test.createTestingModule({
         providers: [
           UserSettingsService,
-          { provide: PrismaService, useValue: mockPrisma },
+          UserSettingsChangeInterceptor,
+          { provide: PLATFORM_PRISMA, useValue: mockPrisma },
+          { provide: PrincipalCache, useValue: { invalidate: jest.fn() } },
+          {
+            provide: SETTINGS_PROFILE_IMAGES,
+            useValue: { normalize: normalizeProfileSettings, isUploadedAvatar: async () => false },
+          },
           { provide: EventEmitter2, useValue: events },
         ],
       }).compile();
-      service = module.get(UserSettingsService);
+      userSettings = module.get(UserSettingsService);
+      interceptor = module.get(UserSettingsChangeInterceptor);
       echoWrites();
     });
 

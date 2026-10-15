@@ -54,7 +54,7 @@ import { JobHistoryPurgeHandler } from '../../src/jobs/handlers/job-history-purg
 import { JobInsightsService } from '../../src/jobs/job-insights.service';
 import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { Job } from '@prisma/client';
 import { createDbClient, resolveDbSuite } from './db-test-support';
 

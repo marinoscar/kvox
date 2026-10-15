@@ -36,7 +36,7 @@ import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { JobLeaseService } from '../../src/jobs/job-lease.service';
 import { JobStuckService } from '../../src/jobs/job-stuck.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from './db-test-support';
 
 const { describeWithDb } = resolveDbSuite('job-lease-renewal.db.spec');

@@ -3,8 +3,10 @@ import { join } from 'path';
 
 import { NOTE_TEMPLATES } from '../../prisma/seed-app';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
-import { composeDefaultSystemSettings } from '../../src/settings/registry';
-import { systemSettingsSchema } from '../../src/common/schemas/settings.schema';
+import {
+  composeDefaultSystemSettings,
+  currentSystemSettingsSchema,
+} from '@marinoscar/platform-api/settings';
 
 // =============================================================================
 // Seed data guard (#256, epic #254; reworked for #465, epic #462)
@@ -404,7 +406,7 @@ describe('seed data (catalogs and seed-app)', () => {
 
     it('is a value the API would accept', () => {
       expect(() =>
-        systemSettingsSchema.parse(SEEDED_SYSTEM_SETTINGS),
+        currentSystemSettingsSchema().parse(SEEDED_SYSTEM_SETTINGS),
       ).not.toThrow();
     });
   });

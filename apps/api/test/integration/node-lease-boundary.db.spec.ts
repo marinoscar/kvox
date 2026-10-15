@@ -41,13 +41,13 @@ import { JobLeaseService } from '../../src/jobs/job-lease.service';
 import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { JobTerminalService } from '../../src/jobs/job-terminal.service';
 import { ProviderThrottleService } from '../../src/jobs/provider-throttle.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { NodesService } from '../../src/nodes/nodes.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { ClaimJobsDto, NodeJobResultDto } from '../../src/nodes/dto/node-control-plane.dto';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { NodeOffloadService } from '../../src/jobs/node-offload.service';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 const { describeWithDb } = resolveDbSuite('node-lease-boundary.db.spec');
 

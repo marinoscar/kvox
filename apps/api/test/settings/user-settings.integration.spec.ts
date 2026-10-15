@@ -16,10 +16,10 @@ import {
 } from '../helpers/auth-mock.helper';
 import {
   DEFAULT_USER_SETTINGS,
-  UserSettingsValue,
-} from '../../src/common/types/settings.types';
+  type UserSettingsValue,
+} from '@marinoscar/platform-api/settings';
+import { DATA_TABLE_MAX_ID_LENGTH } from '@marinoscar/platform-contract/settings';
 import {
-  DATA_TABLE_MAX_ID_LENGTH,
   ONBOARDING_MAX_SKIPPED,
   ONBOARDING_MAX_STEP_KEY_LENGTH,
 } from '../../src/common/schemas/user-settings-namespaces.schema';

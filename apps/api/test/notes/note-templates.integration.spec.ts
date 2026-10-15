@@ -1,6 +1,6 @@
 import request from 'supertest';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import {
   BUILT_IN_TEMPLATE_IMMUTABLE_MESSAGE,
   NOTE_TEMPLATE_NOT_FOUND_MESSAGE,

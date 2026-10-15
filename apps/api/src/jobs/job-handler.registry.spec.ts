@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '@marinoscar/platform-api/identity';
 import configuration from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsStandInModule } from '../../test/helpers/settings-stand-in.module';
 
 // -----------------------------------------------------------------------------
 // Test doubles for the three node-eligibility shapes.
@@ -204,12 +205,12 @@ describe('ExampleEchoHandler self-registration (via JobsModule)', () => {
         ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
         EventEmitterModule.forRoot(),
         PrismaModule,
+        SettingsStandInModule,
         JobsModule,
       ],
     })
-      // See the note in `job.worker.bootstrap.spec.ts`: `JobsModule` imports
-      // `SettingsModule` since #263, which brings its controllers (and their
-      // guards) into this graph. Nothing here serves a request.
+      // `SystemSettingsService` is the platform's global slice (stood in above);
+      // nothing here serves a request, so its guard is stubbed.
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .overrideProvider(PrismaService)

@@ -134,6 +134,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'writable only with `system_settings:write`.',
       },
       {
+        name: 'Organization Settings',
+        description:
+          'One organization\'s overrides of the organization-overridable system settings (platform ' +
+          '`/api/org-settings`, mounted by #466). Gated on `org_settings:read` / `org_settings:write`. ' +
+          'KVox runs a single organization with no overrides, so the stored document stays empty.',
+      },
+      {
         name: 'Email Settings',
         description:
           'Mail transport configuration (SES or SMTP), the sender identity, and a test send that ' +

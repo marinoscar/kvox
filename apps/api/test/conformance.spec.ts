@@ -4,9 +4,11 @@
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
 
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { buildPermissionCatalog, catalogGrants, permissionRegistry, roleRegistry, userOwnedModelRegistry } from '@marinoscar/platform-api/core';
+import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/doctor/testing';
 import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
@@ -16,6 +18,14 @@ import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 import { AppModule } from '../src/app.module';
 
 const API_DIR = join(__dirname, '..');
+
+function readCatalog(): string | undefined {
+  try {
+    return readFileSync(join(API_DIR, 'prisma', 'catalog', 'system-settings-defaults.json'), 'utf8');
+  } catch {
+    return undefined;
+  }
+}
 
 const CRON_EXEMPT = [
   {
@@ -103,6 +113,16 @@ runPlatformConformance({
     },
     host: { skip: 'adopted in #464' },
     doctorReadOnly: { skip: 'adopted in #464' },
-    settings: { skip: 'adopted in #466' },
+    settings: {
+      permissions: permissionRegistry.list(),
+      catalog: {
+        contents: readCatalog(),
+        staleMessage: 'prisma/catalog/system-settings-defaults.json is stale. Run `npm run catalog:settings` in apps/api and commit the result.',
+      },
+      // notifications, jobs, nodes, databaseBackup, maintenance (platform declarations) + transcription, ai (KVox).
+      minSystemNamespaces: 7,
+    },
+    // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
+    credentials: { appOwners: ['app', 'transcription'] },
   },
 });
