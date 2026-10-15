@@ -91,11 +91,11 @@ Every improvement to the CLI (`apps/cli`, `install.sh`, `apps/cli/bootstrap-vps.
 Every settings surface, admin or per-user, is a **registry-driven hub**, not a tab strip and not an ungoverned route. Rationale and rejected alternatives: [docs/specs/settings-ui.md](docs/specs/settings-ui.md); web specifics (the five gates in detail): [apps/web/AGENTS.md](apps/web/AGENTS.md).
 
 1. **Every new settings page is declared in a section registry.** Admin cards: `apps/web/src/config/adminSections.tsx` (`ADMIN_SECTIONS`, `SettingsCardDef`); per-user cards: `apps/web/src/config/userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`). A route without a registry entry is unacceptable: the hub, the Console rail and the AppBar title resolver would disagree about it.
-2. **A settings page is never added as a new tab on an existing settings page.** Tabs are legitimate only **inside** one destination, for genuinely **parallel** content (live example: `apps/web/src/pages/Admin/UsersPage.tsx`, Users and Allowlist). A destination gate is about reachability; a tab gate is about content. Tabs are permitted, never required.
+2. **A settings page is never added as a new tab on an existing settings page.** Tabs are legitimate only **inside** one destination, for genuinely **parallel** content (live example: `apps/web/src/identity/UsersPage.tsx` with `apps/web/src/identity/usersPageSlots.ts`, the packaged Users and Allowlist page plus KVox's Reminders tab). A destination gate is about reachability; a tab gate is about content. Tabs are permitted, never required.
 3. **The card's `permission` is the exact string the API controller enforces**, never invented or approximated:
    - `system_settings:read` / `:write` → `system-settings.controller.ts`; `system_settings:read` → `about.controller.ts` (deliberately no `about:read`)
-   - `users:read` → `users.controller.ts`
-   - `allowlist:read` → `allowlist.controller.ts` (gates content inside Users & Allowlist, not the route)
+   - `users:read` → the platform's users controller (`GET /api/users`, `@marinoscar/platform-api/identity`)
+   - `allowlist:read` → the platform's allowlist controller and KVox's `apps/api/src/allowlist-reminders/allowlist-reminders.controller.ts` (gates content inside Users & Allowlist, not the route)
 4. **New settings surfaces reuse `apps/web/src/components/settings/SettingsHub.tsx`.** Never fork or copy it. `/settings` (`apps/web/src/pages/UserSettingsHubPage.tsx`) is a 4-prop binding (`sections`, `hubKey`, `title`, `subtitle`) over the component `/admin/settings` uses.
 5. **The five coupled breakpoint gates move together or not at all**; never change one without checking all five: (1) `Layout.tsx` `showRail` (`up('sm')`), (2) `BottomNav` `down('sm')` self-gate, (3) `<main>` `pb: { xs: 10, sm: 3 }` in `Layout.tsx`, (4) `SettingsHub.tsx` `isCompactWindow`, (5) `AppBar.tsx` `isCompactWindow`. The boundary is `sm` (600px), never `md` (900px). No shared constant binds them, deliberately. `LibraryPageFrame.tsx` also reads `down('sm')` but is **not** a sixth gate.
 
@@ -139,6 +139,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - JWT access tokens are short-lived (15 min); refresh tokens are HttpOnly cookies, rotated on use.
 - Validate input on every endpoint. Uploads: size and type limits, randomized filenames.
 - The email allowlist restricts access; `INITIAL_ADMIN_EMAIL` always bypasses it.
+- Identity (sign-in, sessions, PATs, the device flow, users, the allowlist) is the platform's slice, mounted in `apps/api/src/platform/identity/`; KVox has no auth code of its own. `admin` is a **system** role; `org_admin`, `contributor` and `viewer` are **org** roles held on a membership, and KVox's domain permissions (`transcripts:*`, `notes:*`, `note_templates:*`, `graph:*`) are org-scoped, declared in `apps/api/src/app-registrations/permissions.ts`. Every route carries `@Auth(...)` or `@Public()` from `@marinoscar/platform-api/identity`.
 
 ## Environment variables
 

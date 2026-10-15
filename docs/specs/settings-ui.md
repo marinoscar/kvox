@@ -93,8 +93,9 @@ being honest about why the tab strip looked reasonable before it looked
 wrong. All three tabs lived under one "Settings" umbrella that an admin was
 already inside; a tab strip meant one route, one page load, and instant
 switching between them, which is a real and often-correct pattern — it is
-exactly the pattern `UsersPage.tsx` still uses for Users/Allowlist today (see
-§2). Nothing about a `<Tabs>` component is wrong in the abstract.
+exactly the pattern the Users/Allowlist page still uses today (see
+§2; since #465 that page is the platform's, bound in
+`apps/web/src/identity/UsersPage.tsx`). Nothing about a `<Tabs>` component is wrong in the abstract.
 
 What made it the wrong tool here shows up the moment the three tabs are
 compared to what they actually became as separate cards. Once split by epic
@@ -129,10 +130,17 @@ from the hub today.
 > [`ux-refresh.md`](ux-refresh.md) §1 for the navigation model that replaced
 > them.
 
-Tabs did not go away — `UsersPage.tsx` (`/admin/settings/users`) still keeps
-its two, Users and Allowlist, and epic #90 kept them on purpose. The
+Tabs did not go away — the Users page (`/admin/settings/users`) still keeps
+its two, Users and Allowlist, and epic #90 kept them on purpose. Issue #465
+(epic #462) replaced the app's own `pages/Admin/UsersPage.tsx` with the platform's
+packaged page (from the platform's web identity package), bound in
+`apps/web/src/identity/UsersPage.tsx`, and added a third parallel tab,
+**Reminders**, through the package's `slots.Tabs`
+(`apps/web/src/identity/usersPageSlots.ts`, gated on `allowlist:read`, with the
+send button inside gated on `allowlist:write`): chasing an invitee who has not
+signed in is another answer to "who may use this application." The
 distinction that decides which pattern applies is stated precisely in
-`UsersPage.tsx`'s own header and worth stating again here because it is the
+the page's own header and worth stating again here because it is the
 rule, not an exception to it:
 
 - A **destination** gate — which registry card exists, which route it
@@ -142,12 +150,13 @@ rule, not an exception to it:
   given that the user is here, which parts of what they see can they use.
 
 Users and Allowlist are genuinely parallel: both answer "who may use this
-application," both are read from `UsersPage.tsx`, and they are backed by two
+application," both are shown by the one Users page, and they are backed by two
 different controllers on purpose. The page-level (destination) gate is
 `users:read` — the permission that makes the page worth reaching at all. The
 Allowlist *tab* then gates itself separately, wrapping `<AllowlistTable />`
 in `<RequirePermission permission="allowlist:read">`, because that data comes
-from `allowlist.controller.ts` and not `users.controller.ts`. Collapsing the
+from the allowlist controller and not the users controller (both are the
+platform's now). Collapsing the
 two gates into one would do one of two wrong things: hide the whole page
 (including the Users tab) from an admin who holds `users:read` but not
 `allowlist:read`, or render an Allowlist tab that can only ever 403. Keeping
@@ -173,8 +182,8 @@ controllers below, not assumed:
 | Registry permission | Controller / decorator |
 |---|---|
 | `system_settings:read` (GET) / `system_settings:write` (PUT/PATCH) | `system-settings.controller.ts` — `@Auth({ permissions: [PERMISSIONS.SYSTEM_SETTINGS_READ] })` / `SYSTEM_SETTINGS_WRITE` |
-| `users:read` | `users.controller.ts` — `@Auth({ permissions: [PERMISSIONS.USERS_READ] })` |
-| `allowlist:read` | `allowlist.controller.ts` — `@Auth({ permissions: [PERMISSIONS.ALLOWLIST_READ] })` (gates the Allowlist **tab**, not the `Users & Allowlist` route — see §2) |
+| `users:read` | the platform's users controller (`GET /api/users`, from the platform identity package) — `users:read` |
+| `allowlist:read` | the platform's allowlist controller, and the app's `allowlist-reminders/allowlist-reminders.controller.ts` (`GET /api/allowlist/reminders`) — `allowlist:read` (gates the Allowlist **and** Reminders **tabs**, not the `Users & Allowlist` route — see §2) |
 | `jobs:read` | `jobs/job-admin.controller.ts` — `PERMISSIONS.JOBS_READ` |
 | `nodes:read` | the worker-node admin controller — `PERMISSIONS.NODES_READ` |
 | `db_backup:read` | the database-backup controller — `PERMISSIONS.DB_BACKUP_READ` |

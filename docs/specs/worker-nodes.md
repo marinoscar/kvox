@@ -9,7 +9,7 @@
 > boundary that keeps it from being able to do anything else:
 > `apps/api/src/nodes/node-credential.service.ts`, its controller and module,
 > and the `Bearer nod_` branch in
-> `apps/api/src/auth/guards/jwt-auth.guard.ts`.
+> the platform's `JwtAuthGuard` (`@marinoscar/platform-api/identity`; KVox's copy at `apps/api/src/auth/guards/jwt-auth.guard.ts` was deleted by #465).
 >
 > **Part two (§8–§14)** is the control plane those credentials reach —
 > register, heartbeat, claim, lease renewal, result and failure —
@@ -53,14 +53,14 @@ promise.** `JwtAuthGuard` resolves a `pat_` token through
 `RolesGuard` and `PermissionsGuard` exactly as the JWT strategy would.
 `src/openapi/description.ts` publishes that as a universal claim — a PAT works
 on every authenticated route, with no narrower scope — and
-`test/auth/pat-universality.integration.spec.ts` exists specifically to keep
+a PAT-universality integration spec (formerly `test/auth/pat-universality.integration.spec.ts`; the PAT guard is the platform's since #465) exists specifically to keep
 it true. That is the correct design for a PAT: a human deliberately delegating
 their own authority to a script they control and can revoke.
 
 Now put the same token in a node's config file. Three facts compound:
 
 1. **The owner is an admin.** `nodes:write` is granted to Admin only in
-   `prisma/seed-data.ts`, alongside `jobs:*` and `db_backup:*`, for the
+   the permission catalog (`apps/api/prisma/catalog/permissions.json`), alongside `jobs:*` and `db_backup:*`, for the
    reasons recorded there — the queue and the fleet are operational surfaces
    that expose payload metadata, host names and the shape of the deployment.
    So whoever can mint a node credential is an administrator, and any token
@@ -233,7 +233,7 @@ equivalent PAT listing uses. Two reasons:
 `nodes:read` rather than `nodes:write` for the listing because a role that may
 audit the fleet without being able to mint new access to it is a distinction
 worth expressing — that is the entire reason the permission pair is split
-(`common/constants/roles.constants.ts`).
+(`common/constants/roles.constants.ts`, derived from the platform registries).
 
 Ownership on revoke is folded into the lookup
 (`findFirst({ where: { id, userId } })`) rather than checked after a
@@ -1335,7 +1335,7 @@ The load-bearing suites:
 * `apps/api/test/nodes/nodes-admin.integration.spec.ts` — `/api/admin/nodes/
   credentials` resolving to the credentials route rather than `:id`, over the
   real router, and the Admin-only RBAC on all five routes.
-* `apps/api/src/auth/guards/jwt-auth.guard.spec.ts` — the allowlist, the
+* `jwt-auth.guard.spec.ts` (was `apps/api/src/auth/guards/`; the guard is now the platform's `JwtAuthGuard` from `@marinoscar/platform-api/identity` since #465) — the allowlist, the
   prefix-boundary paths, the ordering assertion (spy on `validateToken`), and
   regression coverage for the untouched `pat_` and JWT branches.
 * `apps/api/test/nodes/node-credential.integration.spec.ts` — the `403`s over

@@ -18,7 +18,7 @@
 > `note_generations`, `note_exports` (#48) — both in `apps/api/prisma/
 > schema.prisma`, the `notes:*`/`note_templates:*` permission pair and the
 > built-in template seed rows in `apps/api/src/common/constants/
-> roles.constants.ts` and `apps/api/prisma/seed-data.ts` (#48), the one-line
+> roles.constants.ts` and `apps/api/prisma/seed-data.ts` (#48; since #465 the permissions are declared in `apps/api/src/app-registrations/permissions.ts`, the grants live in `apps/api/prisma/catalog/permissions.json` and the template rows in `apps/api/prisma/seed-app.ts`), the one-line
 > delete guard the new `Restrict` foreign keys require in `apps/api/src/
 > transcripts/transcripts.service.ts` (#48, landing in the same window as the
 > migration — see §4), `apps/api/src/notes/` for everything else on the API
@@ -1961,8 +1961,8 @@ kind of mistake.
 ### 6.3 What `notes:*` and `note_templates:*` gate
 
 `notes:read`/`notes:write` and `note_templates:read`/`note_templates:write`
-are seeded to **all three roles** — Admin, Contributor, and **Viewer**
-(`apps/api/prisma/seed-data.ts` `ROLE_PERMISSIONS`) — mirroring
+are **org-scoped and granted to all three org roles** — `org_admin`, `contributor`, and **`viewer`**
+(`apps/api/src/app-registrations/permissions.ts`; the system `admin` reaches them through its `org_admin` membership) — mirroring
 `transcripts:read`/`write` exactly (permission catalog, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §7.3),
 because producing a note is the core action this epic exists to enable and a
 fresh account's default role is Viewer. There is deliberately **no
@@ -2026,7 +2026,7 @@ action is a read or a write.
 
 `note_templates.owner_id IS NULL` means built-in — readable by **every**
 user regardless of any permission beyond `note_templates:read`, editable by
-**nobody** through the API, seeded via `apps/api/prisma/seed-data.ts` (#48),
+**nobody** through the API, seeded via `apps/api/prisma/seed-app.ts` (#48),
 extending the exact same seeding mechanism this repository already uses for
 role-permission rows and the allowlist's initial admin entry. `GET
 /api/note-templates` returns the union of `owner_id IS NULL` and `owner_id =
