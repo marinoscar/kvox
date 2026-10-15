@@ -53,6 +53,7 @@ import { buildDatabaseUrl } from '../../src/common/database-url';
 import { NoteSourceNameService } from '../../src/notes/note-source-name.service';
 import type { NotesService } from '../../src/notes/notes.service';
 import { buildNotesService } from './notes-service-test-factory';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim from
@@ -352,7 +353,7 @@ describeWithDb('Note list paging (real Postgres)', () => {
   it('filters to one source transcript, which is what a transcript page asks for (#59)', async () => {
     const owner = await createUser();
 
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: 'audio.m4a',
         size: BigInt(1024),

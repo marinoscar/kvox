@@ -29,6 +29,7 @@ import { JobsService } from '../../src/jobs/jobs.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { NoteOriginService } from '../../src/notes/note-origin.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-extract.db.spec');
 
@@ -149,7 +150,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const user = await prisma.user.create({
       data: { email: `${EMAIL_PREFIX}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test` },
     });
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: { name: 'r.m4a', size: BigInt(1), mimeType: 'audio/mp4', storageKey: `${EMAIL_PREFIX}/${randomUUID()}`, managedBy: 'transcripts', uploadedById: user.id },
     });
     const transcript = await prisma.transcript.create({

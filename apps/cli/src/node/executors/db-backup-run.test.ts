@@ -8,7 +8,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NodeLogger, readLogTail } from '../logger.js';
 import type { JobSecret, NodeApi, UploadUrlResult } from '../node-api.js';
-import { buildPgDumpArgs, pgClientEnv, type PgConnection } from '../pg-dump.js';
+import { assertRlsBypassCoupled, buildPgDumpArgs, pgClientEnv, type PgConnection } from '../pg-dump.js';
 import { DatabaseBackupRunExecutor, readPgMaterial } from './db-backup-run.js';
 import type { JobExecutionContext } from './index.js';
 
@@ -507,6 +507,23 @@ describe('the child’s environment', () => {
     // The broker's mode wins over the inherited one.
     expect(env.PGSSLMODE).toBe('require');
     expect(env.PGPASSWORD).toBe(PASSWORD);
+  });
+
+  it('sets the platform RLS bypass on the dump connection, replacing an inherited PGOPTIONS', () => {
+    process.env.PGOPTIONS = '-c search_path=evil';
+
+    expect(pgClientEnv(connection).PGOPTIONS).toBe('-c app.rls_bypass=on');
+  });
+
+  it('--enable-row-security is in the argv iff PGOPTIONS sets app.rls_bypass=on', () => {
+    const args = buildPgDumpArgs(connection);
+
+    expect(args).toContain('--enable-row-security');
+    expect(pgClientEnv(connection).PGOPTIONS).toContain('app.rls_bypass=on');
+    expect(() => assertRlsBypassCoupled(args, pgClientEnv(connection))).not.toThrow();
+    // One without the other would silently filter the archive, or fail on every protected table.
+    expect(() => assertRlsBypassCoupled(args, {})).toThrow(/together/);
+    expect(() => assertRlsBypassCoupled([], pgClientEnv(connection))).toThrow(/together/);
   });
 
   it('keeps everything else, so the binary is still findable and the locale still right', () => {

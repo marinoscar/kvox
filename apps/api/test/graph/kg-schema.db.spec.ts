@@ -38,6 +38,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 // All ELEVEN hand-written, Prisma-inexpressible indexes this migration adds
 // (see migration.sql's "HAND-WRITTEN, PRISMA-INEXPRESSIBLE SQL" header).
@@ -291,7 +292,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const owner = await createUser('relation-both-sources');
       const from = await createEntity(owner.id);
       const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
-      const source = await prisma.storageObject.create({
+      const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
           size: BigInt(1),
@@ -329,7 +330,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     it('rejects a non-IDENTIFIED_AS relation with from_speaker_id set', async () => {
       const owner = await createUser('relation-wrong-type-speaker');
       const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
-      const source = await prisma.storageObject.create({
+      const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
           size: BigInt(1),
@@ -366,7 +367,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     it('allows an IDENTIFIED_AS relation with from_speaker_id only, and cascades on speaker deletion', async () => {
       const owner = await createUser('relation-speaker-ok');
       const to = await createEntity(owner.id, { label: 'Sarah Chen' });
-      const source = await prisma.storageObject.create({
+      const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
           size: BigInt(1),
@@ -619,7 +620,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const note = await prisma.note.create({
         data: { ownerId: owner.id, title: 'Note', body: 'Body', status: 'ready', sourceType: 'document' },
       });
-      const source = await prisma.storageObject.create({
+      const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
           size: BigInt(1),
@@ -973,7 +974,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
   describe('kg_evidence SetNulls its transcript/segment/note pointers on delete, keeping quote', () => {
     it('nulls transcript_id/segment_id when the transcript is deleted', async () => {
       const owner = await createUser('evidence-transcript-setnull');
-      const source = await prisma.storageObject.create({
+      const source = await createStorageObject(prisma, {
         data: {
           name: 'r.m4a',
           size: BigInt(1),

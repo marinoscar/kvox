@@ -76,6 +76,8 @@ import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input
 import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
+import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 
@@ -264,7 +266,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
     handler = new NoteSourceExtractHandler(
       registry,
       service,
-      new NoteObjectsService(service, { deleteManagedObject: jest.fn() } as never, storage),
+      new NoteObjectsService(service, { deleteManagedObject: jest.fn() } as never, storage, new LegacyObjectOwnershipStore(service as never)),
       storage,
     );
 
@@ -330,7 +332,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
     const storageKey = `${PREFIX}notes/sources/uploads/${randomUUID()}/source`;
     storage.seed(storageKey, content);
 
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: `${PREFIX}document`,
         size: BigInt(content.length),
@@ -464,7 +466,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
 
     // Managed by this module, so the generic list hides it and the generic
     // DELETE refuses it — the same protection the upload itself gets.
-    expect(extracted.managedBy).toBe('notes');
+    expect(await managedByOf(prisma, extracted.id)).toBe('notes');
     expect(extracted.uploadedById).toBe(ownerId);
     expect(storage.objects.get(extracted.storageKey)?.toString('utf8')).toBe(computed.text);
   });

@@ -45,6 +45,7 @@ import {
 import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-speaker-link.db.spec');
 
@@ -134,7 +135,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
 
   /** A transcript with one speaker per label, each with `segmentsEach` segments. */
   async function createTranscript(ownerId: string, labels: string[], segmentsEach = 4) {
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'r.m4a',
         size: BigInt(1),

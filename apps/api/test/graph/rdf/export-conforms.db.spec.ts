@@ -51,6 +51,7 @@ import { TranscriptAccessService } from '../../../src/transcripts/transcript-acc
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { validateShacl } from './rdf-fixtures';
+import { defaultOrgId } from '../../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('export-conforms.db.spec');
 
@@ -74,8 +75,8 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
         body.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
           uploads.set(input.storageKey, text);
-          prisma.storageObject
-            .upsert({
+          (async () => {
+            const row = await prisma.storageObject.upsert({
               where: { id: uuidFromKey(input.storageKey) },
               update: { size: BigInt(Buffer.byteLength(text)) },
               create: {
@@ -84,12 +85,15 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
                 size: BigInt(Buffer.byteLength(text)),
                 mimeType: input.mimeType,
                 storageKey: input.storageKey,
-                managedBy: 'graph',
+                orgId: await defaultOrgId(prisma),
                 status: 'ready',
                 uploadedById: input.ownerId,
               },
-            })
-            .then(resolve, reject);
+            });
+            // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+            await prisma.$executeRaw`UPDATE storage_objects SET managed_by = 'graph' WHERE id = ${row.id}::uuid`;
+            return row;
+          })().then(resolve, reject);
         });
       });
       return { body, done };

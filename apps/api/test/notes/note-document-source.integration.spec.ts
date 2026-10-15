@@ -159,10 +159,26 @@ function createStorage(world: World) {
  * file is about a VALUE THAT LANDED, and a mock that only records calls would
  * let the extraction "write" a metadata key the generator never reads back.
  */
+/** PLATFORM-ADOPTION-SHIM(#469): `managed_by` lives on the fake world's rows. */
+function fakeOwnership(world: World) {
+  return {
+    setManagedBy: async (id: string, module: string) => {
+      const row = world.objects.get(id);
+      if (row) row.managedBy = module;
+    },
+    getManagedBy: async (ids: readonly string[]) =>
+      new Map(ids.map((id) => [id, (world.objects.get(id)?.managedBy as string | undefined) ?? null])),
+  };
+}
+
 function createPrisma(world: World): Record<string, unknown> {
   let nextObjectId = 2;
 
   const prisma: Record<string, unknown> = {
+    // PLATFORM-ADOPTION-SHIM(#469): `createRow` inserts and stamps `managed_by`
+    // in one transaction, over the default organization.
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+    organization: { findFirst: jest.fn(async () => ({ id: 'org-1' })) },
     storageObject: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
         const row = world.objects.get(where.id);
@@ -301,6 +317,7 @@ function harness(world: World) {
     prisma as never,
     { deleteManagedObject: jest.fn() } as never,
     storage as never,
+    fakeOwnership(world) as never,
   );
 
   const extract = new NoteSourceExtractHandler(

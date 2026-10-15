@@ -32,36 +32,34 @@ const USER_ID = 'user-1';
 
 function filesHarness() {
   const prisma = {
-    storageObject: {
-      findMany: jest.fn().mockResolvedValue([]),
-      aggregate: jest.fn().mockResolvedValue({ _count: { _all: 0 }, _sum: { size: null } }),
-    },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
   };
+  // PLATFORM-ADOPTION-SHIM(#469): the `managed_by IS NULL` queries live in the
+  // legacy ownership store.
+  const ownership = {
+    summarizeUnmanaged: jest.fn().mockResolvedValue({ count: 0, bytes: BigInt(0) }),
+    selectObjectIds: jest.fn().mockResolvedValue([] as string[]),
+  };
   const objects = { delete: jest.fn().mockResolvedValue(undefined) };
-  const hooks = new FilesUserDataHooks(prisma as never, objects as never);
+  const hooks = new FilesUserDataHooks(prisma as never, objects as never, ownership as never);
 
-  return { hooks, prisma, objects };
+  return { hooks, prisma, objects, ownership };
 }
 
 describe('FilesUserDataHooks — summary', () => {
   it('counts only unmanaged objects the caller uploaded — a transcript or note owns the rest', async () => {
-    const { hooks, prisma } = filesHarness();
+    const { hooks, ownership } = filesHarness();
 
     await hooks.summarize(USER_ID);
 
-    expect(prisma.storageObject.aggregate).toHaveBeenCalledWith({
-      where: { uploadedById: USER_ID, managedBy: null },
-      _count: { _all: true },
-      _sum: { size: true },
-    });
+    expect(ownership.summarizeUnmanaged).toHaveBeenCalledWith(USER_ID);
   });
 
   it('reports bytes as a decimal STRING, so a large library cannot round silently', async () => {
-    const { hooks, prisma } = filesHarness();
-    prisma.storageObject.aggregate.mockResolvedValue({
-      _count: { _all: 2 },
-      _sum: { size: BigInt('9007199254740993') }, // > Number.MAX_SAFE_INTEGER
+    const { hooks, ownership } = filesHarness();
+    ownership.summarizeUnmanaged.mockResolvedValue({
+      count: 2,
+      bytes: BigInt('9007199254740993'), // > Number.MAX_SAFE_INTEGER
     });
 
     await expect(hooks.summarize(USER_ID)).resolves.toEqual({
@@ -72,22 +70,21 @@ describe('FilesUserDataHooks — summary', () => {
 });
 
 describe('FilesUserDataHooks — only unmanaged storage objects are deleted', () => {
-  it('selects storage objects with managedBy: null, owned by the caller — never a module-managed one', async () => {
-    const { hooks, prisma } = filesHarness();
+  it('selects unmanaged storage objects owned by the caller — never a module-managed one', async () => {
+    const { hooks, ownership } = filesHarness();
 
     await hooks.purge(USER_ID);
 
-    expect(prisma.storageObject.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ uploadedById: USER_ID, managedBy: null }),
-      }),
+    expect(ownership.selectObjectIds).toHaveBeenCalledWith(
+      expect.objectContaining({ managed: 'unmanaged', uploadedById: USER_ID }),
+      expect.anything(),
     );
   });
 
   it('deletes through ObjectsService.delete, the same path per-item deletes already use', async () => {
-    const { hooks, prisma, objects } = filesHarness();
+    const { hooks, prisma, objects, ownership } = filesHarness();
 
-    prisma.storageObject.findMany.mockResolvedValueOnce([{ id: 'object-1' }]).mockResolvedValue([]);
+    ownership.selectObjectIds.mockResolvedValueOnce(['object-1']).mockResolvedValue([]);
 
     await hooks.purge(USER_ID);
 
@@ -103,11 +100,9 @@ describe('FilesUserDataHooks — only unmanaged storage objects are deleted', ()
   });
 
   it('tolerates a row that has already vanished by the time an unmanaged object delete runs', async () => {
-    const { hooks, prisma, objects } = filesHarness();
+    const { hooks, objects, ownership } = filesHarness();
 
-    prisma.storageObject.findMany
-      .mockResolvedValueOnce([{ id: 'object-gone' }])
-      .mockResolvedValue([]);
+    ownership.selectObjectIds.mockResolvedValueOnce(['object-gone']).mockResolvedValue([]);
     objects.delete.mockRejectedValueOnce(new Error('object not found'));
 
     // The per-row try/catch tolerates this and still completes the job rather
@@ -116,27 +111,24 @@ describe('FilesUserDataHooks — only unmanaged storage objects are deleted', ()
   });
 
   it('excludes a failed object from the next page so the same page is not selected forever', async () => {
-    const { hooks, prisma, objects } = filesHarness();
+    const { hooks, objects, ownership } = filesHarness();
 
-    prisma.storageObject.findMany
-      .mockResolvedValueOnce([{ id: 'object-stuck' }])
-      .mockResolvedValue([]);
+    ownership.selectObjectIds.mockResolvedValueOnce(['object-stuck']).mockResolvedValue([]);
     objects.delete.mockRejectedValueOnce(new Error('provider refused'));
 
     await hooks.purge(USER_ID);
 
-    expect(prisma.storageObject.findMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: { notIn: ['object-stuck'] } }),
-      }),
+    expect(ownership.selectObjectIds).toHaveBeenLastCalledWith(
+      expect.objectContaining({ excludeIds: ['object-stuck'] }),
+      expect.anything(),
     );
   });
 
   it('fails loudly, naming the step, when a selected row never stops matching the query', async () => {
-    const { hooks, prisma, objects } = filesHarness();
+    const { hooks, objects, ownership } = filesHarness();
 
     // Selected, "deleted" without error, and still there next time.
-    prisma.storageObject.findMany.mockResolvedValue([{ id: 'object-stuck' }]);
+    ownership.selectObjectIds.mockResolvedValue(['object-stuck']);
     objects.delete.mockResolvedValue(undefined);
 
     await expect(hooks.purge(USER_ID)).rejects.toThrow(

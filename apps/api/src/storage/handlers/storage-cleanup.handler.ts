@@ -58,6 +58,7 @@ import type { Job } from '@prisma/client';
 import { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
 import { STORAGE_PROVIDER, StorageProvider } from '../providers';
 
 /**
@@ -95,7 +96,9 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_PROVIDER)
     private readonly storageProvider: StorageProvider,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+    private readonly ownership: LegacyObjectOwnershipStore
   ) {}
 
   /** Self-registration — the only wiring a handler needs. */
@@ -158,22 +161,28 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
     // and every status poll (see `ObjectsService.touchUpload`), so this now
     // asks the question the sweep actually means: has NOTHING touched this
     // upload for `ageHours`?
-    const staleUploads = await this.prisma.storageObject.findMany({
-      where: {
-        status: { in: ['pending', 'uploading'] },
-        updatedAt: { lt: cleanupBefore },
-        // Unmanaged only (issue #322). The owning module reconciles its own
-        // uploads — `transcripts.housekeeping` does for transcripts — and
-        // deleting a managed row here would violate that module's `Restrict`
-        // foreign key (`transcripts.source_object_id`) on every run.
-        managedBy: null,
-      },
-      select: {
-        id: true,
-        storageKey: true,
-        s3UploadId: true,
-      },
+    //
+    // Unmanaged only (issue #322). The owning module reconciles its own
+    // uploads — `transcripts.housekeeping` does for transcripts — and
+    // deleting a managed row here would violate that module's `Restrict`
+    // foreign key (`transcripts.source_object_id`) on every run.
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by IS NULL` is raw SQL in the
+    // legacy store, which picks the ids; the rows are then loaded by id.
+    const staleIds = await this.ownership.selectObjectIds({
+      managed: 'unmanaged',
+      statuses: ['pending', 'uploading'],
+      updatedBefore: cleanupBefore,
     });
+    const staleUploads = staleIds.length
+      ? await this.prisma.storageObject.findMany({
+          where: { id: { in: staleIds } },
+          select: {
+            id: true,
+            storageKey: true,
+            s3UploadId: true,
+          },
+        })
+      : [];
 
     let removed = 0;
     let failed = 0;

@@ -61,6 +61,8 @@ import { NOTE_EXPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-typ
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
+import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('note-export.db.spec');
 
@@ -135,6 +137,7 @@ describeWithDb('Note exports (real Postgres)', () => {
         },
       } as unknown as ObjectsService,
       storage,
+      new LegacyObjectOwnershipStore(service as never),
     );
 
     registry = new NoteExporterRegistry();
@@ -221,7 +224,7 @@ describeWithDb('Note exports (real Postgres)', () => {
       isActive: true,
     };
 
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),
@@ -273,7 +276,7 @@ describeWithDb('Note exports (real Postgres)', () => {
     await prisma.job.deleteMany({ where: { type: NOTE_EXPORT_JOB_TYPE } });
     await prisma.auditEvent.deleteMany({ where: { targetType: 'note' } });
     await prisma.storageObject.deleteMany({
-      where: { managedBy: 'notes', uploadedById: { in: [ownerId] } },
+      where: { id: { in: await idsManagedBy(prisma, 'notes', { uploadedByIds: [ownerId] }) } },
     });
   }
 
@@ -361,7 +364,7 @@ describeWithDb('Note exports (real Postgres)', () => {
 
       expect(Number(object.size)).toBe(bytes.byteLength);
       expect(bytes.byteLength).toBeGreaterThan(0);
-      expect(object.managedBy).toBe('notes');
+      expect(await managedByOf(prisma, object.id)).toBe('notes');
     }
 
     // Each format is its own render: the content address includes `format`.

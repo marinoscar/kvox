@@ -5,7 +5,12 @@ import {
   DEFAULT_COMPRESSION_LEVEL,
   buildPgDumpArgs,
   clampCompressionLevel,
+  PG_ENABLE_ROW_SECURITY_ARG,
+  PG_RLS_BYPASS_OPTION,
+  assertRlsBypassCoupled,
   pgClientEnv,
+  pgDumpEnv,
+  pgDumpOptions,
   resolvePgConnection,
   spawnPgDump,
   spawnPgProcess,
@@ -256,6 +261,7 @@ describe('buildPgDumpArgs', () => {
       '-Fc',
       '--no-owner',
       '--no-acl',
+      '--enable-row-security',
       '-Z',
       '9',
     ]);
@@ -334,5 +340,68 @@ describe('pgClientEnv', () => {
     // The password is deliberately NOT here: it is a named option on
     // spawnPgProcess so it cannot be lost in a spread.
     expect(pgClientEnv(CONNECTION)).toEqual({});
+  });
+});
+
+// PLATFORM-ADOPTION-SHIM(#471): a dump connection carries the platform's RLS
+// bypass session setting, merged with any inherited PGOPTIONS, never at role level.
+describe('pg_dump RLS bypass (PGOPTIONS)', () => {
+  it('sets app.rls_bypass=on when PGOPTIONS is empty', () => {
+    expect(PG_RLS_BYPASS_OPTION).toBe('-c app.rls_bypass=on');
+    expect(pgDumpOptions(undefined)).toBe('-c app.rls_bypass=on');
+    expect(pgDumpOptions('  ')).toBe('-c app.rls_bypass=on');
+  });
+
+  it('merges with an existing PGOPTIONS, ours last so it wins', () => {
+    expect(pgDumpOptions('-c statement_timeout=0')).toBe('-c statement_timeout=0 -c app.rls_bypass=on');
+    expect(pgDumpOptions('-c app.rls_bypass=off').endsWith('-c app.rls_bypass=on')).toBe(true);
+  });
+
+  it('pgDumpEnv adds PGOPTIONS to the client env without dropping sslmode', () => {
+    const env = pgDumpEnv({ ...CONNECTION, sslMode: 'require' }, { PGOPTIONS: '-c search_path=public' });
+
+    expect(env).toEqual({ PGSSLMODE: 'require', PGOPTIONS: '-c search_path=public -c app.rls_bypass=on' });
+  });
+
+  it('every spawnPgDump child gets it, merged with the inherited PGOPTIONS', () => {
+    const saved = process.env.PGOPTIONS;
+    process.env.PGOPTIONS = '-c statement_timeout=0';
+    try {
+      const spawn = createFakeSpawn();
+      spawnPgDump({ connection: CONNECTION, spawnFn: spawn.fn });
+
+      expect(spawn.last().env.PGOPTIONS).toBe('-c statement_timeout=0 -c app.rls_bypass=on');
+    } finally {
+      if (saved === undefined) delete process.env.PGOPTIONS;
+      else process.env.PGOPTIONS = saved;
+    }
+  });
+});
+
+describe('--enable-row-security is coupled to the bypass setting', () => {
+  it('a spawned dump has the flag iff PGOPTIONS sets app.rls_bypass=on', () => {
+    const spawn = createFakeSpawn();
+    spawnPgDump({ connection: CONNECTION, spawnFn: spawn.fn });
+
+    const { args, env } = spawn.last();
+    expect(args.includes('--enable-row-security')).toBe(true);
+    expect(env.PGOPTIONS).toContain('app.rls_bypass=on');
+  });
+
+  it('refuses the flag without the bypass, and the bypass without the flag', () => {
+    expect(() => assertRlsBypassCoupled([PG_ENABLE_ROW_SECURITY_ARG], {})).toThrow(/together/);
+    expect(() => assertRlsBypassCoupled([PG_ENABLE_ROW_SECURITY_ARG], { PGOPTIONS: '-c app.rls_bypass=off' })).toThrow(/together/);
+    expect(() => assertRlsBypassCoupled([], { PGOPTIONS: PG_RLS_BYPASS_OPTION })).toThrow(/together/);
+  });
+
+  it('accepts both together, and neither', () => {
+    expect(() => assertRlsBypassCoupled([PG_ENABLE_ROW_SECURITY_ARG], { PGOPTIONS: PG_RLS_BYPASS_OPTION })).not.toThrow();
+    expect(() => assertRlsBypassCoupled([], {})).not.toThrow();
+  });
+
+  it('a later app.rls_bypass=off in PGOPTIONS cancels the bypass (the last setting wins)', () => {
+    expect(() =>
+      assertRlsBypassCoupled([PG_ENABLE_ROW_SECURITY_ARG], { PGOPTIONS: '-c app.rls_bypass=on -c app.rls_bypass=off' }),
+    ).toThrow(/together/);
   });
 });

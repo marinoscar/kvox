@@ -21,6 +21,12 @@ const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
 ]);
 
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`; the unit tier pins it.
+jest.mock('../../prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('ProfileImageService (#367)', () => {
   let service: ProfileImageService;
   let mockPrisma: MockPrismaService;

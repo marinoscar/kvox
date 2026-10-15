@@ -88,6 +88,7 @@ import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { NodeOffloadService } from '../../src/jobs/node-offload.service';
 import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb } = resolveDbSuite('node-checksum-data-plane.db.spec');
 
@@ -419,7 +420,7 @@ describeWithDb('example.checksum end to end on a worker node (real Postgres)', (
     const storageKey = `${PREFIX}uploads/${randomUUID()}.bin`;
     storage.seed(storageKey, content);
 
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: `${PREFIX}payload.bin`,
         size: BigInt(content.length),

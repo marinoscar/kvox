@@ -49,6 +49,10 @@ describe('Prisma.JobScalarFieldEnum', () => {
       'claimedByNodeId',
       'leaseExpiresAt',
       'executor',
+      // PLATFORM-ADOPTION-SHIM(#468): columns the platform added to `jobs`.
+      'orgId',
+      'claimToken',
+      'traceContext',
     ].sort();
 
     const actual = Object.keys(Prisma.JobScalarFieldEnum).sort();

@@ -58,6 +58,8 @@ import {
 } from '../../src/transcripts/transcript-sharing.service';
 import { TranscriptsService } from '../../src/transcripts/transcripts.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('transcript-sharing.db.spec');
 
@@ -111,6 +113,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       { deleteManagedObject: jest.fn() } as unknown as ObjectsService,
       new ConfigService({}),
       storage,
+      new LegacyObjectOwnershipStore(service as never),
     );
 
     const pipeline = {
@@ -176,7 +179,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
 
     inactive = actor(disabled.id, disabled.email);
 
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(2048),

@@ -14,6 +14,7 @@ import { UserAiCredentialsService } from '../ai/user-ai-credentials.service';
 import { PatService } from '../pat/pat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserSettingsService } from '../settings/user-settings/user-settings.service';
+import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { ObjectsService } from '../storage/objects/objects.service';
 import {
   auditUserData,
@@ -33,25 +34,25 @@ export class FilesUserDataHooks {
   constructor(
     private readonly prisma: PrismaService,
     private readonly objects: ObjectsService,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /** `files` in `GET /api/user-data/summary`. */
   async summarize(userId: string): Promise<{ count: number; bytes: string }> {
-    const files = await this.prisma.storageObject.aggregate({
-      // ⚠ `managedBy: null` IS THE WHOLE DEFINITION OF "a file" HERE. A
+    // PLATFORM-ADOPTION-SHIM(#469): the `managed_by IS NULL` filter below is
+    // raw SQL in the legacy store.
+    const files = await this.ownership.summarizeUnmanaged(userId);
+
+    // ⚠ `managed_by IS NULL` IS THE WHOLE DEFINITION OF "a file" HERE. A
       // transcript's source audio and a note's rendered export are also rows
       // this user uploaded, and they belong to the transcript and the note —
-      // deleting them under `files` would gut content the user did not ask to
-      // touch. Issue #21 built `managed_by` for exactly this distinction and
-      // the generic storage endpoints already draw the same line.
-      where: { uploadedById: userId, managedBy: null },
-      _count: { _all: true },
-      _sum: { size: true },
-    });
-
+    // deleting them under `files` would gut content the user did not ask to
+    // touch. Issue #21 built `managed_by` for exactly this distinction and
+    // the generic storage endpoints already draw the same line.
     return {
-      count: files._count._all,
-      bytes: (files._sum.size ?? BigInt(0)).toString(),
+      count: files.count,
+      bytes: files.bytes.toString(),
     };
   }
 
@@ -62,7 +63,7 @@ export class FilesUserDataHooks {
   /**
    * Delete the caller's plain uploads: bytes and row, through `ObjectsService`.
    *
-   * ⚠ `managedBy: null` IS PART OF THE QUERY, not a check after the fact. A
+   * ⚠ `managed_by IS NULL` IS PART OF THE QUERY, not a check after the fact. A
    * transcript's source audio, a note's rendered export and every other
    * module-owned object are `managed_by`-stamped precisely so they can only be
    * removed by the module that understands them (issue #21), and their bytes
@@ -80,15 +81,13 @@ export class FilesUserDataHooks {
     const failed = new Set<string>();
 
     for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      const rows = await this.prisma.storageObject.findMany({
-        where: {
-          uploadedById: userId,
-          managedBy: null,
-          ...(failed.size > 0 ? { id: { notIn: [...failed] } } : {}),
-        },
-        select: { id: true },
-        take: USER_DATA_PURGE_BATCH,
-      });
+      // PLATFORM-ADOPTION-SHIM(#469): `managed_by IS NULL` is raw SQL in the legacy store.
+      const rows = (
+        await this.ownership.selectObjectIds(
+          { managed: 'unmanaged', uploadedById: userId, excludeIds: [...failed] },
+          { take: USER_DATA_PURGE_BATCH },
+        )
+      ).map((id) => ({ id }));
 
       if (rows.length === 0) {
         if (deleted > 0 || failed.size > 0) {

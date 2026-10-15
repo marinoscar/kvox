@@ -22,6 +22,7 @@ import { goldenFixtureSchema } from '../../scripts/kg-eval/fixture-schema';
 import { exportNoteSkeleton, RealDataNotFoundError, RealDataPathError } from '../../scripts/kg-eval/real-data';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-eval-export.db.spec');
 
@@ -66,7 +67,7 @@ describeWithDb('kg:eval --export-note (real Postgres)', () => {
   }
 
   async function seed(ownerId: string) {
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'call.m4a',
         size: BigInt(1),

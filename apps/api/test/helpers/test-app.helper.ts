@@ -11,6 +11,8 @@ import { AppModule } from '../../src/app.module';
 import { JobWorker } from '../../src/jobs/job.worker';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { prismaMock } from '../mocks/prisma.mock';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { createFakeOwnershipStore } from './fake-ownership-store.helper';
 
 export interface TestContext {
   app: NestFastifyApplication;
@@ -132,7 +134,12 @@ export async function createTestApp(
       // `src/jobs/job.worker.bootstrap.spec.ts`, both of which drive it
       // deliberately.
       .overrideProvider(JobWorker)
-      .useValue({});
+      .useValue({})
+      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` / `part_size` are raw SQL in
+      // the real store, which a mocked client cannot answer; this fake answers
+      // from the rows the spec feeds `storageObject.findUnique`.
+      .overrideProvider(LegacyObjectOwnershipStore)
+      .useValue(createFakeOwnershipStore(prismaMock));
 
     for (const { provide, useValue } of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(provide).useValue(useValue);

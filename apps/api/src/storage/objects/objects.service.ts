@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { getDefaultOrgId } from '../../prisma/default-org';
+import { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
 import { Prisma, StorageObject } from '@prisma/client';
 import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import type { StorageProvider } from '../providers/storage-provider.interface';
@@ -97,6 +99,9 @@ export class ObjectsService {
     private readonly storageProvider: StorageProvider,
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` / `part_size` are not on the
+    // Prisma client; this store reads and writes them with raw SQL.
+    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /**
@@ -239,21 +244,30 @@ export class ObjectsService {
       { mimeType },
     );
 
-    // Create StorageObject record
-    const storageObject = await this.prisma.storageObject.create({
-      data: {
-        name,
-        size: BigInt(size),
-        mimeType,
-        storageKey,
-        storageProvider: 's3',
-        bucket: this.storageProvider.getBucket(),
-        status: 'pending',
-        s3UploadId: uploadId,
-        partSize,
-        managedBy: managedBy ?? null,
-        uploadedById: userId,
-      },
+    // Create StorageObject record.
+    //
+    // PLATFORM-ADOPTION-SHIM(#469): `orgId` is the default organization, and
+    // `part_size` / `managed_by` are stamped by raw SQL in the SAME
+    // transaction, so a managed upload is never visible as unmanaged.
+    const orgId = await getDefaultOrgId(this.prisma);
+    const storageObject = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.storageObject.create({
+        data: {
+          name,
+          size: BigInt(size),
+          mimeType,
+          storageKey,
+          storageProvider: 's3',
+          bucket: this.storageProvider.getBucket(),
+          status: 'pending',
+          s3UploadId: uploadId,
+          orgId,
+          uploadedById: userId,
+        },
+      });
+      await this.ownership.setPartSize(created.id, partSize, tx);
+      if (managedBy) await this.ownership.setManagedBy(created.id, managedBy, tx);
+      return created;
     });
 
     // Generate presigned URLs for the first batch. A convenience, not a cap:
@@ -330,7 +344,7 @@ export class ObjectsService {
       );
     }
 
-    const totalParts = this.totalPartsFor(object);
+    const totalParts = await this.totalPartsFor(object);
     const seen = new Set<number>();
 
     for (const partNumber of partNumbers) {
@@ -400,8 +414,8 @@ export class ObjectsService {
       throw new ForbiddenException('You do not own this upload');
     }
 
-    const partSize = this.partSizeFor(storageObject);
-    const totalParts = this.totalPartsFor(storageObject);
+    const partSize = await this.partSizeFor(storageObject);
+    const totalParts = await this.totalPartsFor(storageObject);
 
     let uploadedParts: number[] = [];
     let uploadedBytes = BigInt(0);
@@ -502,6 +516,8 @@ export class ObjectsService {
             partNumber: part.partNumber,
             eTag: part.eTag,
             size: BigInt(0), // We don't know exact part size from client
+            // The chunk's organization is its parent object's (composite FK).
+            orgId: storageObject.orgId,
           },
           update: {
             eTag: part.eTag,
@@ -568,8 +584,9 @@ export class ObjectsService {
     // (`transcripts.source_object_id`), so the delete below would fail, the
     // client's cancel with it, and the owning record would sit in `uploading`
     // forever. Mark it `failed` and let the owner reconcile.
-    if (storageObject.managedBy) {
-      await this.abortManagedUpload(storageObject, userId);
+    const managedBy = (await this.ownership.getManagedBy([objectId])).get(objectId) ?? null;
+    if (managedBy) {
+      await this.abortManagedUpload(storageObject, userId, managedBy);
       return;
     }
 
@@ -614,6 +631,7 @@ export class ObjectsService {
   private async abortManagedUpload(
     storageObject: StorageObject,
     userId: string,
+    managedBy: string,
   ): Promise<void> {
     if (
       storageObject.status === 'processing' ||
@@ -623,7 +641,7 @@ export class ObjectsService {
     }
 
     this.logger.log(
-      `Aborting managed upload ${storageObject.id} (managed by ${storageObject.managedBy})`,
+      `Aborting managed upload ${storageObject.id} (managed by ${managedBy})`,
     );
 
     // Tolerates `NoSuchUpload`, and is a no-op for an already-`failed` row.
@@ -636,13 +654,13 @@ export class ObjectsService {
 
     this.eventEmitter.emit(
       OBJECT_UPLOAD_ABORTED_EVENT,
-      new ObjectUploadAbortedEvent(updated),
+      new ObjectUploadAbortedEvent(updated, managedBy),
     );
 
     await this.createAuditEvent(userId, 'storage:upload:abort', storageObject.id, {
       name: storageObject.name,
       status: storageObject.status,
-      managedBy: storageObject.managedBy,
+      managedBy,
     });
 
     this.logger.log(`Managed upload aborted: ${storageObject.id}`);
@@ -681,6 +699,7 @@ export class ObjectsService {
         storageProvider: 's3',
         bucket: result.bucket,
         status: 'processing',
+        orgId: await getDefaultOrgId(this.prisma), // PLATFORM-ADOPTION-SHIM(#469)
         uploadedById: userId,
       },
     });
@@ -720,31 +739,33 @@ export class ObjectsService {
     // by the same user, so without this filter one transcript turns into four
     // rows in a generic file list nobody asked for — each of them a file the
     // user cannot meaningfully act on here. The owning module lists its own.
-    const where = {
+    //
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client,
+    // so the page is chosen by the legacy store (`managed_by IS NULL`, i.e.
+    // `id NOT IN (SELECT id FROM storage_objects WHERE managed_by IS NOT NULL)`)
+    // and the rows are then loaded by id, in the store's order.
+    const filter = {
+      managed: 'unmanaged' as const,
       uploadedById: userId,
-      managedBy: null,
-      ...(status && { status }),
+      ...(status && { statuses: [status] }),
     };
 
-    // Build orderBy clause
-    const orderBy: any = {};
-    if (sortBy === 'createdAt') {
-      orderBy.createdAt = sortOrder;
-    } else if (sortBy === 'name') {
-      orderBy.name = sortOrder;
-    } else if (sortBy === 'size') {
-      orderBy.size = sortOrder;
-    }
+    const orderBy =
+      sortBy === 'createdAt' ? 'created_at' : sortBy === 'name' ? 'name' : sortBy === 'size' ? 'size' : 'id';
 
-    const [items, totalItems] = await Promise.all([
-      this.prisma.storageObject.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-      }),
-      this.prisma.storageObject.count({ where }),
+    const [ids, totalItems] = await Promise.all([
+      this.ownership.selectObjectIds(filter, { orderBy, order: sortOrder, skip, take }),
+      this.ownership.countObjects(filter),
     ]);
+
+    const rows = ids.length
+      ? await this.prisma.storageObject.findMany({ where: { id: { in: ids } } })
+      : [];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const items = ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
 
     const totalPages = Math.ceil(totalItems / pageSize);
 
@@ -814,9 +835,10 @@ export class ObjectsService {
     // on it), which is what 409 means. Deleting a transcript's source audio
     // through the generic endpoint leaves the transcript pointing at bytes
     // that no longer exist and nothing to repair it from.
-    if (object.managedBy) {
+    const managedBy = (await this.ownership.getManagedBy([id])).get(id) ?? null;
+    if (managedBy) {
       throw new ConflictException(
-        `This object is managed by the ${object.managedBy} module and must be ` +
+        `This object is managed by the ${managedBy} module and must be ` +
           `deleted through it, not through the generic storage endpoint`,
       );
     }
@@ -902,9 +924,10 @@ export class ObjectsService {
       throw new NotFoundException('Object not found');
     }
 
-    if (object.managedBy !== expectedManagedBy) {
+    const managedBy = (await this.ownership.getManagedBy([id])).get(id) ?? null;
+    if (managedBy !== expectedManagedBy) {
       throw new ConflictException(
-        `Object ${id} is managed by ${object.managedBy ?? 'nobody'}, not by ` +
+        `Object ${id} is managed by ${managedBy ?? 'nobody'}, not by ` +
           `${expectedManagedBy}`,
       );
     }
@@ -1021,15 +1044,17 @@ export class ObjectsService {
    * exactly the bug that made a mid-flight configuration change renumber an
    * upload's parts.
    */
-  private partSizeFor(object: { partSize: number | null }): number {
+  private async partSizeFor(object: { id: string }): Promise<number> {
+    // PLATFORM-ADOPTION-SHIM(#469): `part_size` is not on the Prisma client.
     return (
-      object.partSize ?? this.config.get<number>('storage.partSize', 10485760)
+      (await this.ownership.getPartSize(object.id)) ??
+      this.config.get<number>('storage.partSize', 10485760)
     );
   }
 
   /** Part count derived from the size and part size on the row itself. */
-  private totalPartsFor(object: { size: bigint; partSize: number | null }): number {
-    return computeTotalParts(Number(object.size), this.partSizeFor(object));
+  private async totalPartsFor(object: { id: string; size: bigint }): Promise<number> {
+    return computeTotalParts(Number(object.size), await this.partSizeFor(object));
   }
 
   /**

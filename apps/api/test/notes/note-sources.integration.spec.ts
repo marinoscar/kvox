@@ -59,6 +59,13 @@ const managedObject = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`, which the mocked client cannot answer.
+jest.mock('../../src/prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('Note source documents (#51)', () => {
   let context: TestContext;
   let mockStorage: ReturnType<typeof createMockStorageProvider>;
@@ -137,11 +144,16 @@ describe('Note source documents (#51)', () => {
       // managed object is invisible to the generic listing and refuses the
       // generic DELETE — see the two specs below, which drive the REAL storage
       // controller rather than trusting this flag.
+      //
+      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is stamped by the legacy
+      // ownership store, in the same transaction as the insert.
       expect(prismaMock.storageObject.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ managedBy: 'notes', uploadedById: user.id }),
+          data: expect.objectContaining({ uploadedById: user.id, orgId: 'org-1' }),
         }),
       );
+      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
+      expect(ownership.setManagedBy.mock.calls.map((call: unknown[]) => call[1])).toContain('notes');
 
       // The extraction is a QUEUE JOB, not an inline step: a document outlives
       // the request that uploaded it.
@@ -283,10 +295,10 @@ describe('Note source documents (#51)', () => {
 
       // The listing filters on `managedBy: null`, so a notes document is not
       // merely absent from this fixture — it is unreachable by construction.
-      expect(prismaMock.storageObject.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ managedBy: null }),
-        }),
+      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
+      expect(ownership.selectObjectIds).toHaveBeenCalledWith(
+        expect.objectContaining({ managed: 'unmanaged' }),
+        expect.anything(),
       );
     });
 

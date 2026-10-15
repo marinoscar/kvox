@@ -63,10 +63,20 @@
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
-import { Job, JobReason, Prisma } from '@prisma/client';
+import { Job, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { buildDedupKey } from './job-keys';
+
+/**
+ * Why a job was queued.
+ *
+ * PLATFORM-ADOPTION-SHIM(#468): platform `0034_open_job_reason` turned the
+ * Prisma `JobReason` enum into an open string column, so the generated client
+ * no longer exports the type. This app keeps its three built-in values here until
+ * #468 deletes this file in favour of the platform's job module.
+ */
+export type JobReason = 'upload' | 'rerun' | 'backfill';
 
 /**
  * The name of the partial unique index that enforces active dedup. Declared

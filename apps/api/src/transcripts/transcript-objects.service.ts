@@ -35,6 +35,8 @@ import type { StorageObject } from '@prisma/client';
 import { PassThrough, Readable, Transform } from 'node:stream';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { getDefaultOrgId } from '../prisma/default-org';
+import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { ObjectsService } from '../storage/objects/objects.service';
 import {
   STORAGE_PROVIDER,
@@ -100,6 +102,8 @@ export class TranscriptObjectsService {
     private readonly objects: ObjectsService,
     private readonly config: ConfigService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /**
@@ -241,20 +245,27 @@ export class TranscriptObjectsService {
   }
 
   /** The one `storage_objects` insert this module makes. Always `managedBy`. */
-  private createRow(input: RecordUploadedObjectInput): Promise<StorageObject> {
-    return this.prisma.storageObject.create({
-      data: {
-        name: input.name,
-        size: BigInt(input.size),
-        mimeType: input.mimeType,
-        storageKey: input.storageKey,
-        storageProvider: 's3',
-        bucket: this.storage.getBucket(),
-        status: 'ready',
-        managedBy: TRANSCRIPTS_MANAGED_BY,
-        uploadedById: input.ownerId,
-        metadata: (input.metadata ?? undefined) as never,
-      },
+  private async createRow(input: RecordUploadedObjectInput): Promise<StorageObject> {
+    // PLATFORM-ADOPTION-SHIM(#469): default org, and `managed_by` stamped in
+    // the same transaction as the insert.
+    const orgId = await getDefaultOrgId(this.prisma);
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.storageObject.create({
+        data: {
+          name: input.name,
+          size: BigInt(input.size),
+          mimeType: input.mimeType,
+          storageKey: input.storageKey,
+          storageProvider: 's3',
+          bucket: this.storage.getBucket(),
+          status: 'ready',
+          orgId,
+          uploadedById: input.ownerId,
+          metadata: (input.metadata ?? undefined) as never,
+        },
+      });
+      await this.ownership.setManagedBy(created.id, TRANSCRIPTS_MANAGED_BY, tx);
+      return created;
     });
   }
 

@@ -16,6 +16,13 @@ import {
 import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
 
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`, which the mocked client cannot answer.
+jest.mock('../../src/prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('Storage Integration', () => {
   let context: TestContext;
   let mockStorageProvider: ReturnType<typeof createMockStorageProvider>;
@@ -671,10 +678,13 @@ describe('Storage Integration', () => {
       // its playback rendition and its exports are all rows owned by this same
       // user; without the filter one transcript becomes four entries in a
       // generic file list, none of which the user can act on here.
-      expect(context.prismaMock.storageObject.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ managedBy: null }),
-        }),
+      //
+      // PLATFORM-ADOPTION-SHIM(#469): the exclusion is `managed_by IS NULL`,
+      // applied by the legacy ownership store.
+      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
+      expect(ownership.selectObjectIds).toHaveBeenCalledWith(
+        expect.objectContaining({ managed: 'unmanaged' }),
+        expect.anything(),
       );
     });
 

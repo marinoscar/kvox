@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { getDefaultOrgId } from '../../prisma/default-org';
 import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
 import type { StorageProvider } from '../../storage/providers/storage-provider.interface';
 import { UserSettingsService } from '../user-settings/user-settings.service';
@@ -100,6 +101,8 @@ export class ProfileImageService {
           storageProvider: 's3',
           bucket: uploaded.bucket,
           status: 'ready',
+          // PLATFORM-ADOPTION-SHIM(#469): `org_id` is required by the platform.
+          orgId: await getDefaultOrgId(this.prisma),
           metadata: { purpose: AVATAR_PURPOSE } as Prisma.InputJsonValue,
           uploadedById: userId,
         },

@@ -37,6 +37,7 @@ import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
 import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
 import type { NotesService } from '../../src/notes/notes.service';
 import { buildNotesService } from './notes-service-test-factory';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
 function isPostgresReachable(host: string, port: number, timeoutMs = 2000): boolean {
@@ -181,7 +182,7 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
   }
 
   async function createObject(ownerId: string, name: string, metadata?: object) {
-    return prisma.storageObject.create({
+    return createStorageObject(prisma, {
       data: {
         name,
         size: BigInt(1024),
@@ -196,7 +197,7 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
 
   /** A transcript with its own (transcripts-managed) source object. */
   async function createTranscript(ownerId: string) {
-    const audio = await prisma.storageObject.create({
+    const audio = await createStorageObject(prisma, {
       data: {
         name: 'audio.m4a',
         size: BigInt(2048),

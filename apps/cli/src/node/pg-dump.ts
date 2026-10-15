@@ -144,6 +144,8 @@ export function buildPgDumpArgs(connection: PgConnection, compressionLevel = DEF
     '-Fc',
     '--no-owner',
     '--no-acl',
+    // PLATFORM-ADOPTION-SHIM(#471): coupled to `pgClientEnv`'s PGOPTIONS.
+    PG_ENABLE_ROW_SECURITY_ARG,
     '-Z',
     String(clampCompressionLevel(compressionLevel)),
   ];
@@ -202,6 +204,47 @@ export const CLEARED_PG_ENV = [
  * value is written into the child's copy and nowhere else, so nothing that
  * outlives the job can read it back.
  */
+/**
+ * The libpq option every `pg_dump` connection carries: the platform's own
+ * system-client row-level-security bypass.
+ *
+ * PLATFORM-ADOPTION-SHIM(#471): revisit in #471 / #467. The platform FORCES
+ * row-level security on its tables, and the dump role the broker mints is
+ * NOSUPERUSER, so `pg_dump` would refuse ("query would be affected by
+ * row-level security policy"). Never `--enable-row-security` (it silently
+ * filters the archive) and never BYPASSRLS on the role: the platform's policies
+ * already admit a session with `app.rls_bypass = 'on'`, so the dump sets it on
+ * its own connection only (`PGOPTIONS` in the child's environment, never
+ * `ALTER ROLE ... SET`). Mirrors `PG_RLS_BYPASS_OPTION` in the API's
+ * `pg-dump.util.ts`.
+ */
+export const PG_RLS_BYPASS_OPTION = '-c app.rls_bypass=on';
+
+/**
+ * The `pg_dump` flag that is the mechanical other half of the bypass: without
+ * it `pg_dump` sends `SET row_security = off` and a non-superuser's dump of a
+ * policy-protected table fails outright. ⚠ It must travel WITH
+ * {@link PG_RLS_BYPASS_OPTION}: the flag alone would silently filter the
+ * archive to the rows the policies allow. `buildPgDumpArgs` adds the flag,
+ * `pgClientEnv` adds the option, and {@link assertRlsBypassCoupled} refuses to
+ * spawn a dump that has one without the other.
+ */
+export const PG_ENABLE_ROW_SECURITY_ARG = '--enable-row-security';
+
+/** Throws unless the flag is in `args` exactly when `env.PGOPTIONS` sets `app.rls_bypass=on`. */
+export function assertRlsBypassCoupled(args: readonly string[], env: NodeJS.ProcessEnv): void {
+  const flag = args.includes(PG_ENABLE_ROW_SECURITY_ARG);
+  const matches = [...(env.PGOPTIONS ?? '').matchAll(/app\.rls_bypass=(\S+)/g)];
+  const bypass = matches.length > 0 && matches[matches.length - 1]![1] === 'on';
+
+  if (flag !== bypass) {
+    throw new Error(
+      `Refusing to run pg_dump: ${PG_ENABLE_ROW_SECURITY_ARG} and PGOPTIONS app.rls_bypass=on must be set together ` +
+        `(flag: ${flag}, bypass: ${bypass}). One without the other would silently filter or fail the archive.`,
+    );
+  }
+}
+
 export function pgClientEnv(connection: PgConnection): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
 
@@ -209,6 +252,10 @@ export function pgClientEnv(connection: PgConnection): NodeJS.ProcessEnv {
 
   env.PGPASSWORD = connection.password;
   if (connection.sslMode !== null) env.PGSSLMODE = connection.sslMode;
+  // An inherited PGOPTIONS was cleared above like every other libpq variable
+  // (a node is a machine people have used by hand), so this sets rather than
+  // merges.
+  env.PGOPTIONS = PG_RLS_BYPASS_OPTION;
 
   return env;
 }
@@ -226,8 +273,11 @@ export function spawnPgDump(options: SpawnPgDumpOptions): PgProcess {
   const command = options.command ?? PG_DUMP_COMMAND;
   const args = buildPgDumpArgs(options.connection, options.compressionLevel);
 
+  const env = pgClientEnv(options.connection);
+  assertRlsBypassCoupled(args, env);
+
   const child = spawnFn(command, args, {
-    env: pgClientEnv(options.connection),
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

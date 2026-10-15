@@ -142,7 +142,7 @@ export interface JobListResult {
 }
 
 /** A row as the list publishes it: the projection below, plus `typeLabel`. */
-export type JobListItem = Omit<Job, 'payload'> & { typeLabel: string };
+export type JobListItem = Omit<Job, JobUnlistedField> & { typeLabel: string };
 
 export interface RetryFailedResult {
   retried: number;
@@ -155,6 +155,11 @@ export interface ResetStuckAdminResult {
   failed: number;
   thresholdMinutes: number;
 }
+
+// PLATFORM-ADOPTION-SHIM(#468): the platform's `Job` gained `orgId`, `claimToken`
+// and `traceContext`. None is operator-facing, so the admin list omits them
+// exactly as it omits `payload`.
+type JobUnlistedField = 'payload' | 'orgId' | 'claimToken' | 'traceContext';
 
 /**
  * Every `Job` column EXCEPT `payload`.
@@ -187,7 +192,7 @@ const JOB_LIST_SELECT = {
   claimedByNodeId: true,
   leaseExpiresAt: true,
   executor: true,
-} as const satisfies Record<keyof Omit<Job, 'payload'>, true>;
+} as const satisfies Record<keyof Omit<Job, JobUnlistedField>, true>;
 
 /**
  * The complete reset a retry writes, as ONE object shared by the single-row

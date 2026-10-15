@@ -771,6 +771,9 @@ interface CarriedCatalog {
  * `completeSucceeded` clears them: a terminal row must not appear to be held by
  * anybody.
  */
+// PLATFORM-ADOPTION-SHIM(#468): `jobs.reason` is TEXT since platform
+// `0034_open_job_reason` (the `"JobReason"` enum type no longer exists), so
+// `$6` is cast to `text`.
 const CARRY_JOB_SQL = `
 INSERT INTO jobs (
   id, type, subject_type, subject_id, dedup_key, status, reason, priority,
@@ -778,7 +781,7 @@ INSERT INTO jobs (
   scheduled_for, rate_limited_at, rate_limit_hits, claimed_by_node_id,
   lease_expires_at, executor
 ) VALUES (
-  $1::uuid, $2, $3, $4, $5, 'succeeded'::"JobStatus", $6::"JobReason", $7::int,
+  $1::uuid, $2, $3, $4, $5, 'succeeded'::"JobStatus", $6::text, $7::int,
   $8::jsonb, $9::int, $10, $11::timestamptz, $12::timestamptz, $13::timestamptz,
   NULL, NULL, 0, NULL,
   NULL, $14

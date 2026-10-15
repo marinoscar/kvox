@@ -23,6 +23,12 @@ const SVG_BYTES = Buffer.from(
   'utf8',
 );
 
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`, which the mocked client cannot answer.
+jest.mock('../../src/prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('Profile Image Integration (#367)', () => {
   let context: TestContext;
   let mockStorageProvider: ReturnType<typeof createMockStorageProvider>;

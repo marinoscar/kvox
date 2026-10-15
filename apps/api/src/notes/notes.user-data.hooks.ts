@@ -12,6 +12,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import {
@@ -35,6 +36,8 @@ export class NotesUserDataHooks {
     private readonly notes: NotesService,
     private readonly templates: NoteTemplatesService,
     private readonly searchIndex: SearchIndexService,
+    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
+    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   // ===========================================================================
@@ -78,9 +81,14 @@ export class NotesUserDataHooks {
       select: { sourceObject: { select: { metadata: true } } },
     });
 
-    const extractedIds = sources
+    const candidateIds = sources
       .map((row) => readExtractedObjectId(row.sourceObject?.metadata))
       .filter((id): id is string => id !== null);
+
+    // PLATFORM-ADOPTION-SHIM(#469): only objects the notes module owns count,
+    // and `managed_by` is read from the legacy store.
+    const owners = await this.ownership.getManagedBy(candidateIds);
+    const extractedIds = candidateIds.filter((id) => owners.get(id) === NOTES_MANAGED_BY);
 
     const { _sum } = await this.prisma.storageObject.aggregate({
       where: {
@@ -92,7 +100,7 @@ export class NotesUserDataHooks {
           // an `OR` where a mistake would instead match everything. Omitting
           // the branch entirely is unambiguous.
           ...(extractedIds.length > 0
-            ? [{ id: { in: extractedIds }, managedBy: NOTES_MANAGED_BY }]
+            ? [{ id: { in: extractedIds } }]
             : []),
         ],
       },

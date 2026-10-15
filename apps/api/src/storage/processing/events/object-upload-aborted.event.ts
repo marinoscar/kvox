@@ -15,7 +15,13 @@ import { StorageObject } from '@prisma/client';
  * Unmanaged objects never emit this; their abort still deletes the row.
  */
 export class ObjectUploadAbortedEvent {
-  constructor(public readonly object: StorageObject) {}
+  // PLATFORM-ADOPTION-SHIM(#469): `managedBy` is no longer a column on the
+  // Prisma `StorageObject`, so the emitter reads it from
+  // `LegacyObjectOwnershipStore` and passes it in.
+  constructor(
+    public readonly object: StorageObject,
+    private readonly owner: string | null,
+  ) {}
 
   get objectId(): string {
     return this.object.id;
@@ -23,7 +29,7 @@ export class ObjectUploadAbortedEvent {
 
   /** The owning module. Never null — unmanaged aborts do not emit this event. */
   get managedBy(): string | null {
-    return this.object.managedBy;
+    return this.owner;
   }
 
   get uploadedById(): string | null {

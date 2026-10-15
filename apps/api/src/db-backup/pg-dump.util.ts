@@ -419,6 +419,86 @@ export function pgClientEnv(connection: PgConnection): NodeJS.ProcessEnv {
   return connection.sslMode === null ? {} : { PGSSLMODE: connection.sslMode };
 }
 
+/**
+ * The libpq option every `pg_dump` connection carries: the platform's own
+ * system-client row-level-security bypass.
+ *
+ * PLATFORM-ADOPTION-SHIM(#471): revisit in #471 / #467. Platform migration
+ * `0025_org_scoped_rls` (and later ones, e.g. `ai_runs`) FORCE row-level
+ * security. A superuser ignores the policies, but the dump role the broker
+ * mints is NOSUPERUSER, so for it a policy-protected table is not "empty" —
+ * `pg_dump` refuses with "query would be affected by row-level security
+ * policy". It must never be worked around with `--enable-row-security`
+ * (which would silently FILTER the archive to the rows a policy allows) or by
+ * giving the role BYPASSRLS. The platform's policies already admit a session
+ * that sets `app.rls_bypass = 'on'`; a dump is exactly that kind of system
+ * client, so it sets it, and only on its own connection: this is `PGOPTIONS`
+ * in the dump process's environment, never `ALTER ROLE ... SET`.
+ */
+export const PG_RLS_BYPASS_OPTION = '-c app.rls_bypass=on';
+
+/**
+ * The `pg_dump` flag that is the mechanical other half of the bypass.
+ *
+ * `pg_dump` sends `SET row_security = off` unless given this flag, and with
+ * that setting a non-superuser's dump of a policy-protected table fails
+ * outright (Postgres refuses without evaluating the policy), so
+ * {@link PG_RLS_BYPASS_OPTION} alone cannot work.
+ *
+ * ⚠ THE TWO MUST TRAVEL TOGETHER. The flag alone would make the dump run the
+ * policies as the role sees them and SILENTLY FILTER the archive to the rows
+ * they allow; the bypass setting is what makes the policies admit every row.
+ * {@link buildPgDumpArgs} adds the flag, {@link pgDumpEnv} adds the option, and
+ * {@link assertRlsBypassCoupled} refuses to spawn a dump that has one without
+ * the other.
+ */
+export const PG_ENABLE_ROW_SECURITY_ARG = '--enable-row-security';
+
+/** Whether a `PGOPTIONS` string sets the platform bypass to `on` (the last setting wins). */
+function optionsEnableBypass(options: string | undefined): boolean {
+  const matches = [...(options ?? '').matchAll(/app\.rls_bypass=(\S+)/g)];
+  return matches.length > 0 && matches[matches.length - 1][1] === 'on';
+}
+
+/**
+ * Throws unless `--enable-row-security` is in `args` exactly when `env.PGOPTIONS`
+ * sets `app.rls_bypass=on`. A dump with the flag and no bypass would silently
+ * drop rows; a dump with the bypass and no flag fails on every protected table.
+ */
+export function assertRlsBypassCoupled(args: readonly string[], env: NodeJS.ProcessEnv): void {
+  const flag = args.includes(PG_ENABLE_ROW_SECURITY_ARG);
+  const bypass = optionsEnableBypass(env.PGOPTIONS);
+
+  if (flag !== bypass) {
+    throw new Error(
+      `Refusing to run pg_dump: ${PG_ENABLE_ROW_SECURITY_ARG} and PGOPTIONS app.rls_bypass=on must be set together ` +
+        `(flag: ${flag}, bypass: ${bypass}). One without the other would silently filter or fail the archive.`,
+    );
+  }
+}
+
+/**
+ * `PGOPTIONS` for a dump connection: whatever the environment already carries,
+ * plus {@link PG_RLS_BYPASS_OPTION}. Appended last so it wins over an
+ * inherited `-c app.rls_bypass=...`.
+ */
+export function pgDumpOptions(existing: string | undefined): string {
+  const current = (existing ?? '').trim();
+  return current === '' ? PG_RLS_BYPASS_OPTION : `${current} ${PG_RLS_BYPASS_OPTION}`;
+}
+
+/**
+ * The child environment for `pg_dump`: {@link pgClientEnv} plus the RLS bypass
+ * session option, merged with any `PGOPTIONS` already in `baseEnv`. The one
+ * place every dump spawn gets its environment from.
+ */
+export function pgDumpEnv(
+  connection: PgConnection,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return { ...pgClientEnv(connection), PGOPTIONS: pgDumpOptions(baseEnv.PGOPTIONS) };
+}
+
 export interface PgDumpArgsOptions {
   connection: PgConnection;
   /** 0-9; clamped rather than rejected, so a bad stored setting cannot stop a backup. */
@@ -466,6 +546,8 @@ export function buildPgDumpArgs(options: PgDumpArgsOptions): string[] {
     '-Fc',
     '--no-owner',
     '--no-acl',
+    // PLATFORM-ADOPTION-SHIM(#471): coupled to `pgDumpEnv`'s PGOPTIONS.
+    PG_ENABLE_ROW_SECURITY_ARG,
     '-Z',
     String(clampCompressionLevel(compressionLevel)),
   ];
@@ -510,11 +592,15 @@ export interface SpawnPgDumpOptions {
 export function spawnPgDump(options: SpawnPgDumpOptions = {}): PgProcess {
   const connection = options.connection ?? resolvePgConnection(options.env);
 
+  const args = buildPgDumpArgs({ connection, compressionLevel: options.compressionLevel });
+  const extraEnv = pgDumpEnv(connection);
+  assertRlsBypassCoupled(args, { ...process.env, ...extraEnv });
+
   return spawnPgProcess({
     command: options.command ?? PG_DUMP_COMMAND,
-    args: buildPgDumpArgs({ connection, compressionLevel: options.compressionLevel }),
+    args,
     password: connection.password,
-    extraEnv: pgClientEnv(connection),
+    extraEnv,
     timeoutMs: options.timeoutMs,
     spawnFn: options.spawnFn,
   });

@@ -28,7 +28,8 @@ Rule: **`AGENTS.md` is the single shared rule set.** Edit rules there. Never cop
 | `apps/api/AGENTS.md`, `apps/web/AGENTS.md`, `apps/cli/AGENTS.md` | OpenCode, when working in that folder | Area rules | 6 KB each |
 | `.claude/agents/*.md` | Claude Code | Subagents: frontmatter `name`, `description`, optional `model` | none enforced |
 | `.opencode/agents/*.md` | OpenCode | Subagents: frontmatter `description`, `mode`, `temperature`, `steps`, `permission` | 6 KB each |
-| `.claude/skills/<name>/SKILL.md` | Claude Code; OpenCode also reads `.claude/skills` | On-demand recipes (`add-job-type`, `add-settings-page`, `new-project`, `rename-app`) | none |
+| `.claude/skills/<name>/SKILL.md` | Claude Code; OpenCode also reads `.claude/skills` | On-demand recipes (`add-job-type`, `add-settings-page`, `new-project`, `rename-app`, `platform-migration`) | 10 KB each |
+| `.opencode/skills/<name>/SKILL.md` | OpenCode | Twins of skills that must be explicit for OpenCode. `platform-migration` is the first; the file is byte-identical to its `.claude/skills` copy and the guard checks both | 10 KB each |
 | `.claude/settings.json` | Claude Code | `permissions.allow` list (read-only git, test and typecheck commands) | none |
 | `opencode.json` | OpenCode | Model, provider, compaction, watcher, permissions | none |
 

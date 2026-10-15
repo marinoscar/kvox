@@ -33,6 +33,8 @@ import { MergeService } from '../../src/graph/resolution/merge.service';
 import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias, statementHash } from '../../src/graph/write/normalize';
+import { createStorageObject } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 export const V = 'test';
 
@@ -69,7 +71,7 @@ export function buildServices(prisma: PrismaClient) {
     proposals,
   );
   const reverts = new ProposalRevertService(db, access, merges, commits, proposals);
-  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES) };
+  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(db as never)) };
 }
 
 export async function cleanup(prisma: PrismaClient, prefix: string, purge: KgPurgeService): Promise<void> {
@@ -104,7 +106,7 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
   const ownerId = user.id;
   const caller: RequestUser = { id: ownerId, email: user.email, roles: [], permissions: ['graph:read', 'graph:write'], isActive: true };
 
-  const source = await prisma.storageObject.create({
+  const source = await createStorageObject(prisma, {
     data: { name: 'r.m4a', size: BigInt(1), mimeType: 'audio/mp4', storageKey: `${prefix}/${randomUUID()}`, managedBy: 'transcripts', uploadedById: ownerId },
   });
   const transcript = await prisma.transcript.create({

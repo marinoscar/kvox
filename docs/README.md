@@ -27,6 +27,8 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Auth, credential kinds, sessions, RBAC | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) |
 | Add or change an endpoint | [API.md](API.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md), then `/api/docs` (OpenAPI) |
 | Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
+| Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)) |
+| Baseline a database onto the platform history | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
 | Add a job type or any long-running work | [../apps/api/src/jobs/handlers/README.md](../apps/api/src/jobs/handlers/README.md), [specs/job-queue.md](specs/job-queue.md), the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)) |
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
@@ -60,7 +62,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas, repository tooling (platform pin, single-instance check, changesets) |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
-| [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines |
+| [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines, [local exceptions](platform-adoption/local-exceptions.md) (every shim and deviation, and the issue that removes it) |
 | [personal-access-tokens.md](personal-access-tokens.md) | Creating and using `pat_` tokens for scripts and CI |
 | [RENAMING.md](RENAMING.md) | Renaming or rebranding the application |
 | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Authentication, authorization, transport and data protection |
@@ -102,6 +104,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Runbook | Use it when |
 |---|---|
 | [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) | AI provider keys and note generation need setup or diagnosis |
+| [runbooks/database-baseline.md](runbooks/database-baseline.md) | You baseline a database onto the platform migration history (`platform db baseline --through 14`), or review the rehearsal record |
 | [runbooks/database-restore.md](runbooks/database-restore.md) | You restore the database from a backup |
 | [runbooks/maintenance-mode.md](runbooks/maintenance-mode.md) | You open, close or recover a maintenance window |
 | [runbooks/node-job-secrets.md](runbooks/node-job-secrets.md) | You configure per-job database credentials for worker nodes |

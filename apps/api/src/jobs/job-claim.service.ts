@@ -297,6 +297,10 @@ export const JOB_CLAIM_COLUMNS: Readonly<Record<keyof Job, string>> = {
   claimedByNodeId: 'claimed_by_node_id',
   leaseExpiresAt: 'lease_expires_at',
   executor: 'executor',
+  // PLATFORM-ADOPTION-SHIM(#468): columns the platform added to `jobs`.
+  orgId: 'org_id',
+  claimToken: 'claim_token',
+  traceContext: 'trace_context',
 };
 
 /**
