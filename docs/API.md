@@ -6139,7 +6139,8 @@ the retry.
   off for this deployment), `ai_not_configured`, `ai_key_missing` (the run
   uses your own key), `model_lacks_capability`, `extraction_running` (this
   note already has an extraction in progress — decided by the database at
-  insert, so two concurrent requests get one `202` and one `409`),
+  insert (`kg_proposals_note_extracting_uniq_idx`), never by a lookup first,
+  so two concurrent requests get one `202` and one `409`),
   `note_not_ready` (the note is not `ready`).
 
 #### GET /graph/extract/estimate?noteId=&model=

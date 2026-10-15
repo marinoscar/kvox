@@ -394,6 +394,15 @@ re-enqueues itself, and everything about it follows from that:
   leaves `dedup_key` `NULL`, and `docs/specs/job-queue.md` §4.2 already
   establishes that a `NULL` key never collides with anything — the new row is
   inserted unconditionally, exactly as intended.
+  This re-enqueue lives in exactly one place —
+  `TranscriptPipelineService.enqueuePoll` — and
+  `transcript-pipeline.service.spec.ts` pins it. A regression here has no
+  other symptom: nothing errors, the transcript simply stops advancing.
+- **Two enqueues in the pipeline are guarded on the job-handler registry.**
+  `media.audio.transcode` (#26) and `transcript.snapshot` (#27) are registered
+  by later issues than the code that enqueues them; without the guard the
+  enqueue would create `pending` rows no worker can ever claim, which would sit
+  in the admin job list as a permanent backlog of one.
 - **Not one job holding a slot in a loop.** §11 covers this as a rejected
   alternative in detail; the summary is that a single long-lived polling job
   holds a worker slot for the recording's entire transcription time and

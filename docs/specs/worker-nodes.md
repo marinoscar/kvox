@@ -494,8 +494,8 @@ path unused would have been the expensive-to-carry code this section warned
 about — but "a node never persists a job-scoped credential" was never really
 optional once a job type needed one at all, so when #351/#352 made
 `db.backup.run` a queue job, brokering stopped being deferred and became
-[MANDATORY rule 3](../../CLAUDE.md#mandatory-every-long-running-activity-is-a-queue-job)
-in `CLAUDE.md`.
+[MANDATORY rule 3](../../AGENTS.md#mandatory-every-long-running-activity-is-a-queue-job)
+in `AGENTS.md`.
 
 The presigned data-plane IO — how a node reads an input object and writes an
 output object with no storage credentials of its own — is **#269**, and it is

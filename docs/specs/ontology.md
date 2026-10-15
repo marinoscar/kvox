@@ -1256,7 +1256,7 @@ write path, with exactly two named exceptions: the **speaker-naming write**
 that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
 from `TranscriptEditingService` (after an identification, and since #405
 after any versioned save or restore that changes a speaker's name) rather than
-performed inline in that request — CLAUDE.md's job-queue rule applies here
+performed inline in that request — `AGENTS.md`'s job-queue rule applies here
 exactly as everywhere else, however small the write — and a **manual edit on
 an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
@@ -1496,7 +1496,13 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   four separate tables would mean writing that query, that dedup pass, and
   that review-status transition four times over rather than once. `owner_id`
   Cascade.
-- **`kg_evidence`** — the §5.3 contract, exactly as specified there.
+- **`kg_evidence`** — the §5.3 contract, exactly as specified there. The
+  no-orphans invariant (§3.3) has a database backstop: a hand-written
+  **deferred constraint trigger** (#355, `kg_assert_has_evidence`,
+  intentional schema drift) refuses at `COMMIT`, with SQLSTATE `23514`, any
+  `accepted`/`edited` entity, relation or item left with no evidence row —
+  so write the subject and its evidence in one transaction, and delete
+  evidence **after** (or together with) its subject, never before.
   Foreign keys into `transcripts`/`transcript_segments`/`notes` are
   **`SetNull`**, not `Restrict` — a deliberate divergence from
   `notes.source_transcript_id`'s `Restrict` (`docs/specs/notes.md` §4.1):
@@ -1698,7 +1704,7 @@ Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
-`kg.extract` lives under `graph/extraction/` (§6), `kg.graph_layout`
+`kg.extract` lives under `graph/extraction/` (§6; `GraphExtractionModule`, imported by `NotesModule` for the auto-extract hook — one-way: it provides the two note services it needs itself), `kg.resolve`/`kg.embed` under `graph/resolution/` (`GraphResolutionModule`, §7), `kg.graph_layout`
 under `graph/layout/` (§22.3) and `kg.migrate` under `graph/migrate/` (§17.4) —
 each grouped with the feature it belongs to rather than in one shared handler
 directory:
@@ -1712,7 +1718,7 @@ directory:
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
-| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY`, and re-run for one owner by the admin job list's Retry |
+| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY` through `enqueueHousekeepingJob` with a subject type **and** id (`kg.export`'s sweep passes a subject type alone; the helper scopes its in-flight check and dedup key to exactly what it is given), and re-run for one owner by the admin job list's Retry |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
@@ -1899,7 +1905,7 @@ entity page's Ask panel (§21.5) came later, with issue #381, through the
 header's `actions` slot.
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
-Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
+Settings UI Pattern rule 2 (AGENTS.md), a tab gate is about *content*
 within one destination, while reachability is about the *route*; the
 proposal panel is neither a destination nor parallel content to the note
 itself — it is a transient review surface over the note that is already
@@ -2741,7 +2747,9 @@ artefacts, not a design that could disagree with itself by intent.
   is `kv:` plus every `RDF_PREFIXES` prefix, never a remapping of `kv:` terms).
 - **Reuse, expiry, purge.** `POST` reuses an unexpired, non-failed export
   with the same `graph_fingerprint` (§10); a daily enqueue-only cron queues
-  `kg.export` in sweep mode to delete expired exports and their files; and
+  `kg.export` in sweep mode (`payload.mode: 'sweep'`, subject
+  `kg_export_sweep`, `KgExportExpiryTask`) to delete expired exports and their
+  files; and
   `kg.purge` — "forget this person" and the Danger Zone alike — deletes every
   export, since a file written before still names what was forgotten.
 
@@ -3726,6 +3734,30 @@ listener re-lays only when the readable entity count has moved by at least
 20% since the latest snapshot (floored at a denominator of 50, so a small
 graph does not re-lay on every new person). A manual refresh that joins an
 automatic job still waiting out its delay pulls it forward to run now.
+
+The details a neighbouring file can break: `GraphLayoutEnqueuer` is the one
+place the job is ever enqueued, with ordinary dedup (never `skipDedup`), so at
+most one layout job is pending or running per owner. The 120-second delay is
+the constant `GRAPH_LAYOUT_COALESCE_MS`. The `graph.changed` event
+(`apps/api/src/graph/graph-events.ts`) is emitted after a graph write commits,
+never inside the transaction, and `GraphLayoutListener` runs one cheap
+readable-entity count and enqueues only past the 20% threshold above — never
+on every commit, which this section forbids. `kg.graph_layout` is server-only
+without being a credential question: it makes no AI call and needs no vendor
+key, but its input is the owner's entire graph read across `kg_entities`,
+`kg_relations` and `kg_items` at run time, so it opts out of node eligibility
+under the "reads several tables mid-computation" exception (the queue-job rule
+2 in `AGENTS.md`). Its profile is `{ maxRuntimeMs: 15 min, maxAttempts: 2 }`:
+one automatic retry is honest here, unlike `note.generate`'s `maxAttempts: 1`,
+because a retry recomputes a derived cache and calls no vendor. The stored
+snapshot holds ids and coordinates only — never a label — and only the newest
+**two** rows per owner are kept (the handler prunes the rest in the transaction
+that inserts the new one), so `GET /api/graph/overview` joins labels live and a
+forgotten person's name cannot resurface through this cache. `kg.purge`'s
+`scope: 'all'` plan deletes the owner's `kg_graph_layouts` rows as its last
+step, since even an ids-and-coordinates cache is a map of the graph being
+wiped; `scope: 'person'` does not touch it — the next layout drops the
+forgotten entity through the live join.
 
 The overview itself renders clusters as the zoomed-out unit — a cluster's
 size and label (its most central entities) rather than every individual
