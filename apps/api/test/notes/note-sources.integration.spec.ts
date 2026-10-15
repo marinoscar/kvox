@@ -9,7 +9,7 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser, createMockViewerUser } from '../helpers/auth-mock.helper';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { markdownFile, multiPagePdf } from '../fixtures/documents.fixture';
 

@@ -27,7 +27,7 @@ that describes the cipher still holds. What changed is where the code lives.
 
 | Table | Sub-key domain (the `purpose` passed to the cipher) | Written by |
 |---|---|---|
-| `credentials` | the row's own `purpose` column (`smtp`, `push_vapid`, `transcription`, ...) | `CredentialsService.setSecret` |
+| `credentials` | the row's own `purpose` column (`smtp`, `push_vapid`, `transcription`, `storage`, ...) | `CredentialsService.setSecret` |
 | `user_ai_credentials` | the constant `'ai-key'` for every row | `UserAiCredentialsService` |
 | `user_credentials`, `org_credentials` | `user:<userId>:<purpose>` and `org:<orgId>:<purpose>` | the platform's per-user and per-organization stores. Mounted but unused: this deployment writes no row, so both are empty. If one ever is not, rotate it too |
 

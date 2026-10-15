@@ -25,7 +25,7 @@ import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/tes
 import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 
 const OBJECT_ID = 'source-object-1';
 

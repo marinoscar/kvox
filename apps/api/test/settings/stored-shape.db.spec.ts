@@ -41,7 +41,7 @@ import {
 import type { PrincipalCache } from '@marinoscar/platform-api/identity';
 
 import '../../src/kvox.manifest';
-import { normalizeProfileSettings } from '../../src/common/profile-image/profile-image';
+import { normalizeProfileSettings } from '@marinoscar/platform-api/storage';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 
 const { describeWithDb } = resolveDbSuite('stored-shape.db.spec');

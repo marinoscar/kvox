@@ -68,7 +68,7 @@ import { DatabaseBackupController } from '../../src/db-backup/db-backup.controll
 import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';
 import { RESTORE_SCHEMA_OVERRIDE_FIELD } from '../../src/db-backup/restore-preflight.service';
 import { startRestoreRequestSchema } from '../../src/db-backup/dto/db-backup-restore.dto';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';

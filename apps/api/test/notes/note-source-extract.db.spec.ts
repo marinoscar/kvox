@@ -70,8 +70,8 @@ import type {
   StorageUploadResult,
   UploadPart,
   UploadedPart,
-} from '../../src/storage/providers';
-import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
+} from '@marinoscar/platform-api/storage';
+import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';

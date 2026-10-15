@@ -11,9 +11,9 @@ import {
   setupMockUserSettings,
 } from '../fixtures/mock-setup.helper';
 import { createMockTestUser, authHeader } from '../helpers/auth-mock.helper';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
-import { AVATAR_MAX_BYTES } from '../../src/common/profile-image/profile-image';
+import { AVATAR_MAX_BYTES } from '@marinoscar/platform-api/storage';
 
 const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00,

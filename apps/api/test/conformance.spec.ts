@@ -18,7 +18,7 @@ import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/t
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
-import { STORAGE_PROVIDER } from '../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
 
@@ -140,8 +140,8 @@ runPlatformConformance({
         contents: readCatalog(),
         staleMessage: 'prisma/catalog/system-settings-defaults.json is stale. Run `npm run catalog:settings` in apps/api and commit the result.',
       },
-      // notifications, jobs, nodes, databaseBackup, maintenance (platform declarations) + transcription, ai (KVox).
-      minSystemNamespaces: 7,
+      // notifications, jobs, nodes, databaseBackup, maintenance, storage (platform declarations) + transcription, ai (KVox).
+      minSystemNamespaces: 8,
     },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },

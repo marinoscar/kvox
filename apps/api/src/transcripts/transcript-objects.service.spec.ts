@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { ObjectsService } from '../storage/objects/objects.service';
-import { STORAGE_PROVIDER } from '../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 import {
   MissingUploadedObjectError,

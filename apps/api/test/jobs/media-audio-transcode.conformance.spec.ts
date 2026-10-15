@@ -32,7 +32,7 @@ import { TranscriptObjectsService } from '../../src/transcripts/transcript-objec
 import { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 
 const TRANSCRIPT_ID = 'transcript-1';
 const OBJECT_ID = 'obj-1';

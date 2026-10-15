@@ -10,8 +10,6 @@ import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { prismaMock } from '../mocks/prisma.mock';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-import { createFakeOwnershipStore } from './fake-ownership-store.helper';
 import { JobWorker } from '@marinoscar/platform-api/jobs';
 
 export interface TestContext {
@@ -134,12 +132,7 @@ export async function createTestApp(
       // `src/jobs/job.worker.bootstrap.spec.ts`, both of which drive it
       // deliberately.
       .overrideProvider(JobWorker)
-      .useValue({})
-      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` / `part_size` are raw SQL in
-      // the real store, which a mocked client cannot answer; this fake answers
-      // from the rows the spec feeds `storageObject.findUnique`.
-      .overrideProvider(LegacyObjectOwnershipStore)
-      .useValue(createFakeOwnershipStore(prismaMock));
+      .useValue({});
 
     for (const { provide, useValue } of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(provide).useValue(useValue);

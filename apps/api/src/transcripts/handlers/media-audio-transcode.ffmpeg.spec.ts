@@ -10,7 +10,7 @@ import type { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
 import { FfmpegService } from '../media/ffmpeg.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';

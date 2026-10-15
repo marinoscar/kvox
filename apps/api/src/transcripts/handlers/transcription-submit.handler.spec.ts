@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { ProviderAuthError, ProviderInputError } from '../../transcription/errors';
 import { TRANSCRIPTION_THROTTLE_KEY } from '../job-types';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';

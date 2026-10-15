@@ -45,8 +45,8 @@ import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { ObjectsService } from '../../src/storage/objects/objects.service';
-import type { StorageProvider } from '../../src/storage/providers/storage-provider.interface';
+import type { ObjectsService } from '@marinoscar/platform-api/storage';
+import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';

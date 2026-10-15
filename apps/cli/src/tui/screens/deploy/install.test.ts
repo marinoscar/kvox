@@ -110,6 +110,7 @@ const TEMPLATE = [
   'JOBS_WORKER_CONCURRENCY=2',
   'API_MEM_LIMIT=512M',
   'WEB_MEM_LIMIT=128M',
+  'UPTRACE_SITE_URL=http://localhost:14318',
   '',
   '# ------------------------------------------------------------',
   '# Database',
@@ -145,11 +146,6 @@ const TEMPLATE = [
   '# Test Authentication',
   '# ------------------------------------------------------------',
   'TEST_AUTH_ENABLED=false',
-  '',
-  '# ------------------------------------------------------------',
-  '# Observability',
-  '# ------------------------------------------------------------',
-  'UPTRACE_SITE_URL=http://localhost:14318',
 ].join('\n');
 
 const SPECS = parseEnvExample(TEMPLATE);

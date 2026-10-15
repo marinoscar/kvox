@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
-import { ObjectsService } from '../storage/objects/objects.service';
+import { ObjectsService } from '@marinoscar/platform-api/storage';
 import { createFakeProvider, type FakeProvider } from './handlers/__fixtures__/fake-provider';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 import { TranscriptAccessService } from './transcript-access.service';

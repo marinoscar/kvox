@@ -34,8 +34,8 @@ import {
 } from './platform/credentials/credentials.config';
 import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-reminders.module';
 import { CommonModule } from './common/common.module';
-import { ProfileImageModule } from './settings/profile-image/profile-image.module';
-import { StorageModule } from './storage/storage.module';
+import { profileImageModule, StorageConfigModule, storageModule } from './platform/storage/storage.config';
+import { KvoxObjectsModule } from './kvox-objects/kvox-objects.module';
 import { EmailModule } from './email/email.module';
 import { BroadcastsModule } from './notifications/broadcasts/broadcasts.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -110,9 +110,12 @@ import configuration from './config/configuration';
     // every module reads `SystemSettingsService` / `UserSettingsService`
     // without importing it. Must come after the manifest imports at the top.
     settingsModule,
-    // Uploaded profile pictures (#367): its own module because it needs the
-    // storage provider and SettingsModule must not (see the module).
-    ProfileImageModule,
+    // Uploaded profile pictures (#367), the platform's since #469:
+    // `GET|POST|DELETE /api/user-settings/profile-image` and the public avatar
+    // route. A dynamic module built AFTER the user-settings namespaces are
+    // registered (the upload response embeds the composed schema); it needs
+    // `settingsModule` and the storage host ports.
+    profileImageModule,
     // The platform host core (#464, epic #462): the event bus, the app metrics,
     // maintenance mode (`GET|PUT /api/admin/maintenance` and the application's
     // ONLY global guard, `MaintenanceGuard`), `/api/health/*`, the `{ data }`
@@ -122,7 +125,21 @@ import configuration from './config/configuration';
     // middleware. Sits where HealthModule sat so the OpenAPI path order is
     // stable. GLOBAL.
     hostCoreModule,
-    StorageModule,
+    // The platform's storage slice (#469, epic #467): `/api/storage/objects`
+    // (the objects API, without KVox's multipart-parts routes),
+    // `/api/storage/status`, the `storage.cleanup.stale-uploads` and
+    // `storage.object.process` job types and the stale-upload cron, over the
+    // runtime-configured provider (the `storage` system setting plus the
+    // credential store). Replaces this app's own `storage/` folder.
+    storageModule,
+    // `/api/admin/storage-config` (read, save, connection test, bucket
+    // provisioning) and the `storage.*` Doctor checks.
+    StorageConfigModule,
+    // KVox's side of storage (#469): `KvoxManagedObjects` (the only code that
+    // reads `storage_objects` for the domain modules), the ownership table, the
+    // multipart-parts routes the platform lacks, `GET /api/kvox/files` and the
+    // transcript upload processor.
+    KvoxObjectsModule,
     // Worker node credentials, the platform's since #468 (epic #467): the `nod_`
     // token family the node fleet authenticates with, and its
     // `/api/node-credentials` admin endpoints. @Global because the identity
@@ -217,12 +234,12 @@ import configuration from './config/configuration';
     // has with `databaseBackup`.
     TranscriptionModule,
 
-    // The transcript pipeline (#25, epic #19): create, the upload listener,
+    // The transcript pipeline (#25, epic #19): create, the upload processor,
     // five job handlers, the reconciliation cron and the read/lifecycle
     // routes. After TranscriptionModule because it imports it for the provider
-    // registry and the settings service, and after StorageModule because it
-    // calls `ObjectsService.initUpload` with a `managedBy` only a module may
-    // claim.
+    // registry and the settings service, and after KvoxObjectsModule because it
+    // calls `KvoxManagedObjects.initManagedUpload` with a module only a module
+    // may claim.
     TranscriptsModule,
 
     // AI (#47, epic #45): the provider framework, the OpenAI provider, the

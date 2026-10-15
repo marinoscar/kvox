@@ -78,7 +78,8 @@ export interface InitManagedUploadInput {
   userId: string;
   name: string;
   size: number;
-  mimeType: string;
+  /** Optional: a browser may report none, and the extension then decides (`resolveMimeType`). */
+  mimeType?: string | null;
   orgId?: string;
   /**
    * The module's own content-type allowlist (`audio/*`, `video/*` for a

@@ -10,6 +10,8 @@
 //   smtp           platform `SMTP_CREDENTIAL_PURPOSE_DEF`   (same string as this app's)
 //   email_ses      platform `SES_CREDENTIAL_PURPOSE_DEF`    (this app stores no SES secret)
 //   push_vapid     platform `PUSH_VAPID_CREDENTIAL_PURPOSE_DEF` (same string as this app's)
+//   storage        platform `STORAGE_CREDENTIAL_PURPOSE_DEF` (#469; the object store's secret
+//                  access key, `storage/default`, entered at /admin/settings/storage)
 //
 // `transcription` (the speech-to-text provider key, name '<providerId>') is this app's
 // own and is registered by `kvox.manifest.ts` (`[registry:credential-purposes]`):
@@ -29,6 +31,7 @@
 import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
 import { SES_CREDENTIAL_PURPOSE_DEF, SMTP_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/notifications';
+import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 
 let registered = false;
 
@@ -40,4 +43,5 @@ export function registerKvoxCredentialPurposes(): void {
   registerCredentialPurpose(SMTP_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(SES_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(PUSH_VAPID_CREDENTIAL_PURPOSE_DEF);
+  registerCredentialPurpose(STORAGE_CREDENTIAL_PURPOSE_DEF);
 }

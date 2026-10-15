@@ -34,7 +34,7 @@ import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 
-import type { StorageProvider } from '../../src/storage/providers/storage-provider.interface';
+import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type {
   MultipartUploadInit,
   SignedPutUrlOptions,
@@ -43,7 +43,7 @@ import type {
   StorageUploadResult,
   UploadPart,
   UploadedPart,
-} from '../../src/storage/providers/storage-provider.types';
+} from '@marinoscar/platform-api/storage';
 
 function notSupported(method: string): never {
   throw new Error(

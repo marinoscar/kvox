@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Writable } from 'node:stream';
 
 import { AiInputError } from '../../ai/ai-errors';
-import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoteObjectsService } from '../note-objects.service';
 import {

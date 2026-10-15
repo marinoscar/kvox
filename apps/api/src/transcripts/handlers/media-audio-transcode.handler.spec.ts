@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { mediaAudioTranscodeResultSchema } from '../contracts/media-audio-transcode.contract';
 import { PrismaService } from '../../prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
 import { selectTranscriptionInput } from '../transcription-input';
 import { FfmpegService } from '../media/ffmpeg.service';
