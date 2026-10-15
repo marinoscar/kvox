@@ -5,22 +5,32 @@
  * `scopeIncludes` IS A SECOND, INDEPENDENTLY-WRITTEN COPY OF A SERVER RULE
  * =============================================================================
  *
- * `apps/api/src/user-data/job-types.ts` OWNS what each scope deletes; this
- * module's `scopeIncludes` exists only so the confirmation dialog can state a
- * count before the request is ever sent. Nothing type-checks the two against
- * each other, so this suite reads the API's OWN `scopeIncludes` source off
- * disk (the technique `services/maintenance.test.ts` already establishes for
- * the maintenance marker) and EXECUTES the extracted expression for every
- * scope, per category — not a hand-typed table that could itself be wrong in
- * the same way a second implementation could be. A rename or a reshuffled
- * `switch` in the API file fails this suite; a genuine, deliberate rule change
- * on the server (like the note-templates reversal below) requires touching
- * both files, which is the whole point.
+ * The API OWNS what each scope deletes; this module's `scopeIncludes` exists
+ * only so the confirmation dialog can state a count before the request is ever
+ * sent. Nothing type-checks the two against each other, so this suite reads
+ * the API's OWN declarations off disk (the technique `services/maintenance
+ * .test.ts` already establishes) and derives the scope x category matrix from
+ * them — not a hand-typed table that could itself be wrong in the same way a
+ * second implementation could be.
+ *
+ * Since issue #460 the API's `scopeIncludes` is registry-driven: categories
+ * (`id`, `content`, `order`) and scopes (`id`, `categories`) are literals in
+ * `apps/api/src/user-data/user-data.base.ts` and the domain files
+ * `apps/api/src/<domain>/<domain>.user-data.ts`. This suite PARSES those files
+ * with the TypeScript compiler's parser (syntax only — nothing is imported, so
+ * no API code reaches the web bundle) and applies the registry's own
+ * resolution rule: `categories: 'all'` reaches everything, `'content'` reaches
+ * the categories flagged `content: true`, and a list reaches exactly its
+ * members. A category added/removed, or a scope's membership changed, on one
+ * side only fails here; a genuine, deliberate rule change on the server (like
+ * the note-templates reversal below) requires touching both sides, which is the
+ * whole point.
  */
 
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 
@@ -40,84 +50,184 @@ const API_BASE = 'http://localhost:3000/api';
 // Same depth as `services/maintenance.test.ts`: this file also lives at
 // apps/web/src/__tests__/services/.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
-const JOB_TYPES_PATH = 'apps/api/src/user-data/job-types.ts';
-const apiSource = readFileSync(resolve(repoRoot, JOB_TYPES_PATH), 'utf8');
+const API_SRC = resolve(repoRoot, 'apps/api/src');
+const MANIFEST_PATH = 'apps/api/src/kvox.manifest.ts';
+const BASE_DECLARATION = 'user-data/user-data.base.ts';
 
 const ALL_SCOPES: UserDataScope[] = ['transcripts', 'notes', 'files', 'content', 'everything'];
 
-/**
- * Isolate the body of the API's own `scopeIncludes`, so the `case` regexes
- * below cannot accidentally match something in `confirmationFor` or a comment
- * elsewhere in the file.
- */
-function extractApiScopeIncludesBody(): string {
-  const start = apiSource.indexOf('export function scopeIncludes(');
-  const end = apiSource.indexOf('export function confirmationFor(');
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error(
-      `Could not isolate scopeIncludes in ${JOB_TYPES_PATH} — has the function been renamed or reordered?`,
-    );
-  }
-  return apiSource.slice(start, end);
+interface ApiCategory {
+  id: string;
+  content: boolean;
+  order: number;
+}
+interface ApiScope {
+  id: string;
+  categories: string[] | 'content' | 'all';
 }
 
-const apiFnBody = extractApiScopeIncludesBody();
-
-/** Every `case '<category>':` label the API's `scopeIncludes` actually switches on. */
-const apiCategoryLabels = [...apiFnBody.matchAll(/case '([^']+)':/g)].map((m) => m[1]);
-
-/**
- * The category UNION on the `category` parameter itself — this is what the
- * web file's own header means by "named exactly as ... and in the same
- * order" (the `switch`'s `case` order below is a separate, unordered thing:
- * the API happens to write `files` before `noteTemplates` there, while the
- * type union — and `USER_DATA_CATEGORIES` — put `noteTemplates` first).
- */
-function extractApiCategoryUnionOrder(): string[] {
-  const match = apiFnBody.match(/category:\s*([\s\S]*?)\n\):/);
-  if (!match) {
-    throw new Error(
-      `Could not find the "category" parameter's type union in ${JOB_TYPES_PATH}.`,
-    );
-  }
-  return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+/** The value of a property whose initializer is a plain string literal, else undefined. */
+function stringProp(props: Map<string, ts.Expression>, name: string): string | undefined {
+  const init = props.get(name);
+  return init && ts.isStringLiteralLike(init) ? init.text : undefined;
 }
 
 /**
- * Extract the boolean expression the API returns for one category, and turn
- * it into a callable predicate — the API's OWN rule, executed, not retyped.
+ * Every API file that DECLARES user-data categories/scopes: the base file plus
+ * each domain's `*.user-data.ts` (hooks/spec files do not match the suffix).
+ * Discovered, not listed, so a new domain's declaration file is picked up
+ * automatically rather than silently ignored.
  */
-function apiScopeIncludesFor(category: string): (scope: UserDataScope) => boolean {
-  const re = new RegExp(`case '${category}':\\s*return ([^;]+);`);
-  const match = apiFnBody.match(re);
-  if (!match) {
-    throw new Error(
-      `Could not find "case '${category}':" inside scopeIncludes in ${JOB_TYPES_PATH}.`,
-    );
-  }
-  const expr = match[1].trim();
-  // eslint-disable-next-line no-new-func -- deliberately executing the API's
-  // own extracted expression rather than re-deriving it by hand.
-  const fn = new Function('scope', `return (${expr});`) as (scope: UserDataScope) => boolean;
-  return fn;
+function findApiDeclarationFiles(): string[] {
+  const found = readdirSync(API_SRC, { recursive: true, encoding: 'utf8' })
+    .map((p) => p.split('\\').join('/'))
+    .filter((p) => p.endsWith('.user-data.ts'));
+  return [BASE_DECLARATION, ...found].sort();
 }
 
-describe('scopeIncludes — mirrored from apps/api/src/user-data/job-types.ts, and pinned against it', () => {
-  it('switches on exactly the same five categories the API file does (order-independent — see the "same order" check below for the type union)', () => {
-    expect(new Set(apiCategoryLabels)).toEqual(new Set(USER_DATA_CATEGORIES));
-    expect(apiCategoryLabels).toHaveLength(USER_DATA_CATEGORIES.length);
+/**
+ * Parse the category and scope literals out of the API's declaration files.
+ * A category literal is an object with a string `id` and a boolean `content`;
+ * a scope literal is an object with a string `id` and a `categories` property.
+ * Nested objects (`summary`, `purge`) carry neither shape and are ignored.
+ */
+function parseApiDeclarations(): { categories: ApiCategory[]; scopes: ApiScope[] } {
+  const categories: ApiCategory[] = [];
+  const scopes: ApiScope[] = [];
+
+  for (const file of findApiDeclarationFiles()) {
+    const text = readFileSync(resolve(API_SRC, file), 'utf8');
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+
+    const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const props = new Map<string, ts.Expression>();
+        for (const prop of node.properties) {
+          if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.name) || ts.isStringLiteralLike(prop.name))) {
+            props.set(prop.name.text, prop.initializer);
+          }
+        }
+        const id = stringProp(props, 'id');
+        const content = props.get('content');
+        const cats = props.get('categories');
+
+        if (id !== undefined && cats !== undefined) {
+          if (ts.isStringLiteralLike(cats)) {
+            if (cats.text !== 'content' && cats.text !== 'all') {
+              throw new Error(`${file}: scope "${id}" has unrecognised categories "${cats.text}".`);
+            }
+            scopes.push({ id, categories: cats.text });
+          } else if (ts.isArrayLiteralExpression(cats) && cats.elements.every(ts.isStringLiteralLike)) {
+            scopes.push({ id, categories: cats.elements.map((e) => (e as ts.StringLiteral).text) });
+          } else {
+            throw new Error(`${file}: scope "${id}" has a \`categories\` value this suite cannot read statically.`);
+          }
+        } else if (
+          id !== undefined &&
+          content !== undefined &&
+          (content.kind === ts.SyntaxKind.TrueKeyword || content.kind === ts.SyntaxKind.FalseKeyword)
+        ) {
+          const order = props.get('order');
+          categories.push({
+            id,
+            content: content.kind === ts.SyntaxKind.TrueKeyword,
+            // Mirrors the registry: a category with no `order` sorts last.
+            order: order && ts.isNumericLiteral(order) ? Number(order.text) : Number.MAX_SAFE_INTEGER,
+          });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+
+  // Array#sort is stable, matching the registry's `list()` for equal orders.
+  categories.sort((a, b) => a.order - b.order);
+  return { categories, scopes };
+}
+
+const api = parseApiDeclarations();
+const apiCategoryIds = api.categories.map((c) => c.id);
+
+/** The registry's own resolution rule (`userDataScopeReaches`), applied to the parsed literals. */
+function apiScopeReaches(scopeId: string, categoryId: string): boolean {
+  const scope = api.scopes.find((s) => s.id === scopeId);
+  const category = api.categories.find((c) => c.id === categoryId);
+  if (!scope || !category) {
+    throw new Error(`API declarations name no scope "${scopeId}" / category "${categoryId}".`);
+  }
+  if (scope.categories === 'all') return true;
+  if (scope.categories === 'content') return category.content;
+  return scope.categories.includes(categoryId);
+}
+
+describe('scopeIncludes — mirrored from the API’s user-data declarations, and pinned against them', () => {
+  it('finds the declaration files, and every one is registered by the API manifest', () => {
+    const files = findApiDeclarationFiles();
+    expect(files).toEqual(
+      expect.arrayContaining([
+        BASE_DECLARATION,
+        'ask/ask.user-data.ts',
+        'graph/graph.user-data.ts',
+        'notes/notes.user-data.ts',
+        'transcripts/transcripts.user-data.ts',
+      ]),
+    );
+    const manifest = readFileSync(resolve(repoRoot, MANIFEST_PATH), 'utf8');
+    for (const file of files) {
+      const specifier = './' + relative(API_SRC, resolve(API_SRC, file)).replace(/\.ts$/, '');
+      expect(manifest, `${file} must be imported by ${MANIFEST_PATH}`).toContain(`'${specifier}'`);
+    }
   });
 
-  it('names the categories in the same order as the API’s own `category` type union', () => {
-    expect(extractApiCategoryUnionOrder()).toEqual([...USER_DATA_CATEGORIES]);
+  it('declares exactly the same categories the web mirror lists (no duplicates on either side)', () => {
+    expect(new Set(apiCategoryIds).size).toBe(apiCategoryIds.length);
+    expect(new Set(apiCategoryIds)).toEqual(new Set(USER_DATA_CATEGORIES));
+    expect(apiCategoryIds).toHaveLength(USER_DATA_CATEGORIES.length);
   });
 
-  it('agrees with the API’s own scopeIncludes for every scope × category pair', () => {
+  it('declares exactly the same five scopes the web mirror asks about', () => {
+    const apiScopeIds = api.scopes.map((s) => s.id);
+    expect(new Set(apiScopeIds).size).toBe(apiScopeIds.length);
+    expect(new Set(apiScopeIds)).toEqual(new Set(ALL_SCOPES));
+  });
+
+  // The API's category order is now the registry `order` of each declaration
+  // (it is the key order of GET /api/user-data/summary), not the union that
+  // `scopeIncludes` used to take. The web list is NOT in that order: it is
+  // the order the deletion dialog's itemised sentence is written in
+  // (`utils/userDataDisplay.ts`, pinned by its own test), which has always
+  // differed from the summary's key order for `noteTemplates`/`files` and for
+  // `onboarding`/`graph`/`ask`. So each side's order is pinned on its own, and
+  // reordering either one fails here and forces a look at the other.
+  it('pins the API’s category order (summary order, by declared `order`) and the web mirror’s own order', () => {
+    expect(apiCategoryIds).toEqual([
+      'transcripts',
+      'notes',
+      'files',
+      'noteTemplates',
+      'credentials',
+      'graph',
+      'ask',
+      'onboarding',
+    ]);
+    expect([...USER_DATA_CATEGORIES]).toEqual([
+      'transcripts',
+      'notes',
+      'noteTemplates',
+      'files',
+      'credentials',
+      'onboarding',
+      'graph',
+      'ask',
+    ]);
+  });
+
+  it('agrees with the API’s declared scopes for every scope × category pair', () => {
     for (const category of USER_DATA_CATEGORIES) {
-      const apiFn = apiScopeIncludesFor(category);
       for (const scope of ALL_SCOPES) {
         expect(scopeIncludes(scope, category), `scope=${scope} category=${category}`).toBe(
-          apiFn(scope),
+          apiScopeReaches(scope, category),
         );
       }
     }

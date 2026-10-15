@@ -4,7 +4,6 @@ import { AiModule } from '../ai/ai.module';
 import { EmailModule } from '../email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsModule } from '../settings/settings.module';
-import { TranscriptionModule } from '../transcription/transcription.module';
 import { AdminOnboardingController } from './admin-onboarding.controller';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
@@ -33,12 +32,17 @@ import { OnboardingService } from './onboarding.service';
 // green over a disabled button — and the disagreement would be invisible until
 // a user reported it.
 //
-// So: `TranscriptionModule` for `TranscriptionConfigService.available`, `AiModule`
-// for the per-caller `AiConfigService`, `SettingsModule` for the AI and backup
+// So: `AiModule` for the per-caller `AiConfigService`, `SettingsModule` for the AI and backup
 // policies plus the caller's own settings, `EmailModule` and
 // `NotificationsModule` for the two admin-only `describeForAdmin` views.
 // `PrismaService` needs no import — `PrismaModule` is `@Global` — and is used
-// only for four `count` calls.
+// only for the two admin account counts.
+//
+// NO DOMAIN MODULE IS IMPORTED (issue #460). What transcription, transcripts and
+// notes contribute — their steps and the facts behind them — is declared beside
+// those modules and registered from `kvox.manifest.ts`; the service resolves a
+// fact's provider with `ModuleRef.get(token, { strict: false })`, which finds it
+// anywhere in the application graph. So `TranscriptionModule` is no longer here.
 //
 // NOTHING IS EXPORTED. No other module has a reason to ask this one anything,
 // and #272's persisted intent (`onboarding.skipped[]`) is owned by
@@ -48,7 +52,6 @@ import { OnboardingService } from './onboarding.service';
 
 @Module({
   imports: [
-    TranscriptionModule,
     AiModule,
     SettingsModule,
     EmailModule,

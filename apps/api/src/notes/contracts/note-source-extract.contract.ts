@@ -83,7 +83,7 @@ import {
   type ExtractionEncoding,
   type ExtractionFailureReason,
   type ExtractionOutcome,
-} from '../../notes/extraction/extraction-result';
+} from '../extraction/extraction-result';
 
 /** Structural ceiling on a node-submitted extraction, in characters. */
 export const NOTE_SOURCE_EXTRACT_MAX_TEXT_CHARS = 16 * 1024 * 1024;

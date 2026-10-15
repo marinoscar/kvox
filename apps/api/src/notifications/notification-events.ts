@@ -80,136 +80,40 @@
 // This file is intentionally NOT a Nest provider. It is pure data and pure
 // functions, so tests, the future endpoint, and a shared package later can all
 // consume it without standing up DI for a constant.
+//
+// SINCE #460 THE LIST IS A REGISTRY. This file declares the platform's own
+// events (`BASE_NOTIFICATIONS`); `notification-registry.ts` holds the registry
+// and the lookups, and the transcript and note events register themselves from
+// their own folders. Everything below that used to be an array or a closed map
+// (`NOTIFICATION_EVENTS`, `findEvent`, `channelsFor`, ...) keeps its name and
+// contract and reads the registry.
 // =============================================================================
 
-/**
- * Every channel the framework knows about, as a value.
- *
- * The type is DERIVED from this array rather than declared alongside it, so
- * the two cannot disagree — widening this array widens the type in the same
- * edit, and every `switch` over a channel that lacks the new arm fails
- * typecheck instead of silently dropping deliveries. `'browser'` arrived this
- * way in #127; `'push'` arrives the same way in #228 (epic #215) — epic #109
- * reserved the name in this comment long before #228 filed the sweep that
- * actually widens the array, and this is that sweep. Adding the string here is
- * ONLY a capability declaration: no `NOTIFICATION_EVENTS` entry declares
- * `'push'` yet (no event has anything to send over it), no sender implements
- * `NotificationChannelSender` for it, and `notification-policy.ts` explains
- * deliberately, in its own comment, why `policyChannels` gives it no
- * deployment-wide gate yet either — that gate is #230's job. Every
- * non-exhaustive `switch`/if-chain over `NotificationChannel` in this tree was
- * swept in the same change that added `'push'` here, per #228.
- *
- * CHANNEL IS AN ENUM FROM THE START, even though #122 delivers only email.
- * Preferences are persisted per event AND per channel from day one. Storing a
- * bare boolean now and growing a channel axis later is a data migration over
- * live user preferences, which is the one shape of change this registry
- * exists to avoid.
- */
-export const NOTIFICATION_CHANNELS = ['email', 'browser', 'push'] as const;
+import {
+  backupFailedBrowserTemplate,
+  broadcastBrowserTemplate,
+  nodeOfflineBrowserTemplate,
+  restoreCompletedBrowserTemplate,
+  roleChangedBrowserTemplate,
+} from './channels/base-browser-templates';
+import {
+  NOTIFICATION_CHANNELS,
+  type NotificationChannel,
+  type NotificationEventDef,
+} from './notification-event.types';
+import {
+  NOTIFICATION_EVENTS,
+  findRegisteredEvent,
+  type NotificationRegistration,
+} from './notification-registry';
 
-/** A delivery channel. See {@link NOTIFICATION_CHANNELS}. */
-export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+export { NOTIFICATION_CHANNELS, NOTIFICATION_EVENTS };
+export type { NotificationChannel, NotificationEventDef };
+
 
 /**
- * One notification event, fully described for every surface that dispatches,
- * renders, or documents it.
- */
-export interface NotificationEventDef {
-  /**
-   * Stable key, persisted in user preferences and in delivery records.
-   *
-   * RENAMING ONE IS A MIGRATION, not a refactor: a stored preference keyed by
-   * the old string becomes unreachable, and — under the epic's sparse
-   * absent-key contract, where absent means enabled — a user who deliberately
-   * muted an event would silently start receiving it again under its new name.
-   * Add a new key and migrate the rows; never edit a key in place.
-   */
-  key: string;
-
-  /** Short human label, shown as the row heading on the preferences page. */
-  label: string;
-
-  /**
-   * One sentence on what actually triggers this, in the user's terms. This is
-   * the only place the answer to "why did I get this?" is written down.
-   */
-  description: string;
-
-  /**
-   * Channels this event CAN be delivered over — a capability of the event,
-   * not a statement about which transports are implemented yet.
-   *
-   * Deliberately per-event and meaningful: `allowlist.invitation` lists email
-   * only because its recipient has no account and no open tab by definition,
-   * so a browser notification is not merely unimplemented, it is impossible.
-   * The dispatcher intersects this with the user's preferences and with the
-   * transports actually registered, so declaring a channel before its
-   * implementation lands is safe — it simply has nowhere to go until then.
-   *
-   * ---------------------------------------------------------------------------
-   * WHAT `channels` MEANS ON THE WIRE IS NOW CAPABILITY ∩ POLICY (#226)
-   * ---------------------------------------------------------------------------
-   *
-   * The array declared BELOW is still pure capability, and this is still the
-   * only place it is stated. But `GET /api/notifications/events` no longer
-   * serves it verbatim: since #226 both that endpoint and the dispatcher run it
-   * through `policyChannels` (notification-policy.ts), which drops `browser`
-   * when an operator has switched browser notifications off deployment-wide or
-   * suppressed this event specifically in system settings.
-   *
-   * So an event that declares `browser` here and shows no `browser` over the
-   * API is CONFIGURATION, not a bug in this registry — check
-   * `system_settings.value.notifications` before concluding otherwise. The one
-   * exception is a `mandatory` event, whose channels survive the policy filter
-   * because its `notifications` row is the delivery and muting a toast must not
-   * mute an audit-relevant inbox entry; for those the policy shows up as
-   * `toast: false` on the stream instead. notification-policy.ts carries the
-   * full argument.
-   *
-   * Must be non-empty: an event with no channels can never be delivered, which
-   * is a declaration bug rather than a configuration.
-   */
-  channels: NotificationChannel[];
-
-  /**
-   * Default when a user has expressed no preference.
-   *
-   * Reads together with the epic's sparse absent-key contract: no preference
-   * row is materialised until a user deliberately changes something, so this
-   * is what an untouched account gets.
-   */
-  defaultEnabled: boolean;
-
-  /**
-   * The user may NOT opt out — on ANY channel this event declares.
-   *
-   * For security-relevant events where silence is itself the risk: a role
-   * change, a new sign-in from an unknown device. #125 enforces this
-   * SERVER-SIDE, in preference resolution, and not only in the preferences UI
-   * — otherwise a crafted PATCH silences the exact alert the UI refuses to
-   * hide, which is the whole attack this flag exists to close.
-   *
-   * ALL-OR-NOTHING, BY DESIGN: mandatory is not "at least one channel must
-   * stay on". Per-channel opt-out on a mandatory event reopens the hole it
-   * closes — a user who drops email and keeps browser is unreachable the
-   * moment no tab is open, and the alert is lost exactly when it matters. So
-   * the resolver ignores stored preferences for a mandatory event entirely and
-   * every declared channel stays enabled. The UI (#126) renders the controls
-   * as disabled WITH the reason rather than hiding them, per epic #109's
-   * success criterion 5 — a dead toggle teaches nothing.
-   *
-   * Absent is the normal case and means "the user is in charge".
-   *
-   * Invariant: a mandatory event must also be `defaultEnabled: true`.
-   * `mandatory` with `defaultEnabled: false` is self-contradictory — it
-   * asserts the user cannot turn off something that is off.
-   */
-  mandatory?: boolean;
-}
-
-/**
- * The events this application can raise.
+ * The platform's own notifications: each event with the email template and
+ * (where it has one) the browser/push renderer that deliver it.
  *
  * Seeded with the three #128 wires end to end, so the framework is exercised
  * by real triggers rather than staying theoretical (epic #109, scope item 8).
@@ -217,78 +121,107 @@ export interface NotificationEventDef {
  * KEYS ARE NAMESPACED `<area>.<event>` so the list stays readable as it grows
  * and so `security.*` is greppable — the class of event that tends to be
  * mandatory is the class most worth auditing as a group.
+ *
+ * Since #460 this is only the PLATFORM's half. The transcript and note events
+ * live in `transcripts/notifications/` and `notes/notifications/`, and
+ * `kvox.manifest.ts` registers them after these, in the order the preferences
+ * matrix has always shown (base events through `db_backup.restore_completed`,
+ * then `transcripts.*`, then `notes.*`). The email bindings (formerly
+ * `EVENT_EMAIL_TEMPLATES`) and the browser renderers (formerly
+ * `EVENT_BROWSER_TEMPLATES`) sit beside the event they belong to, so "declared
+ * but unsendable" is a registration error rather than a missing map entry.
  */
-export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
+export const BASE_NOTIFICATIONS: NotificationRegistration[] = [
   {
-    key: 'user.welcome',
-    label: 'Welcome',
-    description: 'Sent once, the first time you sign in to this application.',
-    // Email only. A browser notification here would fire while the user is
-    // looking at the very page that welcomes them — it has no reader.
-    channels: ['email'],
-    defaultEnabled: true,
+    event: {
+      key: 'user.welcome',
+      label: 'Welcome',
+      description: 'Sent once, the first time you sign in to this application.',
+      // Email only. A browser notification here would fire while the user is
+      // looking at the very page that welcomes them — it has no reader.
+      channels: ['email'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'user-welcome',
   },
+
   {
-    key: 'allowlist.invitation',
-    label: 'Invitation to join',
-    description:
-      'Sent when an administrator adds your email address to the allowlist, inviting you to sign in.',
-    // Email only, and NOT because #127 has not landed. The recipient has no
-    // account, no session and no open tab at the moment this fires — that is
-    // what being newly allowlisted means — so no in-app channel can reach
-    // them. This entry is the worked example of `channels` carrying real
-    // per-event information rather than being copied between rows.
-    channels: ['email'],
-    defaultEnabled: true,
+    event: {
+      key: 'allowlist.invitation',
+      label: 'Invitation to join',
+      description:
+        'Sent when an administrator adds your email address to the allowlist, inviting you to sign in.',
+      // Email only, and NOT because #127 has not landed. The recipient has no
+      // account, no session and no open tab at the moment this fires — that is
+      // what being newly allowlisted means — so no in-app channel can reach
+      // them. This entry is the worked example of `channels` carrying real
+      // per-event information rather than being copied between rows.
+      channels: ['email'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'allowlist-invitation',
   },
+
   {
-    // -------------------------------------------------------------------------
-    // #301 (epic #271) — A SEPARATE KEY FROM `allowlist.invitation`, NOT A FLAG
-    // -------------------------------------------------------------------------
-    //
-    // The obvious alternative is one `allowlist.invitation` event with a
-    // `reminder: true` in its payload. It was rejected for two reasons, and the
-    // first is the one that settles it:
-    //
-    //   1. **A key IS the unit of preference.** Somebody who wants to be told
-    //      they have been invited, but does not want to be chased about it, has
-    //      no way to say so if both messages arrive under one key — muting the
-    //      reminder would mute the invitation, which is the one message they
-    //      asked for. Two keys make that expressible; one key makes it
-    //      unrepresentable no matter what the UI offers.
-    //   2. **The copy genuinely differs.** "You have been invited" and "you were
-    //      invited a while ago and have not signed in yet" are different
-    //      messages with different openings, and the second states a date the
-    //      first has no reason to carry. One key would mean one template
-    //      branching on a payload flag — the shape that drifts.
-    //
-    // MANUAL, NOT SCHEDULED. This fires when an administrator presses a button
-    // (`POST /api/allowlist/:id/reminder`); there is no cron, no job type and
-    // no settings namespace behind it, on purpose.
-    key: 'allowlist.invitation_reminder',
-    label: 'Invitation reminder',
-    description:
-      'Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.',
-    // Email only, for the IDENTICAL reason the invitation above declares it,
-    // and if anything more forcefully: the recipient still has no account, no
-    // session and no open tab — not having signed in is the precondition of
-    // this event existing at all — so no in-app channel can reach them.
-    channels: ['email'],
-    defaultEnabled: true,
+    // The manual reminder (#301, epic #271). Its own template, not a second
+    // key pointing at `allowlist-invitation` the way the broadcast pair below
+    // shares one: these two messages read differently, which is the reason
+    // there are two event keys at all.
+    event: {
+      // -------------------------------------------------------------------------
+      // #301 (epic #271) — A SEPARATE KEY FROM `allowlist.invitation`, NOT A FLAG
+      // -------------------------------------------------------------------------
+      //
+      // The obvious alternative is one `allowlist.invitation` event with a
+      // `reminder: true` in its payload. It was rejected for two reasons, and the
+      // first is the one that settles it:
+      //
+      //   1. **A key IS the unit of preference.** Somebody who wants to be told
+      //      they have been invited, but does not want to be chased about it, has
+      //      no way to say so if both messages arrive under one key — muting the
+      //      reminder would mute the invitation, which is the one message they
+      //      asked for. Two keys make that expressible; one key makes it
+      //      unrepresentable no matter what the UI offers.
+      //   2. **The copy genuinely differs.** "You have been invited" and "you were
+      //      invited a while ago and have not signed in yet" are different
+      //      messages with different openings, and the second states a date the
+      //      first has no reason to carry. One key would mean one template
+      //      branching on a payload flag — the shape that drifts.
+      //
+      // MANUAL, NOT SCHEDULED. This fires when an administrator presses a button
+      // (`POST /api/allowlist/:id/reminder`); there is no cron, no job type and
+      // no settings namespace behind it, on purpose.
+      key: 'allowlist.invitation_reminder',
+      label: 'Invitation reminder',
+      description:
+        'Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.',
+      // Email only, for the IDENTICAL reason the invitation above declares it,
+      // and if anything more forcefully: the recipient still has no account, no
+      // session and no open tab — not having signed in is the precondition of
+      // this event existing at all — so no in-app channel can reach them.
+      channels: ['email'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'allowlist-invitation-reminder',
   },
+
   {
-    key: 'security.role_changed',
-    label: 'Your roles changed',
-    description:
-      'Sent when an administrator changes the roles assigned to your account, which changes what you can access.',
-    // Both channels: a privilege change is worth surfacing immediately to an
-    // open tab AND leaving a durable record in the user's inbox.
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-    // A privilege change the user never hears about is the failure mode this
-    // whole flag exists for: an account silently gains or loses access and
-    // nobody outside the admin console can tell. Not silenceable.
-    mandatory: true,
+    event: {
+      key: 'security.role_changed',
+      label: 'Your roles changed',
+      description:
+        'Sent when an administrator changes the roles assigned to your account, which changes what you can access.',
+      // Both channels: a privilege change is worth surfacing immediately to an
+      // open tab AND leaving a durable record in the user's inbox.
+      channels: ['email', 'browser'],
+      defaultEnabled: true,
+      // A privilege change the user never hears about is the failure mode this
+      // whole flag exists for: an account silently gains or loses access and
+      // nobody outside the admin console can tell. Not silenceable.
+      mandatory: true,
+    },
+    emailTemplate: 'role-changed',
+    browserTemplate: roleChangedBrowserTemplate,
   },
 
   // ===========================================================================
@@ -320,33 +253,50 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   // The pair is otherwise deliberately identical: same channels, same default.
   // The ONLY difference between them is who is in charge of muting them.
   // ===========================================================================
+
   {
-    key: 'admin.broadcast',
-    label: 'Announcements',
-    description:
-      'Occasional messages an administrator sends to everyone using this application.',
-    // All three channels: a broadcast has no shape of its own, so the medium is
-    // the admin's choice per send — expressed as a NARROWING of this list (see
-    // `NotifyOptions` in notification.types.ts), never as a widening of it.
-    channels: ['email', 'browser', 'push'],
-    defaultEnabled: true,
+    // ONE TEMPLATE, TWO KEYS (#322, epic #319). `admin.broadcast` and
+    // `admin.broadcast_critical` differ in whether a recipient may MUTE them —
+    // `mandatory` on the second — not in how the message reads, and the copy
+    // they render was typed by an administrator either way. A second template
+    // would be a copy of the first that drifts from it, so the `critical` flag
+    // in the payload adds the one footer line that differs. Both keys share ONE
+    // browser renderer for the same reason.
+    event: {
+      key: 'admin.broadcast',
+      label: 'Announcements',
+      description:
+        'Occasional messages an administrator sends to everyone using this application.',
+      // All three channels: a broadcast has no shape of its own, so the medium is
+      // the admin's choice per send — expressed as a NARROWING of this list (see
+      // `NotifyOptions` in notification.types.ts), never as a widening of it.
+      channels: ['email', 'browser', 'push'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'broadcast',
+    browserTemplate: broadcastBrowserTemplate,
   },
+
   {
-    key: 'admin.broadcast_critical',
-    label: 'Important announcements',
-    description:
-      'Messages an administrator has marked as important — service interruptions, security notices and anything else everyone needs to see. These cannot be turned off.',
-    channels: ['email', 'browser', 'push'],
-    defaultEnabled: true,
-    // A service interruption or a security notice nobody receives is the
-    // failure this flag exists for, and it is the same argument
-    // `security.role_changed` makes: silence is itself the risk.
-    //
-    // Note what this does NOT constrain: `mandatory` binds the RECIPIENT, not
-    // the sender. An admin may still choose to send a critical broadcast over a
-    // subset of channels — see `dispatch()` in notifications.service.ts, which
-    // permits narrowing a mandatory event on purpose and says why.
-    mandatory: true,
+    event: {
+      key: 'admin.broadcast_critical',
+      label: 'Important announcements',
+      description:
+        'Messages an administrator has marked as important — service interruptions, security notices and anything else everyone needs to see. These cannot be turned off.',
+      channels: ['email', 'browser', 'push'],
+      defaultEnabled: true,
+      // A service interruption or a security notice nobody receives is the
+      // failure this flag exists for, and it is the same argument
+      // `security.role_changed` makes: silence is itself the risk.
+      //
+      // Note what this does NOT constrain: `mandatory` binds the RECIPIENT, not
+      // the sender. An admin may still choose to send a critical broadcast over a
+      // subset of channels — see `dispatch()` in notifications.service.ts, which
+      // permits narrowing a mandatory event on purpose and says why.
+      mandatory: true,
+    },
+    emailTemplate: 'broadcast',
+    browserTemplate: broadcastBrowserTemplate,
   },
 
   // ===========================================================================
@@ -382,183 +332,78 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   // template can produce that volume, and a roll-up nobody needs is a second
   // scheduler, a second state table and a second way for a failure to be late.
   // ===========================================================================
+
   {
-    key: 'jobs.job_failed',
-    label: 'Background job failed',
-    description:
-      'Sent when a background job exhausts its retry budget and is given up on. Retries and deferrals are silent; only the final give-up raises this.',
-    // EMAIL ONLY, and not for want of a browser template. This is the one
-    // event of the four with NO ADMIN PAGE THAT ANSWERS IT: a failed job's
-    // detail lives behind a filter on the jobs list, and a toast whose click
-    // target cannot show the thing it is about is worse than no toast. The
-    // email carries the type, the error and the attempt count, which is the
-    // whole of what a reader needs before deciding to go and look.
-    channels: ['email'],
-    defaultEnabled: true,
-  },
-  {
-    key: 'nodes.node_offline',
-    label: 'Worker node went offline',
-    description:
-      'Sent when a worker node stops heartbeating and the fleet sweep marks it offline. Capacity has dropped until it comes back.',
-    // Both channels: lost capacity is worth an immediate in-app row for
-    // somebody already looking at the application, and a durable mail for
-    // somebody who is not.
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-  },
-  {
-    key: 'db_backup.backup_failed',
-    label: 'Database backup failed',
-    description:
-      'Sent when a database backup run fails, or stops heartbeating and is given up on. The deployment has one fewer recovery point than it thinks.',
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-  },
-  {
-    key: 'db_backup.restore_completed',
-    label: 'Database restored',
-    description:
-      'Sent when a database restore finishes and the restored copy becomes the live database. This cannot be turned off.',
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-    // THE ONE MANDATORY EVENT OF THE FOUR, for the reason `security
-    // .role_changed` is mandatory: silence is itself the risk. A restore
-    // replaces the live database with the contents of an archive — every write
-    // made after that archive was taken is gone, and the process that did it
-    // exits immediately afterwards. An operator who is not told is an operator
-    // debugging "where did today's data go?" from first principles.
-    mandatory: true,
+    // The four operational events (#288, epic #254). One template each: unlike
+    // the broadcast pair above, these four say genuinely different things, and
+    // the only shape they share is the detail table their layouts happen to
+    // use.
+    event: {
+      key: 'jobs.job_failed',
+      label: 'Background job failed',
+      description:
+        'Sent when a background job exhausts its retry budget and is given up on. Retries and deferrals are silent; only the final give-up raises this.',
+      // EMAIL ONLY, and not for want of a browser template. This is the one
+      // event of the four with NO ADMIN PAGE THAT ANSWERS IT: a failed job's
+      // detail lives behind a filter on the jobs list, and a toast whose click
+      // target cannot show the thing it is about is worse than no toast. The
+      // email carries the type, the error and the attempt count, which is the
+      // whole of what a reader needs before deciding to go and look.
+      channels: ['email'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'job-failed',
   },
 
-  // ===========================================================================
-  // THE TRANSCRIPT PIPELINE (#25, epic #19)
-  // ===========================================================================
-  //
-  // Two events, and the thing that makes them different from the four
-  // operational ones above is WHO THEY ARE ADDRESSED TO. `jobs.job_failed` and
-  // its neighbours are addressed to a PERMISSION — anybody who can see the
-  // queue should learn that it gave up — because a failed job is a fact about
-  // the deployment. A transcript is a fact about one person: their recording,
-  // their conversation, their private data. So both of these are raised with
-  // `notify(key, ownerId, …)` to the OWNER ALONE, and never with
-  // `notifyPermissionHolders`.
-  //
-  // NEITHER IS `mandatory`. Being told your own upload finished is a courtesy,
-  // not a security-relevant change to your own privileges — the test
-  // `security.role_changed` and `db_backup.restore_completed` pass and these
-  // two do not. A user who transcribes twenty files a day and watches the
-  // in-app list is entitled to turn both off.
-  // ===========================================================================
   {
-    key: 'transcripts.transcript_ready',
-    label: 'Transcript ready',
-    description:
-      'Sent when one of your recordings finishes transcribing and can be read, corrected and shared.',
-    // Both channels: a transcription takes minutes to hours, so the reader has
-    // usually closed the tab — which is what an email is for — while somebody
-    // who is still in the application gets the toast that saves them polling.
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-  },
-  {
-    key: 'transcripts.transcript_failed',
-    label: 'Transcription failed',
-    description:
-      'Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.',
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
+    event: {
+      key: 'nodes.node_offline',
+      label: 'Worker node went offline',
+      description:
+        'Sent when a worker node stops heartbeating and the fleet sweep marks it offline. Capacity has dropped until it comes back.',
+      // Both channels: lost capacity is worth an immediate in-app row for
+      // somebody already looking at the application, and a durable mail for
+      // somebody who is not.
+      channels: ['email', 'browser'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'node-offline',
+    browserTemplate: nodeOfflineBrowserTemplate,
   },
 
-  // ===========================================================================
-  // SHARING (#29, epic #19)
-  // ===========================================================================
-  //
-  // The one transcript event addressed to somebody OTHER than the owner. It
-  // goes to the RECIPIENT of a share, with `notify(key, recipientId, ...)`, and
-  // to nobody else — not the owner (who just performed the action), not the
-  // other people the transcript is already shared with (who have no business
-  // learning that somebody new was added).
-  //
-  // NOT `mandatory`, and that is the same test the two events above pass:
-  // `security.role_changed` is mandatory because it is a change to the reader's
-  // OWN privileges inside this application, which they must not be able to
-  // miss. Being handed access to somebody else's recording is an offer, not a
-  // change to what the reader is trusted with — the transcript also simply
-  // appears in their "Shared with me" list, so silencing the message loses
-  // nobody any access. A user who is shared thirty recordings a week is
-  // entitled to turn it off.
-  //
-  // ⚠ THERE IS DELIBERATELY NO `transcript_unshared` COUNTERPART. "Your access
-  // was removed" is a message whose main effect is to tell somebody they were
-  // discussed; an owner is entitled to un-share a private conversation without
-  // composing an explanation, and revocation already takes effect silently on
-  // the next request.
   {
-    key: 'transcripts.transcript_shared',
-    label: 'A recording was shared with you',
-    description:
-      'Sent when another user shares one of their recordings with you, as a viewer or an editor.',
-    // Both channels, like the two above: the reader is usually not in the
-    // application when somebody shares with them, which is what the email is
-    // for, while somebody who is gets the toast instead of finding it later.
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
+    event: {
+      key: 'db_backup.backup_failed',
+      label: 'Database backup failed',
+      description:
+        'Sent when a database backup run fails, or stops heartbeating and is given up on. The deployment has one fewer recovery point than it thinks.',
+      channels: ['email', 'browser'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'backup-failed',
+    browserTemplate: backupFailedBrowserTemplate,
   },
 
-  // ===========================================================================
-  // NOTES (#49, epic #45)
-  // ===========================================================================
-  //
-  // Both are raised by `note.generate` and addressed to the note's OWNER — the
-  // person who asked for the work — never to a permission the way
-  // `jobs.job_failed` is. They are what make "close the tab and walk away"
-  // actually work: a generation runs for ten seconds to several minutes on
-  // somebody else's infrastructure, and the durable buffer (spec §5.1) is only
-  // half of the promise. Without these, a user who closed the tab has no way to
-  // learn their note exists short of going back to look.
-  //
-  // ⚠ A PURE APPEND. Two entries, two templates, two call sites — no table, no
-  // column, no migration, exactly as `operational-events-no-migration.spec.ts`
-  // exists to prove. See CLAUDE.md's "Adding a Notification".
-  //
-  // NEITHER IS `mandatory`. Being told your own requested work finished (or
-  // did not) is a courtesy about your own action, not a security-relevant
-  // change to your account — the line `security.role_changed` and
-  // `db_backup.restore_completed` are on the other side of.
-  //
-  // ⚠ THERE IS DELIBERATELY NO EVENT FOR A RATE-LIMITED GENERATION. A 429 is a
-  // deferral the queue handles invisibly (spec §2.2), not a failure; mailing
-  // somebody about it would report a delay as something to act on.
   {
-    key: 'notes.note_ready',
-    label: 'Note ready',
-    description:
-      'Sent when a note you asked for finishes generating and can be read and edited.',
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
-  },
-  {
-    key: 'notes.note_failed',
-    label: 'Note generation failed',
-    description:
-      'Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.',
-    channels: ['email', 'browser'],
-    defaultEnabled: true,
+    event: {
+      key: 'db_backup.restore_completed',
+      label: 'Database restored',
+      description:
+        'Sent when a database restore finishes and the restored copy becomes the live database. This cannot be turned off.',
+      channels: ['email', 'browser'],
+      defaultEnabled: true,
+      // THE ONE MANDATORY EVENT OF THE FOUR, for the reason `security
+      // .role_changed` is mandatory: silence is itself the risk. A restore
+      // replaces the live database with the contents of an archive — every write
+      // made after that archive was taken is gone, and the process that did it
+      // exits immediately afterwards. An operator who is not told is an operator
+      // debugging "where did today's data go?" from first principles.
+      mandatory: true,
+    },
+    emailTemplate: 'restore-completed',
+    browserTemplate: restoreCompletedBrowserTemplate,
   },
 ];
-
-/**
- * Key -> definition, built once at module load.
- *
- * The list above is the source of truth and stays an array because its ORDER
- * is meaningful — #126 renders the preferences matrix in it. This index exists
- * so the dispatcher's per-delivery lookups are not a linear scan of the
- * registry on every event.
- */
-const EVENTS_BY_KEY: ReadonlyMap<string, NotificationEventDef> = new Map(
-  NOTIFICATION_EVENTS.map((event) => [event.key, event]),
-);
 
 /**
  * The definition for `key`, or `undefined` when nothing is registered under it.
@@ -570,7 +415,7 @@ const EVENTS_BY_KEY: ReadonlyMap<string, NotificationEventDef> = new Map(
  * the caller decides whether an unknown key is "skip it" or "this is a bug".
  */
 export function findEvent(key: string): NotificationEventDef | undefined {
-  return EVENTS_BY_KEY.get(key);
+  return findRegisteredEvent(key);
 }
 
 /**
@@ -584,13 +429,12 @@ export function findEvent(key: string): NotificationEventDef | undefined {
  * violating epic #109's rule that a notification failure never fails the
  * action that triggered it.
  *
- * Returns a defensive copy: the arrays in `NOTIFICATION_EVENTS` are the
- * registry's own state, and a caller that sorted or spliced the result in
- * place would silently reconfigure delivery for every later dispatch in the
- * process.
+ * Returns a defensive copy: the arrays in the registry are its own state, and
+ * a caller that sorted or spliced the result in place would silently
+ * reconfigure delivery for every later dispatch in the process.
  */
 export function channelsFor(key: string): NotificationChannel[] {
-  return [...(EVENTS_BY_KEY.get(key)?.channels ?? [])];
+  return [...(findRegisteredEvent(key)?.channels ?? [])];
 }
 
 /**
@@ -601,7 +445,7 @@ export function channelsFor(key: string): NotificationChannel[] {
  * each call site. Unknown key is `false`, consistent with `channelsFor`.
  */
 export function supportsChannel(key: string, channel: NotificationChannel): boolean {
-  return EVENTS_BY_KEY.get(key)?.channels.includes(channel) ?? false;
+  return findRegisteredEvent(key)?.channels.includes(channel) ?? false;
 }
 
 /**
@@ -616,5 +460,5 @@ export function supportsChannel(key: string, channel: NotificationChannel): bool
  * at all, so nothing is being weakened by the default.
  */
 export function isMandatory(key: string): boolean {
-  return EVENTS_BY_KEY.get(key)?.mandatory === true;
+  return findRegisteredEvent(key)?.mandatory === true;
 }

@@ -11,6 +11,7 @@ import {
   type UserDataScope,
 } from './job-types';
 import { userDataSummarySchema } from './dto/user-data.dto';
+import { userDataCategories } from './user-data.registries';
 import { readPurgePayload, UserDataService } from './user-data.service';
 
 // =============================================================================
@@ -63,47 +64,66 @@ describe('readPurgePayload', () => {
   });
 });
 
+/**
+ * The registered summary categories' hooks, as stubs. A summary is ASSEMBLED
+ * from the category registry (issue #460), so what the service owns — and what
+ * is pinned here — is the assembly: which hooks it calls, with which user, in
+ * which key order, with `activeDeletion` last. What each hook counts is pinned
+ * beside the hook (`*.user-data.spec.ts`, `user-data.base.spec.ts`).
+ *
+ * A Proxy rather than hand-written stubs so this spec names no domain method.
+ * Each call answers `{ method, userId }`, which makes "this key came from that
+ * hook" assertable.
+ */
+function summaryHookProviders(calls: string[]) {
+  const tokens = new Set(
+    userDataCategories()
+      .map((category) => category.summary?.inject)
+      .filter((inject): inject is string => typeof inject === 'string'),
+  );
+
+  return [...tokens].map((token) => ({
+    provide: token,
+    useValue: new Proxy(
+      {},
+      {
+        get: (_target, method) => {
+          if (method === 'then') return undefined;
+
+          return async (userId: string) => {
+            calls.push(`${token}.${String(method)}`);
+            return { method: String(method), userId };
+          };
+        },
+      },
+    ),
+  }));
+}
+
 describe('UserDataService', () => {
   let service: UserDataService;
   let prisma: {
-    transcript: { count: jest.Mock };
-    note: { count: jest.Mock; findMany: jest.Mock };
-    storageObject: { aggregate: jest.Mock };
-    noteTemplate: { count: jest.Mock };
-    userAiCredential: { count: jest.Mock };
-    personalAccessToken: { count: jest.Mock };
-    kgEntity: { count: jest.Mock };
-    kgItem: { count: jest.Mock };
-    askConversation: { count: jest.Mock };
     job: { findFirst: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
   let jobs: { enqueue: jest.Mock };
-
-  const zeroAggregate = { _count: { _all: 0 }, _sum: { size: null } };
+  let hookCalls: string[];
 
   beforeEach(async () => {
     prisma = {
-      transcript: { count: jest.fn().mockResolvedValue(0) },
-      note: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
-      storageObject: { aggregate: jest.fn().mockResolvedValue(zeroAggregate) },
-      noteTemplate: { count: jest.fn().mockResolvedValue(0) },
-      userAiCredential: { count: jest.fn().mockResolvedValue(0) },
-      personalAccessToken: { count: jest.fn().mockResolvedValue(0) },
-      kgEntity: { count: jest.fn().mockResolvedValue(0) },
-      kgItem: { count: jest.fn().mockResolvedValue(0) },
-      askConversation: { count: jest.fn().mockResolvedValue(0) },
       job: { findFirst: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
 
     jobs = { enqueue: jest.fn() };
+    hookCalls = [];
 
     const module = await Test.createTestingModule({
       providers: [
         UserDataService,
         { provide: PrismaService, useValue: prisma },
         { provide: JobsService, useValue: jobs },
+        ...summaryHookProviders(hookCalls),
       ],
     }).compile();
 
@@ -115,81 +135,65 @@ describe('UserDataService', () => {
   // ---------------------------------------------------------------------------
 
   describe('summary', () => {
-    it('excludes already soft-deleted rows from the transcript and note counts', async () => {
-      await service.summary(USER_ID);
-
-      expect(prisma.transcript.count).toHaveBeenCalledWith({
-        where: { ownerId: USER_ID, deletedAt: null },
-      });
-      expect(prisma.note.count).toHaveBeenCalledWith({
-        where: { ownerId: USER_ID, deletedAt: null },
-      });
-    });
-
-    it('reports bytes as a decimal STRING, never a number, so a large library cannot round silently', async () => {
-      prisma.storageObject.aggregate.mockImplementation((args: { where: Record<string, unknown> }) => {
-        // The "files" aggregate is the one with no `OR` — a direct
-        // `uploadedById` + `managedBy` filter. Everything else (transcript
-        // and note byte totals) can stay at zero for this assertion.
-        if (args.where.uploadedById) {
-          return Promise.resolve({
-            _count: { _all: 2 },
-            _sum: { size: BigInt('9007199254740993') }, // > Number.MAX_SAFE_INTEGER
-          });
-        }
-
-        return Promise.resolve(zeroAggregate);
-      });
-
+    // ⚠ THE WIRE-VISIBLE KEY ORDER of `GET /api/user-data/summary`, and the
+    // reason it is asserted on a service whose categories are registered
+    // elsewhere: the order is the registry's `order`, not an array literal
+    // here, so a re-registration is what could silently change it.
+    it('assembles one key per registered summary, in category order, with activeDeletion last', async () => {
       const result = await service.summary(USER_ID);
 
-      expect(typeof result.files.bytes).toBe('string');
-      expect(result.files.bytes).toBe('9007199254740993');
-      expect(typeof result.transcripts.bytes).toBe('string');
-      expect(typeof result.notes.bytes).toBe('string');
+      expect(Object.keys(result)).toEqual([
+        'transcripts',
+        'notes',
+        'files',
+        'noteTemplates',
+        'credentials',
+        'graph',
+        'askConversations',
+        'activeDeletion',
+      ]);
     });
 
-    it('counts "files" as only unmanaged objects the caller uploaded — a transcript or note owns the rest', async () => {
-      await service.summary(USER_ID);
+    it('asks every registered summary hook once, for the caller', async () => {
+      const result = await service.summary(USER_ID);
 
-      const filesCall = prisma.storageObject.aggregate.mock.calls.find(
-        ([args]: [{ where: Record<string, unknown> }]) => args.where.uploadedById !== undefined,
+      const summaries = userDataCategories().filter((category) => category.summary);
+
+      expect(hookCalls).toHaveLength(summaries.length);
+      for (const key of Object.keys(result).filter((k) => k !== 'activeDeletion')) {
+        expect(result[key]).toEqual({ method: expect.any(String), userId: USER_ID });
+      }
+    });
+
+    it('publishes a response schema with exactly the same keys, in the same order', () => {
+      expect(Object.keys(userDataSummarySchema.shape)).toEqual([
+        'transcripts',
+        'notes',
+        'files',
+        'noteTemplates',
+        'credentials',
+        'graph',
+        'askConversations',
+        'activeDeletion',
+      ]);
+    });
+
+    // ⚠ A HOOK THAT CANNOT BE RESOLVED FAILS THE REQUEST. Reporting a category
+    // as simply absent would show a Danger Zone that omits a row of data the
+    // deployment is holding.
+    it('fails the request when a summary hook cannot be resolved', async () => {
+      const module = await Test.createTestingModule({
+        providers: [
+          UserDataService,
+          { provide: PrismaService, useValue: prisma },
+          { provide: JobsService, useValue: jobs },
+          // No hook providers at all.
+        ],
+      }).compile();
+
+      await expect(module.get(UserDataService).summary(USER_ID)).rejects.toThrow(
+        /summary hook .* could not be resolved/,
       );
-
-      expect(filesCall).toBeDefined();
-      expect(filesCall[0]).toEqual({
-        where: { uploadedById: USER_ID, managedBy: null },
-        _count: { _all: true },
-        _sum: { size: true },
-      });
-    });
-
-    it('reports the knowledge graph as entity and item counts, excluding merge tombstones (#357)', async () => {
-      prisma.kgEntity.count.mockResolvedValue(7);
-      prisma.kgItem.count.mockResolvedValue(12);
-
-      const result = await service.summary(USER_ID);
-
-      expect(result.graph).toEqual({ entities: 7, items: 12 });
-      expect(prisma.kgEntity.count).toHaveBeenCalledWith({
-        where: { ownerId: USER_ID, reviewStatus: { not: 'merged' } },
-      });
-      expect(prisma.kgItem.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
-    });
-
-    it('counts the caller\'s saved Ask conversations (#376)', async () => {
-      prisma.askConversation.count.mockResolvedValue(4);
-
-      const result = await service.summary(USER_ID);
-
-      expect(result.askConversations).toEqual({ count: 4 });
-      expect(prisma.askConversation.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
-    });
-
-    it('conforms to the published summary schema, graph field included', async () => {
-      const result = await service.summary(USER_ID);
-
-      expect(userDataSummarySchema.safeParse(result).success).toBe(true);
     });
 
     it('reports activeDeletion as null when nothing is running', async () => {

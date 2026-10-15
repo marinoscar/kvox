@@ -35,10 +35,8 @@ import type {
   TranscriptionStatus as TranscriptionStatusEnum,
 } from '@prisma/client';
 
-import type {
-  TranscriptFailedEmailData,
-  TranscriptReadyEmailData,
-} from '../email';
+import type { TranscriptFailedEmailData } from './notifications/transcript-failed.email';
+import type { TranscriptReadyEmailData } from './notifications/transcript-ready.email';
 import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';

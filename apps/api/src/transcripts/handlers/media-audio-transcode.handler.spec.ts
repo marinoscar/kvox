@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { mediaAudioTranscodeResultSchema } from '../../jobs/contracts/media-audio-transcode.contract';
+import { mediaAudioTranscodeResultSchema } from '../contracts/media-audio-transcode.contract';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import * as jobTemp from '../../jobs/job-temp';
