@@ -13,7 +13,7 @@
 // (`compose.ts`).
 //
 // Field names match the platform's so Epic 1 issue 1.4 can swap the import.
-// KVox is single-org, so the platform's `org` layer, `read` and `merge` hooks
+// This app is single-org, so the platform's `org` layer, `read` and `merge` hooks
 // are omitted; the service's hand-written merge stays where it is.
 //
 // ORDER IS WIRE-VISIBLE. Registration order is the stored JSON's key order and
