@@ -13,10 +13,10 @@ import {
   authHeader,
 } from '../helpers/auth-mock.helper';
 import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
-import { CredentialsService } from '../../src/credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { TranscriptionSettingsController } from '../../src/transcription/transcription-settings.controller';
 import { TranscriptionConfigController } from '../../src/transcription/transcription-config.controller';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 
 // =============================================================================
 // Transcription settings integration (issue #23, epic #19)

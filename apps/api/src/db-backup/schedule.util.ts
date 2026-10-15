@@ -79,10 +79,15 @@ export const DEFAULT_BACKUP_TIME_OF_DAY = '02:00';
  */
 export const SCHEDULE_SEARCH_LIMIT_DAYS = 400;
 
-export type BackupFrequency = 'daily' | 'weekly' | 'monthly';
+// PLATFORM-ADOPTION-SHIM(#467): `'cron'` and `cron` arrive with the platform's
+// `databaseBackup` declaration (#466), which `PATCH /api/system-settings` now
+// validates. #467 replaces this file with the platform's `schedule.util`.
+export type BackupFrequency = 'daily' | 'weekly' | 'monthly' | 'cron';
 
 export interface BackupScheduleInput {
   frequency: BackupFrequency;
+  /** A 5-field cron expression. Used by `cron` only. */
+  cron?: string;
   /** 0 (Sunday) - 6 (Saturday). Used by `weekly` only. */
   dayOfWeek?: number;
   /** 1 - 28. Used by `monthly` only. */
@@ -157,6 +162,13 @@ export function backupScheduleToCron(schedule: BackupScheduleInput): string {
   // frequency that loses the least: a schedule that should have been weekly
   // taking a backup every night is wasteful, the reverse is a gap.
   switch (schedule.frequency) {
+    case 'cron': {
+      // The operator's own expression, verbatim. A blank one degrades to the
+      // daily default below rather than throwing, like every other malformed
+      // input here.
+      const expression = schedule.cron?.trim();
+      return expression ? expression : `${minute} ${hour} * * *`;
+    }
     case 'weekly':
       return `${minute} ${hour} * * ${clampDayOfWeek(schedule.dayOfWeek)}`;
     case 'monthly':

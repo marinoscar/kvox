@@ -7,9 +7,9 @@
  * overwritten (seedPlatform), so an existing deployment keeps what an
  * administrator edited.
  *
- * PLATFORM-ADOPTION-SHIM(#466): until the settings slice moves to the platform
- * this renders this app's own registry (src/settings/registry). #466 swaps the
- * import for `renderSystemSettingsCatalog` from `@marinoscar/platform-api/settings`.
+ * Since #466 this renders the platform registry's composed defaults
+ * (`renderSystemSettingsCatalog` from `@marinoscar/platform-api/settings`) over
+ * the namespaces `src/settings/registry` registers.
  *
  *   npm run catalog:settings            write the file
  *   npm run catalog:settings -- --check exit 1 when the file is stale
@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 
 // MUST stay first: registers the settings namespaces the composers read.
 import '../src/kvox.manifest';
-import { composeDefaultSystemSettings } from '../src/settings/registry';
+import { renderSystemSettingsCatalog } from '@marinoscar/platform-api/settings';
 
 const CATALOG_PATH = join(
   __dirname,
@@ -30,7 +30,7 @@ const CATALOG_PATH = join(
 );
 
 export function renderSettingsCatalog(): string {
-  return `${JSON.stringify(composeDefaultSystemSettings(), null, 2)}\n`;
+  return renderSystemSettingsCatalog();
 }
 
 function main(): void {

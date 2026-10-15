@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 
-import { CredentialsModule } from '../credentials/credentials.module';
+import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { SettingsModule } from '../settings/settings.module';
 import { BrowserNotificationChannel } from './channels/browser-notification.channel';
 import { EmailNotificationChannel } from './channels/email-notification.channel';
 import { PushNotificationChannel } from './channels/push-notification.channel';
@@ -134,7 +133,6 @@ import {
     // there is no cycle to forward-ref around, and reusing that service means
     // the dispatcher degrades a malformed `system_settings` row exactly as the
     // admin API does instead of re-deriving those rules.
-    SettingsModule,
     // The VAPID private key's only home (#355). Imported explicitly, exactly
     // like `EmailModule` above and for the identical reason: `CredentialsModule`
     // is deliberately not `@Global()` because it can reach a plaintext-returning

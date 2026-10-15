@@ -125,7 +125,7 @@ import {
 
 import { useIsMounted } from '../hooks/useIsMounted';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useUserSettings } from '../hooks/useUserSettings';
+import { useUserSettings } from '../hooks/userSettingsRetry';
 import { ApiError } from '../services/api';
 import {
   getAdminOnboardingState,
@@ -133,7 +133,7 @@ import {
   type OnboardingAudience,
   type OnboardingState,
 } from '../services/onboarding';
-import type { OnboardingSettings } from '../types';
+import type { OnboardingSettings, UserSettings, UserSettingsUpdate } from '../types';
 
 /**
  * The permission `GET /api/admin/onboarding` enforces, spelled once.
@@ -266,7 +266,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     settings,
     isLoading: isLoadingSettings,
     updateSettings,
-  } = useUserSettings({ syncTheme: false });
+  } = useUserSettings<UserSettings, UserSettingsUpdate>({
+    syncTheme: false,
+  });
 
   const isMounted = useIsMounted();
 

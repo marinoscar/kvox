@@ -6,7 +6,6 @@ import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
-import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
@@ -102,7 +101,6 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     TranscriptsModule,
     StorageModule,
     StorageProvidersModule,
-    SettingsModule,
     // The semantic index (#188, epic #165). ONE-WAY, exactly as in
     // `TranscriptsModule`: this module queues a re-index after a note's content
     // commits and forgets a purged note's rows, while `search/indexing/` reads

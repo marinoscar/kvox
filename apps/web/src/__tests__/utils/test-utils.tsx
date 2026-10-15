@@ -11,6 +11,8 @@ import type {
   AuthProviderInfo as AuthProviderType,
 } from '@marinoscar/platform-web/identity/headless';
 import { ThemeContextProvider } from '../../contexts/ThemeContext';
+// Issue #466: the host the packaged settings pages and headless hooks read.
+import { PlatformHost } from '../../platform/PlatformHost';
 
 interface WrapperOptions {
   route?: string;
@@ -180,7 +182,7 @@ function createWrapper(options: WrapperOptions = {}) {
             isLoading={isLoading}
             providers={providers}
           >
-            {children}
+            <PlatformHost>{children}</PlatformHost>
           </MockAuthProvider>
         </ThemeContextProvider>
       </MemoryRouter>

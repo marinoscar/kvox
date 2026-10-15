@@ -12,7 +12,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { UserAiCredentialsService } from '../ai/user-ai-credentials.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserSettingsService } from '../settings/user-settings/user-settings.service';
+import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { ObjectsService } from '../storage/objects/objects.service';
 import {

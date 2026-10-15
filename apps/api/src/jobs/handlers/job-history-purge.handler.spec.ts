@@ -14,7 +14,7 @@ import { Job, JobStatus } from '@prisma/client';
 
 import { foldDeltas, JobHistoryPurgeHandler, purgeableWhere } from './job-history-purge.handler';
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { JobHandler } from '../job-handler.interface';
 import type { JobHandlerRegistry } from '../job-handler.registry';
 

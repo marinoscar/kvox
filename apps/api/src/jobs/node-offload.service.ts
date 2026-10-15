@@ -58,7 +58,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { JobHandler } from './job-handler.interface';
 import { JobHandlerRegistry } from './job-handler.registry';
 import type { JobSecretBroker } from './job-secret-broker';

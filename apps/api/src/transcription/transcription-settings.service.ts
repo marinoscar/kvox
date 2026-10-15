@@ -2,9 +2,9 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CredentialsService } from '../credentials/credentials.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
-import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
 import type {
   SystemTranscriptionValue,
   systemTranscriptionPatchSchema,
@@ -180,7 +180,7 @@ export class TranscriptionSettingsService {
 
   /** The stored policy, degraded to defaults if the row is damaged. */
   async get(): Promise<SystemTranscriptionValue> {
-    return this.systemSettings.getTranscriptionPolicy();
+    return this.systemSettings.getNamespace('transcription');
   }
 
   /**

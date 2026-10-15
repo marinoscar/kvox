@@ -14,7 +14,7 @@ import {
   createMockContributorUser,
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { OPENAI_FETCH } from '../../src/ai/providers/openai.provider';
 import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
 import type { AiProvider } from '../../src/ai/providers/ai-provider.interface';
@@ -698,7 +698,7 @@ describe('AI settings and config integration', () => {
 
     async function withStoredKey() {
       const { encryptSecret } = await import(
-        '../../src/common/crypto/secret-cipher'
+        '@marinoscar/platform-api/core'
       );
       prismaMock.userAiCredential.findUnique.mockResolvedValue({
         secret: encryptSecret(RAW_KEY, 'ai-key'),

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { SettingsModule } from '../settings/settings.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { ExampleChecksumHandler } from './handlers/example-checksum.handler';
 import { ExampleEchoHandler } from './handlers/example-echo.handler';
@@ -183,7 +182,7 @@ import { TempFileJanitorTask } from './tasks/temp-file-janitor.task';
 // =============================================================================
 
 @Module({
-  imports: [SettingsModule, StorageProvidersModule],
+  imports: [StorageProvidersModule],
   controllers: [JobAdminController],
   providers: [
     JobAdminService,

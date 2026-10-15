@@ -81,6 +81,11 @@ import {
 import type { AuthContextValue } from '@marinoscar/platform-web/identity/headless';
 import { appIdentityAdapters } from '../src/identity/identityAdapters';
 import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeContext';
+// Issue #466, epic #462. The packaged Profile and Appearance pages and the
+// headless settings hooks read the platform host; the hubs read the registered
+// feature keys. Both are the app's own wiring, mounted exactly as `App.tsx` does.
+import { PlatformHost } from '../src/platform/PlatformHost';
+import '../src/config/settingsFeatures';
 import { Layout } from '../src/components/common/Layout';
 // Issue #30, epic #19. The New-transcript screen reads the app-wide upload
 // manager, and `useUploadManager` THROWS without a provider — deliberately, so
@@ -101,8 +106,12 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 // `ReturnToSetupBar`) on every page, including these two checklist pages
 // themselves.
 const GettingStartedPage = lazy(() => import('../src/pages/GettingStartedPage'));
-const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
-const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
+const UserProfilePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserProfilePage })),
+);
+const UserAppearancePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserAppearancePage })),
+);
 const UserTokensPage = lazy(() =>
   import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
 );
@@ -531,7 +540,9 @@ createRoot(document.getElementById('root')!).render(
             identity client from the adapters, exactly as `App.tsx` provides. */}
         <IdentityWebAdaptersProvider adapters={appIdentityAdapters}>
           <ThemeContextProvider>
-            <Inner />
+            <PlatformHost>
+              <Inner />
+            </PlatformHost>
           </ThemeContextProvider>
         </IdentityWebAdaptersProvider>
       </AuthContext.Provider>

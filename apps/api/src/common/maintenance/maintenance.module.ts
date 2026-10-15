@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { SettingsModule } from '../../settings/settings.module';
 import { MaintenanceController } from './maintenance.controller';
 import { MaintenanceGuard } from './maintenance.guard';
 import { MaintenanceModeService } from './maintenance-mode.service';
@@ -37,7 +36,6 @@ import { MaintenanceModeService } from './maintenance-mode.service';
  */
 @Module({
   imports: [
-    SettingsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

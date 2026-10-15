@@ -343,7 +343,7 @@ and it is deliberately small — annotations for keys that need behavior
 | `secret: true` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `POSTGRES_PASSWORD`, `AWS_SECRET_ACCESS_KEY`, the `UPTRACE_*` credentials (`UPTRACE_PROJECT1_TOKEN`, `UPTRACE_SECRET_KEY`, `UPTRACE_ADMIN_PASSWORD`, `UPTRACE_PGPASSWORD`, `UPTRACE_REDIS_PASSWORD`, `UPTRACE_CH_PASSWORD`) | Masked input when typed (see `promptSecret` below); the value feeds `journal.ts`'s redaction list (section 7) unconditionally, whether the operator typed it or the wizard generated it. |
 | `generate: 'base64-32'` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` | The wizard offers "generate one" as the default action, using `node:crypto`'s `randomBytes(32).toString('base64')` **in-process** — not a shell-out to `openssl`, even though the `.env.example` comment tells a *human* to run `openssl rand -base64 32`. Shelling out would make `openssl` a new precondition this doctor check would have to verify on every VPS; Node already has the primitive. |
 | `validate: minLength(32)` | `JWT_SECRET`, `COOKIE_SECRET` | Matches the API's own documented minimum. |
-| `validate: base64Decodes32Bytes` | `SECRETS_ENCRYPTION_KEY` | Must decode to exactly 32 bytes — this is the AES-256 key `secret-cipher.ts` expects (see `rotate-secrets-encryption-key.md` for the cipher this key feeds). A key that merely looks base64 but decodes to the wrong length must be rejected here, before it becomes a boot-time failure the operator sees an hour later. |
+| `validate: base64Decodes32Bytes` | `SECRETS_ENCRYPTION_KEY` | Must decode to exactly 32 bytes — this is the AES-256 key the platform secret cipher (`@marinoscar/platform-api/core`) expects (see `rotate-secrets-encryption-key.md` for the cipher this key feeds). A key that merely looks base64 but decodes to the wrong length must be rejected here, before it becomes a boot-time failure the operator sees an hour later. |
 | `derivedFrom` | `GOOGLE_CALLBACK_URL` from `APP_URL`; `APP_URL` from the one domain question | The wizard asks for the public domain once ("What domain will this be served at?") and derives `APP_URL=https://<domain>` and `GOOGLE_CALLBACK_URL=https://<domain>/api/auth/google/callback`, showing both as defaults the operator can still override — never silently computed with no visibility. |
 | `essential: true` | `APP_URL`, all six `POSTGRES_*`, `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `INITIAL_ADMIN_EMAIL` (~13 keys) | Prompted by default. Everything else in the spec takes its template default silently unless `--all` is passed, in which case the wizard walks every key — required and optional/commented-out alike — offering keep-default / edit / (for optional keys) skip. |
 
@@ -2632,10 +2632,12 @@ A Contributor or a Viewer could not see their own build number at all.
 
 `apps/web/package.json`'s version is baked into the bundle by a Vite `define`
 (`apps/web/app-version.ts`, shared by `vite.config.ts` and `vitest.config.ts`)
-and rendered as a quiet caption at the foot of the shared
-`components/settings/SettingsHub.tsx` — so it appears on both `/settings` and
-`/admin/settings`, which is what Settings UI Pattern rule 4 ("reuse it, never
-fork it") means here. It adds no breakpoint read, so rule 5's five coupled
+and rendered as a quiet caption (`components/settings/AppVersionLine.tsx`) below the
+shared hub on both `/settings` and `/admin/settings`: each of the two hub pages
+(`UserSettingsHubPage.tsx`, `Admin/SettingsHubPage.tsx`) mounts it, because the
+packaged `SettingsHub` (`@marinoscar/platform-web/settings/ui`) has no slot for
+it. That is what Settings UI Pattern rule 4 ("reuse it, never fork it") means
+here. It adds no breakpoint read, so rule 5's five coupled
 gates are untouched.
 
 **A define, not an endpoint**, and not for convenience: it reports what *the

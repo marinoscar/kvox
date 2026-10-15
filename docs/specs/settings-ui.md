@@ -3,7 +3,10 @@
 > Epic #90, issues #91–#96. Implemented in
 > `apps/web/src/config/adminSections.tsx` (`ADMIN_SECTIONS`),
 > `apps/web/src/config/userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`),
-> and `apps/web/src/components/settings/SettingsHub.tsx`, with two thin
+> and the hub component `SettingsHub` from the packaged
+> `@marinoscar/platform-web/settings/ui` (issue #466, epic #462: until then it
+> lived in `apps/web/src/components/settings/SettingsHub.tsx`, a file that no
+> longer exists), with two thin
 > per-surface bindings, `apps/web/src/pages/Admin/SettingsHubPage.tsx` and
 > `apps/web/src/pages/UserSettingsHubPage.tsx`. Console mode (the rail
 > swapping its contents on `/admin/*`) lives in
@@ -64,7 +67,7 @@ a contributor treats `App.tsx` as the whole surface.
 So `ADMIN_SECTIONS` and `USER_SETTINGS_SECTIONS` are declared once each, and
 three consumers read them rather than maintaining their own list:
 
-1. **The hub** (`SettingsHub.tsx`, rendered by `SettingsHubPage.tsx` and
+1. **The hub** (the packaged `SettingsHub`, rendered by `SettingsHubPage.tsx` and
    `UserSettingsHubPage.tsx`) — the card grid at `sm` and up, the drill-down
    list below it.
 2. **The Console rail** (`NavigationRail.tsx`) — on any `/admin/*` route, the
@@ -221,7 +224,8 @@ this literally, both already true of the live registry:
 
 ## 4. Every new surface reuses `SettingsHub`, parameterised
 
-`SettingsHub.tsx` takes `sections`, `hubKey`, `title` and `subtitle` as props
+`SettingsHub` (imported from `@marinoscar/platform-web/settings/ui`; the app
+owns no copy of it) takes `sections`, `hubKey`, `title` and `subtitle` as props
 and names neither surface internally — its own header states the reason
 directly: a second hub built by copying the first "is precisely the failure
 epic #90 was filed to remove," the identical argument
@@ -251,7 +255,9 @@ comment:
 3. `Layout.tsx`'s `<main>` padding, `pb: { xs: 10, sm: 3 }` — clears the
    fixed bottom bar, and only needs to below the same width the bar exists
    at.
-4. `SettingsHub.tsx`'s `isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'))`
+4. `SettingsHub`'s `isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'))`
+   (in the packaged component, `@marinoscar/platform-web/settings/ui`; the
+   package keeps `down('sm')`, so moving the file did not move the gate)
    — chooses the drill-down list over the card grid.
 5. `AppBar.tsx`'s `isCompactWindow`, the same expression — chooses the
    back-arrow-plus-resolved-title header over the normal wordmark toolbar.
@@ -333,22 +339,22 @@ Two things moved near these gates without becoming one:
 
 ## 6. Accessibility requirements
 
-Read directly out of `SettingsHub.tsx` and `NavigationRail.tsx`, rather than
-asserted:
+Read directly out of the packaged `SettingsHub` and `NavigationRail.tsx`,
+rather than asserted:
 
 - **The search field's accessible name is explicit**, not left to the
-  placeholder: `SettingsHub.tsx` sets `aria-label="Search settings"` on the
+  placeholder: the packaged `SettingsHub` sets `aria-label="Search settings"` on the
   input, because a placeholder disappears the moment the user types,
   taking the only announced name with it.
 - **The clear-search button only renders when there is something to
   clear.** A permanently mounted clear button on an empty field is a dead
   tab stop that announces an affordance and does nothing.
 - **The compact/expanded choice is made by mounting, never by rendering
-  both and hiding one with CSS.** Both `SettingsHub.tsx` (list vs. grid) and
+  both and hiding one with CSS.** Both the packaged `SettingsHub` (list vs. grid) and
   `Layout.tsx` (rail vs. bottom bar) follow this rule: a hidden duplicate
   doubles the DOM, doubles the tab order with targets a keyboard user can
   reach but not see, and gives any `aria-current` two owners.
-- **An inert ("Coming soon") card is not a tab stop.** `SettingsHub.tsx`
+- **An inert ("Coming soon") card is not a tab stop.** the packaged `SettingsHub`
   renders it with no `CardActionArea` at all in the grid, and as a
   `disabled` `ListItemButton` in the drill-down — never a focusable control
   whose activation does nothing.
@@ -401,7 +407,7 @@ smaller grid than the one that ships.
 ## Rejected alternatives
 
 - **A second, admin-specific hub component, hand-rolled for `/settings`
-  later.** Rejected before it was ever built: `SettingsHub.tsx` is
+  later.** Rejected before it was ever built: `SettingsHub` is
   parameterised from its first commit specifically so the user-settings
   surface (#96) never has cause to fork it. Two near-identical hubs is not a
   hypothetical risk here — it is the literal shape of the pre-epic-#90
@@ -433,5 +439,5 @@ smaller grid than the one that ships.
 | A newly-added card (Notifications #225, Broadcasts #325) is declared with the exact permission its controller enforces, is not an `alwaysShow` escape hatch, and appears/disappears across the hub, rail and title resolver together | `settingsRegistry.test.ts` |
 | `/admin/settings`'s own route gate matches `console`'s `anyPermission` in `destinations.ts` byte for byte | `apps/web/src/__tests__/config/destinations.test.ts` |
 | No route in `App.tsx` is claimed by two destinations, and every declared route is either owned or explicitly listed as unowned | `destinations.test.ts` |
-| The hub renders the correct cards for a permission-limited user, navigates on click, and shows the grid vs. drill-down treatment at the right width | `apps/web/src/__tests__/components/settings/SettingsHub.test.tsx` |
-| The admin hub and the user hub restore independent scroll offsets | `SettingsHub.test.tsx` |
+| The hub renders the correct cards for a permission-limited user, navigates on click, and shows the grid vs. drill-down treatment at the right width | The package's own suite (`@marinoscar/platform-web`, `settings/ui`); the app's `SettingsHub.test.tsx` was deleted with the component in #466 |
+| The admin hub and the user hub bind distinct `hubKey` scroll keys | `apps/web/src/pages/Admin/SettingsHubPage.tsx` and `apps/web/src/pages/UserSettingsHubPage.tsx` (the keys `admin-settings-hub`, `user-settings-hub`) |

@@ -34,6 +34,8 @@
 // /credentials/:provider`) without touching the others.
 // =============================================================================
 
+import type { CredentialPurposeDef } from '@marinoscar/platform-api/credentials';
+
 /**
  * Credential store address for a transcription API key: the sub-key domain.
  *
@@ -42,6 +44,20 @@
  * remain in the table and become permanently unreadable. It is not a rename.
  */
 export const TRANSCRIPTION_CREDENTIAL_PURPOSE = 'transcription';
+
+/**
+ * The purpose's registration with the platform credential store (#466): its
+ * `CredentialsService` refuses a write to a purpose nobody registered. Registered
+ * by `kvox.manifest.ts` (`[registry:credential-purposes]`), because base code
+ * (`platform/credentials/`) may not import this folder. System tier only: the
+ * provider key is the deployment's, one row per provider id.
+ */
+export const TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF = {
+  purpose: TRANSCRIPTION_CREDENTIAL_PURPOSE,
+  owner: 'transcription',
+  label: 'Transcription provider API key',
+  tiers: ['system'],
+} as const satisfies CredentialPurposeDef;
 
 /**
  * The discriminator within the purpose: the provider's own id.

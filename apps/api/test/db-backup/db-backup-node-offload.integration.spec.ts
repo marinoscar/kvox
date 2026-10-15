@@ -31,7 +31,7 @@ import request from 'supertest';
 
 import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
 import { BACKUP_JOB_TYPE } from '../../src/db-backup/db-backup-runner.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { ConfigService } from '@nestjs/config';
 
 import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';

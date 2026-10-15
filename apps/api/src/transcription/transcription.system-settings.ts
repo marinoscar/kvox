@@ -4,9 +4,10 @@
 //
 // Speech-to-text policy: the active provider, its region and model, how audio
 // reaches it and what happens to it afterwards. Declared HERE, beside the
-// module that owns it, and registered by `apps/api/src/kvox.manifest.ts`; the
-// settings module composes it into `GET/PUT/PATCH /api/system-settings` without
-// importing this folder.
+// module that owns it, and registered by `apps/api/src/app-registrations/settings.ts`
+// (`APP_SYSTEM_SETTINGS_NAMESPACES`, with its `SystemSettingsNamespaces`
+// augmentation); the platform settings slice composes it into
+// `GET/PUT/PATCH /api/system-settings`.
 //
 // The stored and PATCH shapes are `systemTranscriptionSchema` /
 // `systemTranscriptionPatchSchema` from `transcription-settings.schema.ts` (a
@@ -26,18 +27,12 @@
 
 import { z } from 'zod';
 
-import type { SystemSettingsNamespace } from '../settings/registry/system-settings-namespace';
+import type { SystemSettingsNamespace } from '@marinoscar/platform-api/settings';
 import {
   systemTranscriptionPatchSchema,
   systemTranscriptionSchema,
   type SystemTranscriptionValue,
 } from './transcription-settings.schema';
-
-declare module '../settings/registry' {
-  interface SystemSettingsNamespaces {
-    transcription: SystemTranscriptionValue;
-  }
-}
 
 /** The PUT branch (optional in the body: an omitted block is carried forward, never reset). */
 const transcriptionPutSchema = z.object({
@@ -112,9 +107,49 @@ const transcriptionResponseSchema = z.object({
   }),
 });
 
+type TranscriptionPatch = z.infer<typeof transcriptionWirePatchSchema>;
+
+/**
+ * The `transcription` PATCH merge, field by field (the body of the old
+ * `SystemSettingsService.patchSettings` block, moved verbatim by #466): a field
+ * the patch names replaces the stored one, an absent field is kept.
+ *
+ * `provider` and `defaultLanguage` test `!== undefined`, never `??`: an explicit
+ * `null` is a VALUE here ("no provider", "detect the language"), so `??` would
+ * make clearing either a silent no-op.
+ */
+export function mergeTranscriptionSettings(
+  current: SystemTranscriptionValue,
+  patch?: TranscriptionPatch,
+): SystemTranscriptionValue {
+  return {
+    enabled: patch?.enabled ?? current.enabled,
+    provider: patch?.provider !== undefined ? patch.provider : current.provider,
+    providers: {
+      assemblyai: {
+        region: patch?.providers?.assemblyai?.region ?? current.providers.assemblyai.region,
+        speechModel:
+          patch?.providers?.assemblyai?.speechModel ?? current.providers.assemblyai.speechModel,
+      },
+    },
+    audioDelivery: patch?.audioDelivery ?? current.audioDelivery,
+    presignedUrlTtlMinutes: patch?.presignedUrlTtlMinutes ?? current.presignedUrlTtlMinutes,
+    deleteRemoteAfterIngest: patch?.deleteRemoteAfterIngest ?? current.deleteRemoteAfterIngest,
+    defaultLanguage:
+      patch?.defaultLanguage !== undefined ? patch.defaultLanguage : current.defaultLanguage,
+    transcodeNodeOffloadEnabled:
+      patch?.transcodeNodeOffloadEnabled ?? current.transcodeNodeOffloadEnabled,
+    abandonedUploadHours: patch?.abandonedUploadHours ?? current.abandonedUploadHours,
+    playback: {
+      bitrateKbps: patch?.playback?.bitrateKbps ?? current.playback.bitrateKbps,
+    },
+  };
+}
+
 export const TRANSCRIPTION_SYSTEM_SETTINGS: SystemSettingsNamespace<
   'transcription',
-  SystemTranscriptionValue
+  SystemTranscriptionValue,
+  TranscriptionPatch
 > = {
   key: 'transcription',
   description: 'Speech-to-text policy: active provider, region and model, audio delivery and retention.',
@@ -167,4 +202,5 @@ export const TRANSCRIPTION_SYSTEM_SETTINGS: SystemSettingsNamespace<
     },
   },
   requiredOnPut: false,
+  merge: mergeTranscriptionSettings,
 };

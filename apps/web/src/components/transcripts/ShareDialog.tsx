@@ -42,7 +42,7 @@
  * FULL SCREEN ON PHONES
  * =============================================================================
  *
- * `down('sm')` — the same compact-window read `SettingsHub.tsx`, `AppBar.tsx`
+ * `down('sm')` — the same compact-window read `SettingsHub` (the packaged hub, `@marinoscar/platform-web/settings/ui`), `AppBar.tsx`
  * and `BroadcastDetailDialog.tsx` use, and one of the five coupled breakpoint
  * gates CLAUDE.md's Settings UI Pattern rule 5 names. The boundary is `sm`
  * (600px), never `md`: gating at 900px would hand the phone treatment to

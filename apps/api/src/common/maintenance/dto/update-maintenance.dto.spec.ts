@@ -1,4 +1,4 @@
-import { systemMaintenanceSchema } from '../../schemas/settings.schema';
+import { systemMaintenanceSchema } from '@marinoscar/platform-api/host';
 import { updateMaintenanceSchema } from './update-maintenance.dto';
 
 describe('updateMaintenanceSchema', () => {

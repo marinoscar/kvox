@@ -34,6 +34,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
 | Add a notification event | [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md), [specs/browser-notifications.md](specs/browser-notifications.md) |
 | Add a settings page (admin or per-user) | [specs/settings-ui.md](specs/settings-ui.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md), the `add-settings-page` skill ([../.claude/skills/add-settings-page/SKILL.md](../.claude/skills/add-settings-page/SKILL.md)) |
+| Add a settings namespace (system or per-user) or a credential purpose | [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry), [ARCHITECTURE.md](ARCHITECTURE.md) §7.7, [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md) |
 | Change navigation, the bottom bar or the rail | [specs/ux-refresh.md](specs/ux-refresh.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md) |
 | Touch the transcript editor or correction model | [specs/transcription.md](specs/transcription.md) (§4), [specs/transcript-name-correction.md](specs/transcript-name-correction.md) |
 | Add a transcript or note export format | [specs/transcription.md](specs/transcription.md), [specs/notes.md](specs/notes.md), [specs/transcript-export.v1.schema.json](specs/transcript-export.v1.schema.json) |

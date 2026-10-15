@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   STORAGE_PROVIDER,
   type StorageProvider,
 } from '../storage/providers/storage-provider.interface';
-import type { SystemDatabaseBackupValue } from '../common/schemas/settings.schema';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 
 // =============================================================================
 // Backup retention: two clocks, deliberately (issue #282, epic #254)

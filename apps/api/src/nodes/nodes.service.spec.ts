@@ -48,7 +48,7 @@ import { JobClaimService } from '../jobs/job-claim.service';
 import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobLeaseService } from '../jobs/job-lease.service';
 import { JobTerminalService } from '../jobs/job-terminal.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { PrismaService } from '../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService } from '../../test/mocks/prisma.mock';
 import {
@@ -59,7 +59,7 @@ import {
   RegisterNodeDto,
 } from './dto/node-control-plane.dto';
 import { NodeOffloadService } from '../jobs/node-offload.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { NodesService } from './nodes.service';
 
 describe('NodesService', () => {

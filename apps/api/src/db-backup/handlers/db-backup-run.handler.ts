@@ -142,7 +142,7 @@ import {
   dbBackupRunResultSchema,
   type DbBackupRunResult,
 } from '../../jobs/contracts/db-backup-run.contract';
-import { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import {
   BACKUP_JOB_TYPE,

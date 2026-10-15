@@ -4,7 +4,7 @@
 //
 // One user's preferences over their OWN connected-knowledge graph
 // (docs/specs/ontology.md §7, §13, §17.2). Declared HERE, beside the module
-// that owns it, and registered by `apps/api/src/kvox.manifest.ts`; the settings
+// that owns it, and registered by `apps/api/src/app-registrations/settings.ts`; the platform settings
 // module composes it into `GET/PUT/PATCH /api/user-settings` without importing
 // this folder.
 //
@@ -19,7 +19,7 @@
 
 import { BadRequestException } from '@nestjs/common';
 
-import type { UserSettingsNamespace } from '../../settings/registry/user-settings-namespace';
+import type { UserSettingsNamespace } from '@marinoscar/platform-api/settings';
 import { GRAPH_PREFERENCE_DEFAULTS } from './graph-preferences.defaults';
 import {
   GRAPH_THRESHOLD_ORDER_MESSAGE,
@@ -29,12 +29,6 @@ import {
   type GraphPreferencesPatchValue,
   type GraphPreferencesValue,
 } from './graph-preferences.schema';
-
-declare module '../../settings/registry' {
-  interface UserSettingsNamespaces {
-    graph: GraphPreferencesValue;
-  }
-}
 
 /** A patch field's value: `undefined` keeps `current`, `null` restores `fallback`, anything else replaces. */
 function pick<T>(patch: T | null | undefined, current: T, fallback: T): T {

@@ -11,8 +11,9 @@
  *
  * This file deliberately declares only DATA. The `SettingsCardDef` /
  * `SettingsSectionDef` types and both helpers
- * (`visibleSettingsSections`, `settingsPageTitle`) are imported from
- * `adminSections.tsx` and re-used verbatim — which is precisely why those
+ * (`visibleSettingsSections`, `settingsPageTitle`) are the package's
+ * (`@marinoscar/platform-web/settings/ui`, #466; `adminSections.tsx` re-exports
+ * them for the hub, rail and AppBar) and are re-used verbatim — which is precisely why those
  * helpers take `sections`, `hubPath` and `hubTitle` as parameters instead of
  * closing over the admin constants. Two copies of the permission gate is the
  * drift the registry exists to prevent, and copying it here to serve a second
@@ -33,7 +34,7 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 // Knowledge graph (#369, epic #346).
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
-import type { SettingsSectionDef } from './adminSections';
+import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 
 /**
  * The user settings sections, in hub order.

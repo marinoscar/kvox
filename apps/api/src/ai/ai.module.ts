@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
-import { SettingsModule } from '../settings/settings.module';
 import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
 import { AiCredentialsController } from './ai-credentials.controller';
@@ -58,7 +57,6 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
     // unknown-key preservation and version counter. This module NEVER writes
     // that row directly; `TranscriptionModule` and `DbBackupModule` take the
     // same dependency for the same reason.
-    SettingsModule,
   ],
   controllers: [
     AiSettingsController,

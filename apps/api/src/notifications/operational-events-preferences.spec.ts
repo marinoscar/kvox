@@ -1,4 +1,4 @@
-import { userSettingsSchema } from '../common/schemas/settings.schema';
+import { currentUserSettingsSchema } from '@marinoscar/platform-api/settings';
 import { findEvent, isMandatory } from './notification-events';
 import {
   readNotificationPreferences,
@@ -42,7 +42,7 @@ const MANDATORY = 'db_backup.restore_completed';
  * about the rest of the document.
  */
 function parseSettings(notifications: Record<string, Record<string, boolean>>) {
-  return userSettingsSchema.parse({
+  return currentUserSettingsSchema().parse({
     theme: 'system',
     profile: { imageSource: 'provider' },
     notifications,

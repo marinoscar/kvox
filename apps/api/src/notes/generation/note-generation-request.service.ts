@@ -78,7 +78,7 @@ import {
   type GenerationRefusalMessages,
 } from '../../ai/ai-task-model-resolver.service';
 import type { AiProvider } from '../../ai/providers/ai-provider.interface';
-import type { SystemAiValue } from '../../common/schemas/settings.schema';
+import type { SystemAiValue } from '../../ai/ai-settings.schema';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LegacyObjectOwnershipStore } from '../../storage/legacy-object-ownership.store';

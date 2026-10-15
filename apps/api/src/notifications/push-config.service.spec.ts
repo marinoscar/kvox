@@ -6,7 +6,7 @@ import {
   MockPrismaService,
 } from '../../test/mocks/prisma.mock';
 import { PrismaService } from '../prisma/prisma.service';
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { PUSH_CONFIG_KEY, PushConfigService } from './push-config.service';
 import { DEFAULT_VAPID_SUBJECT } from './push-config.schema';
 import {

@@ -8,8 +8,8 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   missingModelNumbers,
   modelKnowledgeOf,

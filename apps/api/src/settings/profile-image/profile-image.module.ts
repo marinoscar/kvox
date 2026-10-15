@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { SettingsModule } from '../settings.module';
 import { StorageProvidersModule } from '../../storage/providers/storage-providers.module';
 import { ProfileImageController } from './profile-image.controller';
 import { ProfileImageService } from './profile-image.service';
@@ -9,14 +8,15 @@ import { AvatarService } from './avatar.service';
 /**
  * Uploaded profile pictures (#367).
  *
- * Separate from `SettingsModule` because it needs the storage provider, and
- * `SettingsModule` must stay a leaf: `StorageModule` -> `JobsModule` ->
- * `SettingsModule` already exists, so settings importing storage would be a
- * cycle. `StorageProvidersModule` (one token, no controllers), not
+ * Separate from the platform `SettingsModule` because it needs the storage
+ * provider, and the settings slice must stay a leaf: `StorageModule` ->
+ * `JobsModule` -> settings already exists, so settings importing storage would
+ * be a cycle. The settings slice is global (#466), so this module imports it
+ * for nothing. It moves to the storage slice in #469. `StorageProvidersModule` (one token, no controllers), not
  * `StorageModule`, for the reason `JobsModule` documents.
  */
 @Module({
-  imports: [SettingsModule, StorageProvidersModule],
+  imports: [StorageProvidersModule],
   controllers: [ProfileImageController, AvatarController],
   providers: [ProfileImageService, AvatarService],
 })

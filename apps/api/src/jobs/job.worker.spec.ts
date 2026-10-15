@@ -30,9 +30,9 @@ import { JobTerminalService } from './job-terminal.service';
 import { resetJobProfileWarnings } from './job-execution-profile';
 import { JobTimeoutError, JobWorker, resetUnknownWorkerModeWarning } from './job.worker';
 import { ProviderThrottleService } from './provider-throttle.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { NodeOffloadService } from './node-offload.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 /** Every worker setting, with the shipped defaults spelled out rather than imported. */
 interface WorkerConfig {

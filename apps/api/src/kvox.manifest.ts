@@ -24,8 +24,9 @@
 //           transcription, ai
 //   user:   dataTables, navigation, notifications, onboarding, graph
 // (`theme` and `profile` are core fields placed ahead of the user namespaces by
-// the composers.) `DEFAULT_SYSTEM_SETTINGS` keeps its own historical order on
-// top of this one; see `common/types/settings.types.ts`.
+// the composers.) Since #466 the namespaces are registered by
+// `settings/registry/` (the platform's declarations folded with this app's from
+// `app-registrations/settings.ts`) and `kvox.settings-manifest.ts` only triggers it.
 //
 // Registration is idempotent per process: Jest imports this from `setup.ts` and
 // a spec may import it again, and registering a namespace twice is a
@@ -82,6 +83,9 @@ import {
   TRANSCRIPTS_ONBOARDING_STEPS,
 } from './transcripts/transcripts.onboarding';
 
+import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
+
+import { TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF } from './transcription/transcription-credential.constants';
 import { BASE_EMAIL_TEMPLATES, registerEmailTemplates } from './email/templates';
 import { BASE_NOTIFICATIONS } from './notifications/notification-events';
 import { registerNotifications } from './notifications/notification-registry';
@@ -98,6 +102,11 @@ if (!registered) {
 
   // ---- issue #460: domain registrations, in dependency order ---------------
   // Each section is owned by one registry; append your calls under your marker.
+  // [registry:credential-purposes]
+  // The platform's `CredentialsService` refuses a write to a purpose nobody
+  // registered (#466). The platform's own purposes (`smtp`, `email_ses`,
+  // `push_vapid`) are registered by `app-registrations/registrations.ts`.
+  registerCredentialPurpose(TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF);
   // [registry:job-labels]
   // Enumeration order reproduces the pre-registry map: base, transcripts, notes,
   // `user.data.purge`, search, graph, ask.

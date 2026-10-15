@@ -65,7 +65,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../common/types/settings.types';
+import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../transcription/transcription.system-settings';
 import { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -363,7 +363,7 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
           describe(error),
       );
 
-      return DEFAULT_SYSTEM_SETTINGS.transcription.abandonedUploadHours;
+      return TRANSCRIPTION_SYSTEM_SETTINGS.defaults.abandonedUploadHours;
     }
   }
 

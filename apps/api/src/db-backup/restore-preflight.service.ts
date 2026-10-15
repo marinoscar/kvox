@@ -3,9 +3,9 @@ import { statfs } from 'node:fs/promises';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { DatabaseBackupRun } from '@prisma/client';
 
-import type { SystemDatabaseBackupValue } from '../common/schemas/settings.schema';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import { PrismaService } from '../prisma/prisma.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   buildOldDatabaseName,
   buildScratchDatabaseName,

@@ -13,7 +13,7 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import { CredentialsService } from '../../src/credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { SesEmailProvider } from '../../src/email/providers/ses-email.provider';
 import { SmtpEmailProvider } from '../../src/email/providers/smtp-email.provider';
 

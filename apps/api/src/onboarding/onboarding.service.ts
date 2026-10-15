@@ -5,8 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AiConfigService } from '../ai/ai-config.service';
 import { EmailSettingsService } from '../email/email-settings.service';
 import { PushConfigService } from '../notifications/push-config.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
-import { UserSettingsService } from '../settings/user-settings/user-settings.service';
+import { SystemSettingsService, UserSettingsService } from '@marinoscar/platform-api/settings';
 import {
   toRequestUser,
   type AuthenticatedUser,

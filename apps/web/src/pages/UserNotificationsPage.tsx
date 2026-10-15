@@ -64,8 +64,9 @@ import { useNotificationCapability } from '../hooks/useNotificationCapability';
 import { useNotificationConfig } from '../hooks/useNotificationConfig';
 import { useNotificationEvents } from '../hooks/useNotificationEvents';
 import { requestPermissionAndSyncPush } from '../services/pushSubscription';
-import type { NotificationPreferencesPatch } from '../types';
-import { UserSettingsSection } from './UserSettingsSection';
+import type { NotificationPreferencesPatch, UserSettings } from '../types';
+import { UserSettingsSection } from '@marinoscar/platform-web/settings/ui';
+import type { UserSettingsUpdate as PackagedUserSettingsUpdate } from '@marinoscar/platform-web/settings/ui';
 
 /** Mirrors the `Notifications` card in `config/userSettingsSections.tsx`, so the
  *  hub card, the compact AppBar title (#95) and this page's `h1` all agree. */
@@ -162,7 +163,11 @@ export default function UserNotificationsPage() {
             // case. Deliberately NOT `?? {}`-ed into a defaulted object here:
             // every control derives its own state from this plus the registry,
             // and the one thing that must never exist is a filled-in local copy.
-            preferences={settings.notifications}
+            // PLATFORM-ADOPTION-SHIM(466): the packaged section types the document
+            // as the platform's base (theme + profile); `notifications` is a
+            // namespace the API serves (and #466's registry keeps) that the base
+            // type does not name yet.
+            preferences={(settings as unknown as UserSettings).notifications}
             isSaving={isSaving}
             browserCapability={capability}
             // The promise is dropped deliberately: `handleRequestPermission`
@@ -191,7 +196,8 @@ export default function UserNotificationsPage() {
               // afterwards is what was actually stored — no optimistic overlay,
               // and therefore no second source of truth to drift.
               void save(
-                { notifications },
+                // PLATFORM-ADOPTION-SHIM(466): same as above, for the PATCH body.
+                { notifications } as unknown as PackagedUserSettingsUpdate,
                 {
                   success: 'Notification preferences updated',
                   failure: 'Failed to update notification preferences',

@@ -12,9 +12,9 @@ import {
   createMockTestUser,
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
-import { CredentialsService } from '../../src/credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { encodeCursor as encodeTranscriptCursor } from '../../src/transcripts/transcripts.service';
 
 // =============================================================================

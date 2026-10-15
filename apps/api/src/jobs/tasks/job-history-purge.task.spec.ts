@@ -15,7 +15,7 @@ import { JobHistoryPurgeTask } from './job-history-purge.task';
 import { JOB_HISTORY_PURGE_TYPE } from '../handlers/job-history-purge.handler';
 import type { JobsService } from '../jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 function makeTask(options: { purgeEnabled?: boolean; active?: unknown; enqueue?: jest.Mock }) {
   const findFirst = jest.fn().mockResolvedValue(options.active ?? null);

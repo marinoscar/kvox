@@ -97,9 +97,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { JOBS_SYSTEM_SETTINGS } from '@marinoscar/platform-api/jobs';
 import { PrismaService } from '../prisma/prisma.service';
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { resolveLeaseHorizonMs, resolveMaxAttempts } from './job-execution-profile';
 import { JobHandlerRegistry } from './job-handler.registry';
 
@@ -264,7 +264,7 @@ export class JobStuckService {
    * NEVER THROWS. This is called from a cron tick with no caller to report to,
    * and a settings read that failed is not a reason to stop reaping — it is a
    * reason to reap on the shipped default, loudly. The fallback is
-   * `DEFAULT_SYSTEM_SETTINGS.jobs.stuckThresholdMinutes` rather than a literal,
+   * `JOBS_SYSTEM_SETTINGS.defaults.stuckThresholdMinutes` rather than a literal,
    * so there is still exactly one place the number lives.
    */
   async getStuckThresholdMinutes(): Promise<number> {
@@ -278,11 +278,11 @@ export class JobStuckService {
     } catch (error) {
       this.logger.warn(
         `Could not read jobs.stuckThresholdMinutes; falling back to ` +
-          `${DEFAULT_SYSTEM_SETTINGS.jobs.stuckThresholdMinutes} minutes: ${describe(error)}`
+          `${JOBS_SYSTEM_SETTINGS.defaults.stuckThresholdMinutes} minutes: ${describe(error)}`
       );
     }
 
-    return DEFAULT_SYSTEM_SETTINGS.jobs.stuckThresholdMinutes;
+    return JOBS_SYSTEM_SETTINGS.defaults.stuckThresholdMinutes;
   }
 
   /**

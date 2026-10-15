@@ -1,4 +1,4 @@
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { TranscriptionConfigService } from './transcription-config.service';
 import { TranscriptionProviderRegistry } from './transcription-provider.registry';
 import type { TranscriptionProvider } from './providers/transcription-provider.interface';

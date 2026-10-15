@@ -107,6 +107,15 @@ const ROOT_FILES_EXEMPT: readonly string[] = [
   'instrumentation.ts', // OpenTelemetry bootstrap, loaded before everything else
 ];
 
+/**
+ * Files inside a base directory that are COMPOSITION ROOTS of one registry: they
+ * exist to name every domain declaration that registry takes. Each says why in
+ * its own header. (Issue #466: the settings namespaces KVox adds to the platform's
+ * registries, `transcription`, `ai`, `onboarding` and `graph`, with the type
+ * augmentation that makes them typed.)
+ */
+const NESTED_ROOTS_EXEMPT: readonly string[] = ['app-registrations/settings.ts'];
+
 interface AllowedEdge {
   /** The importing file, relative to `apps/api/src`, posix separators. */
   readonly from: string;
@@ -245,6 +254,8 @@ function deriveBaseDirs(): string[] {
 function baseFiles(): string[] {
   const files: string[] = [];
   for (const dir of deriveBaseDirs()) files.push(...walkTypeScript(join(SRC, dir)));
+  const exempt = new Set(NESTED_ROOTS_EXEMPT.map((file) => join(SRC, file)));
+  files.splice(0, files.length, ...files.filter((file) => !exempt.has(file)));
   for (const entry of readdirSync(SRC)) {
     const full = join(SRC, entry);
     if (statSync(full).isFile() && entry.endsWith('.ts') && !ROOT_FILES_EXEMPT.includes(entry)) {
@@ -326,7 +337,7 @@ describe('base code does not import domain code (issue #459)', () => {
   });
 
   it('lists only composition roots that exist', () => {
-    for (const file of ROOT_FILES_EXEMPT) {
+    for (const file of [...ROOT_FILES_EXEMPT, ...NESTED_ROOTS_EXEMPT]) {
       expect({ file, exists: statSync(join(SRC, file)).isFile() }).toEqual({ file, exists: true });
     }
   });
@@ -380,6 +391,7 @@ const REGISTRATION_IMPORTERS: readonly string[] = [
   'kvox.manifest.ts',
   'kvox.settings-manifest.ts',
   'app.module.ts',
+  ...NESTED_ROOTS_EXEMPT,
 ];
 
 /**
@@ -414,7 +426,7 @@ describe('domain registrations are imported by the composition roots only (issue
       .map(
         (edge) =>
           `${edge.from}:${edge.line} imports the domain registration '${edge.specifier}'. ` +
-          'Only kvox.manifest.ts, kvox.settings-manifest.ts and app.module.ts may; base code reads the registry.',
+          'Only kvox.manifest.ts, kvox.settings-manifest.ts, app-registrations/settings.ts and app.module.ts may; base code reads the registry.',
       );
 
     expect(violations).toEqual([]);
@@ -437,7 +449,8 @@ describe('domain registrations are imported by the composition roots only (issue
     );
 
     expect(importers.has('kvox.manifest.ts')).toBe(true);
-    expect(importers.has('kvox.settings-manifest.ts')).toBe(true);
+    // Since #466 the settings declarations are imported by `app-registrations/settings.ts`.
+    expect(importers.has('app-registrations/settings.ts')).toBe(true);
   });
 
   it.each([

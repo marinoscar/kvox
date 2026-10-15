@@ -2,7 +2,7 @@ import {
   PROFILE_IMAGE_SOURCES,
   type ProfileImageSource,
   type UserProfileSettingsValue,
-} from '../schemas/settings.schema';
+} from '@marinoscar/platform-contract/settings';
 
 // =============================================================================
 // Profile image (#367) — pure helpers shared by settings, auth and users

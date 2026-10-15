@@ -21,7 +21,7 @@ import { NotificationBroadcast } from '@prisma/client';
 
 import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { NotificationsService } from '../notifications.service';
 import {
   BROADCAST_CRITICAL_EVENT_KEY,

@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
 import { UserDataController } from './user-data.controller';
@@ -82,7 +81,6 @@ import { UserDataService } from './user-data.service';
     // Epic #271 — `UserSettingsService.patchSettings`, so the `everything`
     // scope can clear the `onboarding` namespace through the path that already
     // knows how an emptied namespace collapses back to absent.
-    SettingsModule,
   ],
   controllers: [UserDataController],
   providers: [

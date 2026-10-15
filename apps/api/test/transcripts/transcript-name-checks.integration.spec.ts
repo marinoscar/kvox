@@ -1,12 +1,12 @@
 import request from 'supertest';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../../src/transcripts/job-types';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
-import { CredentialsService } from '../../src/credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
 
 // =============================================================================

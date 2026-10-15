@@ -15,9 +15,9 @@
 //      144 times a day, with no error anywhere.
 // =============================================================================
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
 import { deriveNodeHealth, NodeLifecycleService } from './node-lifecycle.service';
-import type { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 

@@ -1,10 +1,11 @@
 /**
  * Issue #126, epic #109. `UserNotificationsPage` wiring, exercised through the
- * REAL `UserSettingsSection` (only `useUserSettings` is mocked, matching
- * `UserSettingsPages.test.tsx`'s pattern for `UserAppearancePage` /
- * `UserProfilePage`) and the REAL `NotificationSettings` matrix, so these
- * assertions are about the actual PATCH bodies the page sends, not a stub's
- * promise to send them.
+ * REAL packaged `UserSettingsSection` and `useUserSettings`
+ * (`@marinoscar/platform-web/settings/ui`, #466) over MSW, and the REAL
+ * `NotificationSettings` matrix, so these assertions are about the actual PATCH
+ * bodies the page sends over the wire, not a stub's promise to send them. (A
+ * `vi.mock` of the headless hook cannot reach the packaged section: Vite
+ * externalises the package, so its own relative imports are never mocked.)
  *
  * `useNotificationEvents` and `useNotificationCapability` are mocked because
  * they own their own fetch/observation concerns with their own test files
@@ -22,11 +23,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { render } from '../utils/test-utils';
-
-vi.mock('../../hooks/useUserSettings', () => ({
-  useUserSettings: vi.fn(),
-}));
+import { server } from '../mocks/server';
 
 vi.mock('../../hooks/useNotificationEvents', () => ({
   useNotificationEvents: vi.fn(),
@@ -40,7 +39,6 @@ vi.mock('../../hooks/useNotificationConfig', () => ({
   useNotificationConfig: vi.fn(),
 }));
 
-import { useUserSettings } from '../../hooks/useUserSettings';
 import { useNotificationEvents } from '../../hooks/useNotificationEvents';
 import { useNotificationCapability } from '../../hooks/useNotificationCapability';
 import { useNotificationConfig } from '../../hooks/useNotificationConfig';
@@ -48,7 +46,6 @@ import UserNotificationsPage from '../../pages/UserNotificationsPage';
 import type { NotificationEventDef, NotificationConfigResponse } from '../../types';
 import type { NotificationCapability } from '../../hooks/useNotificationCapability';
 
-const mockUseUserSettings = vi.mocked(useUserSettings);
 const mockUseNotificationEvents = vi.mocked(useNotificationEvents);
 const mockUseNotificationCapability = vi.mocked(useNotificationCapability);
 const mockUseNotificationConfig = vi.mocked(useNotificationConfig);
@@ -83,25 +80,37 @@ const ROLE_CHANGED: NotificationEventDef = {
   mandatory: true,
 };
 
-function mockSettings(overrides: Partial<ReturnType<typeof useUserSettings>> = {}) {
-  mockUseUserSettings.mockReturnValue({
-    settings: {
-      theme: 'system',
-      profile: { imageSource: 'provider' },
-      updatedAt: new Date().toISOString(),
-      version: 1,
-      // No `notifications` key at all - the untouched-account case.
-    },
-    isLoading: false,
-    error: null,
-    isSaving: false,
-    updateSettings: vi.fn().mockResolvedValue(undefined),
-    updateTheme: vi.fn().mockResolvedValue(undefined),
-    updateProfile: vi.fn().mockResolvedValue(undefined),
-    refresh: vi.fn(),
-    replaceSettings: vi.fn(),
-    ...overrides,
-  });
+/** Every PATCH body `/user-settings` received, in order. */
+let patches: unknown[] = [];
+
+/**
+ * Serves `GET /user-settings` with a document that has no `notifications` key
+ * (the untouched-account case) unless `extra` adds one, and records every PATCH
+ * body. A `GET` that never answers (`hang`) is the loading window.
+ */
+function mockSettings(extra: Record<string, unknown> = {}) {
+  const doc = {
+    theme: 'system',
+    profile: { imageSource: 'provider' },
+    updatedAt: new Date().toISOString(),
+    version: 1,
+    ...extra,
+  };
+  server.use(
+    http.get('*/api/user-settings', () => HttpResponse.json({ data: doc })),
+    http.patch('*/api/user-settings', async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      patches.push(body);
+      return HttpResponse.json({ data: { ...doc, ...body, version: doc.version + 1 } });
+    }),
+  );
+}
+
+/** Renders the page and waits for the settings document to have loaded. */
+async function renderPage() {
+  const view = render(<UserNotificationsPage />);
+  await screen.findByRole('heading', { name: /notifications/i, level: 1 });
+  return view;
 }
 
 function mockEvents(events: NotificationEventDef[] | null, overrides: Partial<ReturnType<typeof useNotificationEvents>> = {}) {
@@ -144,14 +153,15 @@ function mockConfig(config: NotificationConfigResponse | null = { browserEnabled
 describe('UserNotificationsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    patches = [];
     mockSettings();
     mockEvents([WELCOME, WEEKLY_DIGEST, ROLE_CHANGED]);
     mockCapability('granted');
     mockConfig();
   });
 
-  it('displays its title and description', () => {
-    render(<UserNotificationsPage />);
+  it('displays its title and description', async () => {
+    await renderPage();
 
     expect(screen.getByRole('heading', { name: /notifications/i, level: 1 })).toBeInTheDocument();
     expect(
@@ -164,22 +174,20 @@ describe('UserNotificationsPage', () => {
   // up serialised and PATCHed on mount - which mutes nobody but freezes every
   // account's preferences at whatever the defaults happened to be the day
   // they first opened this page.
-  it('makes no request on mount - zero calls to updateSettings after the page has rendered', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
-    mockSettings({ updateSettings });
+  it('makes no request on mount - no PATCH after the page has rendered', async () => {
 
-    render(<UserNotificationsPage />);
+    await renderPage();
 
     // Let any pending effects/microtasks flush.
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /notifications/i, level: 1 })).toBeInTheDocument();
     });
 
-    expect(updateSettings).not.toHaveBeenCalled();
+    expect(patches).toHaveLength(0);
   });
 
-  it('an untouched account (no notifications key at all) renders every control at its registry default', () => {
-    render(<UserNotificationsPage />);
+  it('an untouched account (no notifications key at all) renders every control at its registry default', async () => {
+    await renderPage();
 
     // WELCOME defaults to true, WEEKLY_DIGEST defaults to false.
     expect(
@@ -191,101 +199,77 @@ describe('UserNotificationsPage', () => {
   });
 
   it('toggling one switch PATCHes exactly one channel and one event key, nothing else', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined);
-    mockSettings({ updateSettings });
     const user = userEvent.setup();
 
-    render(<UserNotificationsPage />);
+    await renderPage();
 
     const toggle = screen.getByRole('switch', { name: /email notifications for welcome/i });
     await user.click(toggle);
 
-    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(patches).toHaveLength(1));
 
     // Exact body: one channel (email), one event key (user.welcome), and
     // nothing else - no browser channel, no weekly.digest, no other field.
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(patches[0]).toEqual({
       notifications: { email: { 'user.welcome': false } },
     });
   });
 
   describe('returning a control to its default sends null, not the default value', () => {
     it('un-muting a defaultEnabled:true event sends null', async () => {
-      const updateSettings = vi.fn().mockResolvedValue(undefined);
-      mockSettings({
-        updateSettings,
-        settings: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-          updatedAt: new Date().toISOString(),
-          version: 1,
-          notifications: { email: { 'user.welcome': false } },
-        },
-      });
+      mockSettings({ notifications: { email: { 'user.welcome': false } } });
       const user = userEvent.setup();
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       const toggle = screen.getByRole('switch', { name: /email notifications for welcome/i });
       expect(toggle).not.toBeChecked();
 
       await user.click(toggle);
 
-      await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
-      expect(updateSettings).toHaveBeenCalledWith({
+      await waitFor(() => expect(patches).toHaveLength(1));
+      expect(patches[0]).toEqual({
         notifications: { email: { 'user.welcome': null } },
       });
     });
 
     it('opting back OUT of a defaultEnabled:false event sends null', async () => {
-      const updateSettings = vi.fn().mockResolvedValue(undefined);
-      mockSettings({
-        updateSettings,
-        settings: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-          updatedAt: new Date().toISOString(),
-          version: 1,
-          notifications: { email: { 'weekly.digest': true } },
-        },
-      });
+      mockSettings({ notifications: { email: { 'weekly.digest': true } } });
       const user = userEvent.setup();
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       const toggle = screen.getByRole('switch', { name: /email notifications for weekly digest/i });
       expect(toggle).toBeChecked();
 
       await user.click(toggle);
 
-      await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
-      expect(updateSettings).toHaveBeenCalledWith({
+      await waitFor(() => expect(patches).toHaveLength(1));
+      expect(patches[0]).toEqual({
         notifications: { email: { 'weekly.digest': null } },
       });
     });
 
     it('opting IN to a defaultEnabled:false event sends the explicit true (contrast case, not a null-delete)', async () => {
-      const updateSettings = vi.fn().mockResolvedValue(undefined);
-      mockSettings({ updateSettings });
       const user = userEvent.setup();
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       const toggle = screen.getByRole('switch', { name: /email notifications for weekly digest/i });
       expect(toggle).not.toBeChecked();
 
       await user.click(toggle);
 
-      await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
-      expect(updateSettings).toHaveBeenCalledWith({
+      await waitFor(() => expect(patches).toHaveLength(1));
+      expect(patches[0]).toEqual({
         notifications: { email: { 'weekly.digest': true } },
       });
     });
   });
 
   describe('mandatory events', () => {
-    it('renders locked, with the reason, and every declared channel disabled', () => {
-      render(<UserNotificationsPage />);
+    it('renders locked, with the reason, and every declared channel disabled', async () => {
+      await renderPage();
 
       expect(screen.getByText('Always on')).toBeInTheDocument();
       expect(
@@ -299,21 +283,10 @@ describe('UserNotificationsPage', () => {
       ).toBeDisabled();
     });
 
-    it('a stale stored false for a mandatory event still renders ON - that is what the user actually receives', () => {
-      mockSettings({
-        settings: {
-          theme: 'system',
-          profile: { imageSource: 'provider' },
-          updatedAt: new Date().toISOString(),
-          version: 1,
-          notifications: {
-            email: { 'security.role_changed': false },
-            browser: { 'security.role_changed': false },
-          },
-        },
-      });
+    it('a stale stored false for a mandatory event still renders ON - that is what the user actually receives', async () => {
+      mockSettings({ notifications: { email: { 'security.role_changed': false }, browser: { 'security.role_changed': false } } });
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(
         screen.getByRole('switch', { name: /email notifications for your roles changed/i }),
@@ -324,18 +297,18 @@ describe('UserNotificationsPage', () => {
     });
   });
 
-  it('shows a loading spinner while the registry is loading, even once settings have loaded', () => {
+  it('shows a loading spinner while the registry is loading, even once settings have loaded', async () => {
     mockEvents(null, { isLoading: true });
 
-    render(<UserNotificationsPage />);
+    await renderPage();
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
-  it('shows the registry fetch error inline, distinct from the settings fetch error', () => {
+  it('shows the registry fetch error inline, distinct from the settings fetch error', async () => {
     mockEvents(null, { isLoading: false, error: 'Failed to load notification events' });
 
-    render(<UserNotificationsPage />);
+    await renderPage();
 
     expect(screen.getByText(/failed to load notification events/i)).toBeInTheDocument();
   });
@@ -348,30 +321,30 @@ describe('UserNotificationsPage', () => {
   // mis-reported as "disabled". See `useNotificationConfig`'s own header and
   // the call site in `UserNotificationsPage.tsx`.
   describe('wiring GET /notifications/config into adminDisabled (#227)', () => {
-    it('passes adminDisabled: true when the fetched config says browserEnabled: false', () => {
+    it('passes adminDisabled: true when the fetched config says browserEnabled: false', async () => {
       mockConfig({ browserEnabled: false, pushEnabled: false, vapidPublicKey: null });
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(mockUseNotificationCapability).toHaveBeenCalledWith(
         expect.objectContaining({ adminDisabled: true }),
       );
     });
 
-    it('passes adminDisabled: false while the config is still loading (config: null)', () => {
+    it('passes adminDisabled: false while the config is still loading (config: null)', async () => {
       mockConfig(null);
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(mockUseNotificationCapability).toHaveBeenCalledWith(
         expect.objectContaining({ adminDisabled: false }),
       );
     });
 
-    it('passes adminDisabled: false when the fetched config says browserEnabled: true', () => {
+    it('passes adminDisabled: false when the fetched config says browserEnabled: true', async () => {
       mockConfig({ browserEnabled: true, pushEnabled: false, vapidPublicKey: null });
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(mockUseNotificationCapability).toHaveBeenCalledWith(
         expect.objectContaining({ adminDisabled: false }),
@@ -383,10 +356,10 @@ describe('UserNotificationsPage', () => {
   // what proves it hands down the capability and not the raw permission, which
   // would render the iOS lie the epic exists to delete.
   describe('the capability reaches the matrix', () => {
-    it('an iOS tab gets the Add to Home Screen remedy, not "not supported"', () => {
+    it('an iOS tab gets the Add to Home Screen remedy, not "not supported"', async () => {
       mockCapability('ios-needs-install');
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(screen.getByText('Add this app to your Home Screen')).toBeInTheDocument();
       expect(
@@ -394,9 +367,9 @@ describe('UserNotificationsPage', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('renders the "Allow notifications" button only in the default state', () => {
+    it('renders the "Allow notifications" button only in the default state', async () => {
       mockCapability('default');
-      const { unmount } = render(<UserNotificationsPage />);
+      const { unmount } = await renderPage();
       expect(
         screen.getByRole('button', { name: /allow notifications/i }),
       ).toBeInTheDocument();
@@ -406,7 +379,7 @@ describe('UserNotificationsPage', () => {
       // answer, and the prompt is a one-shot, effectively permanent resource.
       for (const capability of ['granted', 'denied', 'admin-disabled', 'sw-unavailable'] as const) {
         mockCapability(capability);
-        const view = render(<UserNotificationsPage />);
+        const view = await renderPage();
         expect(
           screen.queryByRole('button', { name: /allow notifications/i }),
         ).not.toBeInTheDocument();
@@ -433,22 +406,22 @@ describe('UserNotificationsPage', () => {
       mandatory: false,
     };
 
-    it('disables the push switch when the fetched config says pushEnabled: false', () => {
+    it('disables the push switch when the fetched config says pushEnabled: false', async () => {
       mockEvents([PUSH_CAPABLE]);
       mockConfig({ browserEnabled: true, pushEnabled: false, vapidPublicKey: null });
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(
         screen.getByRole('switch', { name: /push notifications for synthetic push event/i }),
       ).toBeDisabled();
     });
 
-    it('enables the push switch when the fetched config says pushEnabled: true - no longer hardcoded off', () => {
+    it('enables the push switch when the fetched config says pushEnabled: true - no longer hardcoded off', async () => {
       mockEvents([PUSH_CAPABLE]);
       mockConfig({ browserEnabled: true, pushEnabled: true, vapidPublicKey: 'BKey123' });
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(
         screen.getByRole('switch', { name: /push notifications for synthetic push event/i }),
@@ -458,11 +431,11 @@ describe('UserNotificationsPage', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('treats a still-loading config (null) as pushEnabled: false - the safe default while unknown', () => {
+    it('treats a still-loading config (null) as pushEnabled: false - the safe default while unknown', async () => {
       mockEvents([PUSH_CAPABLE]);
       mockConfig(null);
 
-      render(<UserNotificationsPage />);
+      await renderPage();
 
       expect(
         screen.getByRole('switch', { name: /push notifications for synthetic push event/i }),
@@ -477,7 +450,7 @@ describe('UserNotificationsPage', () => {
     mockCapability('default');
 
     const user = userEvent.setup();
-    render(<UserNotificationsPage />);
+    await renderPage();
 
     expect(requestPermission).not.toHaveBeenCalled();
 

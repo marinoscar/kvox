@@ -1,4 +1,4 @@
-import { patchUserSettingsSchema } from '../../settings/dto/update-user-settings.dto';
+import { composePatchUserSettingsSchema } from '@marinoscar/platform-api/settings';
 import {
   graphPreferencesPatchSchema,
   graphPreferencesSchema,
@@ -16,6 +16,10 @@ import { GraphPreferencesService } from './graph-preferences.service';
 // =============================================================================
 
 const USER = '11111111-1111-4111-8111-111111111111';
+
+// The platform's composed PATCH body (every registered namespace; `test/setup.ts`
+// registers them through `kvox.manifest`).
+const patchUserSettingsSchema = composePatchUserSettingsSchema();
 
 describe('resolveGraphPreferences', () => {
   it('returns every default for an absent namespace', () => {

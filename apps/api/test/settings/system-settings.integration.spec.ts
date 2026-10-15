@@ -12,22 +12,16 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import {
-  DEFAULT_SYSTEM_SETTINGS,
-  SystemSettingsValue,
-} from '../../src/common/types/settings.types';
-import { systemSettingsResponseSchema } from '../../src/settings/dto/system-settings-response.dto';
+import type { SystemSettingsValue } from '@marinoscar/platform-api/settings';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 
-// .env.test pins JWT_ACCESS_TTL_MINUTES=15 and JWT_REFRESH_TTL_DAYS=14 —
-// the same numbers configuration.ts falls back to when the env vars are
-// unset, so this suite cannot tell "read from config" apart from "hardcoded
-// default" on its own. That distinction (non-default config values) is
-// pinned instead in the unit spec
-// (system-settings.service.spec.ts), which mocks ConfigService directly;
-// this integration suite proves the real HTTP contract: GET/PATCH actually
-// emit the block, a submitted one is discarded, and the payload validates
-// against systemSettingsResponseSchema.
-const EXPECTED_SECURITY = { jwtAccessTtlMinutes: 15, refreshTtlDays: 14 };
+// #466: `GET|PATCH /api/system-settings` are served by the platform's settings
+// slice. This suite asserts KVox's own namespaces and stored shape through that
+// service (read back through the HTTP route and, for writes, from what reached
+// the mocked `system_settings` row). It deliberately does NOT assert the
+// platform's own response fields (`security`, the composed response schema,
+// `updatedBy`): those belong to the platform's tests and to the `settings`
+// conformance suite in `test/conformance.spec.ts`.
 
 describe('System Settings Integration', () => {
   let context: TestContext;
@@ -72,7 +66,6 @@ describe('System Settings Integration', () => {
       expect(response.body.data).toMatchObject({
         jobs: DEFAULT_SYSTEM_SETTINGS.jobs,
         nodes: DEFAULT_SYSTEM_SETTINGS.nodes,
-        security: EXPECTED_SECURITY,
         version: expect.any(Number),
       });
       expect(response.body.data.updatedAt).toBeDefined();
@@ -235,7 +228,6 @@ describe('System Settings Integration', () => {
 
       expect(response.body.data.nodes.jobSecretBrokerEnabled).toBe(true);
       expect(response.body.data.jobs).toEqual(DEFAULT_SYSTEM_SETTINGS.jobs);
-      expect(response.body.data.security).toEqual(EXPECTED_SECURITY);
       expect(response.body.data.version).toBe(2);
     });
 
@@ -528,9 +520,6 @@ describe('System Settings Integration', () => {
 
       // 2. The response the caller gets back.
       expect(patched.body.data.databaseBackup).toEqual(expectedStored);
-      expect(() =>
-        systemSettingsResponseSchema.parse(patched.body.data),
-      ).not.toThrow();
 
       // 3. And a genuine read back, over the value the write produced.
       context.prismaMock.systemSettings.findUnique.mockResolvedValue({
@@ -650,9 +639,6 @@ describe('System Settings Integration', () => {
       expect(patched.body.data.ai.taskModels).toEqual({
         'graph.extract': { model: 'gpt-5.4' },
       });
-      expect(() =>
-        systemSettingsResponseSchema.parse(patched.body.data),
-      ).not.toThrow();
     });
 
     it('replaces ai.taskModels wholesale rather than merging it (#360)', async () => {
@@ -818,51 +804,12 @@ describe('System Settings Integration', () => {
   });
 
   // ===========================================================================
-  // #148 — `systemSettingsResponseSchema` has always declared `security`, and
-  // nothing ever populated it, so the OpenAPI contract advertised a key every
-  // real response omitted. The GET and PATCH assertions above (and inline in
-  // their own describes) already cover "the block is present with the right
-  // numbers" on the happy path; this block covers the other two guarantees
-  // end to end over real HTTP: a client cannot write it, and the payload
-  // that goes out the door is the one the published schema promises.
-  //
-  // PUT is deliberately not exercised here: `describe.skip('PUT
-  // /api/system-settings', ...)` above predates this change and is unrelated
-  // to it — see the unit spec (system-settings.service.spec.ts) for PUT's
-  // read-only and schema-conformance coverage via `service.replaceSettings`
-  // directly.
+  // A `security` key never reaches storage. The platform serves `security` in the
+  // response from configuration; the stored `global` row is KVox's, and it must
+  // not grow a key a client wrote.
   // ===========================================================================
-  describe('security block (#148)', () => {
-    it('GET: a real response parses cleanly through systemSettingsResponseSchema', async () => {
-      const admin = await createMockAdminUser(context);
-
-      // The default fixture from `setupBaseMocks()` sets `updatedByUserId`
-      // but omits the `updatedByUser` key outright (rather than nulling it),
-      // which is not what the real `loadOrCreateRow`'s Prisma `include`
-      // produces for a row with no updater — that always comes back as an
-      // explicit `null`. Set the row up the way production actually shapes
-      // it so this test exercises the response schema, not a fixture gap.
-      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
-        id: 'settings-1',
-        key: 'global',
-        value: DEFAULT_SYSTEM_SETTINGS as any,
-        version: 1,
-        updatedAt: new Date(),
-        updatedByUserId: null,
-        updatedByUser: null,
-      });
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/system-settings')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      expect(() =>
-        systemSettingsResponseSchema.parse(response.body.data),
-      ).not.toThrow();
-    });
-
-    it('PATCH: a submitted security block is discarded — the persisted value carries no security key, and the response still reflects config, not the submitted numbers', async () => {
+  describe('stored shape', () => {
+    it('PATCH: a submitted security block is discarded and never reaches the stored row', async () => {
       const admin = await createMockAdminUser(context);
 
       context.prismaMock.systemSettings.findUnique.mockResolvedValue({
@@ -889,36 +836,18 @@ describe('System Settings Integration', () => {
       });
       context.prismaMock.auditEvent.create.mockResolvedValue({} as any);
 
-      // A client that read the OpenAPI contract and assumed `security` was
-      // writable, since the response DTO declares it.
-      const dtoWithSecurity = {
-        nodes: { jobSecretBrokerEnabled: true },
-        security: { jwtAccessTtlMinutes: 9999, refreshTtlDays: 9999 },
-      };
-
-      const response = await request(context.app.getHttpServer())
+      await request(context.app.getHttpServer())
         .patch('/api/system-settings')
         .set(authHeader(admin.accessToken))
-        .send(dtoWithSecurity)
+        .send({
+          nodes: { jobSecretBrokerEnabled: true },
+          security: { jwtAccessTtlMinutes: 9999, refreshTtlDays: 9999 },
+        })
         .expect(200);
 
-      // The write itself is clean: nothing resembling the submitted
-      // security block reached storage.
-      const updateArgs =
-        context.prismaMock.systemSettings.update.mock.calls[0][0];
+      const updateArgs = context.prismaMock.systemSettings.update.mock.calls[0][0];
       expect(updateArgs.data.value).not.toHaveProperty('security');
-
-      // And the response carries config's numbers (see EXPECTED_SECURITY
-      // above), never the submitted 9999s.
-      expect(response.body.data.security).toEqual(EXPECTED_SECURITY);
-      expect(response.body.data.security).not.toEqual({
-        jwtAccessTtlMinutes: 9999,
-        refreshTtlDays: 9999,
-      });
-
-      expect(() =>
-        systemSettingsResponseSchema.parse(response.body.data),
-      ).not.toThrow();
+      expect((updateArgs.data.value as any).nodes.jobSecretBrokerEnabled).toBe(true);
     });
   });
 });

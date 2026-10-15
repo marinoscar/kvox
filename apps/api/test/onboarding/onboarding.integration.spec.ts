@@ -5,7 +5,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks, setupMockUserSettings } from '../fixtures/mock-setup.helper';
 import { createMockAdminUser, authHeader } from '../helpers/auth-mock.helper';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { EmailSettingsService } from '../../src/email/email-settings.service';
 import { PushConfigService } from '../../src/notifications/push-config.service';
 

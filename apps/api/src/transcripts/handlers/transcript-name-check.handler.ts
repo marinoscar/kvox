@@ -17,7 +17,7 @@ import {
   type AiProviderContext,
 } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import type { SystemAiValue } from '../../common/schemas/settings.schema';
+import type { SystemAiValue } from '../../ai/ai-settings.schema';
 import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';

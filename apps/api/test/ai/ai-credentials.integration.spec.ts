@@ -9,7 +9,7 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { OPENAI_FETCH } from '../../src/ai/providers/openai.provider';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 
 // =============================================================================
 // Per-user AI credentials over the wire (issue #47, epic #45)
@@ -542,7 +542,7 @@ describe('AI credentials integration', () => {
       // The stored ciphertext, produced by the real cipher so the decrypt in
       // the service is exercised rather than stubbed.
       const { encryptSecret } = await import(
-        '../../src/common/crypto/secret-cipher'
+        '@marinoscar/platform-api/core'
       );
       prismaMock.userAiCredential.findUnique.mockResolvedValue({
         secret: encryptSecret(RAW_KEY, 'ai-key'),

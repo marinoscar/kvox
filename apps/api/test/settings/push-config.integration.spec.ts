@@ -14,7 +14,7 @@ import {
   authHeader,
 } from '../helpers/auth-mock.helper';
 import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
-import { CredentialsService } from '../../src/credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { PushConfigController } from '../../src/notifications/push-config.controller';
 import { PushConfigService } from '../../src/notifications/push-config.service';
 

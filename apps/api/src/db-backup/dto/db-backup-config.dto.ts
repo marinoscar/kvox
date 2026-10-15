@@ -49,7 +49,7 @@ import { z } from 'zod';
 import {
   systemDatabaseBackupPatchSchema,
   systemDatabaseBackupSchema,
-} from '../../common/schemas/settings.schema';
+} from '@marinoscar/platform-contract/db-backup';
 
 /**
  * The `PUT config` body: the settings namespace's own patch schema, unchanged.

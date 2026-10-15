@@ -91,8 +91,9 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
     NoteAccessService,
     // #369 — the `graph` user-settings namespace, resolved with defaults.
     GraphPreferencesService,
-    // #459 — turns the settings module's generic `user-settings.namespace-changed`
-    // event for `graph` into `graph.preferences_changed`.
+    // #459 — turns the generic `user-settings.namespace-changed` event for `graph`
+    // (emitted by `platform/settings/user-settings-change.interceptor.ts` since
+    // #466) into `graph.preferences_changed`.
     GraphPreferencesChangeForwarder,
     GraphOntologyService,
     EvidenceValidator,

@@ -26,7 +26,7 @@
  * The AES-GCM sub-key domain for a user's AI provider key.
  *
  * ⚠ CHANGING THIS STRING IS NOT A RENAME. `purpose` is the derivation label
- * (`common/crypto/secret-cipher.ts`), so a different value derives a different
+ * (`encryptSecret` / `decryptSecret` from `@marinoscar/platform-api/core`), so a different value derives a different
  * key: every already-stored AI credential would remain in the table and become
  * permanently unreadable, with the failure surfacing as "the provider refused
  * this key" for every user at once.

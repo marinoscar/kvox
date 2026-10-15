@@ -160,7 +160,6 @@ import { Module } from '@nestjs/common';
 
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { SettingsModule } from '../settings/settings.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { NodeDataPlaneService } from './node-data-plane.service';
 import { NodeLifecycleService } from './node-lifecycle.service';
@@ -179,7 +178,6 @@ import { NodeStaleOfflineTask } from './tasks/node-stale-offline.task';
 @Module({
   imports: [
     JobsModule,
-    SettingsModule,
     StorageProvidersModule,
     NotificationsModule,
   ],

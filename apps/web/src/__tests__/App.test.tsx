@@ -64,12 +64,12 @@ vi.mock('../pages/UserSettingsHubPage', () => ({
   default: () => <h1>User Settings Hub</h1>,
 }));
 
-vi.mock('../pages/UserProfilePage', () => ({
-  default: () => <h1>User Profile Page</h1>,
-}));
-
-vi.mock('../pages/UserAppearancePage', () => ({
-  default: () => <h1>User Appearance Page</h1>,
+// Issue #466: Profile and Appearance are the packaged pages. Only the two pages
+// are replaced; the barrel's hub, registry helpers and hooks stay real.
+vi.mock('@marinoscar/platform-web/settings/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/settings/ui')>()),
+  UserProfilePage: () => <h1>User Profile Page</h1>,
+  UserAppearancePage: () => <h1>User Appearance Page</h1>,
 }));
 
 // Issue #465: the Access Tokens page is the packaged one. The registries in
@@ -347,7 +347,7 @@ describe('App', () => {
    * Issue #96, epic #90. The per-user settings hub plus one route per card in
    * `config/userSettingsSections.tsx`. This file (and only this file) had no
    * assertions at all for `/settings/*` before this change — the split pages'
-   * own suites (`UserSettingsPages.test.tsx`, `SettingsHub.test.tsx`) proved
+   * own suites (`SettingsHubPages.test.tsx`, and the package's own) proved
    * each page renders correctly in isolation, but nothing proved `App.tsx`
    * wires each PATH to the right one, and nothing proved these routes are
    * reachable without the `RequirePermission` gate the `/admin/settings/*`

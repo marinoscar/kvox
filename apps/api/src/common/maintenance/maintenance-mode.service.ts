@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
-import type { PatchSystemSettingsDto } from '../../settings/dto/update-system-settings.dto';
-import type { SystemMaintenanceValue } from '../schemas/settings.schema';
-import { DEFAULT_SYSTEM_SETTINGS } from '../types/settings.types';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
+import {
+  MAINTENANCE_SYSTEM_SETTINGS,
+  type SystemMaintenanceValue,
+} from '@marinoscar/platform-api/host';
 
 // =============================================================================
 // MaintenanceModeService — the three-layer maintenance switch (#257, epic #254)
@@ -362,7 +364,7 @@ export class MaintenanceModeService {
     }
 
     try {
-      const value = await this.systemSettings.getMaintenancePolicy();
+      const value = await this.systemSettings.getNamespace('maintenance');
       this.cache = { value, readAt: now };
 
       if (this.persistedUnreadable) {
@@ -388,7 +390,7 @@ export class MaintenanceModeService {
       return {
         readable: false,
         value: this.cache?.value ?? {
-          ...DEFAULT_SYSTEM_SETTINGS.maintenance,
+          ...MAINTENANCE_SYSTEM_SETTINGS.defaults,
         },
       };
     }

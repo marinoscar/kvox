@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
-import { CredentialsModule } from '../credentials/credentials.module';
-import { SettingsModule } from '../settings/settings.module';
+import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { AssemblyAiProvider } from './providers/assemblyai.provider';
 import { TranscriptionConfigController } from './transcription-config.controller';
 import { TranscriptionConfigService } from './transcription-config.service';
@@ -46,7 +45,6 @@ import { TranscriptionSettingsService } from './transcription-settings.service';
     // unknown-key preservation and version counter. This module NEVER writes
     // that row directly; `DbBackupModule` takes the same dependency for the
     // same reason.
-    SettingsModule,
   ],
   controllers: [TranscriptionSettingsController, TranscriptionConfigController],
   providers: [

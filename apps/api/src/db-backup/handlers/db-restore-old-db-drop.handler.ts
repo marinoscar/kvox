@@ -51,7 +51,7 @@ import type { Job } from '@prisma/client';
 
 import { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
-import { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { DatabaseRestoreService } from '../database-restore.service';
 
 /**

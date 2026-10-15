@@ -1,16 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type { IdentityProfileImages, UserDefaults } from '@marinoscar/platform-api/identity';
+import { DEFAULT_USER_SETTINGS } from '@marinoscar/platform-api/settings';
 
 import {
   normalizeProfileSettings,
   resolveProfileImageUrl,
 } from '../../common/profile-image/profile-image';
-import { DEFAULT_USER_SETTINGS } from '../../common/types/settings.types';
 
 /**
  * Identity's `USER_DEFAULTS`: what a new user's `user_settings.value` holds at
- * creation, over this app's current default document (PLATFORM-ADOPTION-SHIM(#466):
- * #466 moves the settings slice into the platform, which then owns it).
+ * creation: the settings slice's default document (#466).
  */
 @Injectable()
 export class KvoxUserDefaults implements UserDefaults {

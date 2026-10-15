@@ -71,7 +71,7 @@ import { ProviderThrottleService } from '../../src/jobs/provider-throttle.servic
 import { ClaimJobsDto, NodeJobResultDto } from '../../src/nodes/dto/node-control-plane.dto';
 import { NodeUploadUrlDto } from '../../src/nodes/dto/node-data-plane.dto';
 import { NodeDataPlaneService } from '../../src/nodes/node-data-plane.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { NodesService } from '../../src/nodes/nodes.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type {
@@ -87,7 +87,7 @@ import type {
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { NodeOffloadService } from '../../src/jobs/node-offload.service';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb } = resolveDbSuite('node-checksum-data-plane.db.spec');

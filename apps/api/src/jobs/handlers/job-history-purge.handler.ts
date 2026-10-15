@@ -114,7 +114,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Job, JobStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { JobHandler } from '../job-handler.interface';
 import { JobHandlerRegistry } from '../job-handler.registry';
 

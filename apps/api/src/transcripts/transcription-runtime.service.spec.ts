@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { ProviderAuthError } from '../transcription/errors';
 import { TranscriptionProviderRegistry } from '../transcription/transcription-provider.registry';
 import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';

@@ -5,8 +5,8 @@ import {
   MAINTENANCE_RETRY_AFTER_SECONDS,
 } from '../../src/common/maintenance/maintenance.guard';
 import { MaintenanceModeService } from '../../src/common/maintenance/maintenance-mode.service';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
-import type { SystemMaintenanceValue } from '../../src/common/schemas/settings.schema';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
+import type { SystemMaintenanceValue } from '@marinoscar/platform-api/host';
 import {
   createMockAdminUser,
   createMockViewerUser,

@@ -1,6 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { systemMaintenanceSchema } from '../../schemas/settings.schema';
+import { systemMaintenanceSchema } from '@marinoscar/platform-api/host';
 
 // =============================================================================
 // Wire bodies for /api/admin/maintenance (#257, epic #254)

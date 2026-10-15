@@ -6,8 +6,7 @@ import type { AiConfigService } from '../../src/ai/ai-config.service';
 import type { EmailSettingsService } from '../../src/email/email-settings.service';
 import type { PushConfigService } from '../../src/notifications/push-config.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import type { SystemSettingsService } from '../../src/settings/system-settings/system-settings.service';
-import type { UserSettingsService } from '../../src/settings/user-settings/user-settings.service';
+import type { SystemSettingsService, UserSettingsService } from '@marinoscar/platform-api/settings';
 import type {
   OnboardingAdminContext,
   OnboardingUserContext,
