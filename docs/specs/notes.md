@@ -931,8 +931,8 @@ string; reasoningEffort?: 'low'|'medium'|'high' }>>` is a new field on the
 existing `ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
 the deployment switch that keeps a fresh install from spending anybody's key
 on automatic extraction before an administrator turns it on. Both fields
-follow the identical six-place settings-parity discipline §2.5 already
-establishes for `allowedModels` (CLAUDE.md's "Database Tables" section).
+follow the identical settings-namespace declaration discipline §2.5 already
+establishes (declared in their module, registered in `kvox.manifest.ts`) for `allowedModels` (CLAUDE.md's "Database Tables" section).
 
 **`chooseTaskModel` is the one pure function three surfaces call**, so they
 can never disagree about which model a task would run on: the run-time
@@ -2144,13 +2144,12 @@ and no shared column.
   foreign key to `note_templates` in either direction — nothing catches a
   hidden id that outlives the template it named, filtering "is this template
   hidden" becomes a JSONB containment check instead of an indexed join, and
-  the six-file settings-parity discipline this codebase's `CLAUDE.md`
-  documents for a `system_settings` namespace (and its five-file counterpart
-  for `user_settings`) buys nothing here that a plain table with two foreign
+  the settings-namespace declaration this codebase's `CLAUDE.md`
+  documents for a `system_settings` or `user_settings` namespace buys nothing here that a plain table with two foreign
   keys does not already get for free. A join table gives real FK integrity
   in both directions, an ordinary indexed `WHERE user_id = ...` / `WHERE
   template_id = ...` query, no cap on how many templates one caller may
-  hide, and zero settings-parity cost.
+  hide, and zero settings-namespace cost.
 - **Not `note_templates.is_archived`.** `is_archived` is a column on the
   **shared** row (§4.3) — true or false for every viewer at once, which is
   exactly wrong for hiding: a built-in must stay archived-`false` and fully

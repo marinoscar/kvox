@@ -1667,8 +1667,7 @@ query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 **Per-user preferences are not a table.** Automatic extraction, the
 resolution thresholds, mode and adjudication switch, and the enabled domains
 live in the `graph` namespace of the existing `user_settings` JSONB row
-(issue #369 — `apps/api/src/common/schemas/user-settings-namespaces.schema.ts`,
-all six user-settings parity places), read through `GraphPreferencesService`
+(issue #369 — declared as a `UserSettingsNamespace` in `apps/api/src/graph/preferences/graph.user-settings.ts` and registered in `kvox.manifest.ts`), read through `GraphPreferencesService`
 (`apps/api/src/graph/preferences/`), which fills every absent field from
 `GRAPH_PREFERENCE_DEFAULTS` at read time and never writes a default into the
 row:
@@ -2175,7 +2174,7 @@ against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
 single source of truth for settings (CLAUDE.md's Adding a Setting rule, and
-the six-file settings-parity discipline `settings-parity.spec.ts` enforces),
+the settings-namespace registry that `settings-parity.spec.ts` iterates),
 and the same argument that makes it right for a system-settings namespace
 makes it right here: one declaration yields runtime validation of a `props`
 object, a JSON Schema for the extraction prompt's structured-output mode,
@@ -3063,7 +3062,7 @@ already have from each other.
 `ai.taskModels: Partial<Record<TaskKey, { model: string; reasoningEffort?:
 'low'|'medium'|'high' }>>` — a new field on the existing `ai` system-settings
 namespace (CLAUDE.md's Database Tables section), following the identical
-six-place settings-parity discipline every other `ai` field already follows
+settings-parity discipline every other `ai` field already follows
 (verified above). `TaskKey` is `'graph.extract' | 'graph.adjudicate' |
 'graph.digest' | 'graph.agent'` — one key per AI-calling *shape* this
 design has, not one per job type, because `kg.resolve`'s
