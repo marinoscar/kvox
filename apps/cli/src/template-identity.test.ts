@@ -461,6 +461,21 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // Assistant instructions for apps/web, the same standing as AGENTS.md and
   // apps/cli/AGENTS.md above: Markdown naming the product, no `@app/shared`.
   'apps/web/AGENTS.md',
+
+  // ---------------------------------------------------------------------
+  // Added by issue #469 (epic #467), the storage slice.
+  //
+  // The application's own storage routes and folder are named after the
+  // product (`GET /api/kvox/files`, `apps/api/src/kvox-objects/`, the
+  // `kvox.transcripts.source` processor name), and the docs below must quote
+  // those names to be of any use to an operator or a client author. Markdown
+  // cannot import from `@app/shared`; a renamed fork edits these along with
+  // the code.
+  // ---------------------------------------------------------------------
+  'docs/API.md',
+  'docs/SECURITY-ARCHITECTURE.md',
+  'docs/runbooks/s3-cors.md',
+  'docs/runbooks/storage-configuration.md',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this

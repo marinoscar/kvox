@@ -112,7 +112,7 @@ uploading → processing → ready
 | Status | Meaning | Set by |
 |---|---|---|
 | `uploading` | The transcript row exists; the audio is not fully received yet | `POST /api/transcripts` |
-| `processing` | The audio arrived; transcode and/or transcription are in flight | The upload-complete listener (§1.5) |
+| `processing` | The audio arrived; transcode and/or transcription are in flight | `TranscriptUploadProcessor`, an `ObjectProcessor` run by the `storage.object.process` job once the upload completes (§9.2, issue #469) |
 | `ready` | `transcript_versions` has a v1 row; the transcript can be read, played and edited | `transcription.ingest`, at the end of its one write transaction |
 | `failed` | Something in the pipeline gave up permanently | Any stage that hits a domain failure or the poll deadline (§1.7) |
 | `deleting` | The owner asked to delete it; `transcript.purge` is removing its storage and rows | `DELETE /api/transcripts/:id` |
@@ -129,15 +129,20 @@ is a request to remove, not a soft state a later request reverses."
 
 `failed` is reachable from `processing` only. There is no `failed` from
 `uploading`: an upload that never completes is not the transcript's failure
-to record. It is either the user cancelling — `ObjectsService.abortUpload`
-marks the (managed) source object `failed` and emits
-`storage.object.upload_aborted`, which `TranscriptsUploadAbortedListener`
-turns into an immediate `transcript.purge` (§9.3, §9.4) — or the upload
-simply going quiet, which `transcripts.housekeeping` (§1.5.8) notices by the
-source object's own `updated_at` and reconciles the same way, on
-`transcription.abandonedUploadHours`' clock (issue #322). Either path
-**purges** the transcript rather than failing it: there is no audio to retry
-with, so a `failed` card here would be permanent and un-retryable.
+to record. It is either the user cancelling or the upload simply going
+quiet. Since issue #469 neither path is an event: the platform's abort and its
+stale-upload sweep emit nothing for this module to listen to, so
+`transcripts.housekeeping` (§1.5.8) finds both. A **cancelled** or reclaimed
+upload (its source object `failed`, gone, or older than the platform's
+72-hour stale-upload age) is marked `failed` with
+`failure_reason: 'upload_aborted'` within one housekeeping cycle, up to ten
+minutes, where it used to be an immediate purge; the same sweep's legacy
+branch then **purges** that row on the following cycle. An upload that goes
+quiet but is still inside the stale-upload age is purged on
+`transcription.abandonedUploadHours`' clock (issue #322). Either way the
+transcript ends up purged rather than kept as a `failed` card: there is no
+audio to retry with, so a `failed` card here would be permanent and
+un-retryable.
 
 ### 1.2 `transcription_status` — the provider round trip
 
@@ -525,8 +530,8 @@ inside the `@Cron` method itself would fail that test the same way a
 `@Cron` that deleted device codes inline would have before #353.
 
 The handler is server-only under rule 2 (reads/writes across
-`transcripts`, `jobs`, and `transcript_exports` in one sweep) and does three
-things:
+`transcripts`, `jobs`, `transcript_exports` and `storage_objects` in one sweep;
+it reads `storage_objects` inside `runInJobOrg`) and does four things:
 
 1. **Restarts a lost poll chain.** A `transcription.poll` chain can go
    silent if the process holding it dies between one poll and the
@@ -551,13 +556,20 @@ things:
    nobody could retry (there is no audio to retry with); the same step also
    purges the legacy rows that behavior left behind (`failed` +
    `transcription_status: waiting_input` with no completed audio). This
-   sweep is the *only* thing that reclaims an abandoned upload — the generic
-   stale-upload sweep (§9.4) now skips managed objects entirely, since
-   deleting one would violate `transcripts.source_object_id`'s `Restrict`
-   foreign key. A **cancelled** upload does not wait for this sweep at all:
-   `TranscriptsUploadAbortedListener` purges it immediately on
-   `storage.object.upload_aborted` (§9.3).
-3. **Expires exports.** Deletes `transcript_exports` rows and their storage
+   sweep is the *only* thing that reclaims an abandoned upload — the platform's
+   stale-upload sweep knows nothing of `transcripts.source_object_id`'s
+   `Restrict` foreign key (§9.4).
+3. **Reconciles aborted uploads (issue #469).** The platform's abort and its
+   stale-upload sweep emit no event, so there is no listener to mark the
+   transcript. This step selects transcripts still in `uploading` whose source
+   object is `failed` (aborted), gone, or `pending`/`uploading` and older than
+   the platform's stale-upload age (72 hours), and marks them `failed` with
+   `failure_reason: 'upload_aborted'`, at most 500 per run. The decision is a
+   pure function, so a `ready`/`processing` object (the audio is present) is
+   never touched. **Latency:** an abort used to be reflected at once; it now
+   takes up to one housekeeping cycle, ten minutes. Step 2's legacy branch then
+   purges the `failed` row on the next cycle.
+4. **Expires exports.** Deletes `transcript_exports` rows and their storage
    objects past their `expires_at` (§8.4).
 
 ### 1.6 Domain failures, retryable failures, and `RateLimitError`
@@ -850,9 +862,9 @@ one `transcripts` row per uploaded recording.
 transcript still references may never be deleted out from under it by an
 unrelated storage cleanup; the *only* path that may remove it is
 `transcript.purge` deleting the transcript row first. This is the same
-ownership discipline §9.3 gives `managed_by`: a `storage_objects` row
-belonging to a transcript is invisible to and untouchable by the generic
-storage endpoints.
+ownership discipline §9.3 gives the `kvox_object_ownership` table: a
+`storage_objects` row belonging to a transcript is absent from the application's
+file list and untouchable by the generic storage delete.
 
 ### 3.2 `transcript_speakers`
 
@@ -1672,6 +1684,27 @@ the identical file.
 
 ## 9. Large uploads and CSP
 
+> **Status after issue #469 (epic #467).** Sections 9.1 to 9.4 record the design
+> issue #21 built against `apps/api/src/storage/`, which was this application's
+> own storage stack. That stack is gone: the objects API, the object store and
+> the processing pipeline are the platform storage slice
+> (`@marinoscar/platform-api/storage`), and the pieces the platform lacks live in
+> `apps/api/src/kvox-objects/`. What carried over, and what did not:
+>
+> | #21 design | Now |
+> |---|---|
+> | `POST :id/upload/parts` (up to 100 part URLs) | Kept, as an application route (`kvox-multipart.controller.ts`); the platform's init presigns only the first ten |
+> | Resume and completion from provider `ListParts` | Kept, as `GET :id/upload/parts` (`kvox-s3-part-lister.ts`); the browser passes that list to the platform's `complete`, whose `parts` is now **required** |
+> | `part_size` persisted per upload, adaptive sizing | **Dropped.** One deployment-wide `STORAGE_PART_SIZE`; the operator rule is in §9.4 |
+> | `storage_objects.managed_by` | Moved to the `kvox_object_ownership` side table; the generic list is replaced by `GET /api/kvox/files`, and the generic `DELETE` 409 is an application hook |
+> | `storage.object.uploaded` event and `TranscriptsUploadListener` | Replaced by `TranscriptUploadProcessor`, an `ObjectProcessor` (`name: 'kvox.transcripts.source'`) run by the platform's `storage.object.process` job |
+> | `storage.object.upload_aborted` and `TranscriptsUploadAbortedListener` | Replaced by the abort reconcile in `transcripts.housekeeping` (§1.5.8), with up to ten minutes of latency |
+> | `STORAGE_STALE_UPLOAD_HOURS` | Fixed at 72 hours in code; the sweep is the platform's `storage.cleanup.stale-uploads` job |
+> | `S3_*` / `AWS_*` / `STORAGE_PROVIDER` environment variables | Runtime configuration at `/admin/settings/storage`; runbook: [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md) |
+>
+> The paragraphs below are kept as the record of why; where they name a deleted
+> file, event or variable, the table above is current.
+
 ### 9.1 Why storage needs hardening at all
 
 `ObjectsService`'s resumable multipart path (`apps/api/src/storage/objects
@@ -1687,6 +1720,19 @@ and resume it tomorrow" simply not work. Issue #21 is the fix, and this
 section is what §22 and #25 build against.
 
 ### 9.2 The part-presign endpoint and `ListParts`-based resume
+
+> **Current (issue #469).** Both routes survive as application routes beside the
+> platform's objects API: `POST /api/storage/objects/:id/upload/parts` signs part
+> URLs, `GET /api/storage/objects/:id/upload/parts` lists what the provider holds
+> (`[{ partNumber, etag, size }]`, 501 `list_parts_unsupported` outside the S3
+> family). The platform's `GET :id/upload/status` answers from recorded chunks
+> and is not used to resume. `complete` takes the listed parts. The pipeline
+> starts from `TranscriptUploadProcessor`, not an event: it looks up the
+> object's ownership row, skips anything not transcripts-owned, finds the
+> transcript by `source_object_id`, promotes it `uploading` → `processing` and
+> enqueues `transcription.submit` and/or `media.audio.transcode` with `orgId`.
+> It only enqueues; it never downloads. The text below describes the pre-#469
+> design.
 
 `StorageProvider.listParts(key, uploadId)` (new interface method,
 implemented against S3's own `ListParts`, paginated) becomes the **single
@@ -1717,6 +1763,16 @@ is authoritative regardless of what the client remembers.
 
 ### 9.3 `managed_by`, and why transcript files are not generic storage objects
 
+> **Current (issue #469).** `managed_by` and `part_size` are no longer columns of
+> `storage_objects`. Ownership is a row in `kvox_object_ownership`
+> (`object_id`, `org_id`, `managed_by`), reached only through `KvoxManagedObjects`.
+> An owned object is absent from `GET /api/kvox/files`; the generic
+> `DELETE /api/storage/objects/:id` answers `409` with
+> `details: { reason: 'managed_by_module', module }` from a Fastify hook, before
+> the platform handler runs. The platform's abort deletes the row and emits no
+> event, so the abort reconcile lives in `transcripts.housekeeping` (§1.5.8).
+> The text below describes the pre-#469 design.
+
 A migration adds `part_size int null` (saved once, at `init`, and used for
 every later calculation rather than recomputed) and `managed_by text null`
 to `storage_objects`. An object with `managed_by` set (e.g. `'transcripts'`)
@@ -1741,6 +1797,21 @@ silently downgraded to `failed`. Unmanaged objects are unaffected: their
 abort still deletes the row as before.
 
 ### 9.4 Adaptive part size, limits, and activity-based stale cleanup
+
+> **Current (issue #469).** The part size is **not adaptive any more**. It is the
+> platform's one deployment-wide number, `STORAGE_PART_SIZE` (default 10 MiB), and
+> nothing stores it per upload. **Operator rule: never change it while uploads are
+> in flight** (a resumed upload would renumber its parts and complete a corrupt
+> object), and keep `partSize x 10,000` at or above the largest file accepted
+> (97.6 GiB at the default, against a 10 GiB `MAX_FILE_SIZE` and AssemblyAI's 5 GiB
+> limit); an upload over the ceiling is refused with 400 at init. The deployment
+> limits are the platform's: `MAX_FILE_SIZE` answers **413** and
+> `ALLOWED_MIME_TYPES` answers **415** (the text below says 400). Transcript
+> uploads resolve a content type from the extension before the check, which the
+> platform's generic route does not. The stale-upload sweep is the platform's
+> `storage.cleanup.stale-uploads` job at a fixed 72 hours. See
+> [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md)
+> section 5. The text below describes the pre-#469 design.
 
 Part size at `init` is `max(STORAGE_PART_SIZE, ceil(size / 10000))`, rounded
 up to a whole MiB — S3 enforces a hard ceiling of 10,000 parts per upload, so
@@ -1792,8 +1863,10 @@ with no `media-src` directive at all, which blocks both of the two things
 this epic needs the browser to do directly against S3: **PUT** a part
 straight to a presigned URL (`connect-src`) and **play** an `<audio>` element
 whose `src` is a signed S3 GET URL (`media-src`). Both directives gain the
-storage origin — derived from configuration (`S3_ENDPOINT`, or the bucket's
-regional endpoint when no custom endpoint is set), **never a wildcard**.
+storage origin — `STORAGE_CSP_ORIGIN`, **never a wildcard**. It was derived from
+`S3_BUCKET` and `S3_REGION` while those were environment variables; since issue
+#469 the bucket is runtime configuration and the origin must be set by hand (see
+the comment above it in `infra/compose/.env.example`).
 This is a narrower allowance than the existing `img-src https:` (broadened
 for Google avatar URLs and a configurable S3 endpoint together, because an
 avatar's exact host is not something this application controls) — a fetch
@@ -2129,6 +2202,6 @@ check the built code against the same list this spec was designed against.
 | JSON export validates against the published `kvox.transcript/v1` schema | A schema-validation test loading `docs/specs/transcript-export.v1.schema.json` directly and validating rendered fixtures against it |
 | Markdown escaping and PDF smoke tests, including a non-ASCII speaker name | `markdown-exporter.spec.ts` and a PDF parse-back smoke test, per issue #28's own acceptance criteria |
 | An identical export request reuses the existing row by `options_hash`; an expired one is cleaned up by housekeeping | `export.service.spec.ts` plus `transcripts-housekeeping.task.spec.ts` |
-| A 5 GB simulated upload gets presigned URLs past part 10, resumes correctly after a simulated reload, and stale cleanup never removes an upload active within `STORAGE_STALE_UPLOAD_HOURS` | Per issue #21's own acceptance criteria, against a mocked S3 provider |
+| A 5 GB simulated upload gets presigned URLs past part 10, resumes correctly after a simulated reload, and stale cleanup never removes an upload active within the stale-upload age (72 hours since issue #469; formerly `STORAGE_STALE_UPLOAD_HOURS`) | Per issue #21's own acceptance criteria, against a mocked S3 provider |
 | The CSP changes permit a real part `PUT` and `<audio src=signed-url>` in the dev stack, and nothing broader than the configured storage origin | A dev-stack integration check, plus a static assertion that `csp.conf`/`csp.dev.conf` name the storage origin explicitly rather than a wildcard |
 | `usePlaybackEngine`'s per-speaker interval logic: gap merging, snapping into the next interval, and the documented backgrounded-tab overshoot | `apps/web/src/__tests__/hooks/usePlaybackEngine.spec.ts`, against a fake `HTMLMediaElement`, per issue #30's own acceptance criteria |

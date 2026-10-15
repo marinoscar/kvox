@@ -1,3 +1,4 @@
+import { createFakeManagedObjects } from '../../test/helpers/fake-managed-objects.helper';
 import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
 import { userDataScopeReaches } from '../user-data/user-data.registries';
 import { USER_DATA_PURGE_MAX_BATCHES } from '../user-data/user-data.support';
@@ -53,6 +54,7 @@ function harness() {
     prisma as never,
     pipeline as never,
     searchIndex as never,
+    createFakeManagedObjects(prisma) as never,
   );
 
   return { hooks, prisma, pipeline, searchIndex };

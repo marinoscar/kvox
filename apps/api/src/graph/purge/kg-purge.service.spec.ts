@@ -1,6 +1,6 @@
 import type { GraphObjectsService } from '../graph-objects.service';
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { LegacyObjectOwnershipStore } from '../../storage/legacy-object-ownership.store';
+import type { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import {
   chunk,
   KG_PURGE_ALL_PLAN,
@@ -100,18 +100,18 @@ function fakeObjects(deleted: string[] = []): GraphObjectsService {
 }
 
 /**
- * PLATFORM-ADOPTION-SHIM(#469): the legacy `managed_by` store. `batches` are the
- * id pages `selectObjectIds` returns, in order; once they run out it returns none.
+ * The object gateway (#469). `batches` are the id pages the import-file
+ * `findMany` returns, in order; once they run out it returns none.
  */
-function fakeOwnership(batches: string[][] = [], selects: unknown[] = [], log: string[] = []): LegacyObjectOwnershipStore {
+function fakeOwnership(batches: string[][] = [], selects: unknown[] = [], log: string[] = []): KvoxManagedObjectsService {
   const queued = [...batches];
   return {
-    selectObjectIds: async (filter: unknown) => {
+    findMany: async (args: unknown) => {
       log.push('ownership.selectObjectIds');
-      selects.push(filter);
-      return queued.shift() ?? [];
+      selects.push(args);
+      return (queued.shift() ?? []).map((id) => ({ id }));
     },
-  } as unknown as LegacyObjectOwnershipStore;
+  } as unknown as KvoxManagedObjectsService;
 }
 
 /** Only writes and transaction boundaries — the part of the log the trigger cares about. */
@@ -348,11 +348,13 @@ describe('KgPurgeService.purgeAll', () => {
       fakeOwnership([['imp1', 'imp2']], selects, log),
     ).purgeAll(USER);
 
-    // PLATFORM-ADOPTION-SHIM(#469): the import files are selected through the legacy store.
+    // The import files are selected through the object gateway, by ownership and key prefix.
     expect(selects[0]).toMatchObject({
-      managed: { by: 'graph' },
-      uploadedById: USER,
-      storageKeyPrefix: `graph/${USER}/imports/`,
+      where: {
+        kvoxOwnership: { managedBy: 'graph' },
+        uploadedById: USER,
+        storageKey: { startsWith: `graph/${USER}/imports/` },
+      },
     });
     expect(deleted).toEqual(['imp1', 'imp2']);
     expect(counts.imports).toBe(2);

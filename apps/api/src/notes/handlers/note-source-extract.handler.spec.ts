@@ -1,3 +1,4 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
 // =============================================================================
 // NoteSourceExtractHandler unit coverage (issue #51, epic #45)
 // =============================================================================
@@ -130,6 +131,7 @@ describe('NoteSourceExtractHandler', () => {
       objects as never,
       jobScope as never,
       storage,
+      createFakeManagedObjects(prisma) as never,
     );
   });
 
@@ -465,6 +467,7 @@ describe('NoteSourceExtractHandler', () => {
         objects as never,
         jobScope as never,
         storage,
+        createFakeManagedObjects(prisma) as never,
       );
       objects.recordUploaded.mockClear();
       prisma.storageObject.findUnique.mockResolvedValue(makeObject());

@@ -3,7 +3,8 @@ import { Test } from '@nestjs/testing';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
-import { ObjectsService } from '@marinoscar/platform-api/storage';
+import { createFakeManagedObjects } from '../../test/helpers/fake-managed-objects.helper';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { createFakeProvider, type FakeProvider } from './handlers/__fixtures__/fake-provider';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 import { TranscriptAccessService } from './transcript-access.service';
@@ -71,7 +72,9 @@ describe('TranscriptsService', () => {
   let service: TranscriptsService;
   let provider: FakeProvider;
   let prisma: Record<string, Record<string, jest.Mock>>;
-  let objects: { initUpload: jest.Mock };
+  // The object gateway (`KvoxManagedObjects`, #469): the upload is initialised
+  // through it, and the source row is read through it.
+  let objects: ReturnType<typeof createFakeManagedObjects>;
   let access: { require: jest.Mock };
   let pipeline: {
     enqueuePurge: jest.Mock;
@@ -127,15 +130,14 @@ describe('TranscriptsService', () => {
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
 
-    objects = {
-      initUpload: jest.fn().mockResolvedValue({
-        objectId: 'obj-1',
-        uploadId: 'upload-1',
-        partSize: 10_485_760,
-        totalParts: 1,
-        presignedUrls: [{ partNumber: 1, url: 'https://signed' }],
-      }),
-    };
+    objects = createFakeManagedObjects(prisma);
+    objects.initManagedUpload.mockResolvedValue({
+      objectId: 'obj-1',
+      uploadId: 'upload-1',
+      partSize: 10_485_760,
+      totalParts: 1,
+      presignedUrls: [{ partNumber: 1, url: 'https://signed' }],
+    });
 
     access = {
       require: jest.fn().mockResolvedValue({ transcript: transcriptRow(), role: 'owner' }),
@@ -159,7 +161,7 @@ describe('TranscriptsService', () => {
       providers: [
         TranscriptsService,
         { provide: PrismaService, useValue: prisma },
-        { provide: ObjectsService, useValue: objects },
+        { provide: KvoxManagedObjectsService, useValue: objects },
         {
           provide: TranscriptObjectsService,
           useValue: { signedUrlFor: jest.fn(), playbackUrlTtlSeconds: () => 21_600 },
@@ -179,15 +181,13 @@ describe('TranscriptsService', () => {
     };
 
     it('claims the upload object for this module, which no HTTP caller can', async () => {
-      // `managedBy` is a service-level argument only: a client able to declare
-      // its own upload "managed by transcripts" could mint a row the generic
-      // delete refuses to remove and the generic list refuses to show.
+      // `module` is a service-level argument only: a client able to declare
+      // its own upload "owned by transcripts" could mint a row the generic
+      // delete refuses to remove and the files list refuses to show.
       await service.create(dto, USER);
 
-      expect(objects.initUpload).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'meeting.mp3' }),
-        USER.id,
-        expect.objectContaining({ managedBy: TRANSCRIPTS_MANAGED_BY }),
+      expect(objects.initManagedUpload).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'meeting.mp3', userId: USER.id, module: TRANSCRIPTS_MANAGED_BY }),
       );
     });
 
@@ -204,13 +204,12 @@ describe('TranscriptsService', () => {
     it('gates the upload on audio/video, not the operator\'s generic upload allowlist (#79)', async () => {
       await service.create(dto, USER);
 
-      expect(objects.initUpload).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'meeting.mp3' }),
-        USER.id,
-        {
-          managedBy: TRANSCRIPTS_MANAGED_BY,
+      expect(objects.initManagedUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'meeting.mp3',
+          module: TRANSCRIPTS_MANAGED_BY,
           allowedMimeTypes: ['audio/*', 'video/*'],
-        },
+        }),
       );
     });
 
@@ -225,13 +224,12 @@ describe('TranscriptsService', () => {
 
       await expect(service.create(m4aDto, USER)).resolves.toBeDefined();
 
-      expect(objects.initUpload).toHaveBeenCalledWith(
+      expect(objects.initManagedUpload).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'recording.m4a',
           mimeType: 'audio/x-m4a',
+          allowedMimeTypes: ['audio/*', 'video/*'],
         }),
-        USER.id,
-        expect.objectContaining({ allowedMimeTypes: ['audio/*', 'video/*'] }),
       );
     });
 
@@ -303,7 +301,7 @@ describe('TranscriptsService', () => {
       runtime.activeProvider.mockResolvedValue(null);
 
       await expect(service.create(dto, USER)).rejects.toBeInstanceOf(ConflictException);
-      expect(objects.initUpload).not.toHaveBeenCalled();
+      expect(objects.initManagedUpload).not.toHaveBeenCalled();
     });
 
     it('is a 409 when a provider is chosen but has no key stored', async () => {
@@ -318,7 +316,7 @@ describe('TranscriptsService', () => {
       provider.capabilities.maxInputBytes = 500_000;
 
       await expect(service.create(dto, USER)).rejects.toBeInstanceOf(BadRequestException);
-      expect(objects.initUpload).not.toHaveBeenCalled();
+      expect(objects.initManagedUpload).not.toHaveBeenCalled();
     });
 
     it('checks everything BEFORE the upload, so nothing half-started is left', async () => {

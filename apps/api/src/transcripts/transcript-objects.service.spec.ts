@@ -1,10 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { PrismaService } from '../prisma/prisma.service';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
-import { ObjectsService } from '../storage/objects/objects.service';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 import {
   MissingUploadedObjectError,
@@ -31,19 +29,11 @@ import {
 //     arrives here with a key that already has a row.
 // =============================================================================
 
-// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
-// helper that queries `organizations`; the unit tier pins it.
-jest.mock('../prisma/default-org', () => ({
-  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
-}));
-
 describe('TranscriptObjectsService.recordUploaded', () => {
   let service: TranscriptObjectsService;
-  let prisma: {
-    storageObject: { findFirst: jest.Mock; create: jest.Mock };
-    $transaction: jest.Mock;
-  };
-  let ownership: { setManagedBy: jest.Mock };
+  // The object gateway (`KvoxManagedObjects`, #469): the row insert, its
+  // ownership stamp and the org scope live behind it.
+  let managed: { findByKey: jest.Mock; create: jest.Mock };
   let storage: { exists: jest.Mock; getBucket: jest.Mock; upload: jest.Mock };
 
   const input = {
@@ -56,15 +46,10 @@ describe('TranscriptObjectsService.recordUploaded', () => {
   };
 
   beforeEach(async () => {
-    prisma = {
-      storageObject: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: 'object-1' }),
-      },
-      // The row insert and the `managed_by` stamp share one transaction.
-      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
+    managed = {
+      findByKey: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'object-1' }),
     };
-    ownership = { setManagedBy: jest.fn().mockResolvedValue(undefined) };
 
     storage = {
       exists: jest.fn().mockResolvedValue(true),
@@ -75,11 +60,9 @@ describe('TranscriptObjectsService.recordUploaded', () => {
     const module = await Test.createTestingModule({
       providers: [
         TranscriptObjectsService,
-        { provide: PrismaService, useValue: prisma },
-        { provide: ObjectsService, useValue: { deleteManagedObject: jest.fn() } },
+        { provide: KvoxManagedObjectsService, useValue: managed },
         { provide: ConfigService, useValue: { get: jest.fn((_k, d) => d) } },
         { provide: STORAGE_PROVIDER, useValue: storage },
-        { provide: LegacyObjectOwnershipStore, useValue: ownership },
       ],
     }).compile();
 
@@ -90,19 +73,19 @@ describe('TranscriptObjectsService.recordUploaded', () => {
     await expect(service.recordUploaded(input)).resolves.toEqual({ id: 'object-1' });
 
     expect(storage.exists).toHaveBeenCalledWith(input.storageKey);
-    expect(prisma.storageObject.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        storageKey: input.storageKey,
+    // Created as a `transcripts`-owned row: the gateway writes the ownership
+    // marker in the same transaction, so the object is absent from
+    // `GET /api/kvox/files` and undeletable through the generic DELETE — the
+    // ownership boundary a transcript's files need.
+    expect(managed.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        module: TRANSCRIPTS_MANAGED_BY,
+        key: input.storageKey,
         mimeType: 'audio/mp4',
-        size: BigInt(512_000),
-        status: 'ready',
-        orgId: 'org-1',
+        size: 512_000,
         uploadedById: 'user-1',
       }),
-    });
-    // Invisible to `GET /api/storage/objects` and undeletable through the
-    // generic DELETE — the ownership boundary a transcript's files need.
-    expect(ownership.setManagedBy).toHaveBeenCalledWith('object-1', TRANSCRIPTS_MANAGED_BY, prisma);
+    );
   });
 
   it('refuses a key that holds nothing, with a message naming the key', async () => {
@@ -111,15 +94,15 @@ describe('TranscriptObjectsService.recordUploaded', () => {
     await expect(service.recordUploaded(input)).rejects.toThrow(MissingUploadedObjectError);
     await expect(service.recordUploaded(input)).rejects.toThrow(input.storageKey);
 
-    expect(prisma.storageObject.create).not.toHaveBeenCalled();
+    expect(managed.create).not.toHaveBeenCalled();
   });
 
   it('reuses the existing row for a key already recorded, creating no duplicate', async () => {
-    prisma.storageObject.findFirst.mockResolvedValue({ id: 'object-0' });
+    managed.findByKey.mockResolvedValue({ id: 'object-0' });
 
     await expect(service.recordUploaded(input)).resolves.toEqual({ id: 'object-0' });
 
-    expect(prisma.storageObject.create).not.toHaveBeenCalled();
+    expect(managed.create).not.toHaveBeenCalled();
     // Not even the HEAD: the row is already proof that the bytes were there,
     // and a retry should not pay a round trip to re-establish it.
     expect(storage.exists).not.toHaveBeenCalled();
@@ -146,23 +129,21 @@ describe('TranscriptObjectsService.recordUploaded', () => {
 // `deleteIfPresent` — purge is re-entrant, so a delete that fails must not
 // blow up the caller (issue #101's abort-before-delete can surface a fresh
 // kind of failure here: a non-NoSuchUpload abort error rethrown by
-// `ObjectsService.deleteManagedObject`).
+// `KvoxManagedObjects.deleteManaged`).
 // =============================================================================
 describe('TranscriptObjectsService.deleteIfPresent', () => {
   let service: TranscriptObjectsService;
-  let objects: { deleteManagedObject: jest.Mock };
+  let objects: { deleteManaged: jest.Mock };
 
   beforeEach(async () => {
-    objects = { deleteManagedObject: jest.fn() };
+    objects = { deleteManaged: jest.fn() };
 
     const module = await Test.createTestingModule({
       providers: [
         TranscriptObjectsService,
-        { provide: PrismaService, useValue: {} },
-        { provide: ObjectsService, useValue: objects },
+        { provide: KvoxManagedObjectsService, useValue: objects },
         { provide: ConfigService, useValue: { get: jest.fn((_k, d) => d) } },
         { provide: STORAGE_PROVIDER, useValue: {} },
-        { provide: LegacyObjectOwnershipStore, useValue: {} },
       ],
     }).compile();
 
@@ -174,18 +155,18 @@ describe('TranscriptObjectsService.deleteIfPresent', () => {
       name: 'AccessDenied',
       $metadata: { httpStatusCode: 403 },
     });
-    objects.deleteManagedObject.mockRejectedValue(accessDenied);
+    objects.deleteManaged.mockRejectedValue(accessDenied);
 
     await expect(service.deleteIfPresent('object-1')).resolves.toBe(false);
 
-    expect(objects.deleteManagedObject).toHaveBeenCalledWith(
+    expect(objects.deleteManaged).toHaveBeenCalledWith(
       'object-1',
       TRANSCRIPTS_MANAGED_BY,
     );
   });
 
   it('returns true when the delete succeeds', async () => {
-    objects.deleteManagedObject.mockResolvedValue(undefined);
+    objects.deleteManaged.mockResolvedValue(undefined);
 
     await expect(service.deleteIfPresent('object-1')).resolves.toBe(true);
   });
@@ -194,6 +175,6 @@ describe('TranscriptObjectsService.deleteIfPresent', () => {
     await expect(service.deleteIfPresent(null)).resolves.toBe(false);
     await expect(service.deleteIfPresent(undefined)).resolves.toBe(false);
 
-    expect(objects.deleteManagedObject).not.toHaveBeenCalled();
+    expect(objects.deleteManaged).not.toHaveBeenCalled();
   });
 });

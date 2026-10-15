@@ -1603,8 +1603,8 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   counts of entities, aliases, relations, items, evidence and attribute
   definitions) — through a plain, non-unique `(owner_id, format,
   graph_fingerprint)` index, so asking twice for an unchanged graph renders
-  once. `object_id` is **Restrict** into a `managed_by: 'graph'` storage
-  object (hidden from the generic storage list, 409 on its generic DELETE);
+  once. `object_id` is **Restrict** into a graph-owned storage
+  object (`kvox_object_ownership.managed_by = 'graph'` since #469; absent from `GET /api/kvox/files`, 409 on its generic DELETE);
   the daily sweep and `kg.purge` clear the reference before deleting the
   file. `owner_id` Cascade; `job_id` `@unique`/SetNull. Its own migration.
 - **`ask_conversations`** / **`ask_messages`** — §21's own tables, added in

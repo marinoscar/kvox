@@ -1,3 +1,5 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -181,6 +183,7 @@ describe('MediaAudioTranscodeHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: TranscriptionRuntimeService, useValue: runtime },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        { provide: KvoxManagedObjectsService, useValue: createFakeManagedObjects(prisma) },
         // The scoped transaction client is the Prisma stub itself.
         { provide: JobScope, useValue: { run: scopeRun } },
       ],

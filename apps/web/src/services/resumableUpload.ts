@@ -35,7 +35,7 @@
  *      upload with an error that looks like a client bug. The platform's
  *      `POST :id/upload/complete` DOES require a `parts` array with an ETag per
  *      part (issue #469), so `completeUpload` below reads the part list back
- *      from KVox's `GET :id/upload/parts` (an S3 `ListParts` on the server) and
+ *      from the app's `GET :id/upload/parts` (an S3 `ListParts` on the server) and
  *      forwards it verbatim. That list is authoritative anyway: it describes
  *      what the provider actually holds, not what this client believes it sent.
  *      The ETag therefore travels server -> client -> server and is never read
@@ -98,7 +98,7 @@ export interface UploadInitRequest {
 
 /**
  * The platform's init response (`initUploadResponseSchema`). Presigns only the
- * first batch of parts (ten); the engine asks KVox's `POST :id/upload/parts`
+ * first batch of parts (ten); the engine asks the app's `POST :id/upload/parts`
  * for the rest.
  */
 export interface PlatformInitUploadResponse {
@@ -120,7 +120,7 @@ export interface UploadInitResponse {
 }
 
 /**
- * One part the provider already holds: an element of KVox's
+ * One part the provider already holds: an element of the app's
  * `GET /api/storage/objects/:id/upload/parts` (a server-side S3 `ListParts`).
  */
 export interface UploadedPart {
@@ -382,7 +382,7 @@ export async function initUpload(input: UploadInitRequest): Promise<UploadInitRe
 }
 
 /**
- * Ask for more presigned part URLs: KVox's `POST /storage/objects/:id/upload/parts`
+ * Ask for more presigned part URLs: the app's `POST /storage/objects/:id/upload/parts`
  * (the platform presigns only the first ten parts at init).
  *
  * ⚠️ The endpoint rejects more than 100 part numbers per call. Callers here
@@ -414,7 +414,7 @@ export class ListPartsUnsupportedError extends Error {
 }
 
 /**
- * The parts the provider holds for this upload — KVox's
+ * The parts the provider holds for this upload — the app's
  * `GET /storage/objects/:id/upload/parts`, an S3 `ListParts` on the server.
  *
  * Authoritative: it describes what is actually stored, not what this tab
@@ -466,7 +466,7 @@ export async function fetchUploadResumeState(
  * Finish the upload.
  *
  * **The client never reads an ETag header.** See the file header: it reads the
- * part list back from KVox's `GET …/upload/parts` and forwards it to the
+ * part list back from the app's `GET …/upload/parts` and forwards it to the
  * platform's `POST …/upload/complete` (`{ parts: [{ partNumber, eTag }] }`), so
  * no upload depends on a bucket CORS `ExposeHeaders` entry for the READ side.
  *

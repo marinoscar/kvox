@@ -38,7 +38,6 @@ function harness() {
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    storageObject: { aggregate: jest.fn().mockResolvedValue({ _sum: { size: null } }) },
     job: { findMany: jest.fn().mockResolvedValue([]) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
   };
@@ -48,14 +47,16 @@ function harness() {
   // destroys rather than trusting the per-item purge jobs to get there.
   const searchIndex = { forgetOwnerDocuments: jest.fn().mockResolvedValue(0) };
 
-  // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is read from the legacy store;
-  // by default every object is owned by the notes module.
-  const ownership = {
-    getManagedBy: jest.fn(async (ids: readonly string[]) => {
+  // The object gateway (`KvoxManagedObjects`, #469): ownership is read from
+  // `kvox_object_ownership` and sizes are summed under the org scope; by
+  // default every object is owned by the notes module.
+  const managed = {
+    managedBy: jest.fn(async (ids: readonly string[]) => {
       const owners = new Map<string, string | null>();
       for (const id of ids) owners.set(id, NOTES_MANAGED_BY);
       return owners;
     }),
+    sumSize: jest.fn().mockResolvedValue(BigInt(0)),
   };
 
   const hooks = new NotesUserDataHooks(
@@ -63,10 +64,10 @@ function harness() {
     notes as never,
     templates as never,
     searchIndex as never,
-    ownership as never,
+    managed as never,
   );
 
-  return { hooks, prisma, notes, templates, searchIndex, ownership };
+  return { hooks, prisma, notes, templates, searchIndex, managed };
 }
 
 // -----------------------------------------------------------------------------
@@ -85,11 +86,9 @@ describe('NotesUserDataHooks — notes summary', () => {
   });
 
   it('reports bytes as a decimal STRING, never a number', async () => {
-    const { hooks, prisma } = harness();
+    const { hooks, prisma, managed } = harness();
     prisma.note.count.mockResolvedValue(5);
-    prisma.storageObject.aggregate.mockResolvedValue({
-      _sum: { size: BigInt('9007199254740993') },
-    });
+    managed.sumSize.mockResolvedValue(BigInt('9007199254740993'));
 
     await expect(hooks.summarizeNotes(USER_ID)).resolves.toEqual({
       count: 5,
@@ -98,16 +97,13 @@ describe('NotesUserDataHooks — notes summary', () => {
   });
 
   it('counts the source document and every export through real foreign keys', async () => {
-    const { hooks, prisma } = harness();
+    const { hooks, managed } = harness();
 
     await hooks.summarizeNotes(USER_ID);
 
     const owned = { ownerId: USER_ID, deletedAt: null };
-    expect(prisma.storageObject.aggregate).toHaveBeenCalledWith({
-      where: {
-        OR: [{ notesAsSourceObject: { some: owned } }, { noteExportFiles: { some: { note: owned } } }],
-      },
-      _sum: { size: true },
+    expect(managed.sumSize).toHaveBeenCalledWith({
+      OR: [{ notesAsSourceObject: { some: owned } }, { noteExportFiles: { some: { note: owned } } }],
     });
   });
 
@@ -115,7 +111,7 @@ describe('NotesUserDataHooks — notes summary', () => {
   // no foreign key — so its ids are collected first and folded into the same
   // `OR`. Leaving it out would understate the figure by the text of every PDF.
   it('folds the extracted-text sidecar objects into the same aggregate, scoped to the notes module', async () => {
-    const { hooks, prisma, ownership } = harness();
+    const { hooks, prisma, managed } = harness();
     prisma.note.findMany.mockResolvedValue([
       { sourceObject: { metadata: { extractedObjectId: 'extracted-1' } } },
       { sourceObject: { metadata: {} } },
@@ -129,31 +125,31 @@ describe('NotesUserDataHooks — notes summary', () => {
       select: { sourceObject: { select: { metadata: true } } },
     });
 
-    const { where } = prisma.storageObject.aggregate.mock.calls[0][0];
-    expect(ownership.getManagedBy).toHaveBeenCalledWith(['extracted-1']);
+    const where = managed.sumSize.mock.calls[0][0];
+    expect(managed.managedBy).toHaveBeenCalledWith(['extracted-1']);
     expect(where.OR).toContainEqual({ id: { in: ['extracted-1'] } });
     expect(where.OR).toHaveLength(3);
   });
 
   it('drops a sidecar id the notes module does not own', async () => {
-    const { hooks, prisma, ownership } = harness();
+    const { hooks, prisma, managed } = harness();
     prisma.note.findMany.mockResolvedValue([
       { sourceObject: { metadata: { extractedObjectId: 'foreign-1' } } },
     ]);
-    ownership.getManagedBy.mockResolvedValue(new Map([['foreign-1', 'transcripts']]));
+    managed.managedBy.mockResolvedValue(new Map([['foreign-1', 'transcripts']]));
 
     await hooks.summarizeNotes(USER_ID);
 
-    const { where } = prisma.storageObject.aggregate.mock.calls[0][0];
+    const where = managed.sumSize.mock.calls[0][0];
     expect(where.OR).toHaveLength(2);
   });
 
   it('omits the sidecar branch entirely when there is none — never an empty `in` list inside an OR', async () => {
-    const { hooks, prisma } = harness();
+    const { hooks, managed } = harness();
 
     await hooks.summarizeNotes(USER_ID);
 
-    const { where } = prisma.storageObject.aggregate.mock.calls[0][0];
+    const where = managed.sumSize.mock.calls[0][0];
     expect(where.OR).toHaveLength(2);
   });
 });
