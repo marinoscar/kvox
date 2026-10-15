@@ -9,7 +9,7 @@
  * looks the same at every width. It never claims to be the deployed revision;
  * About stays authoritative for that.
  *
- * PLATFORM-ADOPTION-SHIM(466): the line lived inside KVox's own `SettingsHub`.
+ * PLATFORM-ADOPTION-SHIM(466): the line lived inside this app's own `SettingsHub`.
  * The packaged hub (`@marinoscar/platform-web/settings/ui`) has no footer slot,
  * so the two page bindings render it as a SIBLING under the hub. The negative
  * top margin cancels the hub's own bottom padding (`p: { xs: 2, md: 4 }`) so

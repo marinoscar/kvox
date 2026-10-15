@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useUserSettings } from '@marinoscar/platform-web/settings/headless';
+import { useUserSettings } from './userSettingsRetry';
 import type { UserSettings, UserSettingsUpdate } from '../types';
 import { useIsMounted } from './useIsMounted';
 

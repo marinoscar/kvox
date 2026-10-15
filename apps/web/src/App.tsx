@@ -6,7 +6,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
 import { IdentityProviders } from './identity/IdentityProviders';
 // Issue #466, epic #462. The platform host (api, viewer, applyTheme) the
-// packaged settings pages and hooks read, and KVox's settings-hub feature keys
+// packaged settings pages and hooks read, and this app's settings-hub feature keys
 // (a side-effect import: it registers them at module scope, before first render).
 import { PlatformHost } from './platform/PlatformHost';
 import './config/settingsFeatures';

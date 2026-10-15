@@ -1,19 +1,19 @@
 /**
- * KVox's minimal binding of the platform host (issue #466, epic #462).
+ * this app's minimal binding of the platform host (issue #466, epic #462).
  *
  * The packaged Appearance and Profile pages, the headless settings hooks and
  * their own behaviour (409 refetch, `If-Match`, spinners, snackbars) are proved
- * by `@marinoscar/platform-web`'s suite. These are the cases about KVOX's glue,
+ * by `@marinoscar/platform-web`'s suite. These are the cases about this app's glue,
  * ported from the deleted `UserSettingsPages.test.tsx` and `useUserSettings`
  * suites:
  *
- *   - the host's `applyTheme` is KVox's `ThemeContext` setter, so the stored
+ *   - the host's `applyTheme` is this app's `ThemeContext` setter, so the stored
  *     preference reaches the live theme when the page loads and when it is saved
  *     (acceptance criterion: "theme switching still applies live"), and a theme
- *     id KVox has no theme for is ignored;
- *   - the host's `api` is KVox's one transport, so a save is a real `PATCH
+ *     id this app has no theme for is ignored;
+ *   - the host's `api` is this app's one transport, so a save is a real `PATCH
  *     /user-settings` carrying the loaded `version` as `If-Match`;
- *   - the Profile page renders under the host, with KVox's own user.
+ *   - the Profile page renders under the host, with this app's own user.
  *
  * Over the real packaged pages and MSW: a `vi.mock` of the headless hooks cannot
  * reach the packaged pages (Vite externalises the package).
@@ -93,7 +93,7 @@ describe('PlatformHost (applyTheme and api)', () => {
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('dark'));
   });
 
-  it('ignores a stored theme id KVox has no theme for', async () => {
+  it('ignores a stored theme id this app has no theme for', async () => {
     serveSettings('solarized');
 
     render(

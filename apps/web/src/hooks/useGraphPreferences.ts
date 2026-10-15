@@ -21,7 +21,7 @@ import type {
   UserSettingsUpdate,
 } from '../types';
 import { useIsMounted } from './useIsMounted';
-import { useUserSettings } from '@marinoscar/platform-web/settings/headless';
+import { useUserSettings } from './userSettingsRetry';
 
 export interface ResolvedGraphPreferences {
   extraction: { autoExtract: boolean };

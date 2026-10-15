@@ -1,11 +1,11 @@
 /**
- * KVox's settings-hub feature keys (issue #466, epic #462).
+ * this app's settings-hub feature keys (issue #466, epic #462).
  *
  * `useSettingsFeatures()` answers from the registry, so a key that is not
- * registered is "off" and every card gated on it is hidden. KVox registers the
+ * registered is "off" and every card gated on it is hidden. this app registers the
  * two keys its registries can name: `graph` (connected knowledge,
  * `ai.graphEnabled`) and `orgs` (the identity slice's multi-organization cards,
- * which KVox does not spread).
+ * which this app does not spread).
  */
 
 import { describe, it, expect, vi } from 'vitest';

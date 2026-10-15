@@ -3,7 +3,7 @@
  *
  * `@marinoscar/platform-web` pages and headless hooks take their transport, the
  * viewer and the theme setter from ONE `PlatformHostProvider`. The settings
- * slice is the first one KVox mounts that needs it (the packaged Profile and
+ * slice is the first one this app mounts that needs it (the packaged Profile and
  * Appearance pages, and `useSystemSettings` / `useUserSettings`), so this is
  * the host, kept to exactly what that slice reads:
  *
@@ -11,9 +11,9 @@
  *     built once at module scope because packaged hooks key on its identity).
  *   - `viewer`: the signed-in user from the identity slice. `hasPermission` is
  *     `usePermissions`'s, the same predicate every route guard uses.
- *   - `applyTheme`: KVox's `ThemeContext` setter. The Appearance page and
+ *   - `applyTheme`: this app's `ThemeContext` setter. The Appearance page and
  *     `useUserSettings` call it when the stored preference loads or is saved, so
- *     a theme switch still applies live. KVox themes are `light | dark |
+ *     a theme switch still applies live. this app themes are `light | dark |
  *     system`; an id the app has no theme for is ignored, as the host contract
  *     asks.
  *

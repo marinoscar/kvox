@@ -1,5 +1,5 @@
 /**
- * KVox's deployment feature keys for the settings hub (issue #466, epic #462).
+ * this app's deployment feature keys for the settings hub (issue #466, epic #462).
  *
  * A registry card may declare `feature: '<key>'`; the packaged `SettingsHub`
  * (and `visibleSettingsSections` / `settingsPageTitle`) then show it only when
@@ -29,7 +29,7 @@ declare module '@marinoscar/platform-web/settings/headless' {
     graph: true;
     /**
      * Multi-organization deployment. The identity slice's Organization cards
-     * declare it; KVox runs single-org and does not spread them, but the key
+     * declare it; this app runs single-org and does not spread them, but the key
      * must exist for the card type to check.
      */
     orgs: true;

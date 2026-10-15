@@ -125,7 +125,7 @@ import {
 
 import { useIsMounted } from '../hooks/useIsMounted';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useUserSettings } from '@marinoscar/platform-web/settings/headless';
+import { useUserSettings } from '../hooks/userSettingsRetry';
 import { ApiError } from '../services/api';
 import {
   getAdminOnboardingState,

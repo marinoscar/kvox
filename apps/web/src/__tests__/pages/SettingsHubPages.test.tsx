@@ -11,7 +11,7 @@ import { setViewportWidth } from '../setup';
  *
  * The hub component is the platform's now (`@marinoscar/platform-web/settings/ui`,
  * with its own suite: search, both width treatments, the empty state, disabled
- * cards, permission gating). What is KVox's, and what this suite pins, is the
+ * cards, permission gating). What is this app's, and what this suite pins, is the
  * WIRING: the real registries, the real title and subtitle constants, the
  * scroll keys, the permission seam, and the version line (#296) that the
  * packaged hub has no slot for.
