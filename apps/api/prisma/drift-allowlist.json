@@ -1,0 +1,79 @@
+{
+  "entries": [
+    {
+      "statement": "DROP INDEX \"kg_entities_embedding_hnsw_idx\";",
+      "reason": "kg_entities_embedding_hnsw_idx is a HNSW (vector_cosine_ops) index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"kg_entities_label_trgm_idx\";",
+      "reason": "kg_entities_label_trgm_idx is a GIN trigram (gin_trgm_ops) index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"kg_entity_aliases_normalized_trgm_idx\";",
+      "reason": "kg_entity_aliases_normalized_trgm_idx is a GIN trigram (gin_trgm_ops) index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"kg_items_embedding_hnsw_idx\";",
+      "reason": "kg_items_embedding_hnsw_idx is a HNSW (vector_cosine_ops) index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"kg_items_valid_gist_idx\";",
+      "reason": "kg_items_valid_gist_idx is a GiST on a tstzrange column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"kg_relations_valid_gist_idx\";",
+      "reason": "kg_relations_valid_gist_idx is a GiST on a tstzrange column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"notes_search_vector_idx\";",
+      "reason": "notes_search_vector_idx is a GIN on a generated tsvector column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"search_embeddings_embedding_hnsw_idx\";",
+      "reason": "search_embeddings_embedding_hnsw_idx is a HNSW (vector_cosine_ops) index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"transcript_segments_search_vector_idx\";",
+      "reason": "transcript_segments_search_vector_idx is a GIN on a generated tsvector column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "DROP INDEX \"transcripts_title_search_vector_idx\";",
+      "reason": "transcripts_title_search_vector_idx is a GIN on a generated tsvector column index declared only in migration.sql; Prisma cannot declare it, so the diff proposes dropping it. Intentional drift, never an @@index.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "ALTER TABLE \"allowed_emails\" DROP COLUMN \"last_reminder_at\", DROP COLUMN \"reminder_count\";",
+      "reason": "Temporary deviation kvox:allowlist-reminders: allowed_emails.reminder_count and last_reminder_at exist only in KVox migration 20260918120000_add_allowlist_reminder_tracking, not in the platform schema.",
+      "removeIn": "#465"
+    },
+    {
+      "statement": "ALTER TABLE \"notes\" ALTER COLUMN \"search_vector\" DROP DEFAULT;",
+      "reason": "notes.search_vector is a GENERATED ALWAYS ... STORED tsvector column created in migration.sql (Unsupported(\"tsvector\") in the schema); the diff proposes dropping its generation expression. Intentional drift.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "ALTER TABLE \"storage_objects\" DROP COLUMN \"managed_by\", DROP COLUMN \"part_size\";",
+      "reason": "Temporary deviation kvox:storage-managed-by-part-size: storage_objects.managed_by and part_size exist only in KVox migration 20260914120000_add_storage_part_size_and_managed_by, not in the platform schema.",
+      "removeIn": "#469"
+    },
+    {
+      "statement": "ALTER TABLE \"transcript_segments\" ALTER COLUMN \"search_vector\" DROP DEFAULT;",
+      "reason": "transcript_segments.search_vector is a GENERATED ALWAYS ... STORED tsvector column created in migration.sql (Unsupported(\"tsvector\") in the schema); the diff proposes dropping its generation expression. Intentional drift.",
+      "removeIn": "permanent"
+    },
+    {
+      "statement": "ALTER TABLE \"transcripts\" ALTER COLUMN \"title_search_vector\" DROP DEFAULT;",
+      "reason": "transcripts.title_search_vector is a GENERATED ALWAYS ... STORED tsvector column created in migration.sql (Unsupported(\"tsvector\") in the schema); the diff proposes dropping its generation expression. Intentional drift.",
+      "removeIn": "permanent"
+    }
+  ]
+}

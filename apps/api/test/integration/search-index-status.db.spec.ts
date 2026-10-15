@@ -44,6 +44,7 @@ import { SearchIndexService } from '../../src/search/indexing/search-index.servi
 import { SearchIndexStatusService } from '../../src/search/indexing/search-index-status.service';
 import { SEARCH_INDEX_REQUEST_CAP } from '../../src/search/indexing/dto/search-index-status.dto';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb } = resolveDbSuite('search-index-status.db.spec');
 
@@ -114,7 +115,7 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
     ownerId: string,
     options: { deleted?: boolean } = {},
   ): Promise<string> {
-    const object = await prisma.storageObject.create({
+    const object = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),

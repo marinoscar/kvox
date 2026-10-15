@@ -18,15 +18,17 @@ import { TranscriptsUploadAbortedListener } from './transcripts-upload-aborted.l
 const TRANSCRIPT_ID = 'transcript-1';
 const OBJECT_ID = 'obj-1';
 
-const abortedEvent = (overrides: Record<string, unknown> = {}) =>
-  new ObjectUploadAbortedEvent({
-    id: OBJECT_ID,
-    managedBy: 'transcripts',
-    uploadedById: 'user-1',
-    storageKey: 'key-1',
-    name: 'recording.mp3',
-    ...overrides,
-  } as never);
+const abortedEvent = ({ managedBy = 'transcripts', ...overrides }: Record<string, unknown> = {}) =>
+  new ObjectUploadAbortedEvent(
+    {
+      id: OBJECT_ID,
+      uploadedById: 'user-1',
+      storageKey: 'key-1',
+      name: 'recording.mp3',
+      ...overrides,
+    } as never,
+    managedBy as string | null,
+  );
 
 describe('TranscriptsUploadAbortedListener', () => {
   let listener: TranscriptsUploadAbortedListener;

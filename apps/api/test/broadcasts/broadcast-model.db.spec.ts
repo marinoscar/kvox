@@ -68,6 +68,8 @@ describe('Prisma.NotificationBroadcastScalarFieldEnum', () => {
       'createdById',
       'createdAt',
       'updatedAt',
+      // PLATFORM-ADOPTION-SHIM(#470): the platform added `target_org_id`.
+      'targetOrgId',
     ].sort();
 
     const actual = Object.keys(Prisma.NotificationBroadcastScalarFieldEnum).sort();

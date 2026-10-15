@@ -43,6 +43,8 @@ describe('RolesGuard', () => {
           id: `role-${name}`,
           name,
           description: `${name} role`,
+          // PLATFORM-ADOPTION-SHIM(#465): the platform's `Role` gained `scope`.
+          scope: 'system',
           rolePermissions: [],
         },
       })),

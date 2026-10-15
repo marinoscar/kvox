@@ -39,6 +39,7 @@ import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias } from '../../src/graph/write/normalize';
 import type { EvidenceInput } from '../../src/graph/dto/graph-evidence.dto';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-write.db.spec');
 
@@ -101,7 +102,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
   }
 
   async function createTranscript(ownerId: string) {
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'r.m4a',
         size: BigInt(1),

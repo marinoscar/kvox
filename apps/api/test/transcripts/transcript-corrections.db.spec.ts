@@ -58,6 +58,8 @@ import { TranscriptSnapshotHandler } from '../../src/transcripts/handlers/transc
 import { ORDINAL_GAP, OP_TYPES, sortByOrdinal } from '../../src/transcripts/editing';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
+import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb } = resolveDbSuite('transcript-corrections.db.spec');
 
@@ -91,6 +93,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
       { deleteManagedObject: jest.fn() } as unknown as ObjectsService,
       new ConfigService({}),
       storage,
+      new LegacyObjectOwnershipStore(service as never),
     );
     const materializeService = new TranscriptMaterializeService(service, objects);
     const access = new TranscriptAccessService(service);
@@ -147,7 +150,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
       isActive: true,
     };
 
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),
@@ -183,7 +186,11 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
     await prisma.auditEvent.deleteMany({ where: { targetType: 'transcript' } });
     await prisma.transcript.deleteMany({ where: { title: { startsWith: TITLE_PREFIX } } });
     await prisma.storageObject.deleteMany({
-      where: { storageKey: { startsWith: 'transcripts/' }, managedBy: 'transcripts', uploadedById: ownerId },
+      where: {
+        id: {
+          in: await idsManagedBy(prisma, 'transcripts', { storageKeyPrefix: 'transcripts/', uploadedByIds: [ownerId] }),
+        },
+      },
     });
   }
 
@@ -767,21 +774,21 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
       });
 
       expect(object.mimeType).toBe('application/gzip');
-      expect(object.managedBy).toBe('transcripts');
+      expect(await managedByOf(prisma, object.id)).toBe('transcripts');
       expect(object.storageKey).toBe(`transcripts/${seed.transcriptId}/snapshots/v1.json.gz`);
 
-      const objectsBefore = await prisma.storageObject.count({
-        where: { managedBy: 'transcripts', storageKey: { startsWith: `transcripts/${seed.transcriptId}/` } },
-      });
+      const objectsBefore = (
+        await idsManagedBy(prisma, 'transcripts', { storageKeyPrefix: `transcripts/${seed.transcriptId}/` })
+      ).length;
 
       await snapshotHandler.process({
         id: 'again',
         payload: { transcriptId: seed.transcriptId, version: 1 },
       } as never);
 
-      const objectsAfter = await prisma.storageObject.count({
-        where: { managedBy: 'transcripts', storageKey: { startsWith: `transcripts/${seed.transcriptId}/` } },
-      });
+      const objectsAfter = (
+        await idsManagedBy(prisma, 'transcripts', { storageKeyPrefix: `transcripts/${seed.transcriptId}/` })
+      ).length;
 
       expect(objectsAfter).toBe(objectsBefore);
       expect(

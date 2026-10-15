@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
 import { ObjectsService } from '../storage/objects/objects.service';
 import { STORAGE_PROVIDER } from '../storage/providers/storage-provider.interface';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
@@ -30,9 +31,19 @@ import {
 //     arrives here with a key that already has a row.
 // =============================================================================
 
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`; the unit tier pins it.
+jest.mock('../prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
+
 describe('TranscriptObjectsService.recordUploaded', () => {
   let service: TranscriptObjectsService;
-  let prisma: { storageObject: { findFirst: jest.Mock; create: jest.Mock } };
+  let prisma: {
+    storageObject: { findFirst: jest.Mock; create: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let ownership: { setManagedBy: jest.Mock };
   let storage: { exists: jest.Mock; getBucket: jest.Mock; upload: jest.Mock };
 
   const input = {
@@ -50,7 +61,10 @@ describe('TranscriptObjectsService.recordUploaded', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'object-1' }),
       },
+      // The row insert and the `managed_by` stamp share one transaction.
+      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
+    ownership = { setManagedBy: jest.fn().mockResolvedValue(undefined) };
 
     storage = {
       exists: jest.fn().mockResolvedValue(true),
@@ -65,6 +79,7 @@ describe('TranscriptObjectsService.recordUploaded', () => {
         { provide: ObjectsService, useValue: { deleteManagedObject: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn((_k, d) => d) } },
         { provide: STORAGE_PROVIDER, useValue: storage },
+        { provide: LegacyObjectOwnershipStore, useValue: ownership },
       ],
     }).compile();
 
@@ -81,12 +96,13 @@ describe('TranscriptObjectsService.recordUploaded', () => {
         mimeType: 'audio/mp4',
         size: BigInt(512_000),
         status: 'ready',
-        // Invisible to `GET /api/storage/objects` and undeletable through the
-        // generic DELETE — the ownership boundary a transcript's files need.
-        managedBy: TRANSCRIPTS_MANAGED_BY,
+        orgId: 'org-1',
         uploadedById: 'user-1',
       }),
     });
+    // Invisible to `GET /api/storage/objects` and undeletable through the
+    // generic DELETE — the ownership boundary a transcript's files need.
+    expect(ownership.setManagedBy).toHaveBeenCalledWith('object-1', TRANSCRIPTS_MANAGED_BY, prisma);
   });
 
   it('refuses a key that holds nothing, with a message naming the key', async () => {
@@ -146,6 +162,7 @@ describe('TranscriptObjectsService.deleteIfPresent', () => {
         { provide: ObjectsService, useValue: objects },
         { provide: ConfigService, useValue: { get: jest.fn((_k, d) => d) } },
         { provide: STORAGE_PROVIDER, useValue: {} },
+        { provide: LegacyObjectOwnershipStore, useValue: {} },
       ],
     }).compile();
 

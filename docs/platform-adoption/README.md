@@ -11,3 +11,5 @@ node <EAB>/scripts/platform-drift.mjs --app <KVOX> --base <SCRATCH>/eab-slice-vi
 ```
 
 The four drift files are generated data and are never edited by hand, apart from replacing local absolute paths with `EnterpriseAppBase` and `kvox`. They are a baseline: a later re-run goes to new files, never over these. Leave them byte-for-byte as generated.
+
+[local-exceptions.md](local-exceptions.md) lists every place KVox deviates from the platform on purpose (shims, declared database deviations, standing constraints) and the issue that removes each one. The baseline procedure for an existing database is [../runbooks/database-baseline.md](../runbooks/database-baseline.md).

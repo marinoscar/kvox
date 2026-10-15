@@ -186,6 +186,19 @@ describe('AI-assistant configuration (#456)', () => {
       expect(names).toEqual(expect.arrayContaining(['add-job-type', 'add-settings-page']));
     });
 
+    it('ships the platform-migration skill in both assistant trees (#463)', () => {
+      const claude = p('.claude', 'skills', 'platform-migration', 'SKILL.md');
+      const opencode = p('.opencode', 'skills', 'platform-migration', 'SKILL.md');
+      expect(existsSync(claude)).toBe(true);
+      expect(existsSync(opencode)).toBe(true); // copy .claude/skills/platform-migration/SKILL.md into .opencode/skills/platform-migration/
+      // The twin must stay byte-identical: edit one, copy to the other.
+      expect(readFileSync(opencode, 'utf8')).toBe(readFileSync(claude, 'utf8'));
+      for (const file of [claude, opencode]) {
+        expect(frontmatterOf(file)?.top.name).toBe('platform-migration');
+        expect(size(file)).toBeLessThanOrEqual(SKILL_BUDGET);
+      }
+    });
+
     it.each(files.map((f) => [rel(f), f]))('%s has valid name and description frontmatter', (_label, file) => {
       const dirName = file.split('/').slice(-2)[0];
       const fm = frontmatterOf(file);

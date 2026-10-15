@@ -30,6 +30,8 @@ import { buildDatabaseUrl } from '../../src/common/database-url';
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-purge.db.spec');
 
@@ -47,7 +49,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
     // No export files in these fixtures (#386's step finds nothing to delete).
-    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never);
+    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never, new LegacyObjectOwnershipStore(prisma as never));
   });
 
   afterAll(async () => {
@@ -88,7 +90,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     await prisma.noteVersion.create({
       data: { noteId: note.id, version: 1, kind: 'edit', body: 'Sarah will send the deck' },
     });
-    const source = await prisma.storageObject.create({
+    const source = await createStorageObject(prisma, {
       data: {
         name: 'r.m4a',
         size: BigInt(1),

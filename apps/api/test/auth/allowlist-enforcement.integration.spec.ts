@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { AllowlistService } from '../../src/allowlist/allowlist.service';
+import { LegacyAllowlistReminderStore } from '../../src/allowlist/legacy-allowlist-reminder.store';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -44,6 +45,8 @@ describe('Auth Service - Allowlist Enforcement', () => {
       providers: [
         AuthService,
         AllowlistService,
+        // PLATFORM-ADOPTION-SHIM(#465): reminder columns live behind a legacy store.
+        { provide: LegacyAllowlistReminderStore, useValue: { get: jest.fn().mockResolvedValue(new Map()), increment: jest.fn() } },
         AdminBootstrapService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: JwtService, useValue: { sign: jest.fn(() => 'mock-jwt-token'), signAsync: jest.fn(() => 'mock-jwt-token') } },

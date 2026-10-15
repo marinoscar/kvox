@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { NOTIFICATION_EVENTS } from './notification-events';
@@ -157,9 +157,25 @@ const MIGRATIONS_AT_288 = [
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
 
+/**
+ * Directories `platform db sync` installed from the platform's history
+ * (`prisma/platform.lock`, issue #463): not authored by any KVox issue, so not
+ * part of what #288 may or may not have added.
+ */
+function platformInstalledDirectories(): Set<string> {
+  const lock = JSON.parse(readFileSync(join(MIGRATIONS_DIR, '..', 'platform.lock'), 'utf8')) as {
+    migrations: Array<{ localDir: string }>;
+  };
+  const known = new Set(MIGRATIONS_AT_288);
+
+  return new Set(lock.migrations.map((m) => m.localDir).filter((dir) => !known.has(dir)));
+}
+
 function migrationDirectories(): string[] {
+  const installed = platformInstalledDirectories();
+
   return readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !installed.has(entry.name))
     .map((entry) => entry.name)
     .sort();
 }

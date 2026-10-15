@@ -39,6 +39,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 const SEARCH_VECTOR_INDEX_NAMES = [
   'transcript_segments_search_vector_idx',
@@ -90,7 +91,7 @@ describeWithDb('Full-text search vectors (real Postgres)', () => {
   }
 
   async function createSourceObject(uploadedById: string, suffix: string) {
-    return prisma.storageObject.create({
+    return createStorageObject(prisma, {
       data: {
         name: 'recording.m4a',
         size: BigInt(1024),

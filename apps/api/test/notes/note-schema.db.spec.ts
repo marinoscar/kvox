@@ -37,6 +37,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { NOTE_TEMPLATES } from '../../prisma/seed-data';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim
@@ -127,7 +128,7 @@ describeWithDb('Notes schema (real Postgres)', () => {
   }
 
   async function createSourceObject(uploadedById: string, suffix: string) {
-    return prisma.storageObject.create({
+    return createStorageObject(prisma, {
       data: {
         name: 'document.pdf',
         size: BigInt(1024),

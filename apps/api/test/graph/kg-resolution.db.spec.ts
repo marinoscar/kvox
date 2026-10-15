@@ -28,6 +28,7 @@ import { EvidenceValidator } from '../../src/graph/write/evidence-validator.serv
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias } from '../../src/graph/write/normalize';
 import { resolveDbSuite } from '../jobs/db-test-support';
+import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-resolution.db.spec');
 const EMAIL_PREFIX = 'kg-resolution-test';
@@ -78,7 +79,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
       followUps as never,
     );
     distinct = new DistinctPairService();
-    purge = new KgPurgeService(db, NO_EXPORT_FILES);
+    purge = new KgPurgeService(db, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(db as never));
   });
 
   afterAll(async () => {

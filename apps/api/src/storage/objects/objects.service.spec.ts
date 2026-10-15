@@ -10,12 +10,19 @@ import {
 import { Readable } from 'node:stream';
 
 import { ObjectsService } from './objects.service';
+import { LegacyObjectOwnershipStore } from '../legacy-object-ownership.store';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
 import { OBJECT_UPLOADED_EVENT } from '../processing/events/object-uploaded.event';
 import { OBJECT_UPLOAD_ABORTED_EVENT } from '../processing/events/object-upload-aborted.event';
+
+// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
+// helper that queries `organizations`; the unit tier pins it.
+jest.mock('../../prisma/default-org', () => ({
+  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
+}));
 
 describe('ObjectsService', () => {
   let service: ObjectsService;
@@ -24,6 +31,18 @@ describe('ObjectsService', () => {
   let mockConfig: jest.Mocked<ConfigService>;
   let configValues: Record<string, unknown>;
   let mockEventEmitter: jest.Mocked<EventEmitter2>;
+  // PLATFORM-ADOPTION-SHIM(#469): `managed_by` / `part_size` are not on the
+  // Prisma client; the service reads them through this store. The fake answers
+  // from whatever row the test fed `storageObject.findUnique`, so the fixtures
+  // below keep carrying `managedBy` and `partSize` as they always did.
+  let mockOwnership: {
+    getManagedBy: jest.Mock;
+    getPartSize: jest.Mock;
+    setManagedBy: jest.Mock;
+    setPartSize: jest.Mock;
+    selectObjectIds: jest.Mock;
+    countObjects: jest.Mock;
+  };
 
   const testUserId = 'user-123';
   const otherUserId = 'user-456';
@@ -79,6 +98,23 @@ describe('ObjectsService', () => {
       emit: jest.fn(),
     } as any;
 
+    const rowOf = async (id: string) =>
+      (await mockPrisma.storageObject.findUnique({ where: { id } } as any)) as any;
+    mockOwnership = {
+      getManagedBy: jest.fn(async (ids: string[]) => {
+        const owners = new Map<string, string | null>();
+        for (const id of ids) owners.set(id, (await rowOf(id))?.managedBy ?? null);
+        return owners;
+      }),
+      getPartSize: jest.fn(async (id: string) => (await rowOf(id))?.partSize ?? null),
+      setManagedBy: jest.fn().mockResolvedValue(undefined),
+      setPartSize: jest.fn().mockResolvedValue(undefined),
+      selectObjectIds: jest.fn().mockResolvedValue([]),
+      countObjects: jest.fn().mockResolvedValue(0),
+    };
+    // Interactive transactions run against the same mock client.
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ObjectsService,
@@ -86,6 +122,7 @@ describe('ObjectsService', () => {
         { provide: STORAGE_PROVIDER, useValue: mockStorageProvider },
         { provide: ConfigService, useValue: mockConfig },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: LegacyObjectOwnershipStore, useValue: mockOwnership },
       ],
     }).compile();
 
@@ -270,10 +307,14 @@ describe('ObjectsService', () => {
 
       await service.initUpload(dto, testUserId);
 
+      expect(mockOwnership.setPartSize).toHaveBeenCalledWith(
+        mockStorageObject.id,
+        10485760,
+        mockPrisma,
+      );
+      expect(mockOwnership.setManagedBy).not.toHaveBeenCalled();
       expect(mockPrisma.storageObject.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ partSize: 10485760, managedBy: null }),
-        }),
+        expect.objectContaining({ data: expect.objectContaining({ orgId: 'org-1' }) }),
       );
     });
 
@@ -400,10 +441,10 @@ describe('ObjectsService', () => {
         { managedBy: 'transcripts' },
       );
 
-      expect(mockPrisma.storageObject.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ managedBy: 'transcripts' }),
-        }),
+      expect(mockOwnership.setManagedBy).toHaveBeenCalledWith(
+        mockStorageObject.id,
+        'transcripts',
+        mockPrisma,
       );
     });
 
@@ -1356,8 +1397,9 @@ describe('ObjectsService', () => {
         { ...mockStorageObject, id: 'obj-2' },
       ];
 
+      mockOwnership.selectObjectIds.mockResolvedValue(['obj-1', 'obj-2']);
+      mockOwnership.countObjects.mockResolvedValue(2);
       mockPrisma.storageObject.findMany.mockResolvedValue(mockObjects as any);
-      mockPrisma.storageObject.count.mockResolvedValue(2);
 
       const result = await service.list(query, testUserId);
 
@@ -1377,17 +1419,18 @@ describe('ObjectsService', () => {
         sortOrder: 'desc' as const,
       };
 
+      mockOwnership.selectObjectIds.mockResolvedValue([mockStorageObject.id]);
+      mockOwnership.countObjects.mockResolvedValue(1);
       mockPrisma.storageObject.findMany.mockResolvedValue([mockStorageObject] as any);
-      mockPrisma.storageObject.count.mockResolvedValue(1);
 
       await service.list(query, testUserId);
 
-      expect(mockPrisma.storageObject.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            status: 'ready',
-          }),
-        }),
+      expect(mockOwnership.selectObjectIds).toHaveBeenCalledWith(
+        expect.objectContaining({ statuses: ['ready'] }),
+        expect.anything(),
+      );
+      expect(mockOwnership.countObjects).toHaveBeenCalledWith(
+        expect.objectContaining({ statuses: ['ready'] }),
       );
     });
 
@@ -1399,15 +1442,11 @@ describe('ObjectsService', () => {
         sortOrder: 'asc' as const,
       };
 
-      mockPrisma.storageObject.findMany.mockResolvedValue([]);
-      mockPrisma.storageObject.count.mockResolvedValue(0);
-
       await service.list(query, testUserId);
 
-      expect(mockPrisma.storageObject.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          orderBy: { name: 'asc' },
-        }),
+      expect(mockOwnership.selectObjectIds).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ orderBy: 'name', order: 'asc' }),
       );
     });
   });
@@ -1418,9 +1457,6 @@ describe('ObjectsService', () => {
   // ===========================================================================
   describe('managed objects', () => {
     it('should exclude managed objects from the list query', async () => {
-      mockPrisma.storageObject.findMany.mockResolvedValue([]);
-      mockPrisma.storageObject.count.mockResolvedValue(0);
-
       await service.list(
         {
           page: 1,
@@ -1431,18 +1467,14 @@ describe('ObjectsService', () => {
         testUserId,
       );
 
-      expect(mockPrisma.storageObject.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            uploadedById: testUserId,
-            managedBy: null,
-          }),
-        }),
+      // PLATFORM-ADOPTION-SHIM(#469): the exclusion is `managed_by IS NULL`,
+      // applied by the legacy store to both the page and the count.
+      expect(mockOwnership.selectObjectIds).toHaveBeenCalledWith(
+        expect.objectContaining({ managed: 'unmanaged', uploadedById: testUserId }),
+        expect.anything(),
       );
-      expect(mockPrisma.storageObject.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ managedBy: null }),
-        }),
+      expect(mockOwnership.countObjects).toHaveBeenCalledWith(
+        expect.objectContaining({ managed: 'unmanaged', uploadedById: testUserId }),
       );
     });
 

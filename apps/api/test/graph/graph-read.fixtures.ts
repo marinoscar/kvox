@@ -15,6 +15,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
+import { createStorageObject } from '../helpers/storage-object.helper';
 
 type ReviewStatus = 'accepted' | 'edited' | 'unreviewed' | 'rejected' | 'merged' | 'superseded';
 const CURATED: ReadonlySet<string> = new Set(['accepted', 'edited']);
@@ -222,7 +223,7 @@ export class GraphFixture {
   }
 
   async transcript(opts: { recordedAt?: Date; title?: string } = {}) {
-    const source = await this.prisma.storageObject.create({
+    const source = await createStorageObject(this.prisma, {
       data: {
         name: 'r.m4a',
         size: BigInt(1),

@@ -38,6 +38,9 @@ describe('Prisma.WorkerNodeScalarFieldEnum', () => {
       'registeredAt',
       'lastHeartbeatAt',
       'createdById',
+      // PLATFORM-ADOPTION-SHIM(#470): columns the platform added to `worker_nodes`.
+      'lastVitals',
+      'lastVitalsAt',
     ].sort();
 
     const actual = Object.keys(Prisma.WorkerNodeScalarFieldEnum).sort();
