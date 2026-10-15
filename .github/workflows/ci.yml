@@ -18,14 +18,15 @@ concurrency:
 # 2026-10-15 (before the split), per step:
 #
 #   `npm test --workspace=api`       7.5-8.4 min  (was inside `Build & Test`)
-#   visual Playwright run            ~8 min       (workers: 1, 135 screenshots)
 #   `test:db --workspace=api`        2.8-4.5 min  (was inside `smoke`)
 #   web Vitest, per shard of 4       1.5-2.7 min
 #   everything else                  under 1 min per step
 #
 # That made the workflow 9-13 min, set by the API suite and the visual run.
-# They are now `api-test` (3 shards), `visual` (3 shards) and `db-test`
-# (2 shards), the same shape `web-test` already had. Typecheck, the CLI suite
+# The API suite is now `api-test` (3 shards) and `test:db` is `db-test`
+# (2 shards), the same shape `web-test` already had. The visual regression
+# job was removed from CI (its suite and the manual `visual-baselines.yml`
+# workflow remain). Typecheck, the CLI suite
 # and the CLI build stay together in `Build & Test`.
 #
 # Two earlier findings still hold:
@@ -139,8 +140,8 @@ jobs:
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # No `needs:` — runs concurrently with `build`, like `openapi`/`smoke`/
-    # `visual` do. Split out of `Build & Test` and sharded across 4 runners
+    # No `needs:` — runs concurrently with `build`, like `openapi` and
+    # `smoke` do. Split out of `Build & Test` and sharded across 4 runners
     # (see the note atop this file) because this suite alone now costs more
     # wall clock than every other job in the workflow combined, and each
     # shard gets its own runner's CPUs rather than contending with
@@ -394,83 +395,3 @@ jobs:
       - run: npm run test:db --workspace=api -- --shard=${{ matrix.shard }}/2
         env:
           NODE_ENV: test
-
-  visual:
-    name: Visual regression (shard ${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
-    # Sharded because the single-worker run was ~8 min, the longest step in CI.
-    # Each shard keeps `workers: 1` (playwright.config.ts) so pixel determinism
-    # is unchanged — only WHICH screenshots a runner takes differs. Baselines
-    # are per-test files, so the split needs no baseline changes.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    # No `needs:` — runs concurrently with `build`, like `openapi` and `smoke`
-    # do, for the same reason: it shares no state with them (no database, no
-    # compiled API artifact) and gains nothing by queueing behind either.
-    #
-    # WHY A DEDICATED CONTAINER, PINNED TO AN EXACT PLAYWRIGHT BUILD
-    # -------------------------------------------------------------------------
-    # This job asserts PIXELS, not DOM state — the one kind of assertion
-    # nothing else in this workflow makes. `web-test` runs the Vitest+RTL
-    # suite against jsdom, which has no layout engine at all (no
-    # `offsetWidth`, no wrapping, no font metrics), so it structurally cannot
-    # catch a layout regression like #105 (a destination rendered in the wrong
-    # position; a caption clipped by 2px of padding) — see
-    # `apps/web/visual/main.tsx` for the full account of why this suite exists.
-    # A pixel baseline is sensitive to the exact browser BUILD, not just the
-    # Playwright *API* version, so this job runs inside the same
-    # `mcr.microsoft.com/playwright:v1.62.1-noble` image the baselines under
-    # `tests/visual/specs/**/*-snapshots/` were generated in, and
-    # `tests/visual/package.json` pins `@playwright/test` to that exact
-    # version with no caret — unlike `tests/e2e`'s `^1.40.0`, which only ever
-    # asserts DOM state and so is safe to float.
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      # The root install (workspaces: apps/*) gets `apps/web` and its Vite dev
-      # server — what the harness in `apps/web/visual` runs on. `tests/visual`
-      # is NOT an npm workspace (same reason `tests/e2e` isn't: these are
-      # test-runner packages, not application code), so its own
-      # `@playwright/test` install is separate.
-      - run: npm ci
-      - run: npm ci
-        working-directory: tests/visual
-
-      # Fails the job on ANY pixel diff (default `expect(page).toHaveScreenshot()`
-      # behavior) or on a missing baseline. `playwright.config.ts` boots
-      # `apps/web/visual`'s own Vite dev server itself (`webServer`) — no
-      # compose stack, no database, no API — so there is nothing else to start
-      # here.
-      #
-      # `tests/visual/node_modules/.bin/playwright` directly, NOT `npx
-      # playwright`: `npx` resolves the binary by walking up from the repo
-      # root, which has no local `playwright` install of its own (only
-      # `apps/web`'s dependencies are hoisted there), so it falls back to an
-      # ad-hoc download of whatever the latest published version is — a
-      # DIFFERENT `@playwright/test` module instance than the pinned one
-      # `tests/visual/specs/*.spec.ts` import, which throws "Playwright Test
-      # did not expect test() to be called here" (two copies of the module,
-      # two singletons). Verified by hitting exactly this failure while
-      # building the suite; the direct binary path is the fix, not a
-      # style preference.
-      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --shard=${{ matrix.shard }}/3
-
-      # Uploaded unconditionally (`if: always()`) so a failing run is
-      # diagnosable from the Actions UI: the HTML report embeds the
-      # expected/actual/diff PNG for every failed assertion, which is far
-      # faster to read than reproducing the failure locally from scratch.
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: visual-playwright-report-${{ matrix.shard }}
-          path: tests/visual/playwright-report/
-          retention-days: 14

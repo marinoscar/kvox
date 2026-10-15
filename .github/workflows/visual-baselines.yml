@@ -4,6 +4,11 @@ name: Regenerate visual baselines
 # The escape hatch for the one CI job nobody can fix from a laptop (issue #325)
 # =============================================================================
 #
+# NOTE: the `visual` job this text describes was REMOVED from `ci.yml`, so the
+# pixel check no longer gates PRs. This workflow and the suite under
+# tests/visual/ remain so baselines can still be regenerated; re-add the job to
+# `ci.yml` before relying on the "red `visual` job" language below.
+#
 # THE PROBLEM THIS SOLVES. `ci.yml`'s `visual` job asserts PIXELS, and a pixel
 # baseline is sensitive to the exact browser BUILD rather than to the Playwright
 # API version — so the baselines under `tests/visual/specs/**/*-snapshots/` are
