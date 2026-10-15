@@ -823,8 +823,8 @@ function AppRoutes() {
                   />
                   {/* Issue #258, epic #254. Same permission string the
                       `Maintenance` card declares and the same one
-                      `common/maintenance/maintenance.controller.ts` enforces on
-                      its GET — the invariant `destinations.test.ts` asserts for
+                      the platform's maintenance controller
+                      (`@marinoscar/platform-api/host`) enforces on its GET — the invariant `destinations.test.ts` asserts for
                       every card. Opening and closing a window needs
                       `system_settings:write`, which the page gates internally by
                       disabling its controls.

@@ -238,7 +238,8 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       },
       {
         // Issue #258, epic #254. `system_settings:read` is the string
-        // `common/maintenance/maintenance.controller.ts` enforces on its GET —
+        // the platform's maintenance controller (`@marinoscar/platform-api/host`)
+        // enforces on its GET —
         // the registry never invents a permission, it mirrors one. That
         // controller deliberately adds NO permission of its own: a maintenance
         // window IS a system setting, stored in the `maintenance` namespace of

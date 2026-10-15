@@ -17,7 +17,8 @@
  * Spec §5 draws the conflict payload at the top level
  * (`{ currentVersion, conflicts }`). It does not arrive that way. This API has
  * ONE error envelope for every operation — `{ statusCode, code, message,
- * details }` — and the global `HttpExceptionFilter` reads nothing else off a
+ * details }` — and the platform's global `HttpExceptionFilter`
+ * (`@marinoscar/platform-api/host`) reads nothing else off a
  * thrown payload, so the conflict object travels in `details` and a client
  * reaching for `err.currentVersion` silently gets `undefined` and reports a
  * conflict with nothing in it. `parseOperationsConflict` below is the ONE place

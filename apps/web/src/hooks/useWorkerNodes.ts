@@ -79,7 +79,7 @@ export const WORKER_NODES_POLL_INTERVAL_MS = 10_000;
  * Turn any thrown value into the sentence the page will render.
  *
  * 403 is named explicitly because its remedy is a permission rather than a
- * retry — the treatment `useJobs`, `useMaintenance` and `useEmailSettings` all
+ * retry — the treatment `useJobs`, the packaged `useMaintenance` (`host/headless`) and `useEmailSettings` all
  * give it. The message says "worker nodes" and not "jobs", because the two are
  * genuinely different permissions (`nodes:read`/`nodes:write` versus
  * `jobs:read`/`jobs:write`) and telling an operator to ask for the wrong one is
