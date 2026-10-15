@@ -2,8 +2,8 @@ import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
-import type { SystemDatabaseBackupValue } from '../../common/schemas/settings.schema';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import type { JobsService } from '../../jobs/jobs.service';
 import type { DatabaseBackupRunnerService } from '../db-backup-runner.service';
 import { DB_BACKUP_SWEEP_TYPE } from '../handlers/db-backup-sweep.handler';

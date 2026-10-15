@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { EmailModule } from '../email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { SettingsModule } from '../settings/settings.module';
 import { AdminOnboardingController } from './admin-onboarding.controller';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
@@ -53,7 +52,6 @@ import { OnboardingService } from './onboarding.service';
 @Module({
   imports: [
     AiModule,
-    SettingsModule,
     EmailModule,
     NotificationsModule,
   ],

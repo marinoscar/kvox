@@ -25,7 +25,7 @@
 import { computeEffectiveSchema } from '@app/shared/ontology';
 
 import { AiProviderRegistry } from '../../../src/ai/ai-provider.registry';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../../src/common/types/settings.types';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../../src/settings/registry/default-system-settings';
 import { createProviderContext, type AiProvider } from '../../../src/ai/providers/ai-provider.interface';
 import { OpenAiProvider } from '../../../src/ai/providers/openai.provider';
 import {

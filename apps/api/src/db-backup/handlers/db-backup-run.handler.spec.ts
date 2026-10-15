@@ -43,7 +43,7 @@ import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { LEASE_GRACE_MS, resolveJobLeaseMs } from '../../jobs/job.worker';
 import { JOB_TYPE_LABELS } from '../../jobs/job-type-labels';
-import type { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { BACKUP_JOB_TYPE } from '../db-backup-runner.service';
 import type { DatabaseBackupRunnerService } from '../db-backup-runner.service';
 import { PG_JOB_ROLE_KIND, PgJobRoleBroker } from '../pg-job-role.broker';

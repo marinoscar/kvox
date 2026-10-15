@@ -19,6 +19,7 @@ import {
   registerPlatformUserOwnedModels,
 } from '@marinoscar/platform-api/manifest';
 
+import { registerKvoxCredentialPurposes } from '../platform/credentials/credential-purposes.manifest';
 import { KVOX_MODEL_OWNERSHIP } from './model-ownership';
 import { KVOX_PERMISSIONS } from './permissions';
 import { KVOX_USER_OWNED_MODELS } from './user-owned-models';
@@ -26,3 +27,6 @@ import { KVOX_USER_OWNED_MODELS } from './user-owned-models';
 registerPlatformPermissions({ app: { permissions: [KVOX_PERMISSIONS] } });
 registerPlatformUserOwnedModels(KVOX_USER_OWNED_MODELS);
 registerPlatformModelOwnership(KVOX_MODEL_OWNERSHIP);
+// The credential purposes KVox stores (#466): the platform's `CredentialsService`
+// refuses a write to a purpose nobody registered.
+registerKvoxCredentialPurposes();

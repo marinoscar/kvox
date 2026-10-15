@@ -1,5 +1,9 @@
 // =============================================================================
 // The `ai` system settings namespace (issue #459, issue #47, epic #45)
+//
+// PLATFORM-ADOPTION-SHIM(3.1): KVox registers its OWN `ai` declaration under the
+// key `ai` until #473 adopts the platform's `AI_SYSTEM_SETTINGS`. Registered by
+// `apps/api/src/app-registrations/settings.ts` as `KVOX_AI_SYSTEM_SETTINGS`.
 // =============================================================================
 //
 // The deployment AI policy: whether AI is on, which endpoint is called, which
@@ -24,18 +28,12 @@
 
 import { z } from 'zod';
 
-import type { SystemSettingsNamespace } from '../settings/registry/system-settings-namespace';
+import type { SystemSettingsNamespace } from '@marinoscar/platform-api/settings';
 import {
   systemAiPatchSchema,
   systemAiSchema,
   type SystemAiValue,
 } from './ai-settings.schema';
-
-declare module '../settings/registry' {
-  interface SystemSettingsNamespaces {
-    ai: SystemAiValue;
-  }
-}
 
 /**
  * One `allowedModels` entry, RESTATED from `ai/ai-settings.schema.ts` (#78).
@@ -219,7 +217,44 @@ const aiResponseSchema = z.object({
   graphEnabled: z.boolean(),
 });
 
-export const AI_SYSTEM_SETTINGS: SystemSettingsNamespace<'ai', SystemAiValue> = {
+type AiPatch = z.infer<typeof aiWirePatchSchema>;
+
+/**
+ * The `ai` PATCH merge, field by field (the body of the old
+ * `SystemSettingsService.patchSettings` block, moved verbatim by #466).
+ *
+ * `provider`, `maxInputTokens` and `maxOutputTokens` test `!== undefined`, never
+ * `??` (#78, #436): `null` is a VALUE there ("no provider is active", "the
+ * selected model's own maximum"), so `??` would make clearing one a 200 that
+ * changed nothing. `allowedModels` and `taskModels` REPLACE wholesale when
+ * present (RFC 7396's rule for arrays), so `[]` / `{}` clears them.
+ */
+export function mergeAiSettings(current: SystemAiValue, patch?: AiPatch): SystemAiValue {
+  return {
+    enabled: patch?.enabled ?? current.enabled,
+    provider: patch?.provider !== undefined ? patch.provider : current.provider,
+    providers: {
+      openai: {
+        baseUrl: patch?.providers?.openai?.baseUrl ?? current.providers.openai.baseUrl,
+        allowedModels:
+          (patch?.providers?.openai?.allowedModels as SystemAiValue['providers']['openai']['allowedModels'] | undefined) ??
+          current.providers.openai.allowedModels,
+        defaultModel: patch?.providers?.openai?.defaultModel ?? current.providers.openai.defaultModel,
+      },
+    },
+    maxInputTokens:
+      patch?.maxInputTokens !== undefined ? patch.maxInputTokens : current.maxInputTokens,
+    maxOutputTokens:
+      patch?.maxOutputTokens !== undefined ? patch.maxOutputTokens : current.maxOutputTokens,
+    requestTimeoutMs: patch?.requestTimeoutMs ?? current.requestTimeoutMs,
+    reasoningEffort: patch?.reasoningEffort ?? current.reasoningEffort,
+    maxDocumentBytes: patch?.maxDocumentBytes ?? current.maxDocumentBytes,
+    taskModels: patch?.taskModels ?? current.taskModels,
+    graphEnabled: patch?.graphEnabled ?? current.graphEnabled,
+  };
+}
+
+export const KVOX_AI_SYSTEM_SETTINGS: SystemSettingsNamespace<'ai', SystemAiValue, AiPatch> = {
   key: 'ai',
   description: 'Deployment AI policy: the active provider, permitted models and request ceilings. Carries no API key.',
   storedSchema: systemAiSchema,
@@ -300,4 +335,5 @@ export const AI_SYSTEM_SETTINGS: SystemSettingsNamespace<'ai', SystemAiValue> = 
     graphEnabled: false,
   },
   requiredOnPut: false,
+  merge: mergeAiSettings,
 };

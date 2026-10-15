@@ -29,7 +29,7 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import {
   USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
   type UserSettingsNamespaceChangedEvent,
-} from '../../settings/user-settings/user-settings.events';
+} from '../../platform/settings/user-settings.events';
 import {
   changedGraphSections,
   resolveGraphPreferences,

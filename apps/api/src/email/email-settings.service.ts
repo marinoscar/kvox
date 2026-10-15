@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import type { z } from 'zod';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import {
   DEFAULT_EMAIL_SETTINGS,
   EmailSettings,

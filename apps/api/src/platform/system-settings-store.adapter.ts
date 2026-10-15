@@ -4,16 +4,13 @@ import type {
   SystemSettingsStore,
 } from '@marinoscar/platform-api/core';
 
-import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 /**
- * The platform's `SYSTEM_SETTINGS_STORE` over this app's CURRENT
- * `SystemSettingsService` (PLATFORM-ADOPTION-SHIM(#466)).
- *
- * #466 moves the settings slice into the platform; until then a packaged slice
- * that reads or patches a settings namespace goes through this app's service, which
- * keeps its validation, `If-Match` check and audit trail. #466 deletes this
- * file.
+ * The platform's `SYSTEM_SETTINGS_STORE` over the platform
+ * `SystemSettingsService` (issue #466): a packaged slice that reads or patches a
+ * settings namespace goes through the settings slice, which keeps its
+ * validation, `If-Match` check and audit trail.
  */
 @Injectable()
 export class SystemSettingsStoreAdapter implements SystemSettingsStore {

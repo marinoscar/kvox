@@ -1,16 +1,18 @@
 // =============================================================================
-// Settings namespace registrations (issue #459), split out of kvox.manifest.ts
+// Settings namespace registrations (issues #459, #460, #466)
 // =============================================================================
 //
-// WHY THIS IS ITS OWN FILE (issue #460). The request/response DTOs, the composed
-// settings schemas and `DEFAULT_SYSTEM_SETTINGS` are composed FROM THE SETTINGS
-// REGISTRIES AT IMPORT TIME, and they throw on an empty registry. The domain
-// registrations in `kvox.manifest.ts` import domain files (onboarding facts,
-// user-data hooks, notification templates) that name provider classes, and those
-// classes transitively import the DTOs. ES imports evaluate in order, so the
-// namespaces must be registered by a module the manifest imports FIRST; doing it
-// in the manifest's own body would run after every import had already composed an
-// empty registry.
+// WHY THIS IS ITS OWN FILE (issue #460). The platform composes the settings
+// request/response DTOs and the OpenAPI document from the namespace registries
+// when `SettingsModule.forRoot()` runs, and it throws on an empty registry. The
+// domain registrations in `kvox.manifest.ts` import domain files that name
+// provider classes, and those classes transitively import settings types and
+// services. ES imports evaluate in order, so the namespaces must be registered
+// by a module `kvox.manifest.ts` imports FIRST.
+//
+// Since #466 the registration itself is `settings/registry/` (the system and
+// user manifests, folding the platform's declarations with KVox's from
+// `app-registrations/settings.ts`); this file only triggers it.
 //
 // Order is the stored key order and the OpenAPI order: append, never insert.
 //   system: notifications, jobs, nodes, databaseBackup, maintenance,
@@ -18,25 +20,4 @@
 //   user:   dataTables, navigation, notifications, onboarding, graph
 // =============================================================================
 
-import { AI_SYSTEM_SETTINGS } from './ai/ai.system-settings';
-import { GRAPH_USER_SETTINGS } from './graph/preferences/graph.user-settings';
-import {
-  registerSystemSettingsNamespaces,
-  registerUserSettingsNamespaces,
-} from './settings/registry';
-import { CORE_SYSTEM_NAMESPACES } from './settings/registry/core-system-namespaces';
-import { CORE_USER_NAMESPACES } from './settings/registry/core-user-namespaces';
-import { TRANSCRIPTION_SYSTEM_SETTINGS } from './transcription/transcription.system-settings';
-
-let registered = false;
-
-if (!registered) {
-  registered = true;
-
-  registerSystemSettingsNamespaces([
-    ...CORE_SYSTEM_NAMESPACES,
-    TRANSCRIPTION_SYSTEM_SETTINGS,
-    AI_SYSTEM_SETTINGS,
-  ]);
-  registerUserSettingsNamespaces([...CORE_USER_NAMESPACES, GRAPH_USER_SETTINGS]);
-}
+import './settings/registry';

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { TranscriptionProviderRegistry } from './transcription-provider.registry';
 import { TranscriptionSettingsService } from './transcription-settings.service';
 import {

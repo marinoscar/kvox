@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
-import { CredentialsModule } from '../credentials/credentials.module';
+import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { EmailSettingsController } from './email-settings.controller';
 import { EmailSettingsService } from './email-settings.service';
 import { EmailTestSendService } from './email-test-send.service';

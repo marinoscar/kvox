@@ -18,15 +18,19 @@ import { PrismaModule } from './prisma/prisma.module';
 import { platformHostModule } from './platform/platform-host.module';
 import { doctorModule } from './platform/doctor.config';
 import { identityModule } from './platform/identity/identity.config';
+import { settingsModule } from './platform/settings/settings.config';
+import {
+  CredentialsModule,
+  OrgCredentialsModule,
+  UserCredentialsModule,
+} from './platform/credentials/credentials.config';
 import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-reminders.module';
 import { CommonModule } from './common/common.module';
-import { SettingsModule } from './settings/settings.module';
 import { ProfileImageModule } from './settings/profile-image/profile-image.module';
 import { HealthModule } from './health/health.module';
 import { StorageModule } from './storage/storage.module';
 import { NodeCredentialModule } from './nodes/node-credential.module';
 import { NodesModule } from './nodes/nodes.module';
-import { CredentialsModule } from './credentials/credentials.module';
 import { EmailModule } from './email/email.module';
 import { BroadcastsModule } from './notifications/broadcasts/broadcasts.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -56,6 +60,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { UserSettingsChangeInterceptor } from './platform/settings/user-settings-change.interceptor';
 
 import configuration from './config/configuration';
 
@@ -99,7 +104,14 @@ import configuration from './config/configuration';
     // `GET /api/allowlist/reminders`), a side table beside the platform's
     // allowlist, which has no seam for them (#301, moved by #465).
     AllowlistRemindersModule,
-    SettingsModule,
+    // The platform's settings slice (#466, epic #462): `GET|PUT|PATCH
+    // /api/system-settings`, `/api/user-settings` and `/api/org-settings`, with
+    // the namespaces `settings/registry/` registers (the platform's five system
+    // and three user declarations plus KVox's `transcription`, `ai`,
+    // `onboarding` and `graph`). Replaces this app's own SettingsModule. GLOBAL:
+    // every module reads `SystemSettingsService` / `UserSettingsService`
+    // without importing it. Must come after the manifest imports at the top.
+    settingsModule,
     // Uploaded profile pictures (#367): its own module because it needs the
     // storage provider and SettingsModule must not (see the module).
     ProfileImageModule,
@@ -116,10 +128,14 @@ import configuration from './config/configuration';
     // dependency weight rather than by topic is what keeps the guard's
     // dependency graph acyclic.
     NodeCredentialModule,
-    // Encrypted credential store (#115). Registered here so it is part of the
-    // module graph; consumers still import CredentialsModule explicitly (it is
-    // not @Global) so every user of a plaintext-returning service is visible.
+    // Encrypted credential store (#115), the platform's since #466. Registered
+    // here so it is part of the module graph; consumers still import
+    // CredentialsModule explicitly (it is not @Global) so every user of a
+    // plaintext-returning service is visible. The user and organization stores
+    // are mounted but unused: this app keeps no credential in them.
     CredentialsModule,
+    UserCredentialsModule,
+    OrgCredentialsModule,
     // Email transports (#122, epic #109) and, since #124, the admin email
     // settings endpoints. Registered here even though nothing sends mail
     // automatically yet: it makes a broken provider graph fail at boot rather
@@ -361,6 +377,13 @@ import configuration from './config/configuration';
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    // PLATFORM-ADOPTION-SHIM(#466): `user-settings.namespace-changed` around
+    // `PUT|PATCH /api/user-settings`, which the platform's service does not
+    // emit and the graph's threshold re-scan depends on.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: UserSettingsChangeInterceptor,
     },
   ],
 })

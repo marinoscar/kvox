@@ -2,7 +2,7 @@
 // `user-settings.namespace-changed` (issue #459)
 // =============================================================================
 //
-// Emitted by `UserSettingsService` after a successful PUT or PATCH of
+// Emitted by `UserSettingsChangeInterceptor` after a successful PUT or PATCH of
 // `/api/user-settings`, ONCE for every registered namespace whose stored value
 // changed (compared on `JSON.stringify` of the value before and after). It is
 // the generic replacement for the graph-specific `graph.preferences_changed`
@@ -14,18 +14,20 @@
 //
 // ⚠ Listeners must only ENQUEUE (CLAUDE.md "Every Long-Running Activity Is a
 // Queue Job"). `EventEmitter2` dispatches synchronously inside the settings
-// write; the service guards against a throwing listener, but a slow one would
+// write; the interceptor guards against a throwing listener, but a slow one would
 // still delay the response.
 //
 // IN-PROCESS ONLY AND NEVER LOGGED. The payload carries values the user already
 // owns (their own preferences), not content, but it is not written to a log or
 // a queue payload by this code.
 //
-// KVOX WORKAROUND, RECORDED FOR EPIC 1 ISSUE 1.4. The platform's
-// `UserSettingsNamespace` has no change hook and its user-settings service
-// emits no change event. When the platform's service replaces this one, keep
-// this behaviour (for example as an interceptor on the PATCH/PUT routes that
-// diffs before/after) or the graph's threshold-change re-scan stops firing.
+// PLATFORM-ADOPTION-SHIM(#466). The platform's `UserSettingsNamespace` has no
+// change hook and its user-settings service emits no change event, so the event
+// is emitted by `user-settings-change.interceptor.ts` (a before/after diff
+// around `PUT`/`PATCH /api/user-settings`). A write that does not go through
+// those routes (the profile-image upload, the user-data purge) changes only
+// `profile` / `onboarding`, which nothing subscribes to. Remove it when the
+// platform grows a namespace change hook.
 // =============================================================================
 
 export const USER_SETTINGS_NAMESPACE_CHANGED_EVENT =

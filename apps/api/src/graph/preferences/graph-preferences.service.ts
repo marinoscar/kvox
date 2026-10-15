@@ -15,7 +15,7 @@
 
 import { Injectable } from '@nestjs/common';
 
-import type { UserSettingsValue } from '../../common/types/settings.types';
+import type { UserSettingsValue } from '@marinoscar/platform-api/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   resolveGraphPreferences,

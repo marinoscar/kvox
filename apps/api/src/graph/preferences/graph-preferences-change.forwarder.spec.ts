@@ -6,8 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   USER_SETTINGS_NAMESPACE_CHANGED_EVENT,
   type UserSettingsNamespaceChangedEvent,
-} from '../../settings/user-settings/user-settings.events';
-import { UserSettingsService } from '../../settings/user-settings/user-settings.service';
+} from '../../platform/settings/user-settings.events';
+import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import {
   createMockPrismaService,
   type MockPrismaService,

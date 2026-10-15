@@ -68,7 +68,7 @@ describe('MaintenanceModule', () => {
     );
   });
 
-  it('reaches only the settings module and a JwtModule of its own', () => {
+  it('reaches only a JwtModule of its own (the settings slice is global since #466)', () => {
     const names = [...reachableModules(MaintenanceModule)]
       .map((m) => (m as { name?: string })?.name)
       .filter((name): name is string => typeof name === 'string')
@@ -85,7 +85,6 @@ describe('MaintenanceModule', () => {
       'ConfigModule',
       'JwtModule',
       'MaintenanceModule',
-      'SettingsModule',
     ]);
   });
 

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { SystemSettingsService } from '../../settings/system-settings/system-settings.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { JOB_HISTORY_PURGE_TYPE } from '../handlers/job-history-purge.handler';
 import { JobsService } from '../jobs.service';
 

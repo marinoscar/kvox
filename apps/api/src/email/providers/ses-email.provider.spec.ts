@@ -37,7 +37,7 @@ jest.mock('@aws-sdk/client-sesv2', () => ({
 import MimeNode = require('nodemailer/lib/mime-node');
 
 import { SesEmailProvider } from './ses-email.provider';
-import { CredentialsService } from '../../credentials/credentials.service';
+import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import type { EmailSettingsService } from '../email-settings.service';
 import type { EmailSettings } from '../email-settings.schema';
 import type { EmailMessage } from '../email.types';

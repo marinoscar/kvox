@@ -34,7 +34,7 @@ import {
   SMTP_CREDENTIAL_NAME,
   SMTP_CREDENTIAL_PURPOSE,
 } from './smtp-email.provider';
-import type { CredentialsService } from '../../credentials/credentials.service';
+import type { CredentialsService } from '@marinoscar/platform-api/credentials';
 import type { EmailSettingsService } from '../email-settings.service';
 import { DEFAULT_SMTP_PORT, IMPLICIT_TLS_SMTP_PORT } from '../email-settings.schema';
 import type { EmailSettings } from '../email-settings.schema';
