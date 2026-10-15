@@ -1,8 +1,8 @@
--- Storage object ownership moves to a KVox side table (issue #469, epic #467).
+-- Storage object ownership moves to a side table (issue #469, epic #467).
 --
--- storage_objects.managed_by (which KVox module owns the object: 'transcripts',
+-- storage_objects.managed_by (which app module owns the object: 'transcripts',
 -- 'notes' or 'graph') and storage_objects.part_size (the persisted multipart
--- part size) were KVox-only columns on a platform table, migration
+-- part size) were app-only columns on a platform table, migration
 -- 20260914120000_add_storage_part_size_and_managed_by, declared as the
 -- deviation kvox:storage-managed-by-part-size. This migration:
 --   1. creates kvox_object_ownership, keyed by the object id, with a composite
@@ -45,7 +45,7 @@ CREATE UNIQUE INDEX "kvox_object_ownership_object_id_org_id_key" ON "kvox_object
 -- AddForeignKey
 ALTER TABLE "kvox_object_ownership" ADD CONSTRAINT "kvox_object_ownership_object_id_org_id_fkey" FOREIGN KEY ("object_id", "org_id") REFERENCES "storage_objects"("id", "org_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Data move: every object a KVox module owns gets an ownership row.
+-- Data move: every object an app module owns gets an ownership row.
 SELECT set_config('app.rls_bypass', 'on', true);
 
 INSERT INTO "kvox_object_ownership" ("object_id", "org_id", "managed_by", "created_at")

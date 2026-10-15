@@ -26,6 +26,17 @@
 //     with 503 rather than let through: "fail open" is only for objects known to
 //     be unmanaged.
 //
+// ABORT. `DELETE .../storage/objects/<uuid>/upload/abort` is forwarded, for a
+// managed object only, to KVox's own `DELETE .../upload/abort-managed` route
+// (`KvoxMultipartController.abortManaged`) with the caller's credentials, and its
+// answer is relayed. The platform abort DELETES the object row, and the owning
+// record's `source_object_id` is `onDelete: Restrict`, so it would abort the
+// provider upload and then fail on the foreign key. The KVox route keeps the row
+// (status `failed`) and fails the transcript. The forward is an in-process
+// `inject` through the full route, so authentication, permissions and the error
+// envelope are the real ones; an unmanaged object still reaches the platform
+// handler untouched.
+//
 // The error body follows the platform's error envelope (`HttpExceptionFilter`),
 // which a raw hook reply would otherwise bypass.
 // =============================================================================
@@ -53,6 +64,27 @@ export function managedDeleteTarget(method: string, url: string, globalPrefix = 
   return match ? (match[1] as string) : null;
 }
 
+/** The object id of a `DELETE <prefix>/storage/objects/<uuid>/upload/abort` request, else null. */
+export function managedAbortTarget(method: string, url: string, globalPrefix = 'api'): string | null {
+  if (method !== 'DELETE') return null;
+
+  const path = url.split('?', 1)[0] ?? '';
+  const prefix = globalPrefix ? `/${globalPrefix.replace(/^\/+|\/+$/g, '')}` : '';
+  const match = new RegExp(`^${prefix}/storage/objects/(${UUID})/upload/abort/?$`).exec(path);
+  return match ? (match[1] as string) : null;
+}
+
+/** Request headers forwarded to the in-process abort route. */
+const FORWARDED_HEADERS = [
+  'authorization',
+  'cookie',
+  'accept',
+  'user-agent',
+  'x-request-id',
+  'x-forwarded-for',
+  'x-forwarded-proto',
+] as const;
+
 /** The ownership lookup behind the hook: a bounded single-row read. */
 @Injectable()
 export class ManagedDeleteVeto {
@@ -72,7 +104,9 @@ export class ManagedDeleteVeto {
   /** Builds the Fastify `onRequest` hook for the given global prefix. */
   hook(globalPrefix = 'api') {
     return async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
-      const objectId = managedDeleteTarget(request.method, request.url, globalPrefix);
+      const deleteId = managedDeleteTarget(request.method, request.url, globalPrefix);
+      const abortId = deleteId ? null : managedAbortTarget(request.method, request.url, globalPrefix);
+      const objectId = deleteId ?? abortId;
       if (!objectId) return;
 
       // Anonymous: let the platform guard answer 401 (see the file header).
@@ -90,6 +124,8 @@ export class ManagedDeleteVeto {
 
       if (!owner) return;
 
+      if (abortId) return this.forwardAbort(request, reply, abortId, globalPrefix);
+
       // Replying early from an async hook: return the reply so Fastify stops the chain.
       return reply.code(409).send(
         this.envelope(409, request, `This object is managed by ${owner} and cannot be deleted directly.`, {
@@ -98,6 +134,37 @@ export class ManagedDeleteVeto {
         }),
       );
     };
+  }
+
+  /** Relays the answer of the in-process KVox abort route. */
+  private async forwardAbort(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    objectId: string,
+    globalPrefix: string,
+  ): Promise<FastifyReply> {
+    const prefix = globalPrefix ? `/${globalPrefix.replace(/^\/+|\/+$/g, '')}` : '';
+    const headers: Record<string, string> = {};
+    for (const name of FORWARDED_HEADERS) {
+      const value = request.headers[name];
+      if (typeof value === 'string') headers[name] = value;
+    }
+
+    try {
+      const response = await request.server.inject({
+        method: 'DELETE',
+        url: `${prefix}/storage/objects/${objectId}/upload/abort-managed`,
+        headers,
+      });
+
+      const contentType = response.headers['content-type'];
+      if (typeof contentType === 'string') void reply.header('content-type', contentType);
+      void reply.code(response.statusCode);
+      return reply.send(response.statusCode === 204 ? undefined : response.rawPayload);
+    } catch (error) {
+      this.logger.error(`Managed abort forward failed: ${error instanceof Error ? error.message : String(error)}`);
+      return reply.code(503).send(this.envelope(503, request, 'The abort could not be completed; try again.'));
+    }
   }
 
   private envelope(status: number, request: FastifyRequest, message: string, details?: Record<string, unknown>) {

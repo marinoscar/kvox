@@ -52,11 +52,22 @@ class PlatformDeleteStandIn {
   }
 }
 
-/** Reads the caller from `x-test-user`; no header is the platform guard's 401. */
+const platformAbort = jest.fn();
+
+@Controller('storage/objects')
+class PlatformAbortStandIn {
+  @Delete(':id/upload/abort')
+  @HttpCode(204)
+  abort(@Param('id') id: string): void {
+    platformAbort(id);
+  }
+}
+
+/** Reads the caller from `Authorization: Bearer <user id>` (the header the abort forward carries); none is the platform guard's 401. */
 const testGuard = {
   canActivate(context: { switchToHttp(): { getRequest(): { headers: Record<string, string>; user?: unknown } } }) {
     const request = context.switchToHttp().getRequest();
-    const user = request.headers['x-test-user'];
+    const user = /^Bearer (.+)$/.exec(request.headers['authorization'] ?? '')?.[1];
     if (!user) return false;
     request.user = { id: user, activeOrgId: ORG };
     return true;
@@ -77,21 +88,21 @@ function uploadRow(overrides: Record<string, unknown> = {}) {
 
 describe('KVox storage routes (mocked HTTP)', () => {
   let app: NestFastifyApplication;
-  let managed: { get: jest.Mock; run: jest.Mock };
+  let managed: { get: jest.Mock; run: jest.Mock; abortManaged: jest.Mock };
   let lister: { listParts: jest.Mock };
   let ownership: { managedBy: jest.Mock };
   let findMany: jest.Mock;
   let count: jest.Mock;
 
   beforeAll(async () => {
-    managed = { get: jest.fn(), run: jest.fn() };
+    managed = { get: jest.fn(), run: jest.fn(), abortManaged: jest.fn() };
     lister = { listParts: jest.fn() };
     ownership = { managedBy: jest.fn() };
     findMany = jest.fn();
     count = jest.fn();
 
     const moduleRef = await Test.createTestingModule({
-      controllers: [PlatformDeleteStandIn, KvoxMultipartController, KvoxFilesController],
+      controllers: [PlatformDeleteStandIn, PlatformAbortStandIn, KvoxMultipartController, KvoxFilesController],
       providers: [
         { provide: KvoxManagedObjectsService, useValue: managed },
         { provide: KvoxS3PartLister, useValue: lister },
@@ -139,10 +150,11 @@ describe('KVox storage routes (mocked HTTP)', () => {
     );
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
+    managed.abortManaged.mockResolvedValue(undefined);
   });
 
-  const asAlice = { 'x-test-user': ALICE, authorization: 'Bearer t' };
-  const asBob = { 'x-test-user': BOB, authorization: 'Bearer t' };
+  const asAlice = { authorization: `Bearer ${ALICE}` };
+  const asBob = { authorization: `Bearer ${BOB}` };
 
   describe('POST /api/storage/objects/:id/upload/parts', () => {
     it('signs parts 11-110 (past the platform\'s first ten) for the uploader', async () => {
@@ -281,6 +293,41 @@ describe('KVox storage routes (mocked HTTP)', () => {
 
       expect(response.statusCode).not.toBe(409);
       expect(ownership.managedBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /api/storage/objects/:id/upload/abort (managed objects)', () => {
+    it('is handled KVox-side for a managed object: 204, the platform abort never runs', async () => {
+      const response = await app.inject({ method: 'DELETE', url: `/api/storage/objects/${MANAGED}/upload/abort`, headers: asAlice });
+
+      expect(response.statusCode).toBe(204);
+      expect(managed.abortManaged).toHaveBeenCalledWith(MANAGED, ALICE, { orgId: ORG });
+      expect(platformAbort).not.toHaveBeenCalled();
+    });
+
+    it('relays the KVox route\'s 404 for another user\'s managed upload', async () => {
+      const { NotFoundException } = jest.requireActual('@nestjs/common');
+      managed.abortManaged.mockRejectedValue(new NotFoundException('Upload not found'));
+
+      const response = await app.inject({ method: 'DELETE', url: `/api/storage/objects/${MANAGED}/upload/abort`, headers: asBob });
+
+      expect(response.statusCode).toBe(404);
+      expect(platformAbort).not.toHaveBeenCalled();
+    });
+
+    it('passes a plain upload straight to the platform abort', async () => {
+      const response = await app.inject({ method: 'DELETE', url: `/api/storage/objects/${PLAIN}/upload/abort`, headers: asAlice });
+
+      expect(response.statusCode).toBe(204);
+      expect(platformAbort).toHaveBeenCalledWith(PLAIN);
+      expect(managed.abortManaged).not.toHaveBeenCalled();
+    });
+
+    it('does not forward an anonymous abort', async () => {
+      const response = await app.inject({ method: 'DELETE', url: `/api/storage/objects/${MANAGED}/upload/abort` });
+
+      expect(response.statusCode).toBe(204); // reaches the (unguarded) platform stand-in, whose real guard answers 401
+      expect(managed.abortManaged).not.toHaveBeenCalled();
     });
   });
 });

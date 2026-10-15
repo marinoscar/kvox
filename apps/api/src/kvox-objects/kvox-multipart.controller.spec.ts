@@ -24,14 +24,14 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 describe('KvoxMultipartController', () => {
-  let managed: { get: jest.Mock };
+  let managed: { get: jest.Mock; abortManaged: jest.Mock };
   let lister: { listParts: jest.Mock };
   let storage: { getSignedUploadUrl: jest.Mock };
   let config: { get: jest.Mock };
   let controller: KvoxMultipartController;
 
   beforeEach(() => {
-    managed = { get: jest.fn().mockResolvedValue(row()) };
+    managed = { get: jest.fn().mockResolvedValue(row()), abortManaged: jest.fn().mockResolvedValue(undefined) };
     lister = { listParts: jest.fn().mockResolvedValue([{ partNumber: 1, etag: '"a"', size: 10 * MIB }]) };
     storage = {
       getSignedUploadUrl: jest.fn(async (_key: string, _uploadId: string, partNumber: number) => `https://s3.test/part/${partNumber}`),
@@ -115,6 +115,23 @@ describe('KvoxMultipartController', () => {
       ['missing', {}],
     ])('rejects %s', (_label, body) => {
       expect(presignPartsSchema.safeParse(body).success).toBe(false);
+    });
+  });
+
+  describe('abortManaged', () => {
+    it('is DELETE :id/upload/abort-managed and delegates to the gateway in the caller\'s organization', async () => {
+      const proto = KvoxMultipartController.prototype;
+      expect(Reflect.getMetadata(PATH_METADATA, proto.abortManaged)).toBe(':id/upload/abort-managed');
+      expect(Reflect.getMetadata(METHOD_METADATA, proto.abortManaged)).toBe(RequestMethod.DELETE);
+
+      await expect(controller.abortManaged(OBJECT_ID, USER, ORG)).resolves.toBeUndefined();
+      expect(managed.abortManaged).toHaveBeenCalledWith(OBJECT_ID, USER, { orgId: ORG });
+    });
+
+    it('propagates the gateway\'s 404', async () => {
+      const notFound = new NotFoundException('Upload not found');
+      managed.abortManaged.mockRejectedValueOnce(notFound);
+      await expect(controller.abortManaged(OBJECT_ID, OTHER, ORG)).rejects.toBe(notFound);
     });
   });
 

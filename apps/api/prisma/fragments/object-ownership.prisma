@@ -2,14 +2,14 @@
 // Storage object ownership (issue #469, epic #467)
 // =============================================================================
 //
-// The platform's `storage_objects` table has no notion of which KVox module
-// owns an object. Until #469 KVox added two columns to it (`managed_by`,
+// The platform's `storage_objects` table has no notion of which app module
+// owns an object. Until #469 the app added two columns to it (`managed_by`,
 // `part_size`), declared as the temporary deviation
 // `kvox:storage-managed-by-part-size`. This side table replaces `managed_by`;
 // `part_size` is dropped (the part size is now the platform's deployment-wide
 // `storage.partSize` setting).
 //
-// A row means "this object belongs to a KVox module (transcripts, notes or
+// A row means "this object belongs to an app module (transcripts, notes or
 // graph)": the generic object list hides it (`GET /api/kvox/files`) and the
 // generic `DELETE` answers 409. An object with no row is a plain upload.
 //

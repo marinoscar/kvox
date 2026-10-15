@@ -1,4 +1,10 @@
-import { ManagedDeleteVeto, installManagedDeleteHook, managedDeleteTarget, MANAGED_BY_MODULE } from './managed-delete.hook';
+import {
+  ManagedDeleteVeto,
+  installManagedDeleteHook,
+  managedAbortTarget,
+  managedDeleteTarget,
+  MANAGED_BY_MODULE,
+} from './managed-delete.hook';
 
 const ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -49,6 +55,16 @@ describe('managedDeleteTarget', () => {
   it('honours a different global prefix', () => {
     expect(managedDeleteTarget('DELETE', `/v1/storage/objects/${ID}`, 'v1')).toBe(ID);
     expect(managedDeleteTarget('DELETE', `/storage/objects/${ID}`, '')).toBe(ID);
+  });
+});
+
+describe('managedAbortTarget', () => {
+  it('matches only DELETE <prefix>/storage/objects/<uuid>/upload/abort', () => {
+    expect(managedAbortTarget('DELETE', `/api/storage/objects/${ID}/upload/abort`)).toBe(ID);
+    expect(managedAbortTarget('DELETE', `/api/storage/objects/${ID}/upload/abort/?x=1`)).toBe(ID);
+    expect(managedAbortTarget('POST', `/api/storage/objects/${ID}/upload/abort`)).toBeNull();
+    expect(managedAbortTarget('DELETE', `/api/storage/objects/${ID}/upload/abort-managed`)).toBeNull();
+    expect(managedAbortTarget('DELETE', `/api/storage/objects/${ID}`)).toBeNull();
   });
 });
 
@@ -118,6 +134,89 @@ describe('ManagedDeleteVeto', () => {
 
     expect(reply.statusCode).toBe(503);
     expect(JSON.stringify(reply.body)).not.toContain('connection refused');
+  });
+});
+
+describe('ManagedDeleteVeto: upload abort', () => {
+  const ABORT_URL = `/api/storage/objects/${ID}/upload/abort`;
+  let managedBy: jest.Mock;
+  let inject: jest.Mock;
+  let veto: ManagedDeleteVeto;
+
+  function abortRequest(overrides: Record<string, unknown> = {}) {
+    return makeRequest({ url: ABORT_URL, server: { inject }, headers: { authorization: 'Bearer t', host: 'x', 'x-ignored': 'y' }, ...overrides });
+  }
+
+  beforeEach(() => {
+    managedBy = jest.fn().mockResolvedValue(new Map([[ID, 'transcripts']]));
+    inject = jest.fn().mockResolvedValue({ statusCode: 204, headers: {}, rawPayload: Buffer.alloc(0) });
+    veto = new ManagedDeleteVeto({} as never, { managedBy } as never);
+  });
+
+  it('forwards a managed abort to the KVox route with the caller\'s credentials and relays the answer', async () => {
+    const reply = makeReply();
+    const reply204 = await veto.hook()(abortRequest() as never, reply as never);
+
+    expect(reply204).toBe(reply);
+    expect(inject).toHaveBeenCalledWith({
+      method: 'DELETE',
+      url: `/api/storage/objects/${ID}/upload/abort-managed`,
+      headers: { authorization: 'Bearer t' },
+    });
+    expect(reply.statusCode).toBe(204);
+    expect(reply.send).toHaveBeenCalledWith(undefined);
+  });
+
+  it('relays an error answer (status, content type and body) from the KVox route', async () => {
+    const payload = Buffer.from('{"code":"NOT_FOUND"}');
+    inject.mockResolvedValue({ statusCode: 404, headers: { 'content-type': 'application/json' }, rawPayload: payload });
+    const reply: { statusCode: number; header: jest.Mock; code: jest.Mock; send: jest.Mock } = {
+      statusCode: 0,
+      header: jest.fn(),
+      code: jest.fn(),
+      send: jest.fn(),
+    };
+    reply.code.mockImplementation((status: number) => {
+      reply.statusCode = status;
+      return reply;
+    });
+    reply.send.mockImplementation(() => reply);
+
+    await veto.hook()(abortRequest() as never, reply as never);
+
+    expect(reply.statusCode).toBe(404);
+    expect(reply.header).toHaveBeenCalledWith('content-type', 'application/json');
+    expect(reply.send).toHaveBeenCalledWith(payload);
+  });
+
+  it('lets an unmanaged abort reach the platform handler', async () => {
+    managedBy.mockResolvedValue(new Map());
+    const reply = makeReply();
+
+    await expect(veto.hook()(abortRequest() as never, reply as never)).resolves.toBeUndefined();
+
+    expect(inject).not.toHaveBeenCalled();
+    expect(reply.send).not.toHaveBeenCalled();
+  });
+
+  it('passes an anonymous abort on so the platform guard answers 401', async () => {
+    const reply = makeReply();
+    await veto.hook()(abortRequest({ headers: {} }) as never, reply as never);
+    expect(managedBy).not.toHaveBeenCalled();
+    expect(inject).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with 503 when the lookup or the forward fails', async () => {
+    managedBy.mockRejectedValueOnce(new Error('db down'));
+    const lookupFailure = makeReply();
+    await veto.hook()(abortRequest() as never, lookupFailure as never);
+    expect(lookupFailure.statusCode).toBe(503);
+
+    inject.mockRejectedValueOnce(new Error('boom'));
+    const forwardFailure = makeReply();
+    await veto.hook()(abortRequest() as never, forwardFailure as never);
+    expect(forwardFailure.statusCode).toBe(503);
+    expect(JSON.stringify(forwardFailure.body)).not.toContain('boom');
   });
 });
 
