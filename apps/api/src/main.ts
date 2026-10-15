@@ -3,6 +3,10 @@ import './instrumentation';
 // Registers the settings namespaces the DTOs below are composed from. Must stay
 // the first import after instrumentation (see kvox.manifest.ts).
 import './kvox.manifest';
+// Fills core's role, permission, user-owned-model and model-ownership registries
+// (#465). Before anything that reads them (the guards, the seed catalog, the
+// OpenAPI RBAC docs); the registries freeze when the application bootstraps.
+import './app-registrations/registrations';
 
 import { NestFactory } from '@nestjs/core';
 import {
@@ -10,6 +14,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { Logger } from '@nestjs/common';
+import { verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from './app.module';
@@ -25,6 +30,11 @@ async function bootstrap() {
   if (process.env.NODE_ENV === 'production' && process.env.TEST_AUTH_ENABLED === 'true') {
     throw new Error('TEST_AUTH_ENABLED must not be true in production');
   }
+
+  // `TENANCY_MODE` (#465): parsed and logged once, BEFORE the application
+  // exists, so a typo never opens a database connection. Unset is `single`, the
+  // only mode KVox runs in.
+  verifyTenancyModeAtStartup(process.env, logger);
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,

@@ -16,7 +16,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { ErrorDto } from '../common/dto/error.dto';
-import { RBAC_EXTENSION_KEY } from '../auth/decorators/auth.decorator';
+import { RBAC_EXTENSION_KEY } from '@marinoscar/platform-api/identity';
 import { applyDataEnvelope } from './data-envelope';
 import { buildApiDescription } from './description';
 import { applyNullableFor31 } from './nullable';

@@ -1,212 +1,47 @@
 // =============================================================================
-// Role Constants
+// Role and permission constants (issue #465, epic #462)
+// =============================================================================
+//
+// DERIVED, NOT DECLARED. The roles and permissions the platform's slices
+// enforce are declared by `@marinoscar/platform-api` (`PLATFORM_ROLES`,
+// `PLATFORM_PERMISSIONS`); KVox's own eight domain permissions are declared in
+// `app-registrations/permissions.ts`. This file only turns those declaration
+// maps into the `ROLES` / `PERMISSIONS` constants the rest of the codebase
+// imports, so a permission string can never drift from what the seed writes
+// and what the guards check.
+//
+// It has no side effects: it registers nothing (that is
+// `app-registrations/registrations.ts`).
+//
+// ROLE SEMANTICS CHANGED WITH THE PLATFORM. `admin` is the one SYSTEM role
+// (held in `user_roles`); `org_admin`, `contributor` and `viewer` are ORG
+// roles (held on a membership). `@Auth({ roles: ['admin'] })` therefore means
+// "a deployment operator"; an org role never satisfies it.
 // =============================================================================
 
-export const ROLES = {
-  ADMIN: 'admin',
-  CONTRIBUTOR: 'contributor',
-  VIEWER: 'viewer',
-} as const;
+import { permissionIds, roleIds } from '@marinoscar/platform-api/core';
+import { PLATFORM_PERMISSIONS, PLATFORM_ROLES } from '@marinoscar/platform-api/manifest';
+
+import { KVOX_PERMISSIONS } from '../../app-registrations/permissions';
+
+export const ROLES = roleIds(PLATFORM_ROLES);
 
 export type RoleName = (typeof ROLES)[keyof typeof ROLES];
 
-// =============================================================================
-// Permission Constants
-// =============================================================================
-
 export const PERMISSIONS = {
-  // System settings
-  SYSTEM_SETTINGS_READ: 'system_settings:read',
-  SYSTEM_SETTINGS_WRITE: 'system_settings:write',
-
-  // User settings
-  USER_SETTINGS_READ: 'user_settings:read',
-  USER_SETTINGS_WRITE: 'user_settings:write',
-
-  // Users
-  USERS_READ: 'users:read',
-  USERS_WRITE: 'users:write',
-
-  // RBAC
-  RBAC_MANAGE: 'rbac:manage',
-
-  // Allowlist
-  ALLOWLIST_READ: 'allowlist:read',
-  ALLOWLIST_WRITE: 'allowlist:write',
-
-  // Storage
-  STORAGE_READ: 'storage:read',
-  STORAGE_WRITE: 'storage:write',
-  STORAGE_DELETE_ANY: 'storage:delete_any',
-
-  // Jobs — the background queue (#256, epic #254)
-  JOBS_READ: 'jobs:read',
-  JOBS_WRITE: 'jobs:write',
-
-  // Worker nodes — the fleet that executes those jobs (#256, epic #254).
-  //
-  // DELIBERATELY SPLIT FROM `jobs:*`, not folded into it. The Settings UI
-  // Pattern (CLAUDE.md rule 3) requires a card's `permission` to be the exact
-  // string the API controller enforces, so a Workers card gated on `jobs:read`
-  // would be advertising a permission the nodes controller never checks — the
-  // hub would hide or show the card on evidence unrelated to whether the
-  // request behind it will be authorized. The two are also genuinely different
-  // questions: "what work is queued" is operational, "which machines are
-  // attached to this deployment" is closer to infrastructure inventory, and a
-  // deployment may well want to grant one without the other.
-  NODES_READ: 'nodes:read',
-  NODES_WRITE: 'nodes:write',
-
-  // Database backup (#256, epic #254).
-  //
-  // `:restore` IS A THIRD PERMISSION, not part of `:write`, because the two
-  // are not the same act. Writing is routine scheduling — change the hour,
-  // change how many copies are kept — and is reversible by writing again.
-  // Restoring renames the live database and restarts the process: it is
-  // destructive, it interrupts every session, and it is exactly the operation
-  // an operator should have to be granted on purpose. Folding it into `:write`
-  // would mean anyone allowed to adjust the backup schedule is also allowed to
-  // roll the database back over the top of production.
-  DB_BACKUP_READ: 'db_backup:read',
-  DB_BACKUP_WRITE: 'db_backup:write',
-  DB_BACKUP_RESTORE: 'db_backup:restore',
-
-  // Notification broadcasts — admin messages fanned out to every user
-  // (#320, epic #319).
-  //
-  // DELIBERATELY SPLIT FROM `system_settings:*`, not folded into it, for the
-  // same reason `nodes:*` is split from `jobs:*` above. Sending a message to
-  // every user in the deployment is not editing the settings document — it
-  // is a one-way broadcast with its own audience, its own history, and no
-  // "current value" to read back the way a settings blob has. The Settings
-  // UI Pattern (CLAUDE.md rule 3) requires a hub card's `permission` to be
-  // the exact string its controller enforces, so a Broadcasts card gated on
-  // `system_settings:read` would mirror a permission its controller never
-  // checks — the hub would decide reachability on evidence unrelated to
-  // whether the request behind it will actually be authorized.
-  //
-  // Plural, matching this file's own convention for collection resources
-  // (`jobs:*`, `nodes:*`, `users:*`) rather than the singular `broadcast:*`.
-  BROADCASTS_READ: 'broadcasts:read',
-  BROADCASTS_WRITE: 'broadcasts:write',
-
-  // Web Push (VAPID) configuration — runtime key generation/rotation
-  // (#355).
-  //
-  // DELIBERATELY SPLIT FROM `system_settings:*`, not folded into it, for the
-  // same reason `nodes:*` is split from `jobs:*` and `broadcasts:*` from
-  // `system_settings:*` above. Generating or rotating VAPID key material has
-  // a real, described blast radius that a routine settings edit does not:
-  // every existing push subscriber goes dark until their browser next
-  // resubscribes against the new public key. Folding this into
-  // `system_settings:write` would mean anyone trusted to edit a system setting
-  // is also trusted to knock out push delivery for the entire user base. The
-  // Settings UI Pattern (CLAUDE.md rule 3) requires a hub card's
-  // `permission` to be the exact string its controller enforces, so a Push
-  // Configuration card gated on `system_settings:*` would mirror a
-  // permission `PushConfigController` never checks.
-  PUSH_READ: 'push:read',
-  PUSH_WRITE: 'push:write',
-
-  // Transcripts (#24, epic #19).
-  //
-  // GRANTED TO ALL THREE ROLES — Admin, Contributor AND Viewer — which is
-  // the OPPOSITE posture from every operational pair above (`nodes:*`,
-  // `broadcasts:*`, `push:*`, `db_backup:*`, all Admin-only). Those exist to
-  // gate infrastructure and organisation-wide broadcast authority a fresh
-  // account should not start with; transcribing a recording is the core
-  // action this product exists to let someone do, and a new user's default
-  // role is Viewer (`DEFAULT_ROLE` below). A permission model that left a
-  // brand-new signup unable to record their first conversation until an
-  // admin promoted them would contradict the product's own onboarding.
-  // `transcripts:read` gates every read endpoint (list, get, segments,
-  // words, versions, exporters); `transcripts:write` is the ADDITIONAL
-  // requirement `TranscriptAccessService`'s `edit`-level check applies on
-  // top of a share (docs/specs/transcription.md §6.1-6.2) — a viewer share
-  // can never correct a transcript no matter what a future role grants,
-  // because a share caps the ceiling an RBAC permission can raise a user
-  // to, never the floor.
-  //
-  // THERE IS DELIBERATELY NO `transcripts:read_any`. Every other "any"-scoped
-  // permission in this codebase (`storage:read_any`, all of `db_backup:*`,
-  // `nodes:*` over the whole fleet) exists because the resource it governs is
-  // either infrastructure or explicitly shared organisational state. A
-  // transcript is neither — it is somebody's private recorded conversation —
-  // and no permission string exists for reading another user's transcript
-  // because that access is out of scope for this feature, not merely unused
-  // today (spec §6.2, §10). The corollary this permission pair does NOT
-  // change: `TranscriptAccessService.require` answers a caller with no
-  // access a plain 404, never a 403 — a 403 would confirm the transcript
-  // exists, which is itself information a stranger has no business learning
-  // about someone's private conversation (spec §6.1).
-  TRANSCRIPTS_READ: 'transcripts:read',
-  TRANSCRIPTS_WRITE: 'transcripts:write',
-
-  // Notes (#48, epic #45).
-  //
-  // GRANTED TO ALL THREE ROLES, mirroring `transcripts:*` exactly and for
-  // the identical reason (docs/specs/notes.md §6.3): generating a note is
-  // the core product action this epic exists to enable, and a fresh
-  // account's default role is Viewer. `notes:read` gates every note read
-  // (list, get, versions, the generation stream); `notes:write` gates
-  // create/regenerate/edit/delete AND, per spec §6.3, gates
-  // `POST /api/note-templates/:id/preview` — a preview reads a template
-  // (covered by `note_templates:read`) but its ACTION is generating real
-  // content through the caller's own AI key, the same mechanism
-  // `note.generate` runs, so it is gated by the permission that governs
-  // generating, not by any permission belonging to the template CRUD
-  // surface.
-  //
-  // THERE IS DELIBERATELY NO `notes:read_any` — not even for an admin. A
-  // note is derived from somebody's private conversation, exactly like a
-  // transcript (see the `transcripts:*` comment above), and no permission
-  // string for reading another user's note exists anywhere in this design,
-  // for any role, ever. `NoteAccessService.require` answers a caller with
-  // no access a plain 404, never a 403, for the identical reason
-  // `TranscriptAccessService` does.
-  NOTES_READ: 'notes:read',
-  NOTES_WRITE: 'notes:write',
-
-  // Note templates (#48, epic #45).
-  //
-  // A SEPARATE PAIR FROM `notes:*`, not folded in — the same "a permission
-  // split at the API is never re-merged in the registry" discipline
-  // `docs/specs/settings-ui.md` §3 states for `nodes:read` staying apart
-  // from `jobs:read`: templates and notes are governed by two different
-  // controllers with two different write surfaces (editing a recipe versus
-  // generating content). `note_templates:write` gates creating, editing and
-  // deleting a user's OWN custom templates only — it does not gate
-  // built-ins, which are immutable through the API regardless of any
-  // permission any role holds (a built-in's `PATCH`/`DELETE` answers 403,
-  // a deliberate divergence from `notes:*`'s 404-never-403 posture, because
-  // a built-in template's existence is public by design — see
-  // docs/specs/notes.md §7.2).
-  NOTE_TEMPLATES_READ: 'note_templates:read',
-  NOTE_TEMPLATES_WRITE: 'note_templates:write',
-
-  // Knowledge graph (#354, epic #344, docs/specs/ontology.md §12).
-  //
-  // Seeded to ALL THREE roles, the same posture as `notes:*`/`transcripts:*`:
-  // curating one's own connected knowledge is a core product action, and this
-  // app's default role is Viewer. `graph:read` gates every read of one's own
-  // entities, relations, facts, proposals and the effective ontology;
-  // `graph:write` gates committing proposals, editing, merging and forgetting
-  // entities, and managing attribute definitions.
-  //
-  // THERE IS DELIBERATELY NO `GRAPH_READ_ANY` — not even for an admin. A graph
-  // is derived from somebody's private conversations and notes, exactly like a
-  // transcript or a note, and no permission string for reading another user's
-  // graph exists anywhere in this design, for any role, ever.
-  // `GraphAccessService.require` answers a caller with no access a plain 404,
-  // never a 403, for the identical reason `NoteAccessService` does.
-  GRAPH_READ: 'graph:read',
-  GRAPH_WRITE: 'graph:write',
+  ...permissionIds(PLATFORM_PERMISSIONS),
+  ...permissionIds(KVOX_PERMISSIONS),
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-// =============================================================================
-// Default Role
-// =============================================================================
-
+/** The org role a new membership gets (the platform's `defaultOrgRole`). */
 export const DEFAULT_ROLE = ROLES.VIEWER;
+
+// Type the platform's `@Auth({ roles, permissions })` with this app's ids, so a
+// typo in a permission string fails the typecheck instead of failing closed at
+// run time.
+declare module '@marinoscar/platform-api/identity' {
+  interface IdentityPermissionIds extends Record<PermissionName, true> {}
+  interface IdentityRoleIds extends Record<RoleName, true> {}
+}
