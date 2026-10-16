@@ -3,14 +3,15 @@
 // =============================================================================
 //
 // One assistant turn of the read-only graph agent: a tool-calling loop over
-// `AiProvider.chat()` (#359) with the `AskToolset` (#377), on the asking
-// user's OWN AI key, writing the answer into `ask_messages.content` as it is
-// generated. A turn takes several model calls and tool executions — tens of
+// `KvoxAi.chat()` (#476: the platform's streamed `stream()`, full history every
+// call) with the `AskToolset` (#377), on the asking user's OWN AI key (the
+// platform resolves it per call; this file never sees it), writing the answer
+// into `ask_messages.content` as it is generated. A turn takes several model calls and tool executions — tens of
 // seconds — so under CLAUDE.md's "Every Long-Running Activity Is a Queue Job"
 // it is a job, and the SSE stream (#379) is a VIEW over the row this writes
 // (Notes rule 1): the turn completes identically whether anyone is watching.
 //
-//   load → re-resolve the model → key → user → `streaming` → history within
+//   load → re-check readiness (model, key) → user → `streaming` → history within
 //   the input budget → register the per-user throttle key → loop:
 //     call (`toolChoice: 'auto'`, or `'none'` once a cap is hit) →
 //       tool calls? execute each (≤ 4), record each in `tool_calls` → again
@@ -52,9 +53,10 @@
 // -----------------------------------------------------------------------------
 //
 //   row gone / not `pending`            → return (idempotent, at-least-once)
-//   resolver 409/400 at run time        → `failed` (`auth` for a missing key,
+//   readiness refusal at run time       → `failed` (`auth` for a missing key,
 //                                          else `other`), return
-//   `AiAuthError`                       → `failed`/`auth`, return
+//   `AiAuthError` (the platform's key      → `failed`/`auth`, return
+//   errors map to it)
 //   `AiRefusedError` / `content_filter` → `failed`/`refusal`, return
 //   `AiBudgetError`                     → `failed`/`budget`, return
 //   call timeout                        → `failed`/`timeout`, return
@@ -73,12 +75,23 @@
 // never the question, the answer, a tool argument or a result.
 // =============================================================================
 
-import { HttpException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { Prisma, type AskErrorClass, type AskFinishReason, type Job } from '@prisma/client';
 
-import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai/ai-errors';
-import { AiTaskModelResolver, type AiModelResolution } from '../../ai/ai-task-model-resolver.service';
+import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai-port/ai-errors';
+import { budgetRefusalMessage, computeTokenBudget, OUTPUT_RESERVE_TOKENS } from '../../ai-port/ai-token-budget';
+import {
+  KVOX_AI,
+  type KvoxAi,
+  type KvoxAiReadiness,
+  type KvoxChatMessage,
+  type KvoxChatRequest,
+  type KvoxReasoningEffort,
+  type KvoxToolCall,
+  type KvoxUsage,
+} from '../../ai-port/kvox-ai';
+import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 import {
   type JobExecutionProfile,
   type JobHandler,
@@ -86,15 +99,6 @@ import {
   ProviderThrottleService,
   RateLimitError,
 } from '@marinoscar/platform-api/jobs';
-import {
-  createProviderContext,
-  type AiChatMessage,
-  type AiChatRequest,
-  type AiProviderContext,
-  type AiToolCall,
-  type AiUsage,
-} from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
 import {
   PRINCIPAL_USER_INCLUDE,
   toRequestUser,
@@ -105,7 +109,7 @@ import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { resolveServiceName } from '../../common/otel/telemetry-identity';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
 import { StreamFlusher } from '../../notes/generation/stream-flusher';
-import { budgetRefusalMessage, computeTokenBudget } from '../../ai/ai-token-budget';
+import { providerLabelOf } from '../../notes/generation/ai-readiness';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fitToBudget, messageTokens, MESSAGE_OVERHEAD_TOKENS, selectHistory, type AskHistoryRow } from '../ask-history';
@@ -218,8 +222,8 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
-    private readonly resolver: AiTaskModelResolver,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
+    private readonly settings: KvoxAiSettings,
     private readonly throttle: ProviderThrottleService,
     private readonly toolset: AskToolset,
   ) {}
@@ -267,7 +271,7 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
 
     await tracer.startActiveSpan(ASK_RESPOND_JOB_TYPE, async (span) => {
       try {
-        await this.respond(payload, row, state);
+        await this.respond(payload, row, state, job.id);
         span.setStatus({ code: SpanStatusCode.OK });
       } catch (error) {
         span.setStatus({ code: SpanStatusCode.ERROR, message: error instanceof Error ? error.name : 'error' });
@@ -350,28 +354,26 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     payload: AskRespondPayload,
     row: { id: string; createdAt: Date; conversation: { id: string; scopeEntityId: string | null } },
     state: TurnState,
+    jobId: string,
   ): Promise<void> {
     const started = this.clock();
     const { userId } = payload;
 
-    // 1. The model, RE-VALIDATED against today's policy (an administrator may
-    //    have narrowed it since the request).
-    const resolution = await this.resolveModel(userId, payload.model);
-    const provider = resolution.provider;
-    if (typeof provider.chat !== 'function') {
-      throw new AskTurnFailure('other', `The "${provider.id}" provider cannot call tools, which Ask needs.`);
+    // 1. The model and the user's key, RE-VALIDATED against today's policy (an
+    //    administrator may have narrowed it, or the user removed the key, since
+    //    the request). The key itself never reaches this file: the platform
+    //    resolves it per call.
+    const readiness = await this.ai.readiness(userId, 'graph_agent', payload.model);
+    if (!readiness.ok || !readiness.hasKey || readiness.model === null || readiness.provider === null) {
+      throw notReadyFailure(readiness, payload.model);
     }
-    const settings = provider.settingsSchema.safeParse(
-      (resolution.policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AskTurnFailure('other', `This deployment's configuration for provider "${provider.id}" is invalid.`);
-    }
-
-    // 2. The user's own key, as late as possible and never stored.
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) {
-      throw new AskTurnFailure('auth', `No ${provider.label} API key is saved for your account.`);
+    const model = readiness.model;
+    const providerId = readiness.provider;
+    const providerLabel = providerLabelOf(providerId);
+    const countTokens = (text: string): number => this.ai.countTokens(text, model);
+    const policy = await this.settings.get();
+    if (readiness.contextWindowTokens === null) {
+      throw new AskTurnFailure('other', `This deployment has no context window recorded for the model "${model}".`);
     }
 
     // 3. The asker, with their CURRENT permissions — the tools authorise with them.
@@ -380,7 +382,7 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     // 4. `pending → streaming`, recording the model actually used (spec §20).
     const claimed = await this.prisma.askMessage.updateMany({
       where: { id: row.id, status: 'pending' },
-      data: { status: 'streaming', model: resolution.model, provider: resolution.providerId },
+      data: { status: 'streaming', model, provider: providerId },
     });
     if (claimed.count === 0) throw new AskTurnGone();
 
@@ -388,24 +390,25 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     const toolCtx = await this.toolset.createContext(user, {
       scopeEntityId: row.conversation.scopeEntityId,
       now: new Date(this.clock()),
-      countTokens: resolution.countTokens,
+      countTokens,
     });
     const scope = await this.registerScope(userId, row.conversation.scopeEntityId, toolCtx);
 
     // 6. History within the input budget — refused, never truncated, when the
     //    question alone does not fit (Notes rule 4).
     const definitions = this.toolset.definitions();
-    const toolDefinitionTokens = resolution.countTokens(JSON.stringify(definitions));
+    const toolDefinitionTokens = countTokens(JSON.stringify(definitions));
     // #436: the model's own limits, the deployment's optional caps, Ask's own
     // answer clamp as a TASK bound (headroom for the effort this turn sends is
     // added on top of it, bounded by the model's maximum).
     const budget = computeTokenBudget({
-      contextWindowTokens: resolution.modelLimits.contextWindowTokens,
-      modelMaxOutputTokens: resolution.modelLimits.maxOutputTokens,
-      policyMaxOutputTokens: resolution.policy.maxOutputTokens,
-      policyMaxInputTokens: resolution.policy.maxInputTokens,
+      contextWindowTokens: readiness.contextWindowTokens,
+      modelMaxOutputTokens:
+        readiness.maxOutputTokens ?? Math.min(readiness.contextWindowTokens, OUTPUT_RESERVE_TOKENS),
+      policyMaxOutputTokens: policy.maxOutputTokens,
+      policyMaxInputTokens: policy.maxInputTokens,
       taskMaxOutputTokens: ASK_MAX_OUTPUT_TOKENS,
-      reasoningEffort: resolution.reasoningEffort,
+      reasoningEffort: readiness.reasoningEffort,
     });
     const { question, history } = await this.loadHistory(row);
     const fit = fitToBudget({
@@ -414,28 +417,33 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
       question,
       availableTokens: budget.availableInputTokens,
       reservedTokens: toolDefinitionTokens,
-      countTokens: resolution.countTokens,
+      countTokens,
     });
     if (!fit.ok) {
       throw new AiBudgetError(
         budgetRefusalMessage({
           promptTokens: fit.requiredTokens,
           availableInputTokens: budget.availableInputTokens,
-          model: resolution.model,
+          model,
         }),
         fit.requiredTokens,
         budget.availableInputTokens,
-        provider.id,
+        providerId,
       );
     }
 
     // 7. THE PER-USER BUCKET, immediately before the first call (Notes rule 3).
     this.throttle.registerProviderKey(this.type, aiProviderThrottleKey(userId));
 
-    const ctx = createProviderContext(apiKey, settings.data as never);
     const outcome = await this.loop({
-      ctx,
-      resolution,
+      userId,
+      jobId,
+      model,
+      providerId,
+      providerLabel,
+      reasoningEffort: readiness.reasoningEffort,
+      timeoutMs: Math.min(ASK_CALL_TIMEOUT_MS, policy.requestTimeoutMs),
+      countTokens,
       messages: fit.messages,
       toolCtx,
       state,
@@ -448,7 +456,7 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     // 8. Citations, checked against THIS turn's handles.
     const content = state.flusher.content;
     if (content.trim().length === 0) {
-      throw new AskTurnFailure('refusal', `${provider.label} returned no answer.`);
+      throw new AskTurnFailure('refusal', `${providerLabel} returned no answer.`);
     }
     const markers = parseCitationMarkers(content);
     const sources = await loadCitationSources(this.prisma, userId, citationSourceRequest(markers, toolCtx.handles));
@@ -477,9 +485,16 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
    * `state.flusher` (and flushed as it went).
    */
   private async loop(args: {
-    ctx: AiProviderContext<never>;
-    resolution: AiModelResolution;
-    messages: AiChatMessage[];
+    userId: string;
+    jobId: string;
+    model: string;
+    providerId: string;
+    providerLabel: string;
+    reasoningEffort: KvoxReasoningEffort;
+    /** The per-call backstop; the port combines it with `ai.requestTimeoutMs`. */
+    timeoutMs: number;
+    countTokens: (text: string) => number;
+    messages: KvoxChatMessage[];
     toolCtx: AskToolContext;
     state: TurnState;
     started: number;
@@ -487,14 +502,12 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     toolDefinitionTokens: number;
     maxOutputTokens: number;
   }): Promise<AskFinishReason> {
-    const { resolution, state, toolCtx } = args;
-    const provider = resolution.provider;
+    const { state, toolCtx } = args;
     const messages = [...args.messages];
     const definitions = this.toolset.definitions();
-    const timeoutMs = Math.min(ASK_CALL_TIMEOUT_MS, resolution.policy.requestTimeoutMs);
 
     for (;;) {
-      const used = messageTokens(messages, resolution.countTokens) + args.toolDefinitionTokens;
+      const used = messageTokens(messages, args.countTokens) + args.toolDefinitionTokens;
       const forced: AskFinishReason | null =
         state.steps >= ASK_MAX_TOOL_STEPS
           ? 'step_cap'
@@ -504,18 +517,22 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
               ? 'token_cap'
               : null;
 
-      const request: AiChatRequest = {
-        model: resolution.model,
+      const request: KvoxChatRequest = {
+        userId: args.userId,
+        feature: 'graph_agent',
+        // The platform's span and usage row (one per round trip) link to this job.
+        jobId: args.jobId,
+        model: args.model,
         messages: forced ? [...messages, { role: 'system', content: ASK_FORCED_ANSWER_LINE }] : messages,
         tools: definitions,
         toolChoice: forced ? 'none' : 'auto',
         maxOutputTokens: args.maxOutputTokens,
-        timeoutMs,
-        reasoningEffort: resolution.reasoningEffort,
+        timeoutMs: args.timeoutMs,
+        reasoningEffort: args.reasoningEffort,
       };
 
       const hold = new AnswerHold();
-      const calls: AiToolCall[] = [];
+      const calls: KvoxToolCall[] = [];
       let finishReason: string | null = null;
       let firstEmit = true;
       const emit = async (text: string) => {
@@ -528,7 +545,7 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
         if (state.flusher.shouldFlush()) await this.flush(state);
       };
 
-      for await (const event of provider.chat!(args.ctx, request)) {
+      for await (const event of this.ai.chat(request)) {
         if (event.kind === 'delta') {
           await emit(hold.delta(event.text));
         } else if (event.kind === 'tool_call') {
@@ -557,7 +574,7 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
 
       await this.flush(state);
       if (finishReason === 'content_filter') {
-        throw new AiRefusedError(`${provider.label} declined to finish this answer.`, undefined, provider.id);
+        throw new AiRefusedError(`${args.providerLabel} declined to finish this answer.`, undefined, args.providerId);
       }
       if (finishReason === 'length') return 'token_cap';
       return forced ?? 'stop';
@@ -566,9 +583,9 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
 
   /** Execute one step's calls in order, recording each immediately (so the stream can show it). */
   private async runToolStep(
-    messages: AiChatMessage[],
+    messages: KvoxChatMessage[],
     preamble: string,
-    calls: AiToolCall[],
+    calls: KvoxToolCall[],
     toolCtx: AskToolContext,
     state: TurnState,
   ): Promise<void> {
@@ -646,19 +663,6 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   // Inputs
   // ---------------------------------------------------------------------------
 
-  private async resolveModel(userId: string, model: string): Promise<AiModelResolution> {
-    try {
-      return await this.resolver.resolve(userId, 'graph.agent', model);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        const body = error.getResponse() as { details?: { reason?: string } } | string;
-        const reason = typeof body === 'object' ? body.details?.reason : undefined;
-        throw new AskTurnFailure(reason === 'ai_key_missing' ? 'auth' : 'other', error.message);
-      }
-      throw error;
-    }
-  }
-
   private async loadUser(userId: string): Promise<RequestUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -717,9 +721,26 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
   }
 }
 
-function addUsage(state: TurnState, usage: AiUsage): void {
-  state.promptTokens += usage.promptTokens ?? 0;
-  state.completionTokens += usage.completionTokens ?? 0;
+function addUsage(state: TurnState, usage: KvoxUsage): void {
+  state.promptTokens += usage.inputTokens ?? 0;
+  state.completionTokens += usage.outputTokens ?? 0;
+}
+
+/** Why the model cannot be used for this turn right now, as the failure the row records. */
+function notReadyFailure(readiness: KvoxAiReadiness, requested: string): AskTurnFailure {
+  if (readiness.reason === 'ai_key_missing' || (readiness.reason === null && !readiness.hasKey)) {
+    return new AskTurnFailure('auth', `No ${providerLabelOf(readiness.provider)} API key is saved for your account.`);
+  }
+  switch (readiness.reason) {
+    case 'graph_disabled':
+      return new AskTurnFailure('other', 'Connected knowledge is switched off for this deployment.');
+    case 'model_not_permitted':
+      return new AskTurnFailure('other', `The model "${requested}" is not permitted by this deployment.`);
+    case 'model_lacks_capability':
+      return new AskTurnFailure('other', `The model "${readiness.model ?? requested}" cannot call tools, which Ask needs.`);
+    default:
+      return new AskTurnFailure('other', 'AI features are not available for this deployment right now.');
+  }
 }
 
 function findLastIndex<T>(items: readonly T[], predicate: (item: T) => boolean): number {

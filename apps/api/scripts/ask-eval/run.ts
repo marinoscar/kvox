@@ -4,26 +4,32 @@
 //
 // Boots a real Nest application context (`JOBS_WORKER_MODE=off`, so nothing
 // else claims the `ask.respond` jobs this run creates), seeds #362's gold
-// graph under one throwaway user, temporarily points this deployment's `ai`
-// policy at the eval model, stores the API key from `ASK_EVAL_OPENAI_API_KEY`
-// on that user, then for every selected question:
+// graph under one throwaway user, temporarily points the graph agent task at the
+// eval model (the graph switch on, `taskModels['graph.agent']`), stores the API
+// key from `ASK_EVAL_OPENAI_API_KEY` on that user through the platform's key
+// service, then for every selected question:
 //
 //   create a conversation → POST it through the REAL `AskMessagesService`
 //   (checks, transaction, the real `ask.respond` job row) → invoke
 //   `AskRespondHandler.process(job)` DIRECTLY (no queue poll — this process
 //   is the only claimer) → read the finished assistant message back.
 //
-// Every `messages` array the provider actually receives is captured through
-// a thin wrapper around the registered provider's own `chat()` — never a
-// second implementation of the provider — so the scorer's leak check sees
-// exactly what left this deployment.
+// The run goes through the REAL `KvoxAi` port (`PlatformKvoxAi.chat()` over the
+// platform's `stream()`, on the eval user's own stored key), exactly as a
+// production turn does (#476). Every request the port receives is captured through
+// a thin wrapper around its own `chat()` — never a second implementation — so the
+// scorer's leak check sees exactly what left this deployment.
 //
-// Everything this file changes about the deployment (the `ai` policy, the
-// eval user's stored key, the seeded graph) is undone by `teardown()` /
-// `close()`, unless the caller asks to keep it for debugging (`--keep`
-// skips only the graph teardown — the shared `ai` policy is ALWAYS restored,
-// because leaving the eval model wired in would silently change what every
-// other user's Ask conversation runs on).
+// PRECONDITION (a deployment fact, not something this file creates): the `ai`
+// policy has the OpenAI provider enabled and the eval model enabled in the model
+// catalog, with tool calling.
+//
+// Everything this file changes about the deployment (the graph switch and the
+// `graph.agent` task model, the eval user's stored key, the seeded graph) is
+// undone by `teardown()` / `close()`, unless the caller asks to keep it for
+// debugging (`--keep` skips only the graph teardown — the shared `ai` policy is
+// ALWAYS restored, because leaving the eval model wired in would silently change
+// what every other user's Ask conversation runs on).
 // =============================================================================
 
 // Registers the settings namespaces the DTOs are composed from. Must be the
@@ -34,12 +40,12 @@ import { NestFactory } from '@nestjs/core';
 import type { INestApplicationContext } from '@nestjs/common';
 import type { Job, PrismaClient } from '@prisma/client';
 
+import { UserAiKeysService } from '@marinoscar/platform-api/ai';
+
 import { AppModule } from '../../src/app.module';
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
-import type { SystemAiPatchValue, SystemAiValue } from '../../src/ai/ai-settings.schema';
-import { AiSettingsService } from '../../src/ai/ai-settings.service';
-import type { AiChatEvent, AiChatRequest, AiProviderContext } from '../../src/ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../src/ai/user-ai-credentials.service';
+import { AiTasksService } from '../../src/ai-port/ai-tasks.service';
+import type { UpdateAiTasksSettings } from '../../src/ai-port/dto/ai-tasks.dto';
+import { KVOX_AI, type KvoxAi, type KvoxChatRequest } from '../../src/ai-port/kvox-ai';
 import { AskConversationsService } from '../../src/ask/ask-conversations.service';
 import { toAskMessage } from '../../src/ask/ask-message.mapper';
 import { AskMessagesService } from '../../src/ask/ask-messages.service';
@@ -72,41 +78,25 @@ export interface AskEvalRunHandle {
 }
 
 /** The `ai` policy patch this run applies. Exported for the CLI's own logging. */
-export function askEvalAiPatch(model: string): SystemAiPatchValue {
-  return {
-    enabled: true,
-    graphEnabled: true,
-    provider: ASK_EVAL_PROVIDER_ID,
-    providers: { openai: { allowedModels: [{ id: model }], defaultModel: model } },
-    taskModels: { 'graph.agent': { model } },
-  };
+export function askEvalAiPatch(model: string): UpdateAiTasksSettings {
+  return { graphEnabled: true, taskModels: { 'graph.agent': { model } } };
 }
 
-/** The subset of a prior `SystemAiValue` this run touches, as the patch that restores it. */
-function restorePatch(previous: SystemAiValue): SystemAiPatchValue {
-  return {
-    enabled: previous.enabled,
-    graphEnabled: previous.graphEnabled,
-    provider: previous.provider,
-    providers: { openai: { allowedModels: previous.providers.openai.allowedModels, defaultModel: previous.providers.openai.defaultModel } },
-    taskModels: previous.taskModels,
-  };
+/** The two fields this run touches, as the patch that restores them. */
+function restorePatch(previous: { graphEnabled: boolean; taskModels: UpdateAiTasksSettings['taskModels'] }): UpdateAiTasksSettings {
+  return { graphEnabled: previous.graphEnabled, taskModels: previous.taskModels ?? {} };
 }
 
-/** A prompt-capturing wrapper around a real provider's `chat()`. Mutates the provider in place; returns the restorer. */
-function wrapChatForCapture(
-  provider: { chat?(ctx: AiProviderContext<never>, request: AiChatRequest): AsyncIterable<AiChatEvent> },
-  onRequest: (request: AiChatRequest) => void,
-): () => void {
-  const original = provider.chat;
-  if (!original) throw new Error('provider has no chat() to wrap for capture');
-  const bound = original.bind(provider);
-  provider.chat = (ctx, request) => {
+/** A request-capturing wrapper around the port's own `chat()`. Mutates the port in place; returns the restorer. */
+function wrapChatForCapture(port: KvoxAi, onRequest: (request: KvoxChatRequest) => void): () => void {
+  const original = port.chat;
+  const bound = original.bind(port);
+  port.chat = (request) => {
     onRequest(request);
-    return bound(ctx, request);
+    return bound(request);
   };
   return () => {
-    provider.chat = original;
+    port.chat = original;
   };
 }
 
@@ -141,25 +131,24 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
   });
 
   const prisma = app.get(PrismaService) as unknown as PrismaClient;
-  const credentials = app.get(UserAiCredentialsService);
-  const aiSettings = app.get(AiSettingsService);
-  const registry = app.get(AiProviderRegistry);
+  const userKeys = app.get(UserAiKeysService, { strict: false });
+  const aiTasks = app.get(AiTasksService, { strict: false });
+  const port = app.get<KvoxAi>(KVOX_AI, { strict: false });
   const conversations = app.get(AskConversationsService);
   const messages = app.get(AskMessagesService);
   const handler = app.get(AskRespondHandler);
 
   const fixtures = loadGoldenSet();
   const seeded = await seedGraph(prisma, fixtures);
-  const previousAi = await aiSettings.get();
+  const previousAi = (await aiTasks.describeForAdmin()).settings;
 
   try {
-    await aiSettings.update(askEvalAiPatch(options.model), seeded.userId);
-    await credentials.save({ provider: ASK_EVAL_PROVIDER_ID, apiKey: options.apiKey }, seeded.userId);
+    await aiTasks.update(askEvalAiPatch(options.model), seeded.userId);
+    // Verified against the provider and stored encrypted, like a key a person saves in settings.
+    await userKeys.set(seeded.userId, ASK_EVAL_PROVIDER_ID, options.apiKey);
 
-    const provider = registry.get(ASK_EVAL_PROVIDER_ID);
-    if (!provider?.chat) throw new Error(`provider "${ASK_EVAL_PROVIDER_ID}" has no chat() — cannot run Ask`);
-    let captureBucket: AiChatRequest[] = [];
-    const unwrapChat = wrapChatForCapture(provider, (request) => captureBucket.push(request));
+    let captureBucket: KvoxChatRequest[] = [];
+    const unwrapChat = wrapChatForCapture(port, (request) => captureBucket.push(request));
 
     const results: QuestionRunResult[] = [];
     try {
@@ -188,7 +177,7 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
 
     const teardown = async () => {
       // ALWAYS: this deployment's shared `ai` policy is not this eval's to keep.
-      await aiSettings.update(restorePatch(previousAi), seeded.userId);
+      await aiTasks.update(restorePatch(previousAi), seeded.userId);
       if (!options.keep) await teardownSeededGraph(prisma, seeded.userId);
     };
 
@@ -197,7 +186,7 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
     // A failure mid-run must not leave the deployment's live `ai` policy
     // pointed at the eval model, nor the seeded graph behind with no handle
     // left to clean it up.
-    await aiSettings.update(restorePatch(previousAi), seeded.userId).catch(() => undefined);
+    await aiTasks.update(restorePatch(previousAi), seeded.userId).catch(() => undefined);
     await teardownSeededGraph(prisma, seeded.userId).catch(() => undefined);
     await app.close();
     throw err;

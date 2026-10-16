@@ -30,7 +30,7 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common';
 import type { ZodError } from 'zod';
 
-import type { AiToolDefinition } from '../../ai/providers/ai-provider.interface';
+import type { KvoxToolDefinition } from '../../ai-port/kvox-ai';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { GraphPreferencesService } from '../../graph/preferences/graph-preferences.service';
 import { AskToolError, type AskTool, type AskToolContext, type AskToolResult } from './ask-tool';
@@ -84,7 +84,7 @@ export class AskToolset {
   }
 
   /** Name, description and strict JSON Schema of all seven tools, in `ASK_TOOL_NAMES` order. */
-  definitions(): AiToolDefinition[] {
+  definitions(): KvoxToolDefinition[] {
     return ASK_TOOL_NAMES.map((name) => {
       const tool = this.tools.get(name)!;
       return { name: tool.name, description: tool.description, parameters: tool.parameters };

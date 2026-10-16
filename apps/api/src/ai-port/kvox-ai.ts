@@ -62,7 +62,7 @@ export type KvoxTextEvent =
   | { type: 'delta'; text: string }
   | { type: 'done'; finishReason: 'stop' | 'length'; model: string; usage: KvoxUsage };
 
-// -- Multi-turn chat with tools (implemented by issue #476) -------------------
+// -- Multi-turn chat with tools (the Ask loop, issue #476) -------------------
 
 export interface KvoxToolDefinition {
   name: string;
@@ -91,15 +91,20 @@ export interface KvoxChatRequest extends KvoxAiCallBase {
   tools?: KvoxToolDefinition[];
   toolChoice?: KvoxToolChoice;
   maxOutputTokens: number;
+  /** A per-call backstop, combined with `ai.requestTimeoutMs` (the smaller applies). */
   timeoutMs?: number;
+  /** The effort this turn sends. Absent: the port decides, as for every other call. */
+  reasoningEffort?: KvoxReasoningEffort;
 }
+
+export type KvoxChatFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls';
 
 export type KvoxChatEvent =
   | { kind: 'delta'; text: string }
   | { kind: 'tool_call'; id: string; name: string; argumentsJson: string }
   | {
       kind: 'done';
-      finishReason: 'stop' | 'length' | 'tool_calls';
+      finishReason: KvoxChatFinishReason;
       model: string;
       usage: KvoxUsage;
     };
@@ -158,6 +163,6 @@ export interface KvoxAi {
   /** A local estimate (no network). Budgets are checked against it. */
   countTokens(text: string, model: string): number;
 
-  /** Streamed, possibly tool-calling, chat turn (the Ask loop). Implemented by #476. */
+  /** Streamed, possibly tool-calling, chat turn (the Ask loop, #476). Full history every call. */
   chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>;
 }

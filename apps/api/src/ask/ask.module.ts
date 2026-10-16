@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { GraphModule } from '../graph/graph.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AskAccessService } from './ask-access.service';
@@ -24,8 +23,9 @@ import { AskToolsModule } from './tools/ask-tools.module';
 // and the `ask.respond` job, #379 the stream — both HERE. `GraphModule`
 // supplies `GraphAccessService` (scope validation); the edge runs one way.
 // `AskToolsModule` (#377) supplies the read-only `AskToolset` #378's job runs.
-// #378: `JobsModule` (enqueue + the handler registry) and `AiModule` (the
-// task-model resolver and the asker's own key) for posting and answering.
+// #378: `JobsModule` (enqueue + the handler registry) for posting and answering.
+// The model, the asker's own key and the streamed tool loop come from `KVOX_AI`
+// (the global `KvoxAiModule`, #475/#476): nothing to import here.
 // #379's `AskMessageStreamController`/`AskMessageStreamService` are a read-only
 // view over `ask_messages`; `ASK_STREAM_TUNING` is `{}` so the defaults ship.
 // =============================================================================
@@ -35,7 +35,6 @@ import { AskToolsModule } from './tools/ask-tools.module';
     PrismaModule,
     GraphModule,
     AskToolsModule,
-    AiModule,
   ],
   providers: [
     AskAccessService,
