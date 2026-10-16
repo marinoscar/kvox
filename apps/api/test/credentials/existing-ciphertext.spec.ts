@@ -21,7 +21,7 @@ import { Logger } from '@nestjs/common';
 import { decryptSecret } from '@marinoscar/platform-api/core';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { SMTP_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/email';
-import { PUSH_VAPID_CREDENTIAL_PURPOSE } from '../../src/notifications/push-vapid-credential.constants';
+import { PUSH_VAPID_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/notifications';
 import { AI_CREDENTIAL_PURPOSE } from '../../src/ai/ai-credential.constants';
 import { TRANSCRIPTION_CREDENTIAL_PURPOSE } from '../../src/transcription/transcription-credential.constants';
 import '../../src/kvox.manifest';

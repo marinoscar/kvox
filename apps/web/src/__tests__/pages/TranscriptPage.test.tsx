@@ -20,7 +20,10 @@ vi.mock('../../services/transcripts', () => ({
   updateTranscript: vi.fn(),
 }));
 
-vi.mock('../../contexts/NotificationContext', () => ({ useNotifications: () => null }));
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
+  useNotifications: () => null,
+}));
 
 import { useLocation } from 'react-router-dom';
 import { server } from '../mocks/server';

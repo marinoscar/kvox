@@ -478,10 +478,15 @@ the update is healthy, signed in as an administrator:
    (browsers re-subscribe the next time they open the app). See
    [`docs/runbooks/vapid-keys.md`](../runbooks/vapid-keys.md#12-after-the-470-deploy).
 2. **`/admin/settings/email`.** Check the provider, sender and the masked
-   password status, then **Send test email**. Amazon SES now reads its region,
-   access key id and secret from this page only; `AWS_ACCESS_KEY_ID`,
-   `AWS_SECRET_ACCESS_KEY` and `S3_REGION` are not read for email. A server that
-   sent through SES on environment credentials alone must enter them here.
+   password status, then **Send test email**. **Amazon SES: re-enter the
+   access key ID and the secret access key on this page after the deploy.** The
+   key ID is now stored in the email settings row and the secret in the
+   encrypted credential store (`email_ses`); `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY` are no longer read. Until you do, SES sends fail and
+   show up as failed deliveries. `S3_REGION` is kept only as the default SES
+   region when none is saved. SMTP is unaffected: its stored settings and
+   password are reused. Every email now carries the brand mark, and the brand
+   colour follows the theme colour in `packages/shared/identity.json`.
 3. **Broadcasts.** `/admin/settings/broadcasts` is the packaged page; nothing to
    do, but organization administrators can now reach it (see
    [`docs/specs/notification-broadcasts.md`](../specs/notification-broadcasts.md#packaged-implementation-470)).

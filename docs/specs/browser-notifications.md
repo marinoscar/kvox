@@ -126,7 +126,7 @@ freeze when the application bootstraps.
 | `notifications/push-config.*`, `push-test.service.ts`, `push-subscription.service.ts`, `dto/*push*` | the platform slice (`PushConfigService`, `PushTestService`) |
 | `notifications/broadcasts/**` | `BroadcastsModule` |
 | `notifications/ops/job-failure-notifier.ts` | `OPS_NOTIFICATIONS` |
-| `notifications/ops/node-offline-notifier.ts` (the `NodeOfflineNotifier` shim) | `NODES_NOTIFICATIONS` (pending agent report: whether the shim row is removed in this PR) |
+| `notifications/ops/node-offline-notifier.ts` (the `NodeOfflineNotifier` shim) | `NODES_NOTIFICATIONS` (audience `nodes:read`; the shim row in local-exceptions.md is removed) |
 | `email/**` (module, providers, settings controller and service, test send) and `email/templates/**` | `@marinoscar/platform-api/email` plus `email-templates/` |
 | `contexts/NotificationContext.tsx`, `hooks/{useNotificationCapability,useBrowserNotificationPermission,usePushSubscriptionSync,...}.ts`, `services/{pushSubscription,pushDiagnostics,browserNotifications,notificationStream,...}.ts` | `@marinoscar/platform-web/notifications/headless` |
 | `components/navigation/NotificationBell.tsx`, `components/notifications/NotificationPermissionBanner.tsx`, `pages/UserNotificationsPage.tsx`, `components/settings/NotificationSettings.tsx`, `pages/Admin/{NotificationSettingsPage,PushConfigPage,BroadcastsPage,EmailSettingsPage}.tsx`, `components/admin/{PushTestPanel,PushConfigConfirmDialog,BroadcastComposer,BroadcastDetailDialog}.tsx` | `@marinoscar/platform-web/notifications/ui` and `/email/ui` |
@@ -161,12 +161,17 @@ code. Everything else in this document still holds.
   `POST test`). The body and response are supersets: `provider` is any
   registered transport id and the response adds `transports` and `descriptors`.
   The legacy `smtp*` and `ses*` fields are unchanged.
-- **Amazon SES reads no environment.** The packaged email slice reads no
-  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` or `S3_REGION`: the SES region,
-  access key id and secret live in the settings row and the credential store
-  (purpose `email_ses`) only. [DEVELOPMENT.md](../DEVELOPMENT.md) said the
-  opposite until #470 (pending agent report: confirm with the email agent
-  whether any environment fallback was kept).
+- **Amazon SES reads no credentials from the environment.** The SES access key
+  ID lives in the `email` settings row and the secret in the credential
+  `email_ses` / `default`; `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are
+  no longer read, so a deployment on SES re-enters both at
+  `/admin/settings/email` after the deploy. `S3_REGION` is kept only as a
+  default SES region (`sesRegionFallback` in
+  `apps/api/src/platform/email/email.options.ts`). SMTP is unaffected.
+  [DEVELOPMENT.md](../DEVELOPMENT.md) said the opposite until #470.
+- **Every email carries the brand mark** (before, only the two invitations did),
+  and the brand colour follows the theme colour in `packages/shared/identity.json`
+  instead of the old hardcoded blue.
 
 ### The service worker (#453 parity)
 

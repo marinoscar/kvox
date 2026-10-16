@@ -5,12 +5,13 @@ vi.mock('../../services/notes', () => ({
   getNoteSummary: vi.fn(),
 }));
 
-vi.mock('../../contexts/NotificationContext', () => ({
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
   useNotifications: vi.fn(),
 }));
 
 import { getNoteSummary } from '../../services/notes';
-import { useNotifications } from '../../contexts/NotificationContext';
+import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import { NOTE_ACTIVE_POLL_MS, useNoteSummary } from '../../hooks/useNotes';
 import type { NoteListItem, NoteSummary } from '../../services/notes';
 

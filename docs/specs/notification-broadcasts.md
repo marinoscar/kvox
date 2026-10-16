@@ -67,8 +67,8 @@ What differs from the original design, all additive or authorization-related:
   held by `org_admin`). The `admin` role is no longer required alongside the
   permission. In this single-organization deployment an organization audience
   is every active user, so the Section 3 audience definition holds, but an
-  `org_admin` can now compose and send (pending agent report: confirm in the
-  RBAC coverage).
+  **`org_admin` can now list, compose, cancel, resume, delete and send
+  broadcasts**, which the former code reserved to the `admin` role.
 - **The `failed` recall.** `cancel` also closes a `failed` broadcast that will
   not be resumed.
 - **No `README` recipe.** Adding a broadcast channel or event is the

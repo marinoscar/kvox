@@ -30,9 +30,6 @@ vi.mock('../pages/Admin/SettingsHubPage', () => ({
   default: () => <h1>Admin Settings Hub</h1>,
 }));
 
-vi.mock('../pages/Admin/NotificationSettingsPage', () => ({
-  default: () => <h1>Admin Notifications</h1>,
-}));
 
 vi.mock('../pages/Admin/MaintenancePage', () => ({
   default: () => <h1>Admin Maintenance</h1>,
@@ -97,8 +94,12 @@ vi.mock('../pages/UserDangerZonePage', () => ({
 // page's own suite (`UserNotificationsPage.test.tsx`) already proves it
 // renders correctly, so this stand-in makes the assertions below about
 // `App.tsx`'s route wiring specifically.
-vi.mock('../pages/UserNotificationsPage', () => ({
-  default: () => <h1>User Notifications Page</h1>,
+// Since #470 the page is the packaged one, so only it is replaced; the barrel's
+// provider, bell, banner and hooks stay real.
+vi.mock('@marinoscar/platform-web/notifications/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/ui')>()),
+  UserNotificationsPage: () => <h1>User Notifications Page</h1>,
+  NotificationSettingsPage: () => <h1>Admin Notifications</h1>,
 }));
 
 // Issue #369. The one GATED `/settings/*` route; its own suite

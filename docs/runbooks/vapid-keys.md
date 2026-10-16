@@ -95,7 +95,10 @@ no longer read by anything; see Section 3.
    confirm the acknowledgement.
 4. Open `/admin/settings/email`, check the provider, the sender address and the
    masked password status, and press **Send test email**. The stored settings are
-   reused; the page is the packaged one.
+   reused; the page is the packaged one. **A deployment on Amazon SES must
+   re-enter the access key ID and the secret access key here:** the old
+   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables are no longer read.
+   SMTP is unaffected.
 
 ## 2. The admin UI (recommended)
 

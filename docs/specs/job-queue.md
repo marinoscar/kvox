@@ -2386,9 +2386,9 @@ retired (below).
 A job that exhausts its retry budget raises `jobs.job_failed`, addressed to
 whoever holds `jobs:read`. Nothing in this document changes for it: the event
 is raised by a **listener** on `job.settled`
-(the event is the platform's `OPS_NOTIFICATIONS`, `@marinoscar/platform-api/notifications`,
-since #470, and the application's own `ops/job-failure-notifier.ts` is gone; the listener wiring is
-pending agent report), registered on the
+(since #470 the platform's `JobFailureNotifier`, with the event in
+`OPS_NOTIFICATIONS`, `@marinoscar/platform-api/notifications`; the application's own
+`ops/job-failure-notifier.ts` is gone), registered on the
 notifications side of the seam precisely so `JobsModule` keeps no dependency on
 notifications and `JobTerminalService` keeps no outbound side effect. Why a
 listener, why the audience is a permission, and why an ordinary retry or

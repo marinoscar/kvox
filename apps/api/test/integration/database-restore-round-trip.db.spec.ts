@@ -83,7 +83,7 @@ import {
 } from '../../src/db-backup/restore-preflight.service';
 import { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import { PrismaAuditSink } from '../../src/platform/audit-sink.adapter';
-import type { NotificationsService } from '../../src/notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { cleanupTmpDir, TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';

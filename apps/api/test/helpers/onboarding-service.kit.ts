@@ -4,7 +4,7 @@ import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { AiConfigService } from '../../src/ai/ai-config.service';
 import type { EmailSettingsService } from '@marinoscar/platform-api/email';
-import type { PushConfigService } from '../../src/notifications/push-config.service';
+import type { PushConfigService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import type { SystemSettingsService, UserSettingsService } from '@marinoscar/platform-api/settings';
 import type {

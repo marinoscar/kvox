@@ -7,7 +7,7 @@ import { setupBaseMocks, setupMockUserSettings } from '../fixtures/mock-setup.he
 import { createMockAdminUser, authHeader } from '../helpers/auth-mock.helper';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { EmailSettingsService } from '@marinoscar/platform-api/email';
-import { PushConfigService } from '../../src/notifications/push-config.service';
+import { PushConfigService } from '@marinoscar/platform-api/notifications';
 
 // =============================================================================
 // GET /api/onboarding and GET /api/admin/onboarding (issue #275, epic #271)
