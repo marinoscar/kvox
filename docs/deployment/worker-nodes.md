@@ -184,8 +184,11 @@ this on needs to know, none of them a code change:
    password in its config file or its state directory. When it holds a
    `db.backup.run` job it calls `POST /nodes/:id/jobs/:jobId/secret`, gets one
    short-lived credential back, holds it in memory for the life of that job,
-   and drops it. `apps/cli/src/node/executors/db-backup-run.test.ts` asserts
-   this statically — the executor imports no config writer at all.
+   and drops it. The executor is the platform's (`db-backup-run` in
+   `@marinoscar/platform-cli`), and the platform's `cli` conformance suite
+   (`apps/cli/src/conformance.test.ts`) runs a credential-hygiene check over it
+   and over every app executor: the credential never reaches the node log, the
+   state directory, HOME, the result or an error.
 2. **Two independent switches, both off by default, must both be on** before
    any node is ever offered the job type: `nodes.jobSecretBrokerEnabled` ("may
    this deployment broker credentials to nodes at all?") and
@@ -237,23 +240,24 @@ file it was already given a URL for.
 
 ### Declaring a requirement in a fork
 
-In `apps/cli/src/node/capabilities.ts`:
+Next to the executor (this app's is
+`apps/cli/src/executors/media-audio-transcode.executor.ts`), at module scope,
+with the registries from `@marinoscar/platform-cli/node`:
 
 ```ts
-export const PROBED_BINARIES = ['pg_dump', 'psql', 'ffmpeg', 'ffprobe', 'exiftool'];
-
-export const JOB_TYPE_REQUIREMENTS = {
-  'video.thumbnail': {
-    required: [binaryCapability('ffmpeg')],
-    degradable: [binaryCapability('exiftool')],
-  },
-};
+registerProbedBinary('ffmpeg', { versionArgs: ['-version'] });
+registerProbedBinary('exiftool', { versionArgs: ['-ver'] });
+registerJobRequirement('video.thumbnail', {
+  required: [binaryCapability('ffmpeg')],
+  degradable: [binaryCapability('exiftool')],
+});
 ```
 
-⚠️ **The two lists move together.** A capability that is never *probed* is a
-capability that is never satisfied, so a requirement naming a binary missing
-from `PROBED_BINARIES` fails the self-test on every machine, however complete
-the install. `capabilities.test.ts` asserts that in both directions.
+`registerJobRequirement` also registers every `binary:<name>` it names as a
+probed binary, so the two cannot drift apart. `node doctor` lists each probed
+binary with its version, and a node that lacks a required one refuses to claim
+the type with `Cannot run job type "...": required capability "binary:..." is
+missing`.
 
 ## Installing dependencies
 
@@ -262,24 +266,20 @@ kvox node install-deps --dry-run   # print the plan, change nothing
 kvox node install-deps
 ```
 
-Three steps ship: the worker's state directory, a Node.js version check, and
-**ffmpeg** for `media.audio.transcode`. The first two are generic; ffmpeg is a
-real package install (`apt-get`/`dnf`/`apk` by detected family) and is the
-worked example a fork copies.
-
-It is still, first, a **framework**: ordered steps, per-step `skipped |
+Two steps ship, both the platform's: the worker's state directory and a
+Node.js version check. It is a **framework**: ordered steps, per-step `skipped |
 installed | failed | unsupported`, distro detection, an explicit sudo
 announcement before anything runs, and a `--dry-run` that performs no mutation
-while still running every `detect`. Add your own steps in
-`apps/cli/src/node/install-deps.ts` beside the three.
+while still running every `detect`.
 
-⚠️ The ffmpeg step runs **unconditionally**, not "only if this node declares
-the type" — `install-deps` is what you run *before* the worker has ever
-started, so there is no `--types` to consult. It reports `skipped` the moment
-both binaries are on PATH, so on a machine that will never transcode the cost
-is two `which` calls. macOS and Windows report `unsupported` with the command
-to run by hand: `brew`/`winget` install into your own environment and
-frequently need a prompt a subcommand must not answer for you.
+⚠️ **There is no `ffmpeg` step since 1.10.** The step list is internal to the
+platform package and has no registry, so the `ffmpeg` install this app used to
+add could not be kept. On a node that runs outside a container, install
+`ffmpeg` (it ships `ffprobe`) with your package manager (`apt-get install
+ffmpeg`, `dnf install ffmpeg`, `apk add ffmpeg`, `brew install ffmpeg`);
+`kvox node doctor` then lists both binaries with their versions, and a node
+without them refuses to claim `media.audio.transcode` by name. The container
+image installs it.
 
 ## Memory
 
