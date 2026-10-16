@@ -300,9 +300,10 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   ├── config/               # Configuration module
 │   │   │   └── main.ts               # Application entry
 │   │   ├── prisma/
-│   │   │   ├── fragments/            # KVox's own models (composed with the platform's)
+│   │   │   ├── fragments/            # Web-edition side tables, plus generated kvox.*.prisma copies from packages/kvox-db
 │   │   │   ├── schema/               # The composed Prisma schema (platform.* and app.*)
-│   │   │   ├── migrations/           # Migration history
+│   │   │   ├── migrations/           # Migration history (platform and domain directories are installed copies)
+│   │   │   ├── kvox.lock             # Hashes of the installed domain migrations (kvox-db)
 │   │   │   ├── catalog/              # permissions.json, system-settings-defaults.json
 │   │   │   ├── seed.ts               # seedPlatform, then seedApp
 │   │   │   └── seed-app.ts           # KVox rows (built-in note templates)
@@ -770,6 +771,8 @@ disappear; only the browser toast is suppressed for them.
 ### 6.4 Table inventory
 
 Every table the schema defines beyond the ERD in §6.1, with the cascade, indexing and hand-written-SQL decisions that are not visible from `schema.prisma` alone.
+
+The domain tables below (transcripts, notes, search, the `kg_*` graph tables, Ask) are declared in `packages/kvox-db/schema/kvox.<slice>.prisma`, created by the migrations in `packages/kvox-db/migrations/`, and their raw-SQL indexes, extensions (`vector`, `pg_trgm`) and other special objects are inventoried in that package's `raw-sql-indexes.json`, `extensions.json` and `schema-objects.json` ([README, Data](../packages/kvox-db/README.md#data)). The app holds installed copies proven by `prisma/kvox.lock`.
 
 
 - `users` - User accounts with profile info

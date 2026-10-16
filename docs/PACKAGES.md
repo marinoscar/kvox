@@ -26,7 +26,7 @@ How the four publishable KVox packages are laid out, documented, checked and rel
 | `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing` |
 | `@marinoscar/kvox-web` | `packages/kvox-web` | ESM | `./core` |
 
-Every package: `"version"` moved by Changesets (the source says `0.0.0`), `"license": "MIT"`, `engines.node >=24`, `publishConfig` `{ "access": "public", "provenance": true }`, a `repository.directory`, and a `files` list of `dist`, `README.md`, `CHANGELOG.md` and `LICENSE` (plus `bin`, `schema`, `migrations`, `raw-sql-indexes.json`, `extensions.json` for `kvox-db`). `LICENSE` is copied from the repository root by the `prepack` script (`scripts/kvox-packages/copy-license.mjs`) and is git-ignored in the package.
+Every package: `"version"` moved by Changesets (the source says `0.0.0`), `"license": "MIT"`, `engines.node >=24`, `publishConfig` `{ "access": "public", "provenance": true }`, a `repository.directory`, and a `files` list of `dist`, `README.md`, `CHANGELOG.md` and `LICENSE` (plus `bin`, `schema`, `migrations`, `raw-sql-indexes.json`, `extensions.json`, `schema-objects.json` for `kvox-db`). `LICENSE` is copied from the repository root by the `prepack` script (`scripts/kvox-packages/copy-license.mjs`) and is git-ignored in the package.
 
 The four packages are one Changesets `fixed` group: they always share one version, so a consumer never mixes `kvox-api@0.1.0-next.3` with `kvox-contract@0.1.0-next.2`. The apps (`api`, `web`, `cli`) and `@app/shared` are in `ignore`; `apps/api` and `apps/web` depend on the packages with a `*` workspace range.
 

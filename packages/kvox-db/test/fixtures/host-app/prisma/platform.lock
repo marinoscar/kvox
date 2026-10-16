@@ -1,0 +1,15 @@
+{
+  "appMigrations": [
+    "20270101000000_host_initial",
+    "20270102000000_host_more"
+  ],
+  "lockVersion": 1,
+  "migrations": [],
+  "platformVersion": "1.0.0",
+  "rawSqlIndexes": [
+    {
+      "definition": "CREATE UNIQUE INDEX host_only_idx ON public.users USING btree (email) WHERE (email IS NOT NULL)",
+      "name": "host_only_idx"
+    }
+  ]
+}

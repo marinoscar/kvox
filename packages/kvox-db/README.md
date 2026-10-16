@@ -1,14 +1,16 @@
 # @marinoscar/kvox-db
 
-The database side of the KVox domain: the Prisma schema fragments, the SQL migrations and the `kvox-db` command that installs them into an app. CommonJS.
+The database side of the KVox domain: the Prisma schema fragments, the SQL migrations, the inventory of what Prisma cannot express, and the `kvox-db` command that installs them into an app and proves the installed copies unchanged. CommonJS.
 
 ## Purpose and scope
 
-The domain Prisma fragments, the domain migrations with a lock file, the raw-SQL index and extension inventory, and the `kvox-db` command (`sync` copies them into an app, `check` proves the copies byte-identical to the package). It does not own the platform tables; those are `@marinoscar/platform-db`'s.
+The domain Prisma fragments (`schema/kvox.<slice>.prisma` for `transcripts`, `notes`, `search`, `graph` and `ask`), the 18 domain migrations byte for byte (`migrations/<original-directory-name>/migration.sql` plus `migrations/manifest.json`), the inventories (`raw-sql-indexes.json`, `extensions.json`, `schema-objects.json`) and the `kvox-db` command: `sync` copies fragments and migrations into a host app and writes `prisma/kvox.lock`, `check` proves every copy byte-identical (`check --database` also checks a live database), `promote` moves a migration authored in the app into the package. It does not own the platform tables (`users`, `storage_objects`, `jobs`, ...), which are `@marinoscar/platform-db`'s, and it changes no table: this is a move.
 
-Status: scaffold. Today the package holds only the `kvox-db` bin, which prints its usage, and the placeholder root export. The fragments, migrations, `raw-sql-indexes.json` and `extensions.json` move in with issue 5.3 (Epic 5); the `files` list already names their folders.
+Why a command and not a plain import: `platform db compose` reads exactly one app fragment folder and `platform db sync` installs migrations only from the platform package, so a second fragment and migration source needs a bridge. `kvox-db sync` copies the fragments into the app's `prisma/fragments` and the migrations into `prisma/migrations`; the platform then sees them as app fragments and app migrations, which is what they were before.
 
-- `@marinoscar/kvox-db`: the package root, which re-exports the `bin` slice (`runKvoxDb`, `kvoxDbUsage`). [README](src/bin/README.md).
+Status: complete for the 18 migrations and 5 fragments of issue 5.3 (Epic 5). Migrations authored later by the platform retrofit (`transcripts.org_id`, the share-to-grants conversion and similar) are the web app's and are not in this package.
+
+- `@marinoscar/kvox-db`: the package root, which re-exports every slice (the `kvox-db` bin runs the `bin` slice). Slice READMEs: [bin](src/bin/README.md), [sync](src/sync/README.md), [check](src/check/README.md), [promote](src/promote/README.md), [lock](src/lock/README.md), [manifest](src/manifest/README.md), [sql](src/sql/README.md).
 
 ## Install and peer dependencies
 
@@ -20,31 +22,75 @@ npm install --save-dev @marinoscar/kvox-db@next
 |---|---|---|
 | `prisma` | `^7.8.0` | `bin` (required) |
 
-The command runs with `npx kvox-db` or from an npm script. The per-slice data is `packages/kvox-slice-peers.json`.
+`commander` is a dependency (the command line). `check --database` also needs `pg`, resolved at run time from the app (any app that talks to PostgreSQL through Prisma's `pg` adapter has it); it is not declared as a peer because the offline commands never use it. The per-slice data is `packages/kvox-slice-peers.json`.
 
 ## Quick start
 
-```bash
-npx kvox-db --help
-```
+In a host that already composes the platform schema (`platform db sync`, `platform db compose`):
 
-`kvox-db sync` and `kvox-db check` arrive with issue 5.3; until then the command lists no subcommand and an unknown one exits with code 2.
+```bash
+npx kvox-db sync                      # fragments, migrations, prisma/kvox.lock, platform.lock
+npx platform db compose               # the app's db:compose script runs both, in this order
+npx kvox-db check                     # every copy is byte-identical to the package
+DATABASE_URL=postgres://... npx kvox-db check --database
+```
 
 ## Configuration
 
-None yet. `sync` and `check` will take the app's Prisma folder as an option.
+| Command | Options |
+|---|---|
+| `kvox-db sync` | `--root <dir>` the app folder that holds `prisma/` (default: the current directory); `--fragments <dir>` and `--migrations <dir>` the package folders to install from (default: the package's `schema/` and `migrations/`); `--names original\|after-host`; `--dry-run` |
+| `kvox-db check` | `--root <dir>`; `--database` also checks the database named by `DATABASE_URL` |
+| `kvox-db promote <localDir>` | `--id <slug>` (required), `--slice <slice>` (required), `--root <dir>` |
+
+Exit codes: 0 ok, 1 a failed check or a refusal (a host model is missing, an installed migration differs from the package, a lock entry disagrees), 2 a usage error or a missing `DATABASE_URL`.
+
+What `sync` does:
+
+- Copies each `schema/kvox.<slice>.prisma` to `<root>/prisma/fragments/kvox.<slice>.prisma` under the header `// GENERATED by kvox-db sync — do not edit` and `// source: @marinoscar/kvox-db:schema/<file>` (the header carries no version, so a version bump never makes a copy stale). Removes `kvox.*.prisma` files the package no longer has.
+- Installs every manifest migration missing from `prisma/kvox.lock` into `prisma/migrations/`, adopting a directory that already exists under the original name when its bytes are identical (and refusing it when they are not).
+- Writes `prisma/kvox.lock` (`{ lockVersion: 1, kvoxDbVersion, migrations: [{ originId: "kvox:<id>", installedDir, sha256 }] }`).
+- Merges `raw-sql-indexes.json` into `prisma/platform.lock` `rawSqlIndexes` (adds missing names; refuses with exit 1 when a name is listed with another definition) and appends the installed directories to `appMigrations` so the platform's ordering check accepts them.
+- Refuses when the host schema lacks `User`, `StorageObject` or `Job`.
 
 ## Extension-point catalog
 
-None.
+None. The package has no host-implemented interface; a host consumes its files.
 
 ## Data
 
-None yet. The fragments (`schema/`), migrations (`migrations/`), `raw-sql-indexes.json` and `extensions.json` ship with issue 5.3. Raw-SQL indexes stay in `migration.sql` and are never added to a fragment.
+Tables the fragments declare (the migrations create them; the host provides `users`, `storage_objects` and `jobs`, which the foreign keys reference):
+
+| Slice | Tables |
+|---|---|
+| `transcripts` | `transcripts`, `transcript_segments`, `transcript_speakers`, `transcript_versions`, `transcript_exports`, `transcript_name_checks`, `transcript_name_suggestions` |
+| `notes` | `notes`, `note_templates`, `user_hidden_note_templates`, `note_generations`, `note_versions`, `note_exports` |
+| `search` | `search_chunks`, `search_embeddings`, `search_index_state` |
+| `graph` | `kg_entities`, `kg_entity_aliases`, `kg_relations`, `kg_items`, `kg_evidence`, `kg_mentions`, `kg_proposals`, `kg_proposal_items`, `kg_merges`, `kg_distinct_pairs`, `kg_attribute_defs`, `kg_entity_digests`, `kg_entity_views`, `kg_exports`, `kg_graph_layouts` |
+| `ask` | `ask_conversations`, `ask_messages` |
+
+Extensions (`extensions.json`; the bootstrap superuser creates them, this package never does): `vector` (0.5.0 or newer; `search`, `graph`) and `pg_trgm` (`graph`). A database without `vector` must fail loudly at the migration that needs it (`20260915130000_add_search_embeddings`), not get it created silently by a role that may lack the privilege; `kvox-db check --database` prints the exact `CREATE EXTENSION IF NOT EXISTS vector;` for an operator to run as a superuser.
+
+Raw-SQL objects (`raw-sql-indexes.json`: 17 indexes with the `pg_indexes.indexdef` text `platform db drift` asserts; `schema-objects.json`: the rest). They exist only in `migration.sql`, are intentional schema drift, and are never declared in a fragment (no `@@unique`, `@@index` or `@unique` under their name or, for a unique one, on their columns):
+
+| Kind | Objects | Needs |
+|---|---|---|
+| Partial unique indexes | `transcript_speakers_transcript_id_label_key`, `kg_items_live_statement_uniq_idx`, `kg_relations_speaker_link_uniq_idx`, `kg_proposals_note_draft_uniq_idx`, `kg_proposals_note_extracting_uniq_idx`, `kg_proposals_owner_import_extracting_uniq_idx`, `ask_messages_one_running_turn_uniq_idx` | plain PostgreSQL |
+| GIN on generated `tsvector` columns | `transcripts_title_search_vector_idx`, `transcript_segments_search_vector_idx`, `notes_search_vector_idx` | plain PostgreSQL |
+| GiST on `tstzrange` columns | `kg_relations_valid_gist_idx`, `kg_items_valid_gist_idx` | plain PostgreSQL |
+| HNSW (`vector_cosine_ops`) | `search_embeddings_embedding_hnsw_idx`, `kg_entities_embedding_hnsw_idx`, `kg_items_embedding_hnsw_idx` | `vector` |
+| GIN trigram (`gin_trgm_ops`) | `kg_entities_label_trgm_idx`, `kg_entity_aliases_normalized_trgm_idx` | `pg_trgm` |
+| Generated columns | `transcripts.title_search_vector`, `transcript_segments.search_vector`, `notes.search_vector` | plain PostgreSQL |
+| CHECK constraints | the twelve `kg_*_chk` constraints | plain PostgreSQL |
+| Deferred constraint triggers | function `kg_assert_has_evidence` and triggers `kg_entities_evidence_trg`, `kg_relations_evidence_trg`, `kg_items_evidence_trg`, `kg_evidence_delete_trg` | PL/pgSQL, deferrable constraint triggers |
+
+PGlite (KVox Desktop) loads `vector` and `pg_trgm` as extensions but does not offer every server feature; the table above says which objects need what, and the Desktop issue proves the set on a real embedded database.
+
+Files in the app: `prisma/fragments/kvox.<slice>.prisma` (generated copies), the installed migration directories, `prisma/kvox.lock`, and the merged entries of `prisma/platform.lock`.
 
 ## Permissions and settings
 
-None.
+None. The package declares no permission string and no settings key.
 
 ## UI
 
@@ -52,30 +98,44 @@ None.
 
 ## Infra
 
-None. The package creates no database role or extension; the bootstrap superuser does.
+None. The package creates no database role and no extension; the bootstrap superuser creates `vector` and `pg_trgm`, and the application role must own the tables the migrations create.
 
 ## Observability
 
-None.
+None. The command prints one line per action and one `CODE  message` line per problem on standard error.
 
 ## Security notes
 
-The command writes only inside the app folder it is pointed at and never reads credentials. It must never run against a database: it copies files.
+`sync` and `check` read and write files only; `check --database` runs `SELECT`s against catalogs (`pg_extension`, `pg_indexes`, `pg_trigger`, `pg_proc`, `pg_constraint`, `information_schema.columns`) and never creates, drops or renames anything. A missing extension is reported, never created. An installed migration is never edited, renamed or overwritten: `sync` refuses a directory whose bytes differ from the package, and comments count toward the hash, so exclude `**/migration.sql` from any formatter or comment clean-up. No fragment or migration holds a secret. Do not run `prisma format` on the generated `kvox.*.prisma` copies: they must stay byte-identical to the package.
 
 ## Conformance suite
 
-None yet. `kvox-db check` is the executable proof that the installed copies match the package.
+`kvox-db check` is the executable proof that the installed copies match the package; `kvox-db check --database` proves the database holds the extensions and raw-SQL objects. The package tests (`npm run test:run -w @marinoscar/kvox-db`) cover the manifest hashes, the raw-SQL index tripwire, `sync` into a fixture host with both naming policies, `check` failing on a one-byte change, and `promote`; `test/apply.db.test.ts` runs only when `DATABASE_URL` names a PostgreSQL 16 server with pgvector and applies the platform history and then the domain history to a fresh database.
 
 ## Upgrade notes
 
-None. This package has not been published yet (see the [release runbook](../../docs/runbooks/release-kvox-packages.md)), so there is nothing to migrate from.
+Naming policy, chosen per host by `--names` or by the rule below:
+
+- `original` keeps the package directory name (`20260914130000_add_transcripts`). It is for a host whose databases already ran the migrations under those names, such as the web app: production databases have the original names in `_prisma_migrations`, so an installed migration is never renamed. Default when `prisma/kvox.lock` records original names, or when the app's `prisma/migrations` already holds a manifest migration under its original name.
+- `after-host` names a migration `<ts>_kvox_<slug>`, where `<ts>` is one second after the newest directory in `prisma/migrations` (then one second apart). It is for a host with no domain history (KVox Desktop, the bare host): the domain migrations are dated September 2026, so under their original names they would sort before the platform migrations a fresh host installs later and run before `users` exists. Default on a host with no kvox history. `platform db sync` later installs platform migrations with a timestamp after everything, the domain ones included.
+
+Adopting an existing app: run `kvox-db sync`. Every directory already exists under its original name, so no migration is written; the command creates `prisma/kvox.lock`, the generated fragments and the `platform.lock` entries. A new package release adds migrations to `migrations/`; `sync` installs only the ones the lock does not record. A migration already in the lock is never changed: a fix is a new migration (see [the runbook](../../docs/runbooks/kvox-domain-migration.md)).
+
+Fragment copies carry no version in their header, so a package version bump changes nothing in the app until the package's own files change.
 
 ## Troubleshooting
 
-`Cannot find module '../dist/bin/index.js'` means the package was not built; run `npm run build -w @marinoscar/kvox-db`.
+- `Cannot find module '../dist/bin/index.js'`: the package was not built; run `npm run build -w @marinoscar/kvox-db`.
+- `FRAGMENT_MODIFIED`: someone edited or formatted a generated copy; run `kvox-db sync` to restore it and edit the package's `schema/` file instead.
+- `INSTALLED_MODIFIED`: an installed `migration.sql` differs from `kvox.lock`, comments included. Restore it from version control; never edit an installed migration.
+- `NOT_INSTALLED` or `LOCK_MISSING`: run `kvox-db sync`.
+- `EXTENSION_MISSING`: ask a database superuser to run the `CREATE EXTENSION IF NOT EXISTS` statement the message prints.
+- `the host schema does not declare model User`: run `platform db sync` and `platform db compose` first; the domain references `users`, `storage_objects` and `jobs`.
+- `platform.lock rawSqlIndexes already lists <name> with a different definition`: the app listed an index of that name itself; reconcile the lock with the package's `raw-sql-indexes.json`.
 
 ## Links
 
 - [Package documentation standard and checks](../../docs/PACKAGES.md): how this README, the TSDoc and the catalog are checked
+- [Authoring a domain migration](../../docs/runbooks/kvox-domain-migration.md): edit a fragment, create the migration, `kvox-db promote`
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands

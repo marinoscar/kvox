@@ -5,7 +5,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 ## Layout
 
 - `src/<module>/` per feature (`transcripts`, `notes`, `graph`, `ask`, `onboarding`, ...). Job handlers live in the owning module's `handlers/`.
-- `prisma/schema.prisma` is one hand-edited file; `prisma/migrations/` holds the SQL. `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
+- `prisma/schema/` is generated (`db:compose`); `prisma/migrations/` holds the SQL (hashed by `prisma/*.lock`). `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
 
 ## Rules
 
