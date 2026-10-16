@@ -6,7 +6,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
-import type { NotificationsService } from '../../notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type {
   BackupPruneResult,
   DatabaseBackupRetentionService,

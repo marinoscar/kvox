@@ -7,7 +7,8 @@ vi.mock('../../services/transcripts', () => ({
   getTranscriptSegments: vi.fn(),
 }));
 
-vi.mock('../../contexts/NotificationContext', () => ({
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
   useNotifications: vi.fn(),
 }));
 
@@ -16,7 +17,7 @@ import {
   getTranscriptSegments,
   getTranscripts,
 } from '../../services/transcripts';
-import { useNotifications } from '../../contexts/NotificationContext';
+import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import {
   TRANSCRIPT_ACTIVE_POLL_MS,
   TRANSCRIPT_IDLE_POLL_MS,

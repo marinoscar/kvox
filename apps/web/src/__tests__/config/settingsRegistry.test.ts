@@ -573,8 +573,17 @@ describe('the Operations group (#266)', () => {
       resolve(PLATFORM_API_DIST, 'nodes/nodes-admin.controller.js'),
       'utf8',
     );
+    // The broadcasts, push-config and email-settings controllers are the platform's (#470).
     const broadcastsController = readFileSync(
-      resolve(API_SRC, 'notifications/broadcasts/broadcasts.controller.ts'),
+      resolve(PLATFORM_API_DIST, 'notifications/broadcasts/broadcasts.controller.js'),
+      'utf8',
+    );
+    const pushConfigController = readFileSync(
+      resolve(PLATFORM_API_DIST, 'notifications/push-config.controller.js'),
+      'utf8',
+    );
+    const emailSettingsController = readFileSync(
+      resolve(PLATFORM_API_DIST, 'email/email-settings.controller.js'),
       'utf8',
     );
     const dbBackupController = readFileSync(
@@ -615,6 +624,20 @@ describe('the Operations group (#266)', () => {
       // CLAUDE.md Settings UI Pattern rule 3.
       expect(broadcastsController).toContain('PERMISSIONS.BROADCASTS_READ');
       expect(broadcastsController).toContain('PERMISSIONS.BROADCASTS_WRITE');
+    });
+
+    it('binds Web Push to push:read, which the platform push-config controller enforces on its GET (#470)', () => {
+      expect(cardsByTitle.get('Web Push')?.permission).toBe('push:read');
+      expect(cardsByTitle.get('Web Push')?.permission).not.toBe('system_settings:read');
+      expect(permissionCatalog).toContain('"push:read"');
+      expect(permissionCatalog).toContain('"push:write"');
+      expect(pushConfigController).toContain('PERMISSIONS.PUSH_READ');
+      expect(pushConfigController).toContain('PERMISSIONS.PUSH_WRITE');
+    });
+
+    it('binds Email to system_settings:read, which the platform email-settings controller enforces on its GET (#470)', () => {
+      expect(cardsByTitle.get('Email')?.permission).toBe('system_settings:read');
+      expect(emailSettingsController).toContain('SYSTEM_SETTINGS_READ');
     });
 
     it('binds Database Backup to the dedicated db_backup:read, never to system_settings:read', () => {

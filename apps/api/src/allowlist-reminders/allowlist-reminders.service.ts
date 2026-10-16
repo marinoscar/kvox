@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
 
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Rows of orphan clean-up per read: bounded so the sweep never holds a long lock. */

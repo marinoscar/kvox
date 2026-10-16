@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
-import { EmailModule } from '../email/email.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { emailModule } from '../platform/email/email.config';
 import { AdminOnboardingController } from './admin-onboarding.controller';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
@@ -32,8 +31,9 @@ import { OnboardingService } from './onboarding.service';
 // a user reported it.
 //
 // So: `AiModule` for the per-caller `AiConfigService`, `SettingsModule` for the AI and backup
-// policies plus the caller's own settings, `EmailModule` and
-// `NotificationsModule` for the two admin-only `describeForAdmin` views.
+// policies plus the caller's own settings, `emailModule` (the platform email slice) for
+// the admin-only email `describeForAdmin` view (the platform's global
+// notifications slice supplies `PushConfigService`, #470).
 // `PrismaService` needs no import — `PrismaModule` is `@Global` — and is used
 // only for the two admin account counts.
 //
@@ -52,8 +52,7 @@ import { OnboardingService } from './onboarding.service';
 @Module({
   imports: [
     AiModule,
-    EmailModule,
-    NotificationsModule,
+    emailModule,
   ],
   controllers: [OnboardingController, AdminOnboardingController],
   providers: [OnboardingService],

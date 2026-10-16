@@ -426,7 +426,7 @@ literal is gone** — `AiConfigService`, `AiSettingsService`,
 vendor now costs one id in `AI_PROVIDER_IDS`, one block in
 `aiProvidersSchema`, and one provider class — no consumer edit, in the same
 "one registry entry" shape the "add a job type" ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and "add a
-notification" ([notifications README](../../apps/api/src/notifications/README.md)) recipes already establish elsewhere in this codebase.
+notification" ([`add-notification` skill](../../.claude/skills/add-notification/SKILL.md)) recipes already establish elsewhere in this codebase.
 
 It is **nullable, not optional**, field for field with
 `ai-settings.schema.ts`'s own reasoning and `systemTranscriptionSchema
@@ -2559,9 +2559,9 @@ version were always going to render in that version's one format.
 
 ## Notifying somebody about a note
 
-Three events, added to `NOTIFICATION_EVENTS`
-(`apps/api/src/notifications/notification-events.ts`) via the exact
-three-step recipe in [`apps/api/src/notifications/README.md`](../../apps/api/src/notifications/README.md) documents —
+Three events (two are registered today; `notes.preview_failed` is specified but not raised by any code), registered with `registerNotification`
+(`apps/api/src/notifications-registry/notes.notifications.ts`) via the exact
+three-step recipe in the [`add-notification` skill](../../.claude/skills/add-notification/SKILL.md) documents —
 mirroring the three transcript events `docs/specs/transcription.md`'s own
 "Notifying somebody about a transcript" section states, with the same
 addressed-to-a-user posture (none of these is a job-queue operational event

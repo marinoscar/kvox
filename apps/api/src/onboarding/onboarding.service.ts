@@ -3,8 +3,8 @@ import { ModuleRef } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AiConfigService } from '../ai/ai-config.service';
-import { EmailSettingsService } from '../email/email-settings.service';
-import { PushConfigService } from '../notifications/push-config.service';
+import { EmailSettingsService } from '@marinoscar/platform-api/email';
+import { PushConfigService } from '@marinoscar/platform-api/notifications';
 import { SystemSettingsService, UserSettingsService } from '@marinoscar/platform-api/settings';
 import {
   toRequestUser,

@@ -190,7 +190,8 @@ controllers below, not assumed:
 | `jobs:read` | `jobs/job-admin.controller.ts` — `PERMISSIONS.JOBS_READ` |
 | `nodes:read` | the worker-node admin controller — `PERMISSIONS.NODES_READ` |
 | `db_backup:read` | the database-backup controller — `PERMISSIONS.DB_BACKUP_READ` |
-| `broadcasts:read` | `notifications/broadcasts/broadcasts.controller.ts` — `PERMISSIONS.BROADCASTS_READ` |
+| `broadcasts:read` | the platform's broadcasts controller (`@marinoscar/platform-api/notifications`, `/api/admin/broadcasts`) — `broadcasts:read` (or the organization twin `org_broadcasts:read`) |
+| `push:read` | the platform's push-config controller (`/api/admin/push-config`) — `push:read` |
 
 The reason this has to be a mirror and never an invented string is what a
 registry is *for*: the hub, the rail and the title resolver decide whether a

@@ -2006,9 +2006,9 @@ authority as reading what flows through it.
 
 ## Notifying somebody about a transcript
 
-Three events, added to `NOTIFICATION_EVENTS`
-(`apps/api/src/notifications/notification-events.ts`) following the exact
-three-step recipe in [`apps/api/src/notifications/README.md`](../../apps/api/src/notifications/README.md) already
+Three events, registered with `registerNotification`
+(`apps/api/src/notifications-registry/transcripts.notifications.ts`) following the exact
+three-step recipe in the [`add-notification` skill](../../.claude/skills/add-notification/SKILL.md) already
 documents — a registry entry, template(s), and a `notify()` call after the
 triggering write commits, outside any transaction:
 

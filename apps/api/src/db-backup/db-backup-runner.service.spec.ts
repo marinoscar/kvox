@@ -7,7 +7,7 @@ import { Prisma, type Job } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
 
 import type { DbBackupRunResult } from './contracts/db-backup-run.contract';
-import type { NotificationsService } from '../notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';

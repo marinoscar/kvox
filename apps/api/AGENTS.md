@@ -4,7 +4,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Layout
 
-- `src/<module>/` per feature (`transcripts`, `notes`, `graph`, `ask`, `user-data`, `onboarding`, `notifications`, ...). Job handlers live in the owning module's `handlers/`.
+- `src/<module>/` per feature (`transcripts`, `notes`, `graph`, `ask`, `user-data`, `onboarding`, ...). Job handlers live in the owning module's `handlers/`.
 - `prisma/schema.prisma` is one hand-edited file; `prisma/migrations/` holds the SQL. `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
 
 ## Rules
@@ -14,8 +14,8 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 - **Adding an endpoint**: controller method (auth/RBAC decorators), service method (all business logic), OpenAPI annotations, unit + integration tests, update `docs/API.md`.
 - **Adding a setting**: a `system_settings` or `user_settings` namespace is one declaration (with its `merge`) appended to `src/app-registrations/settings.ts`; the platform settings slice composes schemas and OpenAPI from the registries (`src/settings/registry/`). No local settings services or DTOs. See [DEVELOPMENT.md](../../docs/DEVELOPMENT.md#settings-namespace-registry).
 - **Secrets** go through the platform `CredentialsService` (`src/platform/credentials/`), never a local cipher. A credential purpose is its sub-key domain: never rename one.
-- **Long-running work is a queue job** (root rules 1-4). The queue is `@marinoscar/platform-api/jobs`; recipe: the [`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md). Handlers declare their own `label`; pass `orgId` explicitly on every enqueue. Notifications, onboarding steps and user-data categories: declare in the domain module plus a manifest line. Enqueue later-registered types only behind a registry guard, or they sit `pending` forever.
-- **`notify()` after commit**, outside any `$transaction`; recipe: [src/notifications/README.md](src/notifications/README.md). Use `notifyAddress` for recipients with no account.
+- **Long-running work is a queue job** (root rules 1-4). Queue: `@marinoscar/platform-api/jobs`; recipe: [`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md). Handlers declare their own `label`; pass `orgId` explicitly on every enqueue. Onboarding steps and user-data categories: domain module plus a manifest line. Enqueue later-registered types only behind a registry guard, or they sit `pending` forever.
+- **`notify()` after commit**, outside any `$transaction`; recipe: [`add-notification` skill](../../.claude/skills/add-notification/SKILL.md) (platform service; events: `src/notifications-registry/`, templates: `src/email-templates/`). `notifyAddress`: no account.
 - **Prisma**: use `npm run prisma:*`, never bare `npx prisma`. Partial unique and expression indexes are hand-written in `migration.sql` only (intentional drift, see root Invariants).
 - **A behaviour change carries tests** in the same or the next commit. Specs run through `scripts/jest.js`; `npm test` skips `*.db.spec.ts`.
 

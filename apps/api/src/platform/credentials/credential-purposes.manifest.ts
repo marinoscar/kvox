@@ -17,11 +17,15 @@
 // own and is registered by `kvox.manifest.ts` (`[registry:credential-purposes]`):
 // base code here may not import the transcription folder.
 //
-// Verified when this file was written: the platform strings `smtp` and
-// `push_vapid` equal `SMTP_CREDENTIAL_PURPOSE` / `PUSH_VAPID_CREDENTIAL_PURPOSE`
-// in `email/smtp-credential.constants.ts` and
-// `notifications/push-vapid-credential.constants.ts`, so no app-level
-// re-registration under this app's own string was needed.
+// Verified when this file was written, and again by #470 when this app's own
+// `email/` and `notifications/` folders were deleted: the platform strings
+// `smtp` and `push_vapid` equal the `SMTP_CREDENTIAL_PURPOSE` and
+// `PUSH_VAPID_CREDENTIAL_PURPOSE` those folders held, so no app-level
+// re-registration under this app's own string was needed. `email_ses` is new
+// to this deployment's rows: the app's own SES provider read the key pair from
+// the environment and stored no secret, so there is no ciphertext under it to
+// orphan (the SES access key id and secret are now saved at
+// `/admin/settings/email`).
 //
 // NOT HERE: `ai-key`. Every AI key is per user in `user_ai_credentials`, never
 // in `credentials`; that table uses the cipher (`encryptSecret` /

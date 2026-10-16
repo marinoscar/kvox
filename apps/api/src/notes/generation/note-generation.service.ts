@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Note, NoteGeneration, Prisma } from '@prisma/client';
 
-import type { NoteFailedEmailData } from '../notifications/note-failed.email';
-import type { NoteReadyEmailData } from '../notifications/note-ready.email';
-import { NotificationsService } from '../../notifications/notifications.service';
+import type { NoteFailedEmailData } from '../../email-templates/note-failed.email';
+import type { NoteReadyEmailData } from '../../email-templates/note-ready.email';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';

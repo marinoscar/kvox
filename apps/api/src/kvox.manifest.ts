@@ -75,14 +75,6 @@ import {
 import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
 
 import { TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF } from './transcription/transcription-credential.constants';
-import { BASE_EMAIL_TEMPLATES, registerEmailTemplates } from './email/templates';
-import { BASE_NOTIFICATIONS } from './notifications/notification-events';
-import { registerNotifications } from './notifications/notification-registry';
-import { NOTES_EMAIL_TEMPLATES, NOTES_NOTIFICATIONS } from './notes/notifications/notes.notifications';
-import {
-  TRANSCRIPTS_EMAIL_TEMPLATES,
-  TRANSCRIPTS_NOTIFICATIONS,
-} from './transcripts/notifications/transcripts.notifications';
 
 let registered = false;
 
@@ -101,20 +93,13 @@ if (!registered) {
   // platform registry records when the handler registers. The labels of the
   // retired example types are registered in `app-registrations/jobs.ts`.
   // [registry:email-templates]
-  // Base templates, then each domain's; notifications (next) may only bind a
-  // template that is already registered. Order = `Object.keys(EMAIL_TEMPLATES)`.
-  registerEmailTemplates(BASE_EMAIL_TEMPLATES);
-  registerEmailTemplates(TRANSCRIPTS_EMAIL_TEMPLATES);
-  registerEmailTemplates(NOTES_EMAIL_TEMPLATES);
+  // None here since #470: the email templates and the notification events are the
+  // platform's slice, registered (platform channels, rendering context, platform
+  // templates, this app's templates, then the events) by
+  // `platform/notifications/notification.manifest.ts`, imported by
+  // `platform/notifications/notifications.config.ts`.
   // [registry:notifications]
-  // Base events through `db_backup.restore_completed`, then `transcripts.*`,
-  // then `notes.*`: the order the preferences matrix and
-  // `GET /api/notifications/events` have always shown.
-  registerNotifications([
-    ...BASE_NOTIFICATIONS,
-    ...TRANSCRIPTS_NOTIFICATIONS,
-    ...NOTES_NOTIFICATIONS,
-  ]);
+  // See above: `notifications-registry/*.notifications.ts`.
   // [registry:onboarding]
   // Facts first (a step is refused if a fact it names is unknown), then steps.
   // `order` (10, 20, 30, ... per audience) fixes the rendered sequence, so the

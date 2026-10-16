@@ -39,15 +39,16 @@ vi.mock('react-router-dom', async () => {
 
 // Issue #365. Mocked so this file can assert the banner mounts and is wired
 // to the hook's own `requestPermission`/`isRequestingPermission`, without
-// re-deriving the auto-prompt/boot-sync behaviour `usePushSubscriptionSync.test.ts`
-// already owns.
-vi.mock('../../../hooks/usePushSubscriptionSync', () => ({
+// re-deriving the auto-prompt/boot-sync behaviour the platform slice owns
+// (`@marinoscar/platform-web/notifications/headless`, #470).
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
   usePushSubscriptionSync: vi.fn(),
 }));
 
 import { AppBar } from '../../../components/navigation/AppBar';
 import { Outlet } from 'react-router-dom';
-import { usePushSubscriptionSync } from '../../../hooks/usePushSubscriptionSync';
+import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 
 const mockUsePushSubscriptionSync = vi.mocked(usePushSubscriptionSync);
 

@@ -22,7 +22,10 @@ vi.mock('../../services/transcriptEditing', () => ({
   restoreTranscriptVersion: vi.fn(),
 }));
 
-vi.mock('../../contexts/NotificationContext', () => ({ useNotifications: () => null }));
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
+  useNotifications: () => null,
+}));
 
 import { render, mockAdminUser } from '../utils/test-utils';
 import TranscriptHistoryPage from '../../pages/TranscriptHistoryPage';

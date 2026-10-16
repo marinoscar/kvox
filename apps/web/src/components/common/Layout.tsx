@@ -2,7 +2,7 @@ import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppBar } from '../navigation/AppBar';
 import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
-import { NotificationPermissionBanner } from '../notifications/NotificationPermissionBanner';
+import { NotificationPermissionBanner } from '@marinoscar/platform-web/notifications/ui';
 // Onboarding (#276/#277, epic #271). The provider and the banner mount
 // together, HERE, for the reason each of them documents in its own header: the
 // shell is the one place that exists exactly once per authenticated session,
@@ -18,7 +18,7 @@ import { OnboardingBanner } from '../onboarding/OnboardingBanner';
 // session rather than of whatever page the user happened to land on.
 import { ReturnToSetupBar } from '../onboarding/ReturnToSetupBar';
 import { FirstRunWelcomeDialog } from '../onboarding/WelcomeDialog';
-import { usePushSubscriptionSync } from '../../hooks/usePushSubscriptionSync';
+import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 import { NavigationRail } from '../navigation/NavigationRail';
 import { BottomNav } from '../navigation/BottomNav';
 

@@ -7,7 +7,7 @@
 // module whose controllers use `@Auth()`, so the ports it injects have to
 // resolve there.
 //
-//   IDENTITY_NOTIFIER         -> NotificationsService     (moves in #468)
+//   IDENTITY_NOTIFIER         -> NotificationsService     (the platform's, #470)
 //   IDENTITY_JOBS             -> JobsService + registry   (the platform's, #468)
 //   USER_DEFAULTS             -> DEFAULT_USER_SETTINGS    (moves in #466)
 //   IDENTITY_PROFILE_IMAGES   -> the storage slice's profile-image helpers (#469)
@@ -33,17 +33,15 @@ import {
 
 import { NodeCredentialService } from '@marinoscar/platform-api/nodes';
 
-import { NotificationsModule } from '../../notifications/notifications.module';
 import { IdentityJobsAdapter } from './identity-jobs.adapter';
 import { IdentityNotifierAdapter } from './identity-notifier.adapter';
 import { KvoxProfileImages, KvoxUserDefaults } from './identity-user.adapters';
 
 @Global()
 @Module({
-  // `NodeCredentialModule` and the jobs slice are themselves @Global, so
-  // `NodeCredentialService`, `JobsService` and `JobHandlerRegistry` resolve here
-  // without an import.
-  imports: [NotificationsModule],
+  // `NodeCredentialModule`, the jobs slice and the notifications slice are
+  // themselves @Global, so `NodeCredentialService`, `JobsService`,
+  // `JobHandlerRegistry` and `NotificationsService` resolve here without an import.
   providers: [
     { provide: IDENTITY_NOTIFIER, useClass: IdentityNotifierAdapter },
     { provide: IDENTITY_JOBS, useClass: IdentityJobsAdapter },

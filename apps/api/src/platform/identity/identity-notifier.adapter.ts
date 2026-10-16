@@ -7,12 +7,13 @@ import type {
   UserWelcomeNotice,
 } from '@marinoscar/platform-api/identity';
 
-import { NotificationsService } from '../../notifications/notifications.service';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 
 /**
- * Identity's `IDENTITY_NOTIFIER` over this app's CURRENT `NotificationsService`
- * (PLATFORM-ADOPTION-SHIM(#468): #468 moves notifications into the platform and
- * changes only the binding in `identity-host.module.ts`).
+ * Identity's `IDENTITY_NOTIFIER` over the platform's `NotificationsService`
+ * (#470). A port bridge: the platform exports no `IdentityNotifier`
+ * implementation, so this maps the identity notices onto the events registered
+ * in `notifications-registry/identity.notifications.ts`.
  *
  * Identity calls every method AFTER the triggering write committed and outside
  * any transaction, and `NotificationsService.notify*` never rejects (a delivery

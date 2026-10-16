@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { GraphExtractionModule } from '../graph/extraction/extraction.module';
-import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
@@ -65,7 +64,8 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //     `UserAiCredentialsService`, which is the only way to reach a user's own
 //     decrypted key. That module is deliberately NOT `@Global()` precisely so
 //     this import shows up in a diff.
-//   • `NotificationsModule` — the two owner-addressed events.
+//   • `NotificationsService` — the two owner-addressed events (global since
+//     #470: the platform's notifications slice, nothing to import).
 //   • `KvoxObjectsModule` — `KvoxManagedObjects`, which `NoteObjectsService`
 //     delegates its row writes and deletes to so this module must NAME the owner
 //     it believes in before it may remove anything, and which re-exports the
@@ -93,7 +93,6 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
   imports: [
     PrismaModule,
     AiModule,
-    NotificationsModule,
     TranscriptsModule,
     KvoxObjectsModule,
     // The semantic index (#188, epic #165). ONE-WAY, exactly as in

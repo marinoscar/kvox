@@ -76,7 +76,7 @@ import { readTocEntryCount } from '../../src/db-backup/pg-restore.util';
 import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
 import { checkPgClientVersion, readServerVersionNumWithPgClient } from '../../src/db-backup/pg-version.util';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { NotificationsService } from '../../src/notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { cleanupTmpDir, TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';

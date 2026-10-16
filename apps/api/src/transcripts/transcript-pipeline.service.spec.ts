@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';

@@ -23,7 +23,7 @@
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 
-import { NotificationsService } from '../src/notifications/notifications.service';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { TestContext, closeTestApp, createTestApp } from './helpers/test-app.helper';
 import { authHeader } from './helpers/auth-mock.helper';
 import { createMembershipAdmin, createMembershipUser } from './helpers/membership-user.helper';

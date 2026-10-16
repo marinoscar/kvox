@@ -38,7 +38,7 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import type { PrismaClient } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import type { NotificationsService } from '../../src/notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AllowlistRemindersController } from './allowlist-reminders.controller';
 import { AllowlistRemindersService } from './allowlist-reminders.service';
@@ -13,7 +12,7 @@ import { AllowlistRemindersService } from './allowlist-reminders.service';
  * dependencies from the global identity slice, so neither is imported here.
  */
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule],
   controllers: [AllowlistRemindersController],
   providers: [AllowlistRemindersService],
 })

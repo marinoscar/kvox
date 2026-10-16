@@ -74,7 +74,7 @@ import type {
 import { isTranscriptInFlight } from '../utils/transcriptDisplay';
 import { reconcileFeed } from '../utils/feedReconcile';
 import { useCachedFeedState } from '../utils/feedCache';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import { useIsMounted } from './useIsMounted';
 import { useVisiblePolling } from './useVisiblePolling';
 

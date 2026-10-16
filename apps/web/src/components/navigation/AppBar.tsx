@@ -20,7 +20,9 @@ import { APP_NAME } from '@app/shared';
 import { useThemeContext } from '../../contexts/ThemeContext';
 import { BrandMark } from '../common/BrandMark';
 import { UserMenu } from './UserMenu';
-import { NotificationBell } from './NotificationBell';
+// Issue #470: the bell is the platform's; it stays mounted HERE, at the same
+// position, until the shell moves (#484).
+import { NotificationBell } from '@marinoscar/platform-web/notifications/ui';
 import {
   ADMIN_SECTIONS,
   ADMIN_HUB_PATH,

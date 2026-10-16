@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { ObjectProcessingModule } from '@marinoscar/platform-api/storage';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
-import { NotificationsModule } from '../notifications/notifications.module';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -75,8 +74,9 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
 //     upload init, `deleteManaged` for purges), which re-exports the platform's
 //     `ObjectsService` and the `STORAGE_PROVIDER` token. Submit presigns with
 //     the provider; ingest writes the gzipped raw result through it.
-//   • `NotificationsModule` — the two owner-addressed events, plus (#29) the
-//     one recipient-addressed one.
+//   • `NotificationsService` — the two owner-addressed events, plus (#29) the
+//     one recipient-addressed one. The platform's notifications slice is global
+//     (#470), so nothing is imported for it.
 //
 // -----------------------------------------------------------------------------
 // NOTHING IS EXPORTED YET, AND THAT IS ON PURPOSE
@@ -107,7 +107,6 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
     PrismaModule,
     TranscriptionModule,
     CredentialsModule,
-    NotificationsModule,
     // #469: the ownership gateway the upload processor asks, and the registry it registers into.
     KvoxObjectsModule,
     ObjectProcessingModule,

@@ -43,7 +43,7 @@ Full index with a "Doc map by task": [docs/README.md](docs/README.md). Read docs
 | Runbooks: VAPID keys, AI provider keys, secrets-encryption key rotation, object storage configuration, S3 CORS, Postgres client version | [docs/runbooks/vapid-keys.md](docs/runbooks/vapid-keys.md), [docs/runbooks/ai-provider-keys.md](docs/runbooks/ai-provider-keys.md), [docs/runbooks/rotate-secrets-encryption-key.md](docs/runbooks/rotate-secrets-encryption-key.md), [docs/runbooks/storage-configuration.md](docs/runbooks/storage-configuration.md), [docs/runbooks/s3-cors.md](docs/runbooks/s3-cors.md), [docs/runbooks/postgres-client-version.md](docs/runbooks/postgres-client-version.md) |
 | `kvox` CLI usage, install, CI setup, `deploy` and `node` command reference | [apps/cli/README.md](apps/cli/README.md) |
 | Recipe: add a job type (the queue and node fleet are `@marinoscar/platform-api/jobs` and `/nodes`; contract in the package README and TSDoc) | [.claude/skills/add-job-type/SKILL.md](.claude/skills/add-job-type/SKILL.md) |
-| Recipe: add a notification | [apps/api/src/notifications/README.md](apps/api/src/notifications/README.md) |
+| Recipe: add a notification (event in `notifications-registry/`, template in `email-templates/`, `notify()` after commit) | [.claude/skills/add-notification/SKILL.md](.claude/skills/add-notification/SKILL.md) |
 | Area rules (API, web, CLI) | [apps/api/AGENTS.md](apps/api/AGENTS.md), [apps/web/AGENTS.md](apps/web/AGENTS.md), [apps/cli/AGENTS.md](apps/cli/AGENTS.md) |
 | How Claude Code and OpenCode share these files, local-model setup, guard specs | [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md) |
 

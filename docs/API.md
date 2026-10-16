@@ -1291,8 +1291,8 @@ policy, plus the Web Push half added by #229/#230/#355 —
 user, with no `system_settings:read` requirement, since a non-admin (e.g. a
 viewer) cannot call `GET /system-settings` directly but still needs to know
 whether notifications are enabled deployment-wide. `pushEnabled` reflects
-whether an active VAPID key pair is currently configured (admin UI or
-environment fallback — see `docs/runbooks/vapid-keys.md`), and
+whether an active VAPID key pair is currently configured (admin UI only
+since #470, there is no environment fallback — see `docs/runbooks/vapid-keys.md`), and
 `vapidPublicKey` carries that key pair's public half when one is active, so
 the web client can pass it to `pushManager.subscribe()` (issue #365; see
 `docs/specs/browser-notifications.md` Section 12). Both are `false`/`null`
@@ -2744,9 +2744,46 @@ Undoes a completed restore. Same "mode is the answer, all three are 200" contrac
 
 ---
 
+### Notifications
+
+> Served by the platform notifications slice (`@marinoscar/platform-api/notifications`) since #470; the paths and bodies are the ones this app has always exposed, plus `GET /notifications/channels`. Design: [`specs/browser-notifications.md`](specs/browser-notifications.md). Every route is `@Auth()` with **no permission** and scoped to the caller's own rows.
+
+| Method | Path | Effect |
+|---|---|---|
+| `GET` | `/notifications/events` | The event registry for the caller's preferences matrix: `key`, `label`, `description`, `mandatory`, `defaultEnabled`, `channels` (capability intersected with administrator policy) and `declaredChannels` (the unfiltered capability; **additive since #470**: the platform route returns it on every event, and the web client tolerates it). Order is the registration order in `platform/notifications/notification.manifest.ts` |
+| `GET` | `/notifications/channels` | **New in #470.** Every registered channel (`email`, `browser`, `push`) with its label, whether a user may toggle it, whether a critical broadcast may rely on it (`criticalCapable`) and whether a broadcast can be sent over it (`broadcastCapable`). Carries no configuration and no secret |
+| `GET` | `/notifications/config` | `{ browserEnabled, pushEnabled, vapidPublicKey }` (see System Settings above) |
+| `GET` | `/notifications/stream` | SSE (`text/event-stream`), the caller's own `notification` frames carrying `toast` and `pushed`. Liveness, not delivery: `GET /notifications` is the truth |
+| `GET` | `/notifications` | The caller's inbox, newest first. Query: `page`, `pageSize`, `unreadOnly` |
+| `GET` | `/notifications/unread-count` | `{ count }`, the bell badge |
+| `POST` | `/notifications/:id/read` | Mark one read; returns the new unread count; `404` for a row that is not the caller's |
+| `POST` | `/notifications/read-all` | Mark all read; returns the new unread count |
+| `POST` | `/notifications/push/subscriptions` | Register or refresh the caller's browser `PushSubscription` (upsert by `endpoint`); `409` when no VAPID key pair is active |
+| `DELETE` | `/notifications/push/subscriptions` | Remove the caller's subscription for an `endpoint`; `204`, or `404` when it is not the caller's |
+
+The response shapes are in the OpenAPI document (`/api/docs`, tag Notifications).
+
+---
+
+### Email Settings (Admin-only)
+
+> Served by the platform email slice (`@marinoscar/platform-api/email`) since #470. The path and the permissions are the same as the former app controller; the body is a superset.
+
+| Method | Path | Permission | Effect |
+|---|---|---|---|
+| `GET` | `/email-settings` | `system_settings:read` | The configuration plus masked credential status. **No secret is ever returned** |
+| `PUT` | `/email-settings` | `system_settings:write` | Replace the configuration. `If-Match` carries the expected `version` (`0` asserts nothing is stored). A password field is write-only: send it to set or rotate, omit it or send it empty to keep the stored value. `400` on validation, `409` on a version conflict |
+| `POST` | `/email-settings/test` | `system_settings:write` | Send the test email **to the caller's own address** (there is no recipient field). Always `HTTP 200`: read `success`, and `error` carries the provider's own message with credentials redacted |
+
+What changed with #470 (additive, the former fields are all still accepted and returned): `provider` is any registered transport id rather than a fixed enum (`smtp` and `ses` ship), `PUT` gains the optional `transports`, `sesAccessKeyId`, `sesSecretAccessKey` (write-only) and `secrets` (`{ <transportId>: { <secret>: value } }`, write-only) fields; `smtpPassword` is unchanged (blank keeps the stored value). The response gains `transports`, `descriptors` (the form fields each transport needs, which the packaged page draws), `secretStatuses`, `sesAccessKeyId` and `sesSecretAccessKeyStatus`; `smtpPasswordStatus` is kept as a deprecated alias. SMTP is unaffected: the same `email` settings row and credential purpose `smtp`, name `default`.
+
+**Operator step for Amazon SES.** The access key ID is stored in the `email` settings row and the secret in the credential `email_ses` / `default`. The former environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are **no longer read**, so a deployment that sends through Amazon SES must re-enter the access key ID and the secret access key at `/admin/settings/email` after the deploy. `S3_REGION` is kept only as a default for the SES region when none is saved (`sesRegionFallback` in `apps/api/src/platform/email/email.options.ts`).
+
+---
+
 ### Notification Broadcasts
 
-**All routes require Admin role (`broadcasts:read` or `broadcasts:write` permissions)**
+**Served by the platform `BroadcastsModule` since #470. Every route accepts either `broadcasts:read|write` or the organization-scoped `org_broadcasts:read|write`** (held by the `org_admin` role). The former code also required the `admin` role; that requirement is gone, so an `org_admin` can reach these routes, scoped to the active organization (in this single-organization deployment, every active user). A request body may carry `targetOrgId`, which must be the caller's own organization for an `org_broadcasts` caller.
 
 Send a message to every active user — composed in the app, sent immediately or scheduled for later. See [`docs/specs/notification-broadcasts.md`](specs/notification-broadcasts.md) for the fan-out mechanism, the audience definition, and why several of these routes behave the way they do; this section documents only the request/response contract.
 
@@ -2990,7 +3027,20 @@ Cancel a scheduled or in-flight broadcast — the only recall mechanism this fea
 
 **Error Cases:**
 - 404 Not Found - Broadcast not found
-- 409 Conflict - The broadcast is not `scheduled` or `sending` (already `sent`, `canceled`, or `failed`)
+- 409 Conflict - The broadcast is not `scheduled`, `sending` or `failed` (already `sent` or `canceled`). Since #470 cancelling a `failed` broadcast is accepted: it closes the record of a broadcast that will not be resumed
+
+---
+
+#### POST /admin/broadcasts/:id/resume
+**New in #470.** Continue a `failed` broadcast from where its fan-out stopped: a compare-and-swap `failed` to `sending`, a new `admin.broadcast.start` job, and the audit action `notification_broadcast.resumed`.
+
+**Requires:** `broadcasts:write` (or `org_broadcasts:write`)
+
+**Response:** the resumed broadcast (`data`).
+
+**Error Cases:**
+- 404 Not Found - No such broadcast
+- 409 Conflict - The broadcast is not `failed`
 
 ---
 
@@ -3012,7 +3062,7 @@ Delete a broadcast's record.
 
 ### Push Configuration (Admin-only)
 
-Runtime-configurable Web Push (VAPID) keys — issue #355. Two permissions:
+Runtime-configurable Web Push (VAPID) keys — issue #355; served by the platform notifications slice since #470 (same paths, permissions, confirmation literals and stored data; **there is no environment fallback**, so a deployment that relied on `VAPID_*` variables must generate keys here). Two permissions:
 `push:read` (get) and `push:write` (every write) — **deliberately separate
 from `system_settings:*`**, mirroring why `broadcasts:*`/`nodes:*`/
 `db_backup:*` were split out rather than folded into an existing pair:

@@ -8,59 +8,42 @@ the delivery mechanism itself — see
 for why Web Push exists, how it fits alongside the browser-toast channel, and
 what it does and does not guarantee.
 
-**As of issue #355, the recommended path is the admin UI** at
-`/admin/settings/push` — generate, enable, rotate, or remove a VAPID key pair
-live, with no restart. Section 2 covers that path. The original env-var
-procedure (Section 3) still works and is kept as a documented fallback for a
-deployment that has not touched the admin UI — see Section 1.1 for exactly
-how the two interact when both are present.
+**Web Push is the platform's since issue #470.** The routes, permissions and
+stored data are the ones this deployment has always used (`/api/admin/push-config`,
+`push:read` and `push:write`, the `webPush` settings row, the `push_vapid`
+credential), so existing keys and browser subscriptions keep working with no
+re-subscription. What changed for an operator:
 
-**As of issue #241, the `deploy install` environment wizard no longer asks
-about `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` at all — not
-even under `--all`.** This is a change to the *wizard prompt* only, and
-nothing about the four-case precedence in Section 1.1 changed: the three
-variables are still declared in `infra/compose/.env.example`, still read by
-`PushConfigService.resolveFromEnv()` (case 1 — no stored configuration is the
-only case that consults them), and still settable by hand in `.env`. They are
-marked `never: true` in `apps/cli/src/deploy/env-metadata.ts` specifically so
-the wizard stops pointing a first-time install at a mechanism the admin page
-has superseded, not because the mechanism itself was removed. An operator who
-wants Section 3's env-var path still gets it — they just now write the three
-lines into `.env` themselves rather than being prompted for them during
-install.
+- **The admin UI at `/admin/settings/push` is the only path.** Generate, enable,
+  rotate or remove a VAPID key pair there, live, with no restart (Section 2).
+- **The environment-variable path is gone.** The platform has no fallback to
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` or `VAPID_SUBJECT`. A deployment that
+  relied on those variables alone has Web Push **off** after the #470 deploy
+  until an admin generates a key pair in the UI. Section 3 says how to carry
+  over an existing pair, and what to do if you must keep the same keys.
+- **After the deploy, open `/admin/settings/push`** (and `/admin/settings/email`)
+  and confirm the status; see Section 1.2.
 
 Source of truth for every claim below:
 
-- `apps/api/src/notifications/push-config.service.ts` — `PushConfigService`,
-  and specifically `resolveActiveVapidConfig()`, the one place both callers
-  below ask "what VAPID key pair, if any, is active right now."
-- `apps/api/src/notifications/push-config.controller.ts` — the five
-  `/api/admin/push-config` routes the admin UI (and any other client) calls.
-- `apps/api/src/notifications/push-config.schema.ts` — the `webPush`
-  `system_settings` row's shape (`enabled`, `publicKey`, `subject`).
-- `apps/api/src/notifications/push-vapid-credential.constants.ts` — where the
-  private key actually lives (`CredentialsService`, `purpose: 'push_vapid'`).
-- `apps/api/src/config/configuration.ts` — the `push` config block
-  (`push.vapidPublicKey`, `push.vapidPrivateKey`, `push.vapidSubject`), read
-  from `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — the
-  env-var fallback path only.
-- `apps/api/src/notifications/push-subscription.service.ts` — `isEnabled()`,
-  the predicate that decides whether this deployment accepts push
-  subscriptions at all; delegates to `resolveActiveVapidConfig()`.
-- `apps/api/src/notifications/channels/push-notification.channel.ts` — the
-  sender, including what happens when a send fails.
-- `apps/api/src/notifications/notifications.module.ts` — registers the push
-  channel unconditionally (like email/browser); see its header comment for
-  why that changed with #355.
-- `apps/web/src/pages/Admin/PushConfigPage.tsx` and
-  `apps/web/src/components/admin/PushConfigConfirmDialog.tsx` — the admin UI.
-- `infra/compose/.env.example` — the three fallback environment variables,
-  commented out by default.
+- `@marinoscar/platform-api/notifications`: `PushConfigService` (and its
+  `resolveActiveVapidConfig()`, the one place that decides which key pair is
+  active), `PushConfigController` (the six `/api/admin/push-config` routes),
+  `PushTestService`, `PushSubscriptionService`, the push channel, and
+  `PUSH_VAPID_CREDENTIAL_PURPOSE_DEF` (purpose `push_vapid`, name `default`).
+  The TSDoc is in `node_modules/@marinoscar/platform-api/dist/notifications/`.
+- `apps/api/src/platform/credentials/credential-purposes.manifest.ts`: where
+  the application registers the `push_vapid` purpose (the string is
+  permanent, it is also the AES sub-key domain).
+- `apps/api/src/platform/notifications/notifications.config.ts`: the mount.
+- `@marinoscar/platform-web/notifications/ui` (`PushConfigPage`) and
+  `apps/web/src/platform/notifications.ts`: the admin UI.
+- `apps/web/src/sw.ts`: the service worker, composed from the package's
+  handlers ([browser-notifications spec](../specs/browser-notifications.md#the-service-worker-453-parity)).
 
-**Web Push ships disabled by default.** Neither touching the admin UI nor
-setting the three environment variables is required — nothing in this
-codebase requires either, and every other notification channel (email, the
-in-app browser toast) is unaffected by their absence.
+**Web Push ships disabled by default.** Nothing in this codebase requires it,
+and every other notification channel (email, the in-app bell) is unaffected by
+its absence.
 
 ---
 
@@ -82,39 +65,45 @@ in-app browser toast) is unaffected by their absence.
   existing subscriber goes dark until it re-subscribes) that should not ride
   along with routine settings edits.
 
-### 1.1 How the admin UI and the environment variables interact
+### 1.1 Which key pair is active
 
-`PushConfigService.resolveActiveVapidConfig()` is the one place this decision
-is made, for every send and every subscribe attempt. Four cases, in order:
+`PushConfigService.resolveActiveVapidConfig()` decides, for every send and
+every subscribe attempt. Three cases, in order:
 
-1. **No `webPush` row exists at all** (the admin page has never been saved
-   on) → fall back to the `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/
-   `VAPID_SUBJECT` environment variables, exactly as before #355. A
-   deployment that only ever used Section 3's procedure needs to do nothing
-   differently.
-2. **A `webPush` row exists, `enabled: true`, and both a public key and the
-   private-key credential are present** → the database wins, **even over
-   env vars that are still set**. The moment an admin saves anything through
-   `/admin/settings/push`, that row is the source of truth, full stop.
-3. **A `webPush` row exists with `enabled: false`** → push is off, and there
-   is **no fallback to the environment variables**. This is the one
-   deliberate asymmetry in the rule: an explicit disable in the admin UI must
-   actually disable push, even on a deployment that also has env vars set —
-   otherwise "disable" would do nothing on such a deployment.
-4. **A `webPush` row exists with `enabled: true`, a public key is stored, but
-   the private-key credential is missing** (corruption, a hand-edited row, a
-   botched migration) → treated as disabled, and logged loudly. This never
-   silently falls back to the env vars — that would mask a real data problem
-   as ordinary "not configured."
+1. **No `webPush` row exists, or the row has `enabled: false`** → push is off.
+   There is no environment fallback (the platform retired it, its #635, to keep
+   one source of truth for a credential). An explicit disable always wins.
+2. **A row exists with `enabled: true` but is broken**: no public key, or the
+   private-key credential is missing (corruption, a hand-edited row) → treated
+   as disabled, and logged loudly.
+3. **A row exists with `enabled: true`, a public key, and the private-key
+   credential** → that key pair is active.
 
-In short: touch the admin UI once, and it owns the answer from then on,
-regardless of what the environment variables say. Never touch it, and the
-environment variables behave exactly as they always did.
+Before #470 this deployment also honoured `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` when no row existed. Those variables are
+no longer read by anything; see Section 3.
+
+### 1.2 After the #470 deploy
+
+1. Open `/admin/settings/push`. If the deployment already had a stored key pair
+   (anything generated or rotated in the UI before), the page shows it as
+   configured and enabled, and nothing else is needed: the stored row, the
+   encrypted private key and every browser subscription are reused.
+2. If the page shows **not configured** and push worked before the deploy, the
+   deployment was running on the environment variables. Follow Section 3.
+3. Press **Test & diagnostics** → send a test push to your own devices and
+   confirm the acknowledgement.
+4. Open `/admin/settings/email`, check the provider, the sender address and the
+   masked password status, and press **Send test email**. The stored settings are
+   reused; the page is the packaged one. **A deployment on Amazon SES must
+   re-enter the access key ID and the secret access key here:** the old
+   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables are no longer read.
+   SMTP is unaffected.
 
 ## 2. The admin UI (recommended)
 
 Visit `/admin/settings/push` as an Admin (or any role holding `push:read`/
-`push:write`). The page has three panels, matching `PushConfigPage.tsx`:
+`push:write`). The page has three panels, matching the packaged `PushConfigPage`:
 
 1. **Status** — always shown: configured/not, enabled/disabled, the full
    public key (monospace, copyable — it is not secret), the subject, and the
@@ -154,7 +143,7 @@ Once a key pair exists, the switch on the configured-state panel toggles
 `enabled` via `PUT /api/admin/push-config`. This is the **non-destructive**
 action — the stored key pair is retained either way, so switching back on
 needs no regenerating. Disabling takes effect immediately (Section 1.1, case
-3): no push is sent while `enabled` is `false`, and `POST
+1): no push is sent while `enabled` is `false`, and `POST
 /api/notifications/push/subscriptions` starts rejecting new subscriptions
 with `409 Conflict`.
 
@@ -249,10 +238,9 @@ other. Confirming calls `DELETE /api/admin/push-config` with
 - Deletes the stored private-key credential **first**, then the `webPush`
   settings row — the opposite order from Generate, and deliberately so: the
   safer partial-failure state is "row still present but the credential is
-  gone" (Section 1.1's case 4 already treats that as disabled and logs
-  loudly), not "row gone but the credential still present," which would let a
-  partial failure silently fall back to any env vars this deployment also has
-  set — reactivating push on stale keys the admin just asked to remove.
+  gone" (Section 1.1's case 2 treats that as disabled and logs loudly), not "row
+  gone but the credential still present," which would leave a live private key
+  behind after the admin asked for it to be removed.
 - Returns the resulting, now-empty configuration.
 
 This is **destructive and immediate**: every existing push subscriber stops
@@ -263,81 +251,41 @@ keeps working; only web push stops. `push_subscriptions` rows are not deleted
 by this action — they sit inert until a new key pair is generated and each
 browser re-subscribes, or until the 404/410 pruning path removes them.
 
-## 3. The environment-variable path (fallback)
+## 3. The environment-variable path (retired in #470)
 
-This is the original, deploy-time-only mechanism from before #355. It still
-works, unchanged, and is the automatic behavior for any deployment that has
-never saved anything through `/admin/settings/push` (Section 1.1, case 1).
-Use it if you would rather manage Web Push the same way as `JWT_SECRET` or
-`GOOGLE_CLIENT_SECRET` — provisioned once at deploy time, outside the
-application — or as a bootstrap step before an admin ever opens the UI.
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are not read by
+anything any more. They remain listed in `infra/compose/.env.example` (marked as
+retired) only because the install wizard's metadata still names them; setting
+them has no effect, and the `deploy install` wizard has not asked about them
+since issue #241.
 
-### 3.1 Generating a key pair
+**If this deployment ran on the variables alone** (Web Push worked, but
+`/admin/settings/push` shows not configured):
 
-```bash
-npx web-push generate-vapid-keys
-```
+1. Press **Generate & enable** (Section 2.1), with a real subject. This mints a
+   new key pair and stores the private key encrypted.
+2. Every browser re-subscribes against the new key the next time it opens the
+   app while its notification permission is still `granted` (Section 4). A
+   browser that is not still granted needs the manual path.
+3. Remove the three variables from `.env` when convenient.
 
-This prints a public and a private key (base64url-encoded). It requires no
-network access and touches no state on this deployment — it is a pure
-keypair generation, and running it twice produces two independent, unrelated
-key pairs.
+There is no UI to paste an existing key pair. Keeping the **same** keys, so that
+no browser needs to re-subscribe, is possible only by writing the `webPush`
+settings row and the `push_vapid` credential yourself; do not do this by hand
+without a reason, and never put the private key in the settings row. Ask for a
+change to the platform's `PushConfigService` rather than working around it.
 
-### 3.2 Where the keys go
-
-Set three environment variables (`infra/compose/.env.example:98-100` documents
-them, commented out by default, right after the comment block explaining why
-the install wizard no longer prompts for them — issue #241):
-
-```bash
-VAPID_PUBLIC_KEY=<the generated public key>
-VAPID_PRIVATE_KEY=<the generated private key>
-VAPID_SUBJECT=mailto:admin@example.com
-```
-
-Do not commit these to the repository. Store them the same way you store
-`JWT_SECRET` or `GOOGLE_CLIENT_SECRET` — this deployment's ordinary
-environment-variable secret path, not the encrypted `credentials` table (that
-path is what the admin UI itself uses for the private key — see Section
-2.1 — and is reserved for runtime-configured, admin-entered secrets).
-
-Both keys are required together: a public key with no private key is
-useless, since nothing on this server could sign a push, and a deployment
-that only sets one is treated by the fallback resolution as "not configured"
-(Section 1.1, case 1's env read requires both).
-
-### 3.3 What happens if `VAPID_SUBJECT` is absent
-
-Unlike the two keys, `VAPID_SUBJECT` is not required for the env fallback to
-activate — it is contact metadata for the JWT `web-push` signs, not something
-that affects whether signing is possible at all. See Section 2.3 for what
-happens when it (or the admin UI's subject field) is left unset: the same
-generic fallback and warning apply regardless of which path supplied the
-keys.
-
-### 3.4 Applying an environment-variable change
-
-Restart the API. Unlike the admin UI, this path has no live-reload mechanism:
-`ConfigService` resolves `process.env` once, at process boot, so changing
-`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` on a running process
-has no effect until it restarts, and `resolveActiveVapidConfig()`'s case-1
-fallback only re-reads those values when it runs (case 1 applies at all only
-when no `webPush` row exists). Confirm the change took effect by calling `GET
-/api/notifications/config` as any authenticated user — `pushEnabled` should
-read `true` and `vapidPublicKey` should carry your public key.
-
-Unsetting all three and restarting turns push back off, following the same
-case-1 logic in reverse — with no `webPush` row present, an empty env read
-resolves to "no active config."
+Unsetting the variables changes nothing; push stays off until a key pair is
+generated in the UI.
 
 ## 4. Recovery mechanics reference
 
-This section is the single source both Section 2.4 (admin UI rotate/remove)
-and Section 3 (env-var changes) point back to, so the claim is checked once,
-not re-asserted per path.
+This section is the single source Section 2.4 (rotate/remove) and Section 3
+(carrying over from the environment variables) point back to, so the claim is
+checked once, not re-asserted per path.
 
 **As of issue #365, this codebase has a client-side re-subscribe-on-reopen
-mechanism, in both paths — bounded by one condition.** The boot-time sync
+mechanism — bounded by one condition.** The boot-time sync
 described in [`docs/specs/browser-notifications.md` Section
 12](../specs/browser-notifications.md#12-the-client-subscribes-itself-and-prompts-automatically-issue-365)
 runs on every app load: it reads the deployment's current `vapidPublicKey`
@@ -345,10 +293,7 @@ from `GET /api/notifications/config`, compares it against any existing
 subscription's `applicationServerKey`, and on a mismatch unsubscribes and
 calls `pushManager.subscribe()` against the new key — then `POST`s the
 result to `POST /api/notifications/push/subscriptions`, which upserts by
-`endpoint`. This applies identically whether the active key pair came from
-the admin UI (Section 2) or the environment-variable fallback (Section 3):
-the sync reads whatever `resolveActiveVapidConfig()` currently resolves to,
-with no awareness of which path produced it.
+`endpoint`. The sync reads whatever `resolveActiveVapidConfig()` currently resolves to.
 
 **The one condition: notification permission must still be `granted` on
 that browser.** The sync runs from page code, which can only call
@@ -357,11 +302,10 @@ that browser.** The sync runs from page code, which can only call
 that has since moved to `denied`, or that simply never loads the app again,
 does **not** self-heal; it needs the manual path (the
 `NotificationPermissionBanner`'s button, or a user re-toggling notifications)
-before anything can resubscribe it. Verified directly against
-`apps/web/src/services/pushSubscription.ts` (`syncPushSubscription`,
-`subscriptionUsesKey`), `apps/web/src/hooks/usePushSubscriptionSync.ts` (what
-triggers the sync, and only while `permission === 'granted'`), and
-`apps/web/src/sw.ts`'s `pushsubscriptionchange` handler (still a
+before anything can resubscribe it. Implemented by the packaged `usePushSubscriptionSync` and
+`requestPermissionAndSyncPush` (`@marinoscar/platform-web/notifications/headless`;
+the sync runs only while `permission === 'granted'`), and by the
+`pushsubscriptionchange` handler of `apps/web/src/sw.ts` (still a
 browser-initiated-only, best-effort path, unchanged by #365 — see that spec
 section's corrected "Rejected alternatives" entry). Do not write or accept
 documentation, UI copy, or code comments claiming "reopening the app
@@ -402,15 +346,10 @@ step. Design: [browser-notifications spec, Section 9](../specs/browser-notificat
       *while its notification permission is still granted* (Section 4); a
       browser that isn't still granted needs the manual path instead
 
-**Environment-variable path (fallback, no admin UI touched):**
-- [ ] Key pair generated with `npx web-push generate-vapid-keys`
-- [ ] `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` set in the
-      deployment's environment (not committed, not stored in the
-      `credentials` table)
-- [ ] API restarted — this path has no live-reload; the admin UI path does
-- [ ] `GET /api/notifications/config` confirms `pushEnabled` and
-      `vapidPublicKey` match the change just made
-- [ ] Understood that once any admin saves through `/admin/settings/push`,
-      the database takes over as the source of truth and these environment
-      variables are no longer consulted (Section 1.1, case 2) — even if they
-      remain set
+**After the #470 deploy (once per deployment):**
+- [ ] `/admin/settings/push` shows the expected state; if it shows not
+      configured on a deployment that used the environment variables, generate
+      a key pair (Section 3)
+- [ ] **Test & diagnostics** sent a test push and the device acknowledged it
+- [ ] `/admin/settings/email` shows the provider and sender, and a test email
+      arrived

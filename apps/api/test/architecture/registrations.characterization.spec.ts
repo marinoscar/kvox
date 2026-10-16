@@ -15,8 +15,11 @@ import {
   ADMIN_ONBOARDING_STEPS,
   USER_ONBOARDING_STEPS,
 } from '../../src/onboarding/onboarding-steps';
-import { NOTIFICATION_EVENTS } from '../../src/notifications/notification-events';
-import { EMAIL_TEMPLATES } from '../../src/email/templates';
+import { emailTemplateRegistry } from '@marinoscar/platform-api/email';
+import { listNotificationEvents } from '@marinoscar/platform-api/notifications';
+// Fills the notification and email registries (the platform's, then this app's), so the two
+// pure-value cases below read them without booting AppModule.
+import '../../src/platform/notifications/notification.manifest';
 import {
   USER_DATA_SCOPES,
   scopeIncludes,
@@ -44,6 +47,12 @@ import { JobHandlerRegistry, JobsService, jobTypeLabels } from '@marinoscar/plat
 // function (`NOTIFICATION_EVENTS`, `EMAIL_TEMPLATES`, `JOB_TYPE_LABELS`,
 // `USER_DATA_SCOPES`, the step arrays), the registry-backed form must stay
 // observably identical, which is exactly what is pinned here.
+//
+// Issue #470 moved the notification events and email templates to the platform
+// registries (`listNotificationEvents()`, `emailTemplateRegistry.ids()`); the
+// snapshots keep their original titles. The ONE intended difference is the
+// order of `allowlist.invitation_reminder` (now after `security.role_changed`,
+// the platform's identity group order) and, with it, the template list.
 //
 // Determinism: the only wall-clock values on the wire are masked by
 // `stableBody` (the envelope's request instant and the jobs stats
@@ -132,11 +141,11 @@ describe('Domain registrations characterization', () => {
     });
 
     it('NOTIFICATION_EVENTS, in declared order', () => {
-      expect(NOTIFICATION_EVENTS).toMatchSnapshot();
+      expect(listNotificationEvents()).toMatchSnapshot();
     });
 
     it('Object.keys(EMAIL_TEMPLATES), in registration order', () => {
-      expect(Object.keys(EMAIL_TEMPLATES)).toMatchSnapshot();
+      expect(emailTemplateRegistry.ids()).toMatchSnapshot();
     });
 
     it('USER_DATA_SCOPES, in declared order', () => {

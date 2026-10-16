@@ -18,7 +18,10 @@ import { NodesWebAdaptersProvider } from '@marinoscar/platform-web/nodes/headles
 import { appJobsAdapters } from './platform/jobsAdapters';
 import { appNodesAdapters } from './platform/nodesAdapters';
 import './config/settingsFeatures';
-import { NotificationProvider } from './contexts/NotificationContext';
+// Issue #470, epic #467. The notification centre is the platform's; the slice is
+// configured once at module scope in `platform/notifications.ts` (imported by
+// `main.tsx`).
+import { NotificationProvider } from '@marinoscar/platform-web/notifications/headless';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
@@ -102,8 +105,13 @@ const UserProfilePage = lazy(() =>
 const UserAppearancePage = lazy(() =>
   import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserAppearancePage })),
 );
-// Issue #126, epic #109 — the per-user event x channel notification matrix.
-const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
+// Issue #126, epic #109; the platform's since #470 — the per-user event x
+// channel notification matrix (`@marinoscar/platform-web/notifications/ui`).
+const UserNotificationsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.UserNotificationsPage,
+  })),
+);
 const UserTokensPage = lazy(() =>
   import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
 );
@@ -132,14 +140,25 @@ const GettingStartedPage = lazy(() => import('./pages/GettingStartedPage'));
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
 const SettingsHubPage = lazy(() => import('./pages/Admin/SettingsHubPage'));
-// Issue #124, epic #109 — the admin email configuration and its test send.
-const EmailSettingsPage = lazy(() => import('./pages/Admin/EmailSettingsPage'));
-// Issue #225, epic #215 — the deployment-wide browser-notification policy.
-const NotificationSettingsPage = lazy(
-  () => import('./pages/Admin/NotificationSettingsPage'),
+// Issue #124, epic #109; the platform's since #470 — the admin email
+// configuration and its test send (`@marinoscar/platform-web/email/ui`).
+const EmailSettingsPage = lazy(() =>
+  import('@marinoscar/platform-web/email/ui').then((m) => ({ default: m.EmailSettingsPage })),
 );
-// Issue #355 — runtime-configurable Web Push (VAPID) key management.
-const PushConfigPage = lazy(() => import('./pages/Admin/PushConfigPage'));
+// Issue #225, epic #215; the platform's since #470 — the deployment-wide
+// browser-notification policy.
+const NotificationSettingsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.NotificationSettingsPage,
+  })),
+);
+// Issue #355; the platform's since #470 — runtime-configurable Web Push (VAPID)
+// key management, status and the test-push diagnostics.
+const PushConfigPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.PushConfigPage,
+  })),
+);
 const TranscriptionSettingsPage = lazy(
   () => import('./pages/Admin/TranscriptionSettingsPage'),
 );
@@ -183,10 +202,14 @@ const StorageConfigPage = lazy(() =>
 // dialog. Lazy for the same reason: a DataTable, a policy form and the restore
 // dialog that nobody who never opens the Console will ever mount.
 const DbBackupPage = lazy(() => import('./pages/Admin/DbBackupPage'));
-// Issue #325, epic #319 — the admin broadcast list and its composer. Lazy for
-// the same reason: a DataTable, a composer dialog and a detail dialog that
-// nobody who never opens the Console will ever mount.
-const BroadcastsPage = lazy(() => import('./pages/Admin/BroadcastsPage'));
+// Issue #325, epic #319; the platform's since #470 — the admin broadcast list
+// and its composer. Lazy for the same reason: a table, a composer dialog and a
+// detail dialog that nobody who never opens the Console will ever mount.
+const BroadcastsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.BroadcastsPage,
+  })),
+);
 // Issue #278, epic #271 — the deployment's first-run checklist. Lazy like
 // every other admin page: an administrator who never opens the Console should
 // not carry it in the entry chunk, and neither should a Viewer, who cannot
