@@ -1,0 +1,202 @@
+import { describe, it, expect } from 'vitest';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+
+/**
+ * The five coupled breakpoint gates are the PACKAGE's since #484 (epic #478):
+ *
+ *   1. `ShellLayout` `showRail`            `up('sm')`
+ *   2. `ShellBottomNav` self-gate          `down('sm')`
+ *   3. `<main>` `pb: { xs: 10, sm: 3 }`    (in `ShellLayout`)
+ *   4. `SettingsHub` `isCompactWindow`     `down('sm')`
+ *   5. `ShellAppBar` `isCompactWindow`     `down('sm')`
+ *
+ * all under `@marinoscar/platform-web` (`shell/ui`, `settings/ui`), which this
+ * repository cannot edit. What it CAN do is refuse to grow a sixth read in the
+ * shell chrome it binds. This suite scans `apps/web/src` for the two ways a
+ * component reads a breakpoint, `useMediaQuery(` and `theme.breakpoints.up|down(`,
+ * and fails on any file that is not listed below with a reason. Adding a read is
+ * allowed; adding it WITHOUT writing down why it is not a gate is not.
+ *
+ * It is a text scan, not a parser: block and line comments are stripped first so
+ * prose that names `useMediaQuery(` does not count.
+ *
+ * Rule 5 of the Settings UI Pattern (root AGENTS.md): the boundary is `sm`
+ * (600px), never `md`. `LibraryPageFrame.tsx` also reads `down('sm')` and is the
+ * documented non-gate.
+ */
+
+const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+const BREAKPOINT_READ = /\buseMediaQuery\s*\(|\bbreakpoints\.(?:up|down|between|only)\s*\(/;
+
+/** Why a file may read a breakpoint without being one of the five gates. */
+const WHY = {
+  libraryFrame:
+    'LibraryPageFrame is the documented non-gate: it only decides where one page puts its create action (header button or FAB), never whether app chrome mounts',
+  libraryView:
+    'a library list chooses a phone card row or a table row for its own content; it mounts no navigation',
+  dialog:
+    'a dialog or sheet goes full-screen below sm; it is page content, not navigation chrome',
+  panel:
+    'a page-local side panel or action bar chooses its own compact layout; it is page content, not navigation chrome',
+  page: 'a page picks its own compact layout for its body; it is page content, not navigation chrome',
+  graph:
+    'a knowledge-graph surface picks a compact layout for its own canvas or panel; page content, not navigation chrome',
+  datatable:
+    'the data table\'s viewport fallback when it cannot measure its container; the table is page content',
+} as const;
+
+/**
+ * Every file under `src/` (outside tests) that reads a breakpoint, keyed by its
+ * path from `src/`. NONE of them may be shell chrome (see `CHROME` below).
+ */
+const ALLOWED_READS: Readonly<Record<string, string>> = {
+  'components/library/LibraryPageFrame.tsx': WHY.libraryFrame,
+  'components/library/TranscriptsLibraryView.tsx': WHY.libraryView,
+  'components/library/NotesLibraryView.tsx': WHY.libraryView,
+
+  'components/transcripts/ExportDialog.tsx': WHY.dialog,
+  'components/transcripts/ShareDialog.tsx': WHY.dialog,
+  'components/transcripts/NameCheckDialog.tsx': WHY.dialog,
+  'components/notes/NoteContextDialog.tsx': WHY.dialog,
+  'components/notes/NoteExportDialog.tsx': WHY.dialog,
+  'components/notes/NoteConflictDialog.tsx': WHY.dialog,
+  'components/graph/ImportGraphDialog.tsx': WHY.dialog,
+  'components/graph/ExportGraphDialog.tsx': WHY.dialog,
+  'components/graph/EntityEditDialog.tsx': WHY.dialog,
+  'components/graph/settings/AttributeDefDialog.tsx': WHY.dialog,
+  'components/graph/guide/ExtractDialog.tsx': WHY.dialog,
+  'components/graph/review/ProposalReviewSheet.tsx': WHY.dialog,
+
+  'components/transcripts/NameSuggestionsPanel.tsx': WHY.panel,
+  'components/transcripts/FindReplacePanel.tsx': WHY.panel,
+  'components/transcripts/SegmentActions.tsx': WHY.panel,
+  'components/transcripts/SpeakerActions.tsx': WHY.panel,
+  'components/transcripts/TranscriptPipeline.tsx': WHY.panel,
+  'components/ask/EntityAskPanel.tsx': WHY.panel,
+
+  'components/graph/overview/ClusterSidePanel.tsx': WHY.graph,
+  'components/graph/explorer/ExplorerSidePanel.tsx': WHY.graph,
+  'components/graph/EvidenceChip.tsx': WHY.graph,
+  'components/graph/NeighborhoodWidget.tsx': WHY.graph,
+  'components/graph/EntityHeader.tsx': WHY.graph,
+  'components/graph/selection/GraphSelectionAdd.tsx': WHY.graph,
+
+  'components/datatable/desktop/DesktopGridRenderer.tsx': WHY.datatable,
+  'components/datatable/useContainerLayout.ts': WHY.datatable,
+
+  'pages/NewNotePage.tsx': WHY.page,
+  'pages/GraphIndexPage.tsx': WHY.page,
+  'pages/GraphOverviewPage.tsx': WHY.page,
+  'pages/GraphExplorerPage.tsx': WHY.page,
+  'pages/AskPage.tsx': WHY.page,
+  // `up('md')`: whether the transcript page lays its player beside the text.
+  'pages/TranscriptPage.tsx': WHY.page,
+};
+
+/**
+ * The files that ARE this app's shell chrome and its bindings. They must read no
+ * breakpoint at all: the shell, its settings hub and its themes are the package's.
+ */
+const CHROME = [
+  'App.tsx',
+  'main.tsx',
+  'components/common/Layout.tsx',
+  'config/shell.ts',
+  'config/destinations.ts',
+  'config/adminSections.tsx',
+  'config/userSettingsSections.tsx',
+  'config/settingsFeatures.ts',
+  'pages/UserSettingsHubPage.tsx',
+  'pages/Admin/SettingsHubPage.tsx',
+  'platform/platformHost.tsx',
+  'platform/GraphFeatureBinding.tsx',
+  'theme/index.ts',
+];
+
+/** Block and line comments removed (a line comment must not follow `:` or a quote, so URLs survive). */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+}
+
+function isTestFile(path: string): boolean {
+  const parts = path.split(sep);
+  return (
+    parts.includes('__tests__') ||
+    /\.(test|spec)\.(ts|tsx)$/.test(path) ||
+    parts.includes('mocks')
+  );
+}
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) return sourceFiles(full);
+    return /\.(ts|tsx)$/.test(name) && !isTestFile(full) ? [full] : [];
+  });
+}
+
+const FILES = sourceFiles(SRC);
+const READERS = FILES.filter((file) =>
+  BREAKPOINT_READ.test(stripComments(readFileSync(file, 'utf8'))),
+).map((file) => relative(SRC, file).split(sep).join('/'));
+
+describe('breakpoint gates — the five are the package\'s (#484)', () => {
+  it('scans the source tree (guards the scan itself against matching nothing)', () => {
+    expect(FILES.length).toBeGreaterThan(100);
+    // The one documented non-gate must be found, or the scan is not reading code.
+    expect(READERS).toContain('components/library/LibraryPageFrame.tsx');
+  });
+
+  it('every file that reads a breakpoint is listed with a reason', () => {
+    const unlisted = READERS.filter((file) => !(file in ALLOWED_READS));
+    expect(
+      unlisted,
+      `These files read a breakpoint (useMediaQuery or theme.breakpoints.up/down) and are not ` +
+        `listed in ALLOWED_READS. The five coupled gates live in @marinoscar/platform-web ` +
+        `(ShellLayout, ShellBottomNav, SettingsHub, ShellAppBar); a new read is a page-level ` +
+        `choice that must say why it is not a sixth gate.`,
+    ).toEqual([]);
+  });
+
+  it('lists no file that has stopped reading a breakpoint (the allowlist stays honest)', () => {
+    const stale = Object.keys(ALLOWED_READS).filter((file) => !READERS.includes(file));
+    expect(stale, 'Remove these from ALLOWED_READS: they read no breakpoint any more').toEqual([]);
+  });
+
+  it('gives every listed read a reason', () => {
+    for (const [file, reason] of Object.entries(ALLOWED_READS)) {
+      expect(reason.length, `${file} needs a reason`).toBeGreaterThan(20);
+    }
+  });
+
+  it('keeps LibraryPageFrame the only library-chrome exemption: it is the documented non-gate', () => {
+    expect(ALLOWED_READS['components/library/LibraryPageFrame.tsx']).toBe(WHY.libraryFrame);
+  });
+
+  describe('shell chrome and its bindings read no breakpoint', () => {
+    it.each(CHROME)('%s', (file) => {
+      expect(existsSync(join(SRC, file)), `${file} must exist`).toBe(true);
+      expect(READERS).not.toContain(file);
+      expect(Object.keys(ALLOWED_READS)).not.toContain(file);
+    });
+  });
+
+  it('keeps the deleted app-side shell files deleted', () => {
+    // A re-added copy would bring a second set of gates back.
+    for (const gone of [
+      'components/navigation/AppBar.tsx',
+      'components/navigation/BottomNav.tsx',
+      'components/navigation/NavigationRail.tsx',
+      'components/navigation/UserMenu.tsx',
+      'components/settings/SettingsHub.tsx',
+      'contexts/ThemeContext.tsx',
+      'contexts/NavigationFeaturesContext.tsx',
+      'hooks/useNavigationPrefs.ts',
+    ]) {
+      expect(existsSync(join(SRC, gone)), `${gone} must stay deleted`).toBe(false);
+    }
+  });
+});

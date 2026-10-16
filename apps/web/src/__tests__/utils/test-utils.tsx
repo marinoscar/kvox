@@ -1,16 +1,16 @@
 import { ReactElement, ReactNode } from 'react';
 import { render, RenderOptions, RenderResult } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
 
-// Import AuthContext and ThemeContextProvider
+// Import AuthContext and the shell's theme root
 import { AuthContext } from '@marinoscar/platform-web/identity/headless';
 import type {
   AuthContextValue,
   AuthProviderInfo as AuthProviderType,
 } from '@marinoscar/platform-web/identity/headless';
-import { ThemeContextProvider } from '../../contexts/ThemeContext';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { darkTheme, lightTheme } from '../../theme';
 // Issue #466: the host the packaged settings pages and headless hooks read.
 import { AppPlatformHostProvider } from '../../platform/platformHost';
 
@@ -175,6 +175,9 @@ function MockAuthProvider({
   );
 }
 
+/** The app's two themes under the shell's root, which seeds itself from `localStorage.theme_mode`. */
+const TEST_THEMES = { light: lightTheme, dark: darkTheme };
+
 function createWrapper(options: WrapperOptions = {}) {
   const {
     route = '/',
@@ -187,8 +190,7 @@ function createWrapper(options: WrapperOptions = {}) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route]}>
-        <ThemeContextProvider>
-          <CssBaseline />
+        <ShellRoot themes={TEST_THEMES}>
           <MockAuthProvider
             authenticated={authenticated}
             user={user}
@@ -197,7 +199,7 @@ function createWrapper(options: WrapperOptions = {}) {
           >
             <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
           </MockAuthProvider>
-        </ThemeContextProvider>
+        </ShellRoot>
       </MemoryRouter>
     );
   };

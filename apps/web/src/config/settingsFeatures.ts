@@ -15,11 +15,13 @@
  * closed; the admin AI card carries no `feature` because it is the switch (#477).
  *
  * `graph` is connected knowledge, switched by `ai.graphEnabled` and read from
- * `GET /api/ai-tasks/config`. The resolver reads the app's own
- * `NavigationFeaturesContext`, which already holds that answer (one fetch for
- * the shell, the destinations and now the hub), because a feature resolver must
- * never fetch. The context's default is "off", so a hub rendered outside the
- * shell fails closed, like the `knowledge` destination.
+ * `GET /api/ai-tasks/config`. The resolver reads `platform/GraphFeatureBinding.tsx`
+ * (`AppGraphFeatureProvider`, mounted above the platform host in `App.tsx`), which
+ * holds the one copy of that answer for the shell's `knowledge` destination
+ * (`feature: 'graph'` in `config/destinations.ts`), its title resolver and the hub,
+ * because a feature resolver must never fetch. The context's default is "off", so
+ * a surface rendered outside the provider fails closed, like the `knowledge`
+ * destination.
  *
  * `telemetry` is the platform's own key (a telemetry store is deployed AND
  * collection is on). It is read from `GET /api/telemetry/config` through the
@@ -37,7 +39,7 @@ import { useAiFeatures } from '@marinoscar/platform-web/ai/headless';
 import { useOrgsFeature } from '@marinoscar/platform-web/identity/headless';
 import { registerSettingsFeature } from '@marinoscar/platform-web/settings/headless';
 import { useTelemetryFeatures } from '@marinoscar/platform-web/telemetry/headless';
-import { useNavigationFeatures } from '../contexts/NavigationFeaturesContext';
+import { useGraphFeature } from '../platform/GraphFeatureBinding';
 
 declare module '@marinoscar/platform-web/settings/headless' {
   interface SettingsFeatureRegistry {
@@ -53,6 +55,6 @@ declare module '@marinoscar/platform-web/settings/headless' {
 }
 
 registerSettingsFeature('ai', () => useAiFeatures().ai);
-registerSettingsFeature('graph', () => useNavigationFeatures().features.graph === true);
+registerSettingsFeature('graph', () => useGraphFeature().graph);
 registerSettingsFeature('orgs', useOrgsFeature);
 registerSettingsFeature('telemetry', () => useTelemetryFeatures().telemetry);

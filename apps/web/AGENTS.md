@@ -4,8 +4,8 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Layout
 
-- `src/config/`: `adminSections.tsx` (`ADMIN_SECTIONS`, `SettingsCardDef`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`), `destinations.ts`.
-- `src/pages/`, `src/components/` (`settings/` holds only KVox's own cards, `navigation/`, `common/Layout.tsx`, `library/`), `src/hooks/`, `src/services/api.ts` (the `PlatformHttpClient` instance and KVox's endpoint functions), `src/contexts/`.
+- `src/config/`: `adminSections.tsx` (`ADMIN_SECTIONS`, `SettingsCardDef`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`), `destinations.ts` (the navigation table), `shell.ts` (`KVOX_NAVIGATION`, `KVOX_BOTTOM_BAR_NAVIGATION`).
+- `src/pages/`, `src/components/` (`settings/` holds only KVox's own cards, `common/Layout.tsx` the thin `ShellLayout` binding, `library/`), `src/hooks/`, `src/services/api.ts` (the `PlatformHttpClient` instance and KVox's endpoint functions), `src/contexts/`, `src/platform/` (bindings of packaged slices). The shell (rail, bar, AppBar, user menu, theme root) is `@marinoscar/platform-web/shell`.
 - `src/identity/`: KVox's bindings of the platform identity slice (`@marinoscar/platform-web/identity/{headless,ui}`): `IdentityProviders.tsx` (`AuthProvider` with `client={api}` and the push-unsubscribe `onBeforeLogout`), `identityAdapters.ts`, `LoginPage.tsx` (brand mark in the `Logo` slot), `UsersPage.tsx` + `usersPageSlots.ts` (Reminders tab). `useAuth`, `usePermissions`, `RequireAuth` and `RequirePermission` are imported from `@marinoscar/platform-web/identity/headless`; KVox has no `AuthContext` of its own.
 - Routes live in `src/App.tsx`. Tests: `src/__tests__/` (Vitest + React Testing Library, MSW for the API); registry suites in `src/__tests__/config/` (`settingsRegistry.test.ts`, `userSettingsSections.test.ts`, `destinations.test.ts`).
 
@@ -19,26 +19,16 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Five coupled breakpoint gates
 
-Change all five together or none. The boundary is `sm` (600px), never `md` (900px). No shared constant binds them.
-
-| # | Gate | File (under `src/`) |
-|---|---|---|
-| 1 | `Layout.tsx` `showRail` (`up('sm')`) mounts `NavigationRail` | `components/common/Layout.tsx` |
-| 2 | `BottomNav` self-gate `down('sm')` | `components/navigation/BottomNav.tsx` |
-| 3 | `<main>` `pb: { xs: 10, sm: 3 }` | `components/common/Layout.tsx` |
-| 4 | `SettingsHub` `isCompactWindow` (`down('sm')`) | `@marinoscar/platform-web/settings/ui` (the package keeps the gate; not a file in `src/`) |
-| 5 | `AppBar` `isCompactWindow` (`down('sm')`) | `components/navigation/AppBar.tsx` |
-
-`components/library/LibraryPageFrame.tsx` also reads `down('sm')` but is **not** a sixth gate: it only decides where one page puts its create action (header button or FAB), never whether app chrome mounts. The rail's collapsed width (72px) is a width, not a gate.
+Change all five together or none; the boundary is `sm` (600px), never `md`. Since #484 all five are the package's: `ShellLayout` `showRail` (`up('sm')`) and `<main>` `pb: { xs: 10, sm: 3 }`, `ShellBottomNav` and `ShellAppBar` `down('sm')` (`@marinoscar/platform-web/shell/ui`), `SettingsHub` `isCompactWindow` (`settings/ui`). `Layout.tsx` and the shell binding read no breakpoint; `src/__tests__/config/breakpointGates.test.ts` fails on any `useMediaQuery(` or `breakpoints.up|down(` not listed with a reason. `components/library/LibraryPageFrame.tsx` also reads `down('sm')` but is **not** a sixth gate: it only places one page's create action. The rail's collapsed width (the package's 56px) is a width, not a gate.
 
 ## Navigation destinations
 
-`src/config/destinations.ts` is the single source for the bottom bar, the rail and the avatar menu. Six destinations: `home`, `transcripts`, `notes`, `knowledge`, `settings`, `console`. Full model: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
+`src/config/destinations.ts` is the single source for the bottom bar, the rail and the avatar menu (a `ShellDestination` table; `config/shell.ts` binds it into `KVOX_NAVIGATION`). Six destinations: `home`, `transcripts`, `notes`, `knowledge`, `settings`, `console`. Full model: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
 - Each non-pinned destination gates on the exact permission its controller enforces.
-- **`pinned` means a MODE, not a peer**: rendered at the rail's foot, in the avatar menu, omitted from the bottom bar. `settings` and `console` are pinned.
+- **`pinned` means a MODE, not a peer**: rendered at the rail's foot, in the avatar menu, omitted from the bottom bar. `settings` and `console` are pinned. The package's bar would draw them plus a "More" tab, so the bar gets `KVOX_BOTTOM_BAR_NAVIGATION` (non-pinned only), never `KVOX_NAVIGATION`.
 - **Four bottom-bar tabs is the ceiling** (`BOTTOM_BAR_DESTINATIONS = DESTINATIONS.filter((d) => !d.pinned)`). A fifth non-pinned destination is a redesign of the bar, not an addition.
-- `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `GET /api/ai-tasks/config`'s `graphEnabled` (`useAiTasksConfig`); while that flag is unknown or loading the item is hidden, never shown then removed.
+- `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `feature: 'graph'` (`config/settingsFeatures.ts`, fed by `GET /api/ai-tasks/config`'s `graphEnabled` through `platform/GraphFeatureBinding.tsx`); while unknown or loading the item is hidden, never shown then removed.
 - Graph drawing goes through `GraphCanvas.tsx`, the one file that imports sigma.
 
 ## Frontend conventions

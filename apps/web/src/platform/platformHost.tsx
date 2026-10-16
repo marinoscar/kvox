@@ -14,16 +14,16 @@
  *     `usePermissions`'s, the same predicate every route guard uses.
  *     `isFeatureEnabled` answers from the settings-feature registry
  *     (`config/settingsFeatures.ts`), the one source the hubs and the rail read.
- *   - `applyTheme`: this app's `ThemeContext` setter. The Appearance page and
+ *   - `applyTheme`: the shell's theme setter (`useShellTheme().setMode`, held by
+ *     `ShellRoot` in `App.tsx` since #484). The Appearance page and
  *     `useUserSettings` call it when the stored preference loads or is saved, so
  *     a theme switch still applies live. This app's themes are `light | dark |
- *     system`; an id the app has no theme for is ignored, as the host contract
- *     asks.
+ *     system`; the setter itself ignores an id the app has no theme for, as the
+ *     host contract asks.
  *   - `formatRelativeTime`: this app's formatter, so the packaged About page
  *     reads like the rest of the app.
  *
- * Mount `AppPlatformHostProvider` once, inside the auth provider and the theme
- * context.
+ * Mount `AppPlatformHostProvider` once, inside the auth provider and `ShellRoot`.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -40,8 +40,7 @@ import type {
 } from '@marinoscar/platform-web/core';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
-import { useThemeContext } from '../contexts/ThemeContext';
-import type { ThemeMode } from '../theme';
+import { useShellTheme } from '@marinoscar/platform-web/shell/headless';
 import { API_BASE_URL, api } from '../services/api';
 import { noticeMaintenance } from '../services/maintenance';
 import { formatRelativeTime } from '../utils/relativeTime';
@@ -72,10 +71,6 @@ function appPostSse(path: string, body: unknown, options: PlatformSseOptions): P
  */
 export const appPlatformApi = createPlatformApiClient(api, { postSse: appPostSse });
 
-function isThemeMode(theme: string): theme is ThemeMode {
-  return theme === 'light' || theme === 'dark' || theme === 'system';
-}
-
 function formatRelative(iso: string): string {
   return formatRelativeTime(iso);
 }
@@ -87,17 +82,14 @@ function formatRelative(iso: string): string {
 export function useAppPlatformHost(): PlatformWebHost {
   const { user, refreshUser } = useAuth();
   const { hasPermission } = usePermissions();
-  const { setMode } = useThemeContext();
-  // PLATFORM-ADOPTION-SHIM(464): the host sits ABOVE `Layout`, so the `graph`
-  // resolver (`useNavigationFeatures`, provided inside `Layout`) reads its
-  // "unknown is off" default here. No packaged page mounted today reads
-  // `viewer.isFeatureEnabled('graph')`; the hubs and the rail read the map
-  // inside the shell, where it is accurate. Goes when #484 moves the shell.
+  const { setMode } = useShellTheme();
+  // The `graph` resolver reads `AppGraphFeatureProvider`, mounted above the host in
+  // `App.tsx`, so the map here and the map the shell reads are the same answer.
   const features = useSettingsFeatures();
 
   const applyTheme = useCallback<NonNullable<PlatformWebHost['applyTheme']>>(
     (theme) => {
-      if (isThemeMode(theme)) setMode(theme);
+      setMode(theme);
     },
     [setMode],
   );

@@ -29,12 +29,12 @@ vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => 
   usePermissions: vi.fn(),
 }));
 
-// A save re-reads the navigation features (the `knowledge` destination follows
-// `graphEnabled`). Mocked so a save's effect on it is asserted directly.
+// A save re-reads the connected-knowledge switch (the `knowledge` destination
+// follows `graphEnabled`). Mocked so a save's effect on it is asserted directly.
 const mockRefreshNavigationFeatures = vi.fn();
-vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
-  useNavigationFeatures: () => ({
-    features: { graph: false },
+vi.mock('../../../platform/GraphFeatureBinding', () => ({
+  useGraphFeature: () => ({
+    graph: false,
     refresh: mockRefreshNavigationFeatures,
   }),
 }));

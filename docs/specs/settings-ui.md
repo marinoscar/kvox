@@ -9,10 +9,10 @@
 > longer exists), with two thin
 > per-surface bindings, `apps/web/src/pages/Admin/SettingsHubPage.tsx` and
 > `apps/web/src/pages/UserSettingsHubPage.tsx`. Console mode (the rail
-> swapping its contents on `/admin/*`) lives in
-> `apps/web/src/components/navigation/NavigationRail.tsx`; the compact
-> drill-down title and back button live in
-> `apps/web/src/components/navigation/AppBar.tsx`. The visible pattern this
+> swapping its contents on `/admin/*`) lives in the packaged
+> `ShellNavigationRail`; the compact drill-down title and back button live in
+> the packaged `ShellAppBar` (`@marinoscar/platform-web/shell/ui`, issue #484;
+> `apps/web/src/config/shell.ts` hands them the two registries). The visible pattern this
 > document explains the reasoning for — every new settings page is a card in
 > one of the two registries above, not a route left to find its own way — is
 > stated as a rule in `AGENTS.md`'s "MANDATORY: Settings UI Pattern" section.
@@ -77,11 +77,13 @@ three consumers read them rather than maintaining their own list:
 1. **The hub** (the packaged `SettingsHub`, rendered by `SettingsHubPage.tsx` and
    `UserSettingsHubPage.tsx`) — the card grid at `sm` and up, the drill-down
    list below it.
-2. **The Console rail** (`NavigationRail.tsx`) — on any `/admin/*` route, the
+2. **The Console rail** (the packaged `ShellNavigationRail`, handed
+   `ADMIN_SECTIONS` as `KVOX_NAVIGATION.console`) — on any `/admin/*` route, the
    expanded rail swaps its contents for the same admin sections, promoting
    the hub's cards into persistent navigation.
-3. **The AppBar's title resolver** (`AppBar.tsx`'s `resolveDrillDown`, backed
-   by `adminSections.tsx`'s `settingsPageTitle`) — resolving the current
+3. **The AppBar's title resolver** (the packaged `ShellAppBar`'s
+   `resolveDrillDown` over `KVOX_NAVIGATION.settingsSurfaces`, backed by the
+   package's `settingsPageTitle`) — resolving the current
    pathname to the compact header's title and its "up" destination.
 
 `visibleSettingsSections` (permission and search filtering) and
@@ -252,29 +254,51 @@ fix every future bug."
 
 Five places in the shell decide, independently, whether the viewport is
 "compact" (below Material 3's `sm` / 600px compact–medium boundary). All five
-must move together, and `Layout.tsx` carries the canonical list in its own
-comment:
+must move together. **Since issue #484 (epic #478) all five are the
+platform's**, in `@marinoscar/platform-web` (`shell/ui` and `settings/ui`),
+and the canonical list lives in `ShellLayout`'s own comment. This repository
+cannot edit them and binds them without reading a breakpoint of its own
+(`apps/web/src/components/common/Layout.tsx` is a thin `ShellLayout` binding;
+`config/shell.ts` is the navigation data):
 
-1. `Layout.tsx`'s `showRail = useMediaQuery(theme.breakpoints.up('sm'))` —
-   mounts or unmounts `NavigationRail` entirely.
-2. `BottomNav.tsx`'s own `useMediaQuery(theme.breakpoints.down('sm'))`
-   self-gate — belt-and-braces alongside (1): `Layout` only mounts
-   `BottomNav` when `!showRail`, and `BottomNav` returns `null` itself if
-   somehow rendered outside that width, so its hooks still run at every width
-   but its output never does at the wrong one.
-3. `Layout.tsx`'s `<main>` padding, `pb: { xs: 10, sm: 3 }` — clears the
+1. `ShellLayout`'s `showRail = useMediaQuery(theme.breakpoints.up('sm'))` —
+   mounts or unmounts `ShellNavigationRail` entirely.
+2. `ShellBottomNav`'s own `useMediaQuery(theme.breakpoints.down('sm'))`
+   self-gate — belt-and-braces alongside (1): `ShellLayout` only mounts the
+   `bottomNav` slot when `!showRail`, and `ShellBottomNav` returns `null`
+   itself if somehow rendered outside that width, so its hooks still run at
+   every width but its output never does at the wrong one.
+3. `ShellLayout`'s `<main>` padding, `pb: { xs: 10, sm: 3 }` — clears the
    fixed bottom bar, and only needs to below the same width the bar exists
    at.
 4. `SettingsHub`'s `isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'))`
-   (in the packaged component, `@marinoscar/platform-web/settings/ui`; the
-   package keeps `down('sm')`, so moving the file did not move the gate)
-   — chooses the drill-down list over the card grid.
-5. `AppBar.tsx`'s `isCompactWindow`, the same expression — chooses the
-   back-arrow-plus-resolved-title header over the normal wordmark toolbar.
+   (`@marinoscar/platform-web/settings/ui`) — chooses the drill-down list
+   over the card grid.
+5. `ShellAppBar`'s `isCompactWindow`, the same expression — chooses the
+   back-arrow-plus-resolved-title header over the normal brand toolbar.
+
+What this repository enforces is the absence of a sixth.
+`apps/web/src/__tests__/config/breakpointGates.test.ts` scans `apps/web/src`
+for `useMediaQuery(` and `theme.breakpoints.up|down(` and fails on any file
+not listed with a reason (the page-level reads, headed by
+`LibraryPageFrame.tsx`, the documented non-gate), and it asserts that the shell
+binding files (`Layout.tsx`, `config/shell.ts`, `config/destinations.ts`, the
+hub pages, the theme) read none and that the deleted app-side shell files stay
+deleted. `__tests__/components/common/Layout.test.tsx` walks the pixels either
+side of 600 against the real package gates, so a package upgrade that moves
+one fails here.
+
+**The bottom bar's contents are data, not a gate.** The packaged bar draws
+every visible destination (pinned ones included) and overflows into a "More"
+sheet past four. This app binds the bar to `KVOX_BOTTOM_BAR_NAVIGATION`, the
+navigation with the pinned destinations filtered out (`docs/specs/ux-refresh.md`
+§1), so the phone bar stays Home · Transcripts · Notes · Knowledge. That is a
+filter over a list; it adds no breakpoint read and no sixth gate.
 
 ### Why `sm` (600px), never `md` (900px)
 
-`Layout.tsx` states this directly and it is worth repeating precisely because
+`ShellLayout` states this directly (the comment moved from this app's
+`Layout.tsx` with the shell) and it is worth repeating precisely because
 it is the boundary a contributor is likeliest to want to "fix" without
 checking here first: 600px is Material 3's own compact/medium window-class
 boundary (compact `< 600dp`, medium `600–840dp`), and M3 is explicit that a
@@ -291,8 +315,10 @@ the available width, not a subtle regression.
 The honest answer to this — the thing `AGENTS.md` explicitly defers to this
 document — turned out to be more specific than "these are different kinds of
 decisions that happen to share a number," and it is worth being precise about
-what the code actually shows rather than restating that generality. Reading
-all five call sites side by side:
+what the code actually shows rather than restating that generality. (The five
+call sites below are the package's since #484; the reasoning is unchanged and
+is the package's reason for not exporting one either.) Reading all five call
+sites side by side:
 
 Four of the five — (1), (2), (4) and (5) — are **structurally identical**:
 each is a call to `useMediaQuery(theme.breakpoints.up('sm'))` or
@@ -300,10 +326,10 @@ each is a call to `useMediaQuery(theme.breakpoints.up('sm'))` or
 gates a rendering branch. A shared constant across those four would be
 trivial to introduce and would cost nothing.
 
-The fifth, `Layout.tsx`'s `pb: { xs: 10, sm: 3 }`, is not that shape at all.
+The fifth, `ShellLayout`'s `pb: { xs: 10, sm: 3 }`, is not that shape at all.
 It is not a `useMediaQuery` call — it is a literal object passed to MUI's
 `sx` prop, where `xs` and `sm` are **object keys** that MUI's own responsive-
-value system reads and turns into media queries internally. `Layout.tsx`'s
+value system reads and turns into media queries internally. `ShellLayout`'s
 own comment states the consequence exactly: *"there is deliberately no shared
 constant, because a constant would let (3) drift while still compiling."*
 Read against the code, that sentence is about this exact asymmetry. A
@@ -338,7 +364,8 @@ Two things moved near these gates without becoming one:
 - **The collapsed rail widened 56 → 72px** (#106), because the 11-character
   destination name "Transcripts" does not fit a 48px caption box at 0.625rem
   and an abbreviation would misdescribe the row. A *width* is not a gate —
-  `showRail`'s breakpoint is untouched.
+  `showRail`'s breakpoint is untouched. (Since #484 the rail is the package's
+  and its collapsed width is the package's 56px; see `ux-refresh.md` §1.)
 - **`components/library/LibraryPageFrame.tsx` reads `down('sm')`**, and it is
   the page-level read `LibraryPage` always had, relocated when #106 split that
   page into `TranscriptsPage` and `NotesPage`. It decides where one page puts
@@ -349,7 +376,7 @@ Two things moved near these gates without becoming one:
 
 ## 6. Accessibility requirements
 
-Read directly out of the packaged `SettingsHub` and `NavigationRail.tsx`,
+Read directly out of the packaged `SettingsHub` and `ShellNavigationRail`,
 rather than asserted:
 
 - **The search field's accessible name is explicit**, not left to the
@@ -361,14 +388,14 @@ rather than asserted:
   tab stop that announces an affordance and does nothing.
 - **The compact/expanded choice is made by mounting, never by rendering
   both and hiding one with CSS.** Both the packaged `SettingsHub` (list vs. grid) and
-  `Layout.tsx` (rail vs. bottom bar) follow this rule: a hidden duplicate
+  `ShellLayout` (rail vs. bottom bar) follow this rule: a hidden duplicate
   doubles the DOM, doubles the tab order with targets a keyboard user can
   reach but not see, and gives any `aria-current` two owners.
 - **An inert ("Coming soon") card is not a tab stop.** the packaged `SettingsHub`
   renders it with no `CardActionArea` at all in the grid, and as a
   `disabled` `ListItemButton` in the drill-down — never a focusable control
   whose activation does nothing.
-- **`NavigationRail.tsx`'s landmark names which mode it is in.** The
+- **The rail's landmark names which mode it is in.** The
   `<nav>`'s `aria-label` is `"Console navigation"` in Console mode and
   `"Main navigation"` otherwise, because the rail's *contents* are entirely
   different between the two and a screen-reader user has no other way to
@@ -381,13 +408,13 @@ rather than asserted:
   carries the full name even when the visible caption is a truncated
   `compactLabel`, and the caption itself is `aria-hidden` so assistive
   technology reads the full name once, not the abbreviation plus the name.
-- **A tooltip supplements, never substitutes.** `NavigationRail.tsx` wraps a
+- **A tooltip supplements, never substitutes.** The packaged rail wraps a
   collapsed row's abbreviated caption in a `Tooltip`, but only where the
   visible text is genuinely shortened, and never as the row's only carrier
   of its full name — a tooltip reaches neither a screen reader reliably nor
   a keyboard-only user at all.
 - **Keyboard focus is visible on every navigation control**, stated
-  explicitly as a `&.Mui-focusVisible` outline in `NavigationRail.tsx`
+  explicitly as a `&.Mui-focusVisible` outline in the packaged rail
   rather than left to the theme's default, which a later theme change could
   quietly drop.
 - **The collapse toggle is a real `<button>` with `aria-expanded`**, not an
@@ -458,7 +485,7 @@ The registry tests that pin the four rows: `apps/web/src/__tests__/config/settin
   and because it visibly misclassifies the 600–899px band (see §5).
 - **A shared constant for the five breakpoint gates.** Rejected — see §5.
   Not because uniformity is undesirable, but because the one member most
-  likely to be forgotten (`Layout.tsx`'s `pb` object key) is also the one a
+  likely to be forgotten (`ShellLayout`'s `pb` object key) is also the one a
   constant would not mechanically enforce, so a constant would trade a
   checklist a reviewer has to run through for a false sense that the
   compiler is already doing it.

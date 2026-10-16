@@ -28,8 +28,16 @@
 
 Six destinations — `home`, `transcripts`, `notes`, `knowledge`, `settings`,
 `console` — declared once in `apps/web/src/config/destinations.ts`'s
-`DESTINATIONS` array, which every navigation surface (the rail, the bottom
-bar, the user menu) reads instead of keeping its own list.
+`DESTINATIONS` array, typed as the packaged shell's `ShellDestination`
+(`@marinoscar/platform-web/shell`, issue #484), which every navigation surface
+(the rail, the bottom bar, the user menu) reads instead of keeping its own
+list. Since #484 the surfaces themselves are the package's: `config/shell.ts`
+binds the table, the two settings registries and the Console prefix into one
+`KVOX_NAVIGATION` (`ShellNavigation`), and `components/common/Layout.tsx` is a
+thin `ShellLayout` binding. This app keeps no rail, bottom bar, AppBar or user
+menu of its own; route ownership (`owns`, `resolveActiveDestination`) and
+visibility (`isDestinationVisible`) are the package's functions, so every
+surface asks one answer.
 `BOTTOM_BAR_DESTINATIONS` is **derived**, never a second hand-written array:
 it is every destination for which `pinned` is falsy, currently four
 (`home`, `transcripts`, `notes`, `knowledge`) — see "Knowledge becomes a
@@ -56,7 +64,46 @@ because each surface has a different place to put one:
   through the avatar menu, the same place a phone user reaches every other
   non-destination control.
 
-### Why the collapsed rail is 72px, not 56px
+### The phone bar is bound to the non-pinned destinations (issue #484)
+
+The packaged `ShellBottomNav` draws **every visible destination, pinned ones
+included**, and past its `maxItems` (default 4) it keeps the first three and
+adds a "More" sheet; in the package `pinned` is rail-only. Handed the full
+table, the phone would show Home · Transcripts · Notes · More, with Knowledge,
+Settings and Console behind a sheet. That contradicts the rule above (a mode is
+never a peer on the bar), so `Layout.tsx` mounts the bar with a second
+navigation, `KVOX_BOTTOM_BAR_NAVIGATION` in `config/shell.ts`: the same value
+with `destinations` replaced by `BOTTOM_BAR_DESTINATIONS`. It is a **data
+filter, not a breakpoint**: `ShellBottomNav` keeps its own `down('sm')`
+self-gate, so there are still exactly five gates (`docs/specs/settings-ui.md`
+§5) and none of them is in this app. Both navigations are module-scope
+constants because the shell keys on their identity. With four non-pinned
+destinations the bar never overflows, so there is never a "More" tab.
+`__tests__/components/common/ShellBinding.test.tsx` pins it against the real
+package bar: four tabs with connected knowledge on, three with it off,
+loading or failed, never Settings, Console or "More", and (as a documented
+contrast) the unbound table does grow a "More" tab.
+
+### Why the collapsed rail was 72px, and why it is 56px again (issue #484)
+
+**Update, issue #484.** The rail is now the package's `ShellNavigationRail`,
+whose `RAIL_WIDTH_COLLAPSED` is **56px** (the expanded width is 220px, as it
+was). This app has no width of its own to set, so the collapsed rail is
+narrower by 16px than it was between #106 and #484. This is deliberate and
+accepted by the issue, and it re-opens the problem recorded below: the
+"Transcripts" caption was the reason for 72px. The package draws that caption
+`noWrap` at 0.625rem in a 48px interior box (56px minus the row's margins and
+padding), so it can truncate with an ellipsis; the row keeps its full
+accessible name and a tooltip, so nothing is lost to assistive technology or
+hover, but the visible caption may read "Transcri…". It could not be measured
+in the environment that made this change (no browser). Check the collapsed
+rail at 600px and 1024px (the visual-baseline workflow captures both); if it
+truncates, the options are the ones rejected below (a shorter `compactLabel`,
+which this issue declared out of scope) or a package change to the collapsed
+width or caption. The history that follows is why 72px was chosen and is kept
+because the same trade-off applies to whatever replaces it.
+
+### (history) Why the collapsed rail was 72px, not 56px
 
 `RAIL_WIDTH_COLLAPSED` moved from 56 to 72 as a direct consequence of this
 epic, and the reason is a specific caption, not a general tightening. Issue
@@ -84,7 +131,8 @@ Two narrower fixes were considered and rejected:
 
 72px is still 8px under Material 3's own 80dp navigation-rail spec while
 holding the app's longest destination name, so the fix widens the box to fit
-the word rather than shrinking the word to fit an arbitrary box.
+the word rather than shrinking the word to fit an arbitrary box. (Superseded
+by the package's 56px, above.)
 
 ### What #106 undid, and put back with room to spare
 
@@ -167,6 +215,34 @@ one depends on a network response that has not necessarily returned yet, so
 the destination is **hidden** while that config is unknown or still
 loading — never shown provisionally and then pulled away — so it never
 flashes into the bar and back out from under a tapping thumb.
+
+Since #484 the gate is the package's, not a field of this app's: the
+destination declares `feature: 'graph'`, and every packaged surface (rail,
+bottom bar, user menu, the AppBar's title resolver, the hubs) asks the
+settings feature map, which fails closed. The `graph` feature is registered in
+`config/settingsFeatures.ts`; because a feature resolver must never fetch, the
+one read of `GET /api/ai-tasks/config` lives in `AppGraphFeatureProvider`
+(`platform/GraphFeatureBinding.tsx`, mounted in `App.tsx` above the platform
+host, reading only once the session is authenticated). Unknown, loading,
+failed and signed-out are all "off"; the admin AI page calls its `refresh`
+after saving the switch, so the tab follows without a reload.
+
+### What the packaged AppBar does not do (issue #484)
+
+The AppBar this app used to own had two drill-down tables: the settings
+registries and a table of non-settings routes (`/transcripts/:id`,
+`/transcripts/new`, the version-history pages, `/notes/:id`, the graph entity,
+explorer, overview and import pages, and Ask) that put a back arrow and a
+static title in the bar below `sm`. The packaged `ShellAppBar` resolves only
+the settings surfaces (`ShellNavigation.settingsSurfaces`) and has no
+extension point for further routes, so on a phone those pages now show the
+brand instead of "back arrow + title". The settings drill-down is unchanged.
+Each of those pages already carries its own in-page way back ("Back to
+transcripts", "Back to Knowledge", "Back to Ask", "Back to the transcript"),
+and the OS back gesture is untouched; the structural header was the second
+route home. Restoring it is a package feature (route-pattern drill-downs on
+`ShellNavigation`), not something to rebuild in this app, because the AppBar's
+compact treatment is breakpoint gate 5.
 
 **Rejected alternatives:**
 
@@ -647,6 +723,21 @@ shipped destinations and rail width; regenerating their baselines is
 deliberately out of this document's scope — it is the last step of the
 epic, run once the code above is final, not a step this documentation
 change performs.
+
+**Issue #484 (epic #478) changes the pixels again, and its baselines are not
+regenerated by the change that made it.** The rail is now the package's
+(56px collapsed rather than 72px, the package's caption sizing and row
+spacing) and the AppBar, user menu and bottom bar are the package's too, so
+every baseline that shows the rail or the AppBar (`library-rail`,
+`console-rail`, `admin-hub`, `user-hub`, `hub-permissions`, `drilldown-appbar`,
+`home`, and the transcript, note and graph captures that include the shell)
+needs regenerating. That is done through the manual
+`.github/workflows/visual-baselines.yml` workflow in the pinned container
+(`commit: false` first, to inspect the diff), in a commit of its own, never by
+editing the images. Review the collapsed rail at 600px and 1024px for the
+"Transcripts" caption (§1). The harness itself (`apps/web/visual/main.tsx`)
+now mounts `ShellRoot` and `AppGraphFeatureProvider` instead of the deleted
+theme context.
 
 ## 8. Rejected alternatives
 

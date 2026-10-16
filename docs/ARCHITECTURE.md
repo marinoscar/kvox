@@ -91,7 +91,7 @@ This is a production-grade web application template that establishes:
 │  │  ┌────────────────────────┐  │  │  │  │    Services/Business       │  │  │
 │  │  │  Contexts/State        │  │  │  │  │    Logic Layer             │  │  │
 │  │  │  • AuthProvider (pkg)  │  │  │  │  │  • AuthService (pkg)       │  │  │
-│  │  │  • ThemeContext        │  │  │  │  │  • UsersService (pkg)      │  │  │
+│  │  │  • ShellRoot (pkg)     │  │  │  │  │  • UsersService (pkg)      │  │  │
 │  │  │  • SettingsContext     │  │  │  │  │  • SettingsService         │  │  │
 │  │  └────────────────────────┘  │  │  │  │  • AllowlistService (pkg)  │  │  │
 │  │                              │  │  │  └────────────────────────────┘  │  │
@@ -1483,7 +1483,7 @@ Email templates register in this order: the platform's first, then the applicati
 
 Differences a reader of the old code would not expect: Web Push reads **no environment variables** and Amazon SES reads no credentials from the environment (VAPID keys, the SES access key ID and the SES secret are configured only at `/admin/settings/push` and `/admin/settings/email`; `S3_REGION` survives only as the default SES region); every email carries the brand mark and the brand colour follows `identity.json`; the platform's `role-changed` template replaces the app's, while `user-welcome` and `allowlist-invitation` stay as registered overrides (`registerKvoxEmailTemplateOverrides` in `email-templates/`); the broadcast routes accept `broadcasts:*` or `org_broadcasts:*` (so **`org_admin` reaches broadcasts**) instead of requiring the `admin` role; the preferences matrix now lists `allowlist.invitation_reminder` after `security.role_changed`; `POST /api/admin/broadcasts/:id/resume` and `GET /api/notifications/channels` are new. See [`API.md`](API.md#notifications) and [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
 
-On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in `AppBar.tsx`; the breakpoint gate is untouched), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps the workbox precache, the denylisted navigation route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its notification listeners with `registerNotificationServiceWorkerHandlers(self, { icon, badge })` from `@marinoscar/platform-web/notifications/service-worker`. The worker always shows a real push (even with a focused client); the page raises no OS toast for a focused tab or a frame flagged `pushed`; the tag is the notification id, so a repeated push replaces its toast. No local exception is needed.
+On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in the `actions` slot of the packaged `ShellAppBar` by `Layout.tsx`; the breakpoint gate is the package's), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps the workbox precache, the denylisted navigation route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its notification listeners with `registerNotificationServiceWorkerHandlers(self, { icon, badge })` from `@marinoscar/platform-web/notifications/service-worker`. The worker always shows a real push (even with a focused client); the page raises no OS toast for a focused tab or a frame flagged `pushed`; the tag is the notification id, so a repeated push replaces its toast. No local exception is needed.
 
 ### 7.10 Platform db-backup and telemetry slices, and the application role
 
@@ -1854,7 +1854,11 @@ change and are candidates to migrate later, not a regression to fix now.
 `apps/web/src/config/destinations.ts` is the single source of truth for the
 app's navigation targets — the bottom bar, the navigation rail and the avatar
 menu all read it, so none of the three can disagree about what exists or who
-may see it. Full design, with rejected alternatives, in
+may see it. Since issue #484 (epic #478) the three surfaces are the platform's
+(`@marinoscar/platform-web/shell`): `config/shell.ts` binds the table into
+`KVOX_NAVIGATION`, `components/common/Layout.tsx` is a thin `ShellLayout`
+binding, and the five breakpoint gates live in the package. Full design, with
+rejected alternatives, in
 [`docs/specs/ux-refresh.md`](specs/ux-refresh.md) §1.
 
 **Six destinations** since issue #438: `home`, `transcripts`, `notes`,
@@ -1887,6 +1891,9 @@ happens to hold. A fifth non-pinned destination is not an addition, it is a
 redesign of that bar — which is why issue #438 pins `settings` rather than
 adding `knowledge` as a fifth: the bar is `home`, `transcripts`, `notes`,
 `knowledge` (three when the graph is off or the caller lacks `graph:read`).
+The packaged bar draws pinned destinations and overflows into "More", so the
+bar is mounted with `KVOX_BOTTOM_BAR_NAVIGATION`, the same navigation filtered to
+`BOTTOM_BAR_DESTINATIONS` (a data filter, not a breakpoint).
 
 ⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
 navigation rail's foot below a divider, appears in the avatar menu, and is
@@ -2311,7 +2318,7 @@ The project uses a **mocked database approach** for all tests by default. This p
 │  │  Integration Tests          │       │                             │  │
 │  │  (*.integration.spec.ts)    │       │  Context Tests              │  │
 │  │  • In test/ directory       │       │  • IdentityProviders        │  │
-│  │  • Full HTTP cycle          │       │  • ThemeContext             │  │
+│  │  • Full HTTP cycle          │       │  • ShellRoot / Layout       │  │
 │  │  • Mocked PrismaService     │       │                             │  │
 │  │                             │       │                             │  │
 │  │  Mocking:                   │       │  Mocking:                   │  │
@@ -2455,18 +2462,14 @@ apps/web/src/
     │   └── hook-utils.tsx                # Hook testing utilities
     ├── components/
     │   ├── common/
+    │   │   ├── Layout.test.tsx           # the ShellLayout binding
+    │   │   ├── ShellBinding.test.tsx     # phone bar, rail, Console mode, avatar menu
     │   │   └── LoadingSpinner.test.tsx
-    │   ├── navigation/
-    │   │   ├── AppBar.test.tsx
-    │   │   ├── Sidebar.test.tsx
-    │   │   └── UserMenu.test.tsx
     │   └── admin/                        # incl. the Reminders panel
     ├── identity/
     │   ├── IdentityProviders.test.tsx
     │   ├── LoginPage.test.tsx            # the packaged page with the KVox Logo slot
     │   └── UsersPage.test.tsx            # the packaged page with the Reminders tab
-    ├── contexts/
-    │   └── ThemeContext.test.tsx
     ├── pages/
     │   ├── UserSettingsPages.test.tsx
     │   └── UserNotificationsPage.test.tsx
@@ -2535,18 +2538,18 @@ afterAll(() => server.close());
 // __tests__/utils/test-utils.tsx
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider } from '../../contexts/ThemeContext';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
 import { AuthProvider } from '@marinoscar/platform-web/identity/headless';
 
 export function renderWithProviders(ui: React.ReactElement, options = {}) {
   return render(ui, {
     wrapper: ({ children }) => (
       <BrowserRouter>
-        <ThemeProvider>
+        <ShellRoot themes={{ light: lightTheme, dark: darkTheme }}>
           <AuthProvider>
             {children}
           </AuthProvider>
-        </ThemeProvider>
+        </ShellRoot>
       </BrowserRouter>
     ),
     ...options,

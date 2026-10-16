@@ -12,7 +12,8 @@ import { http, HttpResponse } from 'msw';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { server } from '../mocks/server';
-import { ThemeContextProvider } from '../../contexts/ThemeContext';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { darkTheme, lightTheme } from '../../theme';
 import { AppPlatformHostProvider } from '../../platform/platformHost';
 import { useUserSettings, PACKAGED_CONFLICT_MESSAGE } from '../../hooks/userSettingsRetry';
 import { AuthContext } from '@marinoscar/platform-web/identity/headless';
@@ -38,11 +39,11 @@ const auth = {
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <MemoryRouter>
-      <ThemeContextProvider>
+      <ShellRoot themes={{ light: lightTheme, dark: darkTheme }}>
         <AuthContext.Provider value={auth}>
           <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
         </AuthContext.Provider>
-      </ThemeContextProvider>
+      </ShellRoot>
     </MemoryRouter>
   );
 }
