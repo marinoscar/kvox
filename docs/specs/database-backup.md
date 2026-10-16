@@ -365,7 +365,7 @@ stopped while it is still streaming.
 
 ## 9. The storage destination
 
-The runner injects `STORAGE_PROVIDER` directly and reads `getBucket()`. It
+The runner injects the `STORAGE_PROVIDER` provider token directly and reads `getBucket()`. Which bucket that is comes from the runtime-configured storage settings (`/admin/settings/storage`, [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md)), not from environment variables: the former `S3_*` / `AWS_*` variables are no longer read, so a backup before the storage configuration is saved fails with the 503 "storage not configured" error rather than writing anywhere. It
 imports `StorageProvidersModule`, **not** `StorageModule` — the same choice
 `JobsModule` and `NodesModule` made, and for the same reason plus one of its
 own: routing a backup through `ObjectsService` would give every archive a

@@ -1,7 +1,7 @@
 /**
  * The resumable upload engine — issue #22, epic #19.
  *
- * The control plane (init, presign, status, complete, abort) is answered by
+ * The control plane (init, presign, list parts, complete, abort) is answered by
  * MSW; the part PUTs are driven by hand through the shared fake
  * `XMLHttpRequest` (`../utils/fakeXhr`), because every property worth
  * asserting here is about TIMING — bytes reported mid-flight, a request
@@ -19,18 +19,23 @@ import { server } from '../mocks/server';
 import { createFakeXhrFactory, type FakeXhrController } from '../utils/fakeXhr';
 import {
   backoffDelayMs,
+  completeUpload,
   cspBlockedUploadMessage,
   defaultUploadRuntime,
   detectPartConcurrency,
   DESKTOP_PART_CONCURRENCY,
   MOBILE_PART_CONCURRENCY,
+  fetchUploadResumeState,
+  listUploadedParts,
+  ListPartsUnsupportedError,
   resumeUpload,
   startUpload,
   createTranscriptUpload,
+  UploadIncompleteError,
   type CspViolation,
   type UploadInitResponse,
+  type UploadResumeState,
   type UploadRuntime,
-  type UploadStatusResponse,
 } from '../../services/resumableUpload';
 
 const API = '*/api';
@@ -87,6 +92,14 @@ describe('resumable upload engine', () => {
   let partRequests: number[][];
   /** The parsed JSON body of every `…/upload/complete` request received. */
   let completeRequestBodies: unknown[];
+  /**
+   * The part numbers the fake provider reports from `GET …/upload/parts`.
+   * Defaults to a generous 1..100 so a test that is not about the part list
+   * completes; a test about gaps or resume narrows it. `null` answers 501.
+   */
+  let storedParts: number[] | null;
+  /** The raw bodies the platform init route received. */
+  let initRequestBodies: unknown[];
   /** The handler `UploadEngine` last subscribed with, or `null` once unsubscribed. */
   let cspHandler: ((violation: CspViolation) => void) | null;
   let cspSubscribeCount: number;
@@ -119,6 +132,8 @@ describe('resumable upload engine', () => {
     abortCalls = 0;
     partRequests = [];
     completeRequestBodies = [];
+    storedParts = Array.from({ length: 100 }, (_, index) => index + 1);
+    initRequestBodies = [];
     cspHandler = null;
     cspSubscribeCount = 0;
     cspUnsubscribeCount = 0;
@@ -141,8 +156,52 @@ describe('resumable upload engine', () => {
     };
 
     server.use(
-      http.post(`${API}/storage/objects/upload/init`, () =>
-        HttpResponse.json({ data: makeInit() }),
+      // The PLATFORM's init: `presignedUrls`, not `parts`.
+      http.post(`${API}/storage/objects/upload/init`, async ({ request }) => {
+        initRequestBodies.push(await request.json());
+        const init = makeInit();
+        return HttpResponse.json({
+          data: {
+            objectId: init.objectId,
+            uploadId: init.uploadId,
+            partSize: init.partSize,
+            totalParts: init.totalParts,
+            presignedUrls: init.parts,
+          },
+        });
+      }),
+      // KVox's read-back of the provider's part list (S3 ListParts).
+      http.get(`${API}/storage/objects/:id/upload/parts`, () =>
+        storedParts === null
+          ? HttpResponse.json(
+              {
+                error: {
+                  code: 'NOT_IMPLEMENTED',
+                  message: 'list parts unsupported',
+                  details: { reason: 'list_parts_unsupported' },
+                },
+              },
+              { status: 501 },
+            )
+          : HttpResponse.json({
+              data: storedParts.map((partNumber) => ({
+                partNumber,
+                etag: `"etag-${partNumber}"`,
+                size: PART_SIZE,
+              })),
+            }),
+      ),
+      http.get(`${API}/storage/objects/:id/upload/status`, () =>
+        HttpResponse.json({
+          data: {
+            objectId: OBJECT_ID,
+            status: 'uploading',
+            uploadedParts: [1],
+            totalParts: TOTAL_PARTS,
+            uploadedBytes: String(PART_SIZE),
+            totalBytes: String(TOTAL_BYTES),
+          },
+        }),
       ),
       http.post(`${API}/storage/objects/:id/upload/parts`, async ({ request }) => {
         const body = (await request.json()) as { partNumbers: number[] };
@@ -448,20 +507,15 @@ describe('resumable upload engine', () => {
   // ---------------------------------------------------------------------------
 
   describe('resume', () => {
-    it('uploads only the parts the status endpoint says are missing', async () => {
-      const status: UploadStatusResponse = {
-        status: 'uploading',
-        partSize: PART_SIZE,
-        totalParts: TOTAL_PARTS,
-        uploadedParts: [
-          { partNumber: 1, size: PART_SIZE },
-          { partNumber: 2, size: PART_SIZE },
-        ],
-        uploadedBytes: 2 * PART_SIZE,
-        totalBytes: TOTAL_BYTES,
-      };
+    const stateOf = (uploadedParts: number[]): UploadResumeState => ({
+      partSize: PART_SIZE,
+      totalParts: TOTAL_PARTS,
+      uploadedParts,
+    });
 
-      const upload = resumeUpload(makeFile(), OBJECT_ID, status, { runtime });
+    it('uploads only the parts the provider says are missing', async () => {
+      storedParts = [1, 2, 3];
+      const upload = resumeUpload(makeFile(), OBJECT_ID, stateOf([1, 2]), { runtime });
 
       // Credited for what the SERVER holds before a single byte is re-sent.
       expect(upload.getProgress().uploadedBytes).toBe(20);
@@ -478,60 +532,147 @@ describe('resumable upload engine', () => {
     });
 
     it('completes immediately when the server already holds every part', async () => {
-      const status: UploadStatusResponse = {
-        status: 'uploading',
-        partSize: PART_SIZE,
-        totalParts: TOTAL_PARTS,
-        uploadedParts: [1, 2, 3].map((partNumber) => ({ partNumber, size: PART_SIZE })),
-        uploadedBytes: TOTAL_BYTES,
-        totalBytes: TOTAL_BYTES,
-      };
-
-      const upload = resumeUpload(makeFile(), OBJECT_ID, status, { runtime });
+      const upload = resumeUpload(makeFile(), OBJECT_ID, stateOf([1, 2, 3]), { runtime });
 
       expect((await upload.whenSettled()).status).toBe('completed');
       expect(xhr.requests).toHaveLength(0);
       expect(completeCalls).toBe(1);
     });
 
-    // ⚠ THE REGRESSION TEST FOR #89. `ApiService.post` drops a body it is
-    // never given — no payload, no `Content-Type` — which a browser's bare
-    // `POST …/upload/complete` used to hit exactly that way, and an object
-    // schema whose every field is optional still rejects `undefined`. Every
-    // browser upload failed at 100% until `completeUpload` started sending an
-    // explicit `{}`. This asserts the body itself, not just a success status,
-    // so a regression that silently reverts to no body — which would still
-    // pass against this suite's happy-path MSW handler — fails here instead.
-    it('sends an explicit {} body on complete, never nothing and never parts', async () => {
-      const status: UploadStatusResponse = {
-        status: 'uploading',
+    it('reads the resume state from the provider part list, using the persisted part size', async () => {
+      storedParts = [1, 2];
+      // The deployment-wide size may have changed since init; the layout comes
+      // from the session record the caller holds, never from the server.
+      const state = await fetchUploadResumeState(OBJECT_ID, {
         partSize: PART_SIZE,
-        totalParts: TOTAL_PARTS,
-        uploadedParts: [1, 2, 3].map((partNumber) => ({ partNumber, size: PART_SIZE })),
-        uploadedBytes: TOTAL_BYTES,
-        totalBytes: TOTAL_BYTES,
-      };
+        size: TOTAL_BYTES,
+      });
+      expect(state).toEqual({ partSize: PART_SIZE, totalParts: TOTAL_PARTS, uploadedParts: [1, 2] });
+    });
 
-      const upload = resumeUpload(makeFile(), OBJECT_ID, status, { runtime });
+    it('ignores listed parts outside the layout', async () => {
+      storedParts = [1, 2, 3, 4, 99];
+      const state = await fetchUploadResumeState(OBJECT_ID, {
+        partSize: PART_SIZE,
+        size: TOTAL_BYTES,
+      });
+      expect(state.uploadedParts).toEqual([1, 2, 3]);
+    });
+
+    it('falls back to the platform status when the driver cannot list parts (501)', async () => {
+      storedParts = null;
+      const state = await fetchUploadResumeState(OBJECT_ID, {
+        partSize: PART_SIZE,
+        size: TOTAL_BYTES,
+      });
+      expect(state.uploadedParts).toEqual([1]);
+      expect(state.totalParts).toBe(TOTAL_PARTS);
+    });
+
+    it('surfaces a 404 from the part list so the caller can forget the session', async () => {
+      server.use(
+        http.get(`${API}/storage/objects/:id/upload/parts`, () =>
+          HttpResponse.json({ error: { code: 'NOT_FOUND', message: 'gone' } }, { status: 404 }),
+        ),
+      );
+      await expect(
+        fetchUploadResumeState(OBJECT_ID, { partSize: PART_SIZE, size: TOTAL_BYTES }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+
+  describe('complete', () => {
+    // ⚠ THE PLATFORM'S `POST …/upload/complete` REQUIRES `parts` WITH AN ETAG
+    // PER PART (issue #469). The client never reads an ETag header off a PUT:
+    // it forwards the ETags KVox's `GET …/upload/parts` listed. This asserts
+    // the body itself, so a regression to the old `{}` (which the platform
+    // would reject with a 400 at 100%) fails here rather than in production.
+    it('sends the provider-listed parts, ETags included, in part order', async () => {
+      storedParts = [3, 1, 2];
+      const upload = resumeUpload(
+        makeFile(),
+        OBJECT_ID,
+        { partSize: PART_SIZE, totalParts: TOTAL_PARTS, uploadedParts: [1, 2, 3] },
+        { runtime },
+      );
 
       expect((await upload.whenSettled()).status).toBe('completed');
-      expect(completeRequestBodies).toHaveLength(1);
-      expect(completeRequestBodies[0]).toEqual({});
-      const body = completeRequestBodies[0] as Record<string, unknown>;
-      expect(Object.prototype.hasOwnProperty.call(body, 'parts')).toBe(false);
+      expect(completeRequestBodies).toEqual([
+        {
+          parts: [
+            { partNumber: 1, eTag: '"etag-1"' },
+            { partNumber: 2, eTag: '"etag-2"' },
+            { partNumber: 3, eTag: '"etag-3"' },
+          ],
+        },
+      ]);
+    });
+
+    it('never reads an ETag off a part PUT response', async () => {
+      const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+        runtime: { ...runtime, concurrency: () => 1 },
+      });
+      const first = await xhr.waitForPending(1);
+      // The fake PUT response exposes no headers at all, exactly like a
+      // cross-origin response from a bucket with no `ExposeHeaders: ETag`:
+      // completion must not depend on them.
+      first[0].respond();
+      expect((await upload.whenSettled()).status).toBe('completed');
+      expect(completeRequestBodies).toEqual([{ parts: [{ partNumber: 1, eTag: '"etag-1"' }] }]);
+    });
+
+    it('refuses to complete over a gap and says how many parts are missing', async () => {
+      storedParts = [1, 3];
+      await expect(completeUpload(OBJECT_ID, TOTAL_PARTS)).rejects.toBeInstanceOf(
+        UploadIncompleteError,
+      );
+      expect(completeCalls).toBe(0);
+
+      const upload = resumeUpload(
+        makeFile(),
+        OBJECT_ID,
+        { partSize: PART_SIZE, totalParts: TOTAL_PARTS, uploadedParts: [1, 2, 3] },
+        { runtime },
+      );
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toMatch(/1 part did not reach storage/);
+    });
+
+    it('fails with a clear message when the driver cannot list parts (501)', async () => {
+      storedParts = null;
+      await expect(completeUpload(OBJECT_ID, TOTAL_PARTS)).rejects.toBeInstanceOf(
+        ListPartsUnsupportedError,
+      );
+      await expect(listUploadedParts(OBJECT_ID)).rejects.toThrow(/S3-compatible/);
+      expect(completeCalls).toBe(0);
+
+      const upload = resumeUpload(
+        makeFile(),
+        OBJECT_ID,
+        { partSize: PART_SIZE, totalParts: TOTAL_PARTS, uploadedParts: [1, 2, 3] },
+        { runtime },
+      );
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toMatch(/does not support browser multipart/);
     });
   });
 
   // ---------------------------------------------------------------------------
 
   describe('createTranscriptUpload', () => {
-    it('inits against the API and starts transferring', async () => {
-      const { upload, init } = await createTranscriptUpload(makeFile(), {
-        runtime,
-        transcriptId: 'transcript-9',
-      });
+    it('inits against the platform route and starts transferring', async () => {
+      const { upload, init } = await createTranscriptUpload(makeFile(), { runtime });
 
       expect(init.objectId).toBe(OBJECT_ID);
+      // The platform's body shape, and its `presignedUrls` adapted to `parts`.
+      expect(initRequestBodies).toEqual([
+        { name: 'recording.m4a', size: TOTAL_BYTES, mimeType: 'audio/mp4' },
+      ]);
+      expect(init.parts).toHaveLength(TOTAL_PARTS);
       await xhr.waitForPending(2);
       expect(upload.getProgress().phase).toBe('uploading');
 

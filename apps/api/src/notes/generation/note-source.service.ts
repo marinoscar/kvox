@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Writable } from 'node:stream';
 
 import { AiInputError } from '../../ai/ai-errors';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoteObjectsService } from '../note-objects.service';
 import {
@@ -112,6 +113,7 @@ export class NoteSourceService {
     private readonly materialize: TranscriptMaterializeService,
     private readonly markdown: MarkdownTranscriptExporter,
     private readonly objects: NoteObjectsService,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /**
@@ -311,7 +313,7 @@ export class NoteSourceService {
       throw new AiInputError('This note names a document source but carries no object id.');
     }
 
-    const object = await this.prisma.storageObject.findUnique({
+    const object = await this.managedObjects.findFirst({
       where: { id: objectId },
       // ⚠ `name`, NOT `filename` — `storage_objects` has no `filename` column,
       // and selecting one is a runtime Prisma error rather than a type error.

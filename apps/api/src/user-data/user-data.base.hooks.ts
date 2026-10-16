@@ -13,8 +13,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { UserAiCredentialsService } from '../ai/user-ai-credentials.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserSettingsService } from '@marinoscar/platform-api/settings';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
-import { ObjectsService } from '../storage/objects/objects.service';
+import { ObjectsService } from '@marinoscar/platform-api/storage';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import {
   auditUserData,
   describe,
@@ -33,15 +33,14 @@ export class FilesUserDataHooks {
   constructor(
     private readonly prisma: PrismaService,
     private readonly objects: ObjectsService,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /** `files` in `GET /api/user-data/summary`. */
   async summarize(userId: string): Promise<{ count: number; bytes: string }> {
-    // PLATFORM-ADOPTION-SHIM(#469): the `managed_by IS NULL` filter below is
-    // raw SQL in the legacy store.
-    const files = await this.ownership.summarizeUnmanaged(userId);
+    // `kvoxOwnership: null` is "no module owns it" -- the whole definition of
+    // "a file" here, see below.
+    const files = await this.managedObjects.summarize({ uploadedById: userId, kvoxOwnership: null });
 
     // ⚠ `managed_by IS NULL` IS THE WHOLE DEFINITION OF "a file" HERE. A
       // transcript's source audio and a note's rendered export are also rows
@@ -62,31 +61,34 @@ export class FilesUserDataHooks {
   /**
    * Delete the caller's plain uploads: bytes and row, through `ObjectsService`.
    *
-   * ⚠ `managed_by IS NULL` IS PART OF THE QUERY, not a check after the fact. A
-   * transcript's source audio, a note's rendered export and every other
-   * module-owned object are `managed_by`-stamped precisely so they can only be
-   * removed by the module that understands them (issue #21), and their bytes
-   * are already on their way out through the purge jobs steps 2 and 3 queued.
-   * Selecting them here would either 409 out of `ObjectsService.delete` or, if
-   * that check were ever relaxed, delete a live transcript's audio.
+   * ⚠ `kvoxOwnership: null` (no `kvox_object_ownership` row) IS PART OF THE
+   * QUERY, not a check after the fact. A transcript's source audio, a note's
+   * rendered export and every other module-owned object are ownership-stamped
+   * precisely so they can only be removed by the module that understands them
+   * (issue #21), and their bytes are already on their way out through the purge
+   * jobs steps 2 and 3 queued. The platform's `ObjectsService.delete` does NOT
+   * refuse a managed object (the 409 is a request hook on the generic route),
+   * so this filter is the only thing that keeps a live transcript's audio safe.
    *
-   * `ObjectsService.delete` is used rather than a narrower in-process method
-   * precisely BECAUSE of that 409: it can never fire on this query's rows, so
-   * reusing the ordinary path costs nothing and keeps one implementation of
+   * `ObjectsService.delete` is used because it is the one implementation of
    * "remove an object's bytes, its row, its chunks and write the audit event".
    */
   async purge(userId: string): Promise<void> {
     let deleted = 0;
     const failed = new Set<string>();
+    const orgId = await this.managedObjects.resolveOrg();
 
     for (let batch = 0; batch < USER_DATA_PURGE_MAX_BATCHES; batch += 1) {
-      // PLATFORM-ADOPTION-SHIM(#469): `managed_by IS NULL` is raw SQL in the legacy store.
-      const rows = (
-        await this.ownership.selectObjectIds(
-          { managed: 'unmanaged', uploadedById: userId, excludeIds: [...failed] },
-          { take: USER_DATA_PURGE_BATCH },
-        )
-      ).map((id) => ({ id }));
+      const rows = await this.managedObjects.findMany({
+        where: {
+          uploadedById: userId,
+          kvoxOwnership: null,
+          ...(failed.size > 0 ? { id: { notIn: [...failed] } } : {}),
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: USER_DATA_PURGE_BATCH,
+      });
 
       if (rows.length === 0) {
         if (deleted > 0 || failed.size > 0) {
@@ -105,7 +107,7 @@ export class FilesUserDataHooks {
 
       for (const row of rows) {
         try {
-          await this.objects.delete(row.id, userId);
+          await this.objects.delete(row.id, userId, orgId);
           deleted += 1;
         } catch (error) {
           // ⚠ RECORDED AND EXCLUDED FROM THE NEXT PAGE. An object whose bytes

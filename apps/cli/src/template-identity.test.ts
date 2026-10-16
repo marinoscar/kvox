@@ -461,6 +461,21 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // Assistant instructions for apps/web, the same standing as AGENTS.md and
   // apps/cli/AGENTS.md above: Markdown naming the product, no `@app/shared`.
   'apps/web/AGENTS.md',
+
+  // ---------------------------------------------------------------------
+  // Added by issue #469 (epic #467), the storage slice.
+  //
+  // The application's own storage routes and folder are named after the
+  // product (`GET /api/kvox/files`, `apps/api/src/kvox-objects/`, the
+  // `kvox.transcripts.source` processor name), and the docs below must quote
+  // those names to be of any use to an operator or a client author. Markdown
+  // cannot import from `@app/shared`; a renamed fork edits these along with
+  // the code.
+  // ---------------------------------------------------------------------
+  'docs/API.md',
+  'docs/SECURITY-ARCHITECTURE.md',
+  'docs/runbooks/s3-cors.md',
+  'docs/runbooks/storage-configuration.md',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this
@@ -576,6 +591,20 @@ function stripRegistryScopes(lineText: string): string {
   return lineText.replace(REGISTRY_SCOPE_RE, '');
 }
 
+/**
+ * Identifiers the storage adoption (issue #469, epic #467) fixes by name: the `kvox-objects/` module and
+ * its classes, the `kvox_object_ownership` table, the `GET /api/kvox/files` route, the `kvox.transcripts.source`
+ * processor name and the retired `kvox:storage-managed-by-part-size` deviation id. They are stripped per
+ * token, like the registry scopes above, so any other mention of the product name on the same line is
+ * still flagged. A rename of the product renames these with the module directory.
+ */
+const STORAGE_ADOPTION_TOKEN_RE =
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b/g;
+
+function stripStorageAdoptionTokens(lineText: string): string {
+  return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');
+}
+
 interface Offender {
   file: string;
   line: number;
@@ -610,7 +639,7 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
       // its own. Only lines that name that file are exempt; any other mention
       // of the product name on the same file is still flagged.
       if (MANIFEST_FILE_LINE_RE.test(lineText)) return;
-      const scanned = stripRegistryScopes(lineText);
+      const scanned = stripStorageAdoptionTokens(stripRegistryScopes(lineText));
       for (const { value, re } of patterns) {
         if (re.test(scanned)) {
           offenders.push({ file, line: idx + 1, text: lineText.trim().slice(0, 160), value });

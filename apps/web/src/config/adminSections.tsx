@@ -60,6 +60,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 // two are the same idea on two axes, and an administrator who has seen one
 // recognises the other.
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 
 /**
  * The admin sections, in hub order.
@@ -75,6 +76,8 @@ import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
  *   - `nodes:read`            → the worker-node controller (#267)
  *   - `db_backup:read`        → the database-backup controller (#268)
  *   - `push:read`             → the push-config controller (#355)
+ *   - `storage_config:read`   → the platform's storage-config controller
+ *                               (`@marinoscar/platform-api/storage`)
  *
  * `Users & Allowlist` gates on `users:read` alone even though it hosts data
  * from two controllers (Users → `users:read`, Allowlist → `allowlist:read`).
@@ -286,6 +289,24 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: InfoOutlinedIcon,
         path: '/admin/settings/about',
         permission: 'system_settings:read',
+      },
+      {
+        // Issue #469, epic #467. The card is the platform storage slice's page
+        // (`StorageConfigPage`, `@marinoscar/platform-web/storage/ui`), APPENDED
+        // last in `General` so no card a reader has learnt moves.
+        // `storage_config:read` is the exact string the platform's
+        // `storage-config.controller` enforces on `GET /api/admin/storage-config`
+        // (the write routes need `storage_config:write`, which the page gates by
+        // disabling its controls). It is deliberately NOT `storage:read`: that
+        // pair gates OBJECT access and every Viewer and Contributor holds it,
+        // whereas this page edits the credential-bearing configuration of every
+        // upload, avatar and backup in the deployment.
+        title: 'Storage',
+        description:
+          'Where uploaded files, avatars and backups are kept: choose the provider, enter its bucket and credentials, and test the connection.',
+        Icon: CloudOutlinedIcon,
+        path: '/admin/settings/storage',
+        permission: 'storage_config:read',
       },
     ],
   },

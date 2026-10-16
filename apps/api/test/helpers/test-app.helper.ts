@@ -9,9 +9,9 @@ import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { PrismaSystemService } from '../../src/prisma/prisma-system.service';
+import { installManagedDeleteHook } from '../../src/kvox-objects/managed-delete.hook';
 import { prismaMock } from '../mocks/prisma.mock';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-import { createFakeOwnershipStore } from './fake-ownership-store.helper';
 import { JobWorker } from '@marinoscar/platform-api/jobs';
 
 export interface TestContext {
@@ -135,11 +135,12 @@ export async function createTestApp(
       // deliberately.
       .overrideProvider(JobWorker)
       .useValue({})
-      // PLATFORM-ADOPTION-SHIM(#469): `managed_by` / `part_size` are raw SQL in
-      // the real store, which a mocked client cannot answer; this fake answers
-      // from the rows the spec feeds `storageObject.findUnique`.
-      .overrideProvider(LegacyObjectOwnershipStore)
-      .useValue(createFakeOwnershipStore(prismaMock));
+      // The platform's bypass client is a SECOND PrismaClient on its own pool
+      // (#469: the storage slice's cross-org reads - the public avatar route,
+      // the stale-upload sweep - go through it). Against the mock it answers
+      // from the same deep mock, so a spec feeds one set of tables.
+      .overrideProvider(PrismaSystemService)
+      .useValue({ forSystem: () => prismaMock, $disconnect: async () => undefined });
 
     for (const { provide, useValue } of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(provide).useValue(useValue);
@@ -174,6 +175,9 @@ export async function createTestApp(
   });
 
   app.setGlobalPrefix('api');
+  // Mirrors main.ts (#469): the managed-object delete veto and abort forward are a Fastify
+  // `onRequest` hook, installed right after the prefix is set.
+  installManagedDeleteHook(app);
   // Note: ZodValidationPipe is already registered globally via APP_PIPE in AppModule
   // Do NOT add a standard ValidationPipe here as it conflicts with Zod DTOs
 

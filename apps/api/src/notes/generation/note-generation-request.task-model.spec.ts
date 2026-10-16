@@ -43,7 +43,7 @@ describe.each(GENERATION_CASES)('resolveForGeneration ≡ resolveModel: $name', 
       resolver,
       {} as never, // TranscriptAccessService
       {} as never, // NoteAccessService
-      {} as never, // LegacyObjectOwnershipStore (PLATFORM-ADOPTION-SHIM(#469))
+      {} as never, // KvoxManagedObjectsService
     );
 
     const outcome = await outcomeOf(notes.resolveModel('u1', c.requested, c.intent));

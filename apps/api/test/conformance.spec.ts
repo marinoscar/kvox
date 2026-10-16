@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465, #464 and #468, epics #462 and #467)
+// Platform conformance (issues #465, #464, #468 and #469, epics #462 and #467)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -14,11 +14,12 @@ import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/settings/testing';
+import '@marinoscar/platform-api/storage/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
-import { STORAGE_PROVIDER } from '../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
 
@@ -89,7 +90,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
   { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
   { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
-  { file: 'storage/legacy-object-ownership.store.ts', why: 'Temporary storage_objects.managed_by deviation (#469) that the platform schema does not declare; keyed by storage object id.' },
   { file: 'transcripts/transcript-editing.service.ts', why: 'Row locks and ordered segment rewrites inside the edit transaction; scoped to a transcript the caller owns.' },
 ] as const;
 
@@ -98,18 +98,26 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Six files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
-    // notes-housekeeping, storage-cleanup, transcripts-housekeeping.
-    cronEnqueueOnly: { exempt: [], minCronFiles: 6 },
+    // Five files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
+    // notes-housekeeping, transcripts-housekeeping (the storage cleanup cron is the platform's since #469).
+    cronEnqueueOnly: { exempt: [], minCronFiles: 5 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
-    // provider). OPTED OUT until #469, with a reason: storage/processing/object-processing.service.ts
-    // still runs the post-upload processors inline from its @OnEvent body (`storageProvider.download`),
-    // and #469 replaces that listener with a platform ObjectProcessor. Every other listener
-    // (nine files, one body each) is already a dispatch or one bounded write. #469 MUST restore
-    // `onEventNoIo: { minListenerFiles: 9, minListenerBodies: 9, mustScan: [...the eight listener files
-    // from issue #468...] }` here when it deletes that listener.
+    // provider). Seven files hold a listener, one body each, every one a dispatch or one bounded
+    // write. The two transcript upload listeners and storage/processing/object-processing.service.ts
+    // are gone (#469): the pipeline starts from transcripts/transcript-upload.processor.ts, a
+    // platform ObjectProcessor that runs in the storage.object.process job.
     onEventNoIo: {
-      skip: 'PLATFORM-ADOPTION-SHIM(2.2): storage/processing/object-processing.service.ts runs processors inline until #469 replaces it',
+      minListenerFiles: 7,
+      minListenerBodies: 7,
+      mustScan: [
+        'graph/layout/graph-layout.listener.ts',
+        'graph/listeners/speaker-identified.listener.ts',
+        'graph/preferences/graph-preferences-change.forwarder.ts',
+        'graph/resolution/listeners/graph-preferences.listener.ts',
+        'notifications/ops/job-failure-notifier.ts',
+        'notifications/ops/node-offline-notifier.ts',
+        'transcripts/listeners/transcript-job-failure.listener.ts',
+      ],
     },
     userOwnedData: {
       schemaPath: join(API_DIR, 'prisma', 'schema'),
@@ -132,9 +140,14 @@ runPlatformConformance({
         contents: readCatalog(),
         staleMessage: 'prisma/catalog/system-settings-defaults.json is stale. Run `npm run catalog:settings` in apps/api and commit the result.',
       },
-      // notifications, jobs, nodes, databaseBackup, maintenance (platform declarations) + transcription, ai (KVox).
-      minSystemNamespaces: 7,
+      // notifications, jobs, nodes, databaseBackup, maintenance, storage (platform declarations) + transcription, ai (KVox).
+      minSystemNamespaces: 8,
     },
+    // Key prefixes (#469): the slice's own four plus db-backup are registered by the platform; the
+    // three below are this app's writers (platform/storage/storage-key-prefix.manifest.ts, deployment scope).
+    // The suite fails on a malformed or overlapping prefix, a missing id, an org-scoped prefix that
+    // builds a key without an organization, and a secret-named field in the storage settings schemas.
+    storage: { requiredPrefixIds: ['transcripts', 'notes', 'graph'] },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
   },

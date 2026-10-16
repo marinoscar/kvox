@@ -19,7 +19,7 @@ import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   STORAGE_PROVIDER,
   type StorageProvider,
-} from '../storage/providers/storage-provider.interface';
+} from '@marinoscar/platform-api/storage';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
 import {
   ACTIVE_STORAGE_PROVIDER_ID,

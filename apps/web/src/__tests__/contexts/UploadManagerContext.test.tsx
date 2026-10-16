@@ -45,7 +45,8 @@ let xhr: FakeXhrController;
 let idb: FakeIndexedDbControl;
 let runtime: Partial<UploadRuntime>;
 let abortCalls: number;
-let uploadedParts: number[];
+/** What the fake provider lists; `null` means every part is stored. */
+let listedParts: number[] | null;
 
 function makeFile(name = 'recording.m4a', lastModified = 111): File {
   return new File([new Uint8Array(PART_SIZE * TOTAL_PARTS)], name, {
@@ -82,7 +83,7 @@ describe('UploadManagerProvider', () => {
     xhr = createFakeXhrFactory();
     idb = installFakeIndexedDB();
     abortCalls = 0;
-    uploadedParts = [];
+    listedParts = null;
     localStorage.clear();
 
     runtime = {
@@ -101,7 +102,7 @@ describe('UploadManagerProvider', () => {
             partSize: PART_SIZE,
             totalParts: TOTAL_PARTS,
             uploadId: 'upload-1',
-            parts: [1, 2].map((partNumber) => ({
+            presignedUrls: [1, 2].map((partNumber) => ({
               partNumber,
               url: `https://s3.example.com/${OBJECT_ID}/part-${partNumber}`,
               expiresAt: FRESH,
@@ -119,19 +120,16 @@ describe('UploadManagerProvider', () => {
           })),
         });
       }),
-      http.get(`${API}/storage/objects/:id/upload/status`, () =>
+      // KVox's read-back of the provider's part list: the resume oracle and
+      // the source of the ETags `complete` forwards.
+      http.get(`${API}/storage/objects/:id/upload/parts`, () =>
         HttpResponse.json({
-          data: {
-            status: 'uploading',
-            partSize: PART_SIZE,
-            totalParts: TOTAL_PARTS,
-            uploadedParts: uploadedParts.map((partNumber) => ({
+          data: (listedParts ?? Array.from({ length: TOTAL_PARTS }, (_, index) => index + 1))
+            .map((partNumber) => ({
               partNumber,
+              etag: `"etag-${partNumber}"`,
               size: PART_SIZE,
             })),
-            uploadedBytes: uploadedParts.length * PART_SIZE,
-            totalBytes: PART_SIZE * TOTAL_PARTS,
-          },
         }),
       ),
       http.post(`${API}/storage/objects/:id/upload/complete`, () =>
@@ -322,7 +320,7 @@ describe('UploadManagerProvider', () => {
       await act(async () => {
         inFlight[0].respond();
       });
-      uploadedParts = [1];
+      listedParts = [1];
       act(() => manager.pauseUpload(OBJECT_ID));
       act(() => manager.dismissUpload(OBJECT_ID));
       xhr.reset();
@@ -340,10 +338,12 @@ describe('UploadManagerProvider', () => {
 
       expect(manager.uploads[0].resumed).toBe(true);
       const inFlight = await xhr.waitForPending(1);
-      // Part 1 is NOT re-sent: the status endpoint is the authority on what
-      // landed, not this browser's memory of what it sent.
+      // Part 1 is NOT re-sent: the provider's part list is the authority on
+      // what landed, not this browser's memory of what it sent.
       expect(xhr.requests).toHaveLength(1);
       expect(inFlight[0].url).toContain('part-2');
+      // Part 2 is about to land, so the list `complete` reads back has both.
+      listedParts = null;
 
       await act(async () => {
         inFlight[0].respond();
@@ -509,7 +509,7 @@ describe('UploadManagerProvider', () => {
       // reconcile), but the object itself is already gone.
       transcriptAnswers(transcriptWithStatus('uploading'));
       server.use(
-        http.get(`${API}/storage/objects/:id/upload/status`, () =>
+        http.get(`${API}/storage/objects/:id/upload/parts`, () =>
           HttpResponse.json({ message: 'Not found' }, { status: 404 }),
         ),
       );

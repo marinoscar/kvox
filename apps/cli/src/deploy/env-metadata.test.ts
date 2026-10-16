@@ -301,12 +301,8 @@ describe('STORAGE_CSP_ORIGIN metadata (issue #255)', () => {
     expect(metadataFor('STORAGE_CSP_ORIGIN').allowBlank).toBe(true);
   });
 
-  it('leaves the empty-default credentials failing closed', () => {
-    for (const key of [
-      'SECRETS_ENCRYPTION_KEY',
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY',
-    ]) {
+  it('leaves the empty-default credential failing closed', () => {
+    for (const key of ['SECRETS_ENCRYPTION_KEY']) {
       expect(metadataFor(key).allowBlank).toBeUndefined();
     }
   });

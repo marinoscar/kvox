@@ -46,6 +46,7 @@ import { TranscriptEditingService } from '../../src/transcripts/transcript-editi
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-speaker-link.db.spec');
 
@@ -64,7 +65,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
     reconciler = new SpeakerLinkReconciler(
-      new GraphWriteService(new EvidenceValidator()),
+      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE))),
       new GraphOntologyService(prisma as never, new GraphPreferencesService(prisma as never)),
     );
     // Upsert by name, exactly as the seed does, so running the seed later is unaffected.

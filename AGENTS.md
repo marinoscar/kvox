@@ -146,7 +146,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - [`infra/compose/.env.example`](infra/compose/.env.example) is the reference; prose per variable: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Do not duplicate either.
 - `DATABASE_URL` is built at runtime from `POSTGRES_*`: use `npm run prisma:*`, never bare `npx prisma`.
 - **Never add a second commented `# MAINTENANCE_MODE=` line** (or any illustrative `# KEY=value`) to `.env.example`: the CLI's `parseEnvExample` reads any commented `# KEY=value` as a declared variable and fails the env-spec test. Describe values as prose.
-- A runtime-configured feature (transcription, AI, VAPID keys, SMTP) gets no environment variable.
+- A runtime-configured feature (transcription, AI, VAPID keys, SMTP, object storage) gets no environment variable.
 
 ## Key commands
 

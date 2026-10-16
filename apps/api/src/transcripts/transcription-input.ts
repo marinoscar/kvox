@@ -4,7 +4,7 @@
 //
 // ONE PURE FUNCTION, called from two places that must agree exactly:
 //
-//   • the upload listener, deciding whether transcription can start the moment
+//   • the upload processor, deciding whether transcription can start the moment
 //     the audio lands, or has to wait for `media.audio.transcode`;
 //   • `transcription.submit` itself, re-deciding at RUN TIME — because the job
 //     may have sat `pending` while the rendition finished, and pointing the

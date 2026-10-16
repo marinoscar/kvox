@@ -6,7 +6,7 @@
 //   JOBS_METRICS       -> AppMetricsService    (the host core's instruments)
 //   JOBS_ORG_SCOPE     -> no ambient org       (an omitted `orgId` becomes null)
 //   NODE_JOB_INPUTS    -> node-job-inputs.adapter.ts
-//   NODE_OBJECT_STORE  -> node-object-store.adapter.ts   (temporary, see there)
+//   NODE_OBJECT_STORE  -> the platform's nodeObjectStoreBinding (STORAGE_PROVIDER, #469)
 //
 // `@Global()` so the slices' services resolve the ports from whichever module
 // instantiates them.
@@ -20,10 +20,9 @@ import { AppMetricsService, EVENT_BUS } from '@marinoscar/platform-api/host';
 import { JOBS_EVENT_BUS, JOBS_METRICS, JOBS_ORG_SCOPE } from '@marinoscar/platform-api/jobs';
 import type { JobsOrgScope } from '@marinoscar/platform-api/jobs';
 import { NODE_JOB_INPUTS, NODE_OBJECT_STORE } from '@marinoscar/platform-api/nodes';
+import { StorageProvidersModule, nodeObjectStoreBinding } from '@marinoscar/platform-api/storage';
 
-import { StorageProvidersModule } from '../../storage/providers/storage-providers.module';
 import { NodeJobInputsAdapter } from './node-job-inputs.adapter';
-import { NodeObjectStoreAdapter } from './node-object-store.adapter';
 
 const NO_AMBIENT_ORG: JobsOrgScope = { currentOrgId: () => null };
 
@@ -35,7 +34,7 @@ const NO_AMBIENT_ORG: JobsOrgScope = { currentOrgId: () => null };
     { provide: JOBS_METRICS, useExisting: AppMetricsService },
     { provide: JOBS_ORG_SCOPE, useValue: NO_AMBIENT_ORG },
     { provide: NODE_JOB_INPUTS, useClass: NodeJobInputsAdapter },
-    { provide: NODE_OBJECT_STORE, useClass: NodeObjectStoreAdapter },
+    nodeObjectStoreBinding,
   ],
   exports: [JOBS_EVENT_BUS, JOBS_METRICS, JOBS_ORG_SCOPE, NODE_JOB_INPUTS, NODE_OBJECT_STORE],
 })

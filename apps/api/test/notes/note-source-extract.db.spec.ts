@@ -51,7 +51,6 @@ import {
   NodeUploadUrlDto,
 } from '@marinoscar/platform-api/nodes';
 import { NodeJobInputsAdapter } from '../../src/platform/jobs/node-job-inputs.adapter';
-import { NodeObjectStoreAdapter } from '../../src/platform/jobs/node-object-store.adapter';
 import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../../src/notes/job-types';
 import { extractDocumentText } from '../../src/notes/extraction';
 import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
@@ -69,15 +68,14 @@ import type {
   StorageUploadOptions,
   StorageUploadResult,
   UploadPart,
-  UploadedPart,
-} from '../../src/storage/providers';
-import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
+} from '@marinoscar/platform-api/storage';
+import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
 import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobScope, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 
@@ -99,6 +97,8 @@ const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 // =============================================================================
 
 class InMemorySignedStorage implements StorageProvider {
+  readonly kind = 'memory';
+
   private readonly secret = randomUUID();
 
   readonly objects = new Map<string, Buffer>();
@@ -210,10 +210,6 @@ class InMemorySignedStorage implements StorageProvider {
 
   async abortMultipartUpload(): Promise<void> {}
 
-  async listParts(): Promise<UploadedPart[]> {
-    return [];
-  }
-
   async delete(key: string): Promise<void> {
     this.objects.delete(key);
   }
@@ -264,14 +260,16 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
 
     const service = prisma as unknown as PrismaService;
     const jobScope = new JobScope(prisma as never);
+    const managed = createDbManagedObjects(prisma, storage);
     defaultOrgId = (await prisma.organization.findFirstOrThrow({ where: { isDefault: true } })).id;
 
     handler = new NoteSourceExtractHandler(
       registry,
       service,
-      new NoteObjectsService(service, { deleteManagedObject: jest.fn() } as never, storage, new LegacyObjectOwnershipStore(service as never)),
+      new NoteObjectsService(managed, storage),
       jobScope,
       storage,
+      managed,
     );
 
     // Self-registration, exactly as `NotesModule` triggers it — this is what
@@ -296,7 +294,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
         getNodesPolicy: async () => ({ ...DEFAULT_SYSTEM_SETTINGS.nodes }),
       } as unknown as SystemSettingsService),
     );
-    dataPlane = new NodeDataPlaneService(service, config, nodes, new NodeObjectStoreAdapter(storage), registry, new NodeJobInputsAdapter(jobScope));
+    dataPlane = new NodeDataPlaneService(service, config, nodes, storage, registry, new NodeJobInputsAdapter(jobScope));
 
     const owner = await prisma.user.create({
       data: { email: OWNER_EMAIL, displayName: 'note source suite' },

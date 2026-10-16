@@ -7,7 +7,7 @@ import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.he
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 
 // =============================================================================
 // AI name correction over HTTP — `POST /api/transcripts/:id/name-checks`

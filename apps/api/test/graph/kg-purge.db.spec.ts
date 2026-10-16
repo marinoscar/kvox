@@ -31,7 +31,7 @@ import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-purge.db.spec');
 
@@ -49,7 +49,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
     // No export files in these fixtures (#386's step finds nothing to delete).
-    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never, new LegacyObjectOwnershipStore(prisma as never));
+    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never, createDbManagedObjects(prisma, UNUSED_STORAGE));
   });
 
   afterAll(async () => {

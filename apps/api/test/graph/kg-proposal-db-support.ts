@@ -34,7 +34,7 @@ import { EvidenceValidator } from '../../src/graph/write/evidence-validator.serv
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias, statementHash } from '../../src/graph/write/normalize';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 export const V = 'test';
 
@@ -45,7 +45,7 @@ export const NOTE_BODY =
 
 export function buildServices(prisma: PrismaClient) {
   const db = prisma as unknown as PrismaService;
-  const write = new GraphWriteService(new EvidenceValidator());
+  const write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE)));
   const access = new GraphAccessService(db);
   const ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
   const spans = new SpanValidator(new NoteOriginService(db));
@@ -71,7 +71,7 @@ export function buildServices(prisma: PrismaClient) {
     proposals,
   );
   const reverts = new ProposalRevertService(db, access, merges, commits, proposals);
-  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(db as never)) };
+  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE)) };
 }
 
 export async function cleanup(prisma: PrismaClient, prefix: string, purge: KgPurgeService): Promise<void> {

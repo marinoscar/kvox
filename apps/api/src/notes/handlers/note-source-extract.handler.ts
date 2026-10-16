@@ -79,12 +79,13 @@ import {
   toExtractionOutcome,
   type NoteSourceExtractResult,
 } from '../contracts/note-source-extract.contract';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { resolveStorageObjectInput } from '../../storage/storage-job-input';
 import {
+  resolveStorageObjectInput,
   STORAGE_PROVIDER,
   type StorageProvider,
-} from '../../storage/providers/storage-provider.interface';
+} from '@marinoscar/platform-api/storage';
 import { extractDocumentText } from '../extraction';
 import { normalizeDocumentMimeType } from '../extraction/document-format';
 import {
@@ -158,6 +159,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
     private readonly objects: NoteObjectsService,
     private readonly jobScope: JobScope,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /** Self-registration — the only wiring a handler needs. */
@@ -389,13 +391,7 @@ export class NoteSourceExtractHandler implements JobHandler, OnModuleInit {
     }
 
     await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
-      tx.storageObject.update({
-        where: { id: source.id },
-        // Cast through `unknown`: `InputJsonValue` is a recursive union a
-        // structurally-typed `Record<string, unknown>` cannot be narrowed to, and
-        // `ObjectsService.updateMetadata` writes the same column the same way.
-        data: { metadata: metadata as unknown as Prisma.InputJsonValue },
-      }),
+      this.managedObjects.setMetadata(source.id, metadata, { tx }),
     );
   }
 

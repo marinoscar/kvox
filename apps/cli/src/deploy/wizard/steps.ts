@@ -92,7 +92,6 @@ export interface WizardStep {
   optional?: boolean | undefined;
 }
 
-export const STORAGE_CHECK_ID = 'storage-reachable';
 export const GOOGLE_OAUTH_CHECK_ID = 'google-oauth-credentials';
 
 /**
@@ -180,65 +179,6 @@ function formatFacts(facts: ServerFacts): string | undefined {
 }
 
 /**
- * A best-effort, warn-only reachability probe of the object store: a TCP
- * connect to the endpoint, or to the bucket's AWS host when no endpoint is
- * set. Warn rather than fail because the bucket may be reachable only once
- * a firewall rule is added later, and a check that blocks the install on a
- * guess is a check people learn to skip.
- */
-async function storageReachable(context: StepCheckContext): Promise<CompletedCheck[]> {
-  const bucket = context.answers.get('S3_BUCKET') ?? '';
-  if (bucket === '' || /^your-/i.test(bucket)) return [];
-
-  const started = Date.now();
-  const endpoint = context.answers.get('S3_ENDPOINT') ?? '';
-  const region = context.answers.get('S3_REGION') || 'us-east-1';
-
-  let host: string;
-  let port: number;
-  if (endpoint === '') {
-    host = `${bucket}.s3.${region}.amazonaws.com`;
-    port = 443;
-  } else {
-    try {
-      const url = new URL(endpoint);
-      host = url.hostname;
-      port = Number(url.port || (url.protocol === 'http:' ? 80 : 443));
-    } catch {
-      return [
-        {
-          id: STORAGE_CHECK_ID,
-          title: 'Object storage reachable',
-          severity: 'recommended',
-          status: 'warn',
-          detail: `S3_ENDPOINT is not a URL: ${endpoint}`,
-          remedy: 'Set S3_ENDPOINT to the full origin, such as https://minio.internal:9000.',
-          durationMs: Date.now() - started,
-        },
-      ];
-    }
-  }
-
-  const { ok, reason } = await context.probeTcp(host, port);
-  return [
-    {
-      id: STORAGE_CHECK_ID,
-      title: 'Object storage reachable',
-      severity: 'recommended',
-      status: ok ? 'pass' : 'warn',
-      detail: ok ? `${host}:${port}` : `no connection to ${host}:${port} (${reason ?? 'unknown'})`,
-      ...(ok
-        ? {}
-        : {
-            remedy:
-              'Uploads will fail until the bucket is reachable from this server. Check S3_ENDPOINT, S3_REGION and any egress firewall.',
-          }),
-      durationMs: Date.now() - started,
-    },
-  ];
-}
-
-/**
  * Verifies the Google OAuth credentials, and is honest about the half it
  * cannot verify (issue #231).
  *
@@ -266,7 +206,7 @@ async function storageReachable(context: StepCheckContext): Promise<CompletedChe
  *
  * FAILURE POSTURE. A malformed client id is a hard failure — it is certainly
  * wrong. Anything that only proves we could not reach Google is a WARNING, for
- * `storageReachable`'s reason exactly: an operator on a restricted network must
+ * the reason any warn-only probe is warn-only: an operator on a restricted network must
  * still be able to install, and a check that blocks on a guess is one people
  * learn to skip.
  */
@@ -476,22 +416,6 @@ export const INSTALL_WIZARD_STEPS: readonly WizardStep[] = [
       "also the certificate registration address unless --email says otherwise.",
     ],
     fields: present(['INITIAL_ADMIN_EMAIL']),
-  },
-  {
-    id: 'storage',
-    title: 'Object storage',
-    intro: () => [
-      'S3-compatible object storage for uploads. Optional: leave a field blank to',
-      'skip it. Reachability is probed, but only as a warning.',
-    ],
-    fields: ({ specs, resolve, groups, claimed }) =>
-      groups.includes('storage')
-        ? specs
-            .filter((spec) => resolve(spec.key).group === 'storage' && !claimed.has(spec.key))
-            .map((spec) => spec.key)
-        : [],
-    onLeave: storageReachable,
-    optional: true,
   },
   {
     id: 'resources',

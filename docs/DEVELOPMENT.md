@@ -180,6 +180,13 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `DEVICE_PAT_EXPIRY_DAYS` - Lifetime of the PAT minted when a device (e.g. the CLI) requests `clientInfo.tokenType: "pat"`, in days; clamped to 1-999 (default: 90)
 - `SECRETS_ENCRYPTION_KEY` - Base64-encoded 32-byte AES-256 key (generate with `openssl rand -base64 32`) that encrypts runtime-configured credentials (e.g. an SMTP password an admin enters through the app) before they are stored in the `credentials` table (and each user's own AI key in `user_ai_credentials`). Optional until a credential is stored; see `docs/runbooks/rotate-secrets-encryption-key.md`. Note: credentials configured at runtime through the UI/API live encrypted in the database, not in the environment — unlike every other secret in this section.
 
+**Object storage:**
+- There is **no variable for the bucket, region, endpoint or keys** (the former `STORAGE_PROVIDER`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `STORAGE_STALE_UPLOAD_HOURS` are no longer read). Sign in as an admin and configure the store at `/admin/settings/storage` (Amazon S3, Cloudflare R2, or an S3-compatible server such as MinIO at `http://localhost:9000`), press Test, then Save. Until then every upload answers 503. The secret access key is stored encrypted with `SECRETS_ENCRYPTION_KEY`, so set that variable first. See `docs/runbooks/storage-configuration.md`
+- `STORAGE_CSP_ORIGIN` - Browser-visible origin of the bucket (for MinIO, `http://localhost:9000`), written into nginx's Content Security Policy. **Set it by hand**: it is no longer derived from a bucket name. Empty means the browser cannot PUT parts or play audio back. Recreate the nginx container after changing it; the bucket also needs CORS (`docs/runbooks/s3-cors.md`)
+- `STORAGE_PART_SIZE` - Multipart part size in bytes for every upload (default 10485760, minimum 5242880). Deployment-wide and not stored per upload: never change it while uploads are in flight, and keep `STORAGE_PART_SIZE x 10000` above `MAX_FILE_SIZE`
+- `MAX_FILE_SIZE` / `ALLOWED_MIME_TYPES` / `SIGNED_URL_EXPIRY` - Largest accepted upload in bytes (413 above it, default 10 GiB), the generic-upload content-type allowlist (415 outside it; transcript uploads enforce their own fixed audio and video list), and the lifetime of a signed URL in seconds (default 3600)
+- Amazon SES email still reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `S3_REGION` from the environment (not the storage settings) until email moves to its own settings; they are not listed in `.env.example`
+
 **Background Job Queue** (all bare/unprefixed, like `POSTGRES_*` — API-side vars never take
 the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments):
 - `JOBS_MAX_ATTEMPTS` - Attempts before a job is permanently `failed`, charged at claim time (default: 3)
@@ -721,7 +728,7 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
    ```bash
    npm run db:compose:check   # prisma/schema/ equals a fresh compose
    npm run db:check           # installed platform migrations still match platform.lock
-   npm run db:drift:kvox      # migrations replayed in a shadow database equal the schema
+   npm run db:drift:kvox      # migrations replayed in a shadow database equal the schema (plain db:drift is not clean by design)
    ```
 
 6. **Update Seeds (if needed):**
@@ -740,7 +747,7 @@ Rules that keep this safe:
 
 - **KVox never authors platform migrations.** A platform package release brings new ones. Install them with `npm run db:sync`, review the new directories under `prisma/migrations/`, commit them with `platform.lock`, then `npm run prisma:migrate`. Never edit or rename an installed directory, comments included: the lock hashes the raw bytes.
 - **Raw-SQL objects stay in `migration.sql`.** Partial unique, trigram, HNSW and GiST indexes, generated `tsvector` columns, CHECK constraints and triggers cannot be declared in a fragment. Never add `@@unique` or `@@index` for one. List every new partial or expression index under `rawSqlIndexes` in `platform.lock`, with `definition` copied from `SELECT indexdef FROM pg_indexes WHERE indexname = '<name>'`.
-- **`db:drift:kvox` filters `apps/api/prisma/drift-allowlist.json`.** Each entry needs `statement`, `reason` and `removeIn` (an issue number). Never add an entry to hide a real difference on a platform table.
+- **`db:drift:kvox` filters `apps/api/prisma/drift-allowlist.json`.** Each entry needs `statement`, `reason` and `removeIn` (an issue number, or `permanent`). Since #469 the file holds only the 13 permanent entries for indexes and generated-column defaults Prisma cannot declare; the platform's plain `db:drift` has no ignore list and fails on them. Never add an entry to hide a real difference on a platform table.
 - The first adoption of the platform history on an existing database is a one-off baseline: `docs/runbooks/database-baseline.md`. The day-to-day workflow is also in the `platform-migration` skill (`.claude/skills/platform-migration/SKILL.md`).
 
 **Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`, `db:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details. `db:drift:kvox` replays the history in a shadow database: set `SHADOW_DATABASE_URL` to an empty database, or use a role that may create databases. The shadow replay runs `CREATE EXTENSION vector`, which needs a superuser (see `docs/platform-adoption/local-exceptions.md`).

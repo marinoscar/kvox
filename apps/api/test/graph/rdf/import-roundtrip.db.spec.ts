@@ -54,8 +54,8 @@ import { resolveDbSuite } from '../../jobs/db-test-support';
 import { buildServices } from '../kg-proposal-db-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { importFixture, type ImportFixture } from './import-fixtures';
-import { LegacyObjectOwnershipStore } from '../../../src/storage/legacy-object-ownership.store';
 import { createStorageObject } from '../../helpers/storage-object.helper';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('import-roundtrip.db.spec');
 
@@ -133,7 +133,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const users = await prisma.user.findMany({ where: { email: { startsWith: EMAIL_PREFIX } }, select: { id: true } });
     for (const { id } of users) {
       await prisma.kgExport.deleteMany({ where: { ownerId: id } });
-      await new KgPurgeService(db, objects, new LegacyObjectOwnershipStore(db as never)).purgeAll(id);
+      await new KgPurgeService(db, objects, createDbManagedObjects(prisma, UNUSED_STORAGE)).purgeAll(id);
       await prisma.auditEvent.deleteMany({ where: { actorUserId: id } });
     }
     await prisma.kgAttributeDef.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });

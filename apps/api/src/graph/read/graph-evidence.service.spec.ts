@@ -52,7 +52,6 @@ function build(state: {
     transcript: { findMany: jest.fn(async () => state.transcripts ?? []) },
     transcriptSegment: { findMany: jest.fn(async () => state.segments ?? []) },
     note: { findMany: jest.fn(async () => state.notes ?? []) },
-    storageObject: { findMany: jest.fn(async () => state.objects ?? []) },
     kgEvidence: {
       findMany: jest.fn(async ({ where }: { where: { id: { in: string[] }; ownerId: string } }) =>
         (state.evidence ?? []).filter((e) => where.id.in.includes(e.id) && e.ownerId === where.ownerId),
@@ -72,8 +71,16 @@ function build(state: {
     ),
   };
   const noteAccess = { roleFor: jest.fn((userId: string, n: { ownerId: string }) => (n.ownerId === userId ? 'owner' : null)) };
-  const svc = new GraphEvidenceService(prisma as never, access as never, transcriptAccess as never, noteAccess as never);
-  return { svc, prisma, access, transcriptAccess };
+  // The object gateway answers the import-object lookup (#469).
+  const managed = { findMany: jest.fn(async () => state.objects ?? []) };
+  const svc = new GraphEvidenceService(
+    prisma as never,
+    access as never,
+    transcriptAccess as never,
+    noteAccess as never,
+    managed as never,
+  );
+  return { svc, prisma, access, transcriptAccess, managed };
 }
 
 describe('href builders', () => {
@@ -207,11 +214,11 @@ describe('GraphEvidenceService.resolve', () => {
   });
 
   it('issues no source query for a table the batch does not cite', async () => {
-    const { svc, prisma } = build({});
+    const { svc, prisma, managed } = build({});
     await svc.resolve(USER, [ev({ noteId: NOTE, noteVersion: 1 })]);
     expect(prisma.transcript.findMany).not.toHaveBeenCalled();
     expect(prisma.transcriptSegment.findMany).not.toHaveBeenCalled();
-    expect(prisma.storageObject.findMany).not.toHaveBeenCalled();
+    expect(managed.findMany).not.toHaveBeenCalled();
     expect(prisma.note.findMany).toHaveBeenCalledTimes(1);
   });
 });

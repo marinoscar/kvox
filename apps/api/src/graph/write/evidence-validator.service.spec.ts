@@ -46,13 +46,16 @@ function fakeTx() {
         where.id.in.map((id) => ({ id, transcriptId: id === SEGMENT ? TRANSCRIPT : OTHER_TRANSCRIPT })),
       ),
     },
-    storageObject: { findMany: jest.fn(async () => []) },
   };
   return tx;
 }
 
 describe('EvidenceValidator', () => {
-  const validator = new EvidenceValidator();
+  // The object gateway answers the import-object ownership lookup (#469).
+  const managed = { findMany: jest.fn(async () => [] as Array<{ id: string }>) };
+  const validator = new EvidenceValidator(managed as never);
+
+  beforeEach(() => managed.findMany.mockClear());
 
   async function invalidIndexes(evidence: EvidenceInput[], tx = fakeTx()): Promise<number[] | null> {
     try {
@@ -134,7 +137,7 @@ describe('EvidenceValidator', () => {
     expect(tx.noteVersion.findMany).toHaveBeenCalledTimes(1);
     expect(tx.transcript.findMany).toHaveBeenCalledTimes(1);
     expect(tx.transcriptSegment.findMany).toHaveBeenCalledTimes(1);
-    expect(tx.storageObject.findMany).not.toHaveBeenCalled();
+    expect(managed.findMany).not.toHaveBeenCalled();
   });
 
   it('queries no table a batch does not cite', async () => {

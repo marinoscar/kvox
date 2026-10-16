@@ -29,7 +29,9 @@ import {
   noteSourceId,
   noteSourceNameKey,
 } from '../../src/notes/note-source-name.service';
+import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { createFakeManagedObjects } from '../helpers/fake-managed-objects.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 
 const USER = 'user-1';
@@ -54,6 +56,8 @@ describe('NoteSourceNameService (#192)', () => {
       providers: [
         NoteSourceNameService,
         { provide: PrismaService, useValue: prismaMock },
+        // `storage_objects` is read through the gateway; the fake answers from `prismaMock.storageObject`.
+        { provide: KvoxManagedObjectsService, useValue: createFakeManagedObjects(prismaMock) },
       ],
     }).compile();
 
@@ -171,7 +175,7 @@ describe('NoteSourceNameService (#192)', () => {
     });
 
     it('reaches an uploaded DOCUMENT only when the caller uploaded it', async () => {
-      // `managed_by: 'notes'` hides these from the generic storage list, not
+      // Notes ownership hides these from the app's file list, not
       // from a read by id — the uploader is still the only person entitled to
       // the filename.
       await service.resolve(

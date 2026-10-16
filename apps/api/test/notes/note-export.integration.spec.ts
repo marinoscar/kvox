@@ -3,7 +3,7 @@ import request from 'supertest';
 import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service';
 import { NOTE_EXPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';

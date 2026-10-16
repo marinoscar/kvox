@@ -29,10 +29,11 @@ import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/tes
 import { MediaAudioTranscodeHandler } from '../../src/transcripts/handlers/media-audio-transcode.handler';
 import { FfmpegService } from '../../src/transcripts/media/ffmpeg.service';
 import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
+import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
 import { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 
 const TRANSCRIPT_ID = 'transcript-1';
 const OBJECT_ID = 'obj-1';
@@ -136,6 +137,9 @@ async function buildWorld(): Promise<JobHandler> {
       MediaAudioTranscodeHandler,
       { provide: JobHandlerRegistry, useValue: new JobHandlerRegistry() },
       { provide: JobScope, useValue: jobScope },
+      // The handler reads the source object through the ownership gateway (#469); the stub row is the
+      // one the old `storageObject.findUnique` mock returned.
+      { provide: KvoxManagedObjectsService, useValue: { get: (...args: unknown[]) => prisma.storageObject.findUnique(...args) } },
       { provide: PrismaService, useValue: prisma },
       { provide: FfmpegService, useValue: ffmpeg },
       { provide: TranscriptObjectsService, useValue: objects },

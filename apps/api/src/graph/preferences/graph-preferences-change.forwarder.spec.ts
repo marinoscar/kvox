@@ -6,7 +6,7 @@ import { lastValueFrom, from } from 'rxjs';
 import { PLATFORM_PRISMA } from '@marinoscar/platform-api/core';
 import { PrincipalCache } from '@marinoscar/platform-api/identity';
 
-import { normalizeProfileSettings } from '../../common/profile-image/profile-image';
+import { normalizeProfileSettings } from '@marinoscar/platform-api/storage';
 import { UserSettingsChangeInterceptor } from '../../platform/settings/user-settings-change.interceptor';
 import {
   USER_SETTINGS_NAMESPACE_CHANGED_EVENT,

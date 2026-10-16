@@ -1,3 +1,5 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 import { execFile } from 'node:child_process';
@@ -10,7 +12,7 @@ import type { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
 import { FfmpegService } from '../media/ffmpeg.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
@@ -204,6 +206,11 @@ describe('media.audio.transcode with a real ffmpeg', () => {
               ),
             },
           },
+        },
+        {
+          provide: KvoxManagedObjectsService,
+          useFactory: (prisma: unknown) => createFakeManagedObjects(prisma),
+          inject: [PrismaService],
         },
         // The scoped transaction client is the Prisma stub itself.
         {

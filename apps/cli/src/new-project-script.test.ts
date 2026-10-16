@@ -136,12 +136,11 @@ describe('scripts/new-project.mjs --reset-release safety check', () => {
 });
 
 // -----------------------------------------------------------------------------
-// 2. --audit (and the implied default) — read-only, and must keep
-//    recommending KEEP for the example handlers.
+// 2. --audit (and the implied default) — read-only.
 // -----------------------------------------------------------------------------
 
 describe('scripts/new-project.mjs --audit', () => {
-  it('exits 0, writes nothing, and reports the example handlers as KEEP', () => {
+  it('exits 0, writes nothing, and no longer reports example handlers', () => {
     const statusBefore = gitPorcelainStatus();
 
     const result = run(['--audit']);
@@ -154,14 +153,10 @@ describe('scripts/new-project.mjs --audit', () => {
     expect(result.stdout).toMatch(/FOR A NEW PROJECT/);
     expect(result.stdout).toMatch(/Nothing above was changed\./);
 
-    // The example-handlers item is load-bearing: example.checksum is the
-    // canonical node-eligible job type and the jobs/worker-node test suites
-    // depend on it as a fixture (see the long comment at the top of
-    // scripts/new-project.mjs). If a future edit ever flips this
-    // recommendation to "delete", this assertion must fail.
-    expect(result.stdout).toMatch(/Example job handlers and storage processor/);
-    expect(result.stdout).toMatch(/KEEP unless you deliberately refactor/);
-    expect(result.stdout).toMatch(/example\.checksum/);
+    // The example job handlers and the example object processor are the
+    // platform's now (issues #468, #469), so the audit no longer reports them
+    // and nothing in this repository depends on them.
+    expect(result.stdout).not.toMatch(/Example job handlers and storage processor/);
   });
 
   it('running with no arguments implies --audit', () => {
@@ -174,7 +169,6 @@ describe('scripts/new-project.mjs --audit', () => {
     expect(result.status, `expected exit 0, got ${result.status}. stderr:\n${result.stderr}`).toBe(0);
     expect(statusAfter).toBe(statusBefore);
     expect(result.stdout).toMatch(/FOR A NEW PROJECT/);
-    expect(result.stdout).toMatch(/KEEP unless you deliberately refactor/);
   });
 });
 

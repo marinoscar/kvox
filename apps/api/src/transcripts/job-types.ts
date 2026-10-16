@@ -13,14 +13,14 @@
 //
 // They live in their own module, rather than on each handler class, because
 // the ENQUEUEING side and the EXECUTING side are usually different files and
-// frequently different modules: the upload listener enqueues `transcription
+// frequently different modules: the upload processor enqueues `transcription
 // .submit`, the poll handler enqueues `transcription.ingest`, the cron enqueues
 // `transcripts.housekeeping`. Importing a handler class purely to read its
 // `type` would drag a provider — and its whole constructor graph — into a file
 // that only needed a string.
 //
 // `media.audio.transcode` is declared here too even though ISSUE #26 OWNS THE
-// HANDLER. This issue's upload listener has to be able to name the type in
+// HANDLER. This issue's upload processor has to be able to name the type in
 // order to enqueue it, and the name has to be the same one #26 registers. A
 // constant both sides import is the only arrangement where that cannot drift;
 // see `TRANSCODE_JOB_TYPE`'s own note on the guard that keeps the enqueue inert
@@ -31,7 +31,7 @@
  * Convert whatever was uploaded into a small, seekable playback rendition.
  *
  * ⚠ NOT REGISTERED BY THIS ISSUE. Issue #26 implements the handler; #25 only
- * needs the name so the upload listener can enqueue it. Every enqueue site in
+ * needs the name so the upload processor can enqueue it. Every enqueue site in
  * this module checks `JobHandlerRegistry.get(TRANSCODE_JOB_TYPE)` first, so a
  * deployment running #25 without #26 queues nothing rather than queueing a row
  * no worker can ever claim — which would sit `pending` forever and show up in
@@ -52,7 +52,7 @@ export const TRANSCRIPTION_INGEST_JOB_TYPE = 'transcription.ingest';
  * Take a point-in-time copy of a version's materialized state.
  *
  * ⚠ NOT REGISTERED BY THIS ISSUE either — issue #27 owns it, and the ingest
- * handler guards its enqueue the same way the upload listener guards the
+ * handler guards its enqueue the same way the upload processor guards the
  * transcode one.
  */
 export const TRANSCRIPT_SNAPSHOT_JOB_TYPE = 'transcript.snapshot';

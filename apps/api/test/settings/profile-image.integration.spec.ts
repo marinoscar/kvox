@@ -11,9 +11,10 @@ import {
   setupMockUserSettings,
 } from '../fixtures/mock-setup.helper';
 import { createMockTestUser, authHeader } from '../helpers/auth-mock.helper';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { createMembershipContributor } from '../helpers/membership-user.helper';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
-import { AVATAR_MAX_BYTES } from '../../src/common/profile-image/profile-image';
+import { AVATAR_MAX_BYTES } from '@marinoscar/platform-api/storage';
 
 const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00,
@@ -23,26 +24,18 @@ const SVG_BYTES = Buffer.from(
   'utf8',
 );
 
-// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
-// helper that queries `organizations`, which the mocked client cannot answer.
-jest.mock('../../src/prisma/default-org', () => ({
-  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
-}));
-
 describe('Profile Image Integration (#367)', () => {
   let context: TestContext;
   let mockStorageProvider: ReturnType<typeof createMockStorageProvider>;
 
   beforeAll(async () => {
     mockStorageProvider = createMockStorageProvider();
-    context = await createTestApp({ useMockDatabase: true });
-
-    const storageProviderToken = context.module.get(STORAGE_PROVIDER, {
-      strict: false,
+    // The platform binds `STORAGE_PROVIDER` to a provider resolved from runtime settings
+    // (read-only properties), so the mock replaces the provider rather than patching it.
+    context = await createTestApp({
+      useMockDatabase: true,
+      overrideProviders: [{ provide: STORAGE_PROVIDER, useValue: mockStorageProvider }],
     });
-    if (storageProviderToken) {
-      Object.assign(storageProviderToken, mockStorageProvider);
-    }
   });
 
   afterAll(async () => {
@@ -70,7 +63,7 @@ describe('Profile Image Integration (#367)', () => {
     });
 
     it('uploads a valid PNG and selects it as the profile picture', async () => {
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
       setupMockUserSettings(user.id, {
         theme: 'system',
         profile: { imageSource: 'provider', imageObjectId: null },
@@ -113,7 +106,7 @@ describe('Profile Image Integration (#367)', () => {
     });
 
     it('returns 400 for an SVG sent with a spoofed image/png content type (magic-byte sniffing)', async () => {
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
       setupMockUserSettings(user.id, {
         theme: 'system',
         profile: { imageSource: 'provider', imageObjectId: null },
@@ -133,7 +126,7 @@ describe('Profile Image Integration (#367)', () => {
     });
 
     it('returns 413 when the file exceeds the 5 MB limit', async () => {
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
       setupMockUserSettings(user.id, {
         theme: 'system',
         profile: { imageSource: 'provider', imageObjectId: null },
@@ -158,7 +151,7 @@ describe('Profile Image Integration (#367)', () => {
     }, 30000);
 
     it('returns 400 for a non-multipart request', async () => {
-      const user = await createMockTestUser(context);
+      const user = await createMembershipContributor(context);
 
       const response = await request(context.app.getHttpServer())
         .post('/api/user-settings/profile-image')
