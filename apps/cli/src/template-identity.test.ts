@@ -600,7 +600,7 @@ function stripRegistryScopes(lineText: string): string {
  * still flagged. A rename of the product renames these with the module directory.
  */
 const STORAGE_ADOPTION_TOKEN_RE =
-  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai-[\w.-]+/g;
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*/g;
 
 function stripStorageAdoptionTokens(lineText: string): string {
   return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');
