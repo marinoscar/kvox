@@ -139,8 +139,8 @@ const GRAPH_PREFERENCES = {
 
 const ONBOARDING = {
   welcomeSeenAt: '2026-02-03T04:05:06.000Z',
-  dismissedAt: '2026-02-04T04:05:06.000Z',
-  skipped: ['connect_ai'],
+  checklistDismissedAt: '2026-02-04T04:05:06.000Z',
+  skipped: ['admin.smoke_test'],
 } as const;
 
 describeWithDb('stored settings shape through the platform services (db)', () => {
@@ -370,11 +370,11 @@ describeWithDb('stored settings shape through the platform services (db)', () =>
       const user = await createUser('patch-onboarding');
       await seedUserSettings(user.id, { ...BASE, graph: GRAPH_PREFERENCES, onboarding: ONBOARDING });
 
-      await users.patchSettings(user.id, { onboarding: { dismissedAt: '2026-03-01T00:00:00.000Z' } } as never);
+      await users.patchSettings(user.id, { onboarding: { checklistDismissedAt: '2026-03-01T00:00:00.000Z' } } as never);
 
       const row = await prisma.userSettings.findUniqueOrThrow({ where: { userId: user.id } });
       const value = row.value as Record<string, unknown>;
-      expect(value.onboarding).toEqual({ ...ONBOARDING, dismissedAt: '2026-03-01T00:00:00.000Z' });
+      expect(value.onboarding).toEqual({ ...ONBOARDING, checklistDismissedAt: '2026-03-01T00:00:00.000Z' });
       expect(value.graph).toEqual(GRAPH_PREFERENCES);
     });
   });

@@ -17,6 +17,7 @@ import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/notifications/testing';
+import '@marinoscar/platform-api/onboarding/testing';
 import '@marinoscar/platform-api/settings/testing';
 import '@marinoscar/platform-api/storage/testing';
 import '@marinoscar/platform-api/telemetry/testing';
@@ -136,6 +137,7 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'graph/resolution/merge.service.ts', why: 'Entity merge with row locks across several tables; scoped by owner_id.' },
   { file: 'graph/speaker-link/speaker-link.reconciler.ts', why: 'Takes a per-transcript advisory lock (`pg_advisory_xact_lock`); touches no rows.' },
   { file: 'graph/write/graph-write.service.ts', why: 'GraphWriteService is the single graph write path; its raw statements use the live-statement and speaker-link partial unique indexes and are scoped by owner_id.' },
+  { file: 'platform/onboarding/onboarding-data.adapter.ts', why: 'The onboarding activation metrics (issue #481): the platform builds one aggregate statement over the registered funnel and milestone expressions and this port runs it in a READ ONLY transaction. It returns counts only, every value is a bound parameter, and the expressions are developer-authored (refused at registration if they contain a semicolon).' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
   { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
   { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
@@ -317,6 +319,21 @@ runPlatformConformance({
         join(REPO_DIR, 'packages', 'shared', 'package.json'),
       ],
       allowedRoots: {},
+    },
+    // The onboarding slice (#481): the registries are well formed, every step's permission is one the
+    // app's RBAC grants, and one derivation, for a caller holding every permission against a spied data
+    // port, resolves each fact once and reads nothing while evaluating. The samples stand in for the five
+    // facts that need an app provider (the transcription probe, the Prisma counts, the AI readiness).
+    onboarding: {
+      permissions: permissionRegistry.list(),
+      factSamples: {
+        'app.ownTranscriptCount': 0,
+        'app.ownReadyTranscriptCount': 0,
+        'app.ownNoteCount': 0,
+        'app.transcriptionAvailable': false,
+        'app.aiReadiness': { available: false, hasKey: false, providerSet: false },
+      },
+      minSteps: 5,
     },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },

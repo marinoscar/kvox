@@ -20,9 +20,9 @@ import {
 } from '@marinoscar/platform-api/settings';
 import { DATA_TABLE_MAX_ID_LENGTH } from '@marinoscar/platform-contract/settings';
 import {
-  ONBOARDING_MAX_SKIPPED,
-  ONBOARDING_MAX_STEP_KEY_LENGTH,
-} from '../../src/common/schemas/user-settings-namespaces.schema';
+  ONBOARDING_SKIPPED_MAX,
+  ONBOARDING_STEP_ID_MAX,
+} from '@marinoscar/platform-contract/onboarding';
 
 describe('User Settings Integration', () => {
   let context: TestContext;
@@ -720,7 +720,7 @@ describe('User Settings Integration', () => {
   });
 
   // ===========================================================================
-  // onboarding namespace (issue #272, epic #271)
+  // onboarding namespace (issue #272, epic #271; the platform's since #481)
   // ===========================================================================
   //
   // Same stateful-mock round-trip approach as the block above, and for the same
@@ -776,14 +776,14 @@ describe('User Settings Integration', () => {
         await patchSettings(user.accessToken, {
           onboarding: {
             welcomeSeenAt: SEEN,
-            dismissedAt: DISMISSED,
+            checklistDismissedAt: DISMISSED,
             adminDismissedAt: ADMIN_DISMISSED,
-            skipped: ['configure_oauth'],
+            skipped: ['admin.smoke_test'],
           },
         }).expect(200);
 
         await patchSettings(user.accessToken, {
-          onboarding: { dismissedAt: null },
+          onboarding: { checklistDismissedAt: null },
         }).expect(200);
 
         const response = await getSettings(user.accessToken);
@@ -791,7 +791,7 @@ describe('User Settings Integration', () => {
         expect(response.body.data.onboarding).toEqual({
           welcomeSeenAt: SEEN,
           adminDismissedAt: ADMIN_DISMISSED,
-          skipped: ['configure_oauth'],
+          skipped: ['admin.smoke_test'],
         });
       });
 
@@ -819,7 +819,7 @@ describe('User Settings Integration', () => {
         setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
 
         await patchSettings(user.accessToken, {
-          onboarding: { welcomeSeenAt: SEEN, dismissedAt: DISMISSED },
+          onboarding: { welcomeSeenAt: SEEN, checklistDismissedAt: DISMISSED },
         }).expect(200);
 
         await patchSettings(user.accessToken, { onboarding: null }).expect(200);
@@ -846,7 +846,7 @@ describe('User Settings Integration', () => {
         setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
 
         await patchSettings(user.accessToken, {
-          onboarding: { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] },
+          onboarding: { welcomeSeenAt: SEEN, skipped: ['admin.smoke_test'] },
         }).expect(200);
 
         await patchSettings(user.accessToken, { theme: 'dark' }).expect(200);
@@ -855,7 +855,7 @@ describe('User Settings Integration', () => {
 
         expect(response.body.data.onboarding).toEqual({
           welcomeSeenAt: SEEN,
-          skipped: ['configure_oauth'],
+          skipped: ['admin.smoke_test'],
         });
       });
     });
@@ -863,22 +863,26 @@ describe('User Settings Integration', () => {
     describe('rejections return 400, not 500', () => {
       const invalidOnboardingPatches: Array<[string, unknown]> = [
         ['a misspelled key (dismisedAt)', { dismisedAt: DISMISSED }],
+        // The pre-#481 name: the platform namespace is strict, so an old client is refused, not ignored.
+        ['the retired key dismissedAt', { dismissedAt: DISMISSED }],
         ['a non-ISO timestamp', { welcomeSeenAt: 'yesterday' }],
         [
-          `more than ${ONBOARDING_MAX_SKIPPED} skipped steps`,
+          `more than ${ONBOARDING_SKIPPED_MAX} skipped steps`,
           {
             skipped: Array.from(
-              { length: ONBOARDING_MAX_SKIPPED + 1 },
+              { length: ONBOARDING_SKIPPED_MAX + 1 },
               (_, i) => `step_${i}`,
             ),
           },
         ],
+        ['a skipped id that is not a registered step', { skipped: ['configure_oauth'] }],
+        // `required` steps are never skippable (refused at registration), so they cannot be stored as skipped.
+        ['a skipped id naming a required step', { skipped: ['user.ai_key'] }],
         ['a skipped key with an uppercase letter', { skipped: ['Step_One'] }],
         ['a skipped key with a leading digit', { skipped: ['1step'] }],
-        ['a skipped key with a hyphen', { skipped: ['configure-oauth'] }],
         [
           'a skipped key over the length limit',
-          { skipped: ['a'.repeat(ONBOARDING_MAX_STEP_KEY_LENGTH + 1)] },
+          { skipped: ['a'.repeat(ONBOARDING_STEP_ID_MAX + 1)] },
         ],
       ];
 

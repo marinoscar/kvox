@@ -59,7 +59,7 @@ import { AskModule } from './ask/ask.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { userDataModule } from './platform/user-data/user-data.config';
 import { SearchModule } from './search/search.module';
-import { OnboardingModule } from './onboarding/onboarding.module';
+import { onboardingModule } from './platform/onboarding/onboarding.config';
 
 import { NotModifiedInterceptor } from './platform/http/not-modified.interceptor';
 import { UserSettingsChangeInterceptor } from './platform/settings/user-settings-change.interceptor';
@@ -333,15 +333,13 @@ import configuration from './config/configuration';
     // rather than an oversight.
     SearchModule,
 
-    // First-run onboarding (#274/#275, epic #271): two read-only routes over
-    // one step registry — the administrator's setup checklist and the user's
-    // own activation checklist. Registered LAST among the feature modules
-    // because it reads from most of them and owns no table of its own: every
-    // status it reports is derived, on every request, from services declared
-    // above. It stores nothing; the only persisted onboarding state in the
-    // epic is the user's INTENT, which lives in `SettingsModule`'s `onboarding`
-    // user-settings namespace (#272).
-    OnboardingModule,
+    // First-run onboarding (#481, epic #478): the platform slice. `GET /api/onboarding` (the caller's
+    // checklists, and the admin one for a holder of `system_settings:read`) and the activation
+    // metrics, over the step and fact registries in `platform/onboarding/`. Last among the feature
+    // modules because its facts read from most of them (resolved lazily through `ModuleRef`); it
+    // owns no table and stores nothing but the user's intent, in the `onboarding` user-settings
+    // namespace.
+    onboardingModule,
   ],
   providers: [
     // The global guard, exception filter, logging and envelope interceptors and

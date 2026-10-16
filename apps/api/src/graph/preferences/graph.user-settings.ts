@@ -8,8 +8,7 @@
 // module composes it into `GET/PUT/PATCH /api/user-settings` without importing
 // this folder.
 //
-// The schemas live in `graph-preferences.schema.ts` (moved from
-// `common/schemas/user-settings-namespaces.schema.ts`). `merge` is
+// The schemas live in `graph-preferences.schema.ts`. `merge` is
 // `UserSettingsService.mergeGraph` moved VERBATIM, and `assertLimits` throws
 // the same `BadRequestException` text it throws today, so an out-of-order
 // threshold pair still answers 400 with the same message.

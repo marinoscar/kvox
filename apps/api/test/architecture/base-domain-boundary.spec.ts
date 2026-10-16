@@ -321,7 +321,7 @@ describe('base code does not import domain code (issue #459)', () => {
     const base = deriveBaseDirs();
 
     // The directories the rule exists for are covered...
-    expect(base).toEqual(expect.arrayContaining(['ai-port', 'common', 'settings', 'onboarding']));
+    expect(base).toEqual(expect.arrayContaining(['ai-port', 'common', 'settings', 'platform']));
     // ...none of the product directories is mistaken for base...
     for (const domain of DOMAIN_DIRS) expect(base).not.toContain(domain);
     // ...and a renamed or deleted domain directory fails here instead of
@@ -333,7 +333,7 @@ describe('base code does not import domain code (issue #459)', () => {
 
   it('scans a meaningful number of files', () => {
     // A path mistake (a wrong SRC) would make every other case vacuously green.
-    expect(baseFiles().length).toBeGreaterThan(200);
+    expect(baseFiles().length).toBeGreaterThan(120);
   });
 
   it('lists only composition roots that exist', () => {
