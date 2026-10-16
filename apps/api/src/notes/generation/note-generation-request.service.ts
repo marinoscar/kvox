@@ -81,7 +81,7 @@ import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 import type { SystemAiValue } from '../../ai/ai-settings.schema';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LegacyObjectOwnershipStore } from '../../storage/legacy-object-ownership.store';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
 import { NoteAccessService } from '../access/note-access.service';
 import type { NoteSourceDto } from '../dto/note.dto';
@@ -136,8 +136,7 @@ export class NoteGenerationRequestService {
     private readonly taskModels: AiTaskModelResolver,
     private readonly transcriptAccess: TranscriptAccessService,
     private readonly noteAccess: NoteAccessService,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /**
@@ -196,7 +195,7 @@ export class NoteGenerationRequestService {
       };
     }
 
-    const object = await this.prisma.storageObject.findFirst({
+    const object = await this.managedObjects.findFirst({
       where: {
         id: source.objectId,
         uploadedById: user.id,
@@ -204,8 +203,7 @@ export class NoteGenerationRequestService {
       select: { id: true },
     });
 
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is read from the legacy store.
-    const owner = object ? (await this.ownership.getManagedBy([object.id])).get(object.id) : null;
+    const owner = object ? (await this.managedObjects.managedBy([object.id])).get(object.id) : null;
     if (!object || owner !== NOTES_MANAGED_BY) throw new NotFoundException('Document not found');
 
     return {

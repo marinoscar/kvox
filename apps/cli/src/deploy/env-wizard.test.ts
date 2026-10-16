@@ -107,9 +107,9 @@ const TEMPLATE = [
   'TEST_AUTH_ENABLED=false',
   '',
   '# ------------------------------------------------------------',
-  '# Storage',
+  '# Observability',
   '# ------------------------------------------------------------',
-  'S3_BUCKET=your-bucket-name',
+  'UPTRACE_SITE_URL=http://localhost:14318',
 ].join('\n');
 
 const SPECS = parseEnvExample(TEMPLATE);
@@ -220,7 +220,7 @@ describe('runEnvWizard', () => {
       ctx,
     });
 
-    expect(values.has('S3_BUCKET')).toBe(false);
+    expect(values.has('UPTRACE_SITE_URL')).toBe(false);
   });
 
   it('includes a group when asked for it', async () => {
@@ -228,12 +228,12 @@ describe('runEnvWizard', () => {
     const { values } = await runEnvWizard({
       specs: SPECS,
       domain: 'app.example.test',
-      groups: ['storage'],
+      groups: ['observability'],
       ctx,
     });
 
     // Not essential, so it takes the template default rather than prompting.
-    expect(values.get('S3_BUCKET')).toBe('your-bucket-name');
+    expect(values.get('UPTRACE_SITE_URL')).toBe('http://localhost:14318');
   });
 
   it('uses existing values as defaults and does not re-ask for a secret', async () => {
@@ -290,7 +290,7 @@ describe('runEnvWizard', () => {
       'appdb',
       'n', // decline generation
       'a-perfectly-long-replacement-secret-value',
-      'bucket-name', // the storage step
+      '', // the observability group's UPTRACE_SITE_URL
       '', // PORT, in the catch-all step at the end
       'y', // review
     ]);
@@ -299,7 +299,7 @@ describe('runEnvWizard', () => {
       specs: SPECS,
       domain: 'app.example.test',
       all: true,
-      groups: ['storage'],
+      groups: ['observability'],
       ctx,
     });
 
@@ -1218,7 +1218,7 @@ describe('runEnvWizard v2: the catch-all step', () => {
 // The three secret-shaped cases below are the reason the blank rule exists at
 // all, and they are asserted here so relaxing it generally fails loudly.
 
-/** An optional key, three empty-default keys, and one that allows blanks. */
+/** An optional key, three empty-default secrets, and one that allows blanks. */
 const BLANKS_TEMPLATE = [
   'NODE_ENV=development',
   'APP_URL=http://localhost:3535',
@@ -1231,8 +1231,8 @@ const BLANKS_TEMPLATE = [
   '# Commented out, so parseEnvExample declares it optional.',
   '# MAINTENANCE_MODE=false',
   'SECRETS_ENCRYPTION_KEY=',
-  'AWS_ACCESS_KEY_ID=',
-  'AWS_SECRET_ACCESS_KEY=',
+  'UPTRACE_REDIS_PASSWORD=',
+  'UPTRACE_CH_PASSWORD=',
   'STORAGE_CSP_ORIGIN=',
 ].join('\n');
 
@@ -1247,7 +1247,7 @@ const BLANKS_DATABASE = new Map([
   ['JWT_SECRET', 'a-perfectly-long-replacement-secret-value'],
 ]);
 
-/** `all` and `storage` so nothing under test is filtered out before it is asked. */
+/** `all` and `observability` so nothing under test is filtered out before it is asked. */
 function blanksRun(
   existing: ReadonlyMap<string, string>,
   options: { generateMissing?: boolean } = {},
@@ -1257,7 +1257,7 @@ function blanksRun(
     domain: 'app.example.test',
     all: true,
     nonInteractive: true,
-    groups: ['storage'],
+    groups: ['observability'],
     existing: new Map(existing),
     facts: facts(),
     portFree: async () => true,
@@ -1269,8 +1269,8 @@ function blanksRun(
 const BLANKS_COMPLETE = new Map([
   ...BLANKS_DATABASE,
   ['SECRETS_ENCRYPTION_KEY', generateBase64Key()],
-  ['AWS_ACCESS_KEY_ID', 'AKIAEXAMPLE'],
-  ['AWS_SECRET_ACCESS_KEY', 'secret-access-key'],
+  ['UPTRACE_REDIS_PASSWORD', 'redis-password'],
+  ['UPTRACE_CH_PASSWORD', 'clickhouse-password'],
 ]);
 
 describe('runEnvWizard --non-interactive: optional and blank-by-design keys', () => {
@@ -1287,8 +1287,8 @@ describe('runEnvWizard --non-interactive: optional and blank-by-design keys', ()
     const error = await blanksRun(
       new Map([
         ...BLANKS_DATABASE,
-        ['AWS_ACCESS_KEY_ID', 'AKIAEXAMPLE'],
-        ['AWS_SECRET_ACCESS_KEY', 'secret-access-key'],
+        ['UPTRACE_REDIS_PASSWORD', 'redis-password'],
+        ['UPTRACE_CH_PASSWORD', 'clickhouse-password'],
       ]),
       // Generation off, so the blank check itself is what is under test rather
       // than the `generate` branch that normally answers this key.
@@ -1301,14 +1301,14 @@ describe('runEnvWizard --non-interactive: optional and blank-by-design keys', ()
     expect((error as Error).message).toContain('SECRETS_ENCRYPTION_KEY');
   });
 
-  it('still refuses blank AWS credentials', async () => {
+  it('still refuses blank secret-shaped credentials', async () => {
     const error = await blanksRun(
       new Map([...BLANKS_DATABASE, ['SECRETS_ENCRYPTION_KEY', generateBase64Key()]]),
     ).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(UsageError);
-    expect((error as Error).message).toContain('AWS_ACCESS_KEY_ID');
-    expect((error as Error).message).toContain('AWS_SECRET_ACCESS_KEY');
+    expect((error as Error).message).toContain('UPTRACE_REDIS_PASSWORD');
+    expect((error as Error).message).toContain('UPTRACE_CH_PASSWORD');
   });
 
   it('still takes the template default for a required key that has a real one', async () => {

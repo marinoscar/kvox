@@ -997,6 +997,13 @@ default, and neither is reachable by omission:
   than off. The `aws` client is borrowed from a one-off container, like
   `psql`, so no S3 SDK is added to this package and the credentials from your
   `.env` are passed by name, never in an argv.
+  **Where the bucket comes from.** The purge reads `S3_BUCKET`, `S3_REGION`,
+  `S3_ENDPOINT`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the
+  deployment's `.env`. The application itself no longer reads them: storage is
+  configured at `/admin/settings/storage` and kept in the database, and
+  `.env.example` does not list them. A deployment installed before that change
+  still has them in its `.env`; for a newer one, add the five variables by hand
+  before `--purge-storage`, or the plan reports the bucket as unknown.
 
 **Each takes its own typed confirmation of that resource's real name.**
 `--confirm-database <database>` and `--confirm-bucket <bucket>`, compared

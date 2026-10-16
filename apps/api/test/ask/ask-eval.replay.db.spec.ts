@@ -52,6 +52,7 @@ import { done, FakeAskProvider, text, toolCall } from '../../scripts/ask-eval/fa
 import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
 import { JobsService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 
@@ -92,7 +93,7 @@ describeWithDb('ask:eval replay (real Postgres, scripted provider, no model)', (
     const ontology = new GraphOntologyService(p, preferences);
     const reads = new GraphReadService(p, access, ontology, transcriptAccess);
     const neighborhood = new GraphNeighborhoodService(p, access, ontology);
-    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p));
+    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
     const search = { search: async () => ({ results: [], nextCursor: null }) };
     const brief = new EntityBriefService(
       p,

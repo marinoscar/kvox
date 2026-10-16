@@ -5,16 +5,17 @@
 // The narrow storage surface `kg.export` needs, cloned from
 // `notes/note-objects.service.ts` for the reason that file's header gives:
 // the ONE guarantee this class makes is that every `storage_objects` row it
-// writes is `managed_by: 'graph'` — hidden from `GET /api/storage/objects`,
-// 409 on the generic DELETE — and a shared class parameterised on the owner
-// would guarantee that only as long as every call site passed the right string.
+// writes is owned by `graph` (a `kvox_object_ownership` row) — absent from
+// `GET /api/kvox/files`, 409 on the generic DELETE — and a shared class
+// parameterised on the owner would guarantee that only as long as every call
+// site passed the right string.
 //
 //   putStream       — stream bytes into storage, metering the size, and record
 //                     the row once the upload lands (idempotent on the key)
 //   putBuffer       — the same, for bytes already in memory (an upload, #387)
 //   openStream      — read a managed object back as a stream (`kg.import`, #387)
 //   signedUrlFor    — a short-lived signed GET with a signed Content-Disposition
-//   deleteIfPresent — bytes and row, through `deleteManagedObject`, never
+//   deleteIfPresent — bytes and row, through `KvoxManagedObjects.deleteManaged`, never
 //                     throwing for an object already gone (purges re-run)
 // =============================================================================
 
@@ -22,11 +23,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { StorageObject } from '@prisma/client';
 import { PassThrough, Transform, type Readable } from 'node:stream';
 
-import { PrismaService } from '../prisma/prisma.service';
-import { getDefaultOrgId } from '../prisma/default-org';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
-import { ObjectsService } from '../storage/objects/objects.service';
-import { STORAGE_PROVIDER, type StorageProvider } from '../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER, type StorageProvider } from '@marinoscar/platform-api/storage';
+
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { GRAPH_MANAGED_BY } from './job-types';
 
 export interface PutGraphObjectInput {
@@ -42,11 +41,8 @@ export class GraphObjectsService {
   private readonly logger = new Logger(GraphObjectsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly objects: ObjectsService,
+    private readonly managed: KvoxManagedObjectsService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /**
@@ -75,34 +71,22 @@ export class GraphObjectsService {
 
     const done = (async () => {
       await this.storage.upload(input.storageKey, metered, { mimeType: input.mimeType });
-      const existing = await this.prisma.storageObject.findFirst({ where: { storageKey: input.storageKey } });
+      const existing = await this.managed.findByKey(input.storageKey);
       if (existing) {
         // A retry re-rendered the same (deterministic) bytes over the same key.
         if (existing.size !== BigInt(size)) {
-          return this.prisma.storageObject.update({ where: { id: existing.id }, data: { size: BigInt(size) } });
+          return this.managed.setSize(existing.id, size);
         }
         return existing;
       }
-      // PLATFORM-ADOPTION-SHIM(#469): default org, and `managed_by` stamped in
-      // the same transaction as the insert.
-      const orgId = await getDefaultOrgId(this.prisma);
-      return this.prisma.$transaction(async (tx) => {
-        const created = await tx.storageObject.create({
-          data: {
-            name: input.name,
-            size: BigInt(size),
-            mimeType: input.mimeType,
-            storageKey: input.storageKey,
-            storageProvider: 's3',
-            bucket: this.storage.getBucket(),
-            status: 'ready',
-            orgId,
-            uploadedById: input.ownerId,
-            metadata: (input.metadata ?? undefined) as never,
-          },
-        });
-        await this.ownership.setManagedBy(created.id, GRAPH_MANAGED_BY, tx);
-        return created;
+      return this.managed.create({
+        module: GRAPH_MANAGED_BY,
+        key: input.storageKey,
+        name: input.name,
+        mimeType: input.mimeType,
+        size,
+        uploadedById: input.ownerId,
+        metadata: input.metadata,
       });
     })();
 
@@ -123,9 +107,9 @@ export class GraphObjectsService {
 
   /** The object's bytes as a stream, or null when the row (or its upload) is gone. */
   async openStream(objectId: string): Promise<{ stream: Readable; object: StorageObject } | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
+    const object = await this.managed.get(objectId);
     if (!object || object.status !== 'ready') return null;
-    if ((await this.ownership.getManagedBy([objectId])).get(objectId) !== GRAPH_MANAGED_BY) return null;
+    if ((await this.managed.managedBy([objectId])).get(objectId) !== GRAPH_MANAGED_BY) return null;
     return { stream: await this.storage.download(object.storageKey), object };
   }
 
@@ -135,20 +119,14 @@ export class GraphObjectsService {
     expiresInSeconds: number,
     contentDisposition?: string,
   ): Promise<{ url: string; expiresAt: Date; object: StorageObject } | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
-    if (!object || object.status !== 'ready') return null;
-    const url = await this.storage.getSignedDownloadUrl(object.storageKey, {
-      expiresIn: expiresInSeconds,
-      responseContentDisposition: contentDisposition,
-    });
-    return { url, expiresAt: new Date(Date.now() + expiresInSeconds * 1000), object };
+    return this.managed.signedDownloadUrl(objectId, { expiresIn: expiresInSeconds, contentDisposition });
   }
 
   /** Bytes and row. Never throws for an object already gone. */
   async deleteIfPresent(objectId: string | null | undefined): Promise<boolean> {
     if (!objectId) return false;
     try {
-      await this.objects.deleteManagedObject(objectId, GRAPH_MANAGED_BY);
+      await this.managed.deleteManaged(objectId, GRAPH_MANAGED_BY);
       return true;
     } catch (error) {
       this.logger.warn(

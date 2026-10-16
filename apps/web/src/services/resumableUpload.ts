@@ -14,7 +14,7 @@
  * A recording that takes twenty minutes to upload on a phone with no progress
  * bar is indistinguishable from a hung app, so the part PUTs in this file use
  * `XMLHttpRequest` — the one transport in every browser that emits byte-level
- * upload progress. The CONTROL PLANE (init, presign, status, complete, abort)
+ * upload progress. The CONTROL PLANE (init, presign, list parts, complete, abort)
  * still goes through `api`, so it inherits the bearer token, the one-shot
  * 401 → refresh → retry, and the maintenance interception like everything else.
  *
@@ -32,11 +32,14 @@
  *   1. **The client never reads the `ETag` response header.** A cross-origin
  *      response exposes no headers unless the bucket's CORS policy lists them
  *      in `ExposeHeaders`, and one misconfigured bucket would then break every
- *      upload with an error that looks like a client bug. This is why
- *      `completeUpload` below sends NO `parts` array: the server reconstructs
- *      the part list with S3 `ListParts`, which is authoritative anyway (it
- *      describes what S3 actually holds, not what this client believes it
- *      sent).
+ *      upload with an error that looks like a client bug. The platform's
+ *      `POST :id/upload/complete` DOES require a `parts` array with an ETag per
+ *      part (issue #469), so `completeUpload` below reads the part list back
+ *      from the app's `GET :id/upload/parts` (an S3 `ListParts` on the server) and
+ *      forwards it verbatim. That list is authoritative anyway: it describes
+ *      what the provider actually holds, not what this client believes it sent.
+ *      The ETag therefore travels server -> client -> server and is never read
+ *      off a PUT response.
  *   2. **The service worker must never see these requests.** `src/sw.ts`
  *      registers exactly one route, a `NavigationRoute`, which matches only
  *      `request.mode === 'navigate'` — a part PUT is `cors`, so it bypasses
@@ -83,13 +86,27 @@ export interface PresignedPart {
   expiresAt?: string;
 }
 
-/** `POST /api/storage/objects/upload/init`. */
+/**
+ * `POST /api/storage/objects/upload/init` — the platform's body
+ * (`initUploadSchema`, `@marinoscar/platform-contract/storage`).
+ */
 export interface UploadInitRequest {
-  fileName: string;
+  name: string;
   size: number;
-  contentType: string;
-  /** The transcript this upload belongs to, when one exists already. */
-  transcriptId?: string | null;
+  mimeType: string;
+}
+
+/**
+ * The platform's init response (`initUploadResponseSchema`). Presigns only the
+ * first batch of parts (ten); the engine asks the app's `POST :id/upload/parts`
+ * for the rest.
+ */
+export interface PlatformInitUploadResponse {
+  objectId: string;
+  uploadId: string;
+  partSize: number;
+  totalParts: number;
+  presignedUrls: PresignedPart[];
 }
 
 /** The init response — and everything the engine needs to lay out the file. */
@@ -102,20 +119,30 @@ export interface UploadInitResponse {
   parts: PresignedPart[];
 }
 
-/** One part the server already holds, from the status endpoint. */
+/**
+ * One part the provider already holds: an element of the app's
+ * `GET /api/storage/objects/:id/upload/parts` (a server-side S3 `ListParts`).
+ */
 export interface UploadedPart {
   partNumber: number;
+  /** As the provider returned it. Only ever forwarded to `…/upload/complete`. */
+  etag: string;
   size: number;
 }
 
-/** `GET /api/storage/objects/:id/upload/status` — the resume oracle. */
-export interface UploadStatusResponse {
-  status: string;
+/**
+ * What a resume needs: the part layout and the parts already stored.
+ *
+ * The part size is NOT on the platform's status payload, so the caller passes
+ * the one the upload was initialised with (the persisted session record) and it
+ * is echoed here. Re-deriving it from the deployment's current setting would
+ * renumber the parts of an upload begun before an operator changed it.
+ */
+export interface UploadResumeState {
   partSize: number;
   totalParts: number;
-  uploadedParts: UploadedPart[];
-  uploadedBytes: number;
-  totalBytes: number;
+  /** 1-based part numbers the provider already holds. */
+  uploadedParts: number[];
 }
 
 // =============================================================================
@@ -336,12 +363,27 @@ export function backoffDelayMs(attempt: number, policy: RetryPolicy, random: num
 // Control-plane calls
 // =============================================================================
 
+/**
+ * Start a generic multipart upload through the PLATFORM's init route and adapt
+ * its response (`presignedUrls`) to the shape the engine takes (`parts`).
+ */
 export async function initUpload(input: UploadInitRequest): Promise<UploadInitResponse> {
-  return api.post<UploadInitResponse>('/storage/objects/upload/init', input);
+  const response = await api.post<PlatformInitUploadResponse>(
+    '/storage/objects/upload/init',
+    input,
+  );
+  return {
+    objectId: response.objectId,
+    uploadId: response.uploadId,
+    partSize: response.partSize,
+    totalParts: response.totalParts,
+    parts: response.presignedUrls,
+  };
 }
 
 /**
- * Ask for more presigned part URLs.
+ * Ask for more presigned part URLs: the app's `POST /storage/objects/:id/upload/parts`
+ * (the platform presigns only the first ten parts at init).
  *
  * ⚠️ The endpoint rejects more than 100 part numbers per call. Callers here
  * never exceed `PART_URL_BATCH_SIZE`; the slice below is belt-and-braces so a
@@ -356,30 +398,98 @@ export async function requestUploadParts(
   });
 }
 
-export async function fetchUploadStatus(objectId: string): Promise<UploadStatusResponse> {
-  return api.get<UploadStatusResponse>(`/storage/objects/${objectId}/upload/status`);
+/**
+ * The active storage driver cannot list the parts of a multipart upload
+ * (`501 list_parts_unsupported`), which this client needs both to resume and to
+ * complete without reading an ETag header.
+ */
+export class ListPartsUnsupportedError extends Error {
+  constructor() {
+    super(
+      'The configured storage provider does not support browser multipart uploads that can be resumed or completed. ' +
+        'An administrator needs to switch Storage to an S3-compatible provider.',
+    );
+    this.name = 'ListPartsUnsupportedError';
+  }
+}
+
+/**
+ * The parts the provider holds for this upload — the app's
+ * `GET /storage/objects/:id/upload/parts`, an S3 `ListParts` on the server.
+ *
+ * Authoritative: it describes what is actually stored, not what this tab
+ * believes it sent. Throws `ListPartsUnsupportedError` on a 501, and the
+ * ordinary `ApiError` otherwise (404 when the upload no longer exists).
+ */
+export async function listUploadedParts(objectId: string): Promise<UploadedPart[]> {
+  try {
+    return await api.get<UploadedPart[]>(`/storage/objects/${objectId}/upload/parts`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 501) throw new ListPartsUnsupportedError();
+    throw err;
+  }
+}
+
+/**
+ * Where a resumed upload stands.
+ *
+ * Reads the provider's own part list. Only when the driver cannot list parts
+ * (501) does it fall back to the platform's `…/upload/status`, which knows only
+ * parts recorded at complete time: harmless, since it then reports nothing and
+ * every part is re-sent. (Completing such an upload fails with
+ * `ListPartsUnsupportedError`, loudly, rather than at the very end of a
+ * transfer: the fallback exists so that a 404 still surfaces as "gone".)
+ */
+export async function fetchUploadResumeState(
+  objectId: string,
+  layout: { partSize: number; size: number },
+): Promise<UploadResumeState> {
+  const totalParts = Math.max(1, Math.ceil(layout.size / layout.partSize));
+  let uploadedParts: number[];
+  try {
+    uploadedParts = (await listUploadedParts(objectId)).map((part) => part.partNumber);
+  } catch (err) {
+    if (!(err instanceof ListPartsUnsupportedError)) throw err;
+    const status = await api.get<{ uploadedParts: number[] }>(
+      `/storage/objects/${objectId}/upload/status`,
+    );
+    uploadedParts = status.uploadedParts;
+  }
+  return {
+    partSize: layout.partSize,
+    totalParts,
+    uploadedParts: uploadedParts.filter((part) => part >= 1 && part <= totalParts),
+  };
 }
 
 /**
  * Finish the upload.
  *
- * **Sends no `parts`, ever.** See the file header: the client cannot read
- * cross-origin `ETag` headers, and the server's `ListParts` reconstruction is
- * the authoritative answer anyway. Adding a `parts` body here would make every
- * upload depend on a bucket CORS `ExposeHeaders` entry.
+ * **The client never reads an ETag header.** See the file header: it reads the
+ * part list back from the app's `GET …/upload/parts` and forwards it to the
+ * platform's `POST …/upload/complete` (`{ parts: [{ partNumber, eTag }] }`), so
+ * no upload depends on a bucket CORS `ExposeHeaders` entry for the READ side.
  *
- * **But it does send a body: `{}`, never nothing (#89).** `ApiService.post`
- * drops a missing body entirely — no payload, no `Content-Type` — so a
- * body-less POST reaches the API with `request.body === undefined`, and an
- * object schema whose every field is optional still rejects `undefined`. That
- * failure is a 400 `Validation failed` arriving *after* every part is already
- * in S3, the worst moment an upload can fail. `{}` is truthy, so it is
- * serialized and labelled `application/json` like any other JSON call, and it
- * validates against any server, including one that never learned to tolerate
- * an absent body.
+ * Refuses to complete (with `UploadIncompleteError`) when the provider is
+ * missing any of `totalParts`: a `CompleteMultipartUpload` over a gap would
+ * assemble a silently truncated object.
  */
-export async function completeUpload(objectId: string): Promise<void> {
-  await api.post<void>(`/storage/objects/${objectId}/upload/complete`, {});
+export async function completeUpload(objectId: string, totalParts: number): Promise<void> {
+  const listed = await listUploadedParts(objectId);
+  const held = new Map<number, string>();
+  for (const part of listed) held.set(part.partNumber, part.etag);
+
+  const missing: number[] = [];
+  for (let part = 1; part <= totalParts; part += 1) {
+    if (!held.has(part)) missing.push(part);
+  }
+  if (missing.length > 0) throw new UploadIncompleteError(missing);
+
+  const parts = Array.from({ length: totalParts }, (_, index) => ({
+    partNumber: index + 1,
+    eTag: held.get(index + 1)!,
+  }));
+  await api.post<void>(`/storage/objects/${objectId}/upload/complete`, { parts });
 }
 
 export async function abortUpload(objectId: string): Promise<void> {
@@ -389,6 +499,17 @@ export async function abortUpload(objectId: string): Promise<void> {
 // =============================================================================
 // Errors
 // =============================================================================
+
+/** Some parts are not stored at the provider yet, so the upload cannot complete. */
+export class UploadIncompleteError extends Error {
+  constructor(readonly missingParts: number[]) {
+    super(
+      `${missingParts.length} part${missingParts.length === 1 ? '' : 's'} did not reach storage. ` +
+        'Resume the upload to send them.',
+    );
+    this.name = 'UploadIncompleteError';
+  }
+}
 
 /** A part exhausted its attempts, or the control plane refused. Terminal. */
 export class UploadFailedError extends Error {
@@ -713,9 +834,15 @@ class UploadEngine implements ResumableUpload {
     this.phase = 'completing';
     this.emit();
     try {
-      await completeUpload(this.objectId);
+      await completeUpload(this.objectId, this.totalParts);
     } catch (err) {
-      this.fail(err instanceof ApiError ? err.message : 'Could not finalise the upload');
+      this.fail(
+        err instanceof ApiError ||
+          err instanceof ListPartsUnsupportedError ||
+          err instanceof UploadIncompleteError
+          ? err.message
+          : 'Could not finalise the upload',
+      );
       return;
     }
     this.detachNetworkListeners();
@@ -1173,22 +1300,19 @@ export function startUpload(
 }
 
 /**
- * Init + start, the ordinary path from a file picker.
- *
- * `transcriptId` is optional because a file can be uploaded before the
- * transcript row exists (issue #30's New-transcript screen creates the
- * transcript from the finished object).
+ * Init + start through the PLATFORM's generic init route, for a file that is
+ * not tied to a transcript row. (A transcript's own upload is initialised by
+ * `POST /api/transcripts` and adopted through `startUpload`; the platform's
+ * init takes no transcript id, so none is accepted here.)
  */
 export async function createTranscriptUpload(
   file: File,
-  options: ResumableUploadOptions & { transcriptId?: string | null } = {},
+  engineOptions: ResumableUploadOptions = {},
 ): Promise<{ upload: ResumableUpload; init: UploadInitResponse }> {
-  const { transcriptId, ...engineOptions } = options;
   const init = await initUpload({
-    fileName: file.name,
+    name: file.name,
     size: file.size,
-    contentType: file.type || 'application/octet-stream',
-    transcriptId: transcriptId ?? null,
+    mimeType: file.type || 'application/octet-stream',
   });
   return { upload: startUpload(file, init, engineOptions), init };
 }
@@ -1196,8 +1320,9 @@ export async function createTranscriptUpload(
 /**
  * Resume an upload the server already knows about.
  *
- * The status response is the ONLY authority on what has landed — never a local
- * record of what this tab believed it sent. A tab that died mid-PUT, another
+ * The resume state (`fetchUploadResumeState`, the provider's own part list) is
+ * the ONLY authority on what has landed — never a local record of what this tab
+ * believed it sent. A tab that died mid-PUT, another
  * device that uploaded some of the same object, a part S3 rejected after the
  * browser closed: all of them make a local tally wrong in the direction that
  * silently corrupts the object (skipping a part that was never stored).
@@ -1205,19 +1330,19 @@ export async function createTranscriptUpload(
 export function resumeUpload(
   file: File,
   objectId: string,
-  status: UploadStatusResponse,
+  state: UploadResumeState,
   options: ResumableUploadOptions = {},
 ): ResumableUpload {
   const upload = new UploadEngine(
     {
       file,
       objectId,
-      partSize: status.partSize,
-      totalParts: status.totalParts,
+      partSize: state.partSize,
+      totalParts: state.totalParts,
     },
     {
       ...options,
-      completedParts: status.uploadedParts.map((part) => part.partNumber),
+      completedParts: state.uploadedParts,
     },
   );
   upload.start();

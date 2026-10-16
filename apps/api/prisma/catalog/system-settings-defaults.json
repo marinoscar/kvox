@@ -38,6 +38,33 @@
     "startedAt": null,
     "startedById": null
   },
+  "storage": {
+    "provider": "s3",
+    "drivers": {
+      "s3": {
+        "bucket": "",
+        "region": "",
+        "endpoint": "",
+        "accessKeyId": "",
+        "forcePathStyle": null
+      },
+      "r2": {
+        "bucket": "",
+        "accountId": "",
+        "region": "",
+        "endpoint": "",
+        "accessKeyId": "",
+        "forcePathStyle": null
+      },
+      "s3compatible": {
+        "bucket": "",
+        "region": "",
+        "endpoint": "",
+        "accessKeyId": "",
+        "forcePathStyle": null
+      }
+    }
+  },
   "transcription": {
     "enabled": false,
     "provider": null,

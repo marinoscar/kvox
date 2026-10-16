@@ -1019,7 +1019,12 @@ async function planExtras(
   if (options.purgeStorage === true) {
     const settings = storageSettings(env);
     if (settings === undefined) {
-      plan.storage = { problem: 'S3_BUCKET is not set in this deployment\'s .env' };
+      plan.storage = {
+        problem:
+          'S3_BUCKET is not set in this deployment\'s .env (the bucket is configured at ' +
+          '/admin/settings/storage now; to purge it, add S3_BUCKET, S3_REGION, S3_ENDPOINT, ' +
+          'AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to this .env first)',
+      };
     } else {
       const problem = storageProblem(settings);
       if (problem !== undefined) {

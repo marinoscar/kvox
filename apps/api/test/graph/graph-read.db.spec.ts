@@ -35,6 +35,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-read.db.spec');
 
@@ -53,7 +54,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const access = new GraphAccessService(p);
     const transcriptAccess = new TranscriptAccessService(p);
     reads = new GraphReadService(p, access, new GraphOntologyService(p, new GraphPreferencesService(p)), transcriptAccess);
-    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p));
+    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
   });
 
   afterAll(async () => {

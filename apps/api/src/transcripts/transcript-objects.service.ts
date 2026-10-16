@@ -2,13 +2,13 @@
 // TranscriptObjectsService (issue #25, epic #19)
 // =============================================================================
 //
-// The narrow storage surface this module needs and `ObjectsService` does not
-// offer: create a managed `storage_objects` row from bytes THIS PROCESS
+// The narrow storage surface this module needs and the platform's
+// `ObjectsService` does not offer: create a managed `storage_objects` row from bytes THIS PROCESS
 // produced (the gzipped raw provider result today; #27's snapshots and #28's
 // exports later), and presign a GET for one.
 //
 // -----------------------------------------------------------------------------
-// WHY NOT `ObjectsService.simpleUpload`
+// WHY NOT the platform's `ObjectsService.simpleUpload`
 // -----------------------------------------------------------------------------
 //
 // `simpleUpload` takes a `MultipartFile` off an HTTP request, enforces the
@@ -21,27 +21,23 @@
 // arguments only a job can supply — which is how the `managed_by` hole that
 // §9.3 closes would be reopened from the inside.
 //
-// ⚠ EVERY ROW THIS SERVICE CREATES IS `managed_by: 'transcripts'`, and that is
-// not a default a caller may override. A managed object is invisible to the
-// generic listing and refuses the generic `DELETE`, which is exactly the
-// ownership boundary a transcript's files need — and the reason `delete()`
-// below goes through `ObjectsService.deleteManagedObject`, which makes this
-// module NAME the owner it believes in before it may remove anything.
+// ⚠ EVERY ROW THIS SERVICE CREATES IS OWNED BY `transcripts` (a
+// `kvox_object_ownership` row written in the same transaction), and that is
+// not a default a caller may override. A managed object is absent from
+// `GET /api/kvox/files` and refuses the generic `DELETE` (409), which is
+// exactly the ownership boundary a transcript's files need — and the reason
+// `deleteIfPresent()` below goes through `KvoxManagedObjects.deleteManaged`,
+// which makes this module NAME the owner it believes in before it may remove
+// anything.
 // =============================================================================
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { StorageObject } from '@prisma/client';
+import { STORAGE_PROVIDER, type StorageProvider } from '@marinoscar/platform-api/storage';
 import { PassThrough, Readable, Transform } from 'node:stream';
 
-import { PrismaService } from '../prisma/prisma.service';
-import { getDefaultOrgId } from '../prisma/default-org';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
-import { ObjectsService } from '../storage/objects/objects.service';
-import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from '../storage/providers/storage-provider.interface';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 
 /**
@@ -98,12 +94,9 @@ export class TranscriptObjectsService {
   private readonly logger = new Logger(TranscriptObjectsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly objects: ObjectsService,
+    private readonly managed: KvoxManagedObjectsService,
     private readonly config: ConfigService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /**
@@ -217,9 +210,7 @@ export class TranscriptObjectsService {
    * prefix, leaving an orphan.
    */
   async recordUploaded(input: RecordUploadedObjectInput): Promise<StorageObject> {
-    const existing = await this.prisma.storageObject.findFirst({
-      where: { storageKey: input.storageKey },
-    });
+    const existing = await this.managed.findByKey(input.storageKey);
 
     if (existing) {
       this.logger.log(
@@ -244,28 +235,16 @@ export class TranscriptObjectsService {
     return object;
   }
 
-  /** The one `storage_objects` insert this module makes. Always `managedBy`. */
-  private async createRow(input: RecordUploadedObjectInput): Promise<StorageObject> {
-    // PLATFORM-ADOPTION-SHIM(#469): default org, and `managed_by` stamped in
-    // the same transaction as the insert.
-    const orgId = await getDefaultOrgId(this.prisma);
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.storageObject.create({
-        data: {
-          name: input.name,
-          size: BigInt(input.size),
-          mimeType: input.mimeType,
-          storageKey: input.storageKey,
-          storageProvider: 's3',
-          bucket: this.storage.getBucket(),
-          status: 'ready',
-          orgId,
-          uploadedById: input.ownerId,
-          metadata: (input.metadata ?? undefined) as never,
-        },
-      });
-      await this.ownership.setManagedBy(created.id, TRANSCRIPTS_MANAGED_BY, tx);
-      return created;
+  /** The one `storage_objects` insert this module makes, owned by `transcripts` in the same transaction. */
+  private createRow(input: RecordUploadedObjectInput): Promise<StorageObject> {
+    return this.managed.create({
+      module: TRANSCRIPTS_MANAGED_BY,
+      key: input.storageKey,
+      name: input.name,
+      mimeType: input.mimeType,
+      size: input.size,
+      uploadedById: input.ownerId,
+      metadata: input.metadata,
     });
   }
 
@@ -281,39 +260,25 @@ export class TranscriptObjectsService {
     expiresInSeconds: number,
     contentDisposition?: string,
   ): Promise<{ url: string; expiresAt: Date; object: StorageObject } | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
-
-    if (!object || object.status !== 'ready') return null;
-
-    const url = await this.storage.getSignedDownloadUrl(object.storageKey, {
+    return this.managed.signedDownloadUrl(objectId, {
       expiresIn: expiresInSeconds,
       // ⚠ PART OF THE SIGNATURE. A provider signs `response-content-disposition`
       // into the URL, which is what makes an export download as a named
       // attachment instead of rendering in the tab — and also why it cannot be
       // added by the caller afterwards as a header.
-      responseContentDisposition: contentDisposition,
+      contentDisposition,
     });
-
-    return {
-      url,
-      expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
-      object,
-    };
   }
 
   /** Read an object's bytes back. Used by ingest's provenance re-read and #27. */
   async download(objectId: string): Promise<Readable | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
-
-    if (!object) return null;
-
-    return this.storage.download(object.storageKey);
+    return (await this.managed.openStream(objectId))?.stream ?? null;
   }
 
   /**
    * Remove one managed object, bytes and row.
    *
-   * Delegates to `ObjectsService.deleteManagedObject`, which requires the
+   * Delegates to `KvoxManagedObjects.deleteManaged`, which requires the
    * caller to name the module it believes owns the object and throws on a
    * mismatch — so "the transcripts module deleted somebody else's file" is an
    * impossible state rather than a possible bug.
@@ -326,7 +291,7 @@ export class TranscriptObjectsService {
     if (!objectId) return false;
 
     try {
-      await this.objects.deleteManagedObject(objectId, TRANSCRIPTS_MANAGED_BY);
+      await this.managed.deleteManaged(objectId, TRANSCRIPTS_MANAGED_BY);
 
       return true;
     } catch (error) {

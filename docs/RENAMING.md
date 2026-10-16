@@ -488,21 +488,12 @@ This is the default action when no other flag is given, and it changes
 nothing — it only reports. Each item is a judgement call to present, not to
 action silently.
 
-**The one to get right — and the most important paragraph in this
-section — is that the audit recommends KEEPING the example job handlers,
-and that recommendation is correct.** `example-echo.handler.ts` and
-`example-checksum.handler.ts` look like disposable demo code. They are not.
-`example.checksum` is the canonical **node-eligible** job type — the only
-handler in the codebase implementing both `process` and
-`nodeResultSchema`/`persistNodeResult` together — and the jobs and
-worker-node test suites use it and `example.echo` as fixtures across
-roughly 27 files. Their coupling to production code is two registrations
-and some comments; their coupling to the test suite is real and deep.
-Deleting them on a bootstrap pass hands a new project a broken test suite
-in its first hour, which is the worst possible introduction to a codebase.
-If you genuinely want them gone, that's a deliberate refactor with its own
-issue and a green suite before and after — never a step you take because a
-bootstrap checklist told you to.
+**There is no example-handler item any more.** The audit used to recommend
+KEEPING `example-echo.handler.ts` and `example-checksum.handler.ts` (the canonical
+node-eligible job type, used as a fixture by the jobs and worker-node suites) and
+the example object processor, and that was correct while they lived here. They are
+the platform's now (`@marinoscar/platform-api/jobs` and `/storage`, issues #468 and
+#469), so the repository holds nothing to keep or delete.
 
 The audit's other items — the stub `deploy.yml` staging/production jobs,
 `docs/specs/` carrying the template's own issue numbers, the Prisma

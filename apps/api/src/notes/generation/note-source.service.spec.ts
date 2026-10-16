@@ -1,3 +1,4 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
 // =============================================================================
 // A note is generated from the transcript AS THE USER CORRECTED IT (issue #49)
 // =============================================================================
@@ -86,6 +87,7 @@ describe('NoteSourceService', () => {
       materialize as never,
       new MarkdownTranscriptExporter(new TranscriptExporterRegistry()),
       objects as never,
+      createFakeManagedObjects(prisma) as never,
     );
   });
 

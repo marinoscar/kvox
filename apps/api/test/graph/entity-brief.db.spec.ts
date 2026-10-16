@@ -43,6 +43,7 @@ import { TranscriptAccessService } from '../../src/transcripts/transcript-access
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('entity-brief.db.spec');
 
@@ -63,7 +64,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
     const transcriptAccess = new TranscriptAccessService(p);
-    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p));
+    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
 
     const registry = new JobHandlerRegistry();
     // A stand-in handler: the brief only needs the type to be registered.

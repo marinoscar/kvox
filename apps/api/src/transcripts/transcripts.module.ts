@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
+import { ObjectProcessingModule } from '@marinoscar/platform-api/storage';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
+import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
-import { StorageModule } from '../storage/storage.module';
-import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
 import { MediaAudioTranscodeHandler } from './handlers/media-audio-transcode.handler';
 import { TranscriptionIngestHandler } from './handlers/transcription-ingest.handler';
@@ -23,8 +24,6 @@ import { PdfTranscriptExporter } from './export/pdf.exporter';
 import { TranscriptExportService } from './export/transcript-export.service';
 import { TranscriptExporterRegistry } from './export/transcript-exporter.interface';
 import { TranscriptJobFailureListener } from './listeners/transcript-job-failure.listener';
-import { TranscriptsUploadAbortedListener } from './listeners/transcripts-upload-aborted.listener';
-import { TranscriptsUploadListener } from './listeners/transcripts-upload.listener';
 import { FfmpegService } from './media/ffmpeg.service';
 import { TranscriptsHousekeepingTask } from './tasks/transcripts-housekeeping.task';
 import { TranscriptAccessService } from './transcript-access.service';
@@ -46,7 +45,7 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
 // TranscriptsModule (issue #25, epic #19)
 // =============================================================================
 //
-// The pipeline: create, upload listener, seven job handlers, the reconciliation
+// The pipeline: create, upload processor, seven job handlers, the reconciliation
 // cron, the ten read/lifecycle routes, (issue #27) the five correction routes
 // with their pure editing core, and (issue #28) the three export routes with
 // their exporter registry.
@@ -72,12 +71,10 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
 //     that this module can reach a plaintext-returning credential path.
 //   • `CredentialsModule` — `TranscriptionRuntimeService` resolves the provider
 //     API key per call. Imported explicitly for the same visibility reason.
-//   • `StorageModule` — `ObjectsService`, for `initUpload` (with `managedBy`
-//     and, since #79, this module's own MIME allowlist in place of the
-//     operator's generic-upload one) and `deleteManagedObject`.
-//   • `StorageProvidersModule` — the `STORAGE_PROVIDER` token itself, which
-//     `StorageModule` does not re-export. Submit presigns with it; ingest
-//     writes the gzipped raw result through it.
+//   • `KvoxObjectsModule` — `KvoxManagedObjects` (`initManagedUpload` for the
+//     upload init, `deleteManaged` for purges), which re-exports the platform's
+//     `ObjectsService` and the `STORAGE_PROVIDER` token. Submit presigns with
+//     the provider; ingest writes the gzipped raw result through it.
 //   • `NotificationsModule` — the two owner-addressed events, plus (#29) the
 //     one recipient-addressed one.
 //
@@ -110,9 +107,10 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
     PrismaModule,
     TranscriptionModule,
     CredentialsModule,
-    StorageModule,
-    StorageProvidersModule,
     NotificationsModule,
+    // #469: the ownership gateway the upload processor asks, and the registry it registers into.
+    KvoxObjectsModule,
+    ObjectProcessingModule,
     // The semantic index (#188, epic #165). ONE-WAY: this module reaches into
     // `SearchIndexService` to queue a re-index after content commits and to
     // forget a purged transcript's rows; nothing in `search/indexing/` imports
@@ -145,9 +143,10 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
     TranscriptObjectsService,
     TranscriptPipelineService,
     TranscriptionRuntimeService,
-    TranscriptsUploadListener,
-    // #322: purges a transcript whose source upload the user cancelled.
-    TranscriptsUploadAbortedListener,
+    // #469: starts the pipeline when a transcript's audio finishes uploading. It lives in
+    // `kvox-objects/` (it reads ownership) but is provided HERE, because it needs the pipeline and
+    // the runtime and `KvoxObjectsModule` must not import this module back.
+    TranscriptUploadProcessor,
     // #95: fails a transcript whose provider-facing job gave up.
     TranscriptJobFailureListener,
     FfmpegService,

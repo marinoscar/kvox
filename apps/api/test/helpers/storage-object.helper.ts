@@ -2,34 +2,37 @@
 // Test helper: create a storage_objects row the way the platform schema wants it
 // =============================================================================
 //
-// PLATFORM-ADOPTION-SHIM(#469)
+// For the real-Postgres (`*.db.spec.ts`) suites that need an object row as a
+// fixture.
 //
-// Two things changed under every fixture that inserts into `storage_objects`:
+//   - `org_id` is NOT NULL on `storage_objects` (an org table, platform
+//     `0025_org_scoped_rls`). A fixture that names no organization gets the
+//     default one (`organizations WHERE is_default`, created by the platform
+//     migrations).
+//   - Which module owns an object lives in `kvox_object_ownership` (#469), not
+//     on the row. A fixture keeps passing `managedBy` inside `data` as it always
+//     did; this helper strips it and writes the ownership row.
 //
-//   - `org_id` is NOT NULL (platform `0025_org_scoped_rls`). A fixture that
-//     names no organization gets the default one (`organizations WHERE
-//     is_default`, created by the platform migrations).
-//   - `managed_by` and `part_size` are no longer on the Prisma client (they are
-//     declared deviations). They are written with raw SQL right after the
-//     insert, and handed back on the returned row so `object.managedBy` reads
-//     keep working.
-//
-// Fixtures keep passing `managedBy` / `partSize` inside `data` exactly as they
-// did; this helper strips them out. #469 deletes it with the legacy store.
+// These fixtures write through the plain client on purpose: the suites connect
+// as a superuser, which row-level security does not apply to. Application code
+// never does this; it goes through `KvoxManagedObjects`.
 // =============================================================================
 
-interface RawCapableClient {
+interface FixtureClient {
   storageObject: { create: (args: any) => Promise<any> };
+  kvoxObjectOwnership: {
+    create: (args: any) => Promise<any>;
+    findUnique: (args: any) => Promise<{ managedBy: string } | null>;
+    findMany: (args: any) => Promise<Array<{ objectId: string }>>;
+  };
   organization: { findFirst: (args: any) => Promise<{ id: string } | null> };
-  $executeRaw: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
-  $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<any>;
 }
 
 const orgIds = new WeakMap<object, Promise<string>>();
 
 /** The default organization's id for this client, resolved once. */
 export function defaultOrgId(client: unknown): Promise<string> {
-  const db = client as RawCapableClient;
+  const db = client as FixtureClient;
   let cached = orgIds.get(db);
   if (!cached) {
     cached = db.organization.findFirst({ where: { isDefault: true }, select: { id: true } }).then((org) => {
@@ -41,41 +44,45 @@ export function defaultOrgId(client: unknown): Promise<string> {
   return cached;
 }
 
-/** `managed_by` of one object, read with raw SQL. */
+/** The module that owns one object (`kvox_object_ownership.managed_by`), or null. */
 export async function managedByOf(client: unknown, id: string): Promise<string | null> {
-  const rows = await (client as RawCapableClient).$queryRaw`SELECT managed_by FROM storage_objects WHERE id = ${id}::uuid`;
-  return rows[0]?.managed_by ?? null;
+  const row = await (client as FixtureClient).kvoxObjectOwnership.findUnique({ where: { objectId: id }, select: { managedBy: true } });
+  return row?.managedBy ?? null;
 }
 
-/** Ids of the objects stamped `managed_by = <owner>` (optionally within an uploader and key prefix). */
+/** Ids of the objects owned by `owner` (optionally within an uploader and key prefix). */
 export async function idsManagedBy(
   client: unknown,
   owner: string,
   filter: { storageKeyPrefix?: string; uploadedByIds?: string[] } = {},
 ): Promise<string[]> {
-  const rows: Array<{ id: string }> = await (client as RawCapableClient).$queryRaw`
-    SELECT id::text AS id FROM storage_objects
-    WHERE managed_by = ${owner}
-      AND (${filter.storageKeyPrefix ?? null}::text IS NULL OR storage_key LIKE ${(filter.storageKeyPrefix ?? '') + '%'})
-      AND (${filter.uploadedByIds ?? null}::uuid[] IS NULL OR uploaded_by_id = ANY(${filter.uploadedByIds ?? null}::uuid[]))
-  `;
-  return rows.map((row) => row.id);
+  const rows = await (client as FixtureClient).kvoxObjectOwnership.findMany({
+    where: {
+      managedBy: owner,
+      object: {
+        ...(filter.storageKeyPrefix ? { storageKey: { startsWith: filter.storageKeyPrefix } } : {}),
+        ...(filter.uploadedByIds ? { uploadedById: { in: filter.uploadedByIds } } : {}),
+      },
+    },
+    select: { objectId: true },
+  });
+  return rows.map((row) => row.objectId);
 }
 
-/** `prisma.storageObject.create(args)` with `orgId` defaulted and `managedBy` / `partSize` written in SQL. */
+/**
+ * `prisma.storageObject.create(args)` with `orgId` defaulted; `managedBy` in
+ * `data` also writes the ownership row and is handed back on the returned row.
+ */
 export async function createStorageObject(client: unknown, args: { data: Record<string, any>; [k: string]: any }): Promise<any> {
-  const db = client as RawCapableClient;
-  const { managedBy, partSize, ...data } = args.data;
+  const db = client as FixtureClient;
+  const { managedBy, ...data } = args.data;
   const orgId = data.orgId ?? (await defaultOrgId(db));
 
   const row = await db.storageObject.create({ ...args, data: { ...data, orgId } });
 
   if (managedBy != null) {
-    await db.$executeRaw`UPDATE storage_objects SET managed_by = ${managedBy} WHERE id = ${row.id}::uuid`;
-  }
-  if (partSize != null) {
-    await db.$executeRaw`UPDATE storage_objects SET part_size = ${partSize} WHERE id = ${row.id}::uuid`;
+    await db.kvoxObjectOwnership.create({ data: { objectId: row.id, orgId, managedBy } });
   }
 
-  return { ...row, managedBy: managedBy ?? null, partSize: partSize ?? null };
+  return { ...row, managedBy: managedBy ?? null };
 }

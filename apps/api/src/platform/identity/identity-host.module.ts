@@ -10,7 +10,7 @@
 //   IDENTITY_NOTIFIER         -> NotificationsService     (moves in #468)
 //   IDENTITY_JOBS             -> JobsService + registry   (the platform's, #468)
 //   USER_DEFAULTS             -> DEFAULT_USER_SETTINGS    (moves in #466)
-//   IDENTITY_PROFILE_IMAGES   -> common/profile-image     (moves in #466/#469)
+//   IDENTITY_PROFILE_IMAGES   -> the storage slice's profile-image helpers (#469)
 //   IDENTITY_NODE_CREDENTIALS -> NodeCredentialService    (the platform's, #468)
 //
 // IDENTITY_METRICS is deliberately UNBOUND: this app has no metrics service, and

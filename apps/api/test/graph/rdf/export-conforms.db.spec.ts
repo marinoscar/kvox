@@ -90,8 +90,11 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
                 uploadedById: input.ownerId,
               },
             });
-            // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-            await prisma.$executeRaw`UPDATE storage_objects SET managed_by = 'graph' WHERE id = ${row.id}::uuid`;
+            await prisma.kvoxObjectOwnership.upsert({
+              where: { objectId: row.id },
+              update: { managedBy: 'graph' },
+              create: { objectId: row.id, orgId: row.orgId, managedBy: 'graph' },
+            });
             return row;
           })().then(resolve, reject);
         });

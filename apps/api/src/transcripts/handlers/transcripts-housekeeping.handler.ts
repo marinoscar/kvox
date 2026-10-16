@@ -2,7 +2,7 @@
 // `transcripts.housekeeping` (issue #25, epic #19, spec §1.5.8)
 // =============================================================================
 //
-// The transcript-aware reconciliation sweep. It does three things the rest of
+// The transcript-aware reconciliation sweep. It does four things the rest of
 // the pipeline structurally cannot do for itself.
 //
 // 1. RESTARTS A LOST POLL CHAIN. A `transcription.poll` chain goes silent if
@@ -32,12 +32,21 @@
 //    completed audio).
 //
 //    This sweep is the ONLY thing that reclaims a transcript's abandoned
-//    upload: the generic stale-upload sweep skips managed objects, because
-//    deleting a row `transcripts.source_object_id` points at would violate its
-//    `Restrict` foreign key. An upload the user CANCELS does not wait for this
-//    at all — `TranscriptsUploadAbortedListener` purges it immediately.
+//    upload: the platform's stale-upload sweep knows nothing of the
+//    `transcripts.source_object_id` `Restrict` foreign key.
 //
-// 3. EXPIRES EXPORTS. `transcript_exports` rows past their `expires_at`, and
+// 3. RECONCILES ABORTED UPLOADS (issue #469). The platform's abort and its
+//    stale-upload sweep emit no event this app could listen to, so a transcript
+//    whose source object is `failed` (aborted), gone, or older than the
+//    platform's stale-upload threshold is marked `failed` with
+//    `failure_reason = 'upload_aborted'`, at most `ABORT_RECONCILE_BATCH` (500)
+//    per run. LATENCY: an abort used to be reflected at once by an event
+//    listener; it now takes up to one housekeeping cycle (10 minutes). Step 2's
+//    legacy branch then purges the `failed` row on the following cycle: an
+//    upload that never completed never became a recording, and there is no
+//    audio to retry with.
+//
+// 4. EXPIRES EXPORTS. `transcript_exports` rows past their `expires_at`, and
 //    the storage objects behind them. Issue #28 creates them; this sweep is
 //    what keeps them from accumulating forever, and it is written now so that
 //    #28 does not also have to add a sweep.
@@ -55,7 +64,11 @@
 // exemption: it sweeps `transcripts`, `jobs`, `transcript_exports` and
 // `storage_objects` in one pass, deciding as it goes.
 //
-// ⚠ NO STEP MAY THROW PAST THE OTHERS. Each of the three is wrapped, and their
+// `storage_objects` is an organization table with forced row-level security, so
+// the sweep reads it inside `runInJobOrg` (this job is enqueued with a null
+// `orgId`; the helper falls back to the default organization).
+//
+// ⚠ NO STEP MAY THROW PAST THE OTHERS. Each of the four is wrapped, and their
 // failures are collected and reported at the end. A sweep that aborted on the
 // first bad row would mean one damaged transcript stops every other transcript
 // from ever being reconciled — the classic failure mode of a housekeeping job
@@ -66,6 +79,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../transcription/transcription.system-settings';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
 import {
@@ -76,7 +90,9 @@ import {
 } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
-import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
+import { runInJobOrg } from '../../common/job-org-scope';
+import { STALE_UPLOAD_HOURS as STORAGE_STALE_UPLOAD_HOURS } from '../../platform/storage/storage.config';
 
 /**
  * The source-object facts step 2 decides on. One query loads them for every
@@ -86,6 +102,42 @@ export interface AbandonedUploadObject {
   status: 'pending' | 'uploading' | 'processing' | 'ready' | 'failed';
   updatedAt: Date;
 }
+
+/** The source-object facts step 3 decides on. */
+export interface AbortedUploadObject {
+  status: 'pending' | 'uploading' | 'processing' | 'ready' | 'failed';
+  createdAt: Date;
+}
+
+/** What step 3 does with one `uploading` transcript. */
+export type AbortedUploadDecision = 'abort' | 'keep';
+
+/**
+ * Step 3's decision for one `uploading` transcript, pure so it needs no database.
+ *
+ * - no source object, or one the platform aborted (`failed`): the upload is dead.
+ * - a `pending`/`uploading` object created before `staleCutoff`: the platform's
+ *   stale-upload sweep is about to reclaim it (or already has), so it is dead too.
+ * - anything else, including `ready`/`processing` (the audio is present, which is
+ *   step 2's missed-processing case and never an abort): keep.
+ */
+export function decideAbortedUpload(
+  object: AbortedUploadObject | undefined,
+  staleCutoff: Date,
+): AbortedUploadDecision {
+  if (!object) return 'abort';
+
+  if (object.status === 'failed') return 'abort';
+
+  if (object.status === 'pending' || object.status === 'uploading') {
+    return object.createdAt.getTime() < staleCutoff.getTime() ? 'abort' : 'keep';
+  }
+
+  return 'keep';
+}
+
+/** The one query's shape, shared by steps 2 and 3. */
+type SourceObjectFacts = AbandonedUploadObject & AbortedUploadObject;
 
 /** What step 2 does with one candidate. */
 export type AbandonedUploadDecision =
@@ -144,6 +196,12 @@ export const LOST_CHAIN_GRACE_MINUTES = 20;
 /** Most rows any one sweep will act on, per step. */
 export const HOUSEKEEPING_BATCH = 200;
 
+/** Most `uploading` transcripts step 3 examines (and so fails) in one run. */
+export const ABORT_RECONCILE_BATCH = 500;
+
+/** `failure_reason` step 3 writes. Machine-readable; it is not rendered into an email. */
+export const UPLOAD_ABORTED_FAILURE_REASON = 'upload_aborted';
+
 @Injectable()
 export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit {
   private readonly logger = new Logger(TranscriptsHousekeepingHandler.name);
@@ -158,6 +216,8 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
     private readonly pipeline: TranscriptPipelineService,
     private readonly objects: TranscriptObjectsService,
     private readonly transcriptionSettings: TranscriptionSettingsService,
+    private readonly jobScope: JobScope,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   onModuleInit(): void {
@@ -170,6 +230,7 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
 
     let restarted = 0;
     let purged = 0;
+    let aborted = 0;
     let expired = 0;
 
     try {
@@ -179,9 +240,17 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
     }
 
     try {
-      purged = await this.purgeAbandonedUploads(now);
+      purged = await this.purgeAbandonedUploads(job, now);
     } catch (error) {
       failures.push(`purging abandoned uploads: ${describe(error)}`);
+    }
+
+    // AFTER step 2, so an upload step 2 already purged is `deleting` and not a
+    // candidate here.
+    try {
+      aborted = await this.reconcileAbortedUploads(job, now);
+    } catch (error) {
+      failures.push(`reconciling aborted uploads: ${describe(error)}`);
     }
 
     try {
@@ -192,7 +261,8 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
 
     this.logger.log(
       `Transcript housekeeping (job ${job.id}): ${restarted} poll chain(s) restarted, ` +
-        `${purged} abandoned upload(s) purged, ${expired} export(s) expired`,
+        `${purged} abandoned upload(s) purged, ${aborted} aborted upload(s) failed, ` +
+        `${expired} export(s) expired`,
     );
 
     if (failures.length > 0) {
@@ -258,7 +328,7 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
   }
 
   /** Step 2 — see the file header. */
-  private async purgeAbandonedUploads(now: Date): Promise<number> {
+  private async purgeAbandonedUploads(job: Job, now: Date): Promise<number> {
     const hours = await this.abandonedUploadHours();
     const cutoff = new Date(now.getTime() - hours * 3_600_000);
 
@@ -282,17 +352,12 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
 
     // ONE QUERY FOR EVERY CANDIDATE'S SOURCE OBJECT — same N+1 argument as
     // step 1.
-    const sources = await this.prisma.storageObject.findMany({
-      where: { id: { in: candidates.map((entry) => entry.sourceObjectId) } },
-      select: { id: true, status: true, updatedAt: true },
-    });
-
-    const byId = new Map<string, AbandonedUploadObject>(
-      sources.map((entry) => [
-        entry.id,
-        { status: entry.status, updatedAt: entry.updatedAt },
-      ]),
+    const sources = await this.readSourceObjects(
+      job,
+      candidates.map((entry) => entry.sourceObjectId),
     );
+
+    const byId = sources;
     let purged = 0;
 
     for (const entry of candidates) {
@@ -304,17 +369,18 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
 
       if (decision === 'audio_present') {
         // A `ready`/`processing` object under an `uploading` transcript is a
-        // DIFFERENT bug — the upload-completed event was missed — and this
-        // sweep does not pretend to fix it, because purging a transcript whose
-        // audio is present and fine would destroy the one thing worth keeping.
-        // It is logged, and the upload listener remains the only thing that
-        // promotes the row. (A legacy `failed` row with its audio present
-        // failed for some other reason, and is silently left alone.)
+        // DIFFERENT bug — the upload processor did not run or did not promote
+        // the row — and this sweep does not pretend to fix it, because purging
+        // a transcript whose audio is present and fine would destroy the one
+        // thing worth keeping. It is logged, and the upload processor remains
+        // the only thing that promotes the row. (A legacy `failed` row with
+        // its audio present failed for some other reason, and is silently left
+        // alone.)
         if (status === 'uploading') {
           this.logger.warn(
             `Transcript ${entry.id} is still 'uploading' but its source object is ` +
-              `${byId.get(entry.sourceObjectId)?.status}; the upload-completed event appears ` +
-              'to have been missed',
+              `${byId.get(entry.sourceObjectId)?.status}; the upload processor appears ` +
+              'not to have promoted it',
           );
         }
 
@@ -369,6 +435,77 @@ export class TranscriptsHousekeepingHandler implements JobHandler, OnModuleInit 
   }
 
   /** Step 3 — see the file header. */
+  private async reconcileAbortedUploads(job: Job, now: Date): Promise<number> {
+    const staleCutoff = new Date(now.getTime() - STORAGE_STALE_UPLOAD_HOURS * 3_600_000);
+
+    // OLDEST FIRST, so a backlog drains in order across runs.
+    const candidates = await this.prisma.transcript.findMany({
+      where: { deletedAt: null, status: 'uploading' },
+      select: { id: true, sourceObjectId: true },
+      orderBy: { createdAt: 'asc' },
+      take: ABORT_RECONCILE_BATCH,
+    });
+
+    if (candidates.length === 0) return 0;
+
+    const sources = await this.readSourceObjects(
+      job,
+      candidates.map((entry) => entry.sourceObjectId),
+    );
+    let failed = 0;
+
+    for (const entry of candidates) {
+      const source = sources.get(entry.sourceObjectId);
+      const decision = decideAbortedUpload(
+        source ? { status: source.status, createdAt: source.createdAt } : undefined,
+        staleCutoff,
+      );
+
+      if (decision === 'keep') continue;
+
+      // CONDITIONAL ON `uploading`, so an upload that completed between the
+      // read and this write is left to the processor. No notification: the
+      // upload was cancelled or timed out, not something the pipeline lost.
+      const result = await this.prisma.transcript.updateMany({
+        where: { id: entry.id, deletedAt: null, status: 'uploading' },
+        data: { status: 'failed', failureReason: UPLOAD_ABORTED_FAILURE_REASON },
+      });
+
+      if (result.count === 0) continue;
+
+      this.logger.log(
+        `Transcript ${entry.id}: its upload was aborted (source object ` +
+          `${source ? source.status : 'gone'}); marked failed`,
+      );
+
+      failed += 1;
+    }
+
+    return failed;
+  }
+
+  /**
+   * The facts steps 2 and 3 decide on, for every id in ONE query, read inside
+   * the job's organization (forced row-level security on `storage_objects`).
+   */
+  private async readSourceObjects(
+    job: Job,
+    ids: string[],
+  ): Promise<Map<string, SourceObjectFacts>> {
+    const rows = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
+      this.managedObjects.findMany(
+        {
+          where: { id: { in: ids } },
+          select: { id: true, status: true, createdAt: true, updatedAt: true },
+        },
+        { tx },
+      ),
+    );
+
+    return new Map(rows.map((row) => [row.id, row]));
+  }
+
+  /** Step 4 — see the file header. */
   private async expireExports(now: Date): Promise<number> {
     const stale = await this.prisma.transcriptExport.findMany({
       where: { expiresAt: { lt: now } },

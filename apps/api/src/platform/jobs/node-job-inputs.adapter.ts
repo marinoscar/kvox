@@ -5,10 +5,7 @@ import type { NodeJobInputObject, NodeJobInputs } from '@marinoscar/platform-api
 import { JobScope } from '@marinoscar/platform-api/jobs';
 import type { Job } from '@marinoscar/platform-api/jobs';
 
-import {
-  JobInputResolutionError,
-  resolveStorageObjectInput,
-} from '../../storage/storage-job-input';
+import { JobInputResolutionError, resolveStorageObjectInput } from '@marinoscar/platform-api/storage';
 
 /**
  * The node data plane's `NODE_JOB_INPUTS`: which stored object a held job reads.

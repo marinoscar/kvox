@@ -10,6 +10,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
@@ -30,6 +31,7 @@ export class TranscriptsUserDataHooks {
     private readonly prisma: PrismaService,
     private readonly pipeline: TranscriptPipelineService,
     private readonly searchIndex: SearchIndexService,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   /** `transcripts` in `GET /api/user-data/summary`. */
@@ -55,20 +57,17 @@ export class TranscriptsUserDataHooks {
   private async transcriptBytes(userId: string): Promise<string> {
     const owned = { ownerId: userId, deletedAt: null };
 
-    const { _sum } = await this.prisma.storageObject.aggregate({
-      where: {
-        OR: [
-          { transcriptsAsSource: { some: owned } },
-          { transcriptsAsPlayback: { some: owned } },
-          { transcriptsAsRawResult: { some: owned } },
-          { transcriptVersionSnapshots: { some: { transcript: owned } } },
-          { transcriptExportFiles: { some: { transcript: owned } } },
-        ],
-      },
-      _sum: { size: true },
+    const bytes = await this.managedObjects.sumSize({
+      OR: [
+        { transcriptsAsSource: { some: owned } },
+        { transcriptsAsPlayback: { some: owned } },
+        { transcriptsAsRawResult: { some: owned } },
+        { transcriptVersionSnapshots: { some: { transcript: owned } } },
+        { transcriptExportFiles: { some: { transcript: owned } } },
+      ],
     });
 
-    return (_sum.size ?? BigInt(0)).toString();
+    return bytes.toString();
   }
 
   /** The destructive step: the transcripts, then their semantic-index rows. */

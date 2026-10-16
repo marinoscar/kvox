@@ -30,7 +30,6 @@ import {
   APP_VERSION_FIELD,
   CATCH_ALL_PAGE_SIZE,
   ENVIRONMENT_STEP_ID,
-  GROUPS_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
   NAME_FIELD,
@@ -53,7 +52,6 @@ import {
   failedModel,
   formFieldsFor,
   formatDuration,
-  groupsOf,
   installSteps,
   optionModeChoicesFor,
   optionModeField,
@@ -112,6 +110,7 @@ const TEMPLATE = [
   'JOBS_WORKER_CONCURRENCY=2',
   'API_MEM_LIMIT=512M',
   'WEB_MEM_LIMIT=128M',
+  'UPTRACE_SITE_URL=http://localhost:14318',
   '',
   '# ------------------------------------------------------------',
   '# Database',
@@ -147,15 +146,6 @@ const TEMPLATE = [
   '# Test Authentication',
   '# ------------------------------------------------------------',
   'TEST_AUTH_ENABLED=false',
-  '',
-  '# ------------------------------------------------------------',
-  '# Storage',
-  '# ------------------------------------------------------------',
-  'S3_BUCKET=your-bucket-name',
-  'S3_REGION=us-east-1',
-  'S3_ENDPOINT=',
-  'AWS_ACCESS_KEY_ID=',
-  'AWS_SECRET_ACCESS_KEY=',
 ].join('\n');
 
 const SPECS = parseEnvExample(TEMPLATE);
@@ -164,7 +154,7 @@ function stepsFor(options: Parameters<typeof installSteps>[1] = {}): InstallStep
   return installSteps(SPECS, options);
 }
 
-const FULL = stepsFor({ all: true, groups: ['storage'] });
+const FULL = stepsFor({ all: true, groups: ['observability'] });
 
 /**
  * The REAL template (#240, #241) — not the small fixture above.
@@ -178,7 +168,7 @@ const FULL = stepsFor({ all: true, groups: ['storage'] });
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REAL_TEMPLATE_PATH = join(HERE, '..', '..', '..', '..', '..', '..', 'infra', 'compose', '.env.example');
 const REAL_SPECS = parseEnvExample(readFileSync(REAL_TEMPLATE_PATH, 'utf8'));
-const REAL_GROUPS = ['observability', 'storage'] as const;
+const REAL_GROUPS = ['observability'] as const;
 
 function stepById(id: string, steps: readonly InstallStep[] = FULL): InstallStep {
   const found = steps.find((step) => step.id === id);
@@ -220,13 +210,9 @@ describe('installSteps', () => {
     expect(stepsFor({ all: true }).some((step) => isCatchAllStep(step.id))).toBe(true);
   });
 
-  it('drops the storage step when the group was not opted into', () => {
-    // Not hidden by a condition here: its `fields` resolve to nothing, and a
-    // step with nothing to ask is not shown.
+  it('has no object storage step: the bucket is configured at runtime (#469)', () => {
+    expect(FULL.map((step) => step.id)).not.toContain('storage');
     expect(stepsFor({ all: true }).map((step) => step.id)).not.toContain('storage');
-    expect(stepsFor({ all: true, groups: groupsOf({ [GROUPS_FIELD]: 'storage' }) }).map((step) => step.id)).toContain(
-      'storage',
-    );
   });
 
   it('places every essential key of the template in exactly one step', () => {
@@ -255,12 +241,11 @@ describe('installSteps', () => {
     expect(domain.fields).toContain(PUBLIC_IP_FIELD);
   });
 
-  it('asks the app name, the repository, the ref, the groups and the depth on Welcome', () => {
+  it('asks the app name, the repository, the ref and the depth on Welcome', () => {
     expect(stepById(WELCOME_STEP_ID).fields).toEqual([
       '__name',
       '__repo',
       '__ref',
-      GROUPS_FIELD,
       ALL_FIELD,
     ]);
   });
@@ -374,11 +359,14 @@ describe('formFieldsFor', () => {
   });
 
   it('lets a blank answer through on an optional step, and never on a required one', () => {
-    const storage = formFieldsFor(stepById('storage'), { specs: SPECS, answers: {} });
+    const catchAll = formFieldsFor(
+      FULL.find((step) => isCatchAllStep(step.id)) as InstallStep,
+      { specs: SPECS, answers: {} },
+    );
     const admin = formFieldsFor(stepById('admin'), { specs: SPECS, answers: {} });
 
-    const bucket = storage.find((field) => field.key === 'S3_BUCKET');
-    expect(bucket?.kind === 'text' ? bucket.validate?.('') : 'missing').toBeUndefined();
+    const siteUrl = catchAll.find((field) => field.key === 'UPTRACE_SITE_URL');
+    expect(siteUrl?.kind === 'text' ? siteUrl.validate?.('') : 'missing').toBeUndefined();
 
     const email = admin.find((field) => field.key === 'INITIAL_ADMIN_EMAIL');
     expect(email?.kind === 'text' ? email.validate?.('') : undefined).toBeDefined();
@@ -439,7 +427,7 @@ describe('envAnswers', () => {
   });
 
   it('skips a blank answer rather than writing the key empty', () => {
-    expect(envAnswers({ S3_ENDPOINT: '', S3_REGION: 'us-east-1' }).has('S3_ENDPOINT')).toBe(false);
+    expect(envAnswers({ SENTRY_DSN: '', LOG_LEVEL: 'info' }).has('SENTRY_DSN')).toBe(false);
   });
 });
 
@@ -629,11 +617,11 @@ describe('stepCheckItems', () => {
   });
 
   it('falls back to the results themselves for a step that declares no registry ids', () => {
-    // The storage step's `onLeave` is one ad-hoc probe, not registry entries,
-    // so listing "all of them" up front is not possible — and its single warn
-    // must still reach the screen.
-    const items = stepCheckItems(stepById('storage'), [
-      fail('storage-reachable', { status: 'warn', severity: 'recommended', title: 'Object storage reachable' }),
+    // A step whose `onLeave` is one ad-hoc probe, not registry entries, cannot
+    // list "all of them" up front — and its single warn must still reach the
+    // screen. The OAuth step is the one that works this way today.
+    const items = stepCheckItems(stepById('oauth'), [
+      fail('google-oauth-credentials', { status: 'warn', severity: 'recommended', title: 'Google OAuth credentials' }),
     ], false);
 
     expect(items).toHaveLength(1);
@@ -1152,8 +1140,8 @@ describe('optionModeChoicesFor (#240)', () => {
     line: 1,
   };
   const optionalNoDefault: EnvVarSpec = {
-    key: 'S3_ENDPOINT',
-    section: 'Storage',
+    key: 'SENTRY_DSN',
+    section: 'Observability',
     defaultValue: '',
     help: '',
     optional: true,
@@ -1199,17 +1187,6 @@ describe('optionModeChoicesFor (#240)', () => {
   });
 });
 
-describe('groupsOf', () => {
-  it('is empty until the operator opts in on Welcome', () => {
-    expect(groupsOf({})).toEqual([]);
-    expect(groupsOf({ [GROUPS_FIELD]: '' })).toEqual([]);
-  });
-
-  it('reads the comma-separated list the Welcome step records', () => {
-    expect(groupsOf({ [GROUPS_FIELD]: 'storage' })).toEqual(['storage']);
-  });
-});
-
 // =============================================================================
 // Resuming, and remembering what was answered  (issue #288)
 // =============================================================================
@@ -1244,7 +1221,7 @@ describe('prefillFrom', () => {
         COMPOSE_PROJECT_NAME: 'somebody-elses-project',
         DEPLOY_ROOT: '/opt/infra/apps/somebody-else',
         // A blank on disk says nothing the blank field does not already say.
-        S3_ENDPOINT: '',
+        SENTRY_DSN: '',
       }),
     );
 

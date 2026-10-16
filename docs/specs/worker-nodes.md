@@ -7,9 +7,10 @@
 > `NodesModule.forRoot` and `NodeCredentialModule` in
 > `apps/api/src/platform/jobs/jobs.config.ts`, with the host ports
 > `NODE_JOB_INPUTS` (`apps/api/src/platform/jobs/node-job-inputs.adapter.ts`,
-> over `apps/api/src/storage/storage-job-input.ts`) and `NODE_OBJECT_STORE`
-> (`apps/api/src/platform/jobs/node-object-store.adapter.ts`, a temporary shim
-> until #469) bound in `jobs-host.module.ts`. Packaged `/admin/settings/workers`
+> over the platform's `resolveStorageObjectInput`, `@marinoscar/platform-api/storage`;
+> the local `apps/api/src/storage/storage-job-input.ts` was deleted in #469) and `NODE_OBJECT_STORE`
+> (`nodeObjectStoreBinding` from `@marinoscar/platform-api/storage`, since #469, replacing the temporary
+> `node-object-store.adapter.ts` shim) bound in `jobs-host.module.ts`. Packaged `/admin/settings/workers`
 > is the fleet's admin page; jobs now carry `org_id` (job-queue.md). KVox keeps
 > the handlers of the node-eligible types (`db.backup.run`,
 > `media.audio.transcode`, `note.source.extract`) and their result contracts in
@@ -46,7 +47,7 @@
 > node-eligible job type that makes the whole fleet reachable end to end:
 > `platform-api/nodes/node-data-plane.service.ts`,
 > `platform-api/nodes/dto/node-data-plane.dto.ts`,
-> `apps/api/src/storage/storage-job-input.ts`,
+> `platform-api/storage/storage-job-input.ts`,
 > `platform-api/jobs/handlers/example-checksum.handler.ts` (retired, §21) and
 > the owning module's `contracts/` folder (`transcripts/contracts/`,
 > `notes/contracts/`, `db-backup/contracts/`).
@@ -707,7 +708,7 @@ which of three causes applied — and the same text appeared for all three.
 Nothing about it suggests the failure is permanent, so such jobs were retried
 to exhaustion.
 
-`resolveStorageObjectInput` (`src/storage/storage-job-input.ts`) is the single
+`resolveStorageObjectInput` (`platform-api/storage/storage-job-input.ts`, formerly `apps/api/src/storage/storage-job-input.ts`) is the single
 resolver both executors use, and it returns a `StorageObject` with a guaranteed
 non-empty `storageKey` or throws one of three named reasons:
 
@@ -1336,7 +1337,7 @@ The load-bearing suites:
   executors leaving the same row, `persistNodeResult` never touching the
   provider, the merge into `metadata`, and the near-miss digests (upper case,
   prefixed, truncated) a fork's own node would produce.
-* `apps/api/src/storage/storage-job-input.spec.ts` — the three failures one at
+* `platform-api/storage/storage-job-input.spec.ts` (formerly `apps/api/src/storage/storage-job-input.spec.ts`) — the three failures one at
   a time, each asserting the message names the job and is not `open ''`.
 * `platform-api/nodes/node-checksum-data-plane.db.spec.ts` — **real Postgres
   only.** `example.checksum` from enqueue to persisted metadata, with a local

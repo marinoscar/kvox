@@ -1,3 +1,5 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
@@ -6,10 +8,12 @@ import { TranscriptionSettingsService } from '../../transcription/transcription-
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import {
+  ABORT_RECONCILE_BATCH,
   decideAbandonedUpload,
+  decideAbortedUpload,
   TranscriptsHousekeepingHandler,
 } from './transcripts-housekeeping.handler';
-import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
 // `transcripts.housekeeping` — the reconciliation sweep (issue #25, §1.5.8)
@@ -21,7 +25,7 @@ import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 // one failing step does not stop the other two from running.
 // =============================================================================
 
-const job = (): Job => ({ id: 'job-1', payload: null } as unknown as Job);
+const job = (): Job => ({ id: 'job-1', payload: null, orgId: 'org-1' } as unknown as Job);
 
 describe('TranscriptsHousekeepingHandler', () => {
   let handler: TranscriptsHousekeepingHandler;
@@ -34,8 +38,11 @@ describe('TranscriptsHousekeepingHandler', () => {
   let pipeline: { enqueueFirstPoll: jest.Mock; markFailed: jest.Mock; enqueuePurge: jest.Mock };
   let objects: { deleteIfPresent: jest.Mock };
   let transcriptionSettings: { get: jest.Mock };
+  let scopeRun: jest.Mock;
 
   beforeEach(async () => {
+    scopeRun = jest.fn(async (_job: unknown, fn: (tx: unknown) => unknown) => fn(prisma));
+
     prisma = {
       transcript: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -70,6 +77,9 @@ describe('TranscriptsHousekeepingHandler', () => {
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: TranscriptObjectsService, useValue: objects },
         { provide: TranscriptionSettingsService, useValue: transcriptionSettings },
+        { provide: KvoxManagedObjectsService, useValue: createFakeManagedObjects(prisma) },
+        // The scoped transaction client is the Prisma stub itself.
+        { provide: JobScope, useValue: { run: scopeRun } },
       ],
     }).compile();
 
@@ -228,6 +238,133 @@ describe('TranscriptsHousekeepingHandler', () => {
       ['failed', { status: 'processing', updatedAt: before }, 'audio_present'],
     ] as const)('%s transcript, object %j → %s', (status, object, expected) => {
       expect(decideAbandonedUpload(status, object, cutoff)).toBe(expected);
+    });
+  });
+
+  describe('reconciling aborted uploads (issue #469)', () => {
+    const HOUR = 3_600_000;
+    const uploading = (id: string, sourceObjectId: string) => ({ id, sourceObjectId });
+
+    /** Step 3 is the `uploading` query without an `OR` (step 2 has one, step 1 filters `processing`). */
+    const step3Returns = (rows: unknown[]) =>
+      prisma.transcript.findMany.mockImplementation(
+        async ({ where }: { where: { status?: string; OR?: unknown } }) =>
+          where.status === 'uploading' && !where.OR ? rows : [],
+      );
+
+    const abortedWrite = {
+      where: { id: 't-1', deletedAt: null, status: 'uploading' },
+      data: { status: 'failed', failureReason: 'upload_aborted' },
+    };
+
+    it('fails a transcript whose source object was aborted', async () => {
+      step3Returns([uploading('t-1', 'obj-1')]);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-1', status: 'failed', createdAt: new Date(), updatedAt: new Date() },
+      ]);
+
+      await handler.process(job());
+
+      expect(prisma.transcript.updateMany).toHaveBeenCalledWith(abortedWrite);
+      // A cancelled upload is not a pipeline failure: no email, no purge in this step.
+      expect(pipeline.markFailed).not.toHaveBeenCalled();
+    });
+
+    it('fails a transcript whose source object is gone', async () => {
+      step3Returns([uploading('t-1', 'obj-1')]);
+      prisma.storageObject.findMany.mockResolvedValue([]);
+
+      await handler.process(job());
+
+      expect(prisma.transcript.updateMany).toHaveBeenCalledWith(abortedWrite);
+    });
+
+    it('fails an upload older than the platform stale-upload threshold', async () => {
+      step3Returns([uploading('t-1', 'obj-1')]);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-1', status: 'uploading', createdAt: new Date(Date.now() - 100 * HOUR), updatedAt: new Date() },
+      ]);
+
+      await handler.process(job());
+
+      expect(prisma.transcript.updateMany).toHaveBeenCalledWith(abortedWrite);
+    });
+
+    it('leaves a live upload, and one whose audio is present, alone', async () => {
+      step3Returns([uploading('t-1', 'obj-1'), uploading('t-2', 'obj-2')]);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-1', status: 'uploading', createdAt: new Date(Date.now() - HOUR), updatedAt: new Date() },
+        { id: 'obj-2', status: 'ready', createdAt: new Date(0), updatedAt: new Date() },
+      ]);
+
+      await handler.process(job());
+
+      expect(prisma.transcript.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('reads every source object in ONE query, inside the job organization', async () => {
+      step3Returns([uploading('t-1', 'obj-1'), uploading('t-2', 'obj-2')]);
+      prisma.storageObject.findMany.mockResolvedValue([]);
+
+      await handler.process(job());
+
+      expect(prisma.storageObject.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.storageObject.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['obj-1', 'obj-2'] } } }),
+      );
+      expect(scopeRun).toHaveBeenCalledWith({ id: 'job-1', orgId: 'org-1' }, expect.any(Function));
+    });
+
+    it('is bounded to 500 transcripts per run, oldest first', async () => {
+      step3Returns([]);
+
+      await handler.process(job());
+
+      expect(ABORT_RECONCILE_BATCH).toBe(500);
+      expect(prisma.transcript.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deletedAt: null, status: 'uploading' },
+          orderBy: { createdAt: 'asc' },
+          take: 500,
+        }),
+      );
+    });
+
+    it('does nothing when the conditional write loses the race', async () => {
+      step3Returns([uploading('t-1', 'obj-1')]);
+      prisma.storageObject.findMany.mockResolvedValue([]);
+      prisma.transcript.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(handler.process(job())).resolves.toBeUndefined();
+    });
+
+    it('does not stop the other steps when it fails, and reports afterwards', async () => {
+      step3Returns([uploading('t-1', 'obj-1')]);
+      prisma.storageObject.findMany.mockRejectedValue(new Error('rls down'));
+      prisma.transcriptExport.findMany.mockResolvedValue([{ id: 'export-1', objectId: null }]);
+
+      await expect(handler.process(job())).rejects.toThrow('reconciling aborted uploads');
+
+      expect(prisma.transcriptExport.delete).toHaveBeenCalled();
+    });
+  });
+
+  describe('decideAbortedUpload', () => {
+    const cutoff = new Date('2026-01-01T12:00:00Z');
+    const before = new Date('2026-01-01T11:00:00Z');
+    const after = new Date('2026-01-01T13:00:00Z');
+
+    it.each([
+      [undefined, 'abort'],
+      [{ status: 'failed', createdAt: after }, 'abort'],
+      [{ status: 'pending', createdAt: before }, 'abort'],
+      [{ status: 'uploading', createdAt: before }, 'abort'],
+      [{ status: 'uploading', createdAt: after }, 'keep'],
+      [{ status: 'pending', createdAt: after }, 'keep'],
+      [{ status: 'ready', createdAt: before }, 'keep'],
+      [{ status: 'processing', createdAt: before }, 'keep'],
+    ] as const)('object %j -> %s', (object, expected) => {
+      expect(decideAbortedUpload(object, cutoff)).toBe(expected);
     });
   });
 

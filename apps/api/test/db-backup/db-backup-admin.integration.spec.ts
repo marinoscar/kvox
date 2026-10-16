@@ -69,7 +69,7 @@ import { BACKUP_DOWNLOAD_URL_EXPIRY_SECONDS } from '../../src/db-backup/db-backu
 import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';
 import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
 import { DatabaseBackupAlreadyRunningError } from '../../src/db-backup/db-backup.errors';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import {
   TestContext,
   createTestApp,

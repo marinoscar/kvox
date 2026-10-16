@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { StorageModule } from '../storage/storage.module';
+import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
 import { UserDataController } from './user-data.controller';
 import {
@@ -33,7 +33,8 @@ import { UserDataService } from './user-data.service';
 //     with, and `JobsService` to enqueue `user.data.purge`, whose partial
 //     unique dedup index is the REAL enforcement of "one deletion at a time
 //     per user" (see `UserDataService`'s header).
-//   • `StorageModule` — `ObjectsService.delete` for the caller's plain uploads.
+//   • `KvoxObjectsModule` — `ObjectsService.delete` (the platform's) and the
+//     ownership-aware object reads for the caller's plain uploads.
 //   • `AiModule` — `UserAiCredentialsService.removeAll`. Deliberately NOT
 //     `@Global()`, so it has to be imported by name, which is the point: a
 //     module that can erase a user's encrypted keys should say so in its own
@@ -74,7 +75,7 @@ import { UserDataService } from './user-data.service';
 @Module({
   imports: [
     PrismaModule,
-    StorageModule,
+    KvoxObjectsModule,
     AiModule,
     // Epic #271 — `UserSettingsService.patchSettings`, so the `everything`
     // scope can clear the `onboarding` namespace through the path that already

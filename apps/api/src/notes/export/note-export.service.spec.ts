@@ -1,3 +1,4 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
@@ -121,6 +122,7 @@ describe('NoteExportService', () => {
       registry,
       handlers as unknown as JobHandlerRegistry,
       jobs as unknown as JobsService,
+      createFakeManagedObjects(prisma) as never,
     );
   });
 

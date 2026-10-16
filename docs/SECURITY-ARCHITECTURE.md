@@ -976,11 +976,14 @@ All file uploads are validated before acceptance:
 - Uses magic number detection for common file types
 - Prevents MIME type spoofing attacks
 
-**Example Configuration:**
-```typescript
-STORAGE_MAX_FILE_SIZE=10737418240      // 10GB in bytes
-STORAGE_ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png,application/zip
+**Example Configuration (environment):**
 ```
+MAX_FILE_SIZE=10737418240                           # 10GB in bytes; 413 above it
+ALLOWED_MIME_TYPES=image/*,application/pdf,video/*,audio/*   # 415 outside it
+STORAGE_PART_SIZE=10485760                          # 10MB parts; part size x 10,000 caps one object
+```
+
+The bucket, region, endpoint and access keys are **not** environment variables: they are runtime configuration, described under "Storage Configuration and Credentials" below.
 
 ### Access Control
 
@@ -997,9 +1000,12 @@ The storage system enforces strict ownership and permission-based access:
 - Useful for moderation and content management
 - All admin operations logged to audit trail
 
+**Managed objects.** Objects another module owns (a transcript's source audio and exports, a note's source document and exports, a graph export or import) are recorded in the `kvox_object_ownership` table. They are uploaded in the owner's name, so they stay readable, downloadable and renamable by that owner, but two rules protect the owning record: the application's own list (`GET /api/kvox/files`) excludes them, and the generic `DELETE /api/storage/objects/:id` answers `409 { details: { reason: 'managed_by_module', module } }` before the platform handler runs, because the owner's table points at the object with a `Restrict` foreign key and deleting it would orphan the record. The veto is a Fastify `onRequest` hook (`apps/api/src/kvox-objects/managed-delete.hook.ts`) that reads one ownership row, makes no call to the provider, **passes an unauthenticated request on so the platform answers 401** (it never tells an anonymous caller which ids are managed), and **fails closed**: if the ownership read fails, the delete is refused with 503. The platform's `GET /api/storage/objects` still lists managed objects for a caller who hits it directly; that discloses only the caller's **own** objects and is accepted. Every KVox read or write of `storage_objects` runs inside an organization-scoped transaction (`runInOrg`), and the part-signing and part-listing routes answer **404, never 403**, for another user's upload.
+
 **Permission Model:**
 | Permission | Description | Granted To |
 |------------|-------------|------------|
+| `storage_config:read` / `storage_config:write` | View / change the object-storage configuration, test it and provision a bucket (platform permissions, system scope) | Admin only |
 | `storage:read` | View own storage objects | All authenticated users |
 | `storage:write` | Upload and update own objects | All authenticated users |
 | `storage:delete` | Delete own storage objects | All authenticated users |
@@ -1022,7 +1028,22 @@ async getObject(objectId: string, userId: string) {
 }
 ```
 
+### Storage Configuration and Credentials
+
+Where objects are stored is runtime configuration, edited at `/admin/settings/storage` by an administrator (`storage_config:write`, admin only, deliberately distinct from `storage:*` and `system_settings:*`):
+
+- **Non-secret fields** (provider, bucket, region, endpoint, access key id, path-style flag) live in the `storage` system-settings namespace. The namespace holds no secret by construction.
+- **The secret access key** lives in the encrypted credential store (`credentials`, purpose `storage`, name `default`), under the purpose-bound AES-256-GCM sub-key of section 14. The configuration endpoint **never returns it**: it reports only whether one is stored, and a blank value on save means "keep the stored key". Every error string that leaves the connection test passes through a redaction step, because most are authored by the AWS SDK.
+- **Test and provisioning** (`POST /api/admin/storage-config/test` and `/bucket`) write one throwaway object under `storage-config-test/` and delete it; both write an audit event (`storage_config:test`, `storage_config:provision_bucket`) carrying the verdict only, never a detail or an error string. Saving writes `storage_config:replace`.
+- **A relocation is gated.** Saving a different bucket, endpoint or provider while `storage_objects` or `database_backup_runs` rows still point at the old location is refused with 409 until the request carries the typed confirmation, because the application does not copy anything.
+- **Until a configuration is saved** every route that needs the store answers 503 with the missing field names and the page to fix it; nothing falls back to environment credentials. The old `STORAGE_PROVIDER`, `S3_*` and `AWS_*` variables are not read, so a stale `.env` cannot silently override the saved configuration. (Amazon SES email, until it has its own settings, still reads AWS credentials from the environment; they are unrelated to the bucket.)
+- **The bucket's browser-facing origin** is the one storage value that stays in the environment (`STORAGE_CSP_ORIGIN`): nginx writes it into the Content Security Policy's `connect-src` and `media-src`, never a wildcard, and it must be set by hand. See [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md) and [`runbooks/s3-cors.md`](runbooks/s3-cors.md).
+- **Part size is a deployment-wide rule.** Parts are laid out at one `STORAGE_PART_SIZE`; changing it while uploads are in flight corrupts the objects they complete. This is an operator rule, not a control the application enforces.
+- **Least privilege for the credential**: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` and `s3:ListBucket` on the one bucket; the bucket-provisioning permissions only for the window in which Create bucket is used. `s3:ListMultipartUploadParts` backs `GET /api/storage/objects/:id/upload/parts`, which exists so a browser never has to read a part's `ETag`; the route's errors map to a 502 with no provider text, and it never logs a key or a secret.
+
 ### Profile Picture Avatar Routes
+
+> The routes in this section are served by the platform's `ProfileImageModule` (`@marinoscar/platform-api/storage`, mounted in `apps/api/src/platform/storage/storage.config.ts`); the application holds no avatar code. The properties described below are the platform's.
 
 Uploaded profile pictures are avatar images stored in the same object storage as
 other files, but they are exposed through two purpose-built routes rather than
@@ -1092,10 +1113,10 @@ The storage system uses time-limited presigned URLs for secure file access:
 - No AWS credentials exposed to client
 
 **Upload URLs (Multipart):**
-- Generated via S3 presigned PUT URLs for each part
-- Short expiration: 15 minutes per part
-- One-time use: URL invalidated after part upload
-- Direct-to-S3 upload (bypasses application server for performance)
+- Generated via S3 presigned PUT URLs for each part: the first ten by the platform's `upload/init`, the rest in batches of up to 100 by `POST /api/storage/objects/:id/upload/parts`
+- Expiration: `SIGNED_URL_EXPIRY` (one hour by default), the same as downloads; a long upload asks for fresh batches as it goes
+- Direct-to-bucket upload (bypasses the application server for performance)
+- Only the uploader can ask for a batch: another user's upload id answers 404
 
 **Security Properties:**
 - URLs cryptographically signed by AWS credentials
@@ -1119,10 +1140,10 @@ async generateDownloadUrl(objectId: string, expiresIn = 3600): Promise<string> {
 
 **Recommended S3 Bucket Security Settings:**
 
-**IAM Roles (Production):**
-- Use EC2/ECS IAM roles instead of static credentials
-- Principle of least privilege: grant only required S3 permissions
-- Rotate credentials if using access keys
+**Credentials (Production):**
+- The storage settings take an access key id and a secret access key (both are required; there is no environment or instance-role fallback in this configuration), so create a dedicated IAM user whose policy is limited to the one bucket
+- Principle of least privilege: grant only the permissions listed under "Storage Configuration and Credentials"
+- Rotate the access key by saving the new one on the storage page, then revoke the old one
 
 **Server-Side Encryption:**
 ```typescript
@@ -1153,15 +1174,16 @@ KMSKeyId: 'arn:aws:kms:region:account:key/key-id'
 - Enable versioning for accidental deletion protection
 - Configure lifecycle policy to archive old versions
 
-**CORS Configuration:**
+**CORS Configuration** (what the storage page's Create bucket action applies; the full rule, and why `Range` matters for playback, is in [`runbooks/s3-cors.md`](runbooks/s3-cors.md)):
 ```json
 {
   "CORSRules": [
     {
       "AllowedOrigins": ["https://yourdomain.com"],
-      "AllowedMethods": ["PUT"],
+      "AllowedMethods": ["PUT", "GET", "HEAD"],
       "AllowedHeaders": ["*"],
-      "MaxAgeSeconds": 3000
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
     }
   ]
 }
@@ -1818,7 +1840,7 @@ apps/web/src/
 
 ### Overview
 
-Deploy-time secrets (`JWT_SECRET`, `GOOGLE_CLIENT_SECRET`, `AWS_SECRET_ACCESS_KEY`, etc.) live in the environment and are covered by the configuration reference above. This section covers a different category: secrets an **administrator configures at runtime through the application** — an SMTP password is the first, forthcoming, consumer (issue #109) — which cannot come from an environment variable because changing an env var requires a redeploy.
+Deploy-time secrets (`JWT_SECRET`, `GOOGLE_CLIENT_SECRET`, etc.) live in the environment and are covered by the configuration reference above. This section covers a different category: secrets an **administrator configures at runtime through the application** — an SMTP password, the VAPID private key, the transcription provider key and the object-storage secret access key (purpose `storage`) — which cannot come from an environment variable because changing an env var requires a redeploy.
 
 These are stored in the `credentials` table (Prisma model `Credential`), encrypted at rest, and managed exclusively by the platform `CredentialsService` (`@marinoscar/platform-api/credentials`, mounted by `apps/api/src/platform/credentials/credentials.config.ts`). **The store has no HTTP controller** — it is consumed directly by backend code (the email, push and transcription settings write through it), and a consumer adds its own controller when it needs one. Each purpose must be registered before a write (`registerCredentialPurpose`); an unregistered purpose is refused. The platform also mounts a per-user and a per-organization store (`user_credentials`, `org_credentials`); this deployment keeps no secret in either (AI keys live in `user_ai_credentials`, under the same cipher with purpose `'ai-key'`).
 

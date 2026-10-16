@@ -33,8 +33,8 @@ import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, NO_EXPORT_FILES, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-overview.db.spec');
 
@@ -58,7 +58,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     enqueuer = new GraphLayoutEnqueuer(new JobsService(p), p);
     overview = new GraphOverviewService(p, enqueuer);
     listener = new GraphLayoutListener(p, enqueuer);
-    purge = new KgPurgeService(p, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(p as never));
+    purge = new KgPurgeService(p, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE));
   });
 
   afterAll(async () => {

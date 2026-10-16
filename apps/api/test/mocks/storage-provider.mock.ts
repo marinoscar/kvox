@@ -4,16 +4,16 @@ import {
   StorageUploadResult,
   MultipartUploadInit,
   UploadPart,
-  UploadedPart,
   SignedUrlOptions,
   StorageUploadOptions,
-} from '../../src/storage/providers';
+} from '@marinoscar/platform-api/storage';
 
 /**
  * Creates a mock storage provider for testing
  * All methods return sensible defaults that can be overridden in tests
  */
 export const createMockStorageProvider = (): jest.Mocked<StorageProvider> => ({
+  kind: 's3',
   upload: jest.fn().mockResolvedValue({
     key: 'test-key',
     bucket: 'test-bucket',
@@ -45,11 +45,6 @@ export const createMockStorageProvider = (): jest.Mocked<StorageProvider> => ({
   } as StorageUploadResult),
 
   abortMultipartUpload: jest.fn().mockResolvedValue(undefined),
-
-  // Provider-reported upload progress (#21). Defaults to "nothing uploaded
-  // yet" so a spec that never stubs it reads as a fresh upload rather than as
-  // a half-finished one.
-  listParts: jest.fn().mockResolvedValue([] as UploadedPart[]),
 
   download: jest.fn().mockResolvedValue(Readable.from(['mock content'])),
 

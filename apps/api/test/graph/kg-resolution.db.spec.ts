@@ -28,7 +28,7 @@ import { EvidenceValidator } from '../../src/graph/write/evidence-validator.serv
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias } from '../../src/graph/write/normalize';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-resolution.db.spec');
 const EMAIL_PREFIX = 'kg-resolution-test';
@@ -73,13 +73,13 @@ describeWithDb('entity resolution (real Postgres)', () => {
     );
     merges = new MergeService(
       db,
-      new GraphWriteService(new EvidenceValidator()),
+      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE))),
       { enqueue: jest.fn() } as never,
       { get: () => undefined } as never,
       followUps as never,
     );
     distinct = new DistinctPairService();
-    purge = new KgPurgeService(db, NO_EXPORT_FILES, new LegacyObjectOwnershipStore(db as never));
+    purge = new KgPurgeService(db, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE));
   });
 
   afterAll(async () => {

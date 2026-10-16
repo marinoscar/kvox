@@ -376,7 +376,6 @@ describe('env metadata', () => {
       'COOKIE_SECRET',
       'SECRETS_ENCRYPTION_KEY',
       'GOOGLE_CLIENT_SECRET',
-      'AWS_SECRET_ACCESS_KEY',
       'UPTRACE_ADMIN_PASSWORD',
     ]) {
       expect(metadataFor(key).secret).toBe(true);

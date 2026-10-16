@@ -31,7 +31,7 @@ function service(): NoteGenerationRequestService {
     {} as never, // AiTaskModelResolver
     {} as never, // TranscriptAccessService
     {} as never, // NoteAccessService
-    {} as never, // LegacyObjectOwnershipStore (PLATFORM-ADOPTION-SHIM(#469))
+    {} as never, // KvoxManagedObjectsService
   );
 }
 

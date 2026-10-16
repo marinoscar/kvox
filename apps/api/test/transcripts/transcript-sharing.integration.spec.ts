@@ -9,7 +9,7 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { SHARE_LOOKUP_MAX_MISSES } from '../../src/transcripts/share-lookup-throttle.service';
 import { SHARE_RECIPIENT_NOT_FOUND_MESSAGE } from '../../src/transcripts/transcript-sharing.service';
 import { TRANSCRIPT_NOT_FOUND_MESSAGE } from '../../src/transcripts/transcript-access.service';

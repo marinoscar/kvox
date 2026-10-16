@@ -2,18 +2,18 @@
 // NoteObjectsService (issue #51, epic #45)
 // =============================================================================
 //
-// The narrow storage surface the notes module needs and `ObjectsService` does
-// not offer, cloned from `transcripts/transcript-objects.service.ts` and
+// The narrow storage surface the notes module needs and the platform's
+// `ObjectsService` does not offer, cloned from `transcripts/transcript-objects.service.ts` and
 // carrying the same three properties for the same three reasons:
 //
-//   • EVERY ROW IT CREATES IS `managed_by: 'notes'`, and that is not a default
-//     a caller may override. A managed object is invisible to
-//     `GET /api/storage/objects` and refuses the generic `DELETE` with a 409
-//     naming this module — which is the behaviour issue #21 built and the only
-//     thing standing between "a note's source document" and "a file the user
-//     can delete out from under a note that still points at it".
+//   • EVERY ROW IT CREATES IS OWNED BY `notes` (a `kvox_object_ownership` row
+//     written in the same transaction), and that is not a default a caller may
+//     override. A managed object is absent from `GET /api/kvox/files` and
+//     refuses the generic `DELETE` with a 409 naming this module — which is the
+//     only thing standing between "a note's source document" and "a file the
+//     user can delete out from under a note that still points at it".
 //
-//   • `deleteIfPresent` goes through `ObjectsService.deleteManagedObject`,
+//   • `deleteIfPresent` goes through `KvoxManagedObjects.deleteManaged`,
 //     which makes this module NAME the owner it believes in before it may
 //     remove anything, so "the notes module deleted somebody else's file" is
 //     an impossible state rather than a possible bug.
@@ -29,26 +29,21 @@
 //
 // The obvious alternative is to lift `TranscriptObjectsService` into a generic
 // `ManagedObjectsService` both modules inject with a `managedBy` constructor
-// argument. Rejected for the same reason `ObjectsService.initUpload` keeps
-// `managedBy` as a service-level argument unreachable over HTTP: the ONE thing
+// argument. Rejected for the same reason `initManagedUpload` keeps the module
+// as a service-level argument unreachable over HTTP: the ONE thing
 // this class guarantees is that every row it writes is claimed by THIS module,
 // and a shared class parameterised on the owner guarantees that only as long as
 // every call site passes the right string. The duplication is roughly sixty
-// lines; the guarantee it buys is the whole point of `managed_by` existing.
+// lines; the guarantee it buys is the whole point of the ownership marker.
 // =============================================================================
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { StorageObject } from '@prisma/client';
 import { PassThrough, Readable, Transform } from 'node:stream';
 
-import { PrismaService } from '../prisma/prisma.service';
-import { getDefaultOrgId } from '../prisma/default-org';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
-import { ObjectsService } from '../storage/objects/objects.service';
-import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from '../storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER, type StorageProvider } from '@marinoscar/platform-api/storage';
+
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { NOTES_MANAGED_BY } from './job-types';
 
 /** An object whose bytes are already in storage, about to be recorded. */
@@ -90,11 +85,8 @@ export class NoteObjectsService {
   private readonly logger = new Logger(NoteObjectsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly objects: ObjectsService,
+    private readonly managed: KvoxManagedObjectsService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
   ) {}
 
   /**
@@ -208,16 +200,10 @@ export class NoteObjectsService {
     expiresInSeconds: number,
     contentDisposition?: string,
   ): Promise<{ url: string; expiresAt: Date; object: StorageObject } | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
-
-    if (!object || object.status !== 'ready') return null;
-
-    const url = await this.storage.getSignedDownloadUrl(object.storageKey, {
+    return this.managed.signedDownloadUrl(objectId, {
       expiresIn: expiresInSeconds,
-      responseContentDisposition: contentDisposition,
+      contentDisposition,
     });
-
-    return { url, expiresAt: new Date(Date.now() + expiresInSeconds * 1000), object };
   }
 
   /**
@@ -263,11 +249,7 @@ export class NoteObjectsService {
 
   /** Read an object's bytes back, or `null` if the row is gone. */
   async download(objectId: string): Promise<Readable | null> {
-    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
-
-    if (!object) return null;
-
-    return this.storage.download(object.storageKey);
+    return (await this.managed.openStream(objectId))?.stream ?? null;
   }
 
   /** Read an object's bytes back as one buffer. */
@@ -295,7 +277,7 @@ export class NoteObjectsService {
     if (!objectId) return false;
 
     try {
-      await this.objects.deleteManagedObject(objectId, NOTES_MANAGED_BY);
+      await this.managed.deleteManaged(objectId, NOTES_MANAGED_BY);
 
       return true;
     } catch (error) {
@@ -309,31 +291,19 @@ export class NoteObjectsService {
   }
 
   private findByKey(storageKey: string): Promise<StorageObject | null> {
-    return this.prisma.storageObject.findFirst({ where: { storageKey } });
+    return this.managed.findByKey(storageKey);
   }
 
-  /** The one `storage_objects` insert this module makes. Always `managedBy`. */
-  private async createRow(input: RecordUploadedNoteObjectInput): Promise<StorageObject> {
-    // PLATFORM-ADOPTION-SHIM(#469): default org, and `managed_by` stamped in
-    // the same transaction as the insert.
-    const orgId = await getDefaultOrgId(this.prisma);
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.storageObject.create({
-        data: {
-          name: input.name,
-          size: BigInt(input.size),
-          mimeType: input.mimeType,
-          storageKey: input.storageKey,
-          storageProvider: 's3',
-          bucket: this.storage.getBucket(),
-          status: 'ready',
-          orgId,
-          uploadedById: input.ownerId,
-          metadata: (input.metadata ?? undefined) as never,
-        },
-      });
-      await this.ownership.setManagedBy(created.id, NOTES_MANAGED_BY, tx);
-      return created;
+  /** The one `storage_objects` insert this module makes, owned by `notes` in the same transaction. */
+  private createRow(input: RecordUploadedNoteObjectInput): Promise<StorageObject> {
+    return this.managed.create({
+      module: NOTES_MANAGED_BY,
+      key: input.storageKey,
+      name: input.name,
+      mimeType: input.mimeType,
+      size: input.size,
+      uploadedById: input.ownerId,
+      metadata: input.metadata,
     });
   }
 }

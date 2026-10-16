@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotePurgeHandler, readNoteId } from './note-purge.handler';
 import { JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
@@ -36,6 +37,7 @@ describe('NotePurgeHandler', () => {
   let handler: NotePurgeHandler;
   let prisma: any;
   let objects: { deleteIfPresent: jest.Mock };
+  let managed: { findFirst: jest.Mock };
   let registry: { register: jest.Mock };
   let searchIndex: { forget: jest.Mock };
 
@@ -52,15 +54,14 @@ describe('NotePurgeHandler', () => {
       noteExport: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      storageObject: {
-        findUnique: jest.fn().mockResolvedValue({
-          metadata: { extractedObjectId: EXTRACTED_OBJECT },
-        }),
-      },
       transcript: { delete: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     };
 
     objects = { deleteIfPresent: jest.fn().mockResolvedValue(true) };
+    // The object gateway reads the source document's metadata inside the job's scope (#469).
+    managed = {
+      findFirst: jest.fn().mockResolvedValue({ metadata: { extractedObjectId: EXTRACTED_OBJECT } }),
+    };
     registry = { register: jest.fn() };
     // #188: the purge is one of the three owners of the semantic index sweep —
     // `search_chunks.document_id` has no foreign key, so nothing else ever
@@ -73,6 +74,7 @@ describe('NotePurgeHandler', () => {
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: PrismaService, useValue: prisma },
         { provide: NoteObjectsService, useValue: objects },
+        { provide: KvoxManagedObjectsService, useValue: managed },
         { provide: SearchIndexService, useValue: searchIndex },
         { provide: JobScope, useValue: { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) } },
       ],

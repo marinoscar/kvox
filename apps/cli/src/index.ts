@@ -303,7 +303,6 @@ export type {
 export {
   DOMAIN_FIELD,
   INSTALL_WIZARD_STEPS,
-  STORAGE_CHECK_ID,
   essentialFields,
   googleRedirectUri,
   resolveSteps,

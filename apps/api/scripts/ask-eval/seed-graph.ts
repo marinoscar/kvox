@@ -45,9 +45,8 @@ import {
   type ItemLabelKind,
 } from '../kg-eval/fixture-schema';
 
-// PLATFORM-ADOPTION-SHIM(#469): `storage_objects.org_id` is required and
-// `managed_by` is no longer on the Prisma client, so the fixture inserts use the
-// default organization and stamp `managed_by` with raw SQL.
+// `storage_objects.org_id` is required, so the fixture inserts use the default
+// organization; which module owns an object is a `kvox_object_ownership` row.
 async function defaultOrgId(tx: Prisma.TransactionClient): Promise<string> {
   const org = await tx.organization.findFirst({ where: { isDefault: true }, select: { id: true } });
   if (!org) throw new Error('No default organization; run the platform migrations and seed.');
@@ -55,7 +54,7 @@ async function defaultOrgId(tx: Prisma.TransactionClient): Promise<string> {
 }
 
 async function stampManagedBy(tx: Prisma.TransactionClient, id: string, module: string): Promise<void> {
-  await tx.$executeRaw`UPDATE storage_objects SET managed_by = ${module} WHERE id = ${id}::uuid`;
+  await tx.kvoxObjectOwnership.create({ data: { objectId: id, orgId: await defaultOrgId(tx), managedBy: module } });
 }
 
 

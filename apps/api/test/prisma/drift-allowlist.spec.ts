@@ -50,23 +50,22 @@ describe('prisma/drift-allowlist.json', () => {
     expect(new Set(normalised).size).toBe(normalised.length);
   });
 
-  it('names the issue that removes each temporary deviation, and no #465 entry survives', () => {
+  it('names the issue that removes each temporary deviation, and no #465 or #469 entry survives', () => {
     const byStatement = (needle: string) => entries.find((e) => e.statement.includes(needle));
     // #465 moved the allowlist reminder bookkeeping to kvox_allowlist_reminders
     // and dropped the two allowed_emails columns, so the entry is gone for good.
     expect(byStatement('"allowed_emails"')).toBeUndefined();
     expect(entries.filter((e) => e.removeIn === '#465')).toEqual([]);
-    // The one remaining temporary deviation, with the issue that moves it.
-    expect(byStatement('"storage_objects" DROP COLUMN')?.removeIn).toBe('#469');
-    for (const col of ['managed_by', 'part_size']) {
-      expect(byStatement('"storage_objects" DROP COLUMN')?.statement).toContain(col);
-    }
+    // #469 moved storage_objects.managed_by to kvox_object_ownership and dropped
+    // part_size, so that entry is gone for good too.
+    expect(byStatement('"storage_objects"')).toBeUndefined();
+    expect(entries.filter((e) => e.removeIn === '#469')).toEqual([]);
   });
 
-  it('never excuses a DROP of anything but an index, a deviation column or a generation expression', () => {
+  it('never excuses a DROP of anything but an index or a generation expression', () => {
     for (const e of entries) {
       expect(e.statement).toMatch(
-        /^(DROP INDEX "[a-z_0-9]+";|ALTER TABLE "storage_objects" DROP COLUMN [^;]+;|ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]*search_vector" DROP DEFAULT;)$/,
+        /^(DROP INDEX "[a-z_0-9]+";|ALTER TABLE "[a-z_]+" ALTER COLUMN "[a-z_]*search_vector" DROP DEFAULT;)$/,
       );
     }
   });
@@ -100,11 +99,12 @@ describe('scripts/db-drift-kvox.mjs (filter, no database)', () => {
     expect(res.stdout).toContain('ok');
   });
 
-  it('passes the multi-line form Prisma prints for a two-column drop', () => {
+  it('fails on the storage_objects managed_by and part_size columns now that #469 dropped them', () => {
     const res = run(
       driftReport(['ALTER TABLE "storage_objects" DROP COLUMN "managed_by",\nDROP COLUMN "part_size";']),
     );
-    expect(res.status).toBe(0);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('"storage_objects"');
   });
 
   it('fails on the allowed_emails reminder columns now that #465 dropped them', () => {
@@ -121,7 +121,7 @@ describe('scripts/db-drift-kvox.mjs (filter, no database)', () => {
     expect(res.stderr).toContain('"users"');
   });
 
-  it('fails on a platform-column drop that is not one of the allowlisted two', () => {
+  it('fails on a platform-column drop', () => {
     const res = run(driftReport(['ALTER TABLE "storage_objects" DROP COLUMN "bucket";']));
     expect(res.status).toBe(1);
   });

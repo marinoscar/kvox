@@ -11,24 +11,12 @@
 // WHAT THIS SCRIPT DOES NOT DO, AND WHY THAT IS DELIBERATE
 // -----------------------------------------------------------------------------
 //
-// It does not delete the example job handlers, and it should not.
-//
-// They look like disposable demo code and they are not. `example.checksum` is
-// the canonical NODE-ELIGIBLE job type — the one handler implementing both
-// `process` and `nodeResultSchema`/`persistNodeResult` — and the jobs and worker
-// node test suites use it and `example.echo` as their fixtures throughout
-// (job-claim, job-admin, job-insights, job-stuck, the registry, and five node
-// integration suites). Their coupling to production code is only comments and
-// two registrations; their coupling to the TEST SUITE is real and deep.
-//
-// Deleting them automatically would hand a new project a broken test suite in
-// its first hour, which is the worst possible introduction to a codebase. They
-// are also the worked examples that `apps/api/src/jobs/handlers/README.md` and
-// CLAUDE.md teach from.
-//
-// So this script REPORTS them instead. Removing them is a deliberate refactor
-// somebody should choose, with the test suite green before and after — not a
-// side effect of a bootstrap command.
+// The example job handlers (`example.echo`, `example.checksum`) and the example
+// object processor used to live in this repository, and this script REPORTED them
+// instead of deleting them, because the jobs and worker-node test suites used
+// them as fixtures. They are the platform's now (`@marinoscar/platform-api/jobs`
+// and `/storage`, issues #468 and #469), so there is nothing here to report or
+// to delete.
 //
 // The same reasoning applies to squashing migrations and resetting git history:
 // both are one-way, neither is reversible by `git checkout .`, and neither
@@ -257,35 +245,6 @@ function countRefs(patterns, pathspec) {
 
 function audit() {
   const items = [];
-
-  const exampleFiles = [
-    'apps/api/src/jobs/handlers/example-echo.handler.ts',
-    'apps/api/src/jobs/handlers/example-checksum.handler.ts',
-    'apps/api/src/jobs/contracts/example-checksum.contract.ts',
-    'apps/api/src/storage/processing/processors/example-metadata.processor.ts',
-  ].filter((f) => existsSync(join(REPO_ROOT, f)));
-
-  if (exampleFiles.length > 0) {
-    const refs = countRefs('example-(echo|checksum|metadata)|example\\.(echo|checksum)', ['apps/api']);
-    items.push({
-      title: 'Example job handlers and storage processor',
-      recommendation: 'KEEP unless you deliberately refactor',
-      detail: [
-        `${exampleFiles.length} example file(s), referenced by ${refs.length} file(s) under apps/api.`,
-        '',
-        'These are NOT disposable demo code. `example.checksum` is the canonical',
-        'node-eligible job type — the only handler implementing both `process` and',
-        '`nodeResultSchema`/`persistNodeResult` — and the jobs and worker-node test',
-        'suites use it and `example.echo` as fixtures throughout. Their coupling to',
-        'production code is only comments and two registrations; their coupling to the',
-        'TEST SUITE is real and deep.',
-        '',
-        'Deleting them is a refactor to do deliberately, with the suite green before and',
-        'after — not a bootstrap step. They are also the worked examples that',
-        'apps/api/src/jobs/handlers/README.md and CLAUDE.md teach from.',
-      ],
-    });
-  }
 
   if (!existsSync(join(REPO_ROOT, 'LICENSE'))) {
     items.push({

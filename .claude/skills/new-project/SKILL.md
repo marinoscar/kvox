@@ -103,15 +103,11 @@ node scripts/new-project.mjs --audit
 
 Each item is a judgement call. Present them; do not action them silently.
 
-**The one to get right: it recommends KEEPING the example job handlers, and that
-recommendation is correct.** They look like demo code and are not —
-`example.checksum` is the canonical node-eligible job type, and the jobs and
-worker-node test suites use it and `example.echo` as fixtures across ~27 files.
-Deleting them hands the new project a broken test suite. If the user still wants
-them gone, treat it as a deliberate refactor with its own issue and a green
-suite either side — never as a bootstrap step.
+The example job handlers and the example object processor are the platform's now
+(`@marinoscar/platform-api/jobs` and `/storage`), so the audit no longer reports
+them and there is nothing to keep or delete.
 
-The others — the stub deploy jobs, `docs/specs/` carrying the template's issue
+The items it does report — the stub deploy jobs, `docs/specs/` carrying the template's issue
 numbers, the inherited migrations — are all "fine to leave" defaults. Say so
 rather than manufacturing work.
 

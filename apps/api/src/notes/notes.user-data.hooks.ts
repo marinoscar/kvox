@@ -12,7 +12,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { LegacyObjectOwnershipStore } from '../storage/legacy-object-ownership.store';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import {
@@ -36,8 +36,7 @@ export class NotesUserDataHooks {
     private readonly notes: NotesService,
     private readonly templates: NoteTemplatesService,
     private readonly searchIndex: SearchIndexService,
-    // PLATFORM-ADOPTION-SHIM(#469): `managed_by` is not on the Prisma client.
-    private readonly ownership: LegacyObjectOwnershipStore,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   // ===========================================================================
@@ -85,29 +84,23 @@ export class NotesUserDataHooks {
       .map((row) => readExtractedObjectId(row.sourceObject?.metadata))
       .filter((id): id is string => id !== null);
 
-    // PLATFORM-ADOPTION-SHIM(#469): only objects the notes module owns count,
-    // and `managed_by` is read from the legacy store.
-    const owners = await this.ownership.getManagedBy(candidateIds);
+    // Only objects the notes module owns count.
+    const owners = await this.managedObjects.managedBy(candidateIds);
     const extractedIds = candidateIds.filter((id) => owners.get(id) === NOTES_MANAGED_BY);
 
-    const { _sum } = await this.prisma.storageObject.aggregate({
-      where: {
-        OR: [
-          { notesAsSourceObject: { some: owned } },
-          { noteExportFiles: { some: { note: owned } } },
-          // ⚠ GUARDED, because an empty `in` list is `WHERE id IN ()` — which
-          // Prisma renders as a clause matching nothing, but which sits inside
-          // an `OR` where a mistake would instead match everything. Omitting
-          // the branch entirely is unambiguous.
-          ...(extractedIds.length > 0
-            ? [{ id: { in: extractedIds } }]
-            : []),
-        ],
-      },
-      _sum: { size: true },
+    const bytes = await this.managedObjects.sumSize({
+      OR: [
+        { notesAsSourceObject: { some: owned } },
+        { noteExportFiles: { some: { note: owned } } },
+        // ⚠ GUARDED, because an empty `in` list is `WHERE id IN ()` — which
+        // Prisma renders as a clause matching nothing, but which sits inside
+        // an `OR` where a mistake would instead match everything. Omitting
+        // the branch entirely is unambiguous.
+        ...(extractedIds.length > 0 ? [{ id: { in: extractedIds } }] : []),
+      ],
     });
 
-    return (_sum.size ?? BigInt(0)).toString();
+    return bytes.toString();
   }
 
   /** The destructive step: the notes, then their semantic-index rows. */

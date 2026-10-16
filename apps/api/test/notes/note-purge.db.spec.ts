@@ -39,6 +39,7 @@ import type { NotesService } from '../../src/notes/notes.service';
 import { buildNotesService } from './notes-service-test-factory';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { JobScope } from '@marinoscar/platform-api/jobs';
+import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
 function isPostgresReachable(host: string, port: number, timeoutMs = 2000): boolean {
@@ -145,6 +146,7 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       { forget: jest.fn().mockResolvedValue(undefined) } as never,
       // `storage_objects` reads run in the job's organization.
       new JobScope(prisma as never),
+      createDbManagedObjects(prisma, UNUSED_STORAGE),
     );
   });
 

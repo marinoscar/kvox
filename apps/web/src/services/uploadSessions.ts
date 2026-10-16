@@ -31,7 +31,8 @@
  * in edge cases: Firefox private windows (historically), Safari with storage
  * blocked, an origin over quota, an embedded webview with storage disabled, a
  * user who cleared site data mid-session. Resume is a CONVENIENCE layered on
- * top of `GET …/upload/status`, which is the real resume mechanism — so every
+ * top of `GET …/upload/parts` (the provider's own part list), which is the real
+ * resume mechanism — so every
  * function here swallows its failure and answers "nothing stored". A reader
  * gets an empty list, a writer silently does nothing, and uploads keep working
  * with the resume affordance simply absent.

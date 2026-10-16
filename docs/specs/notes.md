@@ -1438,7 +1438,7 @@ is, and that difference is worth stating rather than glossing over:
 
 - **`source_object_id` → `storage_objects`** is `Restrict` for the same
   reason `transcripts.source_object_id` is (transcription.md §3.1): the
-  uploaded document is `managed_by: 'notes'`, so the generic storage
+  uploaded document is owned by notes (`managed_by: 'notes'` in the `kvox_object_ownership` table since #469; it was a `storage_objects` column), so the generic storage
   `DELETE` already 409s on it (§9.3 of transcription.md's pattern, reused
   unchanged) — nothing outside `note.purge` can even attempt to delete it.
   `Restrict` here is belt-and-suspenders on a path that is already closed.
@@ -1676,8 +1676,8 @@ applied to notes (§8 covers the export path in full).
 
 `note.source.extract` (#51) needs to persist the plain text it pulls out of
 an uploaded PDF/TXT/MD **without** a sixth table. It reuses machinery
-`storage_objects` already has: the raw upload (`storage_objects`, `managed_by:
-'notes'`, the object a `notes.source_object_id` eventually points at) and a
+`storage_objects` already has: the raw upload (`storage_objects`, owned by notes in `kvox_object_ownership` since #469 (formerly `managed_by:
+'notes'`), the object a `notes.source_object_id` eventually points at) and a
 **second**, node-eligible-written `storage_objects` row holding the extracted
 plain text — the same "one write, two paths" shape
 `media.audio.transcode`'s `recordRendition()` uses
@@ -2702,7 +2702,7 @@ requested work, not a security-relevant change to their account.
   `jobs:read` — collapsing them here would make a deployment unable to grant
   one without the other for no structural reason.
 - **A sixth `note_source_documents` table for extracted text.** Rejected per
-  §4.7: `storage_objects`'s existing `managed_by` convention and generic
+  §4.7: the existing storage-object ownership convention (`managed_by`, now the `kvox_object_ownership` table) and generic
   metadata column already express "a derived artifact, referenced by id,"
   the identical shape `media.audio.transcode`'s rendition already uses — a
   new table would duplicate that mechanism for no new capability.

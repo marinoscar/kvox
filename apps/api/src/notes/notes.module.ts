@@ -5,8 +5,7 @@ import { GraphExtractionModule } from '../graph/extraction/extraction.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
-import { StorageModule } from '../storage/storage.module';
-import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
+import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService } from './note-origin.service';
@@ -67,12 +66,11 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //     decrypted key. That module is deliberately NOT `@Global()` precisely so
 //     this import shows up in a diff.
 //   • `NotificationsModule` — the two owner-addressed events.
-//   • `StorageModule` — `ObjectsService`, which `NoteObjectsService` delegates
-//     its deletes to so this module must NAME the owner it believes in before
-//     it may remove anything.
-//   • `StorageProvidersModule` — the `STORAGE_PROVIDER` itself, for writing and
-//     reading the two objects a document source involves (#51): the upload and
-//     the extracted text beside it.
+//   • `KvoxObjectsModule` — `KvoxManagedObjects`, which `NoteObjectsService`
+//     delegates its row writes and deletes to so this module must NAME the owner
+//     it believes in before it may remove anything, and which re-exports the
+//     `STORAGE_PROVIDER` for writing and reading the two objects a document
+//     source involves (#51): the upload and the extracted text beside it.
 //   • `SettingsModule` — `SystemSettingsService`, for the one setting the
 //     upload endpoint reads per request (`ai.maxDocumentBytes`). ⚠ Read through
 //     the settings service and never off `system_settings` directly, the same
@@ -97,8 +95,7 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     AiModule,
     NotificationsModule,
     TranscriptsModule,
-    StorageModule,
-    StorageProvidersModule,
+    KvoxObjectsModule,
     // The semantic index (#188, epic #165). ONE-WAY, exactly as in
     // `TranscriptsModule`: this module queues a re-index after a note's content
     // commits and forgets a purged note's rows, while `search/indexing/` reads

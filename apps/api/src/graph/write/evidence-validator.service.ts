@@ -31,6 +31,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { evidenceInputSchema, type EvidenceInput } from '../dto/graph-evidence.dto';
 
 export const INVALID_EVIDENCE_MESSAGE =
@@ -38,6 +39,8 @@ export const INVALID_EVIDENCE_MESSAGE =
 
 @Injectable()
 export class EvidenceValidator {
+  constructor(private readonly managedObjects: KvoxManagedObjectsService) {}
+
   /**
    * Parse every row (applying the DTO's defaults) and prove each anchor is
    * readable by `ownerId`. Returns the parsed rows, in order.
@@ -118,10 +121,13 @@ export class EvidenceValidator {
           }),
       importObjectIds.length === 0
         ? Promise.resolve([] as { id: string }[])
-        : tx.storageObject.findMany({
-            where: { id: { in: importObjectIds }, uploadedById: ownerId },
-            select: { id: true },
-          }),
+        : this.managedObjects.findMany(
+            {
+              where: { id: { in: importObjectIds }, uploadedById: ownerId },
+              select: { id: true },
+            },
+            { tx },
+          ),
     ]);
 
     const readableNotes = new Set(notes.map((n) => n.id));

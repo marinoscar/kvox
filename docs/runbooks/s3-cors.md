@@ -13,14 +13,25 @@ Security Policy, which must name the same origin; see
 [`infra/compose/.env.example`](../../infra/compose/.env.example). **Both are
 required. Fixing one and not the other leaves the symptom unchanged.**
 
+The bucket itself (name, region, endpoint, keys) is configured at
+`/admin/settings/storage`, not in the environment; see
+[`storage-configuration.md`](storage-configuration.md). That page can also
+create the bucket and apply a CORS rule for you (section 3.3); this runbook is
+for a bucket you manage by hand, and for diagnosing one that was set up either
+way.
+
 Source of truth for every claim below:
 
-- `apps/api/src/storage/objects/objects.service.ts` — `initUpload`,
-  `presignParts` and `completeUpload`; what the browser is actually asked to do.
-- `apps/api/src/storage/providers/s3/s3-storage.provider.ts` — the presigned
-  `UploadPart` / `GetObject` URLs, and `listParts`.
-- `apps/api/src/config/configuration.ts` — the `storage.s3` block, read from
-  `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT`.
+- `@marinoscar/platform-api/storage` — the objects API (`upload/init`,
+  `upload/complete`, `upload/abort`, simple upload, download), the S3 driver's
+  presigned `UploadPart` / `GetObject` URLs, and the bucket provisioning that
+  applies the CORS rule.
+- `apps/api/src/kvox-objects/kvox-multipart.controller.ts` — the two routes the
+  platform does not have: `POST` and `GET /api/storage/objects/{id}/upload/parts`
+  (more part URLs, and `ListParts`).
+- `apps/api/src/config/configuration.ts` — the `storage` block, read from
+  `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES`, `SIGNED_URL_EXPIRY` and
+  `STORAGE_PART_SIZE`.
 - `infra/nginx/csp.conf` and `infra/nginx/csp.dev.conf` — `connect-src` and
   `media-src`.
 - `infra/compose/base.compose.yml` — how `STORAGE_CSP_ORIGIN` reaches nginx.
@@ -31,13 +42,18 @@ Source of truth for every claim below:
 
 Bytes never pass through this API. A resumable upload works like this:
 
-1. The browser calls `POST /api/storage/objects/upload/init` and gets back a
-   part size and a first batch of signed `PUT` URLs.
+1. The browser calls `POST /api/storage/objects/upload/init` (the platform's
+   route) and gets back a part size and a first batch of at most ten signed
+   `PUT` URLs.
 2. The browser **PUTs each part directly to the bucket**, cross-origin.
-3. It asks `POST /api/storage/objects/{id}/upload/parts` for more signed URLs
-   as it goes, and `GET /api/storage/objects/{id}/upload/status` for what the
-   bucket already holds if it needs to resume.
-4. It calls `POST /api/storage/objects/{id}/upload/complete`.
+3. It asks `POST /api/storage/objects/{id}/upload/parts` (this application's
+   route) for more signed URLs as it goes, and `GET
+   /api/storage/objects/{id}/upload/parts` for the parts the bucket already
+   holds if it needs to resume. Both signed URL batches come from the same
+   signer, so the CORS and CSP requirements below are identical whichever route
+   issued the URL.
+4. It calls `POST /api/storage/objects/{id}/upload/complete` (the platform's
+   route) with the parts it just listed.
 
 Step 2 is a cross-origin request from your application's origin to the bucket's
 origin, so the browser applies CORS. Playback is the same story in reverse:
@@ -55,7 +71,7 @@ buffered somewhere. The presigned URL exists precisely so that does not happen.
 | `AllowedMethods` | `PUT`, `GET`, `HEAD` | `PUT` uploads a part. `GET` downloads and plays back. `HEAD` is what the browser's media element and most resumable-upload libraries use to probe an object before fetching it. |
 | `AllowedOrigins` | your application's origin | Exactly the origin the app is served from (`https://app.example.com`, or `http://localhost:3535` in development). Not the bucket's origin — the *page's*. |
 | `AllowedHeaders` | at least `content-type`, and `Range` | See below. |
-| `ExposeHeaders` | `ETag` — optional | Only needed if a client wants to send its own `parts` list to `/upload/complete`. Omitting the `parts` field entirely is the supported browser path and needs nothing exposed. |
+| `ExposeHeaders` | `ETag` — optional for the web client | Only needed if a client reads each part's `ETag` itself. This application's web client never does: it lists the parts from `GET .../upload/parts` instead (see below). The rule the storage page's **Create bucket** button applies exposes it anyway, so a client that does read it keeps working. |
 | `MaxAgeSeconds` | `3000` | How long the browser may cache the preflight. Not load-bearing. |
 
 Two of those rows are where deployments actually go wrong:
@@ -67,13 +83,16 @@ request fails and playback either refuses to start or refuses to seek, while a
 plain download of the same object works. That asymmetry is the signature of this
 mistake.
 
-**`ETag` does not need to be exposed.** Completing a multipart upload needs each
-part's ETag, and the ETag of a cross-origin `PUT` is unreadable from JavaScript
-unless the bucket lists it in `ExposeHeaders`. Rather than depend on that, the
-`parts` field of `POST /api/storage/objects/{id}/upload/complete` is optional:
-omit it and the **server** reads the parts back from the provider with
-`ListParts`. A browser client should always omit it. Expose `ETag` only if you
-have a non-browser client that would rather not pay for the extra call.
+**`ETag` does not need to be exposed for the web client.** Completing a
+multipart upload needs each part's ETag, and the ETag of a cross-origin `PUT` is
+unreadable from JavaScript unless the bucket lists it in `ExposeHeaders`. The
+platform's `POST /api/storage/objects/{id}/upload/complete` requires the `parts`
+list, so rather than depend on that header the browser asks this application's
+`GET /api/storage/objects/{id}/upload/parts`: the **server** reads the parts
+back from the bucket with `ListParts` and returns `{ partNumber, etag, size }`
+for each, and the browser passes that list to complete. That call needs the
+credential to hold `s3:ListMultipartUploadParts`. Expose `ETag` if you have a
+non-browser client that reads it from the `PUT` response itself.
 
 ## 3. The rule
 
@@ -99,6 +118,11 @@ element reason about a ranged response; they are cheap and worth including even
 though playback often limps along without them.
 
 ### 3.1 AWS S3, with the CLI
+
+In the commands below `$S3_BUCKET` (and, for MinIO, `$S3_ENDPOINT`, `$AWS_ACCESS_KEY_ID`
+and `$AWS_SECRET_ACCESS_KEY`) are **shell variables** you set from the values
+entered at `/admin/settings/storage`; the application itself no longer reads
+them from its environment.
 
 Save the block above as `cors.json`, then:
 
@@ -148,6 +172,20 @@ environment:
   MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:3535
 ```
 
+### 3.3 Letting the application do it
+
+The storage page's **Create bucket** action creates the bucket and hardens it
+(public access blocked, default encryption on) and applies a CORS rule: the
+allowed origin is this deployment's own `APP_URL` origin, `AllowedMethods` is
+`PUT`, `GET`, `HEAD`, `AllowedHeaders` is `*` (which covers `content-type`,
+`Range` and the SDK's `x-amz-*` headers), `ExposeHeaders` is `ETag`, and
+`MaxAgeSeconds` is `3600`. It needs `s3:CreateBucket`,
+`s3:PutBucketPublicAccessBlock`, `s3:PutEncryptionConfiguration` and
+`s3:PutBucketCORS`. Where the credential lacks one it reports the step as
+blocked and prints the equivalent commands to run by hand, which is also the way
+to repair a bucket that was created without a CORS rule. If you serve the app
+from more than one origin, add the extra origins by hand as in section 3.
+
 ## 4. Verifying it
 
 Send the preflight the browser would send, by hand. This needs no application
@@ -192,15 +230,20 @@ ever show up in the bucket, and the served policy reads `connect-src 'self'
 curl -s -D - -o /dev/null https://<host>/ | grep -i content-security-policy
 ```
 
-If `connect-src` lists only `'self'`, `STORAGE_CSP_ORIGIN` was empty (or,
-before this was fixed, simply unset by default) when nginx started.
-`STORAGE_CSP_ORIGIN` now derives to the AWS virtual-hosted origin
-(`https://<bucket>.s3.<region>.amazonaws.com`) automatically when it is left
-empty and `S3_BUCKET`/`S3_REGION` are set for plain AWS S3 — see the comment
-above `STORAGE_CSP_ORIGIN=` in `infra/compose/.env.example`. It still needs
-setting **explicitly** for MinIO/LocalStack/any `S3_ENDPOINT`, a bucket name
-containing dots, or a CDN/custom domain in front of the bucket — the derived
-value is wrong or absent in each of those cases.
+If `connect-src` lists only `'self'`, `STORAGE_CSP_ORIGIN` was empty when nginx
+started. **It is never derived any more.** It used to default to the AWS
+virtual-hosted origin computed from `S3_BUCKET` and `S3_REGION`, but the bucket
+is now configured at runtime, after nginx has started, so there is nothing to
+compute it from. Always set it explicitly in `infra/compose/.env`:
+
+| Bucket | `STORAGE_CSP_ORIGIN` |
+|---|---|
+| AWS, DNS-compatible bucket name | `https://<bucket>.s3.<region>.amazonaws.com` |
+| AWS, bucket name containing dots | `https://s3.<region>.amazonaws.com` |
+| MinIO, LocalStack, any custom endpoint | the endpoint's origin |
+| CDN or custom domain in front of the bucket | that domain's origin |
+
+See the comment above `STORAGE_CSP_ORIGIN=` in `infra/compose/.env.example`.
 
 **Applying the fix.** Nginx renders `csp.conf`'s template with `envsubst`
 **only once, at container start** — editing `.env` and sending nginx a reload
@@ -236,4 +279,11 @@ bucket's CORS rule or the page's CSP.
 signed URL has expired — part URLs are signed for `SIGNED_URL_EXPIRY` seconds
 (one hour by default), and a multi-gigabyte upload outlives its own first batch.
 A client is expected to ask `POST /api/storage/objects/{id}/upload/parts` for a
-fresh batch as it goes; the `expiresAt` in that response is when to come back.
+fresh batch as it goes, well inside `SIGNED_URL_EXPIRY`; the response lists only
+`{ partNumber, url }`, so track the expiry yourself from when you asked.
+
+**Large uploads fail at the very end.** Every part reaches the bucket, then
+completion fails: the `GET /api/storage/objects/{id}/upload/parts` call answers
+502, because the credential lacks `s3:ListMultipartUploadParts`. Nothing is wrong
+with CORS or the CSP. Add the grant (see
+[`storage-configuration.md`](storage-configuration.md), section 2).

@@ -158,7 +158,7 @@ import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db
 import {
   STORAGE_PROVIDER,
   type StorageProvider,
-} from '../storage/providers/storage-provider.interface';
+} from '@marinoscar/platform-api/storage';
 import { DatabaseBackupRunnerService } from './db-backup-runner.service';
 import { DatabaseRestoreService } from './database-restore.service';
 import type {

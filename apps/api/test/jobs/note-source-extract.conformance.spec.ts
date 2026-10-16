@@ -24,8 +24,9 @@ import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/tes
 
 import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
+import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
+import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 
 const OBJECT_ID = 'source-object-1';
 
@@ -84,6 +85,15 @@ async function buildWorld(): Promise<JobHandler> {
       NoteSourceExtractHandler,
       { provide: JobHandlerRegistry, useValue: new JobHandlerRegistry() },
       { provide: JobScope, useValue: jobScope },
+      // The ownership gateway (#469): metadata writes land on the same stateful row the stub client holds.
+      {
+        provide: KvoxManagedObjectsService,
+        useValue: {
+          setMetadata: async (_id: string, metadata: Record<string, unknown>) => {
+            row.metadata = metadata;
+          },
+        },
+      },
       { provide: PrismaService, useValue: prisma },
       { provide: NoteObjectsService, useValue: objects },
       { provide: STORAGE_PROVIDER, useValue: storage },

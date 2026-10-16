@@ -13,7 +13,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 1. A new settings page is a card appended to `ADMIN_SECTIONS` or `USER_SETTINGS_SECTIONS`, plus its route in `App.tsx`. No route without a card.
 2. Never add a settings page as a tab of another. Tabs only for parallel content inside one destination (live example: the packaged Users & Allowlist page, `@marinoscar/platform-web/identity/ui` `UsersPage`, with KVox's Reminders tab appended through `slots.Tabs` in `src/identity/usersPageSlots.ts`).
-3. A card's `permission` is the exact string the API controller enforces (`system_settings:read`, `users:read`, `allowlist:read`, `jobs:read`, `nodes:read`, `db_backup:read`, `broadcasts:read`, `push:read`). Writes are gated inside the page by disabling controls.
+3. A card's `permission` is the exact string the API controller enforces (`system_settings:read`, `users:read`, `allowlist:read`, `jobs:read`, `nodes:read`, `db_backup:read`, `broadcasts:read`, `push:read`, `storage_config:read`). Writes are gated inside the page by disabling controls.
 4. Reuse the packaged `SettingsHub` (`@marinoscar/platform-web/settings/ui`); never fork it or add a local copy. Profile and Appearance are the packaged `UserProfilePage` and `UserAppearancePage` from the same entry; the `useSystemSettings` and `useUserSettings` hooks come from `@marinoscar/platform-web/settings/headless`. `src/pages/UserSettingsHubPage.tsx` is the 4-prop binding.
 5. Update the registry tests above when you add a card.
 

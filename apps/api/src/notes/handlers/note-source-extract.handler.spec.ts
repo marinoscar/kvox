@@ -1,3 +1,4 @@
+import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-objects.helper';
 // =============================================================================
 // NoteSourceExtractHandler unit coverage (issue #51, epic #45)
 // =============================================================================
@@ -38,8 +39,8 @@ import {
 } from '../../../test/fixtures/documents.fixture';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
-import type { StorageProvider } from '../../storage/providers/storage-provider.interface';
-import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../storage/storage-job-input';
+import type { StorageProvider } from '@marinoscar/platform-api/storage';
+import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import { extractedTextStorageKey, EXTRACTION_METADATA_KEY } from '../source-metadata';
 import { NoteSourceExtractHandler } from './note-source-extract.handler';
 import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
@@ -130,6 +131,7 @@ describe('NoteSourceExtractHandler', () => {
       objects as never,
       jobScope as never,
       storage,
+      createFakeManagedObjects(prisma) as never,
     );
   });
 
@@ -465,6 +467,7 @@ describe('NoteSourceExtractHandler', () => {
         objects as never,
         jobScope as never,
         storage,
+        createFakeManagedObjects(prisma) as never,
       );
       objects.recordUploaded.mockClear();
       prisma.storageObject.findUnique.mockResolvedValue(makeObject());

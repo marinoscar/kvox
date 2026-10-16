@@ -72,13 +72,12 @@ import {
 import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  STORAGE_PROVIDER,
-  type StorageProvider,
-} from '../../storage/providers/storage-provider.interface';
-import {
   JobInputResolutionError,
   STORAGE_OBJECT_SUBJECT_TYPE,
-} from '../../storage/storage-job-input';
+  STORAGE_PROVIDER,
+  type StorageProvider,
+} from '@marinoscar/platform-api/storage';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { TRANSCODE_JOB_TYPE } from '../job-types';
 import {
   planTranscode,
@@ -170,6 +169,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
     private readonly runtime: TranscriptionRuntimeService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
     private readonly jobScope: JobScope,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   onModuleInit(): void {
@@ -247,7 +247,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
 
     const subjectId = job.subjectId;
     const object = await runInJobOrg(this.jobScope, this.prisma, job, (tx) =>
-      tx.storageObject.findUnique({ where: { id: subjectId } }),
+      this.managedObjects.get(subjectId, { tx }),
     );
 
     if (!object) {

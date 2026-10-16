@@ -3,7 +3,7 @@
 // =============================================================================
 //
 //   SETTINGS_DATA            -> PrismaService.runInOrg (set_config(..., true))
-//   SETTINGS_PROFILE_IMAGES  -> common/profile-image    (moves in #469)
+//   SETTINGS_PROFILE_IMAGES  -> the storage slice's profile-image helpers (#469)
 //
 // `@Global()` so the slice's services resolve both ports from whichever module
 // instantiates them.

@@ -52,6 +52,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Sign in from a CLI or device | [DEVICE-AUTH.md](DEVICE-AUTH.md), [personal-access-tokens.md](personal-access-tokens.md) |
 | Rename or rebrand the application | [RENAMING.md](RENAMING.md) |
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
+| Configure or move object storage, change the part size | [runbooks/storage-configuration.md](runbooks/storage-configuration.md), [runbooks/s3-cors.md](runbooks/s3-cors.md) |
 | Operate a deployment (secrets, CORS, VAPID, restore) | [Runbooks](#runbooks) |
 
 ## Guides
@@ -113,6 +114,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [runbooks/postgres-client-version.md](runbooks/postgres-client-version.md) | `pg_dump` fails on a client/server version mismatch |
 | [runbooks/rotate-secrets-encryption-key.md](runbooks/rotate-secrets-encryption-key.md) | You rotate `SECRETS_ENCRYPTION_KEY` |
 | [runbooks/s3-cors.md](runbooks/s3-cors.md) | Browser uploads or playback need bucket CORS |
+| [runbooks/storage-configuration.md](runbooks/storage-configuration.md) | You configure, move or diagnose object storage (`/admin/settings/storage`), or change the multipart part size |
 | [runbooks/vapid-keys.md](runbooks/vapid-keys.md) | You generate, enable, rotate or disable Web Push keys |
 
 ## Developer recipes in the code

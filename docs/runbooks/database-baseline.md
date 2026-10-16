@@ -11,6 +11,8 @@ Source of truth for every claim below:
 - `docs/platform-adoption/local-exceptions.md` (what each deviation is and which issue removes it).
 - `docs/runbooks/database-restore.md` and `docs/runbooks/maintenance-mode.md` (the two procedures this one leans on).
 
+> **After #469.** The `kvox:storage-managed-by-part-size` deviation no longer exists: migration `kvox_object_ownership` moved `managed_by` into a side table and dropped both columns. A database that has not yet taken that migration still shows the two columns in the baseline diff, and the drift allowlist then still excuses their `DROP COLUMN`. `db:drift:kvox` and its allowlist (13 permanent entries for indexes Prisma cannot declare) are unchanged. This runbook records the baseline as it was run for #463, so the sections below still name the deviation.
+
 This is KVox's version of the EnterpriseAppBase baseline procedure. KVox adds three things: the `--through 14` cut, 22 app-only migrations, and two declared deviations (`kvox:storage-managed-by-part-size` and `kvox:domain-schema`; `kvox:allowlist-reminders` was removed by #465, see section 5).
 
 ## 1. What the baseline does

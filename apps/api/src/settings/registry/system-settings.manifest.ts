@@ -5,9 +5,11 @@
 // Which `system_settings` namespaces this deployment has, and in what order.
 // ORDER IS THE STORED KEY ORDER (and the OpenAPI order): append, never insert.
 //
-//   notifications, jobs, nodes, databaseBackup, maintenance, transcription, ai
+//   notifications, jobs, nodes, databaseBackup, maintenance, storage, transcription, ai
 //
-// The first five are the PLATFORM's declarations. They are registered here even
+// The first six are the PLATFORM's declarations (`storage` joined with #469, the
+// object-storage driver configuration; it sits after the operations namespaces,
+// as the platform's reference manifest places it). They are registered here even
 // though the slices that own them (`JobsModule`, `NodesModule`, the db-backup
 // slice, the host slice) are not mounted yet: the services this app still runs read
 // them through `SystemSettingsService.getNamespace`. When a platform slice's
@@ -27,6 +29,7 @@ import { MAINTENANCE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/host';
 import { JOBS_SYSTEM_SETTINGS } from '@marinoscar/platform-api/jobs';
 import { NODES_SYSTEM_SETTINGS } from '@marinoscar/platform-api/nodes';
 import { NOTIFICATIONS_SYSTEM_SETTINGS } from '@marinoscar/platform-api/notifications';
+import { STORAGE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/storage';
 import {
   assembleSystemSettingsNamespaces,
   registerSystemSettingsNamespaces,
@@ -46,6 +49,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
   NODES_SYSTEM_SETTINGS as SystemSettingsNamespace, // /nodes
   DATABASE_BACKUP_SYSTEM_SETTINGS as SystemSettingsNamespace, // /db-backup
   MAINTENANCE_SYSTEM_SETTINGS as SystemSettingsNamespace, // /host
+  STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace, // /storage
 ];
 
 /** The final, ordered list this deployment registers. */

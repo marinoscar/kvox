@@ -1094,6 +1094,8 @@ already accepted stay in the graph either way.
 
 ---
 
+> **Implementation.** The three `/user-settings/profile-image` routes and `GET /users/:userId/avatar/:objectId` are served by the platform's `ProfileImageModule` (`apps/api/src/platform/storage/storage.config.ts`); this repository holds no controller or image-validation code for them. They need object storage to be configured (a 503 until it is).
+
 #### GET /user-settings/profile-image
 **Requires:** `user_settings:read` permission (bearer auth)
 
@@ -1513,11 +1515,17 @@ Partially update the active organization's overrides. Optional `If-Match: <versi
 
 The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.
 
+> **Implementation.** `/api/storage/objects`, `GET /api/storage/status`, `/api/admin/storage-config` and the profile-image routes are served by the platform storage slice (`@marinoscar/platform-api/storage`, mounted in `apps/api/src/platform/storage/storage.config.ts`); this repository holds no controller for them. The object store is **runtime-configured** (provider, bucket, region, endpoint and keys at `/admin/settings/storage`; runbook: [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md)), and every route below that touches the bucket answers **503** until a configuration is saved. The application adds three routes of its own, marked **(application route)** below: `POST` and `GET /api/storage/objects/:id/upload/parts` (`apps/api/src/kvox-objects/kvox-multipart.controller.ts`) and `GET /api/kvox/files` (`kvox-files.controller.ts`). It also vetoes the generic `DELETE` for objects other modules own (`managed-delete.hook.ts`). The deliberate differences from the platform slice are listed in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
+
+**Which object a route sees.** Objects owned by the transcripts, notes or graph modules (a transcript's source audio and exports, a note's source document and exports, a graph export or import) are recorded in the `kvox_object_ownership` side table. They are excluded from `GET /api/kvox/files` and refuse the generic `DELETE` with a 409. Every other route works on them as on any object, for the owner.
+
+**Object storage errors.** While no configuration is saved (or it is incomplete) a storage call answers **503** with `details.reason: "storage_not_configured"`, `details.missing` naming the empty fields and `details.remedy` naming `/admin/settings/storage`.
+
 #### Initialize Resumable Upload
 
 `POST /api/storage/objects/upload/init`
 
-**Requires Authentication** - Initialize a multipart upload for large files. Returns presigned URLs for direct-to-S3 uploads.
+**Requires** `storage:write` - Initialize a multipart upload for large files. Returns presigned URLs for direct-to-bucket uploads.
 
 **Request Body:**
 ```json
@@ -1528,18 +1536,14 @@ The storage system provides file upload and management capabilities with support
 }
 ```
 
-`mimeType` is **optional**. A browser reports an empty string for `.amr`, and
-`application/octet-stream` or nothing at all for `.m4a` on several Android
-builds; when the declared type is generic or absent it is resolved from the
-file extension (`.m4a .mp3 .wav .flac .ogg .opus .aac .amr .webm .wma .mp4
-.m4b .3gp .aiff .aif .caf .wv`) and the resolved type is what gets stored.
+All three fields are required. This is the platform's route and it does not infer a content type: a browser reports an empty string for `.amr`, and `application/octet-stream` or nothing for `.m4a` on several Android builds, and that value is checked as sent. The transcript upload (`POST /api/transcripts`, see `### Transcripts`) is different: it resolves the type from the file extension (`.m4a .mp3 .wav .flac .ogg .opus .aac .amr .webm .wma .mp4 .m4b .3gp .aiff .aif .caf .wv`) before storing it. A client of this generic route should resolve the type itself.
 
 **Response:**
 ```json
 {
   "data": {
     "objectId": "uuid",
-    "uploadId": "s3-upload-id",
+    "uploadId": "provider-upload-id",
     "partSize": 10485760,
     "totalParts": 10,
     "presignedUrls": [
@@ -1550,43 +1554,27 @@ file extension (`.m4a .mp3 .wav .flac .ogg .opus .aac .amr .webm .wma .mp4
 }
 ```
 
-**`partSize` is chosen per upload, and it is not always the configured
-default.** S3 allows at most 10,000 parts, so for a large file the part size is
-raised to `max(configured, ceil(size / 10000))`, rounded up to a whole MiB — a
-1 TB object simply uses bigger parts rather than being rejected. Slice the file
-with exactly the `partSize` returned here; it is stored on the object and
-replayed by the status endpoint so a resume slices it the same way.
+**`partSize` is one deployment-wide number.** It is `STORAGE_PART_SIZE` (default 10 MiB, minimum 5 MiB) for every upload; it is no longer raised per upload for a large file and no longer stored on the object. `totalParts` is `ceil(size / partSize)`. Slice the file with exactly the `partSize` returned here, and keep using that number for the life of the upload. **The operator rule:** `STORAGE_PART_SIZE` must never be changed while uploads are in flight (a resumed upload would renumber its parts), and `partSize x 10,000` must be at least the largest file accepted (about 97.6 GiB at the default). See [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md) section 5.
 
-**`presignedUrls` is the first batch, not the whole upload.** At most ten URLs
-come back, as a fast path for a small file. Ask
-`POST /api/storage/objects/:id/upload/parts` for the rest, in batches, as you
-go — signed URLs expire (`SIGNED_URL_EXPIRY`, one hour by default) and a
-multi-GB upload outlives its own first batch.
+**`presignedUrls` is the first batch, not the whole upload.** At most ten URLs come back, as a fast path for a small file. Ask `POST /api/storage/objects/:id/upload/parts` for the rest, in batches, as you go: signed URLs expire (`SIGNED_URL_EXPIRY`, one hour by default) and a multi-GB upload outlives its own first batch. A client that never asks silently fails any file over ten parts.
+
+The object key is `uploads/<organization id>/<timestamp>/<uuid><ext>`.
 
 **Error Cases:**
-- 400 Bad Request - File exceeds `MAX_FILE_SIZE`; the message names the actual
-  limit and the actual size
-- 400 Bad Request - Content type is not in `ALLOWED_MIME_TYPES` (default
-  `image/*,application/pdf,video/*,audio/*`) and no known audio extension
-  rescues it; the message names the type that was rejected
+- 400 Bad Request - The file needs more than 10,000 parts at the configured part size
+- 413 Payload Too Large - File exceeds `MAX_FILE_SIZE`; the message names the actual limit and the actual size
+- 415 Unsupported Media Type - Content type is not in `ALLOWED_MIME_TYPES` (default `image/*,application/pdf,video/*,audio/*`); the message names the type that was rejected
+- 503 Service Unavailable - Object storage is not configured
 
-  ⚠ **This is the generic-upload allowlist only.** `POST /api/transcripts`
-  (issue #79) does **not** route its content-type check through
-  `ALLOWED_MIME_TYPES` — it enforces its own, fixed `audio/*,video/*` list
-  regardless of what an operator has configured here, for the reason given
-  under `### Transcripts` below. A 400 from a transcript upload never names
-  this setting.
+  ⚠ **For transcripts this list is a second gate, not the policy.** `POST /api/transcripts` (issue #79) does **not** route its own content-type check through `ALLOWED_MIME_TYPES`: it enforces its own, fixed `audio/*,video/*` list regardless of what an operator has configured here, for the reason given under `### Transcripts` below. The platform's init then applies this list as well, so a list without `audio/*` and `video/*` makes the transcript upload answer 415 (which does name this setting); a 400 from the application's own check never does.
 
 ---
 
-#### Sign More Upload Part URLs
+#### Sign More Upload Part URLs (application route)
 
 `POST /api/storage/objects/:id/upload/parts`
 
-**Requires Authentication** and `storage:write` - Issue signed `PUT` URLs for a
-further batch of parts of an in-progress upload. Each call also marks the
-upload as still active, which is what keeps it out of the stale-upload sweep
-(see `STORAGE_STALE_UPLOAD_HOURS`).
+**Requires** `storage:write` - Issue signed `PUT` URLs for a further batch of parts of an in-progress upload. The platform has no equivalent: its init presigns only the first ten parts.
 
 **Request Body:**
 ```json
@@ -1595,32 +1583,53 @@ upload as still active, which is what keeps it out of the stale-upload sweep
 }
 ```
 
-At most **100** part numbers per call. Each must be an integer in
-`1..totalParts` for this upload, and duplicates are rejected.
+`partNumbers` holds 1 to **100** distinct integers. Each must be in `1..totalParts` for this upload, where `totalParts` is derived from the object's size and the current deployment-wide part size.
+
+**Response:** HTTP 200
+```json
+{
+  "data": [
+    { "partNumber": 11, "url": "https://..." },
+    { "partNumber": 12, "url": "https://..." },
+    { "partNumber": 13, "url": "https://..." }
+  ]
+}
+```
+
+There is no `expiresAt`: the URLs inherit the signed-URL lifetime (`SIGNED_URL_EXPIRY`), so ask for a fresh batch well inside it.
+
+**Error Cases:**
+- 400 Bad Request - More than 100 part numbers, a duplicate, a part number outside `1..totalParts`, or an upload that is no longer `pending`/`uploading`
+- 404 Not Found - Upload not found **or not yours**. Never 403: the response does not reveal whether another user's object exists
+- 503 Service Unavailable - Object storage is not configured
+
+---
+
+#### List Uploaded Parts (application route)
+
+`GET /api/storage/objects/:id/upload/parts`
+
+**Requires** `storage:write` - Read the parts the storage provider is actually holding for an in-progress upload (S3 `ListParts`), ascending by part number. This is what a resuming client asks, and what a browser passes to complete: a browser cannot read the `ETag` of a cross-origin `PUT` response unless the bucket exposes it, and the web client deliberately never does.
 
 **Response:**
 ```json
 {
-  "data": {
-    "parts": [
-      {
-        "partNumber": 11,
-        "url": "https://...",
-        "expiresAt": "2024-01-01T01:00:00.000Z"
-      }
-    ]
-  }
+  "data": [
+    { "partNumber": 1, "etag": "\"9b2cf535f27731c974343645a3985328\"", "size": 10485760 },
+    { "partNumber": 2, "etag": "\"6f5902ac237024bdd0c176cb93063dc4\"", "size": 10485760 },
+    { "partNumber": 4, "etag": "\"0c78aef83f66abc1fa1e8477f296d394\"", "size": 10485760 }
+  ]
 }
 ```
 
-`expiresAt` is when to come back for a fresh batch rather than discovering the
-expiry as a 403 part-way through a file.
+The gaps are exactly the parts a resuming client must re-upload. Listing needs `s3:ListMultipartUploadParts` on the credential.
 
 **Error Cases:**
-- 400 Bad Request - More than 100 part numbers, a duplicate, a part number
-  outside `1..totalParts`, or an upload that is no longer `pending`/`uploading`
-- 403 Forbidden - Caller does not own the upload, or lacks `storage:write`
-- 404 Not Found - Upload not found
+- 400 Bad Request - The upload is no longer `pending`/`uploading`
+- 404 Not Found - Upload not found or not yours
+- 501 Not Implemented - `details.reason: "list_parts_unsupported"`: the active storage driver is not in the S3 family
+- 502 Bad Gateway - The storage provider could not answer. The body carries no provider text, keys or secrets
+- 503 Service Unavailable - Object storage is not configured
 
 ---
 
@@ -1628,8 +1637,7 @@ expiry as a 403 part-way through a file.
 
 `GET /api/storage/objects/:id/upload/status`
 
-**Requires Authentication** - Check progress of an in-progress upload, and the
-endpoint a resuming client asks first.
+**Requires** `storage:write` - Check progress of an in-progress upload.
 
 **Response:**
 ```json
@@ -1639,24 +1647,19 @@ endpoint a resuming client asks first.
     "status": "uploading",
     "uploadedParts": [1, 2, 4],
     "totalParts": 10,
-    "partSize": 10485760,
     "uploadedBytes": "31457280",
     "totalBytes": "104857600"
   }
 }
 ```
 
-`uploadedParts` is read from the **storage provider**, not from this
-application's own records: it is the list of parts the bucket is actually
-holding, so the gaps in it are exactly the parts a resuming client must
-re-upload. `partSize` is the size this upload was initialised with — use it,
-not your own default, or the resumed parts will contain the wrong bytes.
+⚠ **This is the platform's route and it answers from this application's own records**, not from the bucket. `uploadedParts` is the list of parts recorded in the database, and the platform records them only when the upload is **completed**, so it is empty while parts are still being uploaded. `totalParts` is recomputed from the **current** part size, and there is no `partSize` field. A resuming client must therefore take the part list from `GET /api/storage/objects/:id/upload/parts` above, which is authoritative, and the part size from the value `upload/init` returned.
 
-`uploadedBytes` and `totalBytes` are **strings**; a byte count at this scale
-loses precision as a JSON number.
+`uploadedBytes` and `totalBytes` are **strings**; a byte count at this scale loses precision as a JSON number.
 
-Polling this endpoint also refreshes the upload's activity timestamp, so an
-upload a client is watching is never swept away as abandoned.
+**Error Cases:**
+- 403 Forbidden - Caller does not own the upload
+- 404 Not Found - Upload not found
 
 ---
 
@@ -1664,7 +1667,7 @@ upload a client is watching is never swept away as abandoned.
 
 `POST /api/storage/objects/:id/upload/complete`
 
-**Requires Authentication** - Finalize multipart upload after all parts are uploaded.
+**Requires** `storage:write` - Finalize a multipart upload after all parts are uploaded.
 
 **Request Body:**
 ```json
@@ -1676,32 +1679,25 @@ upload a client is watching is never swept away as abandoned.
 }
 ```
 
-**`parts` is optional, and a browser should omit it:**
+`parts` is **required** and must hold at least one entry (the platform's contract). A browser builds it from `GET /api/storage/objects/:id/upload/parts`, mapping each `etag` to `eTag`, rather than from response headers it cannot read; an omitted or empty list is rejected with 400. Before this change `parts` was optional and the server listed the parts itself.
 
-```json
-{}
-```
-
-Omitted, the server reads the uploaded parts back from the storage provider
-itself. The ETag of a part is a response header on a cross-origin `PUT`, which
-a page cannot read unless the bucket lists it in `Access-Control-Expose-Headers`
-— so a client that gets its CORS configuration slightly wrong completes the
-upload with null ETags and corrupts the object. Supply `parts` only from a
-non-browser client that already has the ETags and would rather avoid the extra
-`ListParts` call.
-
-**Response:**
+**Response:** the object (`status` is `processing`, then `ready` or `failed` once the object processors have run)
 ```json
 {
   "data": {
     "id": "uuid",
     "name": "document.pdf",
-    "size": 104857600,
+    "size": "104857600",
     "mimeType": "application/pdf",
-    "status": "processing"
+    "status": "processing",
+    "metadata": null,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
+
+Completing queues the `storage.object.process` job, which runs the registered object processors against the object. The one this application registers (`kvox.transcripts.source`) starts the transcription pipeline for a transcript's source audio and does nothing for any other object. There is no `storage.object.uploaded` event and no listener to attach any more: add an `ObjectProcessor` instead.
 
 ---
 
@@ -1709,20 +1705,19 @@ non-browser client that already has the ETags and would rather avoid the extra
 
 `DELETE /api/storage/objects/:id/upload/abort`
 
-**Requires Authentication** - Cancel an in-progress upload and clean up resources.
-
-For an **unmanaged** object, the row is deleted after the multipart upload is
-aborted, exactly as before. For an object **managed by another module**
-(`managed_by` set — a transcript's source audio, for one), the row cannot be
-deleted here: the owning module's table points at it with a `Restrict`
-foreign key. Instead the multipart upload is aborted, the object is marked
-`failed`, and `storage.object.upload_aborted` is emitted for the owning
-module to reconcile its own record — for a transcript, that means
-soft-deleting it and queuing `transcript.purge`, the one path allowed to free
-the object (issue #322). **400** if the managed upload already completed
-(`processing`/`ready`) — that is never silently downgraded to `failed`.
+**Requires** `storage:write` - Cancel an in-progress upload and clean up resources: the multipart upload is aborted at the provider, which frees its uploaded parts. For a plain upload the row is deleted.
 
 **Response:** HTTP 204 No Content
+
+**Error Cases:**
+- 400 Bad Request - The object has no multipart upload to abort
+- 403 Forbidden - Caller does not own the upload
+- 404 Not Found - Upload not found
+- 503 Service Unavailable - Only for a managed object: the ownership lookup or the in-process forward failed (see below)
+
+**Managed objects (application behaviour).** A transcript's source audio, a note's source document and a graph import are referenced by their owner with a `Restrict` foreign key, so the platform's abort, which deletes the row, cannot run on them. The same Fastify `onRequest` hook that vetoes the generic `DELETE` (`managed-delete.hook.ts`) looks the object up in `kvox_object_ownership` and, when it is managed, forwards this request in-process to an application route, `DELETE /api/storage/objects/:id/upload/abort-managed` (`storage:write`, 204). That route aborts the multipart upload, **keeps the `storage_objects` row** with status `failed` and no upload id, and, for a transcripts-owned object, marks the transcript `failed` with `failure_reason: "upload_aborted"` where its status is still `uploading`. The client keeps calling `/upload/abort`; the `-managed` route is an implementation detail and is not meant to be called directly. An unmanaged object passes through to the platform handler unchanged. An anonymous request also passes through, so the platform answers 401. A failed lookup or forward answers 503.
+
+**Transcripts, other paths.** An upload abandoned past `transcription.abandonedUploadHours`, or reclaimed by the platform's 72-hour stale-upload sweep, emits no event. `transcripts.housekeeping`, which runs every **10 minutes**, finds `uploading` transcripts whose source object is `failed`, gone or stale and marks them `failed` with `failure_reason: "upload_aborted"` (at most 500 per run), and purges the failed row on a later cycle. A user's own cancel is reflected at once by the route above; these other paths take **up to one housekeeping cycle**.
 
 ---
 
@@ -1730,7 +1725,7 @@ the object (issue #322). **400** if the managed upload already completed
 
 `POST /api/storage/objects`
 
-**Requires Authentication** - Direct upload for small files (< 100MB) using multipart/form-data.
+**Requires** `storage:write` - Direct upload for small files using multipart/form-data. The ceiling is the smaller of 100 MB and `MAX_FILE_SIZE`.
 
 **Request:**
 - Content-Type: `multipart/form-data`
@@ -1742,25 +1737,29 @@ the object (issue #322). **400** if the managed upload already completed
   "data": {
     "id": "uuid",
     "name": "document.pdf",
-    "size": 1048576,
+    "size": "0",
     "mimeType": "application/pdf",
-    "status": "uploading"
+    "status": "ready",
+    "metadata": null,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
 
+`size` is `"0"` in this response: the byte count of a streamed body is not known until it has been consumed, so the final size is set when processing settles. `status` is `ready`, or `processing` while an object processor still has work to do.
+
+**Error Cases:**
+- 413 Payload Too Large - File exceeds the simple-upload limit
+- 415 Unsupported Media Type - Content type is not in `ALLOWED_MIME_TYPES`
+
 ---
 
-#### List Objects
+#### List Files (application route)
 
-`GET /api/storage/objects`
+`GET /api/kvox/files`
 
-**Requires Authentication** - List storage objects with pagination and filtering.
-
-Objects **managed by another module** (a transcript's source audio, its
-playback rendition, its exports) are excluded from this list. They belong to
-the feature that created them, not to a generic file browser; that module
-lists its own.
+**Requires** `storage:read` - The caller's plain uploads, with objects owned by another module excluded: a transcript's source audio, a note's source document, a graph export. **This is the list every client of this application uses** (the web Files view calls it). It takes the platform list's query, returns the platform list's body and item shape, and adds one filter: `id NOT IN (SELECT object_id FROM kvox_object_ownership)`.
 
 **Query Parameters:**
 | Parameter | Type | Default | Description |
@@ -1774,24 +1773,40 @@ lists its own.
 **Response:**
 ```json
 {
-  "data": [
-    {
-      "id": "uuid",
-      "name": "document.pdf",
-      "size": 104857600,
-      "mimeType": "application/pdf",
-      "status": "ready",
-      "createdAt": "2024-01-01T00:00:00.000Z"
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "name": "document.pdf",
+        "size": "104857600",
+        "mimeType": "application/pdf",
+        "status": "ready",
+        "metadata": null,
+        "createdAt": "2024-01-01T00:00:00.000Z",
+        "updatedAt": "2024-01-01T00:00:00.000Z"
+      }
+    ],
+    "meta": {
+      "page": 1,
+      "pageSize": 20,
+      "totalItems": 50,
+      "totalPages": 3
     }
-  ],
-  "meta": {
-    "total": 50,
-    "page": 1,
-    "pageSize": 20,
-    "totalPages": 3
   }
 }
 ```
+
+`size` is a string (a byte count at this scale loses precision as a JSON number).
+
+---
+
+#### List Objects (platform route)
+
+`GET /api/storage/objects`
+
+**Requires** `storage:read` - The platform's list of the caller's objects, same query parameters and response body as `GET /api/kvox/files` above.
+
+⚠ **It does not hide managed objects.** A transcript's source audio, a note's source document and a graph export are uploaded in the caller's name, so this route lists them. That discloses only the caller's **own** objects, and a delete through it is refused (see below), so it is documented rather than closed. Use `GET /api/kvox/files` for anything a person looks at.
 
 ---
 
@@ -1799,7 +1814,7 @@ lists its own.
 
 `GET /api/storage/objects/:id`
 
-**Requires Authentication** - Get storage object metadata.
+**Requires** `storage:read` - Get storage object metadata.
 
 **Response:**
 ```json
@@ -1807,7 +1822,7 @@ lists its own.
   "data": {
     "id": "uuid",
     "name": "document.pdf",
-    "size": 104857600,
+    "size": "104857600",
     "mimeType": "application/pdf",
     "status": "ready",
     "metadata": {
@@ -1825,7 +1840,7 @@ lists its own.
 
 `GET /api/storage/objects/:id/download`
 
-**Requires Authentication** - Get a signed download URL for the object.
+**Requires** `storage:read` - Get a signed download URL for the object.
 
 **Query Parameters:**
 | Parameter | Type | Default | Description |
@@ -1848,25 +1863,27 @@ lists its own.
 
 `DELETE /api/storage/objects/:id`
 
-**Requires Authentication** - Delete a storage object and its associated file.
-If the object's resumable upload never completed (`s3UploadId` set, status
-`pending`/`uploading`), the multipart upload is aborted first, freeing its
-uploaded parts, before the row is deleted (issue #101). An abort that fails
-for a reason other than the upload already being gone leaves the object in
-place so the stale-upload sweep can retry it later, rather than deleting the
-row and losing the only record of the upload to abort.
+**Requires** `storage:write` - Delete a storage object from the bucket and the database. The owner may always delete their own object; a caller who also holds `storage:delete_any` may delete another user's, except another user's profile image.
+
+This route deletes the object and its row. It does **not** abort an unfinished multipart upload: cancel one with `DELETE /api/storage/objects/:id/upload/abort`, or leave it to the stale-upload sweep.
 
 **Response:** HTTP 204 No Content
 
 **Error Cases:**
 - 404 Not Found - Object not found
-- 403 Forbidden - User does not own object (non-admin)
-- **409 Conflict** - The object is managed by another module and must be
-  deleted through that module. The message names the module. This is 409 and
-  not 403 on purpose: the caller genuinely owns the bytes, and the refusal is
-  about the object's state — something else depends on it. Reading, downloading
-  and editing the metadata of a managed object all remain available to its
-  owner; only listing and deleting change.
+- 403 Forbidden - User does not own object (non-admin), or it is another user's profile image
+- **409 Conflict** - The object is managed by another module and must be deleted through that module:
+  ```json
+  {
+    "statusCode": 409,
+    "code": "CONFLICT",
+    "message": "This object is managed by transcripts and cannot be deleted directly.",
+    "timestamp": "2024-01-01T00:00:00.000Z",
+    "path": "/api/storage/objects/<id>",
+    "details": { "reason": "managed_by_module", "module": "transcripts" }
+  }
+  ```
+  `module` is `transcripts`, `notes` or `graph`. This is 409 and not 403 on purpose: the caller genuinely owns the bytes, and the refusal is about the object's state, since something else depends on it. The veto is an application hook that runs before the platform handler (one indexed read of `kvox_object_ownership`, no call to the provider); an unauthenticated request is passed through so the platform answers 401, and if the ownership read itself fails the delete is refused with 503 rather than let through. Reading, downloading and editing the metadata of a managed object all remain available to its owner.
 
 ---
 
@@ -1874,7 +1891,7 @@ row and losing the only record of the upload to abort.
 
 `PATCH /api/storage/objects/:id/metadata`
 
-**Requires Authentication** - Update custom metadata for an object.
+**Requires** `storage:write` - Update custom metadata for an object.
 
 **Request Body:**
 ```json
@@ -1900,6 +1917,23 @@ row and losing the only record of the upload to abort.
   }
 }
 ```
+
+---
+
+#### Storage Status and Configuration
+
+`GET /api/storage/status` (`storage:read`) reports whether object storage is configured, without exposing the configuration.
+
+`/api/admin/storage-config` (`storage_config:read` / `storage_config:write`, admin only) is the page behind `/admin/settings/storage`:
+
+| Route | Purpose |
+|---|---|
+| `GET /api/admin/storage-config` | The active provider, its settings, the masked secret status and the registered drivers. The secret access key is never returned. |
+| `PUT /api/admin/storage-config` | Save the provider, its settings and, optionally, a new secret (blank keeps the stored one). Optional `If-Match: <version>` (`0` for "nothing stored yet"); a stale version is 409. Repointing a deployment that still holds objects or backups at a different bucket, endpoint or provider is 409 until the body carries the typed switch confirmation. It acknowledges the stranded objects, it does not copy them. |
+| `POST /api/admin/storage-config/test` | Run four checks against the submitted configuration (credentials, bucket, write/read/delete round trip, presigned URL) without saving it. |
+| `POST /api/admin/storage-config/bucket` | Create and harden the submitted bucket, or return the equivalent commands when the credential lacks the permission. |
+
+The configuration is held in the `storage` system-settings namespace plus the credential store; see [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md).
 
 ---
 
@@ -3279,7 +3313,7 @@ inconsistently — `application/octet-stream`, or nothing at all, for `.m4a` and
     "upload": {
       "objectId": "…",
       "uploadId": "…",
-      "partSize": 16777216,
+      "partSize": 10485760,
       "totalParts": 9,
       "presignedUrls": [{ "partNumber": 1, "url": "https://…" }]
     }
@@ -3287,9 +3321,17 @@ inconsistently — `application/octet-stream`, or nothing at all, for `.m4a` and
 }
 ```
 
-Upload the parts against `POST /storage/objects/:id/upload/parts` and finish
-with `POST /storage/objects/:id/upload/complete`, exactly as for any other
-resumable upload. Completing it is what starts the pipeline.
+Upload the parts, signing batches with `POST /storage/objects/:id/upload/parts`
+and listing what the bucket holds with `GET /storage/objects/:id/upload/parts`,
+and finish with `POST /storage/objects/:id/upload/complete` carrying that list,
+exactly as for any other resumable upload (see `### Storage Objects`). `partSize`
+is the deployment-wide `STORAGE_PART_SIZE`, the same for every upload. Completing
+it queues `storage.object.process`, whose `kvox.transcripts.source` processor is
+what starts the pipeline.
+
+An upload that is cancelled or abandoned is reflected on the transcript by
+`transcripts.housekeeping` (marked `failed`, `failure_reason: "upload_aborted"`),
+not at once: allow up to one 10-minute cycle.
 
 Three pre-flight checks run **before** anything is created, so a rejected
 request leaves no half-started upload behind for the stale sweep to find:
@@ -3314,9 +3356,11 @@ what AssemblyAI accepts directly: a video file passes here because
 `media.audio.transcode` extracts a rendition the provider does accept, decided
 later by `selectTranscriptionInput` once that rendition exists.
 
-The upload object is created `managed_by: transcripts`, which makes it
-**invisible** to `GET /storage/objects` and makes a generic `DELETE` against it
-return 409 — only this transcript being deleted removes it.
+The upload object is owned by the transcripts module (a `kvox_object_ownership`
+row), which makes it **absent** from `GET /kvox/files` and makes a generic
+`DELETE` against it return 409 — only this transcript being deleted removes it.
+
+⚠ **`ALLOWED_MIME_TYPES` still applies afterwards.** The transcript check above is the application's own pre-check; the platform's upload start then checks the same type against `ALLOWED_MIME_TYPES` and answers **415**. A deployment whose `ALLOWED_MIME_TYPES` omits `audio/*` or `video/*` therefore rejects transcript uploads, so keep both in it.
 
 ⚠ `source.size` is the client's claim, and every check here is made against it.
 That is not a trust decision: it is the only number available before a byte has
@@ -4747,8 +4791,8 @@ a failed row is never reused.
 
 #### POST /notes/sources/documents
 Uploads a document to generate a note from. Multipart, single `file` part.
-Stored as a storage object `managed_by: notes` — invisible to
-`GET /storage/objects`, refusing the generic `DELETE` with a 409 — and a
+Stored as a storage object owned by the notes module — absent from
+`GET /kvox/files`, refusing the generic `DELETE` with a 409 — and a
 `note.source.extract` job is queued to turn it into plain text.
 
 **Requires:** `notes:write`. ⚠ It is `notes:write`, **not** `storage:write`
@@ -5955,8 +5999,8 @@ is signed into the URL.
 
 Your unexpired exports, newest first, at most 20: `{ exports: [ … ] }`.
 
-**Expiry.** An export and its file (`managed_by: "graph"` — hidden from
-`GET /storage/objects`, `409` on its generic `DELETE`) are deleted **7 days**
+**Expiry.** An export and its file (owned by the graph module — absent from
+`GET /kvox/files`, `409` on its generic `DELETE`) are deleted **7 days**
 after the request by a daily sweep (the same `kg.export` job type, in sweep
 mode). "Forget this person" and the Danger Zone's `content`/`everything` also
 delete every export — a file written before still names the forgotten data.
@@ -5978,7 +6022,7 @@ The format comes from the extension, then the declared type: `.ttl` /
 `.nq` / `application/n-quads` → N-Quads; anything else is a `400`.
 
 **Response:** **`202`** `{ proposalId, jobId }`. The file is stored
-`managed_by: "graph"` (hidden from `GET /storage/objects`), a proposal is
+as a graph-owned object (absent from `GET /kvox/files`), a proposal is
 created in `extracting` and the **`kg.import`** job is queued, in one
 transaction. Audited `graph.import_created` `{ proposalId, format, bytes }`.
 

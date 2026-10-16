@@ -50,7 +50,7 @@ import {
 import type { Prisma, Transcript, TranscriptSegment } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { ObjectsService } from '../storage/objects/objects.service';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import {
   DEFAULT_WORDS_WINDOW_MS,
@@ -72,7 +72,7 @@ import { TranscriptionRuntimeService } from './transcription-runtime.service';
 
 /**
  * The content-type allowlist `POST /api/transcripts` enforces, handed to
- * `ObjectsService.initUpload` in place of the operator-configured
+ * `KvoxManagedObjects.initManagedUpload` in front of the operator-configured
  * `storage.allowedMimeTypes` (issue #79).
  *
  * ⚠ THE WHOLE AUDIO AND VIDEO FAMILIES, DELIBERATELY — not the active
@@ -132,7 +132,7 @@ export class TranscriptsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly objects: ObjectsService,
+    private readonly managedObjects: KvoxManagedObjectsService,
     private readonly transcriptObjects: TranscriptObjectsService,
     private readonly access: TranscriptAccessService,
     private readonly pipeline: TranscriptPipelineService,
@@ -188,24 +188,19 @@ export class TranscriptsService {
     // extension-aware resolution on top of the list it is given, which is what
     // mobile browsers reporting `application/octet-stream` for a `.m4a` make
     // necessary; it is only the LIST that this module supplies.
-    const upload = await this.objects.initUpload(
-      {
-        name: dto.source.name,
-        size: dto.source.size,
-        mimeType: dto.source.mimeType,
-      },
-      user.id,
-      {
-        // ⚠ BOTH OF THESE ARE SERVICE-LEVEL ARGUMENTS AND UNREACHABLE OVER
-        // HTTP, for the two reasons `initUpload`'s own block comment sets out:
-        // a client that could claim `managedBy` would mint a row the generic
-        // list hides and the generic `DELETE` refuses (the ownership boundary
-        // of spec §9.3), and a client that could name its own
-        // `allowedMimeTypes` would have defeated the allowlist entirely.
-        managedBy: TRANSCRIPTS_MANAGED_BY,
-        allowedMimeTypes: TRANSCRIPT_SOURCE_MIME_TYPES,
-      },
-    );
+    const upload = await this.managedObjects.initManagedUpload({
+      name: dto.source.name,
+      size: dto.source.size,
+      mimeType: dto.source.mimeType,
+      userId: user.id,
+      // ⚠ BOTH OF THESE ARE SERVICE-LEVEL ARGUMENTS AND UNREACHABLE OVER HTTP:
+      // a client that could claim `module` would mint a row the generic
+      // delete refuses and `GET /api/kvox/files` hides (the ownership boundary
+      // of spec §9.3), and a client that could name its own
+      // `allowedMimeTypes` would have defeated the allowlist entirely.
+      module: TRANSCRIPTS_MANAGED_BY,
+      allowedMimeTypes: TRANSCRIPT_SOURCE_MIME_TYPES,
+    });
 
     // #352: ONE `Date` instance for both columns, so a new row's recording
     // date equals its upload instant exactly rather than two `now()`s a few
@@ -786,7 +781,7 @@ export class TranscriptsService {
       );
     }
 
-    const source = await this.prisma.storageObject.findUnique({
+    const source = await this.managedObjects.findFirst({
       where: { id: transcript.sourceObjectId },
       select: { status: true },
     });
@@ -932,7 +927,7 @@ export class TranscriptsService {
         orderBy: { colorIndex: 'asc' },
         select: { id: true, label: true, displayName: true, colorIndex: true, rev: true },
       }),
-      this.prisma.storageObject.findUnique({
+      this.managedObjects.findFirst({
         where: { id: transcript.sourceObjectId },
         select: { name: true, mimeType: true, size: true },
       }),

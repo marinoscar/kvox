@@ -2,10 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { IdentityProfileImages, UserDefaults } from '@marinoscar/platform-api/identity';
 import { DEFAULT_USER_SETTINGS } from '@marinoscar/platform-api/settings';
 
-import {
-  normalizeProfileSettings,
-  resolveProfileImageUrl,
-} from '../../common/profile-image/profile-image';
+import { normalizeProfileSettings, resolveProfileImageUrl } from '@marinoscar/platform-api/storage';
 
 /**
  * Identity's `USER_DEFAULTS`: what a new user's `user_settings.value` holds at
@@ -21,8 +18,8 @@ export class KvoxUserDefaults implements UserDefaults {
 
 /**
  * Identity's `IDENTITY_PROFILE_IMAGES`: which picture `/api/auth/me` and
- * `/api/users` report, over this app's profile-image helpers
- * (`common/profile-image/profile-image.ts`, issue #367). The picture lives in
+ * `/api/users` report, over the storage slice's profile-image helpers
+ * (`@marinoscar/platform-api/storage`, issue #367). The picture lives in
  * the user's settings (`profile.imageSource`) and in object storage, neither of
  * which identity owns.
  */

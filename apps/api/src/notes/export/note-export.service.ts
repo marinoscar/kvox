@@ -57,6 +57,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import type { Note, NoteExport, Prisma } from '@prisma/client';
 
 import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
+import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashExportRequest, type ExportOptions } from '../../export/export-options';
 import { NoteAccessService } from '../access/note-access.service';
@@ -136,6 +137,7 @@ export class NoteExportService {
     private readonly registry: NoteExporterRegistry,
     private readonly handlers: JobHandlerRegistry,
     private readonly jobs: JobsService,
+    private readonly managedObjects: KvoxManagedObjectsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -459,7 +461,7 @@ export class NoteExportService {
     const objectId = note.sourceObjectId;
 
     if (objectId) {
-      const object = await this.prisma.storageObject.findUnique({
+      const object = await this.managedObjects.findFirst({
         where: { id: objectId },
         select: { name: true, createdAt: true },
       });

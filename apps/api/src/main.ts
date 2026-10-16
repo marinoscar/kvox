@@ -14,6 +14,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
 import { verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
 import fastifyCookie from '@fastify/cookie';
@@ -21,6 +22,8 @@ import multipart from '@fastify/multipart';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { registerPlatformDocs } from '@marinoscar/platform-api/host';
+import { simpleUploadFileSizeLimit } from '@marinoscar/platform-api/storage';
+import { installManagedDeleteHook } from './kvox-objects/managed-delete.hook';
 import { APP_OPENAPI } from './openapi/document';
 
 async function bootstrap() {
@@ -75,16 +78,28 @@ async function bootstrap() {
     secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
   });
 
-  // Register multipart plugin for file uploads
+  // Register multipart plugin for file uploads. The simple-upload route is the
+  // platform's (`POST /api/storage/objects`); `simpleUploadFileSizeLimit` is the
+  // limit the slice documents for it: min(100 MiB, the deployment's
+  // `storage.maxFileSize`). Larger files take the resumable path.
   await app.register(multipart, {
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB for simple upload
+      fileSize: simpleUploadFileSizeLimit(app.get(ConfigService).get('storage.maxFileSize')),
       files: 1,
     },
   });
 
   // Global prefix for all routes
   app.setGlobalPrefix('api');
+
+  // Permanent until the platform adds a veto seam: the platform's
+  // `DELETE /api/storage/objects/:id` has no seam for module ownership, so this
+  // `onRequest` hook answers 409 `managed_by_module` for an object a domain
+  // module owns, before the handler runs. It also forwards
+  // `DELETE .../:id/upload/abort` of a managed object to the app's own abort
+  // route (the platform abort deletes the row the owning record restricts).
+  // After `setGlobalPrefix` because it matches the prefixed path.
+  installManagedDeleteHook(app);
 
   // Enable CORS (same-origin by default, configurable)
   app.enableCors({

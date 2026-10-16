@@ -23,7 +23,7 @@ import type { ServerFacts } from './server-facts.js';
 // =============================================================================
 
 /** Groups an operator opts into. Their keys are skipped otherwise. */
-export type EnvGroup = 'observability' | 'storage';
+export type EnvGroup = 'observability';
 
 export interface DeriveContext {
   /** The public hostname the deployment is being published under. */
@@ -465,19 +465,19 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   UPTRACE_CH_USER: { group: 'observability' },
 
   // --- Storage -------------------------------------------------------------
-  S3_BUCKET: { group: 'storage' },
-  S3_REGION: { group: 'storage' },
-  S3_ENDPOINT: { group: 'storage' },
-  AWS_ACCESS_KEY_ID: { group: 'storage', secret: true },
-  AWS_SECRET_ACCESS_KEY: { group: 'storage', secret: true },
+  // The bucket, region, endpoint and keys are no longer environment variables:
+  // they are saved at /admin/settings/storage after the deploy (#469), so the
+  // template carries no `storage` group key and the wizard's storage step has
+  // no field to ask. Only the nginx CSP origin remains here.
+  //
   // The one key in this template whose EMPTY default is a real answer (#255).
   // `STORAGE_CSP_ORIGIN=` is uncommented with no value, so it is not optional
   // and its blank is not "unset" - it means "no extra origin", and the policy
   // reads as connect-src/media-src 'self' only. That is a deployment somebody
-  // chose, unlike an empty AWS_ACCESS_KEY_ID, which is a credential nobody
+  // chose, unlike an empty SECRETS_ENCRYPTION_KEY, which is a credential nobody
   // supplied. Hence this flag here rather than a softer blank rule in
-  // env-wizard.ts: SECRETS_ENCRYPTION_KEY and the two AWS keys ship empty
-  // defaults too and must keep failing closed.
+  // env-wizard.ts: SECRETS_ENCRYPTION_KEY ships an empty default too and must
+  // keep failing closed.
   STORAGE_CSP_ORIGIN: { allowBlank: true },
 };
 
