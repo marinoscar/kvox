@@ -20,10 +20,10 @@ services:
       # Development only.
       #
       # ⚠ THE CONTAINER PATH MUST MATCH base.compose.yml'S EXACTLY, or Compose
-      # keeps BOTH mounts and the strict policy wins. Since #21 that path is
-      # the envsubst template, not /etc/nginx/csp.conf — the rendering (and
-      # therefore ${STORAGE_CSP_ORIGIN}) is inherited from base unchanged.
-      - ../nginx/csp.dev.conf:/etc/nginx/templates/csp.conf.template:ro
+      # keeps BOTH mounts and the strict policy wins. It is /etc/nginx/csp.conf;
+      # the storage origin is rendered into /etc/nginx/storage-origin.conf by
+      # base.compose.yml's template mount, which this file inherits unchanged.
+      - ../nginx/csp.dev.conf:/etc/nginx/csp.conf:ro
 
   # ---------------------------------------------------------------------------
   # API - Development overrides

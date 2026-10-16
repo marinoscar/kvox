@@ -411,6 +411,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Assert the installed layout
         run: |
+          set -o pipefail
           ls -la "$APP_DIR"
 
           # 0600: it holds the database password, the JWT secret and the OAuth
@@ -489,6 +490,7 @@ jobs:
 
       - name: The deployment serves
         run: |
+          set -o pipefail
           curl -fsS "http://127.0.0.1:$BIND_PORT/api/health/ready" | tee -a "$DIAG_DIR/probes.txt"
           echo >> "$DIAG_DIR/probes.txt"
           curl -fsS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$BIND_PORT/" \
@@ -531,6 +533,9 @@ jobs:
 
       - name: update with nothing to apply rebuilds nothing
         run: |
+          # `| tee` below would otherwise hide the CLI's exit status: a failed
+          # update passed this step as long as its output said "up to date".
+          set -o pipefail
           docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
             | sort > "$DIAG_DIR/images-before.txt"
 
@@ -586,6 +591,7 @@ jobs:
 
       - name: update applies it
         run: |
+          set -o pipefail
           $CLI deploy update \
             --apps-root "$APPS_ROOT" \
             --skip-proxy \
