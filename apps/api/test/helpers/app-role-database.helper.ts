@@ -76,6 +76,19 @@ function isSuperuser(host: string, port: number, user: string, password: string,
   }
 }
 
+/**
+ * What `infra/compose/postgres-init/20-kvox-extensions.sh` runs in each database:
+ * the extensions, and no comment on them (an ordinary role may not
+ * `COMMENT ON EXTENSION` one it does not own, so a dump that carries the comment
+ * cannot be restored by it).
+ */
+export async function installExtensions(superuserClient: Client): Promise<void> {
+  for (const extension of EXTENSIONS) {
+    await superuserClient.query(`CREATE EXTENSION IF NOT EXISTS "${extension}"`);
+    await superuserClient.query(`COMMENT ON EXTENSION "${extension}" IS NULL`);
+  }
+}
+
 /** Whether `command` can be run (`--version` exits 0). */
 export function commandAvailable(command: string): boolean {
   try {
@@ -120,6 +133,15 @@ export interface AppRoleDatabase {
   adminClient(): Client;
   /** A new Prisma client logged in as the application role. */
   prismaClient(): PrismaClient;
+  /**
+   * Creates a template database holding the extensions (what `template1` is
+   * after 20-kvox-extensions.sh) and returns its name; dropped by `drop()`.
+   * A real restore creates its scratch database from `template1`; a test must
+   * not edit the shared cluster's, so it uses this stand-in.
+   */
+  createExtensionTemplate(): Promise<string>;
+  /** Names of extra databases created for the test, dropped by `drop()`. */
+  extraDatabases: string[];
   /** Drops the database and the role. Safe to call twice. */
   drop(): Promise<void>;
 }
@@ -160,9 +182,7 @@ export async function provisionAppRoleDatabase(admin: AdminCredentials): Promise
   await bootstrap.connect();
   try {
     // 20-kvox-extensions.sh (before the ownership moves: the superuser owns the extensions)
-    for (const extension of EXTENSIONS) {
-      await bootstrap.query(`CREATE EXTENSION IF NOT EXISTS "${extension}"`);
-    }
+    await installExtensions(bootstrap);
     await bootstrap.query(`ALTER DATABASE "${database}" OWNER TO "${role}"`);
     await bootstrap.query(`ALTER SCHEMA public OWNER TO "${role}"`);
   } finally {
@@ -188,10 +208,41 @@ export async function provisionAppRoleDatabase(admin: AdminCredentials): Promise
       new Client({ host: admin.host, port: admin.port, user: role, password, database }),
     adminClient: () => connectAdmin(database),
     prismaClient: () => new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(env)) }),
+    extraDatabases: [],
+    createExtensionTemplate: async () => {
+      const template = `${database}_tpl`;
+      const maintenanceClient = connectAdmin('postgres');
+      await maintenanceClient.connect();
+      try {
+        await maintenanceClient.query(`CREATE DATABASE "${template}"`);
+        handle.extraDatabases.push(template);
+      } finally {
+        await maintenanceClient.end();
+      }
+      const templateClient = connectAdmin(template);
+      await templateClient.connect();
+      try {
+        await installExtensions(templateClient);
+      } finally {
+        await templateClient.end();
+      }
+      const flagClient = connectAdmin('postgres');
+      await flagClient.connect();
+      try {
+        await flagClient.query(`ALTER DATABASE "${template}" IS_TEMPLATE true`);
+      } finally {
+        await flagClient.end();
+      }
+      return template;
+    },
     drop: async () => {
       const cleanup = connectAdmin('postgres');
       try {
         await cleanup.connect();
+        for (const extra of handle.extraDatabases) {
+          await cleanup.query(`ALTER DATABASE "${extra}" IS_TEMPLATE false`).catch(() => undefined);
+          await cleanup.query(`DROP DATABASE IF EXISTS "${extra}" WITH (FORCE)`);
+        }
         await cleanup.query(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
         await cleanup.query(`DROP ROLE IF EXISTS "${role}"`);
       } catch {

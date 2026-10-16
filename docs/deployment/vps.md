@@ -572,7 +572,7 @@ OTEL_ENABLED=true
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ```
 
-then `kvox deploy update` (or `kvox deploy install --fresh` for a new box). The
+then `kvox deploy update` (or `kvox deploy install --fresh` for a new box). Unattended installs that use the overlay fail until the three passwords (and any `POSTGRES_MONITOR_*`) are supplied. The
 CLI then brings the stack up with `base`, `prod`, `telemetry`, `vps`,
 `vps.telemetry` in that order (`docs/specs/vps-deploy.md` section 15.1). Nothing is
 published on a public interface: the collector publishes no port, and GreptimeDB's
@@ -581,11 +581,13 @@ each deployment on a shared host its own); reach it with
 `ssh -L 14003:127.0.0.1:14003 <host>` and log in as `GREPTIME_READER_USER`. The
 SQL dashboard on 4000 is not published at all.
 
-**Memory.** GreptimeDB is capped at 1 GB and the collector at 256 MB. Check that
-the host has about 1.25 GB beyond the API, web, Nginx and (if local) PostgreSQL
-limits before you enable it; on a small VPS leave telemetry off and keep
-`OTEL_ENABLED=false`. Remove any old `UPTRACE_*` lines from `.env`; they are no
-longer read.
+**Memory.** GreptimeDB is capped at 1 GB and the collector at 256 MB, against
+512 MB for the API and 128 MB for the web container. An observability VPS needs
+about 2 GB of extra headroom, and the wizard's `API_MEM_LIMIT` suggestion does not
+account for it. Check that the host has that room beyond the API, web, Nginx and
+(if local) PostgreSQL limits before you enable it; on a small VPS leave telemetry off and keep
+`OTEL_ENABLED=false`. Remove the old observability lines from `.env` (the six
+variables of the previous trace UI); they are no longer read.
 
 Three checks once the update is healthy, signed in as an administrator:
 

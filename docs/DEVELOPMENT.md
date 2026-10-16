@@ -81,8 +81,10 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    > `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp`. The API
    > and `npm run prisma:migrate` use `POSTGRES_USER` / `POSTGRES_PASSWORD`, which
    > `.env.example` sets to that role, so no superuser is in the API's environment.
-   > A volume created before #471 has no such role: run `docker compose ... down -v`
-   > to recreate it, or follow `docs/runbooks/application-role.md`.
+   > Volumes created before #471 predate the init scripts: run `docker compose ... down -v`
+   > to recreate them, set `APP_DB_USER=postgres` to opt out of the role (row-level
+   > security is then inert and the Doctor says so), or follow
+   > `docs/runbooks/application-role.md`.
 
    > **First run on a new machine:** `base.compose.yml` attaches the API to an
    > external Docker network named `devnet`, so the very first `docker compose
@@ -234,7 +236,7 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 - `GREPTIME_WRITER_USER` / `GREPTIME_READER_USER` / `GREPTIME_ADMIN_USER` and the three `*_PASSWORD` values - The three GreptimeDB accounts. The writer is the collector's ingest login only. The reader and admin are the **deployment default**: an administrator can save a connection at `/admin/settings/telemetry` (stored encrypted in the credential store) and it then replaces both with no restart. `telemetry.compose.yml` refuses to start without the passwords
 - `GREPTIME_BIND_PG_PORT` - Host port for GreptimeDB's PostgreSQL wire protocol on a VPS (bound to `127.0.0.1` only)
 
-Local telemetry: `docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml up` starts the collector and GreptimeDB. Traces and metrics appear in the app's telemetry explorer and dashboard (Admin Console, Operations) and in GreptimeDB's own SQL dashboard at http://localhost:14000/dashboard; `psql -h localhost -p 14003 -U <GREPTIME_READER_USER>` reads them directly. The collector's OTLP ports are remapped to 4327 (gRPC) and 4328 (HTTP) on the host. The GreptimeDB container is capped at 1 GB. Telemetry is optional: with `OTEL_ENABLED=false` or GreptimeDB unreachable the API reports telemetry as unavailable and carries on. Pending agent report: the logger decision (`common/logger/`).
+Local telemetry: `docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml up` starts the collector and GreptimeDB. Traces and metrics appear in the app's telemetry explorer and dashboard (Admin Console, Operations) and in GreptimeDB's own SQL dashboard at http://localhost:14000/dashboard; `psql -h localhost -p 14003 -U <GREPTIME_READER_USER>` reads them directly. The collector's OTLP ports are remapped to 4327 (gRPC) and 4328 (HTTP) on the host. The GreptimeDB container is capped at 1 GB. `scripts/dev.ps1 -Otel` uses the same overlay. Telemetry is optional: with `OTEL_ENABLED=false` or GreptimeDB unreachable the API reports telemetry as unavailable and carries on. Pending agent report: the logger decision (`common/logger/`).
 
 ---
 

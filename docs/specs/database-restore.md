@@ -11,15 +11,15 @@
 > controller, the admin service and `dto/`), over the `restore*` columns
 > `apps/api/prisma/schema.prisma` declares on `DatabaseBackupRun` (see
 > `docs/specs/database-backup.md` §1.1 — **neither issue adds a migration**).
-> KVox's own copy, `apps/api/src/db-backup/`, was deleted. The rules in this
+> The app's own copy, `apps/api/src/db-backup/`, was deleted. The rules in this
 > document did not change; file names it cites keep their names inside the
-> package. KVox mounts the slice in `apps/api/src/platform/db-backup/` and
-> registers one restore gate (`kvox.extensions`) in
+> package. This app mounts the slice in `apps/api/src/platform/db-backup/` and
+> registers one restore gate (id: the app slug plus `.extensions`) in
 > `apps/api/src/app-registrations/db-backup.ts` (§2.8). The operator side is the
 > package's `DbBackupPage` and restore dialog from
 > `@marinoscar/platform-web/db-backup/ui`, wrapped in
 > `DbBackupWebAdaptersProvider` through `apps/web/src/platform/dbBackupAdapters.ts`;
-> the KVox `DbBackupPage`, `DbBackupRestoreDialog` and `DbBackupConfigPanel`
+> the app's own `DbBackupPage`, `DbBackupRestoreDialog` and `DbBackupConfigPanel`
 > components, `useDbBackup` and `services/dbBackup.ts` were deleted. §10 describes
 > the interface they implement.
 >
@@ -329,7 +329,7 @@ An archive with **no** recorded migration is a `warning`, not a block: #281
 records it best-effort, and refusing to restore an archive whose audit read
 failed would make a best-effort field load-bearing after the fact.
 
-### 2.8 App gates, and KVox's `kvox.extensions` (#471)
+### 2.8 App gates, and this app's extensions gate (#471)
 
 An application registers its own gate with `registerRestoreGate({ id, label,
 kind?, check })` from a file imported before `NestFactory.create`. A gate is
@@ -340,17 +340,17 @@ already ran, and fails closed: a throw, a timeout or a malformed answer is a
 restore outright** and is not overridable. App gates run after the built-ins,
 in registration order, and appear in the dialog like any other row.
 
-KVox registers one, in `apps/api/src/app-registrations/db-backup.ts`:
+This app registers one, in `apps/api/src/app-registrations/db-backup.ts`:
 
 | Gate | Passes when | On failure |
 |---|---|---|
-| `kvox.extensions` — "pgvector and pg_trgm are available on the target cluster" | `pg_available_extensions` on the cluster admin connection lists both `vector` and `pg_trgm` | `fail` with a remedy naming the missing extension (pending agent B report: exact wording) |
+| `<app slug>.extensions` — "pgvector and pg_trgm are available on the target cluster" | `pg_available_extensions` on the cluster admin connection lists both `vector` and `pg_trgm` | `fail` with a remedy naming the missing extension (pending agent B report: exact wording) |
 
 It differs from the built-in `extensions` gate (§2.3), which asks whether the
 extensions the *live* database has are available. This one asks whether the
-two extensions KVox's schema **requires** are available on the target cluster,
+two extensions this app's schema **requires** are available on the target cluster,
 even when the live database has lost one. It **only reads**: a pre-flight that
-created an extension would break the rule in §5. Nothing in KVox's restore path
+created an extension would break the rule in §5. Nothing in this app's restore path
 creates, installs or alters an extension.
 
 ## 3. Three outcomes, and all three are normal
@@ -462,7 +462,7 @@ could tell.
 **No migration.** The `restore*` columns were declared by #281.
 
 **Since #471 the wiring is the package's.** `DbBackupModule.forRoot` provides
-the pre-flight and the restore service; KVox supplies only the host ports
+the pre-flight and the restore service; the app supplies only the host ports
 (`database-backup.md` §18) and the gate in §2.8. The optional test seams
 (`RESTORE_PREFLIGHT_SEAM`, `RESTORE_ADMIN_CLIENT_FACTORY`) stay unbound in the
 application.
@@ -819,7 +819,7 @@ discarding a database the deployment is already serving from. Losing the backup
 catalog is bad. Undoing a successful restore to avoid losing it would be worse.
 The failure logs CRITICAL and names what has to be done by hand.
 
-#### 8.7.1 Extra carry-over: KVox registers none (#471)
+#### 8.7.1 Extra carry-over: this app registers none (#471)
 
 The package carries `database_backup_runs` and the restore's own `jobs` row by
 itself (the rules above, now its code) and lets an application add tables whose
@@ -828,9 +828,9 @@ exportSql, reinsertSql })`, or `forRoot({ extraCarryOver })`. A carry exists for
 a fact the archive cannot hold, because it was written after the backup was
 taken or it records something outside the database.
 
-**KVox's decision is none.** Every KVox table, including `kvox_object_ownership`
+**This app's decision is none.** Every table, including `kvox_object_ownership`
 and `kvox_allowlist_reminders`, is inside the dump and is restored with it, and
-nothing KVox stores records a fact outside the database. The reason is written as
+nothing the app stores records a fact outside the database. The reason is written as
 a comment in `apps/api/src/app-registrations/db-backup.ts` next to the gate. A
 future table that holds such a fact adds a carry there, not a fork of the
 restore service.
@@ -1576,7 +1576,7 @@ See §10.1.
 
 ## 11. Verification
 
-> **Where the tests went (#471).** The tables below name KVox's own specs under `src/db-backup/` and `test/db-backup/`, deleted with the code they covered. The same claims are covered by the package's suite and the `dbBackup` suite of `runPlatformConformance()` (`apps/api/test/conformance.spec.ts`); KVox adds the restore-gate unit test for `kvox.extensions` and `test/db-backup/kvox-dump-rls.db.spec.ts`. The "Covered by" column records what proved each claim when it was written.
+> **Where the tests went (#471).** The tables below name the app's own specs under `src/db-backup/` and `test/db-backup/`, deleted with the code they covered. The same claims are covered by the package's suite and the `dbBackup` suite of `runPlatformConformance()` (`apps/api/test/conformance.spec.ts`); the app adds the restore-gate unit test for its extensions gate and a dump spec under `test/db-backup/`. The "Covered by" column records what proved each claim when it was written.
 
 | Claim | Covered by |
 |---|---|

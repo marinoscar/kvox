@@ -1046,11 +1046,28 @@ login". The GreptimeDB credentials in `.env` are only the deployment default:
 an administrator can save a connection at `/admin/settings/telemetry`, stored
 in the credential store, and it is then used instead.
 
+**Compose file order per mode** (the platform's; `[x]` is present only with the
+telemetry overlay):
+
+| Mode | `-f` list |
+|---|---|
+| dev | `base`, `dev`, `[telemetry]` |
+| devdb | `base`, `dev`, `devdb`, `[telemetry]` |
+| prod | `base`, `prod`, `[telemetry]` |
+| vps | `base`, `prod`, `[telemetry]`, `vps`, `[vps.telemetry]` |
+| test | `test` only |
+
+`status` and `uninstall` use the same derived list as `install` and `update`.
+`GREPTIME_*_PASSWORD` and `POSTGRES_MONITOR_*` are secrets in the `observability`
+group, so an unattended install that uses the overlay fails until they are
+supplied.
+
 **Memory.** The telemetry stack adds a GreptimeDB container capped at 1 GB and
 the collector capped at 256 MB on a VPS (both restated in
-`vps.telemetry.compose.yml`). Check the host before enabling it: the capped
-total (about 1.25 GB) comes on top of the API, web and Nginx limits already in
-`prod.compose.yml`, and PostgreSQL if it shares the host.
+`vps.telemetry.compose.yml`), on top of the API (512 MB) and web (128 MB) limits
+in `prod.compose.yml`. An observability VPS needs about 2 GB of extra headroom,
+and the wizard's `API_MEM_LIMIT` suggestion does not account for it: check the
+host before enabling the overlay.
 
 ### 15.2 The application database role (#471)
 

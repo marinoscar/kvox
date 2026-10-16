@@ -10,11 +10,11 @@ Source of truth for every claim below:
 
 - `apps/api/Dockerfile` — the `postgresql<N>-client` package installed in the
   `base` stage.
-- `apps/api/src/db-backup/pg-version.util.ts` — `MIN_PG_CLIENT_MAJOR`, the
+- `@marinoscar/platform-api/db-backup` `pg-version.util` (since #471) — `MIN_PG_CLIENT_MAJOR`, the
   version parsers, and the block/warn decision.
 - `apps/api/test/pg-client-version.spec.ts` — the test that fails when those
   two disagree.
-- `apps/api/src/db-backup/pg-dump.util.ts` — how the client is invoked, and how
+- `@marinoscar/platform-api/db-backup` `pg-dump.util` — how the client is invoked (with both row-level-security settings), and how
   the connection is derived from the `POSTGRES_*` environment.
 - `infra/compose/base.compose.yml` — note what is *not* there: no `db` service.
 
@@ -94,11 +94,15 @@ both numbers printed side by side.
    RUN apk add --no-cache openssl postgresql18-client
    ```
 
-2. **`apps/api/src/db-backup/pg-version.util.ts`**:
-
-   ```ts
-   export const MIN_PG_CLIENT_MAJOR = 18;
-   ```
+2. **`MIN_PG_CLIENT_MAJOR`** in the platform package
+   (`@marinoscar/platform-api/db-backup`, `pg-version.util`). Since #471 this app no
+   longer carries its own copy: the constant is the package's floor, and it moves
+   with a package release. The image must install a client at least as new as the
+   server **and** at least this floor. If your server major is above the package's
+   floor, bumping `apps/api/Dockerfile` alone is enough; if the floor is above
+   the Dockerfile's client, upgrade the client first. (Pending agent report: what
+   `apps/api/test/pg-client-version.spec.ts` asserts now that the constant is not
+   this app's.)
 
 Then rebuild and redeploy the API image:
 
@@ -173,7 +177,7 @@ anywhere.
 
 - **A restore that fails part way through.** That is a different failure with a
   different guard (`--exit-on-error`, in
-  `apps/api/src/db-backup/pg-restore.util.ts`).
+  `@marinoscar/platform-api/db-backup` `pg-restore.util`).
 - **Dumping a server much older than the client** — supported, and not a
   version problem.
 - **Extension or locale mismatches between two servers.** A dump taken from one
@@ -189,9 +193,9 @@ anywhere.
       assumed from the provider's console
 - [ ] Confirmed the client major is genuinely **lower** than the server major
 - [ ] `postgresql<N>-client` bumped in `apps/api/Dockerfile` (`base` stage)
-- [ ] `MIN_PG_CLIENT_MAJOR` bumped in
-      `apps/api/src/db-backup/pg-version.util.ts` to the same number
-- [ ] `npm test --workspace=api` passes (the two are compared by a test)
+- [ ] The Dockerfile's client major is at least the package's
+      `MIN_PG_CLIENT_MAJOR` (`@marinoscar/platform-api/db-backup`)
+- [ ] `npm test --workspace=api` passes
 - [ ] Image rebuilt **and** redeployed, then `pg_dump --version` re-checked
       inside the running container
 - [ ] A dump run by hand from inside the container (section 3.1) exits 0,

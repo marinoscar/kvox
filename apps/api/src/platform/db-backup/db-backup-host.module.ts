@@ -28,7 +28,7 @@ import {
   DB_BACKUP_NOTIFIER,
   DB_BACKUP_SYSTEM_DATA,
 } from '@marinoscar/platform-api/db-backup';
-import type { DbBackupSystemData } from '@marinoscar/platform-api/db-backup';
+import type { DbBackupSystemData, DbBackupSystemTx } from '@marinoscar/platform-api/db-backup';
 import {
   AppMetricsService,
   DeploymentModeService,
@@ -49,10 +49,8 @@ import { PrismaSystemService } from '../../prisma/prisma-system.service';
       provide: DB_BACKUP_SYSTEM_DATA,
       inject: [PrismaSystemService],
       useFactory: (system: PrismaSystemService): DbBackupSystemData => ({
-        runAsSystem: (reason, fn) =>
-          runAsSystem(system as never, reason, fn as never) as ReturnType<
-            DbBackupSystemData['runAsSystem']
-          >,
+        runAsSystem: <T>(reason: 'doctor', fn: (tx: DbBackupSystemTx) => Promise<T>): Promise<T> =>
+          runAsSystem(system as never, reason, fn as never) as Promise<T>,
       }),
     },
   ],

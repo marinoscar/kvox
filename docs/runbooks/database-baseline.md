@@ -40,9 +40,9 @@ Facts that follow from the code, and that the older notes get wrong:
 
 - Work in the feature worktree for #463. The rehearsal commits the installed directories and `platform.lock`.
 - You need a recent production backup (section 3) and a scratch Postgres server you may break. The role needs to create databases (the shadow database), or pass `--shadow-database-url`.
-- `CREATE EXTENSION vector` and `pg_trgm` need a superuser, or a trusted-extension setup. KVox still runs as `postgres` until #471, so this holds today. Do not move to a non-superuser role before #471. The `pg_restore` into the scratch database, a fresh `prisma:migrate` and `prisma migrate dev` (shadow database) all create these extensions.
+- `CREATE EXTENSION vector` and `pg_trgm` need a superuser, or a trusted-extension setup. Run the baseline tooling as the bootstrap superuser (since #471 the API itself runs as an ordinary role, `docs/runbooks/application-role.md`). The `pg_restore` into the scratch database, a fresh `prisma:migrate` and `prisma migrate dev` (shadow database) all create these extensions.
 - Every `db:baseline --through 14` command below carries `--allow-rls`. Platform `0025` to `0029` enable row-level security and sit above `--through 14`, so the tool refuses with `RLS_OPT_IN_REQUIRED` without it (the first rehearsal dry run showed exactly that refusal).
-  - The flag asserts that the application role is `NOSUPERUSER NOBYPASSRLS`. **That is not true for KVox**: it runs as `postgres`, a superuser, until #471. The policies are therefore inert (section 10).
+  - The flag asserts that the application role is `NOSUPERUSER NOBYPASSRLS`. Since #471 that is true of the API's role, but the baseline tooling still connects as the bootstrap superuser (section 10).
   - Passing the flag is a deliberate, known deviation. State it in the PR description and keep this paragraph in the runbook. Do not pass it for any other reason.
 - **Check `POSTGRES_*` twice** before any `--apply`. `scripts/platform-env.js` builds `DATABASE_URL` from them and `--apply` writes to whatever they name.
 - No secrets belong in the lock or in a report. The report prints SQL only.
@@ -250,7 +250,7 @@ A restore is the only clean way back once `prisma:migrate` has applied `0015` to
 
 Platform `0025_org_scoped_rls` forces row-level security on `storage_objects` and other tables. While the application connects as a superuser, the policies are inert: a superuser ignores every policy.
 
-- Do not change `POSTGRES_USER` to a non-superuser role before #471.
+- Since #471 the API connects as an ordinary role (`docs/runbooks/application-role.md`); the baseline tooling runs as the bootstrap superuser.
 - `--allow-rls` records your statement that you know this. It does not make the role safe.
 - KVox domain tables keep plain foreign keys to `storage_objects(id)`. That is valid in single-org mode. A composite `(object_id, org_id)` key is only needed if KVox goes multi-org. See `docs/platform-adoption/local-exceptions.md`.
 

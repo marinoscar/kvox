@@ -3,16 +3,16 @@
 **Audience:** whoever operates this deployment's database.
 **Applies to:** an **existing** database that the API still reaches as `postgres`
 (a superuser). A fresh development or test volume needs none of this:
-`infra/compose/postgres-init/10-application-role.sh` and
-`20-kvox-extensions.sh` create the role and the extensions on its first start.
+the two init scripts in `infra/compose/postgres-init/` create the role and the
+extensions on its first start.
 
 Source of truth for every claim below:
 
 - `apps/api/scripts/transfer-ownership.sql` — the ownership transfer, with its
   preconditions and its closing check.
 - `infra/compose/postgres-init/10-application-role.sh` — the role attributes
-  (copied from the platform, never hand-edited) and
-  `infra/compose/postgres-init/20-kvox-extensions.sh` — the extensions.
+  (copied from the platform, never hand-edited) and the `20-*.sh` script beside
+  it — the extensions.
 - `docs/SECURITY-ARCHITECTURE.md`, "Tenant isolation (RLS)" — why the role
   matters.
 - `docs/ARCHITECTURE.md` section 7.10 — where it sits in the system.
@@ -26,7 +26,7 @@ Platform migration `0025_org_scoped_rls` forces row-level security on
 `0026` to `0029` do the same for the group, grant and organization-settings
 tables. **A superuser skips every policy.** While the API connects as
 `postgres`, tenant isolation is inert and the Doctor check `db.rls_role` fails.
-Every KVox read of `storage_objects` already goes through `runInOrg` (#469), so
+Every read of `storage_objects` already goes through `runInOrg` (#469), so
 it is safe to connect as an ordinary role.
 
 The target state:
@@ -185,8 +185,8 @@ other grant: it will own everything it uses.
 ## 4. Transfer ownership
 
 In the window, with the API **stopped** (`docker compose ... stop api`, or
-`kvox deploy` tooling for a VPS deployment; stop every replica and every
-`kvox node` that reads the database):
+the deploy CLI for a VPS deployment; stop every replica and every
+worker node that reads the database):
 
 ```bash
 psql -v ON_ERROR_STOP=1 -v app=kvox_app \
@@ -234,9 +234,8 @@ APP_DB_PASSWORD=<the role's password>
 `POSTGRES_USER=kvox_app` and the `APP_DB_*` pair kept equal to
 `POSTGRES_USER` and `POSTGRES_PASSWORD`. A deployment's database already exists,
 so `APP_DB_*` are read by `devdb.compose.yml` and `test.compose.yml` only, and
-`kvox deploy` never writes them. Pending agent report: the exact `kvox deploy`
-behaviour for an existing `.env` (whether `update` leaves `POSTGRES_USER`
-alone, and the restart command).
+the deploy CLI never writes them. It writes neither `APP_DB_USER` nor `APP_DB_PASSWORD` (`never` in
+`env-metadata.ts`), and `update` leaves an existing `.env` login alone.
 
 Then restart the API so it reconnects as the role:
 
@@ -244,7 +243,7 @@ Then restart the API so it reconnects as the role:
 cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up -d --force-recreate api
 ```
 
-(A VPS deployment uses its own file list; `kvox deploy update` rebuilds and
+(A VPS deployment uses its own file list; the CLI's `deploy update` rebuilds and
 restarts with the right one, and `docs/deployment/vps.md` section 6 describes it.)
 
 Run migrations as the role to confirm it owns what it needs
@@ -308,6 +307,16 @@ DROP ROLE kvox_app;
 Do that only with the API stopped and after the switch back.
 
 ---
+
+## What CI does and does not prove
+
+The CI workflow runs its own `pgvector/pgvector:pg16` service container with the
+`postgres` superuser, so CI exercises neither `kvox_app` nor the `postgres-init`
+scripts. The row-level-security DB specs create their own ordinary role
+(`apps/api/test/rls/storage-isolation.db.spec.ts`,
+the dump spec in `apps/api/test/db-backup/`). The scripts and this
+runbook are verified by the rehearsal in section 2, and a fresh `devdb` volume
+(`docker compose ... down -v`, then `up`) proves the role and extension scripts.
 
 ## Troubleshooting
 
