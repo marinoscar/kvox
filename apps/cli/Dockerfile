@@ -72,14 +72,10 @@ COPY apps/cli/package.json ./apps/cli/
 # The WHOLE shared package, not just its manifest — the production stage
 # inherits this directory, and a symlink pointing at an empty one produces an
 # image that builds clean and dies at boot with ERR_MODULE_NOT_FOUND.
-COPY packages/shared ./packages/shared/
-# The four `@marinoscar/kvox-*` packages are workspace members too (apps/api and
-# apps/web depend on them), so `npm ci` needs each one on disk: the whole
-# directory, not just the manifest, for the same reason as @app/shared above.
-COPY packages/kvox-contract ./packages/kvox-contract/
-COPY packages/kvox-db ./packages/kvox-db/
-COPY packages/kvox-api ./packages/kvox-api/
-COPY packages/kvox-web ./packages/kvox-web/
+# Every workspace package under packages/ (`@app/shared` and the four
+# domain packages the apps depend on): whole directories, not just manifests, for
+# the same reason as above.
+COPY packages ./packages/
 RUN npm ci --workspace=cli --include-workspace-root --ignore-scripts
 
 # -----------------------------------------------------------------------------
