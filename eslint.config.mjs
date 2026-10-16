@@ -316,7 +316,7 @@ export const WEB_HEADLESS_RESTRICTED_IMPORT_PATHS = [
 const noopRule = { meta: { schema: [] }, create: () => ({}) };
 const legacyDirectiveStubs = (names) => ({ rules: Object.fromEntries(names.map((n) => [n, noopRule])) });
 const APP_LEGACY_RULE_STUBS = {
-  '@typescript-eslint': legacyDirectiveStubs(['no-explicit-any', 'no-var-requires', 'no-throw-literal', 'no-empty-object-type']),
+  '@typescript-eslint': legacyDirectiveStubs(['no-explicit-any', 'no-var-requires', 'no-require-imports', 'no-throw-literal', 'no-empty-object-type']),
   'react-hooks': legacyDirectiveStubs(['exhaustive-deps']),
   react: legacyDirectiveStubs(['no-array-index-key']),
 };
