@@ -1,6 +1,7 @@
 {
-  "$comment": "Slice dependency graph for @marinoscar/kvox-* (Epic 5). A slice may import only the slices listed for it. Append-only.",
-  "kvox-contract": {},
-  "kvox-api": {},
-  "kvox-web": {}
+  "$comment": "Slice dependency graph for @marinoscar/kvox-* (Epic 5). A slice is a folder directly under packages/kvox-<pkg>/src/; it may import only the slices listed for it, and only through their index.ts. Append-only: Epic 6 and Epic 7 add slices, never rename or remove one. Read by eslint.config.mjs (rule B) and scripts/kvox-packages/check-slice-peers.mjs.",
+  "kvox-api": { "ports": [], "core": ["ports"], "testing": ["ports", "core"] },
+  "kvox-web": { "core": [] },
+  "kvox-contract": { "errors": [], "ontology": [] },
+  "kvox-db": { "bin": [] }
 }
