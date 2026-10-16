@@ -27,7 +27,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Auth, credential kinds, sessions, RBAC | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) |
 | Add or change an endpoint | [API.md](API.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md), then `/api/docs` (OpenAPI) |
 | Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
-| Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)) |
+| Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)), [runbooks/kvox-domain-migration.md](runbooks/kvox-domain-migration.md) for the domain tables |
 | Add a slice to, check or release a `@marinoscar/kvox-*` package | [PACKAGES.md](PACKAGES.md), [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md) |
 | Baseline a database onto the platform history | [runbooks/application-role.md](runbooks/application-role.md) | You move an existing database to the ordinary application role the API connects as (row-level security), or roll back |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
@@ -112,6 +112,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) | AI provider keys and note generation need setup or diagnosis |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) | You baseline a database onto the platform migration history (`platform db baseline --through 14`), or review the rehearsal record |
 | [runbooks/database-restore.md](runbooks/database-restore.md) | You restore the database from a backup |
+| [runbooks/kvox-domain-migration.md](runbooks/kvox-domain-migration.md) | You change a domain table (transcripts, notes, search, graph, ask), author a migration with `kvox-db promote`, install the domain into a new host or fix a failing `kvox-db check` |
 | [runbooks/maintenance-mode.md](runbooks/maintenance-mode.md) | You open, close or recover a maintenance window |
 | [runbooks/node-job-secrets.md](runbooks/node-job-secrets.md) | You configure per-job database credentials for worker nodes |
 | [runbooks/ontology-migration.md](runbooks/ontology-migration.md) | An ontology bump needs `kg.migrate` run or retried |

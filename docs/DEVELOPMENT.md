@@ -712,14 +712,15 @@ const response = await request(app.getHttpServer())
 
 ### Making Database Changes
 
-The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `platform db compose` from the platform fragments in `@marinoscar/platform-db` plus KVox's own `apps/api/prisma/fragments/*.prisma`. There is no `schema.prisma`. Never edit a file in `prisma/schema/`: the next compose overwrites it and `db:compose:check` fails in CI.
+The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `platform db compose` from the platform fragments in `@marinoscar/platform-db` plus KVox's own `apps/api/prisma/fragments/*.prisma`. The domain fragments (transcripts, notes, search, graph, ask) are not edited there: they live in `packages/kvox-db/schema/` and `kvox-db sync` (the first half of `npm run db:compose`) installs them as generated `fragments/kvox.<slice>.prisma` copies. There is no `schema.prisma`. Never edit a file in `prisma/schema/`: the next compose overwrites it and `db:compose:check` fails in CI.
 
 1. **Edit a fragment:**
    ```bash
    cd apps/api
-   # Edit prisma/fragments/<domain>.prisma (transcripts, notes, search, graph, ask, ...)
+   # Domain tables: edit packages/kvox-db/schema/kvox.<slice>.prisma (transcripts, notes, search, graph, ask)
+   # Web-edition side tables: edit prisma/fragments/<name>.prisma
    ```
-   - A KVox model lives in the fragment of its domain.
+   - A KVox model lives in the fragment of its domain. Never edit `prisma/fragments/kvox.*.prisma`: they are generated copies (`kvox-db check` fails on a changed byte).
    - A relation from a KVox model to a platform model (`User`, `StorageObject`, `Job`) needs a back-relation. Add it as `extend model User { ... }` in the fragment that owns the foreign key. An `extend` block holds back-relation fields only: the composer refuses a scalar field or an index there.
    - A column on a platform table is not possible from a fragment. Use a side table keyed by the platform id, and list the exception in `docs/platform-adoption/local-exceptions.md`.
 
@@ -737,7 +738,7 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
    # Or in Docker container
    docker compose exec api npm run prisma:migrate:dev -- --name descriptive_name
    ```
-   Only one open pull request may carry a migration at a time.
+   Only one open pull request may carry a migration at a time. For a **domain** table add `--create-only`, then move the draft into the package with `npx kvox-db promote <dir> --id <slug> --slice <slice>` and list any new special index in `packages/kvox-db/raw-sql-indexes.json`; the steps are in [runbooks/kvox-domain-migration.md](runbooks/kvox-domain-migration.md).
 
 4. **Generate Prisma Client:**
    ```bash
@@ -751,7 +752,7 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
 5. **Check the schema and the history:**
    ```bash
    npm run db:compose:check   # prisma/schema/ equals a fresh compose
-   npm run db:check           # installed platform migrations still match platform.lock
+   npm run db:check           # installed platform migrations match platform.lock; installed domain fragments and migrations match packages/kvox-db (kvox.lock)
    npm run db:drift:kvox      # migrations replayed in a shadow database equal the schema (plain db:drift is not clean by design)
    ```
 
@@ -769,6 +770,8 @@ The Prisma schema is composed. `apps/api/prisma/schema/` is **generated** by `pl
 
 Rules that keep this safe:
 
+- **`kvox-db` runs from its build.** After `npm ci` and after any change under `packages/kvox-db/src`, run `npm run build -w @marinoscar/kvox-db` (or `npm run build:kvox-packages`); until then `db:compose`, `db:check` and `db:kvox:*` fail with `Cannot find module '../dist/bin/index.js'`.
+- **Domain migrations live in `packages/kvox-db`.** The installed copies in `prisma/migrations/` are proven byte-identical by `prisma/kvox.lock` (`npm run db:check`, or `npm run db:kvox:check` alone; `npm run db:kvox:check:database` also checks the extensions and raw-SQL objects in the dev database). `kvox-db sync` installs what the lock lacks and merges the package's raw-SQL index list into `platform.lock`. Never edit or rename an installed domain directory, comments included.
 - **KVox never authors platform migrations.** A platform package release brings new ones. Install them with `npm run db:sync`, review the new directories under `prisma/migrations/`, commit them with `platform.lock`, then `npm run prisma:migrate`. Never edit or rename an installed directory, comments included: the lock hashes the raw bytes.
 - **Raw-SQL objects stay in `migration.sql`.** Partial unique, trigram, HNSW and GiST indexes, generated `tsvector` columns, CHECK constraints and triggers cannot be declared in a fragment. Never add `@@unique` or `@@index` for one. List every new partial or expression index under `rawSqlIndexes` in `platform.lock`, with `definition` copied from `SELECT indexdef FROM pg_indexes WHERE indexname = '<name>'`.
 - **`db:drift:kvox` filters `apps/api/prisma/drift-allowlist.json`.** Each entry needs `statement`, `reason` and `removeIn` (an issue number, or `permanent`). Since #469 the file holds only the 13 permanent entries for indexes and generated-column defaults Prisma cannot declare; the platform's plain `db:drift` has no ignore list and fails on them. Never add an entry to hide a real difference on a platform table.
@@ -925,7 +928,7 @@ Run `npx changeset` in any pull request that changes a package; `npx changeset -
 
 ### CI: the `tooling` job
 
-`.github/workflows/ci.yml` has a `tooling` job (Repository tooling) that runs concurrently with the others (no `needs:`). After `npm ci` it runs, in order: `check:platform-pin`, `node scripts/check-platform-pin.mjs --self-test`, `check:single-instance`, `check:platform-imports`, `lint:packages`, `build:packages`, `typecheck:packages`, `test:packages` and `npx changeset status` (skipped on the `kvox-release/version` pull request, which consumes the changesets). The docs, peers, pack and smoke-import checks run in `.github/workflows/kvox-packages.yml` when a package changes. To reproduce a failure locally, run the same commands from the repository root.
+`.github/workflows/ci.yml` has a `tooling` job (Repository tooling) that runs concurrently with the others (no `needs:`). After `npm ci` it runs, in order: `check:platform-pin`, `node scripts/check-platform-pin.mjs --self-test`, `check:single-instance`, `check:platform-imports`, `lint:packages`, `build:packages`, `typecheck:packages`, `test:packages`, `db:compose:check` and `db:check` (workspace `api`: the composed schema is current and the installed domain copies match `packages/kvox-db`) and `npx changeset status` (skipped on the `kvox-release/version` pull request, which consumes the changesets). The docs, peers, pack and smoke-import checks run in `.github/workflows/kvox-packages.yml` when a package changes. To reproduce a failure locally, run the same commands from the repository root.
 
 ### The `MonoRepo` tag
 
