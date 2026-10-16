@@ -875,10 +875,10 @@ describe('resumable upload engine', () => {
   // ---------------------------------------------------------------------------
 
   describe('cspBlockedUploadMessage', () => {
-    it('names the blocked origin and the STORAGE_CSP_ORIGIN setting', () => {
+    it('names the blocked origin and where the policy is extended', () => {
       const message = cspBlockedUploadMessage('https://storage.example.com');
       expect(message).toContain('https://storage.example.com');
-      expect(message).toContain('STORAGE_CSP_ORIGIN');
+      expect(message).toContain('app.d/csp');
     });
   });
 

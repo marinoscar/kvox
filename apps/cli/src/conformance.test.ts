@@ -46,19 +46,21 @@ runPlatformConformance({
         {
           name: 'infra/compose/.env.example',
           text: readFileSync(ENV_EXAMPLE, 'utf8'),
-          // Optional variables this template documents by a commented example
-          // on purpose (the CLI reads each as a declared optional key). A new
-          // illustrative `# KEY=value` line is a failure: describe the value in
-          // prose instead.
+          // Optional variables the GENERATED template documents by a commented
+          // example on purpose (the CLI reads each as a declared optional key):
+          // they come from the platform's `env/base.env.example`, so the list
+          // is the platform's, not this app's. A new illustrative `# KEY=value`
+          // line in `infra/compose/app.env.example` is a failure: describe the
+          // value in prose instead and write a default uncommented.
           allowCommented: [
-            'VAPID_PUBLIC_KEY',
-            'VAPID_PRIVATE_KEY',
-            'VAPID_SUBJECT',
+            'CORS_ORIGIN',
+            'MICROSOFT_CLIENT_ID',
+            'MICROSOFT_CLIENT_SECRET',
+            'MICROSOFT_CALLBACK_URL',
             'TEST_AUTH_ENABLED',
             'MAINTENANCE_MODE',
             'OTEL_DEBUG',
             'JOBS_SYSTEM_MODE_EXTRA_TYPES',
-            'KG_MIGRATE_SCHEDULE_ENABLED',
           ],
         },
       ],

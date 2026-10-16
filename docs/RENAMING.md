@@ -91,6 +91,7 @@ edits:
 | `README.md` (title, tagline, CI badge URL, clone/`cd` instructions, directory-tree root) | The one place in the codebase where the product name and repo slug appear as hand-written prose rather than as a rendered value. |
 | `infra/compose/.env.example` and `base.compose.yml` (`OTEL_SERVICE_NAME` default) | These are Compose-file string defaults, not JavaScript — nothing executes `@app/shared` to produce them. The codemod changes the *value* only; it never adds a new key, because the CLI's conformance test (`apps/cli/src/conformance.test.ts`) refuses a commented `# KEY=value` line it does not list, and the CLI reads every one as a declared variable. |
 | `infra/compose/test.compose.yml`, `apps/api/.env.test`, `scripts/dev.ps1` (test database name and container name) | Same reasoning as the OTEL default — Compose/env-file values, not code. |
+| **After the codemod: `npm run platform:infra:sync`** | `infra/` is generated from `@marinoscar/platform-infra` with the identity in `identity.json` (#483). The codemod edits the same rendered literals in place, so the files and `infra/platform-infra.lock.json` disagree until the sync re-renders them from the new identity; CI's `sync --check` fails until it is run and committed. |
 | `package.json`'s `"name"` field | npm reads this before any of the repository's own code runs, so it is necessarily a second copy of the slug. |
 | `apps/web/public/favicon.svg` and `apps/web/public/icons/source.svg` (the `fill` attribute on the background rect) | These are the two hand-editable *vector* masters. `generate-icons.py` reads the manifest for the *rasters* but deliberately does not rasterise these two SVGs — see [The binary-name decision](#the-binary-name-decision)'s sibling note in `packages/shared/README.md` on why an SVG toolchain is refused. |
 | `cliName` in `packages/shared/identity.json` and `apps/cli/package.json`'s `bin` key | Only touched when `--cli-name` is passed — see the next section. |
@@ -429,7 +430,7 @@ declared unconditionally.
 ### 5. Bring it up, migrate, seed
 
 ```bash
-docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
+docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f app.devdb.pgvector.compose.yml up
 npm run prisma:migrate --workspace=api
 npm run prisma:seed --workspace=api
 ```

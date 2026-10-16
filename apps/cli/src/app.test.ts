@@ -7,7 +7,7 @@ import { configDirName, createCli, envPrefix, versionText } from '@marinoscar/pl
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { APP_CLI_OPTIONS, readVersion } from './app.js';
+import { APP_CLI_OPTIONS, APP_STREAM_PATHS, readVersion } from './app.js';
 
 // =============================================================================
 // The CLI is `createCli()` with this app's identity  (issue #482, epic #478)
@@ -171,5 +171,17 @@ describe('no copy of a platform engine file', () => {
     'init',
   ])('src/%s does not exist', (name) => {
     expect(existsSync(join(HERE, name))).toBe(false);
+  });
+});
+
+describe('the streaming routes of the shared host proxy', () => {
+  it('cover the three server-sent-event families of this app, and the same ones the inner nginx streams', () => {
+    expect(APP_CLI_OPTIONS.proxy?.streamPaths).toEqual(APP_STREAM_PATHS);
+    expect([...APP_STREAM_PATHS].sort()).toEqual(['/api/ask/messages/', '/api/note-generations/', '/api/notes/']);
+
+    // infra/nginx/app.d/locations/app-streams.conf is the inner nginx's copy of the same routes.
+    const inner = readFileSync(join(REPO_ROOT, 'infra', 'nginx', 'app.d', 'locations', 'app-streams.conf'), 'utf8');
+    expect(inner).toContain('^/api/(notes|note-generations)/[^/]+/stream$');
+    expect(inner).toContain('^/api/ask/messages/[^/]+/stream$');
   });
 });
