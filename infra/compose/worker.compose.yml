@@ -1,3 +1,5 @@
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.5 (compose) — do not edit; extend through an infra/compose/app.*.compose.yml overlay
+# Source of truth: @marinoscar/platform-infra/compose/worker.compose.yml; re-materialise with `npx platform-infra sync`
 # =============================================================================
 # Worker node fleet  (issue #278, epic #254)
 # =============================================================================
@@ -27,8 +29,8 @@
 # -----------------------------------------------------------------------------
 # The service key is `worker`, which is unambiguous inside this bundle and
 # needs no rename. The environment-variable names are the second unavoidable
-# copy of apps/cli/src/node/worker-env.ts, guarded bidirectionally by
-# apps/cli/src/node/worker-env.test.ts.
+# copy of packages/platform-cli/src/engine/node/worker-env.ts, guarded
+# bidirectionally by packages/platform-cli/src/engine/node/worker-env.test.ts.
 # =============================================================================
 
 services:
@@ -48,7 +50,7 @@ services:
 
     environment:
       # ---- Required ---------------------------------------------------------
-      # The server, and a `nod_` node credential from the CLI's `node enroll`.
+      # The server, and a `nod_` node credential from `kvox node enroll`.
       # These two alone are enough: with no config file the worker synthesises
       # its settings from the environment.
       KVOX_SERVER_URL: ${KVOX_SERVER_URL:?set KVOX_SERVER_URL}

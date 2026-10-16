@@ -1,0 +1,16 @@
+# =============================================================================
+# App overlay (scope devdb) - the development database carries pgvector
+# =============================================================================
+# The platform's devdb.compose.yml runs `postgres:16-alpine`. Semantic search
+# needs the `vector` extension, a server-side control file that CREATE
+# EXTENSION cannot install from the client, so the first migration that uses it
+# would abort on that image. `pgvector/pgvector:pg16` is the same PostgreSQL
+# major (an existing `dev-db-data` volume keeps working; the base OS moves
+# from Alpine to Debian, which the data directory does not see).
+# the extensions script in postgres-init/ (20-*) creates the extensions on the first start
+# of an empty volume.
+# =============================================================================
+
+services:
+  db:
+    image: pgvector/pgvector:pg16

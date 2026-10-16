@@ -1,5 +1,3 @@
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { Routes, Route, Navigate } from 'react-router-dom';
 // Issue #465, epic #462. Identity is the platform's: the session provider, the
 // route guards and the identity pages come from `@marinoscar/platform-web`.
@@ -46,7 +44,15 @@ import './config/settingsFeatures';
 // configured once at module scope in `platform/notifications.ts` (imported by
 // `main.tsx`).
 import { NotificationProvider } from '@marinoscar/platform-web/notifications/headless';
-import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
+// Issue #484, epic #478. The shell is the platform's (`@marinoscar/platform-web/shell`):
+// `ShellRoot` holds the viewer's light/dark/system choice (under the `theme_mode`
+// key this app has always used) and mounts MUI's `ThemeProvider` and `CssBaseline`;
+// `Layout` binds `ShellLayout`. `AppGraphFeatureProvider` is the one read of the
+// connected-knowledge switch the `knowledge` destination and the hub cards gate on;
+// it sits above the platform host, like the AI and telemetry config providers.
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { AppGraphFeatureProvider } from './platform/GraphFeatureBinding';
+import { darkTheme, lightTheme } from './theme';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
@@ -161,10 +167,11 @@ const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage')
 // destination and why there is no admin equivalent and no backfill cron.
 const UserSearchIndexPage = lazy(() => import('./pages/UserSearchIndexPage'));
 const UserKnowledgeGraphPage = lazy(() => import('./pages/UserKnowledgeGraphPage'));
-// Issue #279, epic #271 — the caller's own activation checklist, and the place
-// the shell banner (#277) leads. A registry card in `userSettingsSections.tsx`
-// like every sibling above, and ungated here for the same reason they are.
-const GettingStartedPage = lazy(() => import('./pages/GettingStartedPage'));
+// Issue #279, epic #271; the platform's Get started page since #481 — the caller's own activation
+// checklist, and the place the shell banner (#277) leads. A registry card in
+// `userSettingsSections.tsx` like every sibling above, and ungated here for the same reason they
+// are. This app's AI-key explanation rides in the page's `BeforeContent` slot.
+const GettingStartedPage = lazy(() => import('./components/onboarding/GettingStartedRoute'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -262,11 +269,10 @@ const BroadcastsPage = lazy(() =>
     default: m.BroadcastsPage,
   })),
 );
-// Issue #278, epic #271 — the deployment's first-run checklist. Lazy like
-// every other admin page: an administrator who never opens the Console should
-// not carry it in the entry chunk, and neither should a Viewer, who cannot
-// reach the route at all.
-const SetupPage = lazy(() => import('./pages/Admin/SetupPage'));
+// Issue #278, epic #271; the platform's Setup guide since #481 — the deployment's first-run
+// checklist. Lazy like every other admin page: an administrator who never opens the Console should
+// not carry it in the entry chunk, and neither should a Viewer, who cannot reach the route at all.
+const SetupPage = lazy(() => import('./components/onboarding/SetupGuideRoute'));
 // The packaged Users & Allowlist page plus this app's Reminders tab (`slots.Tabs`).
 const AdminUsersPage = lazy(() => import('./identity/UsersPage'));
 
@@ -275,12 +281,15 @@ const TestLoginPage = import.meta.env.PROD
   ? null
   : lazy(() => import('./pages/TestLoginPage'));
 
-function AppRoutes() {
-  const { theme } = useThemeContext();
+/** The two themes, as the shell's root takes them: module constants. */
+const APP_THEMES = { light: lightTheme, dark: darkTheme };
 
+/** Where the viewer's theme choice is kept in `localStorage`; unchanged by #484. */
+const THEME_STORAGE_KEY = 'theme_mode';
+
+function AppRoutes() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <ErrorBoundary>
         {/* THE CLIENT GATE (#258, epic #254), around the whole route tree and
             inside `AuthProvider`.
@@ -639,15 +648,14 @@ function AppRoutes() {
                       `/settings` wherever each is written. */}
                   <Route path="/settings" element={<UserSettingsHubPage />} />
                   {/* Issue #279, epic #271. Ungated like every `/settings/*`
-                      sibling, and with the same reason `/settings/ai` carries:
-                      `onboarding.controller.ts` gates `GET /api/onboarding` on
-                      `@Auth()` and NO permission, because the resource is the
-                      caller's own activation state, scoped by `userId` in the
-                      query itself. A `RequirePermission` here would be a gate
-                      the API does not have — and it would fail in the worst
-                      direction, shutting a VIEWER (this application's default
-                      role) out of the one page that explains why AI features
-                      are going to ask them for a key. */}
+                      sibling: the platform's `GET /api/onboarding` needs only
+                      `user_settings:read`, which every role holds, because the
+                      resource is the caller's own activation state. A
+                      `RequirePermission` here would be a gate the API does not
+                      have — and it would fail in the worst direction, shutting
+                      a VIEWER (this application's default role) out of the one
+                      page that explains why AI features are going to ask them
+                      for a key. */}
                   <Route path="/settings/getting-started" element={<GettingStartedPage />} />
                   <Route path="/settings/profile" element={<UserProfilePage />} />
                   <Route path="/settings/appearance" element={<UserAppearancePage />} />
@@ -802,19 +810,18 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Issue #278, epic #271. Same permission string the `Setup`
-                      card declares in `config/adminSections.tsx`, which is the
-                      same string `onboarding/admin-onboarding.controller.ts`
-                      enforces on its one GET (#275) — the invariant
-                      `destinations.test.ts` asserts for every card. #275
-                      deliberately reused `system_settings:read` rather than
-                      minting `onboarding:read`, following epic #118 decision
-                      8's precedent for the About card.
-                      The page is read-only apart from the inline invite, which
-                      gates itself on `allowlist:write` internally: the route
-                      gate is about REACHABILITY, and "what does this
-                      deployment still need" is the first thing a new
-                      administrator should be able to open. */}
+                  {/* Issue #278, epic #271. Same permission string the `Setup
+                      guide` card declares in `config/adminSections.tsx`, which
+                      is the permission the platform onboarding slice adds the
+                      `admin` block of `GET /api/onboarding` for (its default
+                      `adminPermission`; no `onboarding:read` is minted,
+                      following epic #118 decision 8's precedent for the About
+                      card) — the invariant `destinations.test.ts` asserts for
+                      every card. The page is read-only apart from the inline
+                      invite, which gates itself on `allowlist:write`
+                      internally: the route gate is about REACHABILITY, and
+                      "what does this deployment still need" is the first thing
+                      a new administrator should be able to open. */}
                   <Route
                     path="/admin/settings/setup"
                     element={
@@ -1266,32 +1273,34 @@ function AppRoutes() {
           one before this change. */}
       <UpdatePrompt useRegisterSW={useRegisterSW} />
       <InstallPrompt appName={APP_NAME} />
-    </ThemeProvider>
+    </>
   );
 }
 
 export default function App() {
   return (
-    <ThemeContextProvider>
+    <ShellRoot themes={APP_THEMES} storageKey={THEME_STORAGE_KEY}>
       <IdentityProviders>
         <AppTelemetryConfigProvider>
           <AppAiConfigProvider>
-            <AppPlatformHostProvider>
-              <JobsWebAdaptersProvider adapters={appJobsAdapters}>
-                <NodesWebAdaptersProvider adapters={appNodesAdapters}>
-                  <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
-                    <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
-                      <AiWebAdaptersProvider adapters={appAiAdapters}>
-                        <AppRoutes />
-                      </AiWebAdaptersProvider>
-                    </TelemetryWebAdaptersProvider>
-                  </DbBackupWebAdaptersProvider>
-                </NodesWebAdaptersProvider>
-              </JobsWebAdaptersProvider>
-            </AppPlatformHostProvider>
+            <AppGraphFeatureProvider>
+              <AppPlatformHostProvider>
+                <JobsWebAdaptersProvider adapters={appJobsAdapters}>
+                  <NodesWebAdaptersProvider adapters={appNodesAdapters}>
+                    <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
+                      <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
+                        <AiWebAdaptersProvider adapters={appAiAdapters}>
+                          <AppRoutes />
+                        </AiWebAdaptersProvider>
+                      </TelemetryWebAdaptersProvider>
+                    </DbBackupWebAdaptersProvider>
+                  </NodesWebAdaptersProvider>
+                </JobsWebAdaptersProvider>
+              </AppPlatformHostProvider>
+            </AppGraphFeatureProvider>
           </AppAiConfigProvider>
         </AppTelemetryConfigProvider>
       </IdentityProviders>
-    </ThemeContextProvider>
+    </ShellRoot>
   );
 }

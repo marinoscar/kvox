@@ -6,15 +6,17 @@
  * a 409 `If-Match` conflict and then THROWS "Settings were updated elsewhere.
  * Please try again." this app's own hook re-read the document and re-applied the
  * SAME patch once (#276, epic #271). That retry is load-bearing here: the
- * navigation rail (`useNavigationPrefs`), onboarding (`OnboardingContext`) and
- * the graph preferences (`useGraphPreferences`) each mount their OWN copy of
+ * navigation rail (the packaged `useShellRailPreference` since #484, which does NOT
+ * retry), the platform onboarding provider (a write of its own,
+ * `PATCH /api/user-settings`) and the graph preferences
+ * (`useGraphPreferences`) each hold their OWN copy of
  * the user-settings document, so one of them writing bumps the version under
  * the others and their next write 409s through no fault of the user. Without
  * the retry that surfaces as a "please try again" for a conflict the hook could
  * have resolved.
  *
  * The fix belongs in the platform hook; delete this file when it retries. Until
- * then the three callers above import `useUserSettings` from here, and the
+ * then the app callers above import `useUserSettings` from here, and the
  * packaged pages (Profile, Appearance, the section chrome) keep the packaged
  * behaviour untouched.
  *

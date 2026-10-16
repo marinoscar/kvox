@@ -20,7 +20,7 @@
 #      and runs the repository's own install.sh from that checkout, with the
 #      shim written to /usr/local/bin so it is on every root shell's PATH.
 #   5. Deploy folder — `mkdir -p /opt/infra/apps`, nothing more.
-#   6. Launch — `kvox deploy doctor --skip-proxy` (read-only), then the
+#   6. Launch — `kvox deploy doctor` (read-only), then the
 #      interactive menu, or with --no-tui the exact next command to run.
 #
 # The CLI checkout at /opt/infra/cli/<name> is deliberately NOT the
@@ -488,8 +488,8 @@ run cd "$CLI_DIR"
 
 note "a first read-only look (exit 6 means a required check failed — fix those before 'deploy install'; it does not stop this script)"
 if [ "$DRY_RUN" = 1 ]; then
-  run "$SHIM" deploy doctor --skip-proxy
-elif run "$SHIM" deploy doctor --skip-proxy; then
+  run "$SHIM" deploy doctor
+elif run "$SHIM" deploy doctor; then
   note "ok: doctor passed"
 else
   DOCTOR_STATUS=$?

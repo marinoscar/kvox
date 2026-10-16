@@ -5,37 +5,28 @@ import { setViewportWidth } from '../../setup';
 import { Layout } from '../../../components/common/Layout';
 
 /**
- * Rewritten wholesale for issue #55. Most of what this file used to assert
- * described `sidebarOpen` state, an `onMenuClick` prop and a drawer close
- * handler — none of which exist any more, because the drawer they belonged to
- * is gone from every breakpoint.
+ * `Layout` is a thin binding of the packaged `ShellLayout` since issue #484
+ * (epic #478), so this suite is about the BINDING, not the chrome:
  *
- * What replaces it is the invariant that actually matters and that nothing
- * else enforces: **exactly one navigation surface at every width.** The rail's
- * `up('sm')` gate and the bottom bar's `down('sm')` gate are hand-kept
- * complements, so a test is the only thing standing between a one-line
- * breakpoint edit and a band with two navs — or none.
+ *   - **exactly one navigation surface at every width.** The rail's `up('sm')`
+ *     gate and the bottom bar's `down('sm')` gate are the package's hand-kept
+ *     complements; walking the exact pixels either side of 600 here is how this
+ *     app notices a package upgrade that drifts them;
+ *   - the slots: the AppBar gets this app's navigation, the bottom bar gets the
+ *     NON-PINNED one (`KVOX_BOTTOM_BAR_NAVIGATION`), the banners sit above the
+ *     page and the welcome dialog is mounted.
+ *
+ * The AppBar and the bottom bar are replaced by markers (they need a session and
+ * the rail preference's network read; the package proves them). The rail is the
+ * package's real one, found by its landmark, and `ShellLayout` is real, so the
+ * gates under test are the shipped ones.
  */
 
-vi.mock('../../../components/navigation/AppBar', () => ({
-  AppBar: vi.fn(() => <div data-testid="mock-appbar" />),
+vi.mock('@marinoscar/platform-web/shell/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/shell/ui')>()),
+  ShellAppBar: vi.fn(() => <div data-testid="mock-appbar" />),
+  ShellBottomNav: vi.fn(() => <div data-testid="mock-bottom-nav" />),
 }));
-
-vi.mock('../../../components/navigation/NavigationRail', () => ({
-  NavigationRail: vi.fn(() => <div data-testid="mock-rail" />),
-}));
-
-vi.mock('../../../components/navigation/BottomNav', () => ({
-  BottomNav: vi.fn(() => <div data-testid="mock-bottom-nav" />),
-}));
-
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    Outlet: vi.fn(() => <div data-testid="outlet-content">Page Content</div>),
-  };
-});
 
 // Issue #365. Mocked so this file can assert the banner mounts and is wired
 // to the hook's own `requestPermission`/`isRequestingPermission`, without
@@ -46,8 +37,9 @@ vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal
   usePushSubscriptionSync: vi.fn(),
 }));
 
-import { AppBar } from '../../../components/navigation/AppBar';
-import { Outlet } from 'react-router-dom';
+import { ShellAppBar, ShellBottomNav } from '@marinoscar/platform-web/shell/ui';
+import { KVOX_BOTTOM_BAR_NAVIGATION, KVOX_NAVIGATION } from '../../../config/shell';
+import { Route, Routes } from 'react-router-dom';
 import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 
 const mockUsePushSubscriptionSync = vi.mocked(usePushSubscriptionSync);
@@ -63,10 +55,29 @@ function mockPushSyncHidden() {
   });
 }
 
+/** The package rail's landmark: present at `sm` and up only (gate 1). */
+function rail(): HTMLElement | null {
+  return screen.queryByRole('navigation', { name: 'Main navigation' });
+}
+
+/**
+ * `Layout` is a route element (the package's `ShellLayout` renders `<Outlet />`
+ * inside `<main>`), so it is rendered as one, with a marker for the routed page.
+ */
+function LayoutRoute() {
+  return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<div data-testid="outlet-content">Page Content</div>} />
+      </Route>
+    </Routes>
+  );
+}
+
 /** Renders at `px`, driving the query-aware matchMedia mock. */
 function renderAt(px: number) {
   setViewportWidth(px);
-  return render(<Layout />);
+  return render(<LayoutRoute />);
 }
 
 /**
@@ -94,19 +105,20 @@ const DESKTOP = 1400;
 describe('Layout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockPushSyncHidden();
   });
 
   describe('Exactly one navigation surface', () => {
     it.each([
-      ['phone', PHONE, 'mock-bottom-nav', 'mock-rail'],
-      ['tablet', TABLET, 'mock-rail', 'mock-bottom-nav'],
-      ['desktop', DESKTOP, 'mock-rail', 'mock-bottom-nav'],
-    ])('mounts one surface and only one at %s width', (_label, width, present, absent) => {
+      ['phone', PHONE, true],
+      ['tablet', TABLET, false],
+      ['desktop', DESKTOP, false],
+    ])('mounts one surface and only one at %s width', (_label, width, phone) => {
       renderAt(width);
 
-      expect(screen.getByTestId(present)).toBeInTheDocument();
-      expect(screen.queryByTestId(absent)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('mock-bottom-nav') !== null).toBe(phone);
+      expect(rail() !== null).toBe(!phone);
     });
 
     it('never mounts both, and never mounts neither, across the sm boundary', async () => {
@@ -117,10 +129,7 @@ describe('Layout', () => {
       for (const width of [375, 599, 600, 601, 900, 1200, 1400]) {
         await act(async () => setViewportWidth(width));
 
-        const surfaces = [
-          screen.queryByTestId('mock-rail'),
-          screen.queryByTestId('mock-bottom-nav'),
-        ].filter(Boolean);
+        const surfaces = [rail(), screen.queryByTestId('mock-bottom-nav')].filter(Boolean);
 
         expect(surfaces, `${width}px should have exactly one navigation surface`).toHaveLength(1);
       }
@@ -133,7 +142,7 @@ describe('Layout', () => {
       expect(screen.getByTestId('mock-bottom-nav')).toBeInTheDocument();
 
       await act(async () => setViewportWidth(600));
-      expect(screen.getByTestId('mock-rail')).toBeInTheDocument();
+      expect(rail()).toBeInTheDocument();
       expect(screen.queryByTestId('mock-bottom-nav')).not.toBeInTheDocument();
     });
   });
@@ -144,7 +153,6 @@ describe('Layout', () => {
 
       const main = screen.getByTestId('outlet-content').closest('main');
       expect(main).toBeInTheDocument();
-      expect(vi.mocked(Outlet)).toHaveBeenCalled();
     });
 
     it('sets minWidth: 0 on <main>', () => {
@@ -170,14 +178,14 @@ describe('Layout', () => {
       // does not evaluate `@media` conditions, so a computed read would report
       // whichever rule happened to be last and silently pass either way. The
       // rules are also the thing the invariant is actually about — the `sm` in
-      // this pb must be the same 600px `BottomNav` gates on, or the padding
+      // this pb must be the same 600px the bottom bar gates on, or the padding
       // outlives the bar it was clearing.
       renderAt(PHONE);
 
       const main = screen.getByTestId('outlet-content').closest('main')!;
       const rules = emittedRulesFor(main);
 
-      // pb: 10 → 80px, which clears the fixed BottomNav's height.
+      // pb: 10 → 80px, which clears the fixed bottom bar's height.
       expect(rules).toMatch(/@media \(min-width:0px\)\{[^}]*padding-bottom:80px/);
       // pb: 3 → 24px at sm and up, matching the other three sides.
       expect(rules).toMatch(/@media \(min-width:600px\)\{[^}]*padding-bottom:24px/);
@@ -185,13 +193,25 @@ describe('Layout', () => {
   });
 
   describe('Shell', () => {
-    it('renders the AppBar with no props at all', () => {
-      // `onMenuClick` is gone from the interface, not merely unused — a
-      // dangling optional handler is how a dead affordance survives a refactor.
+    it('binds the AppBar to this app\'s navigation, with the bell and the user menu slots', () => {
       renderAt(DESKTOP);
 
       expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(vi.mocked(AppBar)).toHaveBeenCalledWith({}, undefined);
+      const props = vi.mocked(ShellAppBar).mock.calls[0][0];
+      expect(props.navigation).toBe(KVOX_NAVIGATION);
+      expect(props.actions).toBeDefined();
+      expect(props.userMenu).toBeDefined();
+    });
+
+    it('binds the bottom bar to the NON-PINNED navigation, never the full one (#484)', () => {
+      // The package draws pinned destinations on the bar and overflows into "More";
+      // this app's rule is that a mode is never a peer on the phone bar.
+      renderAt(PHONE);
+
+      const props = vi.mocked(ShellBottomNav).mock.calls[0][0];
+      expect(props.navigation).toBe(KVOX_BOTTOM_BAR_NAVIGATION);
+      expect(props.navigation).not.toBe(KVOX_NAVIGATION);
+      expect(props.navigation.destinations.some((d) => d.pinned)).toBe(false);
     });
 
     it('owns viewport height so pages do not have to', () => {
@@ -256,7 +276,7 @@ describe('Layout', () => {
   describe('Integration', () => {
     it('renders for an authenticated user', () => {
       setViewportWidth(DESKTOP);
-      render(<Layout />, { wrapperOptions: { authenticated: true, user: mockUser } });
+      render(<LayoutRoute />, { wrapperOptions: { authenticated: true, user: mockUser } });
 
       expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
       expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
@@ -264,7 +284,8 @@ describe('Layout', () => {
 
     it.each([['light'], ['dark']] as const)('renders with the %s theme', (theme) => {
       setViewportWidth(DESKTOP);
-      render(<Layout />, { wrapperOptions: { theme } });
+      localStorage.setItem('theme_mode', theme);
+      render(<LayoutRoute />, { wrapperOptions: { theme } });
 
       expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
       expect(screen.getByTestId('outlet-content')).toBeInTheDocument();

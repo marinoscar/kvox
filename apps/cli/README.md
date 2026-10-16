@@ -2,18 +2,32 @@
 
 First-party command-line client for the API. It authenticates with the same
 device authorization flow as any other headless client, stores a personal
-access token, and then lets you call any API endpoint from a shell — which
-matters because this repository is a **baseline**: new endpoints get added
-and old ones get renamed constantly, and a CLI that hard-codes a subcommand
-per resource goes stale the day it ships. `kvox` has exactly one command
-that talks to the API (`api <method> <path>`), so it stays correct against
-endpoints that don't exist yet.
+access token, and then lets you call any API endpoint from a shell, check and
+deploy a server, and run a machine as a worker node for the job queue.
+
+**The engine is [`@marinoscar/platform-cli`](https://www.npmjs.com/package/@marinoscar/platform-cli)**
+(pinned in `package.json`): the `init`, `login`, `api`, `config`, `node` and
+`deploy` commands, the interactive ink menu, the VPS deploy pipeline and the
+worker-node engine are the platform's, built by one `createCli()` call
+(`src/cli.ts` -> `src/app.ts`). This app adds only what the platform does not
+have; everything else is documented in the package's README and in
+`kvox <command> --help`, and this document does not restate it.
+
+| Where | What it holds |
+| --- | --- |
+| `src/app.ts` | `APP_CLI_OPTIONS`: the identity (from `packages/shared/identity.json`), the version (`package.json`), the node executor, this app's `.env.example` key metadata, one deploy check and the proxy stream paths |
+| `src/executors/media-audio-transcode.executor.ts` | the node executor for `media.audio.transcode` and its `ffmpeg` + `ffprobe` requirement (a node without them refuses to claim the type, naming the missing tool) |
+| `src/extensions/` | the pre-platform `deploy` flags and commands the platform lacks ([the table below](#flags-and-commands-that-changed-in-110)), `deploy update --check`, the `deploy uninstall` name confirmation and `.env` backup, the `bind-port-not-promised` and `docker-network-devnet` checks, the app env-key metadata |
+| `src/run.ts` | one invocation: translate legacy flags, answer `update --check`, otherwise `createCli(...).run` |
 
 Run with no arguments in an interactive terminal and it opens a full-screen
-menu (login, call an endpoint, view config, deploy this server, logout) built
-with [ink](https://github.com/vadimdemedes/ink). Everything that menu can do
-is also a plain subcommand, and the subcommands are what this document
-covers — they're what you'd script or run in CI.
+menu (login, call an endpoint, view config, deploy this server, worker node,
+logout) built with [ink](https://github.com/vadimdemedes/ink). Everything that
+menu can do is also a plain subcommand, and the subcommands are what this
+document covers: they're what you'd script or run in CI.
+
+`kvox --version` prints `<cli version> (platform <engine version>)`, for
+example `1.10.1 (platform 0.1.0-next.5)`.
 
 ## Install
 
@@ -57,12 +71,12 @@ KVOX_SRC=/path/to/repo bash /path/to/repo/install.sh
 ### Verify the install
 
 ```bash
-kvox --version
+kvox --version      # 1.10.1 (platform 0.1.0-next.5)
 kvox --help
 ```
 
 The installer already does this for you as its last step: it runs the new
-shim's `--version`, prints an install summary (version, install size, and
+shim's `--version` (comparing its first word, the CLI version), prints an install summary (version, install size, and
 the app/shim paths), and warns if the version reported by the binary doesn't
 match the version it just built from source — a sign something went wrong
 partway through the deploy step.
@@ -181,8 +195,8 @@ requirement — just these four.
 4. Deploys the standalone app: copies `apps/cli/dist`, `package.json` and
    `README.md` into `$KVOX_HOME/app` (replacing any previous install), then
    runs `npm install --omit=dev` there to pull in just the runtime
-   dependencies (commander, ink, ink-select-input, ink-spinner,
-   ink-text-input, react). `KVOX_HOME` defaults to `~/.kvox` — or to
+   dependencies (`@marinoscar/platform-cli`, which brings commander and ink,
+   and react). `KVOX_HOME` defaults to `~/.kvox` — or to
    `/usr/local/lib/kvox` when the installer is run as root, see below.
 5. Writes the `kvox` shim to `$KVOX_BIN_DIR/kvox` — a small script that
    `exec`s `node $KVOX_HOME/app/dist/cli.js "$@"` — and makes it executable.
@@ -299,9 +313,7 @@ string), not a short-lived session JWT — that's what makes it practical to
 stay logged in for days between commands. It's stored, along with the server
 URL, in `~/.kvox/config.json`. That file is created with `0600`
 permissions (owner read/write only) even across restarts and partial
-rewrites — see the extensive comment on `writeConfigFile` in
-`apps/cli/src/config.ts` if you want the mechanics of how that's guaranteed
-under a hostile umask. The token itself is never printed by any command; if
+rewrites (the mechanics are the platform engine's). The token itself is never printed by any command; if
 you need to see what's stored, `kvox config` prints the server URL and a
 masked hint (`pat_abcd••••••••` — the first eight characters, then a
 fixed-width mask) instead.
@@ -378,35 +390,36 @@ kvox deploy doctor
 ```
 
 Eight subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
-`about`, `list`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
-VPS to running, migrated, seeded, and served over HTTPS at a real domain, and
-back to the latest revision on every subsequent deploy. They run **on the
-VPS itself**: SSH in with your own credentials, build `kvox` from a checkout
-there (see [Building from source](#building-from-source-development) below),
-and run these from inside it. There's no SSH client in `kvox` and no
-laptop-driven orchestration — it never dials out to a server on your behalf.
+`about`, `list`, `certs`) take this repository, or your fork of it, from an
+empty VPS to running, migrated, seeded, and served over HTTPS at a real
+domain, and back to the latest revision on every subsequent deploy. They run
+**on the VPS itself**: SSH in with your own credentials, install `kvox` there
+(see [Fresh server in three commands](#fresh-server-in-three-commands)), and
+run these. There's no SSH client in `kvox` and no laptop-driven
+orchestration: it never dials out to a server on your behalf.
 
-For the full walkthrough — prerequisites, the manual step after install,
-troubleshooting — see [`docs/deployment/vps.md`](../../docs/deployment/vps.md).
-For why it's built this way, see
-[`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md).
+The pipeline, its steps, the answers file, consent, edge config, renewal
+scheduling and run records are the platform's; see the
+[`@marinoscar/platform-cli` deploy README](https://www.npmjs.com/package/@marinoscar/platform-cli)
+for the mechanics. For the walkthrough, prerequisites, the manual step after
+install and troubleshooting, see
+[`docs/deployment/vps.md`](../../docs/deployment/vps.md); for the design and the
+`deploy-info/info.json` schema, [`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md)
+(both were written for the engine this app carried before the platform one, and
+open with a note saying so).
 
-Every subcommand exits `0` on success. The exit codes that matter for
-scripting:
+The exit codes that matter for scripting:
 
 | Exit | Meaning | Which commands use it |
 |---|---|---|
 | `0` | Success | all |
-| `1` | A step failed / installed but unhealthy | `bootstrap-vps.sh`; `status` (unhealthy); `certs status` (a certificate has expired) |
-| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about`, `list` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
-| `6` (`EXIT.PRECONDITION`) | A required `doctor` check failed before anything was changed | `doctor`; `install`/`update`'s own preflight step (a logged-out `gh` stops `install`/`update` here too, before anything is cloned) |
+| `1` | A step failed / installed but unhealthy | `bootstrap-vps.sh`; `status` (unhealthy); `certs` (a certificate is due, or the reload failed) |
+| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about`, `list` (nothing under `--apps-root`/`--root`); a flag this CLI no longer has (see below) |
+| `6` | A required `doctor` check failed before anything was changed | `doctor`; `install`/`update`'s own preflight step |
 
-`about` is the one exception worth calling out: it is informational and
-never a health verdict, so a stopped API container or an unreachable remote
-is reported inline and still exits `0` — only "nothing is installed" is an
-error there, and it shares exit `2` with `status` for that one case, so a
-script can tell "no deployment" apart from "a deployment whose API is
-down."
+`about` is informational and never a health verdict: it reads the deployment
+record off disk and exits `0` when there is none; only "nothing is installed"
+at the path asked for is an error.
 
 ### Fresh server in three commands
 
@@ -457,7 +470,7 @@ Six steps, each printed before it runs, each verified after:
    `KVOX_BIN_DIR=/usr/local/bin`, so `kvox` is on every root shell's PATH.
    Verified with `kvox --version`.
 5. **Deploy folder** — `mkdir -p /opt/infra/apps`, nothing more.
-6. **Launch** — `kvox deploy doctor --skip-proxy` for a first read-only look
+6. **Launch** — `kvox deploy doctor` for a first read-only look
    (its exit code is reported, not fatal), then `kvox` — the interactive
    menu — or with `--no-tui` the exact next command:
    `kvox deploy install --domain <your-domain>`.
@@ -500,10 +513,10 @@ name**, so the containers are `<name>-api-1`, `<name>-web-1`,
 The same three flags select the app on every subcommand:
 
 ```
-  --apps-root <dir>  Directory that holds one folder per app (default:
-                     "/opt/infra/apps")
-  --name <app>       App folder and compose project name
-  --root <dir>       Deployment directory, overriding --apps-root/--name
+  --apps-root <path>  Directory holding the deployments (default:
+                      "/opt/infra/apps")
+  --name <app>        Which deployment to act on, by name
+  --root <path>       Deployment directory (an explicit path)
 ```
 
 `install` defaults `--name` to the repository's own name (`…/kvox.git`
@@ -525,1151 +538,251 @@ With several installed, none named, and none of them the folder you are in,
 they refuse and list them until `--name` says which.
 `kvox deploy list` shows what they found.
 
-### Checking prerequisites
-
-```bash
-kvox deploy doctor
-kvox deploy doctor --domain app.example.com
-```
-
-Nothing is installed, written or started — it's read-only, so it's safe to
-run against a production server at any time, not just before a first
-install. It runs around 32 checks, in five groups:
-
-- **Host** — Docker and its daemon, the Compose v2 plugin, the `devnet`
-  Docker network, git, node, disk
-  and memory headroom, the loopback port; the shared reverse proxy's
-  directory and its `conf.d`/webroot being writable; the proxy **container**
-  (found by `--proxy-container`, else whatever publishes `:443`, else
-  `proxy-nginx`), that it runs on the host network, that its config passes
-  `nginx -t` *inside* the container, and that it has IPv6 (the vhost binds
-  `[::]`); the `certbot/certbot` image being pulled (certificates are issued
-  with `docker run`, never a host `certbot`); ports 80 and 443; and, when
-  `ufw` is installed, that it allows both.
-- **GitHub CLI** — `gh` installed, `gh auth status` passing, and the
-  repository being deployed visible to that account (`gh repo view`). All
-  three are required: the server clones a private repository over HTTPS with
-  gh's token — `install` and `update` run `gh auth setup-git` for you, and
-  an `ssh://` or `git@github.com:` origin copied from a laptop is rewritten
-  to HTTPS so that helper is the credential git uses. A remote that isn't on
-  github.com is skipped, not failed, and deployed with plain git;
-  `--skip-github` skips the group (and the pipelines' `auth` step).
-- **Database** — the external PostgreSQL database: reachable, credentials
-  valid, database exists, can create tables, the `vector` extension
-  (`pgvector`) installed or available to install — *required*, because the
-  semantic-search migration cannot run without it, and a `warn` when it is
-  available but the connecting role is not a superuser — and TLS.
-- **DNS** and **TLS** — once `--domain` turns them on: the name resolves and
-  points here (`--public-ip`, or `KVOX_PUBLIC_IP`, states this server's
-  address when it sits behind NAT — no external echo service is ever asked),
-  the certificate's presence and expiry, and that something renews it
-  (`certbot.timer`, a cron line mentioning `certbot` or `renew` anywhere in
-  `/etc/cron.d`, `/etc/crontab` or `crontab -l`, or the CLI's own
-  `/etc/cron.d/kvox-certs-*`).
-
-`--skip-proxy` makes every proxy, certificate, port and DNS check report
-`skip` — it's how the pipeline runs on a box with no proxy at all, such as
-CI.
-
-```bash
-kvox deploy doctor --json | jq '.checks[] | select(.status=="fail")'
-```
-
-Exits `6` (`EXIT.PRECONDITION`) when a required check fails, `0` when only
-recommended checks fail — warnings never fail the run. `--json` prints a
-machine-readable report on stdout and nothing on stderr.
-
-Other flags, from `kvox deploy doctor --help`:
-
-```
-Options:
-  --apps-root <dir>         Directory that holds one folder per app (default:
-                            "/opt/infra/apps")
-  --name <app>              App folder and compose project name
-  --root <dir>              Deployment directory, overriding --apps-root/--name
-  --proxy-root <path>       Shared reverse proxy directory (default:
-                            "/opt/infra/proxy")
-  --port <port>             Loopback port the proxy forwards to (default: "3535")
-  --domain <domain>         Public domain; enables the DNS and TLS checks
-  --proxy-container <name>  Verify this proxy container instead of finding one
-  --public-ip <ip>          This server's public address, for the DNS check
-                            behind NAT (env: KVOX_PUBLIC_IP)
-  --skip-proxy              Skip the proxy, certificate, port and DNS checks
-  --skip-github             Skip the GitHub CLI checks (a non-GitHub remote)
-  --json                    Print a machine-readable report on stdout
-  --no-color                Disable colour even on a terminal
-```
-
-`install` runs the required checks above as its own preflight step, and
-`update` runs a named subset of them — the host, git, disk, the `devnet`
-network, the proxy pair, and the **whole database chain** including
-`pgvector`, because `update` migrates and those are preconditions of a step
-it is about to run. (DNS and certificates are not re-litigated on a site that
-is already serving.) So nothing either does is skipped by running `doctor`
-first — but running it on its own first means you find out about a bad DNS
-record or an unreachable database before you're mid-pipeline, not partway
-through one.
-
-### Installing
-
-```bash
-kvox deploy install --domain app.example.com
-```
-
-Runs preflight → network → auth → checkout → environment →
-validate-environment → build → migrate → seed → start → health → publish →
-verify, in that order, printing each step's result as it completes.
-`--domain` is the one required flag. `network` creates the external `devnet`
-Docker network the compose files declare when the host does not have it yet,
-and is a no-op when it does. `auth` is where a logged-out GitHub CLI stops
-the run — exit `6`, with the `gh auth login` command to fix it — *before*
-anything is cloned; for a GitHub remote it runs `gh auth setup-git` so plain
-`git` fetches with gh's token, and for any other remote it stands down.
-Everything is written under `<apps-root>/<name>/`, and the `.env` it writes
-carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose` in the
-compose directory sees the same project the CLI does.
-
-The repository and ref come from **this checkout's own git remote**, not a
-value hardcoded in the CLI — a fork deploys itself with no configuration
-change; see "Deploying a fork" below.
-
-```bash
-kvox deploy install --domain app.example.com --staging
-kvox deploy install --non-interactive --domain app.example.com
-```
-
-Use `--staging` while you're still working out the setup — it requests a
-Let's Encrypt **staging** certificate instead of a production one. Worth
-doing before a first real attempt, because a failed production issuance
-spends real rate-limit budget: five failures per hostname per hour, and 50
-certificates per registered domain per week, shared with every subdomain on
-that server. `--non-interactive` skips every prompt and fails, listing
-what's unresolved, rather than asking; pair it with `--all` to review every
-environment variable instead of only the essential dozen.
-
-With `--all`, the interactive (ink) wizard's remaining "Everything else" step
-is **paginated, one page per `.env.example` section banner** (issue #240),
-capped at six keys a page. Rendering all ~37 leftover keys at once (74 rows —
-each key costs a keep/edit/skip row plus a value row) pushed the focused
-field off-screen, so the step could not be completed at all; splitting on the
-template's own section headings (`Web Push`, `Observability`, …) instead of a
-running count keeps a section's keys together and lets each page carry the
-section name and a `page N of M` marker the operator can match against the
-file they copied from. The rail still shows one entry for the whole step —
-adjacent pages collapse into it — so the wizard still reads as ten steps no
-matter how many pages the catch-all splits into. A key the template ships
-with no value (commented out, or blank) now offers "Leave unset" in place of
-"Keep", since there is nothing behind a blank field to keep.
-
-**Telemetry (`--group observability`).** Opting into the group adds the
-platform telemetry stack to the deployment: an OpenTelemetry collector and
-GreptimeDB, with the API's telemetry explorer and dashboard reading them back.
-The wizard asks for the three GreptimeDB passwords (`GREPTIME_WRITER_PASSWORD`,
-`GREPTIME_READER_PASSWORD`, `GREPTIME_ADMIN_PASSWORD`) and refuses the
-template's `change-me-*` placeholders; in a `--non-interactive` run supply them
-with `--answer`. A deployment carries the stack exactly when its `.env` holds
-all three, and then every compose command of `install`, `update`, `status` and
-`uninstall` is run with `base`, `prod`, `telemetry`, `vps`, `vps.telemetry`
-(in that order: the VPS files harden the telemetry services, so they come
-after them, and nothing is published on a public interface). Without the three
-passwords the list is unchanged: `base`, `prod`, `vps`. GreptimeDB adds roughly
-1 GiB of memory (capped at 1 GiB in `vps.telemetry.compose.yml`) on top of the
-API, the web container and the collector, so size the host for it. To add the
-stack to an existing deployment, put the three passwords in its `.env` and run
-`kvox deploy update`. `APP_DB_USER` and `APP_DB_PASSWORD` are the development
-and test database's application-role bootstrap and are never written to a
-deployment's `.env`.
-
-The wizard also no longer asks about Web Push (`VAPID_PUBLIC_KEY` /
-`VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`), even under `--all` (issue #241): the
-admin UI at `/admin/settings/push` generates, rotates and enables these live,
-with no restart, and is the intended path. The three variables are still
-read — `PushConfigService.resolveActiveVapidConfig()` falls back to them when
-no configuration has been saved through that page — so an operator who wants
-the environment-variable path can still set them by hand in `.env`; see
-[`docs/runbooks/vapid-keys.md`](../../docs/runbooks/vapid-keys.md).
-
-The environment is collected in **steps** — domain, database, secrets,
-Google OAuth, admin, resources — and each is verified before the next
-question: the DNS record when the domain is typed, the connection,
-credentials, database and privileges when the database is. A failed check
-re-enters the step with its remedy shown, so a wrong password is corrected
-on the spot. Nothing is pre-filled for the database host. Secrets are
-generated (on every path, including `--non-interactive`); the loopback
-port, the job worker slots and the container memory limits are **measured
-from the server and applied, not asked** (issue #257) — `min(4, cpus − 1)`,
-a limit sized to the RAM, and the first port from 3535 that clears all three
-port sources below. Each is printed as it is taken and appears in the Review
-table with its reason, so nothing is applied without being shown; pass
-`--answer APP_BIND_PORT=3600` to decide one yourself, or `--all` to be asked
-about every one of them. A value already in the `.env` is never
-second-guessed. The
-OAuth step prints the exact redirect URI to register before asking for the
-client id. The id is checked locally before anything reaches Google: one
-that doesn't contain `.apps.googleusercontent.` is certainly the wrong field
-(a project id, an API key) and hard-fails on the spot; one that does but
-doesn't end `.apps.googleusercontent.com` — a well-formed placeholder on a
-reserved TLD such as RFC 2606 `.invalid` or `.test` — only warns and skips
-the probe entirely, since it can't be a client Google knows about and
-probing it would send a credential to a third party for a value that isn't
-real. A step's `onLeave` checks run in `--non-interactive` mode too
-(`env-wizard.ts`), which is why that distinction matters for an unattended
-install and not just an interactive one. Only an id actually ending
-`.apps.googleusercontent.com` is verified against Google's own token
-endpoint: a deliberately bogus authorization code gets `invalid_client` back
-when the pair isn't real (a hard failure) or `invalid_grant` when it is (the
-pass). That proves the credentials are a real pair, not that login will
-work — a client secret can't be fully exercised without a browser round-trip,
-and whether the redirect URI is actually registered isn't checkable from
-here. Google being unreachable is a warning, not a failure — an operator on
-a restricted network must still be able to install.
-
-The **bind port** is chosen against three sources, because each sees
-something the other two cannot (issue #257): the state files of the apps
-under `--apps-root` (a stopped app this CLI installed), every host port
-Docker has been told to publish — read from `HostConfig.PortBindings`, so a
-**stopped** container this CLI did not install counts too — and a live
-loopback bind probe (a stray process that is no container at all). The
-reason shown beside the chosen port names whichever of the three passed the
-earlier ones over ("3536: 3535 is held by container pgadmin"). Docker is not
-a requirement of the scan: a query that fails, times out or returns nothing
-parseable falls back to the other two sources rather than refusing to
-suggest a port.
-
-The port is then **re-verified immediately before `docker compose up -d`**,
-because the build, migration and seed between choosing it and binding it
-take minutes. If it was taken in that window the install stops and names the
-port and, where Docker can say, the container now holding it. It is
-deliberately not re-picked: an external proxy or a DNS record may already
-point at that port, so the remedy is yours (`--answer APP_BIND_PORT=<n>`).
-This deployment's **own** containers are not a collision — a `--resume`
-after a failed health step finds its own `nginx` still on the port, which
-`up -d` is about to recreate.
-
-When the Database step's own checks fail specifically because the database
-itself does not exist yet, the wizard offers to create it — naming the
-database, host, port and user — then re-runs the step's checks so
-`database-privileges` — "can this user create tables", which is what decides
-whether the migrations will work — finally answers instead of staying skipped
-(issue #238). Declining leaves the failure exactly as it was,
-`createdb` remedy included. With a terminal, `--create-database` only sets
-that confirmation's default answer; you're still asked by name. Under
-`--non-interactive` there is nobody to ask, so `--create-database` is the
-entire authorisation — without it an unattended run reports the missing
-database and stops, same as before this flag existed. See
-[`docs/specs/vps-deploy.md` §20](../../docs/specs/vps-deploy.md#20-creating-the-database-on-request-only-issue-238)
-for the exact bounds (one statement, only when the database is genuinely
-absent, no roles or extensions, never destructive).
-
-`--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (a `.env`-format
-file; the file first, then the flags) seed values without a prompt. The
-domain may be given in the file as `APP_DOMAIN`. Every value goes through
-the same validator the prompt would apply, before anything runs:
-
-```bash
-kvox deploy install --non-interactive --answers-file answers.env
-```
-
-with only the domain, the database, the OAuth client and the admin email in
-the file is a complete install — every secret generated, every resource
-suggested and printed with its reason in the review table.
-
-`install` is idempotent — if it fails partway through, fix whatever it
-reported and run the same command again, or add `--resume` to continue from
-the step that failed rather than re-running everything before it.
-`--reinstall` installs over an existing deployment on purpose; `--force`
-discards uncommitted changes in the checkout it manages; `--skip-doctor`,
-`--skip-proxy` and `--skip-seed` each skip exactly the one stage they name.
-
-**Which deployment `install` acts on** is decided before anything is read or
-written, in three ranks (issue #266):
-
-1. `--root <dir>` or `--name <app>`, and `--repo <url>` for the repository
-   itself.
-2. **The deployment you are standing in.** From a deploy root under
-   `--apps-root` — or any directory inside one, such as
-   `<root>/repo/infra/compose` — the state file there names the repository,
-   the ref and the app, and that is what is used. This is what makes
-   `cd /opt/infra/apps/<app> && kvox deploy install --resume` work, which is
-   where the on-screen instruction after a failed install leaves you standing.
-   The walk upward stops at the apps root: standing at the apps root itself,
-   or above it, resolves nothing this way.
-3. The `origin` of the git checkout around the current directory.
-
-Rank 2 exists because rank 3 answered a question it could not answer: on a
-server whose `/opt/infra` is itself a git repository — infrastructure as code,
-with the apps underneath it — the walk went past the deploy root's own state
-file and derived the app from the infrastructure repository. That is refused
-outright (a checkout containing the apps root is never treated as the
-application), and the refusal still stands for a directory that really does
-imply nothing. Nothing is ever scanned for candidates: exactly one deployment
-is implied by a directory, or none.
-
-`--resume` is available after **any** failed run, including the first install
-at a deploy root. A run that fails writes its deployment state before it
-exits, recording the steps that did complete, the step that stopped it and
-that it did not finish — so `--resume` re-enters at that step and skips the
-clone, the image build and the migration that already succeeded. The failed
-run does **not** write `deploy-info/`: that file is what the running
-application reports about itself, and an install that did not finish has not
-deployed what it would claim. `deploy status` says so on such a root ("the
-last install failed at `<step>`") rather than reporting it as an ordinary
-deployment, and re-running plain `install` there does **not** ask for
-`--reinstall` — nothing was deployed for it to install over. A failed run
-over a deployment that *had* previously completed still does.
-
-`--resume` reads the state file inside the deploy root, so it needs that root
-resolved first — which rank 2 above now does from the directory you are
-standing in. Outside the apps root, name the deployment with `--name` (or
-`--root`, or `--repo`) exactly as the original run did; with nothing to point
-at, `--resume` refuses rather than starting a new install somewhere else.
-
-The `publish` step talks to the shared proxy **container** only — there is
-no host `nginx` or `certbot` on the server. Before spending any Let's
-Encrypt rate-limit budget it writes a nonce under the proxy's ACME webroot
-and fetches it over `http://<domain>/.well-known/acme-challenge/…` — the
-exact path the HTTP-01 challenge takes — and fails, naming the domain and
-what answered instead, when the nonce does not come back (a wrong DNS
-record, or a proxy not serving the webroot). The certificate is then issued
-with `docker run --rm … certbot/certbot certonly --webroot`, the vhost is
-written with the paths the container sees (`/var/www/certbot`,
-`/etc/letsencrypt/live/<domain>/…`), and it is validated and reloaded with
-`docker exec <container> nginx -t` / `nginx -s reload`, rolled back if `-t`
-fails. The container is `--proxy-container`, else whatever `doctor` found
-publishing `:443`, else `proxy-nginx`, and is recorded in the state so
-`update` reuses it. `--no-ipv6` renders the vhost without `[::]` listeners
-for a host with IPv6 disabled (the reload, not `nginx -t`, is what fails
-there). When this deployment has no renewal entry yet, one is written to
-`/etc/cron.d/kvox-certs-<name>` (see [Certificates](#certificates) below);
-`--install-cron` writes it regardless, `--no-install-cron` never does. The
-gate is whether an entry exists, not whether this run issued a certificate,
-so a re-run over an existing certificate installs the missing schedule
-instead of silently leaving it out.
-
-**`/etc/cron.d` is root-owned, so this one step may need you.** The CLI runs
-as an ordinary user on purpose — running it under `sudo` resets `HOME` and
-logs `gh` out — so on a standard server it cannot write that file. That does
-**not** fail the install: the certificate is issued, the vhost is live, the
-site serves HTTPS, and the run finishes with an `Action required:` block
-carrying the error and one line to paste, e.g.
-
-```bash
-sudo install -m 644 /opt/infra/apps/<name>/kvox-certs-<name> /etc/cron.d/kvox-certs-<name>
-```
-
-The file named there is the exact one the CLI would have written; it is
-staged in the deploy root so you can read it first. Verify afterwards with:
-
-```bash
-ls /etc/cron.d/kvox-certs-*
-```
-
-`doctor`'s `cron-dir-writable` check tells you in advance whether this step
-will be needed. It is `recommended`, never `required` — a root-owned
-`/etc/cron.d` is the ordinary case, not a broken server.
-
-Other flags, from `kvox deploy install --help`:
-
-```
-Options:
-  --apps-root <dir>    Directory that holds one folder per app (default:
-                       "/opt/infra/apps")
-  --name <app>         App folder and compose project name
-  --root <dir>         Deployment directory, overriding --apps-root/--name
-  --domain <domain>    Public domain to publish under
-  --proxy-root <path>  Shared reverse proxy directory (default:
-                       "/opt/infra/proxy")
-  --port <port>        Loopback port the proxy forwards to (default: suggested,
-                       from 3535)
-  --repo <url>         Repository to deploy (default: this checkout's origin)
-  --ref <ref>          Branch, tag or commit (default: the remote default
-                       branch)
-  --email <email>      Certificate registration address
-  --group <name>       Optional feature group; repeat for more (default: [])
-  --all                Review every environment variable, not only the essential
-                       ones
-  --non-interactive    Never prompt; fail listing anything unresolved
-  --answer <KEY=VALUE>  Supply one environment value without a prompt; repeat
-                       for more (default: [])
-  --answers-file <path>  Supply environment values from a .env-format file
-  --reinstall          Install over an existing deployment
-  --resume             Continue from the step that failed
-  --skip-doctor        Skip the prerequisite checks
-  --skip-proxy         Do not touch the reverse proxy or request a certificate
-  --skip-seed          Do not run the database seed
-  --create-database    Create the PostgreSQL database when it does not exist
-  --skip-github        Never consult the GitHub CLI, even for a GitHub remote
-  --no-cache           Rebuild images without the layer cache
-  --force              Discard uncommitted changes in the checkout
-  --staging            Use Let's Encrypt staging while working out the setup
-  --proxy-container <name>  Publish through this proxy container instead of
-                       finding one
-  --no-ipv6            Render the vhost without [::] listeners (a host with
-                       IPv6 disabled)
-  --install-cron       Write the certificate renewal cron even when this
-                       deployment already has one
-  --no-install-cron    Never write the renewal cron
-  --fresh              Discard this app's prior .env, state file and
-                       deploy-info first, and install clean
-  --json               Print a machine-readable result on stdout
-```
-
-`--fresh` is the "start over on the same server" flag, and it exists because
-`.env` deliberately lives at `<deployRoot>/.env` — *outside* `repo/` — so
-that `rm -rf repo` can't take your secrets with it. That's right for a
-re-clone and wrong for a start-over, and it's how a corrupt `.env` survived
-three consecutive install attempts and produced a failure whose symptom
-pointed nowhere near its cause (issue #259). `--fresh` discards **this app's
-local state only** — the `.env`, the state file and `deploy-info/` — after
-copying the old `.env` to `<apps-root>/<name>.env.<timestamp>.bak` (0600),
-and then installs normally. It implies `--reinstall`.
-
-It deliberately does **not** touch the containers, the proxy vhost, the TLS
-certificate or the database, and it needs no typed confirmation: nothing
-irreversible is destroyed, because the backup is taken first and the clone is
-re-fetched anyway. To remove a deployment outright, use `uninstall` below.
-
-**`install` does not create an admin user.** The seed writes the allowlist
-row for `INITIAL_ADMIN_EMAIL`, not a user account — nobody has access until
-that address logs in through Google OAuth at `https://<domain>`. See "After
-install: the first login" in the runbook linked above.
-
-### Removing a deployment
-
-```bash
-kvox deploy uninstall --dry-run          # see exactly what would go
-kvox deploy uninstall --confirm myapp    # then do it
-
-# the data too, each with its own typed confirmation
-kvox deploy uninstall --dry-run --drop-database --purge-storage
-kvox deploy uninstall --confirm myapp \
-    --purge-storage --confirm-bucket my-bucket \
-    --drop-database --confirm-database appdb
-```
-
-It is also the `Uninstall` destination in `kvox tui` → Deploy, which drives
-this exact command.
-
-```
-  --confirm <name>           Type the app's own name to authorise the removal
-  --drop-database            ALSO drop the database (off by default)
-  --confirm-database <name>  Type the database's own name to authorise it
-  --purge-storage            ALSO empty this app's prefixes in the bucket
-  --confirm-bucket <name>    Type the bucket's own name to authorise it
-  --dry-run                  List everything that would be removed; change
-                             nothing
-  --certs                    Also delete the TLS certificate
-  --keep-env                 Leave the .env in place (a backup is taken either
-                             way)
-  --non-interactive          Never prompt; every --confirm* is then required
-  --skip-proxy               Do not touch the shared reverse proxy
-  --proxy-root <path>        Shared reverse proxy directory
-  --proxy-container <name>   Proxy container to reload
-  --json                     Print a machine-readable result on stdout
-```
-
-**Removes**, in this order:
-
-- **the compose project** — containers, project networks and named volumes,
-  with `down -v --remove-orphans` through the same
-  `-p <name> -f base -f prod -f vps` invocation `install` uses. `-v` is what
-  makes it a removal rather than a stop.
-- **the deploy root** — `repo/`, `.env`, `logs/`, `data/`, `deploy-info/` and
-  the state file, named one by one so `--dry-run` can print a list.
-- **this app's vhost** in the shared proxy, by its exact path and only when it
-  still carries the `# Managed by appctl deploy` marker, then **reloads** the
-  proxy (never restarts it — that would drop every other site's connections).
-- **this app's certificate renewal cron**, `/etc/cron.d/kvox-certs-<name>` —
-  but **only quietly when another entry survives**. Every such entry runs
-  `certs renew --all`, so one entry renews *every* certificate behind the
-  shared proxy, not just its own app's. If this was the **last** one, it is
-  still removed (leaving it means a cron pointing at a deploy root that no
-  longer exists, failing silently twice a day) and the run prints an
-  `Action required:` block above everything else, saying that automatic
-  renewal has stopped **for every app on the server** and giving the exact
-  `kvox deploy certs renew --install-cron --apps-root <dir> --name <surviving-app>`
-  to put it back — naming a real surviving deployment where there is one.
-  `--dry-run` prints it too, which is when you actually want to know.
-
-**Removes only if you ask for it by name** (issue #268). Both are off by
-default, and neither is reachable by omission:
-
-- **`--drop-database`** issues `DROP DATABASE "<name>"` against the `postgres`
-  maintenance database, through the same one-off `psql` container every
-  database check uses. It runs **after** the containers are down, so in the
-  ordinary case nothing is connected and **no session is touched at all**. If
-  the drop is refused with `55006` ("is being accessed by other users"), the
-  open sessions are ended — **scoped to this one database**, never a bare
-  terminate-all — and the number ended is reported. If they can't be ended,
-  you get the `pg_stat_activity` query that names exactly what is holding it
-  open, not psql's own sentence.
-- **`--purge-storage`** empties the six prefixes this application writes —
-  `avatars/`, `database-backups/`, `node-outputs/`, `notes/`, `transcripts/`,
-  `uploads/` — and **reports anything else in the bucket without reading into
-  it or deleting it**. There is no per-app key prefix: objects are written at
-  bucket root, so "empty the bucket" and "delete this app's objects" coincide
-  only when the bucket is dedicated. This is complete for a dedicated bucket
-  and safe for a shared one. **The bucket itself is never deleted.** On a
-  **versioned** bucket every version *and* delete marker is removed **by id**,
-  because a plain delete there writes another marker and keeps the bytes and
-  the bill; an unreadable `GetBucketVersioning` is treated as versioned rather
-  than off. The `aws` client is borrowed from a one-off container, like
-  `psql`, so no S3 SDK is added to this package and the credentials from your
-  `.env` are passed by name, never in an argv.
-  **Where the bucket comes from.** The purge reads `S3_BUCKET`, `S3_REGION`,
-  `S3_ENDPOINT`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the
-  deployment's `.env`. The application itself no longer reads them: storage is
-  configured at `/admin/settings/storage` and kept in the database, and
-  `.env.example` does not list them. A deployment installed before that change
-  still has them in its `.env`; for a newer one, add the five variables by hand
-  before `--purge-storage`, or the plan reports the bucket as unknown.
-
-**Each takes its own typed confirmation of that resource's real name.**
-`--confirm-database <database>` and `--confirm-bucket <bucket>`, compared
-against that resource and nothing else — a word typed for one can never
-authorise the other. That is the convention the API already uses (the Danger
-Zone's rule that *the confirmation IS the scope, uppercased*). Under
-`--non-interactive` each must arrive as its flag; there is no combined
-"delete the data too" switch and there will not be one.
-
-**You see the numbers before you are asked.** Both print a full inventory
-first — objects and bytes per prefix, everything in the bucket that is not
-ours, the database's name, host, size and open session count — because you
-cannot consent to a number you were never shown. `--dry-run` prints the same
-inventory and destroys nothing, which is how to look before deciding. A
-resource that could not be *read* is never confirmed and never destroyed; the
-run reports why and removes the deployment anyway.
-
-**Never removes** — each one a deliberate refusal, documented with its
-reasoning in
-[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-what-it-refuses-to-remove-and-the-two-extras-that-must-be-asked-for-issues-261-268):
-
-- **Your database, without `--drop-database`.** `deploy` validates it and
-  never manages it; it holds your data and usually lives on another host. The
-  `dropdb` command is **printed** — assembled from the deployment's own
-  `.env`, read before anything is deleted, because afterwards nothing is left
-  that knows the database's name — with no password in it.
-- **Your object storage, without `--purge-storage`.**
-- **The `devnet` network** and **the shared proxy container**. Both are shared
-  with every other app on the server.
-- **TLS certificates**, unless you pass `--certs`. Let's Encrypt allows only
-  **5 duplicate certificates per week** for the same set of hostnames, and a
-  reinstall re-requests the certificate — so destroying and re-requesting on
-  each iteration of a broken install locks you out of issuing for your own
-  domain for a week, with the app down. `--certs` uses `certbot delete
-  --cert-name`, which knows all three of a certificate's linked directories.
-
-**The confirmation is the app's own name, typed** — not a `y/N`. That is the
-convention this project already uses for destructive API actions
-(`confirmation: "RESTORE"`, `"ROLLBACK"`, `"REMOVE"`), and typing the name
-additionally proves you're removing the deployment you think you are. With
-`--non-interactive` it must arrive as `--confirm <name>`; a destructive
-default reachable by omission is not a default. `--dry-run` needs no
-confirmation, because it destroys nothing.
-
-**The `.env` is backed up first**, to `<apps-root>/<name>.env.<timestamp>.bak`
-(0600) — *outside* the directory being removed, or it wouldn't be a backup. It
-holds generated secrets that may exist nowhere else. `--keep-env` leaves the
-file in place as well, and the deploy root survives with just that file in it.
-
-**A half-removed deployment uninstalls cleanly.** No containers, no clone, no
-deploy root, or a state file this build can't parse: each is reported rather
-than treated as an error, and the run continues. If the clone is gone the
-compose project can't be torn down at all (compose needs its files), so the
-`docker rm -f` command that works without them is printed instead.
-
-`--dry-run` writes **nothing at all**, the run journal included, and starts no
-subprocess. A successful uninstall deletes its own log along with `logs/`; a
-*failed* one keeps it, which is the run you'd want a log for.
-
-**The order is fixed**: the containers stop, then the storage is purged, then
-the database is dropped, then the deployment is removed. Containers first
-because nothing may write an object or open a connection mid-teardown; storage
-before the database because the deployment's own rows are the only thing that
-could ever reconcile an object the purge missed; the deployment last because
-its `.env` holds the credentials the other two steps authenticate with. A
-failed extra is reported under `Action required:` and does **not** fail the
-uninstall — the deployment was going whatever the bucket said.
-
-Exit `2` covers "nothing is installed here" and any confirmation that was
-missing or wrong — the app's, the bucket's or the database's.
-
 ### Deploying a fork
 
-You don't need to change anything in this CLI to deploy a fork. The
-repository URL and ref are read from your own checkout's git remote (a fork
-using `master` or `develop` as its default branch works with no `--ref`
-needed — nothing here assumes `main`), and the environment wizard's
-questions are parsed structurally from *your fork's own*
-`infra/compose/.env.example` — not a list of field names hardcoded into the
-CLI.
-
-The wizard tries four sources for that file, in order, and uses the first
-that answers: the repository's own copy read from the remote at the resolved
-ref (`gh api`, the same credential the `checkout` step clones with); a
-checkout already on this server, or the one the CLI is running from; the
-copy `install.sh` saved beside the CLI when it was installed, if that copy
-came from the repository actually being deployed; or, failing all three, a
-refusal to install rather than an offer built from template defaults. Never
-a sibling app's template at any step, and never one repository's file
-answering another's questions — see
-[`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md#61-where-the-template-file-comes-from-and-why-the-order-matters-issues-229-230-234-236)
-for the four sources and why each is weaker than the one before it.
-
-Because `install.sh` bundles the repository's own `.env.example` when it
-builds the CLI, **a first install no longer needs `gh` at all** to ask the
-right questions, as long as the CLI was installed (or last updated) from the
-repository you're deploying now. The remote read is still tried first and is
-the most current — it reflects the exact ref being deployed rather than
-whatever commit the CLI happened to be built from — so it's still worth
-having `gh` logged in. Remember that `gh`'s authentication is **per user**:
-`sudo kvox deploy install` runs as root, and root needs its **own**
-`gh auth login`, separate from whatever account you logged in as yourself. A
-`gh` that can't answer is reported on the Welcome screen (not installed, not
-logged in, no access to the repo, timed out, or an empty file) but never
-fails the install by itself, as long as one of the other two sources can.
-
-Rename the app, add a new secret to your `.env.example`, remove a feature
-block: `kvox deploy install` follows all of it with no flag changes, for the
-same reason `api <method> <path>` (above) doesn't go stale as endpoints
-change — nothing about a specific repository's shape is baked into the tool.
-
-### Updating
-
-```bash
-kvox deploy update
-```
-
-Brings an already-installed server up to the latest revision (or, with
-`--ref`, to a specific one): auth, fetch, build, migrate, seed, restart,
-verify. It refuses to run at all if nothing is installed under `--apps-root`
-yet.
-
-#### Adopting a deployment with no state file
-
-`update` asks whether a **deployment** is there, not whether the CLI's own
-record of one is. When `.appctl-deploy.json` is missing but a deployment
-plainly is not — an install that stopped before the record was written, a
-directory restored from a backup that skipped a dot-file, a record deleted by
-hand — `update` rebuilds the record and carries on, rather than sending you to
-`install`, whose own precondition is the opposite.
-
-Two things must **be** there before it will: a git checkout at `<root>/repo`,
-and a readable `.env`. Both, not either. Running containers are deliberately
-not part of the gate — a deployment whose containers are stopped or pruned is
-exactly the one you are trying to update. A directory with neither, or with
-one, still gets the refusal it always got, plus a line naming the half that
-was found.
-
-What is rebuilt, and from where:
-
-| Field | Read from |
-|---|---|
-| `repoUrl` | `git -C repo remote get-url origin` |
-| `commitSha` | `git -C repo rev-parse HEAD` |
-| `ref` | `--ref`, else the branch HEAD is on, else the remote's own default branch |
-| `name` | `.env`'s `COMPOSE_PROJECT_NAME`, else the directory name |
-| `bindPort` | `.env`'s `APP_BIND_PORT`, else 3535 |
-| `domain` | `.env`'s `APP_URL` host, else the proxy vhost that forwards to `bindPort` |
-| `installedAt` | `deploy-info/info.json`, when that survived — otherwise left **unknown** |
-
-`installedAt` and `lastDeployedAt` are **never invented**. Neither is knowable
-from a disk the CLI did not write, and a guessed timestamp would show up on the
-About page as a fact. Absent means unknown, `deploy-info/info.json` carries
-`null` for them, and About renders its unknown mark. The record instead carries
-`adoptedAt` — when the bookkeeping was rebuilt, which is not the same thing as
-when the deployment was made.
-
-One directory under the apps root is **not** enumerated as a deployment,
-however: somebody else's application, deployed by the same one-app-one-folder
-convention. It would pass the gate above — a clone and an `.env` is what a
-deployment looks like from outside — so listing it would name a stranger's app
-in a refusal about yours. An unrecorded deployment is therefore counted as
-yours when its `.env` carries `DEPLOY_ROOT`, which `install` writes and every
-`update` re-pins, or when the `.env` is still at the pre-`DEPLOY_ROOT`
-location inside the clone. This is enumeration only: `--root` and `--name`
-name a directory outright and adopt exactly as they always did, and listing
-one extra name is a better failure than hiding a real deployment.
-
-It says so once, before the pipeline runs, listing every field and its source;
-the same block goes into the run journal, and `--json` carries it as `adopted`
-on the result. Three things make it refuse rather than guess: a clone with no
-`origin`, a clone with no HEAD, and a detached HEAD whose remote has no default
-branch (pass `--ref`) — guessing `main` is how a fork on `master` gets deployed
-from the wrong branch.
-
-An existing state file is always used exactly as it is, and is never
-reconstructed over.
-
-A bare `kvox deploy update` with no `--name`/`--root` reaches this too:
-discovering apps under `--apps-root` uses the same evidence gate, so a
-directory that is a deployment is found whether or not it has a state file. Two
-of them with nothing named refuses exactly as two installed apps always did —
-`Several apps are installed under …: alpha, beta. Pass --name <app> to say
-which one.` — and a recorded app beside an unrecorded one refuses the same way,
-with no silent preference for either.
-
-⚠ `status`, `about` and a named `certs` are **not** part of this. They still
-want a state file, because each is a read-only reporter and adopting from one
-would mean writing the CLI's private record from a command that only reports.
-Run `update` once to restore the record and they work again.
-
-```bash
-kvox deploy update --check
-kvox deploy update --ref v1.4.0
-```
-
-`--check` answers "is there anything to update, and what?" without doing
-it: it fetches, then prints `current <sha12> → latest <sha12>, N commits
-behind` followed by the commit subjects (or `already up to date at
-<sha12>`), records the result as `remote` in `deploy-info/info.json` —
-which is what the About page reads — and exits `0` either way, with nothing
-checked out, built or written to the state file. `--json` prints that
-object (`current`, `latest`, `commitsBehind`, `commits`, `checkedAt`) on
-stdout. A plain `update` prints the same block before it builds, so you see
-what is about to be applied; there is deliberately no auto-update when
-behind and no update cron.
-
-If the resolved ref's commit hasn't moved since the last successful run,
-`update` exits `0` **without doing anything** — no rebuild, no restart —
-which is what makes it safe to run unattended, e.g. from cron. `--force`
-rebuilds anyway even when the revision is unchanged.
-
-The `auth` step runs `gh auth status` and `gh auth setup-git` on every
-update for a GitHub remote — idempotently, so a server whose git config was
-reset heals here rather than stalling on git's own password prompt. A
-logged-out `gh` stops the update with exit `6` before the fetch.
-
-The database seed **re-runs by default** on every `update`. The seed is
-entirely upserts, and re-running it is the only way a permission or role a
-newer release adds actually reaches an already-installed server — skip it
-and the feature ships, the permission doesn't exist, and it shows up later
-as a confusing 403 with nothing in the logs to explain it. This is a
-deliberate divergence from the shell scripts this replaces, which never
-re-seeded; pass `--skip-seed` if you've hand-edited seeded rows and don't
-want them upserted back.
-
-There's no automatic rollback. A partly-applied database migration can't be
-undone by checking out the old code, so on failure `update` prints the
-previous revision and the exact command to redeploy it —
-`kvox deploy update --ref <sha> --force` — and leaves that decision to you.
-
-The `publish` step rewrites the vhost (keeping the upload limit from
-`MAX_FILE_SIZE`, so an update never resets it), reloads the proxy container
-only when the file actually changed, and — when the certificate expires
-within 30 days — renews it through `docker run certbot/certbot renew`
-rather than trusting that a cron exists.
-
-Other flags, from `kvox deploy update --help`:
-
-```
-Options:
-  --apps-root <dir>  Directory that holds one folder per app (default:
-                     "/opt/infra/apps")
-  --name <app>       App folder and compose project name
-  --root <dir>       Deployment directory, overriding --apps-root/--name
-  --check            Report what an update would apply, then stop; nothing is
-                     changed
-  --ref <ref>        Branch, tag or commit to move to
-  --force            Rebuild even when the revision has not changed
-  --no-cache         Rebuild images without the layer cache
-  --app-version <semver>  Version to deploy; default is a patch bump of the
-                     current one
-  --no-version-bump  Deploy without changing the application version
-  --non-interactive  Never prompt; fail listing anything unresolved
-  --answer <KEY=VALUE>  Supply a value a new revision asks for; repeat for more
-                     (default: [])
-  --answers-file <path>  Supply such values from a .env-format file
-  --skip-seed        Do not re-run the database seed
-  --skip-proxy       Do not touch the reverse proxy
-  --skip-github      Never consult the GitHub CLI, even for a GitHub remote
-  --json             Print a machine-readable result on stdout
-```
+`kvox deploy` reads the repository and branch to deploy from the git remote of
+the checkout it is run in, unless you pass `--repo` and `--ref`, so a fork
+deploys itself with no configuration. The CLI checkout is not the
+deployment's own `repo/` clone: `deploy install` clones that separately.
 
 ### The application version
 
-Every `install` and every `update` that actually deploys something chooses an
-**application version**, writes it into the deployment, and — once the
-deployment is healthy — records it back in the repository.
-
-```bash
-kvox deploy update                      # suggests a patch bump, asks
-kvox deploy update --app-version 1.4.0  # chooses one outright
-kvox deploy update --no-version-bump    # deploys without touching it
-```
-
-The number is one shared product version. `apps/api/package.json`,
-`apps/web/package.json` and the root `package-lock.json`'s two workspace
-entries are written together — they ship as one deployment from one commit, so
-two numbers could only ever diverge by accident.
-
-Where it ends up, and what reads it:
-
-| Written to | Read by |
-|---|---|
-| `APP_VERSION` in the deployment's `.env` | `resolveApiVersion()` — the API's own reported version, and `/api/docs` |
-| `apps/api/package.json` in the clone | the built image, and `deploy-info/info.json`'s `app.version` |
-| `apps/web/package.json` in the clone | the web bundle, which shows it at the foot of **Settings** |
-| `deploy-info/info.json` | the About page's **Version** fact |
-
-`APP_VERSION` is deliberately **not** in `infra/compose/.env.example`. That
-file is the install wizard's question list, and this is a value the CLI
-chooses — the same reason `DEPLOY_ROOT` and `COMPOSE_PROJECT_NAME` are not
-there either. It is carried through every later `.env` rewrite under the
-`Not in .env.example` heading.
-
-#### Choosing the number
-
-The suggestion is a **patch bump** of the current version, and "current" is the
-higher of what the repository says and what this server is already running — so
-a version that could not be published (below) can never be handed out twice.
-A release candidate suggests its own release: `1.4.0-rc.2` suggests `1.4.0`.
-
-Two versions are refused outright, whether typed or passed as `--app-version`:
-one that is not valid SemVer (`v1.4.0` is not — the `v` is a tag convention,
-not part of the version), and one that does not sort **above** the current
-version. A deploy never moves the number backwards, and re-deploying the same
-number for different code is the same problem with a smaller step size —
-`--no-version-bump` is how you say you meant to redeploy a release unchanged.
-
-With `--non-interactive` and neither flag, the run **takes the suggestion** and
-says so in the journal. Refusing instead would break every unattended deploy
-for a question that has a correct default, and the suggestion cannot move the
-number backwards by construction.
-
-#### Publishing it back
-
-The two `package.json` files and the lockfile are committed in the clone as
-`chore(release): v<version>`, and pushed to the deployed branch **only after
-the deployment is healthy and verified**. A deploy that failed at `build` or
-`migrate` leaves the repository untouched — a version published for a release
-that never ran is a number nobody can interpret afterwards.
-
-**A push that does not happen never fails the deploy.** By then the application
-is built, migrated, started, answering and verified; the push is bookkeeping.
-Four ordinary situations end the same way — a warning under `Action required:`
-on the summary, and a deployment that is running the new version regardless:
-
-- the deployed ref is a **tag or a commit**, so there is no branch to push to;
-- the clone is a **fork you cannot push to**;
-- **another server pushed first**, so the push is not a fast-forward;
-- the remote refuses the write for any other reason.
-
-The bump commit is then taken back out of the clone, so the clone matches the
-branch again and the next `update` compares cleanly. The deployment keeps the
-version — it is in the image, the `.env` and `deploy-info` — and the next
-deploy measures its bump from there rather than from the repository.
-
-It never force-pushes, and it never retries a rejected push. Retrying would
-mean re-committing the bump on top of whatever the branch moved to, and the
-deployment was built from the *old* tip — the published commit's tree would
-then contain code this server never built. The next deploy fetches that newer
-commit, builds it, and carries the version forward then.
-
-An `update` with nothing to apply versions nothing: no release was deployed, so
-there is no release to number. That is what makes `kvox deploy update` safe to
-run from cron.
-
-### Checking status
-
-```bash
-kvox deploy status
-```
-
-Reports whether the installed app is healthy: container state, an
-immediate `/api/health/ready` poll, migration state, and — with `--domain` —
-an external HTTPS check. It also runs the same fetch-and-compare
-`update --check` does (bounded to ten seconds, never cloning) and renders it
-as an `Update` line — `3 commits behind (latest <sha12>, checked just now)`
-— refreshing `remote` in `deploy-info/info.json` on the way; `--json`
-includes it as `remote`. When the remote can't be reached the line reads
-`update check: unavailable (<reason>)` and the verdict is unaffected:
-"is it serving?" and "is it current?" are different questions.
-
-```bash
-kvox deploy status --domain app.example.com
-kvox deploy status --json || alert 'deployment unhealthy'
-```
-
-`/api/health/ready` returning 200 only proves the app can run `SELECT 1`
-against the database — it passes against a completely empty, unmigrated one
-just as readily as a fully migrated one. That's why `status` reports
-migration state as its own fact rather than inferring it from the health
-probe.
-
-Exits `0` when serving and the schema is current, `1` when installed but
-unhealthy, `2` when nothing is installed under `--apps-root` (or at
-`--root`).
-
-It reports the deployed revision as a single `Revision` line and points at
-`kvox deploy about` for the rest — when it was installed and last updated,
-by whom, and what machine it is on.
-
-Other flags, from `kvox deploy status --help`:
-
-```
-Options:
-  --apps-root <dir>  Directory that holds one folder per app (default:
-                     "/opt/infra/apps")
-  --name <app>       App folder and compose project name
-  --root <dir>       Deployment directory, overriding --apps-root/--name
-  --port <port>      Loopback port the proxy forwards to (default: "3535")
-  --domain <domain>  Public domain; adds an external HTTPS check
-  --json             Print a machine-readable report on stdout
-  --no-color         Disable colour even on a terminal
-```
-
-### What is deployed here
-
-```bash
-kvox deploy about
-```
-
-The full picture, in three blocks mirroring the web Console's About page:
-
-- **Application** — the app version recorded at deploy time, and (when a
-  login for this deployment is available) the running process's API version,
-  environment, Node, start time, server clock, PostgreSQL version and
-  migration count, read from `GET /api/admin/about`.
-- **Deployment** — revision and ref, repository, domain and bind port, when
-  it was installed, when it was last updated, by which command and which CLI,
-  the previous revision, the deploy root, the environment file and the proxy
-  container — plus `Update: 3 commits behind (latest <sha12>)` and when that
-  was last checked.
-- **Server** — hostname, OS, kernel, architecture, CPU, memory, disk, Docker,
-  Compose and Node as recorded at deploy time. A live value that has changed
-  since is shown beside it: `3.8 GiB  (now 7.6 GiB)`.
-
-Every timestamp is UTC with how long ago it was —
-`2026-09-15 18:02:11 UTC (3 hours ago)` — so the terminal, the web card and
-`deploy-info/info.json` never disagree about the same moment.
-
-```bash
-kvox deploy about --check
-kvox deploy about --json | jq .deployment.updatedAt
-kvox deploy about --server http://127.0.0.1:3535
-```
-
-`--check` fetches the remote first (the same computation `update --check`
-runs, never cloning) and records the result in `deploy-info/info.json`;
-without it the `Update` line reports what was last recorded, or
-`never checked`. `--json` prints the report on stdout and nothing else, so it
-pipes into `jq`; every timestamp there is the ISO-8601 `Z` string the file
-carries, unformatted.
-
-The Application block needs a token for **this** deployment's own domain. A
-login stored for a different server is refused rather than reported as this
-one's — pass `--server <url>` to ask an API explicitly, which is also how you
-reach it over the loopback port while the domain is not yet serving. Without
-either, the block reads `unavailable (not logged in)` and everything else
-still renders.
-
-**It is informational, never a health verdict.** A stopped API container, an
-unreachable remote and a missing deployment record are all reported inline
-and still exit `0`; only "nothing is installed under `--apps-root` (or at
-`--root`)" is an error, and it exits `2` — the same code `status` uses, so a
-script can tell "no deployment" from "a deployment whose API is down". Use
-`kvox deploy status` for the check a monitor should act on.
-
-Other flags, from `kvox deploy about --help`:
-
-```
-Options:
-  --apps-root <dir>  Directory that holds one folder per app (default:
-                     "/opt/infra/apps")
-  --name <app>       App folder and compose project name
-  --root <dir>       Deployment directory, overriding --apps-root/--name
-  --check            Fetch the remote first, so the Update line is current
-  --server <url>     Ask this API about itself instead of the deployment's own
-                     domain
-  --json             Print the report on stdout
-```
-
-### Every app on this server
-
-```bash
-kvox deploy list
-kvox deploy list --json | jq -r '.apps[].name'
-```
-
-The inventory of `--apps-root`: one block per app, with its name, deploy root,
-revision and ref, bind port, domain, when it was last deployed, and whether
-that came from the app's own `.appctl-deploy.json` or was inferred from the
-clone and the `.env` (see [Adopting a deployment with no state
-file](#adopting-a-deployment-with-no-state-file) above).
-
-There is no central registry behind it and deliberately never will be: the
-registry is the apps root itself, one record per folder, next to the thing it
-describes. So this reads the filesystem and nothing else — no container, no
-network, no `git` — which is why it is instant with a dozen apps installed and
-answers the same when Docker is down, and also why an app with no state file
-reports no revision. One `kvox deploy update` on it rebuilds the record, after
-which it reports like any other.
-
-`--name`/`--root` are deliberately absent: this is the inventory, and both
-flags name one app. Exits `2` when nothing is installed under `--apps-root`.
-
-```
-Options:
-  --apps-root <dir>  Directory that holds one folder per app (default:
-                     "/opt/infra/apps")
-  --json             Print the inventory on stdout
-```
-
-### Certificates
-
-```bash
-kvox deploy certs renew
-kvox deploy certs renew --dry-run
-kvox deploy certs renew --install-cron
-kvox deploy certs status
-```
-
-Certificates live behind the shared proxy, and are issued and renewed with
-`docker run --rm certbot/certbot` against the proxy's own `letsencrypt/`
-and `webroot/` directories — never a host `certbot`. `renew` runs certbot's
-`renew` for this app's domain (or every certificate under the proxy with
-`--all`); certbot decides what is due, and the proxy container is reloaded
-with `docker exec` **only** when something was actually renewed, so a
-scheduled run on a quiet day touches nothing. `--dry-run` passes certbot's
-own `--dry-run` (a rehearsal against staging) and prints the argv.
-
-`--install-cron` writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice
-daily at 03:xx and 15:xx with a minute derived from the app's name so
-several apps on one box don't all fire together — calling
-`kvox deploy certs renew --all --apps-root <…> --name <…>` and logging to
-`/var/log/kvox-certs-<name>.log`. It is idempotent: a second run rewrites
-nothing. `install` writes the same file whenever this deployment does not
-already have one. `doctor`'s `certificate-renewal` check recognises it, and
-its `cron-dir-writable` check says in advance whether the write will succeed.
-
-Writing into `/etc/cron.d` needs root and this CLI is deliberately never run
-under `sudo`, so on a standard server the write fails. `install` treats that
-as non-fatal and prints a `sudo install -m 644 …` line to finish it by hand
-(see [Installing](#installing) above); `certs renew --install-cron`,
-where you asked for the cron explicitly, still reports the failure as one.
-
-`status` lists every certificate under the proxy with its expiry; exits `0`
-while all are valid, `1` when one has expired, `2` when there are none.
-
-```
-Options (renew):
-  --apps-root <dir>         Directory that holds one folder per app
-  --name <app>              App folder and compose project name
-  --root <dir>              Deployment directory, overriding --apps-root/--name
-  --proxy-root <path>       Shared reverse proxy directory (default: the app's,
-                            else /opt/infra/proxy)
-  --proxy-container <name>  Proxy container to reload (default: the app's, else
-                            proxy-nginx)
-  --all                     Every certificate under the proxy, not only this
-                            app's
-  --dry-run                 Rehearse with certbot's own --dry-run; nothing is
-                            written or reloaded
-  --install-cron            Also write /etc/cron.d/kvox-certs-<name> so this
-                            runs twice a day
-  --json                    Print a machine-readable result on stdout
-```
-
-```
-Options (status):
-  --apps-root <dir>    Directory that holds one folder per app
-  --name <app>         App folder and compose project name
-  --root <dir>         Deployment directory, overriding --apps-root/--name
-  --proxy-root <path>  Shared reverse proxy directory (default: the app's,
-                       else /opt/infra/proxy)
-  --json               Print a machine-readable report on stdout
-```
-
-### Logs
-
-Every `doctor`, `install` and `update` run writes a human-readable `.log`
-and a matching machine-readable `.jsonl` under `<deployRoot>/logs/`, mode
-`0600`, newest ten runs kept. Every value the CLI knows to be a secret —
-whether you typed it or the wizard generated it — is redacted from both
-files before a single byte reaches disk, so they're safe to attach to an
-issue or hand to someone else for help.
-
-### Testing the deploy pipeline locally
-
-Every test under `src/deploy/` injects a fake `runCommand`, so none of them
-runs `docker`. The pipeline as a whole — `docker compose build`, the migrate
-step's `run --rm --no-deps api npm run prisma:migrate`, the `.env` symlink
-into the clone, the `-p <name>` project naming — is exercised end to end by
-the `Deploy E2E` workflow (`.github/workflows/deploy-e2e.yml`, issue #133),
-which runs on any change under `src/deploy/`, `infra/compose/`, either
-Dockerfile or `apps/api/prisma/`, plus nightly so base-image drift is caught
-too.
-
-You can run the same thing on your own machine. You need Docker, Compose v2,
-and a PostgreSQL the containers can reach — the workflow uses a service
-container at the docker0 gateway; locally, anything works as long as the
-host and the containers agree on the address.
-
-```bash
-# From the repository root, in a clone you don't mind deploying from.
-npm ci
-npm run build --workspace=cli
-
-# The CLI deploys a REPOSITORY, not a working tree, so HEAD must be a real
-# branch that the clone can resolve.
-git checkout -B e2e
-
-# devnet is `external: true` in base.compose.yml; nothing creates it for you.
-docker network create devnet
-
-# Copy the CI answers and edit POSTGRES_* for your database. Every other
-# value is a placeholder on a reserved name and can stay as it is.
-cp .github/e2e/answers.env /tmp/answers.env
-
-node apps/cli/dist/cli.js deploy doctor \
-  --apps-root /tmp/apps --skip-proxy --skip-github --json | jq .
-
-node apps/cli/dist/cli.js deploy install \
-  --apps-root /tmp/apps --name e2e \
-  --repo "file://$PWD" --ref e2e \
-  --domain e2e.invalid --port 3535 \
-  --skip-proxy --skip-github --non-interactive \
-  --answers-file /tmp/answers.env
-
-node apps/cli/dist/cli.js deploy status --apps-root /tmp/apps --json | jq .
-node apps/cli/dist/cli.js deploy update --apps-root /tmp/apps \
-  --skip-proxy --skip-github --check --json | jq .
-```
-
-Four flags make this work anywhere, and each is load-bearing:
-
-- `--skip-proxy` — there is no shared reverse proxy and no public DNS, so
-  the proxy, certificate and DNS checks report `skip` rather than failing.
-  Nothing is published: the stack still binds `127.0.0.1:3535` only.
-- `--skip-github` — a `file://` remote is not on GitHub, so `gh` is never
-  consulted for the clone anyway; the flag is what also stands the three
-  required `gh-*` prerequisite checks down on a machine where `gh` is
-  installed and logged out.
-- `--non-interactive` with `--answers-file` — every secret is generated with
-  the CSPRNG and every resource limit suggested from the machine, so the
-  answers file only carries the database, the OAuth client and the admin
-  address.
-- `--repo "file://$PWD"` — the scheme survives `normaliseRepoUrl` untouched
-  (only GitHub remotes are rewritten to HTTPS), so the clone is a plain local
-  `git clone`.
-
-`--domain e2e.invalid` is a reserved name that can never resolve; it exists
-so `APP_URL`, the derived OAuth callback and the state file are populated
-exactly as a real install populates them.
-
-To go round again, `deploy update --apps-root /tmp/apps --skip-proxy
---skip-github` after moving the branch (`git commit --allow-empty` is
-enough — the SHA is all the pipeline compares). To clean up:
-
-```bash
-cd /tmp/apps/e2e/repo/infra/compose
-docker compose -p e2e -f base.compose.yml -f prod.compose.yml -f vps.compose.yml down -v   # add -f telemetry.compose.yml ... as listed above when the e2e .env opted in
-rm -rf /tmp/apps/e2e
-docker network rm devnet
-```
-
-The journal from each run is under `/tmp/apps/e2e/logs/`, redacted, and is
-the first place to look when a step fails — see [Logs](#logs) above.
+Install and update stamp a release version: by default a patch bump of the
+current `APP_VERSION`, written back to the repository's default branch.
+`--app-version <version>` chooses the number and `--no-version-bump` deploys
+the current version with no write, no commit and no push. An update with
+nothing new to apply bumps nothing.
+
+### Command reference
+
+Generated from `kvox deploy <command> --help` for this version. Every command
+also takes `-h, --help`.
+
+#### `kvox deploy doctor`
+
+Check that this server meets the prerequisites
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--proxy-root <path>` | Shared reverse proxy directory (default: "/opt/infra/proxy") |
+| `--port <port>` | Loopback port the proxy forwards to (default: "3535") |
+| `--domain <domain>` | Public domain; enables the DNS and TLS checks |
+| `--proxy-container <name>` | Name of the shared proxy container (default: as recorded, else proxy-nginx) |
+| `--proxy-mode <mode>` | How the shared proxy runs: container or host (default: as recorded, else detected) |
+| `--repo <url>` | Repository whose access to check (default: the recorded one, then this checkout's origin) |
+| `--json` | Print a machine-readable report on stdout |
+| `--no-color` | Disable colour even on a terminal |
+
+#### `kvox deploy install`
+
+Install this application on this server
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--domain <domain>` | Public domain to publish under |
+| `--proxy-root <path>` | Shared reverse proxy directory (default: "/opt/infra/proxy") |
+| `--proxy-container <name>` | Name of the shared proxy container (default: as recorded, else proxy-nginx) |
+| `--proxy-mode <mode>` | How the shared proxy runs: container or host (default: as recorded, else detected) |
+| `--port <port>` | Loopback port the proxy forwards to (default: "3535") |
+| `--repo <url>` | Repository to deploy (default: this checkout's origin) |
+| `--ref <ref>` | Branch, tag or commit (default: the remote default branch) |
+| `--email <email>` | Certificate registration address |
+| `--group <name>` | Optional feature group; repeat for more (default: []) |
+| `--all` | Review every environment variable, not only the essential ones |
+| `--non-interactive` | Never prompt; fail listing anything unresolved |
+| `--answer <key=value>` | Supply one environment answer; repeat for more (default: {}) |
+| `--answers-file <path>` | Read answers from a KEY=value file (like .env) |
+| `--reinstall` | Install over an existing deployment |
+| `--resume` | Continue from the step that failed |
+| `--skip-doctor` | Skip the prerequisite checks |
+| `--skip-proxy` | Do not touch the reverse proxy or request a certificate |
+| `--skip-seed` | Do not run the database seed |
+| `--bootstrap-proxy` | Create the shared proxy if this server has none (no prompt) |
+| `--create-database` | Create the database if it does not exist (no prompt) |
+| `--app-db-user <name>` | Name of the dedicated application database role (default: <app>_app) |
+| `--admin-user <name>` | Administrative database login that provisions the role (password: $KVOX_DB_ADMIN_PASSWORD or DB_ADMIN_PASSWORD in the answers file; never a flag) |
+| `--skip-role-provisioning` | Create no role; POSTGRES_USER must already be an ordinary role |
+| `--allow-superuser` | Run the API as a superuser/BYPASSRLS login anyway (tenant isolation OFF) |
+| `--rotate-app-password` | Generate a new password for the application role |
+| `--provision-app-role` | Consent: create the role when the database login is a superuser (no prompt) |
+| `--transfer-ownership` | Consent: change the owner of an existing database's objects to the role (no prompt) |
+| `--allow-reduced-role` | Consent: accept a role the server would not give CREATEROLE/createrole_self_grant |
+| `--show-credentials` | Print the generated application login once at the end (never journaled) |
+| `--skip-renewal` | Do not schedule certificate renewal |
+| `--skip-oauth-check` | Do not verify the Google OAuth credentials with Google |
+| `--no-cache` | Rebuild images without the layer cache |
+| `--force` | Discard uncommitted changes in the checkout |
+| `--staging` | Use Let's Encrypt staging while working out the setup |
+| `--app-version <version>` | Release version to deploy (default: a patch bump of the current one) |
+| `--no-version-bump` | Deploy the current version: no write, no commit, no push |
+| `--json` | Print a machine-readable result on stdout |
+
+#### `kvox deploy update`
+
+Bring this server up to the latest revision
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--ref <ref>` | Branch, tag or commit to move to |
+| `--force` | Rebuild even when the revision has not changed |
+| `--no-cache` | Rebuild images without the layer cache |
+| `--non-interactive` | Never prompt; fail listing anything unresolved |
+| `--answer <key=value>` | Supply one environment answer; repeat for more (default: {}) |
+| `--answers-file <path>` | Read answers from a KEY=value file (like .env) |
+| `--skip-seed` | Do not re-run the database seed |
+| `--skip-proxy` | Do not touch the reverse proxy |
+| `--create-database` | Create the database if it does not exist (no prompt) |
+| `--app-db-user <name>` | Name of the dedicated application database role (default: <app>_app) |
+| `--admin-user <name>` | Administrative database login that provisions the role (password: $KVOX_DB_ADMIN_PASSWORD or DB_ADMIN_PASSWORD in the answers file; never a flag) |
+| `--skip-role-provisioning` | Create no role; POSTGRES_USER must already be an ordinary role |
+| `--allow-superuser` | Run the API as a superuser/BYPASSRLS login anyway (tenant isolation OFF) |
+| `--rotate-app-password` | Generate a new password for the application role |
+| `--provision-app-role` | Consent: create the role when the database login is a superuser (no prompt) |
+| `--transfer-ownership` | Consent: change the owner of an existing database's objects to the role (no prompt) |
+| `--allow-reduced-role` | Consent: accept a role the server would not give CREATEROLE/createrole_self_grant |
+| `--show-credentials` | Print the generated application login once at the end (never journaled) |
+| `--skip-renewal` | Do not schedule certificate renewal |
+| `--skip-oauth-check` | Do not run the post-deploy OAuth sign-in smoke |
+| `--proxy-container <name>` | Name of the shared proxy container (default: as recorded, else proxy-nginx) |
+| `--proxy-mode <mode>` | How the shared proxy runs: container or host (default: as recorded, else detected) |
+| `--app-version <version>` | Release version to deploy (default: a patch bump of the current one) |
+| `--no-version-bump` | Deploy the current version: no write, no commit, no push |
+| `--maintenance` | Serve a 503 from before the build until just after restart, instead of whatever the stop/migrate/restart window looks like underneath |
+| `--json` | Print a machine-readable result on stdout |
+
+#### `kvox deploy status`
+
+Report whether the deployment on this server is healthy
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--port <port>` | Loopback port the proxy forwards to (default: "3535") |
+| `--domain <domain>` | Public domain; adds an external HTTPS check |
+| `--json` | Print a machine-readable report on stdout |
+| `--no-color` | Disable colour even on a terminal |
+
+#### `kvox deploy list`
+
+List every deployment on this server
+
+| Flag | Meaning |
+| --- | --- |
+| `--apps-root <path>` | Directory holding the deployments (default: "/opt/infra/apps") |
+| `--json` | Print a machine-readable inventory on stdout |
+
+#### `kvox deploy about`
+
+Show what this server says it is running
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--json` | Print the record itself on stdout |
+
+#### `kvox deploy certs`
+
+Inspect or renew this deployment's TLS certificate
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--proxy-root <path>` | Shared reverse proxy directory (default: "/opt/infra/proxy") |
+| `--domain <domain>` | Domain to act on (default: the recorded one) |
+| `--proxy-container <name>` | Name of the shared proxy container (default: as recorded, else proxy-nginx) |
+| `--proxy-mode <mode>` | How the shared proxy runs: container or host (default: as recorded, else detected) |
+| `--renew` | Renew when the certificate is inside the renewal window |
+| `--force` | Renew even when it is not due. Spends rate-limit budget. |
+| `--email <email>` | Registration address (default: INITIAL_ADMIN_EMAIL) |
+| `--staging` | Use Let's Encrypt staging, which is not trusted by browsers |
+| `--json` | Print a machine-readable report on stdout |
+
+#### `kvox deploy uninstall`
+
+Remove a deployment from this server
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <path>` | Deployment directory (rank 1: an explicit path) |
+| `--apps-root <path>` | Directory holding the deployments (rank 3 walks up inside it) (default: "/opt/infra/apps") |
+| `--name <app>` | Which deployment to act on, by name |
+| `--proxy-root <path>` | Shared reverse proxy directory (default: "/opt/infra/proxy") |
+| `--proxy-container <name>` | Name of the shared proxy container (default: as recorded, else proxy-nginx) |
+| `--proxy-mode <mode>` | How the shared proxy runs: container or host (default: as recorded, else detected) |
+| `--dry-run` | Report what would be removed and change nothing |
+| `--drop-database` | Also DROP the PostgreSQL database named by POSTGRES_DB, after the stack stops (needs --confirm-database) |
+| `--confirm-database <name>` | The database's own name, typed back |
+| `--purge-storage` | Also delete every object in storage (needs --confirm-bucket) |
+| `--confirm-bucket <name>` | The bucket's own name, typed back |
+| `--json` | Print a machine-readable plan on stdout |
+
+
+`deploy update --check` is not in the table: it is this app's own (below).
+
+### Flags and commands that changed in 1.10
+
+The CLI moved onto the platform's engine in 1.10. Every top-level command, every
+`node` subcommand and every flag of `init`, `login`, `api`, `config`, `node *`,
+`deploy list` and `deploy status` is unchanged. These `deploy` flags and
+commands of 1.9 and earlier are not the platform's; each is handled in
+`src/extensions/legacy-flags.ts` (the same table), and none is ever accepted and
+then not honoured. **ignored** means the flag is dropped with a one-line note on
+stderr; **refused** means the command stops with exit `2` and a message that says
+what to do instead.
+
+| Old | Now | Why |
+| --- | --- | --- |
+| `install\|update\|doctor --skip-github` | ignored | the GitHub CLI checks skip themselves when git can already read the repository or the remote is not an HTTPS GitHub URL |
+| `install --no-install-cron` | `--skip-renewal` | |
+| `install --install-cron` | ignored | install and update schedule renewal themselves, unless something else already renews the certificates |
+| `install --fresh` | refused | use `deploy uninstall` then `install`, or `install --reinstall` |
+| `install --no-ipv6` | refused | the platform's vhost always listens on `[::]`; no switch exists |
+| `update --check` | **kept** | fetches the ref and prints `current -> latest, N commits behind` (`--json`: `{current, latest, commitsBehind, commits, checkedAt}`); changes nothing. It no longer records `remote` in `deploy-info/info.json` |
+| `doctor --skip-proxy`, `doctor --public-ip <ip>` (and `KVOX_PUBLIC_IP`) | refused | the platform doctor has neither |
+| `uninstall --confirm <name>` | **kept, now required** | a real uninstall needs the deployment's own name typed as `--confirm <name>`; there is no interactive prompt. `--dry-run` needs nothing |
+| `uninstall` backup of `.env` | **kept** | copied to `<apps-root>/<name>.env.<timestamp>.bak` (mode 0600) before the platform deletes it |
+| `uninstall --keep-env`, `--certs`, `--skip-proxy` | refused | the platform always removes `.env`, never removes the certificate, always removes the vhost |
+| `uninstall --non-interactive` | ignored | uninstall never prompts |
+| `about --check`, `about --server <url>` | ignored | `about` reads `deploy-info/info.json` off disk; it no longer asks the API or fetches the remote |
+| `certs renew [--all --dry-run --install-cron --json]` | `certs --renew` | **cron files written by earlier versions call this**; they keep working. `--all` and `--install-cron` are dropped with a note, `--dry-run` reports without renewing |
+| `certs status` | `certs` | reports and changes nothing |
+| `node install-deps` installing `ffmpeg` | not done | the platform's step list has no `ffmpeg` and no extension point; install `ffmpeg` (it ships `ffprobe`) yourself. `node doctor` names what is missing; the worker image has it |
+| preflight `database-vector-extension` (required in 1.9: the server must offer `vector`) | not done | the platform has no such check and an app check cannot read the database password, so a server without `vector` fails later, at the first migration (`extension "vector" is not available`). Use a pgvector image (`pgvector/pgvector`) and create the extensions as the bootstrap superuser before the first install (`infra/compose/postgres-init/20-kvox-extensions.sh`, `docs/runbooks/application-role.md` section 3.1) |
+| server-fact suggestions for `APP_BIND_PORT`, `JOBS_WORKER_CONCURRENCY`, `API_MEM_LIMIT`, `WEB_MEM_LIMIT` | not done | these take the template default unless answered (`API_MEM_LIMIT` 512M ran `prisma:seed` out of heap in the deploy end-to-end job, so pass `--answer API_MEM_LIMIT=2g` or similar where the server has the memory); `POSTGRES_SSL` is validated but no longer asked by default (pass `--all`, `--answer POSTGRES_SSL=true`) |
+
+Other differences an operator can see:
+
+- **The first write upgrades the state file.** `.appctl-deploy.json` (a fixed
+  name: servers carry it) is read at version 1 and rewritten at version 2 by
+  the first `install` or `update` of this build; 1.9 and earlier then refuse
+  it. Read-only commands never rewrite it.
+- `deploy status` has no "Update" line, and `deploy about` shows the record
+  only.
+- The environment file is `repo/infra/compose/.env`, written as a regular file;
+  1.9 kept it in the app folder behind a symlink in the checkout. An unattended
+  install must be given `JWT_SECRET`, `COOKIE_SECRET` and
+  `SECRETS_ENCRYPTION_KEY` (the wizard no longer generates them without a
+  terminal), and the version-bump commit is the deployed commit even when it
+  could not be pushed.
+- `deploy install` provisions a dedicated ordinary database role (`<app>_app`);
+  a superuser login with no consent flag stops the install.
+- `deploy uninstall --purge-storage` runs `npm run storage:purge` inside the
+  API image, as the platform does, and empties every registered key prefix.
 
 ## Running a worker node
 
@@ -1758,9 +871,13 @@ machine.
 **`media.audio.transcode` — producing the playback rendition here.** The
 easiest type to offload: it needs no credential and no database route at all,
 only `ffmpeg` and `ffprobe` on `PATH` (the same startup self-test refuses to
-declare the type without *both* — they ship in one package, but the executor
-runs them as two programs). `kvox node install-deps` installs them on
-Debian/RHEL/Alpine; the container image already has them. It is offered
+declare the type without *both*, naming the missing one: `Cannot run job type
+"media.audio.transcode": required capability "binary:ffmpeg" is missing`; they
+ship in one package, but the executor runs them as two programs). Install them
+yourself (`apt-get install ffmpeg`, `dnf install ffmpeg`, `apk add ffmpeg`);
+`kvox node doctor` lists both with their versions, and the container image
+already has them. The executor is this app's own:
+`src/executors/media-audio-transcode.executor.ts`. It is offered
 whenever an administrator leaves `transcription.transcodeNodeOffloadEnabled`
 on, which is the default — there is no second switch, because there is no
 credential to broker.
@@ -1834,7 +951,7 @@ capability over an object, and a log file is a thing people attach to issues.
 
 ```bash
 kvox node doctor                 # three independent groups of checks
-kvox node install-deps --dry-run # the dependency step framework
+kvox node install-deps --dry-run # the dependency steps
 kvox node service install        # systemd user unit
 kvox node service status
 kvox node service uninstall
@@ -1860,10 +977,10 @@ rather than a stored setting on purpose: **a worker node holds no database
 configuration at all**; the connection arrives per job, from the server, and is
 dropped when the job settles.
 
-`install-deps` ships as a **framework**, not a set of real installs: this
-template has no native dependencies, so it provides the ordered-step structure,
-per-step outcomes, distro detection and `--dry-run`, and a fork fills in its own
-steps. See [`docs/deployment/worker-nodes.md`](../../docs/deployment/worker-nodes.md).
+`install-deps` is the platform's framework (ordered steps, per-step outcomes,
+distro detection and `--dry-run`) with its two generic steps: the state
+directory and the Node.js version. It has no `ffmpeg` step (see the table
+above). See [`docs/deployment/worker-nodes.md`](../../docs/deployment/worker-nodes.md).
 
 `service install` writes a systemd **user** unit (no root needed) whose name
 and description derive from the CLI and app names. It sets
@@ -1990,31 +1107,27 @@ Every setting can come from the environment instead of the config file, which
 is how a container runs with no interactive setup at all. Environment values
 win over the file, **per field** — override one without restating the rest.
 
-⚠️ **Generated — do not edit the table below by hand.** It is built from
-`WORKER_ENV` (`src/node/worker-env.ts`) and the JSDoc comment already written
-above each of its entries, so it cannot drift the way a hand-typed copy would.
-Run `npm run docs:worker-env --workspace=cli` to regenerate it after changing
-`WORKER_ENV`; `worker-env-table.test.ts` fails the build if this block and
-`WORKER_ENV` disagree.
+The names are the platform engine's (`workerEnv()` in `@marinoscar/platform-cli`)
+with this CLI's prefix. `src/worker-image.test.ts` fails the build if the engine
+reads a variable the table, the worker `Dockerfile` or `worker.compose.yml`
+does not carry, or the other way round.
 
-<!-- GENERATED:WORKER_ENV_TABLE:START -->
 | Variable | Description |
 | --- | --- |
-| `KVOX_SERVER_URL` | `KVOX_SERVER_URL` — reused from `config.ts`, never minted again. |
-| `KVOX_TOKEN` | `KVOX_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. |
+| `KVOX_SERVER_URL` | The server to talk to; overrides the stored URL. |
+| `KVOX_TOKEN` | The credential; a `nod_` credential, normally. |
 | `KVOX_NODE_ID` | The node row this process re-attaches to, so a restart is not a new node. |
 | `KVOX_NODE_NAME` | Display name; defaults to the hostname. Reattachment keys on it server-side. |
-| `KVOX_CONCURRENCY` | How many jobs this process runs at once. 1–64, per the server's own cap. |
+| `KVOX_CONCURRENCY` | How many jobs this process runs at once. 1-64, per the server's own cap. |
 | `KVOX_ELIGIBLE_TYPES` | Comma-separated job types this node will claim. Empty means "all it can". |
 | `KVOX_POLL_INTERVAL_MS` | Idle poll interval in milliseconds. |
 | `KVOX_HEADLESS` | `true` to run without a TTY and drain on SIGTERM WITHOUT deregistering. |
 | `KVOX_STATE_DIR` | Overrides the state directory. The one variable a container almost always sets. |
-| `KVOX_HEAP_LIMIT_MB` | Old-space limit in MB for the re-exec (#277). `0` disables re-tuning entirely. |
-| `KVOX_HEAP_TUNED` | The re-exec LATCH (#277). Set by the parent shim on the child it spawns. Not an operator knob — it exists so the re-exec cannot loop. It is still declared here rather than read as a literal, because the rule this map enforces has no exceptions: a variable the code reads is a variable a rename must reach. |
-| `KVOX_MEMORY_WATCHDOG` | `false` to disable the memory watchdog and its pre-OOM valve (#277). |
-| `KVOX_MEMORY_THRESHOLD` | heapUsed/heapLimit fraction at which the valve fires. Default ~0.9 (#277). |
-| `KVOX_HEAP_SNAPSHOTS` | `false` to disable ALL THREE heap-snapshot paths (#277). |
-<!-- GENERATED:WORKER_ENV_TABLE:END -->
+| `KVOX_HEAP_LIMIT_MB` | Old-space limit in MB for the re-exec. `0` disables re-tuning entirely. |
+| `KVOX_HEAP_TUNED` | The re-exec latch, set by the parent shim on the child it spawns. Not an operator knob: it exists so the re-exec cannot loop. |
+| `KVOX_MEMORY_WATCHDOG` | `false` to disable the memory watchdog and its pre-OOM valve. |
+| `KVOX_MEMORY_THRESHOLD` | heapUsed/heapLimit fraction at which the valve fires. Default about 0.9. |
+| `KVOX_HEAP_SNAPSHOTS` | `false` to disable all three heap-snapshot paths. |
 
 With `KVOX_SERVER_URL` and `KVOX_TOKEN` set and no config file at all, the
 worker synthesises its settings from the environment and starts. If it cannot
@@ -2055,8 +1168,8 @@ explicit subcommand ignores this gate entirely and is unaffected by it.
 
 There are two identities here, and they are deliberately independent.
 
-**The product name** — the half of the CLI banner in `--help` and the
-interactive UI that names the product rather than the executable — is not set
+**The product name** (the half of the CLI banner in `--help` and the
+interactive UI that names the product rather than the executable) is not set
 in this package at all. It comes from `packages/shared/identity.json`, the one
 manifest every app reads its identity from, so renaming the product renames
 the CLI banner, the browser wordmark and the email templates together:
@@ -2069,44 +1182,48 @@ the CLI banner, the browser wordmark and the email templates together:
 ```
 
 See [`docs/RENAMING.md`](../../docs/RENAMING.md) for the full rebrand
-walkthrough — this section only covers what's specific to the CLI.
+walkthrough; this section only covers what's specific to the CLI.
 
-**The executable's own identity** — the command name shown in `--help` and
-errors, the config directory (`~/.kvox/`), and the `KVOX_`
-environment-variable prefix — is derived from a separate constant:
+**The executable's own identity** (the command name shown in `--help` and
+errors, the config directory (`~/.kvox/`), the `KVOX_` environment-variable
+prefix and the systemd unit) is derived from a separate field of the same
+manifest:
 
-```ts
-// apps/cli/src/branding.ts
-export const CLI_NAME = 'kvox';
+```json
+// packages/shared/identity.json
+{
+  "cliName": "kvox"
+}
 ```
 
-The split is intentional: a product called "Acme" may perfectly well still
-ship a command called `kvox`, and renaming the binary moves a filesystem
-path and an environment-variable prefix, which renaming the product must not.
+`@app/shared` exports it as `CLI_NAME`, `src/app.ts` hands it to the platform
+CLI's `createCli({ identity })`, and the engine derives the rest. The split is
+intentional: a product called "Acme" may perfectly well still ship a command
+called `kvox`, and renaming the binary moves a filesystem path and an
+environment-variable prefix, which renaming the product must not. `cliName`
+is lowercase ASCII letters, digits and hyphens only, since it becomes both a
+filesystem path and part of an environment variable name.
 
-Change that one line (see the comment above it in `branding.ts` for the
-naming constraints — lowercase ASCII letters, digits and hyphens only, since
-it becomes both a filesystem path and part of an environment variable name)
-and the config directory, the env var prefix, and every place the CLI refers
-to itself by name follow automatically. The one place it can't reach is the
-`bin` key in `apps/cli/package.json` — npm reads that before any of this
-code runs, so it has to be updated by hand to match, and a test in
-`apps/cli/src/branding.test.ts` asserts the two stay in sync.
+`scripts/rename.mjs --cli-name <name>` writes the manifest field and the `bin`
+key. The `bin` key in `apps/cli/package.json` is the one place the constant
+cannot reach (npm reads it before any code runs), so a test in
+`apps/cli/src/app.test.ts` asserts the two stay in sync.
 
-Note that the env var prefix is `KVOX_`, not `APP_` — a bare `APP_` prefix
-is generic enough to collide with unrelated variables in a shared CI shell,
-so the prefix is derived from the (longer, more specific) binary name
-instead. If you've seen `APP_SERVER_URL` / `APP_TOKEN` mentioned elsewhere,
-that's what it would have been under a shorter, collision-prone prefix;
-`KVOX_SERVER_URL` / `KVOX_TOKEN` is what the code actually reads.
+Two literals do **not** follow the name, on purpose, because servers already
+deployed carry them: the deploy state file `.appctl-deploy.json` and the
+`# Managed by appctl deploy` marker in proxy vhosts. They are the platform
+engine's fixed values; never change them.
 
-`install.sh`'s default `KVOX_REPO` (the git URL it clones when
-`KVOX_SRC` isn't set) is a second place a fork has to edit by hand,
-alongside the `bin` key above. It's a standalone shell script that runs
-*before* any of this repo's own code executes — `git clone`s the source
-first — so it has no way to read `CLI_NAME` out of `branding.ts` and derive
-the clone URL itself; the URL is hard-coded near the top of `install.sh`
-under its own "Defaults" comment block and has to be changed there directly.
+The env var prefix is `KVOX_`, not `APP_`: a bare `APP_` prefix is generic enough
+to collide with unrelated variables in a shared CI shell, so the prefix is
+derived from the (longer, more specific) binary name instead.
+
+`install.sh`'s default `KVOX_REPO` (the git URL it clones when `KVOX_SRC`
+isn't set) is a second place a fork has to edit by hand, alongside the `bin`
+key above. It's a standalone shell script that runs *before* any of this repo's
+own code executes (it `git clone`s the source first), so it has no way to read
+the manifest and derive the clone URL itself; the URL is hard-coded near the
+top of `install.sh` under its own "Defaults" comment block.
 
 ## Building from source (development)
 
@@ -2153,3 +1270,8 @@ no build step.
 ```bash
 npm run test:run --workspace=cli
 ```
+
+`src/conformance.test.ts` runs the platform CLI's conformance suites (env
+template fragments, executor credential hygiene for every executor the worker
+would run, the deploy registrations); `src/deploy-fixture.test.ts` reads a
+deployment as CLI 1.8.0 wrote it.

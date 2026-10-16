@@ -3,5 +3,6 @@
   "tagline": "From voice to knowledge.",
   "repoSlug": "marinoscar/kvox",
   "themeColor": "#4f46e5",
-  "backgroundColor": "#ffffff"
+  "backgroundColor": "#ffffff",
+  "cliName": "kvox"
 }

@@ -549,8 +549,8 @@ mkdir -p "$APP_DIR"
 
 # Copy the built artifacts, the package manifest and the environment
 # template (issue #236) - not the full repo.
-# Most of apps/cli's runtime deps (commander, ink, react, ...) are ordinary
-# public npm packages. @app/shared is not: it is an internal workspace package
+# Most of apps/cli's runtime deps (@marinoscar/platform-cli, which brings
+# commander and ink, and react) are ordinary public npm packages. @app/shared is not: it is an internal workspace package
 # (epic #161) that is `private: true` and never published, so the `npm install`
 # below — which runs OUTSIDE the monorepo, with no workspace to link against —
 # would go looking for it on the public registry and fail the whole install.
@@ -648,7 +648,7 @@ ok "Copied dist + package.json to $APP_DIR"
 
 info "Installing runtime dependencies (omitting devDeps) …"
 # This runs OUTSIDE the monorepo, so npm installs only the CLI's own runtime
-# deps (commander, ink, ink-select-input, ink-spinner, ink-text-input, react).
+# deps (@marinoscar/platform-cli with its own dependencies, and react).
 (
   cd "$APP_DIR"
   npm install --omit=dev --no-audit --no-fund 2>&1 \
@@ -728,7 +728,10 @@ fi
 # ---------------------------------------------------------------------------
 step "Verifying installation"
 
-INSTALLED_VERSION="$("$BIN_SHIM" --version 2>/dev/null | head -1 || echo "unknown")"
+# `--version` prints "<cli version> (platform <engine version>)" since the CLI
+# moved onto the platform engine (#482); the first word is the version this
+# installer built and compares against.
+INSTALLED_VERSION="$("$BIN_SHIM" --version 2>/dev/null | head -1 | awk '{print $1}' || echo "unknown")"
 if [[ "$INSTALLED_VERSION" == "unknown" || -z "$INSTALLED_VERSION" ]]; then
   err "Installed binary did not report a version — the install may be broken."
   dim "  Try running: $BIN_SHIM --version"

@@ -91,7 +91,7 @@ This is a production-grade web application template that establishes:
 │  │  ┌────────────────────────┐  │  │  │  │    Services/Business       │  │  │
 │  │  │  Contexts/State        │  │  │  │  │    Logic Layer             │  │  │
 │  │  │  • AuthProvider (pkg)  │  │  │  │  │  • AuthService (pkg)       │  │  │
-│  │  │  • ThemeContext        │  │  │  │  │  • UsersService (pkg)      │  │  │
+│  │  │  • ShellRoot (pkg)     │  │  │  │  │  • UsersService (pkg)      │  │  │
 │  │  │  • SettingsContext     │  │  │  │  │  • SettingsService         │  │  │
 │  │  └────────────────────────┘  │  │  │  │  • AllowlistService (pkg)  │  │  │
 │  │                              │  │  │  └────────────────────────────┘  │  │
@@ -434,7 +434,7 @@ Object storage (uploads, avatars, renditions, exports, backups, the node data pl
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Runtime-configured.** There is no storage environment variable for the bucket. The active driver and its non-secret settings are the `storage` system-settings namespace; the secret access key is in the credential store (`credentials`, purpose `storage`), encrypted with `SECRETS_ENCRYPTION_KEY`. An administrator edits both at `/admin/settings/storage`, and the resolving provider re-reads them on a short cache, so a change needs no restart. While nothing usable is saved, every storage call answers 503. The environment keeps only `STORAGE_CSP_ORIGIN` (nginx), `STORAGE_PART_SIZE`, `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES` and `SIGNED_URL_EXPIRY`. Operator steps: [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md).
+**Runtime-configured.** There is no storage environment variable for the bucket. The active driver and its non-secret settings are the `storage` system-settings namespace; the secret access key is in the credential store (`credentials`, purpose `storage`), encrypted with `SECRETS_ENCRYPTION_KEY`. An administrator edits both at `/admin/settings/storage`, and the resolving provider re-reads them on a short cache, so a change needs no restart. While nothing usable is saved, every storage call answers 503. The environment keeps only `STORAGE_PART_SIZE`, `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES` and `SIGNED_URL_EXPIRY`. Operator steps: [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md).
 
 **Tenancy.** `storage_objects` and `storage_object_chunks` are organization tables with forced row-level security. Every application read or write goes through `runInOrg` (or the job's `JobScope`), and only `KvoxManagedObjects` does it; a grep-based tripwire spec fails when any other file outside the platform bindings touches `prisma.storageObject`. The API connects as an ordinary `NOSUPERUSER NOBYPASSRLS` role since #471, so these policies apply ([7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role)).
 
@@ -644,7 +644,7 @@ Both tables are platform organization tables (`org_id`, composite key `(id, org_
 #### User Settings Shape
 
 Served by the platform settings slice (`/api/user-settings`, section 7.7). `theme` and `profile` are core fields;
-`dataTables`, `navigation` and `notifications` (platform namespaces) and `onboarding` and `graph` (KVox's) are optional
+`dataTables`, `navigation`, `notifications` and `onboarding` (platform namespaces) and `graph` (KVox's) are optional
 namespaces, present only once set, in that stored key order.
 
 ```json
@@ -778,12 +778,12 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `user_roles` - User-to-system-role assignments. Only the system role `admin` lives here now; `contributor`, `viewer` and `org_admin` are **organization** roles held on `memberships.role_id` (platform migration `0024_split_system_org_roles` moved them; see §7.3)
 - `organizations` / `memberships` - The platform's tenancy tables. KVox runs in single-organization mode (`TENANCY_MODE` unset): one default organization, and every user has one membership in it whose role is their org role
 - `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations; the jobs slice also registers a `retention` namespace, one `{ enabled, days }` policy per growing table, which the 01:00 `RetentionPurgeTask` reads, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` (KVox's, `app-registrations/settings.ts`) and `ai` (the platform AI slice's namespace, extended by KVox's `KVOX_AI_SETTINGS_EXTENSION` with `taskModels`, `graphEnabled`, `defaultModel` and the limits, #473; a deployment that has not yet run the migration command of `runbooks/ai-platform-migration.md` still carries the previous `provider` and `providers` blocks, which the platform salvages on read). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. The `ai` namespace carries no API key (a test walks its schema for a secret-looking name) and, besides the platform's fields (provider slots, key policy, call defaults, limits), holds the fields KVox adds: `taskModels` (a per-task model and optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on write), `graphEnabled` (default `false`, the spending switch for connected knowledge), `defaultModel`, `maxInputTokens`/`maxOutputTokens` (`number | null`, `null` meaning the selected model's own maximum governs), `requestTimeoutMs`, `reasoningEffort` and `maxDocumentBytes` (the ceiling on one uploaded note source document; it lives in the AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk). The enabled-model list is the `ai_models` table, not a settings field. See `docs/specs/notes.md` §2.5, §2.8 and §3.3.
-- `user_settings` - Per-user settings (JSONB), served by the platform settings slice. Optional namespaces in stored key order: `dataTables`, `navigation`, `notifications` (platform), then `onboarding` and `graph` (KVox, `app-registrations/settings.ts`). `onboarding` (issue #272, epic
-  #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
+- `user_settings` - Per-user settings (JSONB), served by the platform settings slice. Optional namespaces in stored key order: `dataTables`, `navigation`, `notifications` (platform), then `onboarding` (the platform onboarding slice's, #481) and `graph` (KVox), both listed in `app-registrations/settings.ts`. `onboarding` (issue #272, epic
+  #271): the caller's own first-run **intent** — `welcomeSeenAt`, `checklistDismissedAt`,
   `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
   the `### Onboarding` group of [`API.md`](API.md#onboarding) and [`docs/specs/onboarding.md`](specs/onboarding.md)). Absent from
-  the default user-settings document on purpose: absent is how "never onboarded" is spelled (the declaration,
-  `onboarding/onboarding.user-settings.ts`, has no default). Also `graph` (issue #369): per-user connected-knowledge
+  the default user-settings document on purpose: absent is how "never onboarded" is spelled (the platform's
+  declaration has no default). Also `graph` (issue #369): per-user connected-knowledge
   preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
   adjudication}`, `domains.{work,personal}` (`personal` default `false`, #383) — absent means every default, resolved by
   `GraphPreferencesService`; see `docs/specs/ontology.md` §10
@@ -1418,7 +1418,7 @@ registers what is its own and binds two host ports.
 |---------|-------|---------------|
 | Routes `/api/system-settings`, `/api/user-settings`, `/api/org-settings`, merge, `If-Match`, the audit row per system write | platform settings slice | `platform/settings/settings.config.ts` (`SettingsModule.forRoot`, global, `systemRowKey` `'global'`, `orgLayer` `'auto'`) |
 | `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (system) and `dataTables`, `navigation`, `notifications` (user) declarations | platform | listed in stored key order in `settings/registry/{system,user}-settings.manifest.ts`; `databaseBackup.storageProvider` default `s3` kept through `APP_SYSTEM_SETTINGS_DEFAULTS` |
-| `transcription` (system) and `onboarding`, `graph` (user) declarations | KVox | `transcription/transcription.system-settings.ts`, `onboarding/onboarding.user-settings.ts`, `graph/graph.user-settings.ts`, assembled in `app-registrations/settings.ts`; the platform requires a `merge` per namespace, so the old service merges live in the declarations |
+| `transcription` (system) and `graph` (user) declarations | KVox | `transcription/transcription.system-settings.ts`, `graph/graph.user-settings.ts`, assembled in `app-registrations/settings.ts` with the platform's `onboarding` declaration (#481); the platform requires a `merge` per namespace, so the old service merges live in the declarations |
 | `ai` (system) namespace | platform AI slice, extended by KVox | `KVOX_AI_SETTINGS_EXTENSION` in `platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS` (#473) |
 | Encrypted `(purpose, name)` store, the AES-256-GCM cipher, the boot-time `SECRETS_ENCRYPTION_KEY` check | platform credentials slice and `core` | `platform/credentials/credentials.config.ts` (`CredentialsModule`, not global; `UserCredentialsModule`, `OrgCredentialsModule` mounted and unused), `main.ts` calls `verifyEncryptionKeyAtStartup` from `@marinoscar/platform-api/core` |
 | Credential purposes `smtp`, `email_ses`, `push_vapid` | platform definitions (strings equal the ones KVox always stored) | `platform/credentials/credential-purposes.manifest.ts` |
@@ -1495,7 +1495,7 @@ Email templates register in this order: the platform's first, then the applicati
 
 Differences a reader of the old code would not expect: Web Push reads **no environment variables** and Amazon SES reads no credentials from the environment (VAPID keys, the SES access key ID and the SES secret are configured only at `/admin/settings/push` and `/admin/settings/email`; `S3_REGION` survives only as the default SES region); every email carries the brand mark and the brand colour follows `identity.json`; the platform's `role-changed` template replaces the app's, while `user-welcome` and `allowlist-invitation` stay as registered overrides (`registerKvoxEmailTemplateOverrides` in `email-templates/`); the broadcast routes accept `broadcasts:*` or `org_broadcasts:*` (so **`org_admin` reaches broadcasts**) instead of requiring the `admin` role; the preferences matrix now lists `allowlist.invitation_reminder` after `security.role_changed`; `POST /api/admin/broadcasts/:id/resume` and `GET /api/notifications/channels` are new. See [`API.md`](API.md#notifications) and [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
 
-On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in `AppBar.tsx`; the breakpoint gate is untouched), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps the workbox precache, the denylisted navigation route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its notification listeners with `registerNotificationServiceWorkerHandlers(self, { icon, badge })` from `@marinoscar/platform-web/notifications/service-worker`. The worker always shows a real push (even with a focused client); the page raises no OS toast for a focused tab or a frame flagged `pushed`; the tag is the notification id, so a repeated push replaces its toast. No local exception is needed.
+On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in the `actions` slot of the packaged `ShellAppBar` by `Layout.tsx`; the breakpoint gate is the package's), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps the workbox precache, the denylisted navigation route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its notification listeners with `registerNotificationServiceWorkerHandlers(self, { icon, badge })` from `@marinoscar/platform-web/notifications/service-worker`. The worker always shows a real push (even with a focused client); the page raises no OS toast for a focused tab or a frame flagged `pushed`; the tag is the notification id, so a repeated push replaces its toast. No local exception is needed.
 
 ### 7.10 Platform db-backup and telemetry slices, and the application role
 
@@ -1866,7 +1866,11 @@ change and are candidates to migrate later, not a regression to fix now.
 `apps/web/src/config/destinations.ts` is the single source of truth for the
 app's navigation targets — the bottom bar, the navigation rail and the avatar
 menu all read it, so none of the three can disagree about what exists or who
-may see it. Full design, with rejected alternatives, in
+may see it. Since issue #484 (epic #478) the three surfaces are the platform's
+(`@marinoscar/platform-web/shell`): `config/shell.ts` binds the table into
+`KVOX_NAVIGATION`, `components/common/Layout.tsx` is a thin `ShellLayout`
+binding, and the five breakpoint gates live in the package. Full design, with
+rejected alternatives, in
 [`docs/specs/ux-refresh.md`](specs/ux-refresh.md) §1.
 
 **Six destinations** since issue #438: `home`, `transcripts`, `notes`,
@@ -1899,6 +1903,9 @@ happens to hold. A fifth non-pinned destination is not an addition, it is a
 redesign of that bar — which is why issue #438 pins `settings` rather than
 adding `knowledge` as a fifth: the bar is `home`, `transcripts`, `notes`,
 `knowledge` (three when the graph is off or the caller lacks `graph:read`).
+The packaged bar draws pinned destinations and overflows into "More", so the
+bar is mounted with `KVOX_BOTTOM_BAR_NAVIGATION`, the same navigation filtered to
+`BOTTOM_BAR_DESTINATIONS` (a data filter, not a breakpoint).
 
 ⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
 navigation rail's foot below a divider, appears in the avatar menu, and is
@@ -2323,7 +2330,7 @@ The project uses a **mocked database approach** for all tests by default. This p
 │  │  Integration Tests          │       │                             │  │
 │  │  (*.integration.spec.ts)    │       │  Context Tests              │  │
 │  │  • In test/ directory       │       │  • IdentityProviders        │  │
-│  │  • Full HTTP cycle          │       │  • ThemeContext             │  │
+│  │  • Full HTTP cycle          │       │  • ShellRoot / Layout       │  │
 │  │  • Mocked PrismaService     │       │                             │  │
 │  │                             │       │                             │  │
 │  │  Mocking:                   │       │  Mocking:                   │  │
@@ -2467,18 +2474,14 @@ apps/web/src/
     │   └── hook-utils.tsx                # Hook testing utilities
     ├── components/
     │   ├── common/
+    │   │   ├── Layout.test.tsx           # the ShellLayout binding
+    │   │   ├── ShellBinding.test.tsx     # phone bar, rail, Console mode, avatar menu
     │   │   └── LoadingSpinner.test.tsx
-    │   ├── navigation/
-    │   │   ├── AppBar.test.tsx
-    │   │   ├── Sidebar.test.tsx
-    │   │   └── UserMenu.test.tsx
     │   └── admin/                        # incl. the Reminders panel
     ├── identity/
     │   ├── IdentityProviders.test.tsx
     │   ├── LoginPage.test.tsx            # the packaged page with the KVox Logo slot
     │   └── UsersPage.test.tsx            # the packaged page with the Reminders tab
-    ├── contexts/
-    │   └── ThemeContext.test.tsx
     ├── pages/
     │   ├── UserSettingsPages.test.tsx
     │   └── UserNotificationsPage.test.tsx
@@ -2547,18 +2550,18 @@ afterAll(() => server.close());
 // __tests__/utils/test-utils.tsx
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider } from '../../contexts/ThemeContext';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
 import { AuthProvider } from '@marinoscar/platform-web/identity/headless';
 
 export function renderWithProviders(ui: React.ReactElement, options = {}) {
   return render(ui, {
     wrapper: ({ children }) => (
       <BrowserRouter>
-        <ThemeProvider>
+        <ShellRoot themes={{ light: lightTheme, dark: darkTheme }}>
           <AuthProvider>
             {children}
           </AuthProvider>
-        </ThemeProvider>
+        </ShellRoot>
       </BrowserRouter>
     ),
     ...options,

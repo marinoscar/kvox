@@ -465,3 +465,45 @@ describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (
     expect(existsSync(join(appDir, 'template'))).toBe(false);
   });
 });
+
+// =============================================================================
+// install.sh reads the version from the first word of `--version` (issue #482)
+// =============================================================================
+//
+// The CLI is the platform engine since #482, and its `--version` prints
+// `<cli version> (platform <engine version>)`. install.sh compares the installed
+// binary's version with the one it just built from `package.json`; comparing the
+// whole line would report a "Version mismatch" after every install. The line is
+// pulled out of the real install.sh and run against a stub shim, so the test
+// follows the script rather than a copy of it.
+// =============================================================================
+describe('install.sh version verification (#482)', () => {
+  function installedVersionLine(): string {
+    const line = readFileSync(INSTALL_SH, 'utf8')
+      .split('\n')
+      .find((candidate) => candidate.startsWith('INSTALLED_VERSION="$("$BIN_SHIM" --version'));
+    if (line === undefined) {
+      throw new Error('install.sh no longer has the INSTALLED_VERSION line this test pins.');
+    }
+    return line;
+  }
+
+  function installedVersionFor(shimOutput: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'install-sh-shim-'));
+    createdDirs.push(dir);
+    const shim = join(dir, 'shim');
+    writeFileSync(shim, `#!/usr/bin/env bash\nprintf '%s\\n' '${shimOutput}'\n`, { mode: 0o755 });
+
+    return execFileSync('bash', ['-c', `BIN_SHIM='${shim}'\n${installedVersionLine()}\nprintf '%s' "$INSTALLED_VERSION"`], {
+      encoding: 'utf8',
+    });
+  }
+
+  it('takes only the CLI version from the platform engine format', () => {
+    expect(installedVersionFor('1.10.0 (platform 0.1.0-next.5)')).toBe('1.10.0');
+  });
+
+  it('still reads a bare version', () => {
+    expect(installedVersionFor('1.9.0')).toBe('1.9.0');
+  });
+});

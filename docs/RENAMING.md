@@ -89,11 +89,12 @@ edits:
 | `install.sh` (the `curl \| bash` header comment, the `KVOX_REPO` default) | **This is the sharpest example.** It is fetched and executed via `curl \| bash` *before the repository exists on disk* — there is nothing to read a manifest out of, because the clone that manifest lives in hasn't happened yet. This is a permanent codemod target; it can never move to the "derived" group. |
 | `apps/cli/README.md` (the same install/uninstall one-liners and `KVOX_REPO` default, restated in docs) | Prose describing the installer above — same reasoning, once removed. |
 | `README.md` (title, tagline, CI badge URL, clone/`cd` instructions, directory-tree root) | The one place in the codebase where the product name and repo slug appear as hand-written prose rather than as a rendered value. |
-| `infra/compose/.env.example` and `base.compose.yml` (`OTEL_SERVICE_NAME` default) | These are Compose-file string defaults, not JavaScript — nothing executes `@app/shared` to produce them. The codemod changes the *value* only; it never adds a new key, because `apps/cli/src/deploy/env-spec.test.ts` counts every commented `# KEY=value` line in `.env.example` as a declared variable, and a new key would fail that test. |
+| `infra/compose/.env.example` and `base.compose.yml` (`OTEL_SERVICE_NAME` default) | These are Compose-file string defaults, not JavaScript — nothing executes `@app/shared` to produce them. The codemod changes the *value* only; it never adds a new key, because the CLI's conformance test (`apps/cli/src/conformance.test.ts`) refuses a commented `# KEY=value` line it does not list, and the CLI reads every one as a declared variable. |
 | `infra/compose/test.compose.yml`, `apps/api/.env.test`, `scripts/dev.ps1` (test database name and container name) | Same reasoning as the OTEL default — Compose/env-file values, not code. |
+| **After the codemod: `npm run platform:infra:sync`** | `infra/` is generated from `@marinoscar/platform-infra` with the identity in `identity.json` (#483). The codemod edits the same rendered literals in place, so the files and `infra/platform-infra.lock.json` disagree until the sync re-renders them from the new identity; CI's `sync --check` fails until it is run and committed. |
 | `package.json`'s `"name"` field | npm reads this before any of the repository's own code runs, so it is necessarily a second copy of the slug. |
 | `apps/web/public/favicon.svg` and `apps/web/public/icons/source.svg` (the `fill` attribute on the background rect) | These are the two hand-editable *vector* masters. `generate-icons.py` reads the manifest for the *rasters* but deliberately does not rasterise these two SVGs — see [The binary-name decision](#the-binary-name-decision)'s sibling note in `packages/shared/README.md` on why an SVG toolchain is refused. |
-| `apps/cli/src/branding.ts` and `apps/cli/package.json`'s `bin` key | Only touched when `--cli-name` is passed — see the next section. |
+| `cliName` in `packages/shared/identity.json` and `apps/cli/package.json`'s `bin` key | Only touched when `--cli-name` is passed — see the next section. |
 
 ### Never renamed
 
@@ -176,8 +177,9 @@ holds, not the fictional values above.)
 derived from it. A product called "Acme Hub" may well still ship a binary
 called `kvox` — `git` isn't called `github-cli`, `kubectl` isn't called
 `kubernetes-cli`, and there's no reason a fork's control client should be
-forced to match the product name syllable-for-syllable. `apps/cli/src/branding.ts`
-carries the full rationale; the summary is that `CLI_NAME` seeds three
+forced to match the product name syllable-for-syllable. `cliName` in
+`packages/shared/identity.json` (exported as `CLI_NAME`, handed to the platform
+CLI's `createCli` by `apps/cli/src/app.ts`) is the single seed; it seeds three
 things the product name has no business touching: the executable shown in
 `--help`, the config directory (`~/.kvox/`), and the environment-variable
 prefix (`KVOX_`).
@@ -186,9 +188,11 @@ Renaming the binary is a bigger, and honestly a more expensive, change than
 renaming the product, and the script says so out loud when you pass
 `--cli-name`. State the cost plainly, because it is real:
 
-- **~6 CLI test files assert literal `KVOX_` environment-variable names on
-  purpose** — they are *meant* to break on a rename, as a forcing function
-  to catch every place that reads the old prefix. Fix them by hand.
+- **The CLI's sources and tests follow the rename.** The engine is the
+  platform CLI package, which derives the config directory, the prefix and the
+  systemd unit from the identity, and `apps/cli/src` derives them from
+  `CLI_NAME`. Its two fixed literals (the deploy state file and the proxy
+  sentinel, below) do not change.
 - **`apps/cli/Dockerfile` declares 14 `ENV KVOX_*` lines.** All 14 need the
   new prefix.
 - **`infra/compose/worker.compose.yml` carries the same prefix.**
@@ -264,8 +268,8 @@ stay exactly as it is. The first row is the one that matters most.
 |---|---|---|
 | The HKDF label `enterpriseappbase:secret-cipher:v1:` | `@marinoscar/platform-api/core` (`secret-cipher`; compiled into the package since #466, so a fork edits it only by patching a dependency) | **Every stored credential becomes permanently undecryptable.** This string happens to be lowercase and to contain the template's old name, which makes it look renameable — it isn't. A case-insensitive find-and-replace across the repository is the realistic way this gets broken by someone who never opened this file; say so explicitly, because "don't do a blind find-and-replace" is the actual lesson here. (Naming the literal here is safe: the guard test's check is case-sensitive against the *current product name*, and this label is lowercase and structurally different from it, so quoting it does not trip CI.) |
 | The `Symbol.for(...)` registry key | `apps/api/src/common/exceptions/verbatim-error-body.exception.ts` | `Symbol.for` interns by string across realms (a worker thread, a separately-loaded copy of the module). Changing the string breaks that cross-realm identity check silently — two symbols that were supposed to compare equal stop doing so. |
-| The `# Managed by appctl deploy` sentinel comment | `apps/cli/src/deploy/proxy.ts` | This line is written into an nginx vhost file on a live server *and* parsed back out of it later to recognise which vhosts the CLI itself manages. Change the string and the CLI stops recognising vhosts it wrote before the change. The command is `kvox deploy` now; this sentinel keeps the historical `appctl` spelling on purpose, because it's read back from vhost files already written by servers deployed before this rename. |
-| The `.appctl-deploy.json` filename | `apps/cli/src/deploy/state.ts` | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. Kept under its historical `appctl` name for the identical reason — it's the same file already sitting on servers deployed under the old name, and `appctlVersion`, the field inside it recording the CLI version at time of write, stays spelled the same way for the same reason. |
+| The `# Managed by appctl deploy` sentinel comment | `@marinoscar/platform-cli` (its deploy `proxy`) | This line is written into an nginx vhost file on a live server *and* parsed back out of it later to recognise which vhosts the CLI itself manages. Change the string and the CLI stops recognising vhosts it wrote before the change. The command is `kvox deploy` now; this sentinel keeps the historical `appctl` spelling on purpose, because it's read back from vhost files already written by servers deployed before this rename. |
+| The `.appctl-deploy.json` filename | `@marinoscar/platform-cli` (its deploy `state`) | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. Kept under its historical `appctl` name for the identical reason — it's the same file already sitting on servers deployed under the old name, and `appctlVersion`, the field inside it recording the CLI version at time of write, stays spelled the same way for the same reason. |
 | `@app/shared`, and the `api` / `web` / `nginx` Compose service names | — | These are internal plumbing names, not identity — nothing user-facing reads them, and nothing about a rebrand depends on them. |
 
 ## The visual suite fails until you regenerate the baselines
@@ -426,7 +430,7 @@ declared unconditionally.
 ### 5. Bring it up, migrate, seed
 
 ```bash
-docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
+docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f app.devdb.pgvector.compose.yml up
 npm run prisma:migrate --workspace=api
 npm run prisma:seed --workspace=api
 ```

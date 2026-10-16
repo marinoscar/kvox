@@ -1,3 +1,5 @@
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.5 (compose) — do not edit; extend through an infra/compose/app.*.compose.yml overlay
+# Source of truth: @marinoscar/platform-infra/compose/devdb.compose.yml; re-materialise with `npx platform-infra sync`
 # =============================================================================
 # Docker Compose - Development database (OPT-IN)
 # =============================================================================
@@ -31,7 +33,7 @@
 # Development only, and it says so in three places for a reason: the credentials
 # below are the well-known `postgres`/`postgres` pair, and the port is published
 # on the host. Do not add this overlay to a production `docker compose` command.
-# Production points POSTGRES_* at a real database — see docs/deployment/vps.md.
+# Production points POSTGRES_* at a real database — see docs/runbooks/deploy-to-vps.md.
 #
 # The test database is a DIFFERENT service in `test.compose.yml`, on a different
 # port (5433) with its own volume, so that running the test suite never touches
@@ -40,31 +42,25 @@
 
 services:
   db:
-    # `pgvector/pgvector:pg16`, not `postgres:16-alpine` (issue #178, epic #165)
-    # — the `vector` extension is a server-side control file, so the semantic
-    # search migration cannot run on an image that does not carry one. Same
-    # PostgreSQL major, so an existing `dev-db-data` volume is unaffected; the
-    # base OS moves Alpine → Debian, which the data directory does not see.
-    # test.compose.yml carries the full argument.
-    image: pgvector/pgvector:pg16
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      # TWO LOGINS, NOT ONE. POSTGRES_USER below is the image's BOOTSTRAP
-      # superuser, fixed to `postgres` and used for administration only (the
-      # init scripts in postgres-init/ connect as it). The API does not use it:
-      # row-level security does not apply to a superuser, so the API signs in
-      # as APP_DB_USER, an ordinary role that 10-application-role.sh creates
-      # on the first start of an empty volume and makes the owner of the
-      # database. base.compose.yml's POSTGRES_USER / POSTGRES_PASSWORD are
-      # that role's login, so they default here to the role being created and
-      # `.env` moves the server and the API together.
+      # These deliberately mirror base.compose.yml's own POSTGRES_* defaults, so
+      # that `.env` overriding any of them moves the server and the API together
+      # rather than leaving the API authenticating against the wrong values.
+      #
+      # The image makes ITS POSTGRES_USER a superuser, and row-level security
+      # (issue #725) is inert for a superuser. So the image's bootstrap login is
+      # the fixed `postgres` (administration only) and the role the API runs as,
+      # `.env`'s POSTGRES_USER, is created ordinary by
+      # postgres-init/10-application-role.sh on the first start of an empty
+      # volume. An existing dev volume keeps its old superuser: recreate it
+      # (docker volume rm) or follow the SECURITY-ARCHITECTURE.md steps.
       POSTGRES_USER: postgres
-      # The bootstrap superuser's password. It follows POSTGRES_PASSWORD so a
-      # single `.env` value is enough for local development.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-appdb}
-      APP_DB_USER: ${APP_DB_USER:-${POSTGRES_USER:-kvox_app}}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}
+      APP_DB_USER: ${POSTGRES_USER:-app}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       # Published so that `prisma migrate` and `psql` can be run from the host
       # checkout, which is how migrations are actually created. 5432 is the
@@ -73,12 +69,6 @@ services:
       - "${POSTGRES_BIND_PORT:-5432}:5432"
     volumes:
       - dev-db-data:/var/lib/postgresql/data
-      # First-start scripts, run in file-name order on an EMPTY data volume
-      # only: 10-application-role.sh creates the ordinary role the API signs in
-      # as, the extensions script creates `vector` and `pg_trgm` as the
-      # superuser (an ordinary role cannot always create them, and the
-      # historical migration that does `CREATE EXTENSION IF NOT EXISTS vector`
-      # is then a no-op). An existing volume is not touched.
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - app-network

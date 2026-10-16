@@ -1,9 +1,21 @@
 /**
- * The destination model — canonical keys, route ownership, and active state.
+ * The destination model — canonical keys and route ownership.
  *
+ * Issue #484, epic #478: the shell that draws these is the platform's
+ * (`@marinoscar/platform-web/shell`). This file stays the app's SINGLE source of
+ * truth for WHAT the navigation is; `config/shell.ts` binds it, with the admin and
+ * user settings registries, into the `ShellNavigation` the shell takes. Route
+ * matching (`owns`, `resolveActiveDestination`) and visibility
+ * (`isDestinationVisible`) are the package's, so every surface asks one function.
+ * The packaged bottom bar draws pinned destinations too (and overflows into
+ * "More"); `pinned` is rail-only in the package, so this app keeps its rule that
+ * the phone bar never carries a mode by binding the bar to
+ * `BOTTOM_BAR_DESTINATIONS` (`KVOX_BOTTOM_BAR_NAVIGATION` in `config/shell.ts`).
+ *
+ * Issue #55, epic #51.
  * Issue #55, epic #51. This file is the SINGLE source of truth for the app's
  * navigation targets. Before it existed the same four menu paths were spelled
- * out in four places (`App.tsx`, `Sidebar.tsx`, `UserMenu.tsx`,
+ * out in four places (`App.tsx`, `Sidebar.tsx`, the user menu,
  * `home/QuickActions.tsx`, deleted by #32), each with its own idea of who was allowed to see
  * them — which is how a Contributor holding `system_settings:read` ended up
  * with a working System Settings page, a menu entry pointing at it, and no
@@ -47,7 +59,7 @@
  * #106 pays back that debt by moving Console OFF the bottom bar rather than
  * merging two nouns onto one row. Console is a MODE — an operator surface a
  * user switches into — and it already had a better home: pinned at the rail's
- * foot (#105) at `sm` and up, and listed in the avatar UserMenu at every width.
+ * foot (#105) at `sm` and up, and listed in the avatar menu at every width.
  * Taking it out of the bar leaves exactly four NON-PINNED destinations —
  * Home · Transcripts · Notes · Settings — which is the bar's ceiling reached BY
  * DESIGN rather than by the coincidence of which permissions a given user
@@ -88,14 +100,14 @@
  * four NON-PINNED destinations — Home · Transcripts · Notes · Knowledge.
  *
  * Knowledge is also the first destination gated on a RUNTIME FEATURE as well as
- * a permission (`requiresFeature`): a deployment with connected knowledge
+ * a permission (`feature: 'graph'`): a deployment with connected knowledge
  * switched off (`ai.graphEnabled`, read from `GET /api/ai-tasks/config`) has no tab
  * for it, and the bar falls back to three. The routes stay reachable and stay
  * owned by `knowledge` either way — ownership answers "what lights up", not
  * "what is drawn".
  */
 
-import type { SvgIconComponent } from '@mui/icons-material';
+import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
 import HomeIcon from '@mui/icons-material/Home';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -112,31 +124,14 @@ export type DestinationKey =
   | 'console';
 
 /**
- * A deployment-level runtime feature a destination can additionally require
- * (#438). One real distinction today — connected knowledge — so this is a
- * union of one, not a generic flag bag; a second feature is a second member.
+ * One navigation destination of this app: the packaged shell's `ShellDestination`
+ * over this app's keys (issue #484, epic #478). `label`, `compactLabel`, `Icon`,
+ * `path`, `permission`, `anyPermission`, `pinned` and `feature` are the shell's
+ * fields; `feature: 'graph'` is the `graph` settings feature
+ * (`config/settingsFeatures.ts`), so the shell hides the row until connected
+ * knowledge is known to be on.
  */
-export type DestinationFeature = 'graph';
-
-/**
- * Which runtime features are ON for this viewer right now. `false` for
- * "unknown" and "still loading" too, so a gated destination never flashes in
- * and then out — see `useNavigationFeatures`.
- */
-export type DestinationFeatures = Readonly<Record<DestinationFeature, boolean>>;
-
-/** Every feature off — the safe answer before anything has been read. */
-export const NO_DESTINATION_FEATURES: DestinationFeatures = { graph: false };
-
-/**
- * Does `prefix` own `path`? True when the path equals the prefix or continues
- * with a `/`. `'/'` matches only itself — every path starts with it, so the
- * root has to be exact or Home would own the entire app.
- */
-export function owns(prefix: string, path: string): boolean {
-  if (prefix === '/') return path === '/';
-  return path === prefix || path.startsWith(`${prefix}/`);
-}
+export type Destination = ShellDestination<DestinationKey>;
 
 /**
  * Route prefixes each destination owns. Child routes are covered by their
@@ -151,7 +146,7 @@ export function owns(prefix: string, path: string): boolean {
  * this list that render would highlight nothing, and the route-ownership test
  * would fail it as "neither owned nor deliberately unowned".
  */
-export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
+export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string[]>> = {
   // Just the root since #438. `/graph` and `/ask` were owned here between
   // #373/#380 and #438 — see the file header.
   home: ['/'],
@@ -194,110 +189,6 @@ export const UNOWNED_ROUTES: readonly string[] = [
   '/activate',
   '/testing/login',
 ];
-
-/**
- * A navigation destination, fully described for every surface that draws it.
- *
- * `permission` is the API permission that makes the destination REACHABLE, and
- * it is deliberately the same string the corresponding controller enforces —
- * see the comments on each entry. A destination with no `permission` and no
- * `anyPermission` is available to every authenticated user.
- */
-export interface Destination {
-  key: DestinationKey;
-  /** Full label — the expanded rail, the bottom bar, the user menu. */
-  label: string;
-  /** Shown in the 72px collapsed rail, which will not hold "System Settings". */
-  compactLabel: string;
-  Icon: SvgIconComponent;
-  path: string;
-  /** API permission required to reach it; absent means "any authenticated user". */
-  permission?: string;
-  /**
-   * Reachable when the user holds ANY ONE of these permissions.
-   *
-   * Added by #92 for `console`, which is its ONE user today: it fronts pages
-   * from two different controllers, so someone with `users:read` alone must
-   * reach the Users & Allowlist page, and someone with `system_settings:read`
-   * alone must reach the settings pages. Neither may be dropped, and the
-   * single-string `permission` field cannot express "or".
-   *
-   * `library` was the second user between #57 and #106, for the same reason —
-   * one row fronting `transcripts.controller.ts` and `notes.controller.ts`.
-   * Splitting that row into two destinations dissolved the "or": each now names
-   * the single permission its own controller enforces. The field stays, because
-   * `console` still needs it and because the next surface that fronts two
-   * controllers will too.
-   *
-   * Widening `permission` to `string | string[]` was the alternative and was
-   * rejected: an array there reads as ALL by every convention in this codebase
-   * (`hasAllPermissions`), so the same field would have meant "and" at one call
-   * site and "or" at another. A separate field names the semantics.
-   *
-   * The two fields AND together when both are set — `permission` must be held
-   * AND at least one of `anyPermission`. No destination sets both today; the
-   * rule is stated so the day one does, `isDestinationVisible` is the only
-   * place that has to know.
-   */
-  anyPermission?: readonly string[];
-  /**
-   * This destination is a MODE, not a peer destination — and each surface draws
-   * a mode differently (#105, redefined by #106):
-   *
-   *   - **The navigation rail** renders it pinned at its FOOT, below a divider,
-   *     rather than inline in the destination list.
-   *   - **The user menu** lists it inline with the rest, because a flat menu has
-   *     no foot to pin to and no room to invent a second group for one row.
-   *   - **The bottom bar OMITS it entirely** (`BOTTOM_BAR_DESTINATIONS`). A bar
-   *     has no foot either — it IS the foot — so there is nowhere to put a
-   *     pinned row that would not read as a fifth peer destination. Console
-   *     and Settings stay reachable below `sm` through the avatar menu, which
-   *     is where a phone user reaches every other non-destination control.
-   *
-   * `console` was the only one until #438 made `settings` the second, and the
-   * flag exists so no surface has to
-   * spell `key === 'console'` in its render. A magic key there would be a
-   * second, invisible answer to "what is the admin surface" — the exact
-   * split-brain this file's header describes — and it would silently stop
-   * being true the day the admin destination is renamed or a second mode is
-   * added.
-   *
-   * Ordering in `DESTINATIONS` is still the correct order for the menu, which
-   * reads the array as declared. The rail lifts pinned rows to its foot and the
-   * bar filters them out; neither reorders what is left.
-   */
-  pinned?: boolean;
-  /**
-   * A runtime feature that must ALSO be on for this destination to be drawn
-   * (#438). Checked AFTER the permission gate, never instead of it: a
-   * permission is what the API enforces, a feature is whether the deployment
-   * has the surface switched on at all. `knowledge` is the one user today.
-   */
-  requiresFeature?: DestinationFeature;
-}
-
-/**
- * Is `destination` visible to a user with this `hasPermission` predicate?
- *
- * EVERY surface calls this rather than testing `destination.permission`
- * inline. Four surfaces (rail, bottom bar, user menu, quick actions) each ran
- * their own `!destination.permission || hasPermission(...)` expression, and
- * every one of them silently ignored `anyPermission` the moment it was added —
- * the `console` row would have appeared for everyone. One function is the same
- * fix this file's header describes for the paths themselves.
- */
-export function isDestinationVisible(
-  destination: Destination,
-  hasPermission: (permission: string) => boolean,
-  features: DestinationFeatures,
-): boolean {
-  if (destination.permission && !hasPermission(destination.permission)) return false;
-  if (destination.anyPermission && !destination.anyPermission.some(hasPermission)) return false;
-  // Required, not optional, so no call site can forget it and quietly draw a
-  // feature-gated row for everyone — the `anyPermission` failure above, again.
-  if (destination.requiresFeature && !features[destination.requiresFeature]) return false;
-  return true;
-}
 
 /**
  * The six destinations, in navigation order: Home, Transcripts, Notes,
@@ -377,10 +268,12 @@ export const DESTINATIONS: readonly Destination[] = [
     key: 'transcripts',
     label: 'Transcripts',
     // Both fields say "Transcripts", and at 11 characters it is the longest
-    // compact label this app ships — which is why `RAIL_WIDTH_COLLAPSED` went
-    // from 56 to 72 in #106. See `NavigationRail`'s measurement comment: a
-    // 48px caption box cannot hold it, and abbreviating it to "Audio" would
-    // name something other than what the row fronts.
+    // compact label this app ships — which is why the collapsed rail went from
+    // 56 to 72px in #106 (a 48px caption box cannot hold it; abbreviating it to
+    // "Audio" would name something other than what the row fronts). The rail is
+    // the package's since #484 and its collapsed width is its own 56px
+    // (`RAIL_WIDTH_COLLAPSED`); check this caption when that width or the
+    // label changes.
     compactLabel: 'Transcripts',
     // The audio waveform this row carried before #57 renamed it to Library.
     // It fronts recordings again, so it gets the recording icon back.
@@ -417,7 +310,7 @@ export const DESTINATIONS: readonly Destination[] = [
     Icon: HubIcon,
     path: '/graph',
     permission: 'graph:read',
-    requiresFeature: 'graph',
+    feature: 'graph',
   },
   {
     key: 'settings',
@@ -455,36 +348,11 @@ export const DESTINATIONS: readonly Destination[] = [
  * statements the same statement. A hand-maintained copy would let a fifth tab
  * appear silently the day someone adds a destination and forgets this file.
  *
- * `BottomNav` still filters this by permission and runtime feature on top — a
- * user sees at most four tabs and possibly fewer (three with connected
- * knowledge off).
+ * The packaged bottom bar still filters this by permission and by the `graph`
+ * feature on top — a user sees at most four tabs and possibly fewer (three with
+ * connected knowledge off), and never a "More" tab, because the list never
+ * exceeds the bar's default of four.
  */
 export const BOTTOM_BAR_DESTINATIONS: readonly Destination[] = DESTINATIONS.filter(
   (d) => !d.pinned,
 );
-
-/**
- * Which destination, if any, owns `pathname`.
- *
- * Longest prefix wins where prefixes overlap. `/admin` is a single prefix
- * today, so nothing under it competes — but the rule is what keeps `/` from
- * winning everything (it is handled by `owns`' exact-match case) and what will
- * keep a future sibling prefix correct without touching this function.
- */
-export function resolveActiveDestination(pathname: string): DestinationKey | null {
-  let best: { key: DestinationKey; length: number } | null = null;
-
-  for (const [key, prefixes] of Object.entries(DESTINATION_ROUTES) as [
-    DestinationKey,
-    readonly string[],
-  ][]) {
-    for (const prefix of prefixes) {
-      if (!owns(prefix, pathname)) continue;
-      if (!best || prefix.length > best.length) {
-        best = { key, length: prefix.length };
-      }
-    }
-  }
-
-  return best?.key ?? null;
-}

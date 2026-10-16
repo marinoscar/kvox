@@ -93,6 +93,12 @@ jobs:
       - run: npm run typecheck --workspace=web
       - run: npm run typecheck --workspace=cli
       - run: npm run typecheck --workspace=@app/shared
+      # infra/ is rendered from @marinoscar/platform-infra by `npm run
+      # platform:infra:sync`: fail when a generated compose/nginx/env file was
+      # edited by hand or the package was bumped without a re-sync (issue #483).
+      # The app's own differences live in infra/compose/app.*.compose.yml,
+      # infra/compose/app.env.example and infra/nginx/app.d/ (never checked).
+      - run: npm run platform:infra:sync -- --check
       # @app/shared/ontology is compiled TypeScript whose output is COMMITTED
       # (packages/shared/ontology/): rebuild it and fail if the committed copy
       # is stale, i.e. a source edit was committed without its rebuild.

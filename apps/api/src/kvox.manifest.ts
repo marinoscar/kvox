@@ -38,18 +38,15 @@
 // IMPORT TIME (`settings/dto/*`). ES imports evaluate in order, so this file's
 // side effect has to run before any of them is loaded. See that file's header.
 import './kvox.settings-manifest';
-import {
-  BASE_ADMIN_ONBOARDING_STEPS,
-  BASE_USER_ONBOARDING_STEPS,
-} from './onboarding/onboarding-steps';
+// The onboarding slice's registries (#481): the platform's facts and steps, and this app's base
+// ones, register on import (the stored `onboarding` namespace's merge reads the step registry, so
+// every entry point that handles settings needs it filled). The domain halves are registered below.
+import './platform/onboarding/onboarding.manifest';
 import {
   registerOnboardingFact,
   registerOnboardingStep,
-} from './onboarding/onboarding.registries';
-import {
-  NOTES_ONBOARDING_FACTS,
-  NOTES_ONBOARDING_STEPS,
-} from './notes/notes.onboarding';
+} from '@marinoscar/platform-api/onboarding';
+import { NOTES_ONBOARDING_FACTS, NOTES_ONBOARDING_STEPS } from './notes/notes.onboarding';
 import {
   TRANSCRIPTION_ONBOARDING_FACTS,
   TRANSCRIPTION_ONBOARDING_STEPS,
@@ -88,19 +85,17 @@ if (!registered) {
   // [registry:notifications]
   // See above: `notifications-registry/*.notifications.ts`.
   // [registry:onboarding]
-  // Facts first (a step is refused if a fact it names is unknown), then steps.
-  // `order` (10, 20, 30, ... per audience) fixes the rendered sequence, so the
-  // registration order below is not load-bearing; `admin.email` (40) before
-  // `admin.access` (50) is pinned by onboarding.service.spec.ts.
+  // The platform's facts and steps and this app's base ones (AI) are registered on import of
+  // `platform/onboarding/onboarding.manifest.ts`; the domain half is here. `order` (per audience)
+  // fixes the rendered sequence, so the call order is not load-bearing, and
+  // `assertOnboardingRegistries` checks at boot that every fact a step names is registered.
   registerOnboardingFact(
     ...TRANSCRIPTION_ONBOARDING_FACTS,
     ...TRANSCRIPTS_ONBOARDING_FACTS,
     ...NOTES_ONBOARDING_FACTS,
   );
   registerOnboardingStep(
-    ...BASE_ADMIN_ONBOARDING_STEPS,
     ...TRANSCRIPTION_ONBOARDING_STEPS,
-    ...BASE_USER_ONBOARDING_STEPS,
     ...TRANSCRIPTS_ONBOARDING_STEPS,
     ...NOTES_ONBOARDING_STEPS,
   );

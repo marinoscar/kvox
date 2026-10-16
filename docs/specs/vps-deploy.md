@@ -1,5 +1,17 @@
 # Design Spec: `kvox deploy` (VPS deployment)
 
+> **Engine change (#482).** Since CLI 1.10 the deploy engine is the platform's
+> (`@marinoscar/platform-cli`), and the `apps/cli/src/**` files cited below
+> (`program.ts`, `commands/`, `deploy/`, `tui/`, `node/`, ...) were deleted from
+> this repository. This document is the design the engine was built to, and the
+> platform package keeps its behaviour with the differences listed in
+> [`apps/cli/README.md` "Flags and commands that changed in 1.10"](../../apps/cli/README.md#flags-and-commands-that-changed-in-110):
+> the state file is version 2 (version 1 is read), `uninstall` has no `--certs`
+> or `--keep-env` and never removes the renewal cron, `install --fresh`,
+> `--no-ipv6`, `doctor --skip-proxy` and `--public-ip` are gone, `deploy
+> about` reads the record only, and `update --check` is this app's own reduced
+> port. Section numbers and anchors are unchanged.
+
 This is the durable design for a new `kvox deploy` command family in
 `apps/cli` that installs and updates this application on a single VPS: git
 clone/pull, `docker compose build`, database migration and seeding, and TLS
@@ -998,7 +1010,13 @@ re-deciding the same things slightly differently.
 
 `infra/compose/telemetry.compose.yml` and `infra/compose/vps.telemetry.compose.yml`
 are copied byte for byte from `@marinoscar/platform-infra/telemetry` (their
-`GENERATED` headers stay; never hand-edit them). They replace the previous
+`GENERATED` headers stay; never hand-edit them). Since #483 every other compose,
+nginx and env file is generated the same way by `npm run platform:infra:sync`,
+and the app's own differences are the `infra/compose/app.*.compose.yml` overlays
+(applied after every platform file, by scope), `app.env.example` and
+`infra/nginx/app.d/`; the list for a deployment is
+`composeFilesForMode('vps', { telemetry, overlays })` from `@marinoscar/platform-infra`
+(see `docs/deployment/vps.md`, "The generated infrastructure files"). They replace the previous
 observability stack (`otel.compose.yml`: a trace UI with ClickHouse, Redis and a
 metadata Postgres behind it): the OpenTelemetry
 collector writes into **GreptimeDB**, and the API reads it back for the telemetry

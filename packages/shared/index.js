@@ -238,3 +238,20 @@ exports.REPO_SLUG = identity.repoSlug;
  * `scripts/rename.mjs`, permanently. See docs/RENAMING.md.
  */
 exports.REPO_URL = `https://github.com/${exports.REPO_SLUG}`;
+
+/**
+ * The CLI executable's name, and the seed for its config directory
+ * (`~/.<name>`), its environment-variable prefix (`<NAME>_`) and its systemd
+ * unit.
+ *
+ * ▲ THIS IS A REBRAND POINT: `cliName` in `identity.json`. It is a SEPARATE
+ * fact from `APP_NAME` (a product called "Acme" may keep shipping its original
+ * binary name), and it is the name `apps/cli/src/app.ts` hands to the
+ * platform CLI's `createCli({ identity })` and `infra/` reads to derive its
+ * own prefix. The `bin` key of `apps/cli/package.json` repeats it, because npm
+ * reads that file before any code runs; a test guards the two against drift.
+ *
+ * Constraint: lowercase ASCII letters, digits and hyphens, starting with a
+ * letter.
+ */
+exports.CLI_NAME = identity.cliName;

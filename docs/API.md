@@ -7461,173 +7461,129 @@ this application has no page for either yet.
 ### Onboarding
 
 A persistent, resumable, **live-derived** first-run checklist for a fresh
-deployment's administrator and a fresh account's ordinary user — issue #275
-(epic #271, issues #272–#281). Full design (why completion is derived on
-every read rather than stored, why the two routes are split rather than
-merged, why there are three statuses rather than two, and every rejected
-alternative) is [`docs/specs/onboarding.md`](specs/onboarding.md).
+deployment's administrator and a fresh account's ordinary user. The routes
+are the platform onboarding slice's (`@marinoscar/platform-api/onboarding`,
+issue #481, epic #478); this application registers its steps and facts on the
+slice's registries. Full design (why completion is derived on every read
+rather than stored, the three statuses, and the step list) is
+[`docs/specs/onboarding.md`](specs/onboarding.md).
 
 #### GET /onboarding
 
-The caller's own activation steps: up to four, naming what this account
-still has to do (add an AI provider key, transcribe something, generate a
-note, set a display name).
+The caller's stored first-run **intent** (`settings`), the `user` checklist
+and, for a holder of `system_settings:read`, the `admin` checklist. Statuses
+are derived from live state on every request and never stored; the only
+stored state is the `onboarding` namespace of `/user-settings`
+(`welcomeSeenAt`, `checklistDismissedAt`, `adminDismissedAt`, `skipped[]`),
+written through `PATCH /user-settings` with `If-Match`.
 
-**Requires:** Authenticated, **no permission** — the resource is the
-caller's own state, scoped by their user id in the query itself, the same
-ownership-scoped posture `/api/pat`, `/api/user-settings` and
-`/api/user-data` already take. Readable by a Viewer holding no permissions
-at all, which is what a freshly invited account looks like.
+A step whose permission the caller lacks is **omitted**, never shown blocked.
+A `blocked` step carries a `blockedReason` naming who has to act. Read-only:
+it never creates a settings row.
+
+**Query:** `refresh=true` bypasses the Doctor's report cache for the
+Doctor-backed admin steps.
+
+**Requires:** `user_settings:read` (every role holds it). The `admin` block
+is non-null only for `system_settings:read`.
 
 **Response:**
 ```json
 {
   "data": {
-    "audience": "user",
-    "steps": [
-      {
-        "key": "user.ai_key",
-        "tier": "required",
-        "title": "Add your AI provider key",
-        "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
-        "actionLabel": "Add your key",
-        "href": "/settings/ai",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": false,
-        "skipped": false
-      },
-      {
-        "key": "user.first_transcript",
-        "tier": "required",
-        "title": "Transcribe your first recording",
-        "description": "Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.",
-        "actionLabel": "New transcript",
-        "href": "/transcripts/new",
-        "status": "blocked",
-        "blockedReason": "Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.",
-        "skippable": false,
-        "skipped": false
-      },
-      {
-        "key": "user.profile",
-        "tier": "optional",
-        "title": "Set your display name",
-        "description": "How you appear to the people you share transcripts and notes with.",
-        "actionLabel": "Edit your profile",
-        "href": "/settings/profile",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": true,
-        "skipped": false
-      }
-    ],
-    "requiredRemaining": 2,
-    "totalRemaining": 3,
-    "allRequiredSatisfied": false
+    "settings": {
+      "welcomeSeenAt": "2026-10-16T12:00:00.000Z",
+      "checklistDismissedAt": null,
+      "adminDismissedAt": null,
+      "skipped": ["admin.smoke_test"]
+    },
+    "user": {
+      "steps": [
+        {
+          "id": "user.ai_key",
+          "audience": "user",
+          "tier": "required",
+          "status": "todo",
+          "title": "Add your AI provider key",
+          "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
+          "actionLabel": "Add your key",
+          "href": "/settings/ai",
+          "detail": null,
+          "blockedReason": null,
+          "skippable": false,
+          "skipped": false
+        },
+        {
+          "id": "user.first_transcript",
+          "audience": "user",
+          "tier": "required",
+          "status": "blocked",
+          "title": "Transcribe your first recording",
+          "description": "Upload or record audio and get back a speaker-separated, timestamped transcript you can correct.",
+          "actionLabel": "New transcript",
+          "href": "/transcripts/new",
+          "detail": null,
+          "blockedReason": "Your administrator has not connected a transcription provider yet, so there is nothing to send a recording to.",
+          "skippable": false,
+          "skipped": false
+        }
+      ],
+      "completed": 0,
+      "total": 2,
+      "requiredDone": false,
+      "allResolved": false
+    },
+    "admin": null
   }
 }
 ```
+
+The user steps, in order: `user.ai_key` (required; present only while AI and
+the OpenAI slot are on), `user.first_transcript` (required, `transcripts:write`),
+`user.first_note` (recommended, skippable, `notes:write`), then the platform's
+`user.profile` and `user.notifications` (optional, skippable).
+
+The admin steps, in order: `admin.storage`, `admin.transcription`,
+`admin.email`, `admin.access` (all required), `admin.ai` (recommended,
+skippable, `ai_config:read`; done only when AI is on, a provider is enabled
+**and** at least one model is enabled), `admin.smoke_test` (recommended,
+skippable, `transcripts:write`; done once the caller owns a `ready`
+transcript, blocked while transcription is not connected), `admin.push` and
+`admin.backup` (recommended, skippable). `admin.org-invite` never applies in
+single-organization mode.
 
 ---
 
-#### GET /admin/onboarding
+#### GET /admin/onboarding/metrics
 
-This deployment's setup steps: up to seven, culminating in a real
-transcription rather than a green tick on a form — `admin.smoke_test` is
-the only step that proves the two required steps before it actually work
-together, and it is only satisfied once the caller owns a transcript that
-actually reached `ready`. It is itself `recommended` and skippable, not
-required (issue #299): the recording has to be this administrator's own and
-spends a real call against the deployment's provider account, so a
-deployment can be genuinely finished without it. Only `admin.transcription`
-and `admin.ai` are `required`.
+New-user activation, as aggregates only (no id, email or per-user value ever
+leaves the database): the size of the cohort of users created in the last
+`days` days, and per user step with an activation query
+(`user.first_transcript`, `user.first_note`, `user.profile`,
+`user.notifications`) how many of them have it done now. One read-only
+statement.
 
-**Requires:** `system_settings:read` — an administrator's configuration
-read, deliberately **not** a permission of its own (epic #118 decision 8's
-precedent, the same one the About card follows: every fact this route
-reports is one the holder of that permission can already read directly).
+**Query:** `days` (integer, 1 to 365, default 30).
+
+**Requires:** `system_settings:read`.
 
 **Response:**
 ```json
 {
   "data": {
-    "audience": "admin",
+    "windowDays": 30,
+    "cohortSize": 12,
+    "milestones": [],
     "steps": [
-      {
-        "key": "admin.transcription",
-        "tier": "required",
-        "title": "Connect a transcription provider",
-        "description": "Choose a speech-to-text provider and store its API key. Until this is done, nobody on this deployment can upload a recording.",
-        "actionLabel": "Open transcription settings",
-        "href": "/admin/settings/transcription",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": false,
-        "skipped": false
-      },
-      {
-        "key": "admin.smoke_test",
-        "tier": "recommended",
-        "title": "Transcribe a test recording",
-        "description": "Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.",
-        "actionLabel": "Upload a recording",
-        "href": "/transcripts/new",
-        "status": "blocked",
-        "blockedReason": "Connect a transcription provider first — there is nothing to send a recording to yet.",
-        "skippable": true,
-        "skipped": false
-      },
-      {
-        "key": "admin.access",
-        "tier": "recommended",
-        "title": "Invite somebody",
-        "description": "This deployment restricts access to an email allowlist. Add the people who should be able to sign in.",
-        "actionLabel": "Open users & allowlist",
-        "href": "/admin/settings/users",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": true,
-        "skipped": false
-      }
-    ],
-    "requiredRemaining": 2,
-    "totalRemaining": 3,
-    "allRequiredSatisfied": false
+      { "id": "user.first_transcript", "title": "Transcribe your first recording", "completed": 9, "rate": 0.75 }
+    ]
   }
 }
 ```
 
-⚠ `requiredRemaining` is 2, not 3, even though only `admin.transcription` appears
-unsatisfied among the steps shown above — `admin.ai` (omitted from this
-abbreviated example) is the other required step still pending. Since issue
-#299, `admin.smoke_test` no longer counts toward `requiredRemaining` at all:
-there are exactly two `required` admin steps (`admin.transcription`,
-`admin.ai`), and `requiredRemaining`/`allRequiredSatisfied` reach zero/`true`
-on those two alone.
-
-**Response fields (both routes):**
-- `steps[].status` — `satisfied` / `pending` / `blocked`, **derived on every
-  read**, never stored. Rotating a provider key out of `credentials` flips
-  the relevant step back to `pending` on the very next request, with
-  nothing to clear.
-- `steps[].blockedReason` — non-null exactly when `status` is `blocked`.
-  Names the person who has to act — an administrator for a user's step, or
-  an earlier admin step for `admin.smoke_test` — which is the one thing a
-  blocked step tells a caller that a pending one does not.
-- `steps[].skipped` — from the caller's own `onboarding.skipped[]` user
-  setting (`PATCH /user-settings`). A skipped step is still **returned**,
-  never filtered out, so a client can offer to un-skip it.
-- A step whose destination permission the caller does not hold, or which is
-  irrelevant to this deployment (no AI vendor configured, so no key to
-  add), is **absent** from `steps` — never present-and-disabled.
-- `requiredRemaining` / `totalRemaining` / `allRequiredSatisfied` — computed
-  server-side, once, rather than left to three independent client
-  derivations that could disagree.
-
 **Error Cases:**
-- `401 Unauthorized` - No valid token (both routes)
-- `403 Forbidden` - Caller lacks `system_settings:read` (`GET /admin/onboarding` only)
+- `400` - `days` is not an integer in 1..365
+- `403` - The caller lacks `system_settings:read`
 
 ---
 

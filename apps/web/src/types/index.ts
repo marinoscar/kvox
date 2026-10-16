@@ -70,17 +70,17 @@ export interface DataTableSettings {
 export interface OnboardingSettings {
   /** When this user was shown the welcome dialog. */
   welcomeSeenAt?: string;
-  /** When this user dismissed the onboarding checklist. */
-  dismissedAt?: string;
+  /** When this user dismissed the Getting started checklist (`dismissedAt` before #481). */
+  checklistDismissedAt?: string;
   /**
    * When this user dismissed the ADMINISTRATOR setup banner — separate from
-   * `dismissedAt`, because an administrator is also a user and the two surfaces
-   * say different things.
+   * `checklistDismissedAt`, because an administrator is also a user and the two
+   * surfaces say different things.
    */
   adminDismissedAt?: string;
   /**
-   * Step keys this user explicitly skipped. Bounded server-side (count and key
-   * format) because it is a user-written array in a JSONB blob.
+   * Step ids this user explicitly skipped. The platform refuses an id that is not
+   * a registered, skippable step, and bounds the count.
    */
   skipped?: string[];
 }
@@ -437,7 +437,7 @@ export interface UserSettings {
    *
    * OPTIONAL, AND ABSENT IS THE POINT — it means this user has never been
    * onboarded, which is what the welcome dialog, the checklist and the admin
-   * banner read. `settings.onboarding?.dismissedAt` being `undefined` is a
+   * banner read. `settings.onboarding?.checklistDismissedAt` being `undefined` is a
    * real answer, not a loading state.
    */
   onboarding?: OnboardingSettings;
@@ -508,7 +508,7 @@ export interface ProfileImageMutationResponse {
  *                                               the registry default for it
  *   - `{ onboarding: null }`                    clears the whole namespace, so
  *                                               the first-run surfaces are due again
- *   - `{ onboarding: { dismissedAt: null } }`   un-dismisses just that surface
+ *   - `{ onboarding: { checklistDismissedAt: null } }`   un-dismisses just that surface
  * Omitting a key leaves the stored value untouched. Server-owned fields
  * (`updatedAt`, `version`) are not patchable and so are absent here.
  */

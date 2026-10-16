@@ -1,5 +1,15 @@
 # Runbook: Deploy to a VPS
 
+> **Engine change (#482).** Since CLI 1.10 `kvox deploy` runs on the platform's
+> engine (`@marinoscar/platform-cli`); the `apps/cli/src/deploy/**` files named
+> below were deleted, and this runbook was written for the engine they held. The
+> commands and flags in it still work, except the ones listed in
+> [Flags and commands that changed in 1.10](../../apps/cli/README.md#flags-and-commands-that-changed-in-110)
+> (`install --fresh`, `--no-ipv6`, `doctor --skip-proxy`, `uninstall --keep-env`
+> and `--certs` are refused; `--skip-github` is ignored; `uninstall` still needs
+> `--confirm <name>`). Where a paragraph below contradicts that table, the table
+> is right. Section 11.1 and the certificate sections have been updated.
+
 This runbook covers taking a single Ubuntu or Debian VPS from nothing to a
 running, migrated, seeded, HTTPS-served deployment of this application using
 `kvox deploy`, and keeping it current afterward. It is the operator-facing
@@ -53,7 +63,7 @@ Source of truth for every claim below:
 The full pipeline is exercised by CI on every change that touches it: the
 **Deploy end-to-end (issue #118)** workflow
 (`.github/workflows/deploy-e2e.yml`) runs `kvox deploy install`,
-`kvox deploy update --check` and `kvox deploy update` against a real Docker
+`kvox deploy update --check` (this app's own, see the README) and `kvox deploy update` against a real Docker
 daemon and a real PostgreSQL service container, with `--skip-proxy` (a CI
 runner has no public DNS to prove routing against, so the proxy/certificate
 half is out of scope for that job specifically — the vhost rendering has its
@@ -198,7 +208,7 @@ SSH session), and everything below runs **on the VPS**.
    | Everything else | Every remaining `.env.example` key not already asked, only with `--all` | — |
    | Review | The full set of answers, before anything is written | — |
 
-   **Object storage is not asked.** The bucket, region, endpoint and keys are no longer `.env` variables (issue #469): after the install, sign in as the initial administrator and enter them at `/admin/settings/storage` (Test, then Save). Uploads answer 503 until you do. The one storage value that stays in `.env` is `STORAGE_CSP_ORIGIN`, the bucket's browser-visible origin for the Content Security Policy; set it before the first start, or recreate the nginx container after setting it. See [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md).
+   **Object storage is not asked.** The bucket, region, endpoint and keys are no longer `.env` variables (issue #469): after the install, sign in as the initial administrator and enter them at `/admin/settings/storage` (Test, then Save). Uploads answer 503 until you do. No storage value stays in `.env`: since #483 the Content Security Policy allows any `https:` origin in `connect-src` and `media-src`, so the bucket's origin is not written into nginx (a plain-http origin such as a local MinIO is added in `infra/nginx/app.d/csp/`, see ["The generated infrastructure files"](#the-generated-infrastructure-files-483)). See [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md).
 
    The full pipeline, in order, is: preflight → the `devnet` network →
    `gh auth setup-git` → checkout → environment (the wizard above) →
@@ -582,7 +592,7 @@ OTEL_ENABLED=true
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ```
 
-then `kvox deploy update` (or `kvox deploy install --fresh` for a new box). Unattended installs that use the overlay fail until the three passwords (and any `POSTGRES_MONITOR_*`) are supplied. The
+then `kvox deploy update` (or `kvox deploy install` for a new box). Unattended installs that use the overlay fail until the three passwords (and any `POSTGRES_MONITOR_*`) are supplied. The
 CLI then brings the stack up with `base`, `prod`, `telemetry`, `vps`,
 `vps.telemetry` in that order (`docs/specs/vps-deploy.md` section 15.1). Nothing is
 published on a public interface: the collector publishes no port, and GreptimeDB's
@@ -606,6 +616,73 @@ Three checks once the update is healthy, signed in as an administrator:
 3. **With telemetry on:** make a request, then find its trace in the explorer
    and confirm the dashboard renders. If GreptimeDB is unreachable the API
    reports telemetry as unavailable; it does not fail.
+
+### The generated infrastructure files (#483)
+
+`infra/` is no longer maintained by hand. `npm run platform:infra:sync` renders it
+from `@marinoscar/platform-infra` (pinned in the root `package.json`) with the
+identity in `packages/shared/identity.json`, writes `infra/platform-infra.lock.json`,
+and CI fails on drift with `npm run platform:infra:sync -- --check`. The files are
+committed, because a VPS deploy runs Compose in a git checkout with no `node_modules`.
+
+| Generated (header `GENERATED from @marinoscar/platform-infra`; never edit) | App-owned (created once, edit freely) |
+|---|---|
+| `infra/compose/{base,dev,devdb,prod,vps,worker,worker.build,test}.compose.yml`, `telemetry.compose.yml`, `vps.telemetry.compose.yml`, `postgres-init/10-application-role.sh` | `infra/compose/app.*.compose.yml` overlays, applied after every platform file |
+| `infra/compose/.env.example`, `.env.worker.example` | `infra/compose/app.env.example`, appended to `.env.example` |
+| `infra/nginx/{nginx.conf,csp.conf,csp.dev.conf}`, `infra/nginx/platform/*` | `infra/nginx/app.d/` (`locations/`, `csp/`, `http/`, `server/`, `permissions-policy.conf`) |
+| `infra/otel/otel-collector-config.yaml` | `infra/otel/app-collector.yaml`, `postgres-init/20-*.sh` |
+
+What this app adds, and why each one is an overlay and not an edit:
+
+| File | Scope | What it does |
+|---|---|---|
+| `app.prod.memory-limits.compose.yml` | prod, vps | The API and web memory limits read `API_MEM_LIMIT` and `WEB_MEM_LIMIT` (defaults 512M and 128M, equal to `prod.compose.yml`). |
+| `app.vps.no-stack-agent.compose.yml` | vps | Puts `stack-agent` (the one container that holds the Docker socket) in the `disabled` profile. |
+| `app.devdb.pgvector.compose.yml`, `app.test.pgvector.compose.yml` | devdb, test | `pgvector/pgvector:pg16` for the development and test databases; the migrations create `vector`, which the platform's `postgres:16-alpine` does not ship. |
+| `app.env.example` | `.env.example` | `API_MEM_LIMIT`, `WEB_MEM_LIMIT`, `KG_MIGRATE_SCHEDULE_ENABLED`. |
+| `app.d/locations/app-streams.conf` | nginx | The three SSE routes (`/api/notes/:id/stream`, `/api/note-generations/:id/stream`, `/api/ask/messages/:id/stream`) through the platform's unbuffered, 600 s `sse-proxy.conf`. The edge proxy has the same three through the CLI's `proxy.streamPaths`. |
+| `app.d/locations/app-uploads.conf` | nginx | `client_max_body_size` for the two multipart routes (`POST /api/graph/imports`, 21m; `POST /api/notes/sources/documents`, 257m, the API enforces `ai.maxDocumentBytes`). The generated `/api` location sets none, so nginx's 1 MiB default applied to them before. |
+| `app.d/permissions-policy.conf` | nginx | `microphone=()`, as this app has always sent it (the platform default is `microphone=(self)`). |
+
+**What changed for an operator**
+
+- **Content Security Policy is wider.** The old policy named one storage origin in
+  `connect-src` and `media-src`; the platform's allows `https:` in both, which
+  covers presigned upload and playback URLs wherever the bucket lives. `script-src`,
+  `default-src`, `object-src` and `frame-ancestors` are unchanged. `STORAGE_CSP_ORIGIN`
+  is gone from `.env.example` and is ignored if left in `.env`. A **plain-http**
+  origin (a local MinIO at `http://localhost:9000`) is no longer allowed: add
+  `infra/nginx/app.d/csp/connect-src.conf` and `media-src.conf` containing
+  `default " http://localhost:9000";` (a leading space; see the platform's
+  `connect-src.conf.example`) and recreate nginx. To keep the strict one-origin
+  policy instead, mount your own `csp.conf` over `/etc/nginx/csp.conf` with an
+  `app.*.compose.yml` overlay (the platform README's "The CSP override").
+- **The development database role defaults to `app`**, not `kvox_app`: the
+  generated `.env.example` carries `POSTGRES_USER=app` and `devdb`/`test` create that
+  role. Deployments keep whatever their `.env` names; this is only the template default.
+  `APP_DB_USER` and `APP_DB_PASSWORD` are gone from `.env.example` (`devdb` derives
+  them from `POSTGRES_USER`/`POSTGRES_PASSWORD`).
+- **Two values became required on the VPS stack.** The platform's `vps.compose.yml`
+  refuses to render without `DEPLOY_ROOT` (it also defaults the deploy-info mount to
+  `./.deploy`, where this app's file used `../../..`) and without `STACK_AGENT_TOKEN`,
+  even though this app switches the stack agent off. A server deployed by CLI 1.8.0
+  has neither guaranteed. `kvox deploy update` records `DEPLOY_ROOT` from the
+  deployment root and generates `STACK_AGENT_TOKEN` (hex, never asked) before it runs
+  Compose, so nothing to do. If you run `docker compose` by hand against an un-updated
+  `.env`, add both: the error names the variable; `openssl rand -hex 32` makes a token.
+- **Ports and limits are unchanged**: nginx still binds `${NGINX_PORT:-3535}` in dev
+  and `127.0.0.1:${APP_BIND_PORT}` on a VPS; nginx and the API now raise their
+  open-file limit (65536) and nginx its worker connections for long-lived SSE.
+- **The old trace UI stack is gone** (`otel.compose.yml`, Uptrace, #471); telemetry is
+  the platform's `telemetry.compose.yml` (GreptimeDB and the collector).
+
+**Changing it.** A change to a generated file goes into the platform package (a new
+release, then `npm run platform:infra:sync`); a change for this app goes into an
+app-owned file above. Never edit a generated file: `--check` fails the build and the
+next sync overwrites it. After a rename (`scripts/rename.mjs`), run the sync again so
+the identity and the lock follow. CI's `Build & Test` job runs `sync --check` and the
+infra conformance suite (`apps/cli/src/infra-conformance.test.ts`): `docker compose config`
+for every mode with the overlays, and `nginx -t` over `app.d/` with both CSP files.
 
 ## 7. Certificates and the renewal cron
 
@@ -634,16 +711,22 @@ something was actually renewed — a scheduled run on a quiet day touches
 nothing.
 
 ```bash
-kvox deploy certs renew --install-cron
+kvox deploy certs --renew
 ```
 
-Writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice daily at a minute
-derived from the app's name (so several apps on one box don't all fire
-together), running `certs renew --all` so one cron entry serves every app
-behind the shared proxy. `install` writes this same file automatically
-whenever this deployment doesn't already have one — the gate is whether the
-entry exists, not whether that run issued a certificate, so a re-run over an
-existing certificate installs the missing schedule rather than skipping it.
+Since 1.10 `certs renew` is `certs --renew` (this deployment's certificate, only
+inside the renewal window; `--force` overrides), `certs renew --dry-run` is
+plain `certs`, and `certs renew --install-cron` no longer exists. The old
+spellings still work: `certs renew [--all] ...` and `certs status` are rewritten
+to the new ones, because cron files written by earlier versions call them.
+
+Renewal is scheduled by `install` and `update` themselves (their `renewal`
+step), into `/etc/cron.d/kvox-certbot-renew`: `root`, twice a day, running
+`certbot renew` then validating and reloading the proxy, unless something
+else (a central script, `certbot.timer`, another cron line) already renews the
+certificates, in which case it does nothing and says so. The files earlier
+versions wrote, `/etc/cron.d/kvox-certs-<name>`, keep working through the
+rewrite above until you remove them.
 `doctor`'s `certificate-renewal` check recognizes it (or `certbot.timer`, or
 any cron line mentioning `certbot`/`renew`) as evidence something is renewing
 certificates on this box.
@@ -774,29 +857,30 @@ and log redaction pick it up.
 There are two commands here and they are **not** the same size. Pick the
 smaller one unless you really mean the larger.
 
-### 11.1 "The install went wrong, let me start clean" — `install --fresh`
+### 11.1 "The install went wrong, let me start clean" — `uninstall`, then `install`
+
+`install --fresh` (discard this app's local state only) no longer exists; the
+command refuses with the recipe below. To start over:
 
 ```bash
-kvox deploy install --domain app.example.com --fresh
+kvox deploy uninstall --confirm <name>
+kvox deploy install --domain app.example.com
 ```
 
-This is almost always the one you want. It discards **this app's local state
-only** — the `.env`, `.appctl-deploy.json` and `deploy-info/` — copies the old
-`.env` to `/opt/infra/apps/<name>.env.<timestamp>.bak` (mode `0600`) first, and
-then installs normally. It implies `--reinstall`, so you don't need both.
+`uninstall` keeps the proxy, the `devnet` network, the TLS certificate and the
+database, so it is safe to reach for while iterating, and it copies the old
+`.env` to `/opt/infra/apps/<name>.env.<timestamp>.bak` (mode `0600`) first.
+To install over an existing deployment as it is (same `.env`, same record), use
+`kvox deploy install --reinstall`.
 
-It does **not** touch the containers, the proxy vhost, the TLS certificate or
-the database, which is exactly why it's safe to reach for while iterating.
-
-**Why this flag exists at all**, and why it matters more than it sounds:
-`.env` deliberately lives at `<deployRoot>/.env`, *outside* `repo/` (section
-9), so that a re-clone can't take your secrets with it. That's right for a
-re-clone and wrong for a start-over — and nothing distinguished the two until
-this flag. It's how a corrupt `.env` silently survived three consecutive
+**Why a start-over has to be explicit**: `.env` deliberately lives at
+`<deployRoot>/.env`, *outside* `repo/` (section 9), so that a re-clone can't
+take your secrets with it. That's right for a re-clone and wrong for a
+start-over, and it is how a corrupt `.env` once survived three consecutive
 install attempts and produced a failure at "Wait for health" on a deployment
 that was, in fact, serving correctly (issue #259). If an install is behaving as
-though it's reading something you thought you'd replaced, `--fresh` is the
-answer.
+though it's reading something you thought you'd replaced, remove the deployment
+with `uninstall` first.
 
 ### 11.2 "Remove this deployment from this server" — `uninstall`
 
@@ -842,34 +926,19 @@ to reach the destructive path by leaving a flag off.
 | **The bucket itself** | **Ever.** Even with `--purge-storage`. You created it, it probably has a lifecycle policy and a CORS rule, and its name can't be reclaimed for hours. |
 | **The `devnet` network** | Shared with every other app on this server. |
 | **The shared proxy container** | Likewise. Its vhost for *this* app is removed and the proxy reloaded; the container is never stopped, restarted or removed, because that takes every other site on the box down with it. |
-| **TLS certificates** | Kept by default. Let's Encrypt allows only **5 duplicate certificates per week** for the same hostname set, and a reinstall re-requests one — so destroying and re-requesting on each attempt at a broken install locks you out of issuing for **your own domain** for a week. Pass `--certs` when you genuinely mean it. |
+| **TLS certificates** | Always kept. Let's Encrypt allows only **5 duplicate certificates per week** for the same hostname set, and a reinstall re-requests one — so destroying and re-requesting on each attempt at a broken install locks you out of issuing for **your own domain** for a week. (`--certs` no longer exists; delete one by hand with certbot if you really mean it.) |
 
-**If this was the last renewal cron entry on the box, read the warning.**
-Every `/etc/cron.d/kvox-certs-*` entry runs `certs renew --all` — one entry
-renews *every* certificate behind the shared proxy, not only its own app's. So
-removing the last one stops automatic renewal for **every app on this server**,
-and you'd find out 60–90 days later when they all expire at once. `uninstall`
-removes it anyway (leaving it behind means a cron entry pointing at a deploy
-root that no longer exists, failing silently twice a day), but it prints an
-`Action required:` block at the **top** of its output, before the inventory,
-with the one command that puts renewal back:
-
-```bash
-kvox deploy certs renew --install-cron --apps-root /opt/infra/apps --name <an-app-that-is-staying>
-```
-
-It fills in a real surviving deployment's name for you when there is one.
-`--dry-run` prints the same warning, which is the point — you want to know
-before you decide, not after. Nothing is said when this app had no entry to
-begin with (installed with `--no-install-cron`, or it never issued a
-certificate): there was no coverage to lose.
+**The renewal cron entry is never removed.** The platform's `uninstall` keeps
+it, because it is per host and renews every application's certificates, so
+removing a deployment can no longer switch off renewal for its neighbours. An
+entry that earlier versions wrote for this app (`/etc/cron.d/kvox-certs-<name>`)
+is also left; delete it by hand if you want it gone.
 
 **Your `.env` is backed up before it is deleted**, to
 `/opt/infra/apps/<name>.env.<timestamp>.bak`, mode `0600` — outside the
 directory being removed, or it wouldn't be a backup. It holds secrets the
-wizard generated that exist nowhere else. `--keep-env` additionally leaves the
-original in place (the deploy root then survives with just that one file in
-it); the copy is taken either way.
+wizard generated that exist nowhere else. (`--keep-env` no longer exists: the
+copy is the recovery path.)
 
 **Verify:**
 
@@ -911,17 +980,18 @@ the data too" flag, and there won't be one. Unattended, each must arrive as its
 own `--confirm*` flag.
 
 **What `--purge-storage` actually deletes.** There is no per-app folder in your
-bucket: this application writes at bucket *root*, under six prefixes.
+bucket: this application writes at bucket *root*, under the key prefixes it
+registers (the platform's and this app's: avatars, database backups, node
+outputs, notes, transcripts, uploads, and the platform's own). Since 1.10 the
+purge runs **inside the api image** (`npm run storage:purge`, the platform's
+`runStoragePurgeCli`), against the live storage configuration, and re-checks the
+bucket name you typed against it there. Only registered prefixes are emptied,
+never a listing of the whole bucket, so on a bucket you share with something
+else the rest is left alone; a versioned bucket has its versions and delete
+markers removed by id. The bucket itself is never deleted.
 
-```
-avatars/  database-backups/  node-outputs/  notes/  transcripts/  uploads/
-```
-
-Those six are emptied. **Anything else in the bucket is listed in the output
-and left completely alone** — not read into, not deleted. So on a bucket
-dedicated to this app, the purge is complete; on a bucket you share with
-something else, it is safe, and the output tells you by name what it did not
-touch. The bucket itself is never deleted.
+> The api image must provide the `storage:purge` script for this to work;
+> without it `--purge-storage` stops before removing anything and says so.
 
 > **If your bucket has versioning on**, deleting an object normally writes a
 > *delete marker* and quietly keeps every byte — and the bill. This does not:
@@ -1032,5 +1102,5 @@ own environment variables, automatically.
 - [ ] Renewal cron installed — `ls /etc/cron.d/kvox-certs-*` lists this app. `install` writes it automatically when there isn't one; if it reported `Action required:` instead, run the `sudo install -m 644 …` line it printed (section 7). `doctor`'s `certificate-renewal` check passes
 - [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
-- [ ] If you need to start over: `kvox deploy install --fresh` (local state only), or `kvox deploy uninstall --dry-run` then `--confirm <name>` (the whole deployment) — never a hand-rolled `rm -rf`, which leaves the `.env`, the volumes, the vhost and the cron behind (section 11)
+- [ ] If you need to start over: `kvox deploy uninstall --dry-run` then `--confirm <name>` (the whole deployment, then install again) — never a hand-rolled `rm -rf`, which leaves the `.env`, the volumes, the vhost and the cron behind (section 11)
 - [ ] To remove the **data** as well, add `--drop-database` / `--purge-storage`, each with its own typed confirmation of that resource's real name — and run `--dry-run` with them first to see the object counts and the database size you are consenting to (section 11.2.1)

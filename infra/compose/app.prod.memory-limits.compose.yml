@@ -1,0 +1,23 @@
+# =============================================================================
+# App overlay (scope prod: applies to prod and vps) - container memory limits
+# =============================================================================
+# prod.compose.yml fixes the API at 512M and the web container at 128M. A VPS
+# can be sized differently, so the limits read API_MEM_LIMIT and WEB_MEM_LIMIT
+# (app.env.example; the defaults equal the fixed values, so a .env without them
+# changes nothing). They are set at the SAME key prod.compose.yml uses
+# (`deploy.resources.limits.memory`), not the legacy `mem_limit`: Compose
+# refuses a service that sets distinct values on both, and an overlay only
+# replaces the scalar it names.
+# =============================================================================
+
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEM_LIMIT:-512M}
+  web:
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEM_LIMIT:-128M}

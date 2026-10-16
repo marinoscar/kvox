@@ -328,9 +328,10 @@ credential a node holds *in memory only* for the lifetime of one job's lease —
 presigning can substitute for. What did **not** change is the durability
 claim this section exists to make: nothing brokered this way is ever written
 to a node's config file, its state directory, or a log line — see §16.5 of
-`database-backup.md` and the CLI's own static check
-(`apps/cli/src/node/executors/db-backup-run.test.ts`) that the executor
-imports no config writer at all — and storage credentials remain absolute
+`database-backup.md` and the platform CLI's credential-hygiene check
+(`checkExecutorCredentialHygiene`, run over every executor by
+`apps/cli/src/conformance.test.ts`) that the credential reaches neither the
+log, the state directory, HOME, the result nor an error — and storage credentials remain absolute
 with no exception: a node never holds one, brokered or otherwise, by
 construction of the presigned data plane in Part three below.
 
@@ -834,21 +835,23 @@ two had: **a native dependency**.
 
 Three properties are the fleet's rules rather than the feature's:
 
-1. **A required binary is declared, not assumed.** `apps/cli/src/node
-   /capabilities.ts` gains `ffmpeg` and `ffprobe` in `PROBED_BINARIES` and both
-   as `required` for this type, so a worker without them **refuses to declare
+1. **A required binary is declared, not assumed.**
+   `apps/cli/src/executors/media-audio-transcode.executor.ts` registers `ffmpeg`
+   and `ffprobe` as probed binaries and both as `required` for this type
+   (`registerProbedBinary`, `registerJobRequirement` from
+   `@marinoscar/platform-cli/node`), so a worker without them **refuses to declare
    the type at startup** instead of claiming transcodes and failing them one at
    a time. Both are listed even though they ship in one package on every
    distribution: the executor runs them as two programs, and a trimmed image
    with only `ffmpeg` would satisfy a one-binary requirement and then die at
    the probe step. There is deliberately **no degradable tier** here — unlike
    `db.backup.run`'s `psql`, nothing about a rendition is best-effort.
-2. **Both container images install it, and so does `install-deps`.**
+2. **Both container images install it.**
    `apps/api/Dockerfile` and `apps/cli/Dockerfile` both `apk add ffmpeg` in
-   their base stage (the `postgresql17-client` precedent, §20.1), and
-   `kvox node install-deps` gained its first genuine package step for the
-   node that runs outside a container. A dependency present in only one of
-   those three is a dependency that works until somebody deploys differently.
+   their base stage (the `postgresql17-client` precedent, §20.1). `kvox node
+   install-deps` used to add a package step for the node that runs outside a
+   container; since 1.10 the platform's step list has no such step, so that
+   node installs `ffmpeg` by hand and `node doctor` names what is missing.
 3. **The output key is the feature's, through `deriveOutputKey`** (§17.1):
    `transcripts/<transcriptId>/renditions/<jobId>.m4a`, not the data plane's
    default `node-outputs/<jobId>/<uuid>`, because `transcript.purge`

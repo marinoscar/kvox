@@ -107,4 +107,29 @@ describe('useAiTasksConfig', () => {
 
     expect(result.current.keyConfigured).toBe(true);
   });
+
+  it('reads nothing while skipped, and drops the answer it held once skipped again (#484)', async () => {
+    let requests = 0;
+    server.use(
+      http.get(`${API}/ai-tasks/config`, () => {
+        requests += 1;
+        return HttpResponse.json({ data: mockGraphAiConfig() });
+      }),
+    );
+    const { result, rerender } = renderHook(({ skip }) => useAiTasksConfig({ skip }), {
+      initialProps: { skip: true },
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(requests).toBe(0);
+    expect(result.current.config).toBeNull();
+
+    rerender({ skip: false });
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+    expect(requests).toBe(1);
+
+    rerender({ skip: true });
+    await waitFor(() => expect(result.current.config).toBeNull());
+    expect(result.current.keyConfigured).toBe(false);
+  });
 });

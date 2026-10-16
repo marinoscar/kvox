@@ -967,7 +967,7 @@ This is a structural gap in jsdom, not a coverage gap that more (or cleverer) Vi
 
 ### The Harness
 
-The suite doesn't screenshot the running application; it screenshots a small, purpose-built harness at `apps/web/visual/` (`index.html`, `main.tsx`, `vite.config.ts`, `tsconfig.json`). The harness is a separate Vite entry point from `apps/web/src/` — excluded from the production build and from `apps/web`'s `tsc --noEmit` app scope — but it mounts the **real** application components: `Layout`, `NavigationRail`, `AppBar`, and `SettingsHub` (via both `pages/Admin/SettingsHubPage` and `pages/UserSettingsHubPage`), wrapped in a fake `AuthContext.Provider`, the real `ThemeContextProvider` + MUI `ThemeProvider` + `CssBaseline`, and a `MemoryRouter`.
+The suite doesn't screenshot the running application; it screenshots a small, purpose-built harness at `apps/web/visual/` (`index.html`, `main.tsx`, `vite.config.ts`, `tsconfig.json`). The harness is a separate Vite entry point from `apps/web/src/` — excluded from the production build and from `apps/web`'s `tsc --noEmit` app scope — but it mounts the **real** application components: `Layout` (the packaged `ShellLayout` with its rail, AppBar and bottom bar since #484) and `SettingsHub` (via both `pages/Admin/SettingsHubPage` and `pages/UserSettingsHubPage`), wrapped in a fake `AuthContext.Provider`, the shell's `ShellRoot` (theme choice + MUI `ThemeProvider` + `CssBaseline`), and a `MemoryRouter`.
 
 The harness takes its starting state entirely from query parameters on its own URL, so a spec can pin exactly the state it wants to screenshot:
 
@@ -978,7 +978,7 @@ The harness takes its starting state entirely from query parameters on its own U
 | `?roles=` | Comma-separated role strings, becomes `user.roles` |
 | `?theme=` | `light` or `dark`, written to `localStorage.theme_mode` before mount |
 
-There is no backend, no database, and no OAuth behind the harness. Calls the app's real hooks make under the hood (e.g. `useUserSettings`, used internally by `useNavigationPrefs`) are deliberately left unproxied, so they fail fast and the app's existing error handling degrades to a deterministic default state — that determinism is what makes the resulting screenshots stable enough to diff against a checked-in baseline.
+There is no backend, no database, and no OAuth behind the harness. Calls the app's real hooks make under the hood (e.g. `useUserSettings`, used internally by the shell's `useShellRailPreference`) are deliberately left unproxied, so they fail fast and the app's existing error handling degrades to a deterministic default state — that determinism is what makes the resulting screenshots stable enough to diff against a checked-in baseline.
 
 ### Fonts: The Harness Loads the App's, Not Its Own
 
@@ -1027,7 +1027,7 @@ tests/visual/                     # Playwright project — sibling to tests/e2e/
 
 ### What's Covered
 
-The 11 specs cover the settings hub at three breakpoints — 1919×862 (3-up card grid, expanded Console rail), 767×844 (2-up grid, collapsed rail), and 551×840 (drill-down list) — plus the Console rail's group headers and "Back to library" control on `/admin/settings` at desktop width, the library rail with Console pinned at its foot (both collapsed and expanded on a non-admin route), the compact drill-down `AppBar`, a filtered search result and the empty "no results" state, a `users:read`-only user whose `General` settings group disappears entirely, and the user settings hub at `/settings`.
+The 11 specs cover the settings hub at three breakpoints — 1919×862 (3-up card grid, expanded Console rail), 767×844 (2-up grid, collapsed rail), and 551×840 (drill-down list) — plus the Console rail's group headers and "Back to Home" control on `/admin/settings` at desktop width, the library rail with Console pinned at its foot (both collapsed and expanded on a non-admin route), the compact drill-down `AppBar`, a filtered search result and the empty "no results" state, a `users:read`-only user whose `General` settings group disappears entirely, and the user settings hub at `/settings`.
 
 ### Configuration
 
