@@ -406,18 +406,6 @@ exports[`Domain registrations characterization HTTP responses GET /api/onboardin
     "audience": "user",
     "steps": [
       {
-        "key": "user.ai_key",
-        "tier": "required",
-        "title": "Add your AI provider key",
-        "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
-        "actionLabel": "Add your key",
-        "href": "/settings/ai",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": false,
-        "skipped": false
-      },
-      {
         "key": "user.first_transcript",
         "tier": "required",
         "title": "Transcribe your first recording",
@@ -454,8 +442,8 @@ exports[`Domain registrations characterization HTTP responses GET /api/onboardin
         "skipped": false
       }
     ],
-    "requiredRemaining": 2,
-    "totalRemaining": 4,
+    "requiredRemaining": 1,
+    "totalRemaining": 3,
     "allRequiredSatisfied": false
   },
   "meta": {
@@ -470,18 +458,6 @@ exports[`Domain registrations characterization HTTP responses GET /api/onboardin
     "audience": "user",
     "steps": [
       {
-        "key": "user.ai_key",
-        "tier": "required",
-        "title": "Add your AI provider key",
-        "description": "Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.",
-        "actionLabel": "Add your key",
-        "href": "/settings/ai",
-        "status": "pending",
-        "blockedReason": null,
-        "skippable": false,
-        "skipped": false
-      },
-      {
         "key": "user.first_transcript",
         "tier": "required",
         "title": "Transcribe your first recording",
@@ -518,8 +494,8 @@ exports[`Domain registrations characterization HTTP responses GET /api/onboardin
         "skipped": false
       }
     ],
-    "requiredRemaining": 2,
-    "totalRemaining": 4,
+    "requiredRemaining": 1,
+    "totalRemaining": 3,
     "allRequiredSatisfied": false
   },
   "meta": {
