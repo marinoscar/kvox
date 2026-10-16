@@ -3,21 +3,17 @@ import { Outlet } from 'react-router-dom';
 import { AppBar } from '../navigation/AppBar';
 import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import { NotificationPermissionBanner } from '@marinoscar/platform-web/notifications/ui';
-// Onboarding (#276/#277, epic #271). The provider and the banner mount
-// together, HERE, for the reason each of them documents in its own header: the
-// shell is the one place that exists exactly once per authenticated session,
-// and it is deliberately not `App.tsx` — every endpoint the provider calls is
-// `@Auth()`-guarded, so mounting it above `ProtectedRoute` would buy a
-// guaranteed 401 on `/login`, `/auth/callback` and `/activate`.
-import { OnboardingProvider } from '../../contexts/OnboardingContext';
+// Onboarding (#276/#277, epic #271; the platform's since #481, epic #478). The provider, the
+// banner and the welcome dialog mount together, HERE, for the reason the banner documents: the
+// shell is the one place that exists exactly once per authenticated session, and it is
+// deliberately not `App.tsx` — every endpoint the provider calls is authenticated, so mounting it
+// above `ProtectedRoute` would buy a guaranteed 401 on `/login`, `/auth/callback` and `/activate`.
+import { OnboardingProvider } from '@marinoscar/platform-web/onboarding/headless';
+import { WelcomeDialog } from '@marinoscar/platform-web/onboarding/ui';
+import { APP_NAME } from '@app/shared';
 import { NavigationFeaturesProvider } from '../../contexts/NavigationFeaturesContext';
 import { OnboardingBanner } from '../onboarding/OnboardingBanner';
-// #280, the same epic. Both are mounted HERE and nowhere else, for the reason
-// the banner above is: `?setup=` is shell-level state that every destination
-// page has in common, and the first-run introduction is a property of the
-// session rather than of whatever page the user happened to land on.
-import { ReturnToSetupBar } from '../onboarding/ReturnToSetupBar';
-import { FirstRunWelcomeDialog } from '../onboarding/WelcomeDialog';
+import { adminWelcomePane, userWelcomePane } from '../onboarding/kvoxWelcomePanes';
 import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 import { NavigationRail } from '../navigation/NavigationRail';
 import { BottomNav } from '../navigation/BottomNav';
@@ -92,7 +88,7 @@ export function Layout() {
        pages are inside it: `/admin/settings/setup` and `/settings/getting-started`
        render the same state this banner reads, and a second provider around the
        page would be a second copy of it. */
-    <OnboardingProvider>
+    <OnboardingProvider appName={APP_NAME}>
       {/* ONE read of the runtime features the navigation chrome draws (#438)
           — the AppBar, the rail and the bottom bar below all read it, as do
           pages inside `<Outlet />` that need to refresh it. */}
@@ -161,18 +157,6 @@ export function Layout() {
                     read that failed, once every required step is satisfied, and for
                     anyone who has put the checklist away. */}
               <OnboardingBanner />
-              {/* Issue #280, epic #271. The thread back out of a step that sent
-                    the user away: rendered only on a page arrived at with
-                    `?setup=<stepKey>`, and only when that key names a step in a
-                    checklist THIS caller holds. Every other value — unknown,
-                    malformed, or another audience's — renders nothing, because
-                    the parameter is user-controllable input and silence is the
-                    only safe default.
-
-                    ⚠ ONE COPY, HERE. Eight destination pages each rendering their
-                    own would be eight chances for the "back" link to drift from
-                    the audience that owns the step. */}
-              <ReturnToSetupBar />
               {/* Issue #365. Fed by the shell's single `usePushSubscriptionSync`
                     mount above; renders nothing unless this device still needs to
                     allow (or unblock, or install for) notifications. */}
@@ -184,17 +168,13 @@ export function Layout() {
               />
               <Outlet />
             </Box>
-            {/* Issue #280. Portalled, so its position in this tree is about
-                  LIFETIME rather than layout: it belongs to the session, opens at
-                  most once for an account that has never seen it, and writes
-                  `onboarding.welcomeSeenAt` on every close route — Escape, the
-                  backdrop, the close button and `Skip` alike.
-
-                  ⚠ It never reopens by itself afterwards, INCLUDING once the step
-                  registry grows a step: the gate reads `welcomeSeen` and no count
-                  at all. `/settings/getting-started` replays it on request,
-                  without clearing that timestamp. */}
-            <FirstRunWelcomeDialog />
+            {/* The platform's one-time welcome (#481), with this app's three panes in its two
+                  body slots. Portalled, so its position in this tree is about LIFETIME rather
+                  than layout: it belongs to the session, opens only while
+                  `onboarding.welcomeSeenAt` is unset, and every way out (the buttons, Escape, the
+                  backdrop) writes it. It never reopens by itself afterwards, including once the
+                  step registry grows a step. */}
+            <WelcomeDialog slots={{ userPane: userWelcomePane, adminPane: adminWelcomePane }} />
           </Box>
           {/* Mounted only where it renders. `BottomNav` also gates itself on
                 `down('sm')` — belt and braces, since a self-gating-but-always-mounted
