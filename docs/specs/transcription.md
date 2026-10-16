@@ -1575,6 +1575,17 @@ exporter (the `docx` package, deferred out of this epic's scope per issue
 change to the endpoint, the job handler, or the export dialog beyond it
 picking up the new format from `GET /api/transcripts/exporters`.
 
+The `Exporter<TDoc>` interface, the generic `ExporterRegistry<TDoc>`, the
+option helpers (`optionsSchemaFor`, `defaultOptions`, `canonicalJson`,
+`hashExportRequest`) and the stream helpers (`writeChunk`, `endStream`,
+`failStream`) come from `@marinoscar/platform-api/exports`; this app keeps only
+`TranscriptExporterRegistry` (which extends the package registry and overrides
+`kind`) and the exporters themselves. A render that fails calls `failStream`
+so the output is destroyed rather than ended, and a half-written file never
+looks complete. `options_hash` is `hashExportRequest` of the parsed options;
+`apps/api/test/exports/export-hash-compat.spec.ts` freezes the hex strings,
+because a different hash for the same request silently breaks export reuse.
+
 `ExportDocument` is built once, from `materialize(transcriptId, version)`
 (§4.4) — every exporter renders from the **same** provider-neutral document
 shape (title, date, duration, language, version and author info, speakers
@@ -1625,7 +1636,10 @@ hundreds of pages for a 10-hour recording, and it needs no browser engine at
 all, unlike a headless-Chromium HTML-to-PDF path.
 
 Fonts (**Noto Sans**, **Noto Sans Mono**) are bundled under
-`apps/api/assets/fonts` and `COPY`'d into the production Docker image,
+`apps/api/assets/fonts` and `COPY`'d into the production Docker image; the
+platform package ships no fonts, so `apps/api/src/pdf/pdf-fonts.ts` (`FONT_DIR`,
+`PDF_FONTS`, `assertFontsPresent`, `registerExportFonts`) is this app's own and
+must stay at the `src/<dir>/` depth for `FONT_DIR` to resolve from `dist/`,
 rather than relying on whatever fonts happen to be installed on the
 container's base image — a PDF exporter whose typography depends on the
 host's installed fonts would render differently, or fail outright, on a

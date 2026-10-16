@@ -16,22 +16,19 @@
 //   - deleting a conversation cascades its messages (a running turn too) and
 //     audits without content; deleting the account cascades its conversations;
 //   - `ask_messages_one_running_turn_uniq_idx` refuses a second running turn;
-//   - the Danger Zone: `content`/`everything` delete the caller's
-//     conversations (and only theirs); `notes` keeps them.
+//   (The Danger Zone's `ask` category - `content`/`everything` delete the
+//   caller's conversations and only theirs, `notes` keeps them - is proven
+//   against the platform purge in `test/user-data/user-data-purge.db.spec.ts`.)
 // =============================================================================
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { AskConversationsService } from '../../src/ask/ask-conversations.service';
-import { ASK_USER_DATA_HOOKS } from '../../src/ask/ask.user-data';
-import { AskUserDataHooks } from '../../src/ask/ask.user-data.hooks';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { UserDataPurgeHandler } from '../../src/user-data/handlers/user-data-purge.handler';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
-import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-conversations.db.spec');
 
@@ -254,46 +251,5 @@ describeWithDb('Ask conversations (real Postgres)', () => {
     await prisma.user.delete({ where: { id: user.id } });
     expect(await prisma.askConversation.count({ where: { id: conv.id } })).toBe(0);
     expect(await prisma.askMessage.count({ where: { conversationId: conv.id } })).toBe(0);
-  });
-
-  describe('the Danger Zone `ask` category (user.data.purge against real rows)', () => {
-    // Real Prisma and the REAL `ask` hook; every other category's hook is a
-    // stub (issue #460: the handler resolves hooks through `ModuleRef`). The
-    // owners here have no notes, transcripts or files, so the other steps find
-    // nothing to do.
-    function purgeHandler() {
-      const noop = new Proxy({}, { get: (_t, m) => (m === 'then' ? undefined : async () => 0) });
-      const askHooks = new AskUserDataHooks(prisma as never);
-      const moduleRef = {
-        get: (token: unknown) => (token === ASK_USER_DATA_HOOKS ? askHooks : noop),
-      };
-
-      return new UserDataPurgeHandler(new JobHandlerRegistry(), moduleRef as never);
-    }
-    const purge = (userId: string, scope: string) =>
-      purgeHandler().process({ id: `job-${userId}`, payload: { userId, scope } } as never);
-
-    it.each(['content', 'everything'])('scope "%s" deletes the caller\'s conversations and messages only', async (scope) => {
-      const user = await owner(`dz-${scope}`);
-      const bystander = await owner(`dz-${scope}-b`);
-      const mine = await service.create(user.id, {});
-      await message(mine.id, 'user', 'q');
-      const theirs = await service.create(bystander.id, {});
-
-      await purge(user.id, scope);
-
-      expect(await prisma.askConversation.count({ where: { ownerId: user.id } })).toBe(0);
-      expect(await prisma.askMessage.count({ where: { conversationId: mine.id } })).toBe(0);
-      expect(await prisma.askConversation.count({ where: { id: theirs.id } })).toBe(1);
-    });
-
-    it('scope "notes" keeps them', async () => {
-      const user = await owner('dz-notes');
-      await service.create(user.id, {});
-
-      await purge(user.id, 'notes');
-
-      expect(await prisma.askConversation.count({ where: { ownerId: user.id } })).toBe(1);
-    });
   });
 });

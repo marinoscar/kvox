@@ -64,7 +64,7 @@ import { TranscriptAccessService } from '../transcript-access.service';
 import { TranscriptMaterializeService } from '../transcript-materialize.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { buildExportDocument, type ExportDocument } from './export-document';
-import { hashExportRequest, type ExportOptions } from './export-options';
+import { hashExportRequest, type ExportOptions } from '@marinoscar/platform-api/exports';
 import {
   TranscriptExporterRegistry,
   type TranscriptExporter,

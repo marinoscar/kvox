@@ -3,7 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { hashExportRequest } from '../../export/export-options';
+import { hashExportRequest } from '@marinoscar/platform-api/exports';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NoteAccessService } from '../access/note-access.service';
 import { NOTE_EXPORT_JOB_TYPE } from '../job-types';

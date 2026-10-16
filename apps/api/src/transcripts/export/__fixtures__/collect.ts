@@ -12,7 +12,7 @@
 import { PassThrough } from 'node:stream';
 
 import type { ExportDocument } from '../export-document';
-import type { ExportOptions } from '../export-options';
+import type { ExportOptions } from '@marinoscar/platform-api/exports';
 import type { TranscriptExporter } from '../transcript-exporter.interface';
 
 export async function renderToBuffer(
