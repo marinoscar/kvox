@@ -1,997 +1,269 @@
+// =============================================================================
+// Storage routes on the real app: what is KVox's (issue #469)
+// =============================================================================
+//
+// `/api/storage/*`, `/api/admin/storage-config` and the profile-image routes are
+// the PLATFORM's (`@marinoscar/platform-api/storage`); their behaviour (init,
+// status, complete, list, download, metadata, the config page, the part-size
+// rule, key building, MIME checks) is that package's to test and is not repeated
+// here. What this file pins is what the APP adds or relies on:
+//
+//   * the slice is MOUNTED: its routes exist at the paths clients use and are
+//     behind authentication and the storage permissions the app's roles grant;
+//   * `GET /api/<app>/files` lists a caller's plain uploads and never the objects
+//     a module owns (the platform list, hit directly, still shows the caller's
+//     own managed objects: a documented, accepted disclosure of their own rows);
+//   * a plain upload takes no ownership row, so the generic routes treat it as
+//     the caller's to delete;
+//   * the app's two routes next to the platform's `/upload/parts` path.
+//
+// The multipart routes themselves are covered in `test/kvox-objects/
+// multipart.integration.spec.ts`, the delete veto and the abort forward in
+// `test/kvox-objects/managed-delete.integration.spec.ts`.
+// =============================================================================
+
 import request from 'supertest';
-import {
-  TestContext,
-  createTestApp,
-  closeTestApp,
-} from '../helpers/test-app.helper';
-import { resetPrismaMock } from '../mocks/prisma.mock';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
-import {
-  createMockTestUser,
-  createMockAdminUser,
-  createMockContributorUser,
-  createMockViewerUser,
-  authHeader,
-} from '../helpers/auth-mock.helper';
+import { APP_SLUG } from '@app/shared';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
+
+import { closeTestApp, createTestApp, type TestContext } from '../helpers/test-app.helper';
+import { authHeader } from '../helpers/auth-mock.helper';
+import {
+  createMembershipAdmin,
+  createMembershipContributor,
+  createMembershipViewer,
+} from '../helpers/membership-user.helper';
+import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { createMockStorageProvider } from '../mocks/storage-provider.mock';
+import { TEST_DEFAULT_ORG_ID, setupBaseMocks } from '../fixtures/mock-setup.helper';
 
-import { LegacyObjectOwnershipStore } from '../../src/storage/legacy-object-ownership.store';
-// PLATFORM-ADOPTION-SHIM(#469): the default organization is resolved by a
-// helper that queries `organizations`, which the mocked client cannot answer.
-jest.mock('../../src/prisma/default-org', () => ({
-  getDefaultOrgId: jest.fn().mockResolvedValue('org-1'),
-}));
+const OBJECT_ID = '550e8400-e29b-41d4-a716-446655440000';
+const FILES = `/api/${APP_SLUG}/files`;
 
-describe('Storage Integration', () => {
+describe('Storage routes (full app, mocked database)', () => {
   let context: TestContext;
-  let mockStorageProvider: ReturnType<typeof createMockStorageProvider>;
+  let storage: ReturnType<typeof createMockStorageProvider>;
 
-  const mockStorageObjectId = '550e8400-e29b-41d4-a716-446655440000'; // Valid UUID
-
-  const mockStorageObject = {
-    id: mockStorageObjectId,
-    name: 'test-file.pdf',
-    size: BigInt(1024000),
+  const objectRow = (overrides: Record<string, unknown> = {}) => ({
+    id: OBJECT_ID,
+    orgId: TEST_DEFAULT_ORG_ID,
+    name: 'report.pdf',
+    size: BigInt(1_024_000),
     mimeType: 'application/pdf',
-    storageKey: 'uploads/123456/uuid-123.pdf',
+    storageKey: 'uploads/org/1760000000000/abc.pdf',
     storageProvider: 's3',
     bucket: 'test-bucket',
     status: 'ready',
     s3UploadId: null,
-    partSize: 10485760,
-    managedBy: null,
-    uploadedById: 'user-123',
+    uploadedById: 'someone',
     metadata: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    createdAt: new Date('2026-10-01T00:00:00Z'),
+    updatedAt: new Date('2026-10-01T00:00:00Z'),
+    ...overrides,
+  });
 
   beforeAll(async () => {
-    mockStorageProvider = createMockStorageProvider();
-    context = await createTestApp({ useMockDatabase: true });
+    storage = createMockStorageProvider();
 
-    // Override storage provider with mock
-    const storageProviderToken = context.module.get(STORAGE_PROVIDER, { strict: false });
-    if (storageProviderToken) {
-      Object.assign(storageProviderToken, mockStorageProvider);
-    }
+    context = await createTestApp({
+      useMockDatabase: true,
+      overrideProviders: [{ provide: STORAGE_PROVIDER, useValue: storage }],
+    });
   });
 
   afterAll(async () => {
     await closeTestApp(context);
   });
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetPrismaMock();
     setupBaseMocks();
     jest.clearAllMocks();
+
+    storage.getBucket.mockReturnValue('test-bucket');
   });
 
-  describe('POST /api/storage/objects/upload/init', () => {
-    it('should initialize upload for authenticated user', async () => {
-      const user = await createMockTestUser(context);
+  // ===========================================================================
+  // The slice is mounted, behind auth
+  // ===========================================================================
 
-      const dto = {
-        name: 'test.pdf',
-        size: 52428800, // 50MB
-        mimeType: 'application/pdf',
-      };
+  describe('mounting and authentication', () => {
+    it('requires a token on the platform routes at the paths clients use', async () => {
+      const server = context.app.getHttpServer();
 
-      mockStorageProvider.initMultipartUpload.mockResolvedValue({
-        uploadId: 'upload-123',
-        key: 'uploads/123/uuid.pdf',
-      });
-      mockStorageProvider.getBucket.mockReturnValue('test-bucket');
-
-      context.prismaMock.storageObject.create.mockResolvedValue({
-        ...mockStorageObject,
-        id: 'new-obj-id',
-        name: dto.name,
-        size: BigInt(dto.size),
-        status: 'pending',
-        s3UploadId: 'upload-123',
-        uploadedById: user.id,
-      });
-
-      const response = await request(context.app.getHttpServer())
-        .post('/api/storage/objects/upload/init')
-        .set(authHeader(user.accessToken))
-        .send(dto)
-        .expect(201);
-
-      expect(response.body.data).toMatchObject({
-        objectId: 'new-obj-id',
-        uploadId: 'upload-123',
-        partSize: expect.any(Number),
-        totalParts: expect.any(Number),
-        presignedUrls: expect.any(Array),
-      });
+      await request(server).get('/api/storage/objects').expect(401);
+      await request(server).post('/api/storage/objects/upload/init').send({ name: 'a.pdf', size: 1, mimeType: 'application/pdf' }).expect(401);
+      await request(server).get(`/api/storage/objects/${OBJECT_ID}`).expect(401);
+      await request(server).delete(`/api/storage/objects/${OBJECT_ID}`).expect(401);
+      await request(server).post(`/api/storage/objects/${OBJECT_ID}/upload/complete`).send({ parts: [] }).expect(401);
+      await request(server).delete(`/api/storage/objects/${OBJECT_ID}/upload/abort`).expect(401);
     });
 
-    it('should return 401 for unauthenticated request', async () => {
-      await request(context.app.getHttpServer())
-        .post('/api/storage/objects/upload/init')
-        .send({
-          name: 'test.pdf',
-          size: 1024000,
-          mimeType: 'application/pdf',
-        })
-        .expect(401);
+    it('requires a token on the app\'s routes', async () => {
+      const server = context.app.getHttpServer();
+
+      await request(server).get(FILES).expect(401);
+      await request(server).post(`/api/storage/objects/${OBJECT_ID}/upload/parts`).send({ partNumbers: [1] }).expect(401);
+      await request(server).get(`/api/storage/objects/${OBJECT_ID}/upload/parts`).expect(401);
     });
 
-    it('should validate request body', async () => {
-      const user = await createMockTestUser(context);
+    it('serves the storage configuration page to administrators only', async () => {
+      const server = context.app.getHttpServer();
+      const contributor = await createMembershipContributor(context);
 
-      await request(context.app.getHttpServer())
-        .post('/api/storage/objects/upload/init')
-        .set(authHeader(user.accessToken))
-        .send({
-          // Missing required fields
-          name: 'test.pdf',
-        })
-        .expect(400);
-    });
-  });
-
-  describe('GET /api/storage/objects/:id/upload/status', () => {
-    it('should return upload status', async () => {
-      const user = await createMockTestUser(context);
-
-      const chunks = [
-        { partNumber: 1, size: BigInt(10485760), eTag: 'etag1' },
-        { partNumber: 2, size: BigInt(10485760), eTag: 'etag2' },
-      ];
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'pending',
-        chunks,
-      });
-
-      const response = await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/upload/status`)
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(response.body.data).toMatchObject({
-        objectId: mockStorageObjectId,
-        status: 'pending',
-        uploadedParts: expect.any(Array),
-        totalParts: expect.any(Number),
-      });
+      await request(server).get('/api/admin/storage-config').expect(401);
+      // `storage_config:read` is an administrator permission; an org contributor does not hold it.
+      await request(server).get('/api/admin/storage-config').set(authHeader(contributor.accessToken)).expect(403);
     });
 
-    it('should report real progress and the persisted part size', async () => {
-      const user = await createMockTestUser(context);
+    it('lets a contributor start an upload and a viewer not', async () => {
+      const server = context.app.getHttpServer();
+      const contributor = await createMembershipContributor(context);
+      const viewer = await createMembershipViewer(context);
+      const body = { name: 'report.pdf', size: 52_428_800, mimeType: 'application/pdf' };
 
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'uploading',
-        s3UploadId: 'upload-123',
-        partSize: 10485760,
-        size: BigInt(26214400), // 25 MiB -> 3 parts
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({});
-      mockStorageProvider.listParts.mockResolvedValue([
-        { partNumber: 1, size: 10485760, etag: '"e1"' },
-        { partNumber: 3, size: 5242880, etag: '"e3"' },
-      ]);
+      storage.initMultipartUpload.mockResolvedValue({ uploadId: 'mpu-1', key: 'uploads/org/1/abc.pdf' });
+      prismaMock.storageObject.create.mockResolvedValue(objectRow({ status: 'pending', uploadedById: contributor.id, s3UploadId: 'mpu-1' }));
 
-      const response = await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/upload/status`)
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(response.body.data).toMatchObject({
-        status: 'uploading',
-        // Part 2 is missing — exactly what a resuming client needs to know.
-        uploadedParts: [1, 3],
-        totalParts: 3,
-        partSize: 10485760,
-        uploadedBytes: '15728640',
-        totalBytes: '26214400',
-      });
-    });
-
-    it('should return 404 for non-existent object', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
-
-      await request(context.app.getHttpServer())
-        .get('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001/upload/status')
-        .set(authHeader(user.accessToken))
-        .expect(404);
-    });
-
-    it('should return 403 for non-owner', async () => {
-      const user = await createMockTestUser(context);
-      const otherUserId = 'other-user-456';
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: otherUserId,
-        chunks: [],
-      });
-
-      await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/upload/status`)
-        .set(authHeader(user.accessToken))
-        .expect(403);
+      await request(server).post('/api/storage/objects/upload/init').set(authHeader(viewer.accessToken)).send(body).expect(403);
+      await request(server).post('/api/storage/objects/upload/init').set(authHeader(contributor.accessToken)).send(body).expect(201);
     });
   });
 
   // ===========================================================================
-  // POST /api/storage/objects/:id/upload/parts (issue #21)
+  // A plain upload belongs to nobody but its uploader
   // ===========================================================================
-  //
-  // The route that makes an upload bigger than the first batch possible:
-  // initialization signs ten part URLs, and before #21 nothing signed an
-  // eleventh, so a 10 MiB part size capped every upload at 100 MB.
-  describe('POST /api/storage/objects/:id/upload/parts', () => {
-    /** 200 parts at the persisted 10 MiB part size. */
-    const activeUpload = {
-      ...mockStorageObject,
-      status: 'uploading',
-      s3UploadId: 'upload-123',
-      partSize: 10485760,
-      size: BigInt(10485760 * 200),
-    };
 
-    it('should sign a batch of part URLs for the owner', async () => {
-      const user = await createMockContributorUser(context);
+  describe('a plain upload', () => {
+    it('is initialized by the platform and takes no ownership row', async () => {
+      const user = await createMembershipContributor(context);
 
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...activeUpload,
-        uploadedById: user.id,
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue(activeUpload);
-      mockStorageProvider.getSignedUploadUrl.mockResolvedValue(
-        'https://signed.example/part',
-      );
+      storage.initMultipartUpload.mockResolvedValue({ uploadId: 'mpu-1', key: 'uploads/org/1/abc.pdf' });
+      prismaMock.storageObject.create.mockResolvedValue(objectRow({ status: 'pending', uploadedById: user.id, s3UploadId: 'mpu-1' }));
 
       const response = await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
+        .post('/api/storage/objects/upload/init')
         .set(authHeader(user.accessToken))
-        .send({ partNumbers: [11, 12, 13] })
-        .expect(200);
+        .send({ name: 'report.pdf', size: 52_428_800, mimeType: 'application/pdf' })
+        .expect(201);
 
-      expect(response.body.data.parts).toHaveLength(3);
-      expect(response.body.data.parts[0]).toMatchObject({
-        partNumber: 11,
-        url: expect.any(String),
-        expiresAt: expect.any(String),
-      });
-    });
-
-    it('should return 401 for an unauthenticated request', async () => {
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .send({ partNumbers: [1] })
-        .expect(401);
-    });
-
-    // storage:write, which a Viewer does not hold.
-    it('should return 403 for a caller without storage:write', async () => {
-      const user = await createMockViewerUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [1] })
-        .expect(403);
-    });
-
-    it('should reject a batch of more than 100 part numbers at the pipe', async () => {
-      const user = await createMockContributorUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: Array.from({ length: 101 }, (_, i) => i + 1) })
-        .expect(400);
-    });
-
-    it('should reject duplicate part numbers at the pipe', async () => {
-      const user = await createMockContributorUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [1, 2, 1] })
-        .expect(400);
-    });
-
-    it.each([[[]], [[0]], [[1.5]], [['nope']]])(
-      'should reject %p as a partNumbers payload',
-      async (partNumbers) => {
-        const user = await createMockContributorUser(context);
-
-        await request(context.app.getHttpServer())
-          .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-          .set(authHeader(user.accessToken))
-          .send({ partNumbers })
-          .expect(400);
-      },
-    );
-
-    it('should return 400 for a part number past the end of the upload', async () => {
-      const user = await createMockContributorUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...activeUpload,
-        uploadedById: user.id,
-      });
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [201] })
-        .expect(400);
-    });
-
-    it('should return 400 once the upload is no longer in progress', async () => {
-      const user = await createMockContributorUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...activeUpload,
-        uploadedById: user.id,
-        status: 'ready',
-      });
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [1] })
-        .expect(400);
-    });
-
-    it('should return 403 for a non-owner', async () => {
-      const user = await createMockContributorUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...activeUpload,
-        uploadedById: 'someone-else',
-      });
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/parts`)
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [1] })
-        .expect(403);
-    });
-
-    it('should return 404 for an unknown upload', async () => {
-      const user = await createMockContributorUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
-
-      await request(context.app.getHttpServer())
-        .post('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001/upload/parts')
-        .set(authHeader(user.accessToken))
-        .send({ partNumbers: [1] })
-        .expect(404);
+      expect(response.body.data).toMatchObject({ objectId: OBJECT_ID, uploadId: 'mpu-1', partSize: 10 * 1024 * 1024, totalParts: 5 });
+      // Only a module's `initManagedUpload` stamps ownership; the generic route does not.
+      expect(prismaMock.kvoxObjectOwnership.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.kvoxObjectOwnership.create).not.toHaveBeenCalled();
     });
   });
 
-  describe('POST /api/storage/objects/:id/upload/complete', () => {
-    it('should complete upload', async () => {
-      const user = await createMockTestUser(context);
+  // ===========================================================================
+  // GET /api/<app>/files
+  // ===========================================================================
 
-      const dto = {
-        parts: [
-          { partNumber: 1, eTag: 'etag1' },
-          { partNumber: 2, eTag: 'etag2' },
-        ],
-      };
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'pending',
-        s3UploadId: 'upload-123',
-        chunks: [],
-      });
-      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
-      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
-        key: 'key',
-        bucket: 'bucket',
-        location: 's3://bucket/key',
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'processing',
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      const response = await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .send(dto)
-        .expect(201);
-
-      expect(response.body.data).toMatchObject({
-        id: mockStorageObjectId,
-        status: 'processing',
-      });
-    });
-
-    it('should return 404 for non-existent object', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
-
-      await request(context.app.getHttpServer())
-        .post('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001/upload/complete')
-        .set(authHeader(user.accessToken))
-        .send({
-          parts: [{ partNumber: 1, eTag: 'etag1' }],
-        })
-        .expect(404);
-    });
-
-    // ⚠ THE BROWSER PATH (#21). Omitting `parts` makes the server read the
-    // ETags back from the provider, so a page never has to read a header off
-    // a cross-origin PUT — which it cannot do unless the bucket exposes it.
-    it('should complete without a parts array, reading them from the provider', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'uploading',
-        s3UploadId: 'upload-123',
-      });
-      mockStorageProvider.listParts.mockResolvedValue([
-        { partNumber: 2, size: 10485760, etag: '"etag2"' },
-        { partNumber: 1, size: 10485760, etag: '"etag1"' },
+  describe(`GET ${FILES}`, () => {
+    it('lists the caller\'s plain uploads in the platform\'s list shape, never a module-owned object', async () => {
+      const user = await createMembershipViewer(context);
+      prismaMock.storageObject.findMany.mockResolvedValue([
+        objectRow({ id: 'obj-1', uploadedById: user.id }),
+        objectRow({ id: 'obj-2', uploadedById: user.id }),
       ]);
-      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
-      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
-        key: 'key',
-        bucket: 'bucket',
-        location: 's3://bucket/key',
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'processing',
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
+      prismaMock.storageObject.count.mockResolvedValue(2);
 
       const response = await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .send({})
-        .expect(201);
-
-      expect(response.body.data).toMatchObject({ status: 'processing' });
-      expect(mockStorageProvider.completeMultipartUpload).toHaveBeenCalledWith(
-        mockStorageObject.storageKey,
-        'upload-123',
-        [
-          { partNumber: 1, eTag: '"etag1"' },
-          { partNumber: 2, eTag: '"etag2"' },
-        ],
-      );
-    });
-
-    it('should validate parts array', async () => {
-      const user = await createMockTestUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .send({
-          parts: 'invalid', // Should be array
-        })
-        .expect(400);
-    });
-
-    // ⚠ THE REGRESSION TEST FOR #89. A browser's `fetch`/XHR POST with no body
-    // and no `Content-Type` reaches Fastify as `request.body === undefined` —
-    // not `{}`. Before the fix, `completeUploadSchema` rejected `undefined`
-    // outright with a 400 `Validation failed`, so every real browser upload
-    // failed at 100%, after every part was already sitting in the bucket.
-    // Deliberately no `.send(...)` call here: supertest sends a body only
-    // when `.send` is called, so this is a genuinely body-less POST.
-    it('should complete with NO body at all, reading parts from the provider', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'uploading',
-        s3UploadId: 'upload-123',
-      });
-      mockStorageProvider.listParts.mockResolvedValue([
-        { partNumber: 2, size: 10485760, etag: '"etag2"' },
-        { partNumber: 1, size: 10485760, etag: '"etag1"' },
-      ]);
-      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
-      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
-        key: 'key',
-        bucket: 'bucket',
-        location: 's3://bucket/key',
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'processing',
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      const response = await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        // No `.send(...)` — this is the exact request a browser sends.
-        .expect(201);
-
-      expect(response.body.data).toMatchObject({ status: 'processing' });
-      expect(mockStorageProvider.listParts).toHaveBeenCalledWith(
-        mockStorageObject.storageKey,
-        'upload-123',
-      );
-      expect(mockStorageProvider.completeMultipartUpload).toHaveBeenCalledWith(
-        mockStorageObject.storageKey,
-        'upload-123',
-        [
-          { partNumber: 1, eTag: '"etag1"' },
-          { partNumber: 2, eTag: '"etag2"' },
-        ],
-      );
-    });
-
-    it('should complete with a JSON null body, reading parts from the provider', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'uploading',
-        s3UploadId: 'upload-123',
-      });
-      mockStorageProvider.listParts.mockResolvedValue([
-        { partNumber: 1, size: 10485760, etag: '"etag1"' },
-      ]);
-      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
-      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
-        key: 'key',
-        bucket: 'bucket',
-        location: 's3://bucket/key',
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'processing',
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      const response = await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .set('Content-Type', 'application/json')
-        .send('null');
-
-      // Fastify's own JSON body parser decides whether a bare `null` payload
-      // reaches the handler at all; this asserts whatever it actually does
-      // rather than forcing an assumption. If Fastify accepts it, the
-      // preprocess normalises it to `{}` exactly like an absent body, and the
-      // request succeeds via the provider `listParts` path (201). If Fastify
-      // itself refuses a bare `null` before the pipe ever runs, that is a
-      // 400 from a layer this fix does not touch.
-      if (response.status === 201) {
-        expect(response.body.data).toMatchObject({ status: 'processing' });
-        expect(mockStorageProvider.completeMultipartUpload).toHaveBeenCalledWith(
-          mockStorageObject.storageKey,
-          'upload-123',
-          [{ partNumber: 1, eTag: '"etag1"' }],
-        );
-      } else {
-        expect(response.status).toBe(400);
-      }
-    });
-
-    it('should reject an empty parts array', async () => {
-      const user = await createMockTestUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .send({ parts: [] })
-        .expect(400);
-    });
-
-    it('should reject a top-level JSON array body', async () => {
-      const user = await createMockTestUser(context);
-
-      await request(context.app.getHttpServer())
-        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
-        .set(authHeader(user.accessToken))
-        .set('Content-Type', 'application/json')
-        .send('[]')
-        .expect(400);
-    });
-  });
-
-  describe('DELETE /api/storage/objects/:id/upload/abort', () => {
-    it('should abort upload', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        s3UploadId: 'upload-123',
-      });
-      mockStorageProvider.abortMultipartUpload.mockResolvedValue(undefined);
-      context.prismaMock.storageObject.delete.mockResolvedValue({});
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      await request(context.app.getHttpServer())
-        .delete(`/api/storage/objects/${mockStorageObjectId}/upload/abort`)
-        .set(authHeader(user.accessToken))
-        .expect(200); // Note: Controller returns void but Fastify may default to 200
-    });
-
-    it('should return 404 for non-existent object', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
-
-      await request(context.app.getHttpServer())
-        .delete('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001/upload/abort')
-        .set(authHeader(user.accessToken))
-        .expect(404);
-    });
-  });
-
-  describe('GET /api/storage/objects', () => {
-    it('should list user\'s objects', async () => {
-      const user = await createMockTestUser(context);
-
-      const mockObjects = [
-        { ...mockStorageObject, id: 'obj-1', uploadedById: user.id },
-        { ...mockStorageObject, id: 'obj-2', uploadedById: user.id },
-      ];
-
-      context.prismaMock.storageObject.findMany.mockResolvedValue(mockObjects);
-      context.prismaMock.storageObject.count.mockResolvedValue(2);
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/storage/objects')
+        .get(FILES)
         .set(authHeader(user.accessToken))
         .expect(200);
 
       expect(response.body.data.items).toHaveLength(2);
-      expect(response.body.data.meta).toMatchObject({
-        page: 1,
-        pageSize: 20,
-        totalItems: 2,
-        totalPages: 1,
-      });
+      expect(response.body.data.items[0]).toMatchObject({ id: 'obj-1', name: 'report.pdf', size: '1024000', status: 'ready' });
+      expect(response.body.data.meta).toEqual({ page: 1, pageSize: 20, totalItems: 2, totalPages: 1 });
 
-      // ⚠ MANAGED OBJECTS ARE EXCLUDED (#21). A transcript's source audio,
-      // its playback rendition and its exports are all rows owned by this same
-      // user; without the filter one transcript becomes four entries in a
-      // generic file list, none of which the user can act on here.
-      //
-      // PLATFORM-ADOPTION-SHIM(#469): the exclusion is `managed_by IS NULL`,
-      // applied by the legacy ownership store.
-      const ownership = context.module.get(LegacyObjectOwnershipStore, { strict: false }) as any;
-      expect(ownership.selectObjectIds).toHaveBeenCalledWith(
-        expect.objectContaining({ managed: 'unmanaged' }),
-        expect.anything(),
-      );
+      // THE FILTER IS THE FEATURE: a transcript's source audio and every export are rows uploaded in
+      // this same user's name; "has no ownership row" is what keeps them out of a generic file list.
+      const expected = { uploadedById: user.id, kvoxOwnership: { is: null } };
+      expect(prismaMock.storageObject.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expected }));
+      expect(prismaMock.storageObject.count).toHaveBeenCalledWith({ where: expected });
     });
 
-    it('should support pagination', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findMany.mockResolvedValue([]);
-      context.prismaMock.storageObject.count.mockResolvedValue(50);
+    it('applies the platform list query: page, size, status and sort', async () => {
+      const user = await createMembershipViewer(context);
+      prismaMock.storageObject.findMany.mockResolvedValue([]);
+      prismaMock.storageObject.count.mockResolvedValue(50);
 
       const response = await request(context.app.getHttpServer())
-        .get('/api/storage/objects?page=2&pageSize=10')
+        .get(`${FILES}?page=2&pageSize=10&status=ready&sortBy=name&sortOrder=asc`)
         .set(authHeader(user.accessToken))
         .expect(200);
 
-      expect(response.body.data.meta).toMatchObject({
-        page: 2,
-        pageSize: 10,
-        totalItems: 50,
-        totalPages: 5,
+      expect(response.body.data.meta).toEqual({ page: 2, pageSize: 10, totalItems: 50, totalPages: 5 });
+      expect(prismaMock.storageObject.findMany).toHaveBeenCalledWith({
+        where: { uploadedById: user.id, kvoxOwnership: { is: null }, status: 'ready' },
+        orderBy: { name: 'asc' },
+        skip: 10,
+        take: 10,
       });
     });
 
-    it('should filter by status', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findMany.mockResolvedValue([
-        { ...mockStorageObject, uploadedById: user.id, status: 'ready' },
-      ]);
-      context.prismaMock.storageObject.count.mockResolvedValue(1);
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/storage/objects?status=ready')
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(response.body.data.items).toHaveLength(1);
-    });
-  });
-
-  describe('GET /api/storage/objects/:id', () => {
-    it('should return object metadata', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-      });
-
-      const response = await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(response.body.data).toMatchObject({
-        id: mockStorageObjectId,
-        name: mockStorageObject.name,
-        mimeType: mockStorageObject.mimeType,
-      });
-    });
-
-    it('should return 404 for non-existent object', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
+    it('is scoped to the caller: another user\'s id never reaches the query', async () => {
+      const user = await createMembershipViewer(context);
+      prismaMock.storageObject.findMany.mockResolvedValue([]);
+      prismaMock.storageObject.count.mockResolvedValue(0);
 
       await request(context.app.getHttpServer())
-        .get('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001')
-        .set(authHeader(user.accessToken))
-        .expect(404);
-    });
-  });
-
-  describe('GET /api/storage/objects/:id/download', () => {
-    it('should return signed download URL', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'ready',
-      });
-      mockStorageProvider.getSignedDownloadUrl.mockResolvedValue(
-        'https://signed-url.com/download',
-      );
-
-      const response = await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/download`)
+        .get(`${FILES}?uploadedById=someone-else`)
         .set(authHeader(user.accessToken))
         .expect(200);
 
-      expect(response.body.data).toMatchObject({
-        url: 'https://signed-url.com/download',
-        expiresIn: expect.any(Number),
-      });
+      for (const [args] of prismaMock.storageObject.findMany.mock.calls) {
+        expect(args.where.uploadedById).toBe(user.id);
+      }
     });
 
-    it('should return 400 for non-ready objects', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        status: 'processing',
-      });
+    it('rejects an out-of-range page size at the pipe', async () => {
+      const user = await createMembershipViewer(context);
 
       await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/download`)
+        .get(`${FILES}?pageSize=101`)
         .set(authHeader(user.accessToken))
         .expect(400);
     });
   });
 
-  describe('DELETE /api/storage/objects/:id', () => {
-    it('should delete object', async () => {
-      const user = await createMockTestUser(context);
+  // ===========================================================================
+  // The platform list, hit directly (a documented exception)
+  // ===========================================================================
 
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-      });
-      mockStorageProvider.delete.mockResolvedValue(undefined);
-      context.prismaMock.storageObject.delete.mockResolvedValue({});
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
+  describe('GET /api/storage/objects', () => {
+    it('still lists the caller\'s OWN objects, owned or not: the app\'s clients list through the files route', async () => {
+      const user = await createMembershipViewer(context);
+      prismaMock.storageObject.findMany.mockResolvedValue([objectRow({ uploadedById: user.id })]);
+      prismaMock.storageObject.count.mockResolvedValue(1);
 
-      await request(context.app.getHttpServer())
-        .delete(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(204);
-    });
-
-    it('should return 404 for non-existent object', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(null);
-
-      await request(context.app.getHttpServer())
-        .delete('/api/storage/objects/550e8400-e29b-41d4-a716-446655440001')
-        .set(authHeader(user.accessToken))
-        .expect(404);
-    });
-
-    // ⚠ 409, NOT 403 (#21). The caller genuinely owns the bytes; the refusal
-    // is about the object's STATE — another module depends on it — which is
-    // what 409 means. Deleting a transcript's source audio through the generic
-    // endpoint leaves the transcript pointing at bytes that no longer exist.
-    it('should return 409 for an object managed by another module', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        managedBy: 'transcripts',
-      });
-
-      const response = await request(context.app.getHttpServer())
-        .delete(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(409);
-
-      expect(JSON.stringify(response.body)).toContain('transcripts');
-      expect(mockStorageProvider.delete).not.toHaveBeenCalled();
-      expect(context.prismaMock.storageObject.delete).not.toHaveBeenCalled();
-    });
-
-    // Only list and delete change for a managed object — the owner still owns
-    // the bytes, and the download URL is how the owning module plays them back.
-    it('should still serve a managed object to its owner', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        managedBy: 'transcripts',
-        status: 'ready',
-      });
-      mockStorageProvider.getSignedDownloadUrl.mockResolvedValue(
-        'https://signed.example/download',
-      );
-
-      await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/download`)
-        .set(authHeader(user.accessToken))
-        .expect(200);
-    });
-  });
-
-  describe('PATCH /api/storage/objects/:id/metadata', () => {
-    it('should update metadata', async () => {
-      const user = await createMockTestUser(context);
-
-      const newMetadata = {
-        custom: 'value',
-        tags: ['tag1', 'tag2'],
-      };
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        metadata: { existing: 'data' },
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        metadata: { existing: 'data', ...newMetadata },
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      const response = await request(context.app.getHttpServer())
-        .patch(`/api/storage/objects/${mockStorageObjectId}/metadata`)
-        .set(authHeader(user.accessToken))
-        .send({ metadata: newMetadata })
-        .expect(200);
-
-      expect(response.body.data.metadata).toMatchObject({
-        existing: 'data',
-        custom: 'value',
-      });
-    });
-
-    it('should merge with existing metadata', async () => {
-      const user = await createMockTestUser(context);
-
-      context.prismaMock.storageObject.findUnique.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        metadata: { key1: 'value1' },
-      });
-      context.prismaMock.storageObject.update.mockResolvedValue({
-        ...mockStorageObject,
-        uploadedById: user.id,
-        metadata: { key1: 'value1', key2: 'value2' },
-      });
-      context.prismaMock.auditEvent.create.mockResolvedValue({});
-
-      await request(context.app.getHttpServer())
-        .patch(`/api/storage/objects/${mockStorageObjectId}/metadata`)
-        .set(authHeader(user.accessToken))
-        .send({ metadata: { key2: 'value2' } })
-        .expect(200);
-    });
-  });
-
-  describe('Authentication', () => {
-    it('should require authentication for all endpoints', async () => {
-      // Test key endpoints without auth
       await request(context.app.getHttpServer())
         .get('/api/storage/objects')
-        .expect(401);
+        .set(authHeader(user.accessToken))
+        .expect(200);
 
-      await request(context.app.getHttpServer())
-        .post('/api/storage/objects/upload/init')
-        .send({
-          name: 'test.pdf',
-          size: 1024000,
-          mimeType: 'application/pdf',
-        })
-        .expect(401);
-
-      await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}`)
-        .expect(401);
-
-      await request(context.app.getHttpServer())
-        .delete(`/api/storage/objects/${mockStorageObjectId}`)
-        .expect(401);
+      // Scoped to the caller (a disclosure of their own rows at most) and carrying no ownership filter.
+      const where = prismaMock.storageObject.findMany.mock.calls[0][0].where;
+      expect(where.uploadedById).toBe(user.id);
+      expect(JSON.stringify(where)).not.toContain('kvoxOwnership');
     });
   });
 
-  describe('Ownership validation', () => {
-    it('should enforce ownership across all operations', async () => {
-      const user = await createMockTestUser(context);
-      const otherUserId = 'other-user-456';
+  // ===========================================================================
+  // Administrators
+  // ===========================================================================
 
-      // Mock object owned by another user
-      const otherUserObject = {
-        ...mockStorageObject,
-        uploadedById: otherUserId,
-      };
+  describe('an administrator', () => {
+    it('list files through their org_admin membership, like any other member', async () => {
+      const admin = await createMembershipAdmin(context);
 
-      context.prismaMock.storageObject.findUnique.mockResolvedValue(otherUserObject);
-
-      // Test various endpoints
-      await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(403);
+      prismaMock.storageObject.findMany.mockResolvedValue([]);
+      prismaMock.storageObject.count.mockResolvedValue(0);
 
       await request(context.app.getHttpServer())
-        .get(`/api/storage/objects/${mockStorageObjectId}/download`)
-        .set(authHeader(user.accessToken))
-        .expect(403);
-
-      await request(context.app.getHttpServer())
-        .delete(`/api/storage/objects/${mockStorageObjectId}`)
-        .set(authHeader(user.accessToken))
-        .expect(403);
-
-      await request(context.app.getHttpServer())
-        .patch(`/api/storage/objects/${mockStorageObjectId}/metadata`)
-        .set(authHeader(user.accessToken))
-        .send({ metadata: { key: 'value' } })
-        .expect(403);
+        .get(FILES)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
     });
   });
 });

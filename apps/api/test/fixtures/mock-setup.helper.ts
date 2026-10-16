@@ -675,7 +675,7 @@ export function setupBaseMocks(): void {
   // ---------------------------------------------------------------------------
   //
   // `storage_objects` is an org table under forced RLS, so every read goes
-  // through `runInOrg` (KVox's gateway) or `forOrg` (the platform storage slice
+  // through `runInOrg` (the app's storage gateway) or `forOrg` (the platform storage slice
   // resolves it through `PLATFORM_PRISMA`). A deep mock answers `undefined` for
   // both, which would swallow the callback. They hand the same mock back as the
   // scoped client, so a spec keeps feeding `prismaMock.storageObject.*` and

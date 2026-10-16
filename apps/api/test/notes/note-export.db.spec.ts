@@ -43,7 +43,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { ObjectsService } from '@marinoscar/platform-api/storage';
+
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { NoteExportService } from '../../src/notes/export/note-export.service';
@@ -88,6 +88,7 @@ describeWithDb('Note exports (real Postgres)', () => {
   let storage: StorageProvider;
 
   let objects: NoteObjectsService;
+  let managed: ReturnType<typeof createDbManagedObjects>;
   let registry: NoteExporterRegistry;
   let exportService: NoteExportService;
   let handler: NoteExportHandler;
