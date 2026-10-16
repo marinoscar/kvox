@@ -713,7 +713,7 @@ describe('System Settings Integration', () => {
     it('reads a stored ai namespace that predates #360 as taskModels {} and graphEnabled false', async () => {
       const admin = await createMockAdminUser(context);
       const { taskModels: _t, graphEnabled: _g, ...legacyAi } =
-        DEFAULT_SYSTEM_SETTINGS.ai;
+        DEFAULT_SYSTEM_SETTINGS.ai as Record<string, unknown>;
 
       context.prismaMock.systemSettings.findUnique.mockResolvedValue({
         id: 'settings-1',
@@ -734,6 +734,93 @@ describe('System Settings Integration', () => {
       expect(res.body.data.ai.graphEnabled).toBe(false);
       // The per-field degrade: the rest of the namespace survives.
       expect(res.body.data.ai.enabled).toBe(true);
+    });
+
+    it('reads a PRE-UPGRADE ai block (the old provider / allowedModels shape) without failing the namespace (#473)', async () => {
+      const admin = await createMockAdminUser(context);
+      const preUpgrade = {
+        enabled: true,
+        provider: 'openai',
+        providers: {
+          openai: {
+            baseUrl: 'https://gateway.example.test/v1',
+            allowedModels: ['gpt-5.4', { id: 'gpt-5.4-mini', label: 'Mini' }],
+            defaultModel: 'gpt-5.4-mini',
+          },
+        },
+        maxInputTokens: 50_000,
+        maxOutputTokens: null,
+        requestTimeoutMs: 120_000,
+        reasoningEffort: 'medium',
+        maxDocumentBytes: 1_000_000,
+        taskModels: {
+          'graph.extract': { model: 'gpt-5.4', reasoningEffort: 'high' },
+          'graph.agent': { model: 'gpt-5.4-mini' },
+        },
+        graphEnabled: true,
+      };
+
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai: preUpgrade } as any,
+        version: 4,
+        updatedAt: new Date(),
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      // The fields the extension kept read back unchanged, with no rewrite.
+      expect(res.body.data.ai).toMatchObject({
+        enabled: true,
+        taskModels: preUpgrade.taskModels,
+        graphEnabled: true,
+        maxInputTokens: 50_000,
+        maxOutputTokens: null,
+        requestTimeoutMs: 120_000,
+        reasoningEffort: 'medium',
+        maxDocumentBytes: 1_000_000,
+        defaultModel: null,
+      });
+      // The platform fields take their defaults, and the old-shape keys are not in its view.
+      expect(res.body.data.ai.keyPolicy).toBe('byok');
+      expect(res.body.data.ai.providers.openai.enabled).toBe(false);
+      expect(res.body.data.ai.provider).toBeUndefined();
+    });
+
+    it('serves the ai defaults, with this app\'s added fields, on a fresh database (#473)', async () => {
+      const admin = await createMockAdminUser(context);
+
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: DEFAULT_SYSTEM_SETTINGS as any,
+        version: 1,
+        updatedAt: new Date(),
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(res.body.data.ai).toMatchObject({
+        taskModels: {},
+        graphEnabled: false,
+        defaultModel: null,
+        maxInputTokens: null,
+        maxOutputTokens: null,
+        requestTimeoutMs: 600_000,
+        reasoningEffort: 'none',
+        maxDocumentBytes: 26_214_400,
+      });
     });
 
     it('rejects a databaseBackup value outside its bounds rather than storing it (#256)', async () => {

@@ -27,6 +27,9 @@ import { identityModule } from './platform/identity/identity.config';
 // composed (see `platform/jobs/jobs.config.ts`).
 import { jobsModule, nodesModule, NodeCredentialModule } from './platform/jobs/jobs.config';
 import { settingsModule } from './platform/settings/settings.config';
+// The platform AI slice (#473). `ai.config.ts` imports `app-registrations/ai.ts`, which
+// registers this app's AI features before the registry freezes.
+import { aiModule } from './platform/ai/ai.config';
 import {
   CredentialsModule,
   OrgCredentialsModule,
@@ -44,6 +47,7 @@ import { LoggerModule } from './common/logger/logger.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
+import { AiPortModule } from './ai-port/ai-port.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
@@ -241,6 +245,19 @@ import configuration from './config/configuration';
     // calls `KvoxManagedObjects.initManagedUpload` with a module only a module
     // may claim.
     TranscriptsModule,
+
+    // The platform's AI slice (#473, epic #472): `GET /api/ai/config`, `/api/ai/keys`
+    // (a user's own provider keys), the responses / embeddings / images / audio /
+    // realtime / runs routes, `GET /api/ai/features`, `/api/ai/usage`, `/api/admin/ai/*`
+    // (policy, model catalogue, deployment and organization keys, usage), the `ai.*`
+    // job types and the kill switch. `AI_TARGET_RESOLVER` is this app's
+    // `KvoxAiTargetResolver`, which keeps routing by connected-knowledge task. It runs
+    // BESIDE the old `AiModule` below until #477 deletes that one; the two share the
+    // `ai` namespace row and the old module's routes are all outside `/api/ai/*`.
+    aiModule,
+    // This app's side of the AI slice: `/api/ai-tasks/config` (the capability probe that
+    // used to be `GET /api/ai/config`) and `/api/ai-tasks/settings` (task models).
+    AiPortModule,
 
     // AI (#47, epic #45): the provider framework, the OpenAI provider, the
     // deployment policy surface, the PER-USER credential surface and the

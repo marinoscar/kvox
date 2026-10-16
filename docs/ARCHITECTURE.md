@@ -284,8 +284,10 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── settings/         # SettingsModule.forRoot + host ports (data, profile images)
 │   │   │   │   ├── storage/          # StorageModule.forRoot + StorageConfigModule + ProfileImageModule + key-prefix manifest
 │   │   │   │   ├── jobs/             # JobsModule.forRoot + NodesModule.forRoot + their host ports (the queue and fleet are the platform's)
-│   │   │   │   └── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
-│   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership
+│   │   │   │   ├── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
+│   │   │   │   └── ai/               # AiModule.forRoot, AiHostModule (binds AI_TARGET_RESOLVER), the ai namespace extension
+│   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership, AI features (ai.ts)
+│   │   │   ├── ai-port/              # Task chooser, KvoxAiTargetResolver, feature-to-task map, AiError mapper, /api/ai-tasks/*
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
 │   │   │   ├── kvox-objects/         # Ownership side table, managed-objects gateway, multipart routes, files list, delete veto, transcript upload processor
 │   │   │   ├── settings/             # registry/ (namespace manifests) only
@@ -775,7 +777,7 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-system-role assignments. Only the system role `admin` lives here now; `contributor`, `viewer` and `org_admin` are **organization** roles held on `memberships.role_id` (platform migration `0024_split_system_org_roles` moved them; see §7.3)
 - `organizations` / `memberships` - The platform's tenancy tables. KVox runs in single-organization mode (`TENANCY_MODE` unset): one default organization, and every user has one membership in it whose role is their org role
-- `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations; the jobs slice also registers a `retention` namespace, one `{ enabled, days }` policy per growing table, which the 01:00 `RetentionPurgeTask` reads, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` and `ai` (KVox's, `app-registrations/settings.ts`; `ai` is a shim until #473). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
+- `system_settings` - Global app settings (JSONB), read and written by the platform settings slice (`systemRowKey` `global`, unchanged shape). Namespaces on the `global` row, in stored key order: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (platform declarations; the jobs slice also registers a `retention` namespace, one `{ enabled, days }` policy per growing table, which the 01:00 `RetentionPurgeTask` reads, registered in `apps/api/src/settings/registry/system-settings.manifest.ts`), then `transcription` (KVox's, `app-registrations/settings.ts`) and `ai` (the platform AI slice's namespace, extended by KVox's `KVOX_AI_SETTINGS_EXTENSION` with `taskModels`, `graphEnabled`, `defaultModel` and the limits, #473; until #474 moves the data the stored value still carries the previous `provider` and `providers` blocks). ⚠ Adding one means declaring it in its module (`SystemSettingsNamespace`) and appending it to `app-registrations/settings.ts` — see [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry); the platform's settings conformance suite iterates the registry. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5. Since issue #360 it also carries `ai.taskModels` (a per-`AiTaskKey` model + optional `reasoningEffort` for connected-knowledge tasks, absent key meaning "use `defaultModel`", replaced wholesale on `PUT`) and `ai.graphEnabled` (default `false` — the spending switch for connected knowledge) — see `docs/specs/notes.md` §2.8. Since issue #436 `ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default `null` ("the selected model's own maximum governs" rather than the old fixed 100,000/16,384 shipped defaults, which are cleared to `null` on upgrade by migration `20260927050000_ai_token_limits_follow_model` wherever a deployment still carries them verbatim) — see `docs/specs/notes.md` §3.3
 - `user_settings` - Per-user settings (JSONB), served by the platform settings slice. Optional namespaces in stored key order: `dataTables`, `navigation`, `notifications` (platform), then `onboarding` and `graph` (KVox, `app-registrations/settings.ts`). `onboarding` (issue #272, epic
   #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
   `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
@@ -1285,7 +1287,7 @@ The complete set of roles and permission strings the API enforces. The machine-r
 - `notes:read/write` - AI-generated notes (issue #48, epic #45), mirroring `transcripts:*`
   exactly and for the identical reason: generating a note is the core product action this
   epic exists to enable, and a fresh account's default role is Viewer. `notes:read` gates
-  every note read (list, get, versions, the generation stream, `GET /api/ai/config`);
+  every note read (list, get, versions, the generation stream, `GET /api/ai-tasks/config`);
   `notes:write` gates create/regenerate/edit/delete **and**
   `POST /api/note-templates/:id/preview` — a preview reads a template but its action is
   generating real content through the caller's own AI key, the same mechanism `note.generate`
@@ -1304,6 +1306,7 @@ The complete set of roles and permission strings the API enforces. The machine-r
   404-never-403 posture, because a built-in template's existence is public by design (it is
   in every account's own catalogue) while another user's template's existence is private.
   Both permissions are org-scoped and granted to all three org roles.
+- `ai:use` - Call AI through the platform AI slice (every `/api/ai/*` route carries `AiEnabledGuard` and this permission). Org-scoped, granted to **Admin, Contributor and Viewer** by the app seed (#473): every member may use AI, and spending is still bounded by the caller's own key. `ai_config:read/write` - The deployment `ai` policy, provider slots, model catalogue and usage report. System scope, **Admin only**. `GET`/`PUT /api/ai-tasks/settings` (task models, #473) are gated on this pair; `GET /api/ai-tasks/config` stays on `notes:read`
 - `graph:read/write` - Connected knowledge (issue #354, epic #344): read your own graph
   (entities, relations, facts, proposals, the effective ontology) vs. curate it (commit
   proposals, edit/merge/forget entities, manage attribute definitions). **Org-scoped and granted to all three
@@ -1413,7 +1416,8 @@ registers what is its own and binds two host ports.
 |---------|-------|---------------|
 | Routes `/api/system-settings`, `/api/user-settings`, `/api/org-settings`, merge, `If-Match`, the audit row per system write | platform settings slice | `platform/settings/settings.config.ts` (`SettingsModule.forRoot`, global, `systemRowKey` `'global'`, `orgLayer` `'auto'`) |
 | `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance` (system) and `dataTables`, `navigation`, `notifications` (user) declarations | platform | listed in stored key order in `settings/registry/{system,user}-settings.manifest.ts`; `databaseBackup.storageProvider` default `s3` kept through `APP_SYSTEM_SETTINGS_DEFAULTS` |
-| `transcription`, `ai` (system) and `onboarding`, `graph` (user) declarations | KVox | `transcription/transcription.system-settings.ts`, `ai/ai.system-settings.ts` (shim until #473), `onboarding/onboarding.user-settings.ts`, `graph/graph.user-settings.ts`, assembled in `app-registrations/settings.ts`; the platform requires a `merge` per namespace, so the old service merges live in the declarations |
+| `transcription` (system) and `onboarding`, `graph` (user) declarations | KVox | `transcription/transcription.system-settings.ts`, `onboarding/onboarding.user-settings.ts`, `graph/graph.user-settings.ts`, assembled in `app-registrations/settings.ts`; the platform requires a `merge` per namespace, so the old service merges live in the declarations |
+| `ai` (system) namespace | platform AI slice, extended by KVox | `KVOX_AI_SETTINGS_EXTENSION` in `platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS` (#473) |
 | Encrypted `(purpose, name)` store, the AES-256-GCM cipher, the boot-time `SECRETS_ENCRYPTION_KEY` check | platform credentials slice and `core` | `platform/credentials/credentials.config.ts` (`CredentialsModule`, not global; `UserCredentialsModule`, `OrgCredentialsModule` mounted and unused), `main.ts` calls `verifyEncryptionKeyAtStartup` from `@marinoscar/platform-api/core` |
 | Credential purposes `smtp`, `email_ses`, `push_vapid` | platform definitions (strings equal the ones KVox always stored) | `platform/credentials/credential-purposes.manifest.ts` |
 | Credential purpose `transcription` | KVox | registered in `kvox.manifest.ts` under `[registry:credential-purposes]` (the base-domain-boundary test forbids `platform/credentials` importing `transcription`) |
@@ -1539,6 +1543,21 @@ migration; an existing deployment follows
 [`runbooks/application-role.md`](runbooks/application-role.md). The bootstrap
 login stays `postgres` and is used for administration only. Design and Doctor
 check: [`SECURITY-ARCHITECTURE.md`](SECURITY-ARCHITECTURE.md) (Tenant isolation).
+
+### 7.11 Platform AI slice
+
+AI is the platform's slice (`@marinoscar/platform-api/ai`), mounted in `apps/api/src/platform/ai/` (`AiModule.forRoot({ imports: [AiHostModule], providers: ['openai'], perUserDefaultModel: false })`, issue #473, epic #472). `perUserDefaultModel` is `false` because the model is chosen per task. The application adds a thin layer in `apps/api/src/ai-port/`; the previous `apps/api/src/ai/` stack is removed in #477.
+
+| Concern | Owner | Where in KVox |
+|---------|-------|---------------|
+| Routes `/api/ai/config`, `/api/ai/keys`, `/api/ai/features`, `/api/admin/ai/usage`, the `ai_models` catalogue, usage rows | platform AI slice | `platform/ai/ai.config.ts` |
+| The `ai` namespace; task models, `graphEnabled`, `defaultModel`, limits | platform, extended | `KVOX_AI_SETTINGS_EXTENSION` (`platform/ai/ai-settings.extension.ts`) |
+| Which model a call runs on | KVox, as the `AI_TARGET_RESOLVER` port | `KvoxAiTargetResolver` over the ported pure `chooseTaskModel` (`ai-port/`), bound in `AiHostModule` |
+| Nine registered features (group `kvox`) | KVox | `app-registrations/ai.ts`; ids to task keys in `ai-port/features.ts` |
+| `AiError` to wire reason or job error class | KVox | `ai-port/kvox-ai-errors.ts` (`mapAiError`) |
+| `GET /api/ai-tasks/config`, `GET`/`PUT /api/ai-tasks/settings` | KVox | `ai-port/ai-tasks.controller.ts` |
+
+Design, the feature table and the mapping table: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice".
 
 ---
 
@@ -1852,7 +1871,7 @@ gates on a **runtime feature flag** — the first destination to do so — see
 below.
 
 **`knowledge` (path `/graph`, issue #438) is a destination of its own,
-gated on `graph:read` *and* `GET /api/ai/config`'s `graphEnabled`.** It
+gated on `graph:read` *and* `GET /api/ai-tasks/config`'s `graphEnabled`.** It
 owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph`,
 `/graph/explore`, `/graph/overview`, `/graph/entities/:id`,
 `/graph/imports/:proposalId` (issue #387) and `/ask`/`/ask/:conversationId`

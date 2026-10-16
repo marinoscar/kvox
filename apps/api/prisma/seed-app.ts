@@ -193,6 +193,44 @@ export const NOTE_TEMPLATES = [
  */
 export async function seedApp(prisma: PrismaClient): Promise<void> {
   await seedNoteTemplates(prisma);
+  await seedViewerAiUse(prisma);
+}
+
+/**
+ * The org roles that hold `ai:use` on top of the platform's own default grants
+ * (`org_admin`, `contributor`): the `viewer` role (issue #473).
+ *
+ * The platform's registry refuses an app grant that targets a platform role, so the
+ * grant is a seed row, not a catalog entry. It is the posture this app has always had:
+ * every role may use AI, with its OWN saved key (`byok`), and a Viewer is the default
+ * role of a new account. A Viewer with no key still cannot call a model.
+ */
+export const VIEWER_AI_GRANTS = [{ role: 'viewer', permission: 'ai:use' }] as const;
+
+async function seedViewerAiUse(prisma: PrismaClient): Promise<void> {
+  console.log('Seeding AI grants...');
+
+  for (const grant of VIEWER_AI_GRANTS) {
+    const [role, permission] = await Promise.all([
+      prisma.role.findUnique({ where: { name: grant.role } }),
+      prisma.permission.findUnique({ where: { name: grant.permission } }),
+    ]);
+
+    // The platform seed ran first and creates both; absent means the catalog changed.
+    if (!role || !permission) {
+      console.log(`  skipped ${grant.role} -> ${grant.permission} (role or permission not seeded)`);
+      continue;
+    }
+
+    // Idempotent: the composite key is the natural unique, and an existing grant is left alone.
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+      update: {},
+      create: { roleId: role.id, permissionId: permission.id },
+    });
+  }
+
+  console.log(`✓ Seeded ${VIEWER_AI_GRANTS.length} AI grant(s)`);
 }
 
 async function seedNoteTemplates(prisma: PrismaClient): Promise<void> {

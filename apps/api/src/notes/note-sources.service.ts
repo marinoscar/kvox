@@ -37,6 +37,7 @@ import {
 import { randomUUID } from 'node:crypto';
 
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { KVOX_AI_POLICY } from '../ai-port/ai-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import {
@@ -87,7 +88,8 @@ export class NoteSourcesService {
 
   /** The per-deployment ceiling on one uploaded document, in bytes. */
   async maxDocumentBytes(): Promise<number> {
-    const policy = await this.settings.getAiPolicy();
+    // `maxDocumentBytes` is a field this app adds to the platform `ai` namespace (#473).
+    const policy = await this.settings.getNamespace(KVOX_AI_POLICY);
 
     return policy.maxDocumentBytes;
   }

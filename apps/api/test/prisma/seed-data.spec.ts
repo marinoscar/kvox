@@ -531,3 +531,62 @@ describe('seed data (catalogs and seed-app)', () => {
     });
   });
 });
+
+// =============================================================================
+// The AI grants (#473): `ai:use` reaches the Viewer role through the app seed
+// =============================================================================
+
+describe('seed-app AI grants (#473)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { seedApp, VIEWER_AI_GRANTS } = require('../../prisma/seed-app') as typeof import('../../prisma/seed-app');
+
+  function fakePrisma(present: { role: boolean; permission: boolean }) {
+    return {
+      noteTemplate: { upsert: jest.fn().mockResolvedValue({}) },
+      role: { findUnique: jest.fn().mockResolvedValue(present.role ? { id: 'role-viewer' } : null) },
+      permission: { findUnique: jest.fn().mockResolvedValue(present.permission ? { id: 'perm-ai-use' } : null) },
+      rolePermission: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+  }
+
+  it('grants ai:use to viewer, and to nothing else', () => {
+    expect(VIEWER_AI_GRANTS).toEqual([{ role: 'viewer', permission: 'ai:use' }]);
+  });
+
+  it('upserts the viewer -> ai:use row, and keeps an existing one as it is', async () => {
+    const prisma = fakePrisma({ role: true, permission: true });
+
+    await seedApp(prisma as never);
+    await seedApp(prisma as never);
+
+    expect(prisma.role.findUnique).toHaveBeenCalledWith({ where: { name: 'viewer' } });
+    expect(prisma.permission.findUnique).toHaveBeenCalledWith({ where: { name: 'ai:use' } });
+    expect(prisma.rolePermission.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.rolePermission.upsert).toHaveBeenCalledWith({
+      where: { roleId_permissionId: { roleId: 'role-viewer', permissionId: 'perm-ai-use' } },
+      update: {},
+      create: { roleId: 'role-viewer', permissionId: 'perm-ai-use' },
+    });
+  });
+
+  it('skips quietly when the platform seed did not create the role or permission', async () => {
+    const prisma = fakePrisma({ role: true, permission: false });
+
+    await seedApp(prisma as never);
+
+    expect(prisma.rolePermission.upsert).not.toHaveBeenCalled();
+  });
+
+  it('the permission catalog the platform seed reads grants ai:use to org_admin and contributor, not viewer', () => {
+    const catalog = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', 'prisma', 'catalog', 'permissions.json'), 'utf8'),
+    ) as { permissions: Array<{ name: string }>; rolePermissions: Record<string, string[]> };
+
+    expect(catalog.permissions.find((p) => p.name === 'ai:use')).toBeDefined();
+    const holders = Object.entries(catalog.rolePermissions)
+      .filter(([, permissions]) => permissions.includes('ai:use'))
+      .map(([role]) => role);
+    expect(holders.sort()).toEqual(['contributor', 'org_admin']);
+    expect(holders).not.toContain('viewer'); // added by seed-app, not the catalog
+  });
+});

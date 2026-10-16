@@ -249,6 +249,15 @@ export class OnboardingService {
       this.prisma.allowedEmail.count(),
     ]);
 
+    // PLATFORM-ADOPTION-SHIM(#477): the `ai` namespace is the platform's since #473 and
+    // carries no `provider` / `allowedModels`; those two legacy keys survive in the
+    // stored value until #474 migrates them. Read them defensively so this step keeps
+    // its meaning on an un-migrated row and degrades to "not configured" on a migrated one.
+    const legacyAi = aiPolicy as unknown as {
+      provider?: string | null;
+      providers?: Record<string, { allowedModels?: unknown[] } | undefined>;
+    };
+
     return {
       context: {
         audience: 'admin',
@@ -256,12 +265,12 @@ export class OnboardingService {
         facts,
         aiPolicy: {
           enabled: aiPolicy.enabled,
-          provider: aiPolicy.provider,
+          provider: legacyAi.provider ?? null,
           // Read through the policy's own active-provider axis (#78) rather
           // than a hardcoded `'openai'`: a deployment that switched vendors
           // would otherwise be judged on the list belonging to the old one.
-          allowedModelCount: aiPolicy.provider
-            ? (aiPolicy.providers[aiPolicy.provider]?.allowedModels.length ?? 0)
+          allowedModelCount: legacyAi.provider
+            ? (legacyAi.providers?.[legacyAi.provider]?.allowedModels?.length ?? 0)
             : 0,
         },
         // A provider chosen AND the feature switched on. Either alone sends no

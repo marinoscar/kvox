@@ -166,6 +166,23 @@ export const mockPermissions = {
   // brand-new account's default role is Viewer. A fixture that withheld these
   // from Viewer would make an integration test asserting a viewer CAN create a
   // transcript fail for a reason the real seed does not have.
+  // The platform AI slice (#473). `ai_config:*` is Admin only; `ai:use` is granted to every
+  // role (the platform grants it to org_admin and contributor, `prisma/seed-app.ts` adds viewer).
+  aiConfigRead: {
+    id: randomUUID(),
+    name: 'ai_config:read',
+    description: 'View the deployment-wide AI platform policy',
+  },
+  aiConfigWrite: {
+    id: randomUUID(),
+    name: 'ai_config:write',
+    description: 'Change the deployment-wide AI platform policy',
+  },
+  aiUse: {
+    id: randomUUID(),
+    name: 'ai:use',
+    description: 'Call AI models using a saved key',
+  },
   transcriptsRead: {
     id: randomUUID(),
     name: 'transcripts:read',
@@ -542,6 +559,9 @@ export const rolePermissionsMap = {
     mockPermissions.dbBackupRestore,
     mockPermissions.pushRead,
     mockPermissions.pushWrite,
+    mockPermissions.aiConfigRead,
+    mockPermissions.aiConfigWrite,
+    mockPermissions.aiUse,
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
     mockPermissions.notesRead,
@@ -556,6 +576,7 @@ export const rolePermissionsMap = {
     mockPermissions.userSettingsWrite,
     mockPermissions.storageRead,
     mockPermissions.storageWrite,
+    mockPermissions.aiUse,
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
     mockPermissions.notesRead,
@@ -571,6 +592,7 @@ export const rolePermissionsMap = {
     mockPermissions.userSettingsRead,
     mockPermissions.userSettingsWrite,
     mockPermissions.storageRead,
+    mockPermissions.aiUse,
     // Both, deliberately — see `transcriptsRead`'s note above.
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
