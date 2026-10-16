@@ -4,7 +4,7 @@
 //
 // ⚠ SINCE ISSUE #54 THIS FILE IS A THIN INSTANTIATION, NOT AN IMPLEMENTATION.
 // The interface and the registry were extracted, behaviour-preserving, into the
-// generic `apps/api/src/export/exporter-registry.ts` (`docs/specs/notes.md`
+// generic `ExporterRegistry` in `@marinoscar/platform-api/exports` (`docs/specs/notes.md`
 // §8.1) so that note export reuses them rather than growing a second registry
 // that diverges on fonts, page setup and PDF generation within a release. That
 // file's header carries the whole contract — the streams-never-buffers rule,
@@ -21,7 +21,7 @@
 
 import { Injectable } from '@nestjs/common';
 
-import { ExporterRegistry, type Exporter } from '../../export/exporter-registry';
+import { ExporterRegistry, type Exporter } from '@marinoscar/platform-api/exports';
 import type { ExportDocument } from './export-document';
 
 /**

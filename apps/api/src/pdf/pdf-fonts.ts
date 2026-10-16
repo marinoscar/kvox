@@ -22,7 +22,7 @@
 // for.
 //
 // `FONT_DIR` resolves the same way from `src/` and from `dist/`
-// (`apps/api/<either>/export/../../assets/fonts`), which is why there is no
+// (`apps/api/<either>/pdf/../../assets/fonts`), which is why there is no
 // environment variable and no build-time copy step.
 //
 // ⚠ CJK AND RIGHT-TO-LEFT SCRIPTS ARE A DOCUMENTED LIMITATION, not a gap

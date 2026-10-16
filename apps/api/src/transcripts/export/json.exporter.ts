@@ -57,11 +57,13 @@ import type { Writable } from 'node:stream';
 
 import type { ExportDocument, ExportSegment } from './export-document';
 import {
+  endStream,
+  failStream,
   optionsSchemaFor,
+  writeChunk,
   type ExportOptionField,
   type ExportOptions,
-} from './export-options';
-import { endStream, writeChunk } from './export-stream';
+} from '@marinoscar/platform-api/exports';
 import {
   TranscriptExporterRegistry,
   type TranscriptExporter,
@@ -119,6 +121,20 @@ export class JsonTranscriptExporter implements TranscriptExporter, OnModuleInit 
   }
 
   async render(doc: ExportDocument, options: ExportOptions, out: Writable): Promise<void> {
+    // A failure part-way destroys `out`, so a half-written file never reaches
+    // storage looking complete (the package's writer contract).
+    try {
+      await this.write(doc, options, out);
+    } catch (error) {
+      failStream(out, error);
+
+      throw error;
+    }
+
+    await endStream(out);
+  }
+
+  private async write(doc: ExportDocument, options: ExportOptions, out: Writable): Promise<void> {
     const includeWords = options.includeWords === true;
 
     await writeChunk(out, '{\n  "schema": ' + JSON.stringify(KVOX_TRANSCRIPT_SCHEMA_ID) + ',\n');
@@ -166,8 +182,6 @@ export class JsonTranscriptExporter implements TranscriptExporter, OnModuleInit 
 
     await writeChunk(out, first ? ']\n' : '\n    ]\n');
     await writeChunk(out, '  }\n}\n');
-
-    await endStream(out);
   }
 }
 

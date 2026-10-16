@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { Writable } from 'node:stream';
 
-import { optionsSchemaFor } from '../../export/export-options';
+import { optionsSchemaFor } from '@marinoscar/platform-api/exports';
 import { MarkdownNoteExporter } from './markdown.exporter';
 import { NoteExporterRegistry, type NoteExporter } from './note-exporter.registry';
 import { PdfNoteExporter } from './pdf.exporter';

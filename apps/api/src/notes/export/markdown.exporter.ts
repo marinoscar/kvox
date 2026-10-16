@@ -34,11 +34,13 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Writable } from 'node:stream';
 
 import {
+  endStream,
+  failStream,
   optionsSchemaFor,
+  writeChunk,
   type ExportOptionField,
   type ExportOptions,
-} from '../../export/export-options';
-import { endStream, writeChunk } from '../../export/export-stream';
+} from '@marinoscar/platform-api/exports';
 import {
   provenanceEntries,
   type NoteExportDocument,
@@ -90,7 +92,7 @@ export class MarkdownNoteExporter implements NoteExporter, OnModuleInit {
       // are the same file. Nothing else about the body is altered.
       await writeChunk(out, `${doc.body.replace(/\s+$/, '')}\n`);
     } catch (error) {
-      out.destroy(error instanceof Error ? error : new Error(String(error)));
+      failStream(out, error);
 
       throw error;
     }

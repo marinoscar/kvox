@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // A thin instantiation of the generic `ExporterRegistry<TDoc>` extracted from
-// `transcripts/export/` — see `apps/api/src/export/exporter-registry.ts` for
+// `transcripts/export/` — see `ExporterRegistry` in `@marinoscar/platform-api/exports` for
 // the whole contract (the streams-never-buffers rule, why `format` is
 // permanent, why a duplicate registration warns rather than throws).
 //
@@ -22,7 +22,7 @@
 
 import { Injectable } from '@nestjs/common';
 
-import { ExporterRegistry, type Exporter } from '../../export/exporter-registry';
+import { ExporterRegistry, type Exporter } from '@marinoscar/platform-api/exports';
 import type { NoteExportDocument } from './note-export-document';
 
 /** An exporter that renders a note. See `Exporter<TDoc>` for the contract. */

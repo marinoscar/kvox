@@ -127,7 +127,7 @@ export class NoteObjectsService {
    *
    * The counterpart to `put` for a producer that does not have a Buffer: a
    * `note.export` renderer writes a PDF or a DOCX into `body` as it goes and
-   * the exporter contract (`apps/api/src/export/exporter-registry.ts`) forbids
+   * the exporter contract (`@marinoscar/platform-api/exports`) forbids
    * it from returning one. Cloned from `TranscriptObjectsService.putStream`
    * exactly, including the metering `Transform`, for the reason this file's
    * header already gives about `managed_by`.

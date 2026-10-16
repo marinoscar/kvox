@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // pdfkit, streamed, with the SAME three Noto faces transcript export bundles
-// (`apps/api/src/export/pdf-fonts.ts`) — §8.3 names the fonts and the streaming
+// (`apps/api/src/pdf/pdf-fonts.ts`) — §8.3 names the fonts and the streaming
 // `render(doc, options, out)` contract as the two pieces of infrastructure
 // genuinely shared between transcript and note PDFs, and this file uses both.
 // Not a headless browser (300 MB+ in the image, a sandbox, and a lot of memory
@@ -51,11 +51,12 @@ import PDFDocument from 'pdfkit';
 import { APP_NAME } from '@app/shared';
 
 import {
+  failStream,
   optionsSchemaFor,
   type ExportOptionField,
   type ExportOptions,
-} from '../../export/export-options';
-import { PDF_FONTS, assertFontsPresent, registerExportFonts } from '../../export/pdf-fonts';
+} from '@marinoscar/platform-api/exports';
+import { PDF_FONTS, assertFontsPresent, registerExportFonts } from '../../pdf/pdf-fonts';
 import { parseBody, type MdBlock, type MdSpan } from './markdown-ast';
 import {
   provenanceEntries,
@@ -117,7 +118,7 @@ export class PdfNoteExporter implements NoteExporter, OnModuleInit {
   }
 
   async render(doc: NoteExportDocument, options: ExportOptions, out: Writable): Promise<void> {
-    let finished: Promise<void>;
+    let finished: Promise<void> | undefined;
 
     // ⚠ EVERYTHING THAT CAN THROW IS INSIDE THE `try`, INCLUDING THE MISSING
     // FONTS CHECK AND THE `PDFDocument` CONSTRUCTOR. A throw before `out` was
@@ -162,7 +163,9 @@ export class PdfNoteExporter implements NoteExporter, OnModuleInit {
       decoratePages(pdf, doc, options.includePageNumbers !== false);
       pdf.end();
     } catch (error) {
-      out.destroy(error instanceof Error ? error : new Error(String(error)));
+      // `finished` rejects on that destroy and nobody awaits it past this point.
+      finished?.catch(() => undefined);
+      failStream(out, error);
 
       throw error;
     }

@@ -4,7 +4,7 @@ import {
   hashExportRequest,
   optionsSchemaFor,
   type ExportOptionField,
-} from './export-options';
+} from '@marinoscar/platform-api/exports';
 
 // =============================================================================
 // Export options and the reuse hash (issue #28, epic #19, spec §8.5)

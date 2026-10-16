@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 
-import type { Exporter } from '../../../export/exporter-registry';
+import type { Exporter } from '@marinoscar/platform-api/exports';
 import { buildNoteExportDocument, type NoteExportDocument } from '../note-export-document';
 
 // =============================================================================

@@ -68,10 +68,11 @@ import type { Writable } from 'node:stream';
 import { APP_NAME } from '@app/shared';
 
 import {
+  failStream,
   optionsSchemaFor,
   type ExportOptionField,
   type ExportOptions,
-} from '../../export/export-options';
+} from '@marinoscar/platform-api/exports';
 import { parseBody, type MdBlock, type MdSpan } from './markdown-ast';
 import {
   provenanceEntries,
@@ -127,7 +128,7 @@ export class WordNoteExporter implements NoteExporter, OnModuleInit {
         stream.pipe(out);
       });
     } catch (error) {
-      out.destroy(error instanceof Error ? error : new Error(String(error)));
+      failStream(out, error);
 
       throw error;
     }
