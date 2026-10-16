@@ -3,7 +3,7 @@
 // docs/specs/ontology.md §21.4)
 // =============================================================================
 //
-// PURE, like `notes/generation/note-stream.ts` next door, and for the same
+// PURE, like `@marinoscar/kvox-api/core`'s SSE stream helpers, and for the same
 // reason: every decision the stream makes — "what text has this client not
 // seen?", "which tool steps has it not been told about?", "what does a frame
 // look like?" — is a function of a string or an array, testable without a
@@ -18,7 +18,7 @@
 // rule unchanged: `id:` is the UTF-16 offset into `ask_messages.content` the
 // frame ends at, so resume is `content.slice(Last-Event-ID)` and a reconnect
 // can neither repeat nor skip a character. The text arithmetic is not
-// re-derived here — `NoteStreamCursor`, `toDeltaFrame` and `parseLastEventId`
+// re-derived here — `KvoxStreamCursor`, `toDeltaFrame` and `parseLastEventId`
 // are IMPORTED, so the two streams cannot drift apart.
 //
 // `step` is new: one frame per recorded `tool_calls` entry ("Looked up Acme…").
@@ -31,18 +31,18 @@
 
 import { ASK_ERROR_CLASSES, type AskCitation, type AskToolCall } from '../dto/ask.dto';
 import {
-  NOTE_STREAM_DELTA_EVENT,
-  NOTE_STREAM_DONE_EVENT,
-  NOTE_STREAM_ERROR_EVENT,
-  type NoteStreamDeltaData,
-  type NoteStreamMessage,
-} from '../../notes/generation/note-stream';
+  KVOX_STREAM_DELTA_EVENT,
+  KVOX_STREAM_DONE_EVENT,
+  KVOX_STREAM_ERROR_EVENT,
+  type KvoxStreamDeltaData,
+  type KvoxStreamMessage,
+} from '@marinoscar/kvox-api/core';
 
 /** The four `event:` names. The first three ARE the note stream's values. */
-export const ASK_STREAM_DELTA_EVENT = NOTE_STREAM_DELTA_EVENT;
+export const ASK_STREAM_DELTA_EVENT = KVOX_STREAM_DELTA_EVENT;
 export const ASK_STREAM_STEP_EVENT = 'step';
-export const ASK_STREAM_DONE_EVENT = NOTE_STREAM_DONE_EVENT;
-export const ASK_STREAM_ERROR_EVENT = NOTE_STREAM_ERROR_EVENT;
+export const ASK_STREAM_DONE_EVENT = KVOX_STREAM_DONE_EVENT;
+export const ASK_STREAM_ERROR_EVENT = KVOX_STREAM_ERROR_EVENT;
 
 /**
  * What an `error` frame blames: #376's `ASK_ERROR_CLASSES` plus the WIRE-ONLY
@@ -62,7 +62,7 @@ export const ASK_STREAM_GONE_REASON = 'message_gone';
 export type AskFinishReasonWire = 'stop' | 'step_cap' | 'token_cap' | 'time_cap';
 
 /** `event: delta` — the note stream's shape, unchanged. */
-export type AskStreamDeltaData = NoteStreamDeltaData;
+export type AskStreamDeltaData = KvoxStreamDeltaData;
 
 /** `event: step` — one recorded tool call. Carries no arguments and no duration. */
 export interface AskStreamStepData {
@@ -95,7 +95,7 @@ export interface AskStreamErrorData {
 }
 
 /** One message in the shape `@Sse()` serialises — the note stream's type. */
-export type AskStreamMessage = NoteStreamMessage;
+export type AskStreamMessage = KvoxStreamMessage;
 
 export function toAskStepFrame(data: AskStreamStepData): AskStreamMessage {
   return { type: ASK_STREAM_STEP_EVENT, id: String(data.offset), data };

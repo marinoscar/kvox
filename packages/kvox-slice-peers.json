@@ -33,7 +33,7 @@
   },
   "kvox-api": {
     "ports": {
-      "peers": ["@marinoscar/kvox-contract", "rxjs", "zod"]
+      "peers": ["@marinoscar/kvox-contract", "@nestjs/common", "rxjs", "zod"]
     },
     "core": {
       "peers": [

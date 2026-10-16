@@ -373,6 +373,8 @@ const EXEMPT: Readonly<Record<string, string>> = {
     'a closure returned to the job that calls it; its callers (kg-embed.handler.ts, resolution.service.ts) register above `embedder.embed(`, which this test checks',
   'search/search-query-embedder.service.ts':
     'embeds a search QUERY inside the HTTP request, never inside a job: the provider throttle is a job-queue mechanism',
+  'platform-kvox/ai/platform-kvox-ai.adapter.ts':
+    'the `KVOX_AI` port adapter (#490) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
 };
 
 function walk(dir: string): string[] {

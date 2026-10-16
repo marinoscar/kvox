@@ -379,6 +379,8 @@ module-name/
 └── module-name.controller.spec.ts  # Unit tests
 ```
 
+**Host ports.** The domain is being packaged as `@marinoscar/kvox-api` slices that reach everything outside the domain (AI, object store, jobs, identity, notifications, events, the database, settings, secrets, audit) through ports declared in `@marinoscar/kvox-api/ports`. `src/platform-kvox/` holds the web edition's adapters, one per port over a platform slice, and `PlatformKvoxModule` (global, imported before every domain module; a missing binding stops the boot). It is the only place that names the platform for these ports. Contract, adapters and conformance suite: [specs/kvox-ports.md](specs/kvox-ports.md).
+
 ### 5.3 Frontend Component Structure
 
 ```

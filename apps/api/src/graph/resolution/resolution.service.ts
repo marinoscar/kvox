@@ -35,7 +35,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/editing/speaker-identity';
 import { normalizeForMatch } from '../extraction/extraction-context';

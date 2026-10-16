@@ -1,10 +1,8 @@
-/**
- * Marks the `testing` slice of `@marinoscar/kvox-api`.
- *
- * @remarks
- * Placeholder of the scaffold (issue 5.1). Issue 5.4 adds the in-memory fakes
- * of every port and `describeKvoxPortsConformance`.
- *
- * @stability experimental
- */
-export const KVOX_API_TESTING = 'kvox-api/testing' as const;
+export * from './fake-ai.js';
+export * from './in-memory-object-store.js';
+export * from './fake-jobs.js';
+export * from './fake-identity.js';
+export * from './recording-ports.js';
+export * from './testing-module.js';
+export * from './conformance.js';
+export * from './fake-ports-under-test.js';

@@ -56,7 +56,7 @@ import { APP_SLUG } from '@app/shared';
 import { kvNamespace } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../extraction/precheck';
 import { ProposalStageRegistry } from '../extraction/proposal-stage';

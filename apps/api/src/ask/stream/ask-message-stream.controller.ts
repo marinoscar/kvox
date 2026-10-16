@@ -32,7 +32,7 @@ import type { Observable } from 'rxjs';
 
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { resolveStreamOffset } from '../../notes/generation/note-stream';
+import { resolveStreamOffset } from '@marinoscar/kvox-api/core';
 import { ASK_MESSAGE_NOT_FOUND, AskAccessService } from '../ask-access.service';
 import { AskMessageStreamService } from './ask-message-stream.service';
 import type { AskStreamMessage } from './ask-stream';

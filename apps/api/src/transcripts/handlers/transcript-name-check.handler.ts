@@ -15,7 +15,7 @@ import {
 } from '../../ai-port/ai-token-budget';
 import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { budgetFromReadiness, providerLabelOf, readAiTokenCaps } from '../../notes/generation/ai-readiness';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';
 import { buildTargets, type NameTarget } from '../name-check/candidates';

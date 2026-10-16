@@ -106,9 +106,10 @@ COPY apps/api/prisma.config.ts ./apps/api/
 # beside the config, `prisma generate` below included. Just this file: the
 # rest of scripts/ reaches the production stage by its own COPY further down.
 COPY apps/api/scripts/prisma-env.js ./apps/api/scripts/
-# `@marinoscar/kvox-contract` is selected too, so its devDependencies (TypeScript,
-# Zod, @types/node) exist for the contract build below (issue #488).
-RUN npm ci --workspace=api --workspace=@marinoscar/kvox-contract --include-workspace-root --ignore-scripts
+# `@marinoscar/kvox-contract` and `@marinoscar/kvox-api` are selected too, so
+# their devDependencies (TypeScript, Zod, @types/node) exist for the builds below
+# (issues #488, #490).
+RUN npm ci --workspace=api --workspace=@marinoscar/kvox-contract --workspace=@marinoscar/kvox-api --include-workspace-root --ignore-scripts
 # --ignore-scripts skips Prisma's postinstall, so generate the client
 # explicitly. DATABASE_URL is a build-time placeholder; `generate` reads the
 # schema only and never opens a connection.
@@ -126,7 +127,7 @@ COPY scripts ./scripts
 # The contract package is TypeScript with its output in `dist/`, which
 # .dockerignore drops, so it is built inside the image (issue #488). Without
 # this the image builds green and dies at boot with `Cannot find module`.
-RUN npm run build --workspace=@marinoscar/kvox-contract
+RUN npm run build --workspace=@marinoscar/kvox-contract && npm run build --workspace=@marinoscar/kvox-api
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
 EXPOSE 3000
@@ -141,7 +142,7 @@ COPY tsconfig.base.json ./
 # The contract's build script calls a helper under scripts/.
 COPY scripts ./scripts
 # Build the contract BEFORE the app: the API imports it from `dist/` (issue #488).
-RUN npm run build --workspace=@marinoscar/kvox-contract
+RUN npm run build --workspace=@marinoscar/kvox-contract && npm run build --workspace=@marinoscar/kvox-api
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
 RUN npm run build

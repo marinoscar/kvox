@@ -1,7 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { KG_ENTITY_DIGEST_JOB_TYPE } from '../job-types';
 import * as queries from './brief-queries';
 import { DigestCitationError } from './citation-validation';

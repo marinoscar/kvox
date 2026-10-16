@@ -55,7 +55,7 @@ import { z } from 'zod';
 
 import { AiAuthError } from '../../ai-port/ai-errors';
 import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAiRunResolver } from '../graph-ai-run.service';
 import type { GraphAiRun } from '../graph-ai-run';

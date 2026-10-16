@@ -5,7 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { matchesETag } from '../../transcripts/transcripts.controller';
+import { matchesETag } from '@marinoscar/kvox-api/core';
 import { GraphRdfService, type RdfArtefact } from './graph-rdf.service';
 
 // =============================================================================

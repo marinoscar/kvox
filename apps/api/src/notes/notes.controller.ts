@@ -78,7 +78,7 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { ApiDataResponse } from '../common/decorators/api-data-response.decorator';
-import { matchesETag, versionETag } from '../transcripts/transcripts.controller';
+import { matchesETag, versionETag } from '@marinoscar/kvox-api/core';
 import {
   CreateNoteBodyDto,
   CreateNoteResultDto,

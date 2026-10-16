@@ -89,18 +89,10 @@ export const TRANSCRIPT_PURGE_JOB_TYPE = 'transcript.purge';
 /** The ten-minute reconciliation sweep. Enqueued by a `@Cron`, never run by one. */
 export const TRANSCRIPTS_HOUSEKEEPING_JOB_TYPE = 'transcripts.housekeeping';
 
-/**
- * The shared provider-throttle bucket for every job type that talks to the
- * transcription provider.
- *
- * ⚠ ONE KEY FOR THREE TYPES, ON PURPOSE. Submit, poll and ingest all
- * authenticate as the same account against the same vendor, so they share one
- * rate-limit bucket on the vendor's side. A 429 discovered by `poll` is
- * evidence that `submit` and `ingest` will be throttled too, and registering
- * one key for all three is what lets `ProviderThrottleService` act on that
- * evidence instead of rediscovering it once per type.
- */
-export const TRANSCRIPTION_THROTTLE_KEY = 'transcription-provider';
+// The shared provider-throttle bucket of the transcription provider (one key for submit, poll
+// and ingest, on purpose) moved to `@marinoscar/kvox-api/core` with the per-user AI key (issue
+// #490). Re-exported so every existing importer keeps compiling.
+export { TRANSCRIPTION_THROTTLE_KEY } from '@marinoscar/kvox-api/core';
 
 /**
  * `Job.subject_type` for every transcript-scoped job in this module.

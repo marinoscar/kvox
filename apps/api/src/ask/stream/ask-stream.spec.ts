@@ -1,9 +1,9 @@
 import { ASK_ERROR_CLASSES, type AskToolCall } from '../dto/ask.dto';
 import {
-  NOTE_STREAM_DELTA_EVENT,
-  NOTE_STREAM_DONE_EVENT,
-  NOTE_STREAM_ERROR_EVENT,
-} from '../../notes/generation/note-stream';
+  KVOX_STREAM_DELTA_EVENT,
+  KVOX_STREAM_DONE_EVENT,
+  KVOX_STREAM_ERROR_EVENT,
+} from '@marinoscar/kvox-api/core';
 import {
   ASK_STREAM_CAP_REASON,
   ASK_STREAM_DELTA_EVENT,
@@ -24,8 +24,8 @@ import {
 // The Ask stream's pure contract (issue #379, epic #348)
 // =============================================================================
 //
-// The text arithmetic (`NoteStreamCursor`) is the note stream's and is pinned
-// by `note-stream.spec.ts`; this file pins what Ask ADDS — the event names the
+// The text arithmetic (`KvoxStreamCursor`) is the shared stream helper's and is pinned
+// by `packages/kvox-api/test/sse-stream.spec.ts`; this file pins what Ask ADDS — the event names the
 // web client (#380) compiles in, the `step` frame, the done/error payloads and
 // the `StepCursor` that decides which steps a connection has announced.
 // =============================================================================
@@ -45,9 +45,9 @@ describe('ask stream event names', () => {
   it('reuses the note stream’s delta/done/error values and adds step', () => {
     // `apps/web/src/services/askStream.ts` compiles these exact strings in; a
     // mismatch fails silently, so they are pinned as literals too.
-    expect(ASK_STREAM_DELTA_EVENT).toBe(NOTE_STREAM_DELTA_EVENT);
-    expect(ASK_STREAM_DONE_EVENT).toBe(NOTE_STREAM_DONE_EVENT);
-    expect(ASK_STREAM_ERROR_EVENT).toBe(NOTE_STREAM_ERROR_EVENT);
+    expect(ASK_STREAM_DELTA_EVENT).toBe(KVOX_STREAM_DELTA_EVENT);
+    expect(ASK_STREAM_DONE_EVENT).toBe(KVOX_STREAM_DONE_EVENT);
+    expect(ASK_STREAM_ERROR_EVENT).toBe(KVOX_STREAM_ERROR_EVENT);
     expect([ASK_STREAM_DELTA_EVENT, ASK_STREAM_STEP_EVENT, ASK_STREAM_DONE_EVENT, ASK_STREAM_ERROR_EVENT]).toEqual([
       'delta',
       'step',

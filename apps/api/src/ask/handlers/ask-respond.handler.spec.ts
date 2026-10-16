@@ -3,7 +3,7 @@ import type { Job } from '@prisma/client';
 import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai-port/ai-errors';
 import type { KvoxAiReadiness, KvoxChatEvent, KvoxChatRequest } from '../../ai-port/kvox-ai';
 import { notReadyReadiness, readyReadiness } from '../../ai-port/testing/fake-kvox-ai';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import {
   ASK_ANSWER_HOLD_CHARS,
   ASK_CALL_TIMEOUT_MS,

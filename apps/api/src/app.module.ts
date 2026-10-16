@@ -48,6 +48,7 @@ import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
+import { platformKvoxModule } from './platform-kvox/platform-kvox.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
@@ -230,6 +231,14 @@ import configuration from './config/configuration';
     // This app's Doctor checks (#464): `<slug>.db.extensions` and
     // `<slug>.transcription.configured`, registered with the platform Doctor.
     DoctorChecksModule,
+
+    // The web edition's binding of the host ports in `@marinoscar/kvox-api/ports` (#490, epic
+    // #486): `KVOX_AI`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_IDENTITY`, `KVOX_NOTIFY`,
+    // `KVOX_EVENTS`, `KVOX_PRISMA`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_AUDIT`, one adapter
+    // per port over a platform slice (`platform-kvox/`). Global; BEFORE every domain module
+    // (transcription, transcripts, notes, the graph, Ask, search), so a packaged slice injects a
+    // port without importing anything. A missing binding stops the boot.
+    platformKvoxModule,
 
     // Transcription (#23, epic #19): the provider framework, the AssemblyAI
     // provider, the admin settings surface and the non-admin capability probe.
