@@ -869,16 +869,5 @@ describe('PlatformKvoxAi', () => {
       expect(service.countTokens('a b c d e f g h', 'gpt-5.4')).toBe(8);
       expect(forUser).not.toHaveBeenCalled();
     });
-
-    it('leaves chat to issue #476', () => {
-      expect(() =>
-        build().service.chat({
-          userId: USER,
-          feature: 'graph_agent',
-          messages: [],
-          maxOutputTokens: 1,
-        }),
-      ).toThrow(/#476/);
-    });
   });
 });

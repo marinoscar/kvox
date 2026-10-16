@@ -21,7 +21,7 @@
 
 import { z } from 'zod';
 
-import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
+import type { JsonSchema } from '../../ai-port/kvox-ai';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { HANDLE_KIND_NOUNS, handleKindOf, type HandleKind, type HandleRegistry, type HandleTarget } from './handle-registry';
 

@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
-import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
+import { assertStrictJsonSchema } from '../../ai-port/strict-json-schema';
 import { EntityBriefService } from '../../graph/brief/entity-brief.service';
 import { EntityDigestEnqueuer } from '../../graph/brief/entity-digest.enqueuer';
 import { GraphEntitiesService } from '../../graph/graph-entities.service';

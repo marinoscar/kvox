@@ -6,9 +6,10 @@
 // `ask:eval` runner would) under one throwaway user, then drives the REAL
 // `AskRespondHandler` — real toolset, real Prisma, real `HandleRegistry` and
 // citation mapper — through 6 representative questions with a SCRIPTED fake
-// provider (`fake-provider.ts`): a fixed sequence of tool calls per question,
-// using handles the real tools actually returned, then a canned answer that
-// cites them — plus one answer that cites an unissued `[^ev99]`.
+// platform stream (`fake-provider.ts`, `FakeAskStream`): a fixed sequence of
+// tool calls per question, using handles the real tools actually returned, then a
+// canned answer that cites them — plus one answer that cites an unissued `[^ev99]`.
+// The fake sits UNDER `PlatformKvoxAi.chat()`, so the event mapping runs too (#476).
 //
 // This is the harness's own self-test, the same role `kg:eval --predictions
 // gold` plays for extraction (#362): it proves the seeder, the tools, the
@@ -26,7 +27,6 @@ import type { Job, PrismaClient } from '@prisma/client';
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { toAskMessage } from '../../src/ask/ask-message.mapper';
 import { AskMessagesService } from '../../src/ask/ask-messages.service';
-import { readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
 import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
 import { AskToolset } from '../../src/ask/tools/ask-toolset';
 import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
@@ -49,7 +49,7 @@ import { TranscriptAccessService } from '../../src/transcripts/transcript-access
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { loadGoldenSet } from '../../scripts/kg-eval/load';
-import { done, FakeAskProvider, text, toolCall } from '../../scripts/ask-eval/fake-provider';
+import { createFakeAskPort, done, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
 import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
 import { JobsService } from '@marinoscar/platform-api/jobs';
@@ -60,12 +60,12 @@ const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec'
 /** Marcus Webb's `sensitive` PersonFact (m13) — must never appear in a tool result or an answer. */
 const SENSITIVE_TEXT = 'shellfish allergy';
 
-describeWithDb('ask:eval replay (real Postgres, scripted provider, no model)', () => {
+describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no model)', () => {
   let prisma: PrismaClient;
   let seeded: SeededGraph;
   let handler: AskRespondHandler;
   let service: AskMessagesService;
-  let provider: FakeAskProvider;
+  let provider: FakeAskStream;
   let roleId: string;
   /** Every `messages` array sent to the provider, across EVERY question this suite asks — for the leak gate. */
   const allCapturedPrompts: string[] = [];
@@ -116,30 +116,17 @@ describeWithDb('ask:eval replay (real Postgres, scripted provider, no model)', (
       preferences,
     );
 
-    provider = new FakeAskProvider();
-    const resolver = {
-      resolve: async () => ({
-        providerId: 'openai',
-        provider,
-        model: 'gpt-replay',
-        reasoningEffort: 'low',
-        countTokens: (t: string) => Math.ceil(t.length / 4),
-        descriptor: { id: 'gpt-replay', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
-        modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
-        policy: { providers: {}, maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 },
-        source: 'task',
-        keyConfigured: true,
-      }),
-    };
+    provider = new FakeAskStream();
     const jobs = new JobsService(p);
-    // The message service asks the AI port only for readiness (the chat loop below is #476).
-    const ai = { readiness: async () => readyReadiness({ model: 'gpt-replay', reasoningEffort: 'low', source: 'task' }) };
-    service = new AskMessagesService(p, new AskAccessService(p), ai as never, jobs);
+    // Readiness is scripted; `chat()` and everything under it is production code
+    // over the fake platform stream.
+    const port = createFakeAskPort(provider);
+    service = new AskMessagesService(p, new AskAccessService(p), port.ai, jobs);
     handler = new AskRespondHandler(
       { register: () => undefined } as never,
       p,
-      resolver as never,
-      { getSecret: async () => 'sk-replay' } as never,
+      port.ai,
+      port.settings as never,
       { registerProviderKey: () => undefined } as never,
       toolset,
     );

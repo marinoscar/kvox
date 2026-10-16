@@ -5,7 +5,8 @@
 // Excluded from `npm test`; run by `npm run test:db`. The real
 // `AskMessagesService` (transaction, `enqueueWithin`, the partial unique index)
 // and the real `AskRespondHandler` over the REAL toolset against real rows —
-// only the AI provider is a scripted fake and the resolver a stub around it.
+// only the platform's `stream()` is a scripted fake (`FakeAskStream`); the port's
+// `chat()` mapping above it is production code (#476).
 //
 //   - a full turn: two tool steps, `tool_calls`, validated `citations`
 //     (an `itm` resolved to its evidence with `via`, an `ent`, an invented
@@ -14,16 +15,18 @@
 //   - a `sensitive` PersonFact never appears in any request sent to the provider;
 //   - two concurrent POSTs → exactly one 202 and one 409 `ask_turn_running`,
 //     decided by `ask_messages_one_running_turn_uniq_idx`;
-//   - a conversation deleted before the job runs → the job returns, no rows.
+//   - a conversation deleted before the job runs → the job returns, no rows;
+//   - the caps end `step_cap` / `token_cap`; text before a tool call never reaches
+//     `content`; a 429 before text resets the row to `pending` and rethrows, after
+//     flushed text it fails `rate_limit`; every call is made for the `graph_agent`
+//     feature under the job (the platform records the usage row from that scope).
 // =============================================================================
 
 import { ConflictException } from '@nestjs/common';
 import type { Job, PrismaClient } from '@prisma/client';
 
-import type { AiChatEvent, AiChatRequest } from '../../src/ai/providers/ai-provider.interface';
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { AskMessagesService } from '../../src/ask/ask-messages.service';
-import { readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
 import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
 import { AskToolset } from '../../src/ask/tools/ask-toolset';
 import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
@@ -46,8 +49,10 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { JobsService } from '@marinoscar/platform-api/jobs';
+import { JobsService, RateLimitError } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createFakeAskPort, done, failure, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
+import { ASK_MAX_TOOL_STEPS } from '../../src/ask/ask-limits';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-respond.db.spec');
 
@@ -59,34 +64,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
   let toolset: AskToolset;
   let roleId: string;
 
-  const requests: AiChatRequest[] = [];
-  let scripts: AiChatEvent[][] = [];
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    settingsSchema: { safeParse: () => ({ success: true, data: {} }) },
-    chat: (_ctx: unknown, request: AiChatRequest) => {
-      requests.push(JSON.parse(JSON.stringify(request)) as AiChatRequest);
-      const events = scripts.shift() ?? [];
-      return (async function* () {
-        for (const e of events) yield e;
-      })();
-    },
-  };
-  const resolver = {
-    resolve: async () => ({
-      providerId: 'openai',
-      provider,
-      model: 'gpt-test',
-      reasoningEffort: 'low',
-      countTokens: (t: string) => Math.ceil(t.length / 4),
-      descriptor: { id: 'gpt-test', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
-      modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
-      policy: { providers: {}, maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 },
-      source: 'task',
-      keyConfigured: true,
-    }),
-  };
+  const stream = new FakeAskStream();
 
   let service: AskMessagesService;
   let handler: AskRespondHandler;
@@ -124,14 +102,14 @@ describeWithDb('ask.respond (real Postgres)', () => {
       preferences,
     );
     const jobs = new JobsService(p);
-    // The message service asks the AI port only for readiness (the chat loop below is #476).
-    const ai = { readiness: async () => readyReadiness({ model: 'gpt-test', reasoningEffort: 'low', source: 'task' }) };
-    service = new AskMessagesService(p, new AskAccessService(p), ai as never, jobs);
+    // Readiness is scripted; `chat()` and everything under it is production code over the fake stream.
+    const port = createFakeAskPort(stream, { model: 'gpt-test' });
+    service = new AskMessagesService(p, new AskAccessService(p), port.ai, jobs);
     handler = new AskRespondHandler(
       { register: () => undefined } as never,
       p,
-      resolver as never,
-      { getSecret: async () => 'sk-test' } as never,
+      port.ai,
+      port.settings as never,
       { registerProviderKey: () => undefined } as never,
       toolset,
     );
@@ -152,8 +130,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
   });
 
   beforeEach(() => {
-    requests.length = 0;
-    scripts = [];
+    stream.reset();
   });
 
   afterEach(async () => {
@@ -194,22 +171,20 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const job = await jobFor(posted.assistantMessage.id);
     expect(job).toMatchObject({ type: 'ask.respond', priority: -10, subjectType: 'ask_message', subjectId: posted.assistantMessage.id });
 
-    scripts = [
-      [
-        { kind: 'delta', text: 'Searching.' },
-        { kind: 'tool_call', id: 'c1', name: 'search', argumentsJson: '{"query":"Sarah Chen","scope":"entities","limit":null}' },
-        { kind: 'done', finishReason: 'tool_calls', usage: { promptTokens: 100, completionTokens: 10 } },
-      ],
-      [
-        { kind: 'tool_call', id: 'c2', name: 'timeline', argumentsJson: '{"entity":"ent1","asOf":null,"kinds":null,"limit":null}' },
-        { kind: 'done', finishReason: 'tool_calls', usage: { promptTokens: 200, completionTokens: 10 } },
-      ],
-      [
-        { kind: 'delta', text: 'You decided to hire Sarah Chen as design lead.[^itm1] She is in your graph.[^ent1] ' },
-        { kind: 'delta', text: 'Nothing else.[^ev99]' },
-        { kind: 'done', finishReason: 'stop', usage: { promptTokens: 300, completionTokens: 30 } },
-      ],
-    ];
+    stream.enqueue([
+      text('Searching.'),
+      toolCall('c1', 'search', '{"query":"Sarah Chen","scope":"entities","limit":null}'),
+      done('tool_calls', 100, 10),
+    ]);
+    stream.enqueue([
+      toolCall('c2', 'timeline', '{"entity":"ent1","asOf":null,"kinds":null,"limit":null}'),
+      done('tool_calls', 200, 10),
+    ]);
+    stream.enqueue([
+      text('You decided to hire Sarah Chen as design lead.[^itm1] She is in your graph.[^ent1] '),
+      text('Nothing else.[^ev99]'),
+      done('stop', 300, 30),
+    ]);
     await handler.process(job);
 
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
@@ -239,9 +214,21 @@ describeWithDb('ask.respond (real Postgres)', () => {
     expect(citations[0].id).toBe(itemEvidence.id);
 
     // §15: a sensitive PersonFact never left the deployment.
-    expect(requests).toHaveLength(3);
-    expect(JSON.stringify(requests)).not.toContain('Health detail');
-    expect(JSON.stringify(requests)).not.toMatch(new RegExp(sarah));
+    expect(stream.requests).toHaveLength(3);
+    expect(JSON.stringify(stream.requests)).not.toContain('Health detail');
+    expect(JSON.stringify(stream.requests)).not.toMatch(new RegExp(sarah));
+
+    // One platform call per model round trip, each for the graph agent under THIS job
+    // (the platform records one usage row per call from that scope).
+    expect(stream.scopes).toHaveLength(3);
+    for (const scope of stream.scopes) {
+      expect(scope).toMatchObject({ userId: user.id, feature: 'graph_agent', jobId: job.id });
+    }
+    // The tool round trip: the second call replays the first call and its result.
+    const second = JSON.stringify(stream.requests[1].input);
+    expect(second).toContain('"type":"function_call"');
+    expect(second).toContain('"type":"function_call_output"');
+    expect(stream.requests.every((r) => r.tools.length === 7)).toBe(true);
 
     const conv2 = await prisma.askConversation.findUniqueOrThrow({ where: { id: conv.id } });
     expect(conv2.title).toBe('What did we decide about Sarah Chen?');
@@ -276,7 +263,81 @@ describeWithDb('ask.respond (real Postgres)', () => {
     await prisma.askConversation.delete({ where: { id: conv.id } });
 
     await expect(handler.process(job)).resolves.toBeUndefined();
-    expect(requests).toHaveLength(0);
+    expect(stream.requests).toHaveLength(0);
     expect(await prisma.askMessage.count({ where: { id: posted.assistantMessage.id } })).toBe(0);
+  });
+
+  /** Posts a question for a fresh owner and returns what a cap/limit scenario needs. */
+  async function post(suffix: string, content = 'What is going on?') {
+    const { user } = await owner(suffix);
+    const conv = await conversation(user.id);
+    const posted = await service.post(user.id, conv.id, { content });
+    return { user, id: posted.assistantMessage.id, job: await jobFor(posted.assistantMessage.id) };
+  }
+
+  const ANSWER = 'Nothing is recorded about that yet, so there is nothing to report on this question.';
+
+  it('keeps text emitted before a tool call out of content (the hold)', async () => {
+    const { id, job } = await post('hold');
+    stream.enqueue([text('Let me look that up for you'), text(' right away…'), toolCall('c1', 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
+    stream.enqueue([text(ANSWER), done('stop')]);
+    await handler.process(job);
+
+    const row = await prisma.askMessage.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ status: 'complete', finishReason: 'stop', content: ANSWER });
+    expect(row.content).not.toContain('Let me look');
+  });
+
+  it(`ends step_cap after ${ASK_MAX_TOOL_STEPS} tool steps: the next call is forced with toolChoice none`, async () => {
+    const { id, job } = await post('stepcap');
+    for (let i = 0; i < ASK_MAX_TOOL_STEPS; i += 1) {
+      stream.enqueue([toolCall(`c${i}`, 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
+    }
+    stream.enqueue([text(ANSWER), done('stop')]);
+    await handler.process(job);
+
+    const row = await prisma.askMessage.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ status: 'complete', finishReason: 'step_cap', content: ANSWER });
+    expect(stream.requests).toHaveLength(ASK_MAX_TOOL_STEPS + 1);
+    expect(stream.requests[ASK_MAX_TOOL_STEPS].toolChoice).toBe('none');
+    expect(stream.requests[0].toolChoice).toBe('auto');
+  });
+
+  it('ends token_cap when the answer stops on length', async () => {
+    const { id, job } = await post('tokencap');
+    stream.enqueue([text(ANSWER), done('length')]);
+    await handler.process(job);
+
+    expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'complete',
+      finishReason: 'token_cap',
+      content: ANSWER,
+    });
+  });
+
+  it('a 429 before any text resets the row to pending and rethrows (no attempt charged)', async () => {
+    const { id, job } = await post('defer');
+    stream.enqueue([failure('AI_RATE_LIMITED', 'slow down')]);
+
+    await expect(handler.process(job)).rejects.toBeInstanceOf(RateLimitError);
+    expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'pending',
+      content: '',
+      toolCalls: [],
+    });
+  });
+
+  it('a 429 after flushed text fails the turn rate_limit and keeps the text', async () => {
+    const { id, job } = await post('afterText');
+    const long = 'Part of an answer. '.repeat(30);
+    stream.enqueue([text(long), toolCall('c1', 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
+    stream.enqueue([failure('AI_RATE_LIMITED', 'slow down')]);
+
+    await expect(handler.process(job)).resolves.toBeUndefined();
+    expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      status: 'failed',
+      errorClass: 'rate_limit',
+      content: long,
+    });
   });
 });

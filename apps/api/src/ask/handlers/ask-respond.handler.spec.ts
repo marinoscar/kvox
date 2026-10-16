@@ -1,11 +1,12 @@
-import { ConflictException } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai/ai-errors';
-import type { AiChatEvent, AiChatRequest } from '../../ai/providers/ai-provider.interface';
+import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError } from '../../ai-port/ai-errors';
+import type { KvoxAiReadiness, KvoxChatEvent, KvoxChatRequest } from '../../ai-port/kvox-ai';
+import { notReadyReadiness, readyReadiness } from '../../ai-port/testing/fake-kvox-ai';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import {
   ASK_ANSWER_HOLD_CHARS,
+  ASK_CALL_TIMEOUT_MS,
   ASK_MAX_TOOL_CALLS_PER_STEP,
   ASK_MAX_TOOL_STEPS,
   ASK_RESPOND_MAX_RUNTIME_MS,
@@ -18,8 +19,9 @@ import { AskRespondHandler, recordedArguments, TOO_MANY_TOOL_CALLS_ERROR } from 
 import { RateLimitError } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
-// `ask.respond` with every collaborator mocked and a SCRIPTED `chat()`: each
-// model call replays one array of events, and every request is captured, so
+// `ask.respond` with every collaborator mocked and a SCRIPTED `KvoxAi.chat()`
+// (the `KVOX_AI` port, #476): each model call replays one array of events, and
+// every request is captured, so
 // the loop, the caps, the hold rule and the append-only buffer are asserted
 // exactly (issue #378).
 // =============================================================================
@@ -31,15 +33,16 @@ const QUESTION_ID = '44444444-4444-4444-8444-444444444444';
 const ENTITY = '55555555-5555-4555-8555-555555555555';
 const EVIDENCE = '66666666-6666-4666-8666-666666666666';
 
-type Script = AiChatEvent[] | ((request: AiChatRequest) => AiChatEvent[]) | Error;
+type Script = KvoxChatEvent[] | ((request: KvoxChatRequest) => KvoxChatEvent[]) | Error;
 
-const done = (finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' = 'stop', p = 10, c = 5): AiChatEvent => ({
+const done = (finishReason: 'stop' | 'length' | 'tool_calls' | 'content_filter' = 'stop', p = 10, c = 5): KvoxChatEvent => ({
   kind: 'done',
   finishReason,
-  usage: { promptTokens: p, completionTokens: c },
+  model: 'gpt-test',
+  usage: { inputTokens: p, outputTokens: c },
 });
-const text = (t: string): AiChatEvent => ({ kind: 'delta', text: t });
-const call = (id: string, name = 'search', args = '{"query":"acme"}'): AiChatEvent => ({
+const text = (t: string): KvoxChatEvent => ({ kind: 'delta', text: t });
+const call = (id: string, name = 'search', args = '{"query":"acme"}'): KvoxChatEvent => ({
   kind: 'tool_call',
   id,
   name,
@@ -67,8 +70,9 @@ interface SetupOptions {
   scripts?: Script[];
   status?: string;
   row?: unknown;
-  resolve?: jest.Mock;
-  apiKey?: string | null;
+  /** The readiness the port answers with; a refusal for a policy that changed since the request. */
+  readiness?: KvoxAiReadiness;
+  requestTimeoutMs?: number;
   permissions?: string[];
   scopeEntityId?: string | null;
   scopeEntity?: unknown;
@@ -78,11 +82,11 @@ interface SetupOptions {
 }
 
 function setup(opts: SetupOptions = {}) {
-  const requests: AiChatRequest[] = [];
+  const requests: KvoxChatRequest[] = [];
   const scripts = [...(opts.scripts ?? [[text(LONG), done()]])];
-  const chat = jest.fn((_ctx: unknown, request: AiChatRequest) => {
+  const chat = jest.fn((request: KvoxChatRequest) => {
     // Deep-copy: the handler keeps appending to its own array.
-    requests.push(JSON.parse(JSON.stringify(request)) as AiChatRequest);
+    requests.push(JSON.parse(JSON.stringify(request)) as KvoxChatRequest);
     const script = scripts.shift() ?? [text('Fallback answer that is long enough to be released as text.'), done()];
     return (async function* () {
       if (script instanceof Error) throw script;
@@ -94,27 +98,23 @@ function setup(opts: SetupOptions = {}) {
     })();
   });
 
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    chat,
-    settingsSchema: { safeParse: () => ({ success: true, data: {} }) },
-  };
-  const resolver = {
-    resolve:
-      opts.resolve ??
-      jest.fn().mockResolvedValue({
-        providerId: 'openai',
-        provider,
+  const readiness = jest.fn().mockResolvedValue(
+    opts.readiness ??
+      readyReadiness({
         model: 'gpt-test',
-        reasoningEffort: 'low',
-        countTokens: (t: string) => Math.ceil(t.length / 4),
-        descriptor: { id: 'gpt-test', contextWindowTokens: opts.contextWindowTokens ?? 128_000, maxOutputTokens: 16_000 },
-        modelLimits: { contextWindowTokens: opts.contextWindowTokens ?? 128_000, maxOutputTokens: 16_000 },
-        policy: { providers: {}, maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 },
         source: 'task',
-        keyConfigured: true,
+        reasoningEffort: 'low',
+        contextWindowTokens: opts.contextWindowTokens ?? 128_000,
+        maxOutputTokens: 16_000,
       }),
+  );
+  const ai = { readiness, chat, countTokens: (t: string) => Math.ceil(t.length / 4) };
+  const settings = {
+    get: jest.fn().mockResolvedValue({
+      maxInputTokens: 100_000,
+      maxOutputTokens: 16_000,
+      requestTimeoutMs: opts.requestTimeoutMs ?? 120_000,
+    }),
   };
 
   const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
@@ -190,15 +190,14 @@ function setup(opts: SetupOptions = {}) {
       })
     ) as jest.Mock,
   };
-  const credentials = { getSecret: jest.fn().mockResolvedValue(opts.apiKey === undefined ? 'sk-user' : opts.apiKey) };
   const throttle = { registerProviderKey: jest.fn() };
   const registry = { register: jest.fn() };
 
   const handler = new AskRespondHandler(
     registry as never,
     prisma as never,
-    resolver as never,
-    credentials as never,
+    ai as never,
+    settings as never,
     throttle as never,
     toolset as never,
   );
@@ -211,7 +210,7 @@ function setup(opts: SetupOptions = {}) {
   const final = () => writes[writes.length - 1].data;
   const contentWrites = () => writes.map((w) => w.data.content).filter((c): c is string => typeof c === 'string');
 
-  return { handler, prisma, resolver, toolset, chat, requests, writes, final, contentWrites, throttle, credentials, registry, advance, conversationWrites, handles };
+  return { handler, prisma, readiness, toolset, chat, requests, writes, final, contentWrites, throttle, registry, advance, conversationWrites, handles };
 }
 
 describe('AskRespondHandler (#378)', () => {
@@ -259,6 +258,14 @@ describe('AskRespondHandler (#378)', () => {
       expect(t.conversationWrites).toEqual([{ where: { id: CONV }, data: { updatedAt: expect.any(Date) } }]);
       expect(t.requests[0].toolChoice).toBe('auto');
       expect(t.requests[0].reasoningEffort).toBe('low');
+      // Every call is made for the graph agent under THIS job: the platform records its usage row from them.
+      expect(t.requests[0]).toMatchObject({
+        userId: USER,
+        feature: 'graph_agent',
+        jobId: 'job-1',
+        model: 'gpt-test',
+        timeoutMs: ASK_CALL_TIMEOUT_MS,
+      });
       expect(t.requests[0].messages[0].role).toBe('system');
       expect(t.requests[0].messages[t.requests[0].messages.length - 1]).toEqual({
         role: 'user',
@@ -333,7 +340,7 @@ describe('AskRespondHandler (#378)', () => {
     });
 
     it('caps tool steps at 8: the 9th call is forced with toolChoice none and ends step_cap', async () => {
-      const toolStep = (i: number): AiChatEvent[] => [call(`c${i}`), done('tool_calls')];
+      const toolStep = (i: number): KvoxChatEvent[] => [call(`c${i}`), done('tool_calls')];
       const t = setup({
         scripts: [...Array.from({ length: ASK_MAX_TOOL_STEPS }, (_, i) => toolStep(i)), [text(LONG), done()]],
       });
@@ -454,10 +461,26 @@ describe('AskRespondHandler (#378)', () => {
       expect(t.throttle.registerProviderKey.mock.invocationCallOrder[0]).toBeLessThan(t.chat.mock.invocationCallOrder[0]);
     });
 
-    it('re-validates the payload model with the graph.agent task', async () => {
+    it('re-validates the payload model with the graph_agent readiness', async () => {
       const t = setup();
       await t.handler.process(job(payload({ model: 'gpt-override' })));
-      expect(t.resolver.resolve).toHaveBeenCalledWith(USER, 'graph.agent', 'gpt-override');
+      expect(t.readiness).toHaveBeenCalledWith(USER, 'graph_agent', 'gpt-override');
+    });
+
+    it('never asks for more time than the deployment allows', async () => {
+      const t = setup({ requestTimeoutMs: 30_000 });
+      await t.handler.process(job());
+      expect(t.requests[0].timeoutMs).toBe(30_000);
+    });
+
+    it('makes one chat call per model round trip, each with the same job and feature', async () => {
+      const t = setup({ scripts: [[call('c1'), done('tool_calls')], [text(LONG), done()]] });
+      await t.handler.process(job());
+      expect(t.chat).toHaveBeenCalledTimes(2);
+      expect(t.requests.map((r) => [r.feature, r.jobId])).toEqual([
+        ['graph_agent', 'job-1'],
+        ['graph_agent', 'job-1'],
+      ]);
     });
 
     it('joins a later call’s answer to earlier streamed text on a new paragraph', async () => {
@@ -531,7 +554,7 @@ describe('AskRespondHandler (#378)', () => {
     });
 
     it('a missing key fails auth without calling the provider', async () => {
-      const t = setup({ apiKey: null });
+      const t = setup({ readiness: notReadyReadiness('ai_key_missing', { model: 'gpt-test' }) });
       await t.handler.process(job());
       expect(t.chat).not.toHaveBeenCalled();
       expect(t.final()).toMatchObject({ status: 'failed', errorClass: 'auth' });
@@ -540,11 +563,13 @@ describe('AskRespondHandler (#378)', () => {
     it.each([
       ['ai_key_missing', 'auth'],
       ['graph_disabled', 'other'],
+      ['ai_not_configured', 'other'],
+      ['model_not_permitted', 'other'],
       ['model_lacks_capability', 'other'],
-    ])('a resolver 409 %s at run time fails %s and returns', async (reason, errorClass) => {
-      const resolve = jest.fn().mockRejectedValue(new ConflictException({ message: 'no', details: { reason } }));
-      const t = setup({ resolve });
+    ] as const)('a readiness refusal %s at run time fails %s and returns', async (reason, errorClass) => {
+      const t = setup({ readiness: notReadyReadiness(reason, { model: 'gpt-test' }) });
       await expect(t.handler.process(job())).resolves.toBeUndefined();
+      expect(t.chat).not.toHaveBeenCalled();
       expect(t.final()).toMatchObject({ status: 'failed', errorClass });
     });
 
