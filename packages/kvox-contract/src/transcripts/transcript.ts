@@ -1,0 +1,615 @@
+// =============================================================================
+// Transcript request and response shapes (issue #25, epic #19)
+// =============================================================================
+//
+// ZOD, NOT class-validator, and that is not a style preference. `app.module.ts`
+// registers `ZodValidationPipe` as this application's single global `APP_PIPE`
+// and never registers Nest's `ValidationPipe`, so a `class-validator` decorator
+// on a DTO here would be inert metadata: the body would reach the controller
+// COMPLETELY UNVALIDATED while looking validated. `createZodDto` publishes the
+// same schema to OpenAPI, so one definition serves the runtime check and the
+// documentation at once — there is no second place for the two to disagree.
+//
+// -----------------------------------------------------------------------------
+// WHAT IS DELIBERATELY NOT IN A RESPONSE
+// -----------------------------------------------------------------------------
+//
+//   • `provider_job_id`. The vendor's own handle for this job. It is of no use
+//     to a client, and publishing it hands anybody who can read a transcript a
+//     stable identifier in a third party's system.
+//   • `source_object_id` / `raw_result_object_id`. Storage ids for objects the
+//     generic endpoints refuse to serve anyway (`managed_by`, §9.3). The one
+//     object a client legitimately needs is reached through
+//     `GET /:id/audio`, which signs a URL rather than naming a row.
+//   • `provider_options`. It carries what was asked for, not what the user
+//     needs to see; `language` and `speakersExpected` are surfaced as their own
+//     fields where they matter.
+// =============================================================================
+
+import { z } from 'zod';
+import {
+  MAX_KEYTERM_LENGTH,
+  MAX_KEYTERM_WORDS,
+  MAX_TRANSCRIPT_KEYTERMS,
+  keytermWordCount,
+  normalizeKeyterms,
+} from '../transcription/index.js';
+
+/**
+ * `transcripts.status` — the top-level lifecycle (spec §1.1).
+ *
+ * @stability experimental
+ */
+export const TRANSCRIPT_STATUSES = [
+  'uploading',
+  'processing',
+  'ready',
+  'failed',
+  'deleting',
+] as const;
+
+/**
+ * `transcription_status` — the provider round trip (spec §1.2).
+ *
+ * @stability experimental
+ */
+export const TRANSCRIPTION_STATUSES = [
+  'waiting_input',
+  'queued',
+  'submitting',
+  'submitted',
+  'processing',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/**
+ * `playback_status` — the transcode sub-pipeline (spec §1.3).
+ *
+ * @stability experimental
+ */
+export const PLAYBACK_STATUSES = [
+  'pending',
+  'processing',
+  'ready',
+  'failed',
+  'not_needed',
+] as const;
+
+/**
+ * How the caller reaches this transcript.
+ *
+ * @stability experimental
+ */
+export const TRANSCRIPT_ACCESS_ROLES = ['owner', 'editor', 'viewer'] as const;
+
+/**
+ * Longest title this application will store.
+ *
+ * @stability experimental
+ */
+export const MAX_TITLE_LENGTH = 200;
+
+// -----------------------------------------------------------------------------
+// Create
+// -----------------------------------------------------------------------------
+
+/**
+ * The file the browser is about to upload.
+ *
+ * ⚠ `size` IS THE CLIENT'S CLAIM, and every check in `POST /api/transcripts`
+ * is made against it. That is not a trust decision — it is the only number
+ * available before a single byte has moved, and refusing a 12 GB file before
+ * the upload starts is the entire value of checking here. The REAL size is
+ * enforced again when the multipart upload completes, where the bytes actually
+ * exist; a client that lies here gets a rejected upload rather than a
+ * transcription job it should not have had.
+ *
+ * @stability experimental
+ */
+export const transcriptSourceSchema = z.object({
+  /** Original filename, used for the storage key's extension and the title. */
+  name: z.string().trim().min(1).max(512),
+  /** Byte length, as the browser reports it. See the note above. */
+  size: z.number().int().positive(),
+  /**
+   * The browser's content type, which is frequently wrong or absent for audio.
+   * Optional on purpose: `resolveMimeType` falls back to the extension, which
+   * is the ordinary case for `.m4a` and `.amr` on several mobile platforms.
+   */
+  mimeType: z.string().trim().max(255).optional(),
+});
+
+/**
+ * The keyterms list: normalised first (`normalizeKeyterms`), then held to this
+ * API's limits. Each violation is a 400 naming the offending term, never a
+ * silent truncation — the user typed these names deliberately, and one that
+ * quietly vanished would be a transcript that misspells it with nothing to say
+ * why.
+ *
+ * @stability experimental
+ */
+export const keytermsSchema = z
+  .array(z.string().max(1000))
+  .max(1000)
+  .transform((terms) => normalizeKeyterms(terms))
+  .superRefine((terms, ctx) => {
+    if (terms.length > MAX_TRANSCRIPT_KEYTERMS) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${MAX_TRANSCRIPT_KEYTERMS} keyterms are accepted; ${terms.length} were given.`,
+      });
+    }
+
+    terms.forEach((term, index) => {
+      if (term.length > MAX_KEYTERM_LENGTH) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message: `Keyterm "${term.slice(0, 40)}…" is longer than ${MAX_KEYTERM_LENGTH} characters.`,
+        });
+      }
+
+      if (keytermWordCount(term) > MAX_KEYTERM_WORDS) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message: `Keyterm "${term}" has more than ${MAX_KEYTERM_WORDS} words; use a shorter phrase.`,
+        });
+      }
+    });
+  })
+  .describe(
+    `Names and terms to expect in the recording (#327): at most ${MAX_TRANSCRIPT_KEYTERMS}, each at most ${MAX_KEYTERM_LENGTH} characters and ${MAX_KEYTERM_WORDS} words. Trimmed, blanks dropped and duplicates (case-insensitive) removed before the limits apply. A hint to the provider, never a constraint; ignored by a provider that does not support it.`,
+  );
+
+/**
+ * Zod schema for the create transcript wire shape.
+ *
+ * @stability experimental
+ */
+export const createTranscriptSchema = z.object({
+  /** Defaults to the source filename when omitted. */
+  title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional(),
+  /**
+   * Force a language rather than letting the provider detect one. Omitted or
+   * null means "detect", which is what the provider is asked to do.
+   */
+  language: z.string().trim().min(2).max(16).nullable().optional(),
+  /**
+   * How many speakers to expect. A HINT the provider may bias diarization
+   * with, never a constraint, and ignored entirely by a provider whose
+   * `speakersExpectedHint` capability is false.
+   */
+  speakersExpected: z.number().int().min(1).max(50).nullable().optional(),
+  /**
+   * Names and domain terms the user expects in the recording (#327), fed
+   * forward to the provider as a recognition HINT. Trimmed, empties dropped,
+   * de-duplicated case-insensitively BEFORE the limits are checked — so a list
+   * padded with blanks or repeats is judged on what it actually says. Stored
+   * whatever the active provider supports; forwarded only to one whose
+   * `keyterms` capability is non-null (see `GET /api/transcription/config`).
+   */
+  keyterms: keytermsSchema.optional(),
+  source: transcriptSourceSchema,
+});
+
+/**
+ * The parsed shape of {@link createTranscriptSchema}.
+ *
+ * @stability experimental
+ */
+export type CreateTranscriptDto = z.infer<typeof createTranscriptSchema>;
+
+// -----------------------------------------------------------------------------
+// Read
+// -----------------------------------------------------------------------------
+
+/**
+ * One speaker, as every read surface reports them.
+ *
+ * @stability experimental
+ */
+export const transcriptSpeakerSchema = z.object({
+  id: z.string(),
+  /** The provider's own label (`"A"`), or null for a user-created speaker. */
+  label: z.string().nullable(),
+  displayName: z.string(),
+  /** Stable index into the client's speaker palette. */
+  colorIndex: z.number().int(),
+  /** Per-entity optimistic-concurrency counter (spec §5). */
+  rev: z.number().int(),
+});
+
+/**
+ * One word timing. Terse keys, because a long transcript has millions.
+ *
+ * @stability experimental
+ */
+export const transcriptWordSchema = z.object({
+  /** The word itself. */
+  t: z.string(),
+  /** Start, milliseconds from the beginning of the media. */
+  s: z.number(),
+  /** End, milliseconds from the beginning of the media. */
+  e: z.number(),
+  /** Provider confidence 0..1, or null when it reported none. */
+  c: z.number().nullable(),
+});
+
+/**
+ * One segment, WITHOUT its words.
+ *
+ * The compact shape `GET /:id/segments` returns. Word timings are excluded
+ * deliberately and are fetched per time window from `GET /:id/words`: a
+ * six-hour recording's word arrays are the single largest thing in this
+ * schema, and a segment list that carried them would be tens of megabytes for
+ * a view that renders text.
+ *
+ * @stability experimental
+ */
+export const transcriptSegmentSchema = z.object({
+  id: z.string(),
+  speakerId: z.string(),
+  startMs: z.number().int(),
+  endMs: z.number().int(),
+  /** Gap-based float, so an insert needs no renumbering (spec §3.4). */
+  ordinal: z.number(),
+  text: z.string(),
+  /** How much to trust this segment's word timings (spec §3.5). */
+  wordsAlignment: z.enum(['exact', 'interpolated', 'none']),
+  confidence: z.number().nullable(),
+  origin: z.enum(['ai', 'user']),
+  rev: z.number().int(),
+  editedAt: z.string().nullable(),
+});
+
+/**
+ * A segment WITH its words, for the time-window endpoint.
+ *
+ * @stability experimental
+ */
+export const transcriptSegmentWordsSchema = z.object({
+  segmentId: z.string(),
+  startMs: z.number().int(),
+  endMs: z.number().int(),
+  wordsAlignment: z.enum(['exact', 'interpolated', 'none']),
+  words: z.array(transcriptWordSchema),
+});
+
+/**
+ * The list-row projection: everything a card needs, nothing more.
+ *
+ * @stability experimental
+ */
+export const transcriptListItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(TRANSCRIPT_STATUSES),
+  transcriptionStatus: z.enum(TRANSCRIPTION_STATUSES),
+  playbackStatus: z.enum(PLAYBACK_STATUSES),
+  language: z.string().nullable(),
+  durationMs: z.number().int().nullable(),
+  speakerCount: z.number().int(),
+  wordCount: z.number().int(),
+  currentVersion: z.number().int(),
+  failureReason: z.string().nullable(),
+  /** How the CALLER reaches this row — not the owner's relationship to it. */
+  access: z.enum(TRANSCRIPT_ACCESS_ROLES),
+  /**
+   * The owner's display name (issue #29).
+   *
+   * PRESENT ON EVERY ROW, not only shared ones, so a client never has to
+   * branch on `access` to know whether the field is meaningful — on an owned
+   * row it is simply the caller's own name. `"Shared with me"` renders it;
+   * `"Mine"` ignores it.
+   *
+   * ONE FIELD, NOT AN EMBEDDED OWNER OBJECT: the name is the whole of what a
+   * shared row needs, and a `{ id, email, imageUrl }` owner block would put the
+   * beginnings of a user directory on a list every user can call. It resolves
+   * `displayName` -\> `providerDisplayName` -\> the address, and the fallback to
+   * the address is a deliberate, bounded choice — it is reached only for an
+   * account that has never had a name, and only ever discloses the address of
+   * somebody who has already chosen to share a private recording with this
+   * exact caller. "Shared by (unknown)" on the one screen whose entire job is
+   * to say who shared it would be worse.
+   */
+  ownerName: z.string(),
+  createdAt: z.string(),
+  /**
+   * When the recording was made (issue #352). Backfilled from, and for a new
+   * transcript identical to, `createdAt`; editable through `PATCH`. The meeting
+   * date connected knowledge dates everything extracted from this recording
+   * against (docs/specs/ontology.md §5.4) — never the upload instant.
+   */
+  recordedAt: z
+    .string()
+    .describe(
+      'When the recording was made (ISO 8601). Defaults to the upload time; the owner or an ' +
+        'editor can correct it. Used as the meeting date by connected knowledge.',
+    ),
+  updatedAt: z.string(),
+});
+
+/**
+ * `GET /api/transcripts` — cursor-paginated, newest first.
+ *
+ * @stability experimental
+ */
+export const transcriptListSchema = z.object({
+  items: z.array(transcriptListItemSchema),
+  /**
+   * How many rows match the current filters, ignoring paging.
+   *
+   * THE FILTERS, NOT THE TABLE, and not "how many are left". It is counted over
+   * the same predicate the page is read with, minus the keyset cursor clause,
+   * so it is IDENTICAL on page one and on every `loadMore` for an unchanged
+   * filter set — a client can render "42 transcripts" once and not watch the
+   * number fall as the user pages.
+   *
+   * Counted rather than estimated: the predicate is already scoped to one
+   * caller and covered by `(owner_id, updated_at desc)`, so this is an index
+   * scan over that user's rows, and an approximation would be a worse answer
+   * for no gain.
+   */
+  total: z
+    .number()
+    .int()
+    .describe(
+      'How many transcripts match the current filters, ignoring paging. Identical on every page of one ' +
+        'filter set, so a client can render a result count that does not change as it pages.',
+    ),
+
+  /**
+   * Opaque cursor for the next page, or null at the end.
+   *
+   * CURSOR, NOT PAGE NUMBER, because this list is ordered by `updatedAt` and
+   * every pipeline transition rewrites that column: offset paging over a list
+   * that reorders itself while a user scrolls skips rows and repeats others.
+   */
+  nextCursor: z.string().nullable(),
+});
+
+/**
+ * `GET /api/transcripts/:id` — the detail view.
+ *
+ * @stability experimental
+ */
+export const transcriptDetailSchema = transcriptListItemSchema.extend({
+  speakers: z.array(transcriptSpeakerSchema),
+  /** Which provider transcribed this. Named for the privacy notice (spec §10). */
+  provider: z.string(),
+  /** Whether the provider's own copy has been deleted (spec §10). */
+  remoteDeletedAt: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  /** Present on the source object, for a client sizing its upload UI. */
+  sourceName: z.string(),
+  sourceMimeType: z.string(),
+  sourceSizeBytes: z.string(),
+});
+
+/**
+ * `GET /api/transcripts/:id/segments`.
+ *
+ * @stability experimental
+ */
+export const transcriptSegmentsSchema = z.object({
+  /** Echoed so a client can pair a segment list with the version it belongs to. */
+  currentVersion: z.number().int(),
+  segments: z.array(transcriptSegmentSchema),
+});
+
+/**
+ * `GET /api/transcripts/:id/words`.
+ *
+ * @stability experimental
+ */
+export const transcriptWordsSchema = z.object({
+  currentVersion: z.number().int(),
+  fromMs: z.number().int(),
+  toMs: z.number().int(),
+  segments: z.array(transcriptSegmentWordsSchema),
+});
+
+/**
+ * `GET /api/transcripts/summary` — the home page's one request.
+ *
+ * @stability experimental
+ */
+export const transcriptSummarySchema = z.object({
+  /** Everything still moving: `uploading` or `processing`, newest first. */
+  inProgress: z.array(transcriptListItemSchema),
+  /** The caller's own most recently touched transcripts, at most eight. */
+  recent: z.array(transcriptListItemSchema),
+  /** Transcripts other people shared with the caller, at most eight. */
+  sharedWithMe: z.array(transcriptListItemSchema),
+  /**
+   * The caller's OWN failed transcripts, newest first, at most eight — the
+   * home page's "Needs attention" section (issue #171, epic #166).
+   *
+   * Owner-scoped, unlike `inProgress`: retry is owner-only, so a stranger's
+   * failure is an item the caller could not act on. `counts.failed` remains
+   * the true total, so a list of eight beside a count of thirty is correct
+   * rather than a contradiction.
+   */
+  failed: z.array(transcriptListItemSchema),
+  counts: z.object({
+    owned: z.number().int(),
+    shared: z.number().int(),
+    inProgress: z.number().int(),
+    failed: z.number().int(),
+  }),
+});
+
+/**
+ * `GET /api/transcripts/:id/audio`.
+ *
+ * @stability experimental
+ */
+export const transcriptAudioSchema = z.object({
+  /** Short-lived signed GET. Never a permanent link. */
+  url: z.string(),
+  /** Which file the URL points at: the rendition when ready, else the upload. */
+  kind: z.enum(['playback', 'original']),
+  mimeType: z.string(),
+  expiresAt: z.string(),
+});
+
+// -----------------------------------------------------------------------------
+// Write
+// -----------------------------------------------------------------------------
+
+/**
+ * `PATCH /api/transcripts/:id`.
+ *
+ * ⚠ METADATA ONLY — THE TITLE AND/OR THE RECORDING DATE (#352) — AND IT IS NOT
+ * VERSIONED. Both are metadata about the recording, not content of it:
+ * renaming or re-dating a transcript does not change a single word anybody
+ * said, so recording it as a `transcript_versions` row would put a no-op in the
+ * edit history that a restore could later "undo" into a value nobody chose.
+ * Content edits go through #28's op batches, which are versioned precisely
+ * because they change what the transcript says.
+ *
+ * `recordedAt` MUST carry an offset (`Z` or `±hh:mm`): an offset-less datetime
+ * is ambiguous about which instant it names, and guessing the server's zone
+ * would silently re-date a meeting. The 1970 floor and the 24-hour future
+ * ceiling are enforced by the service, against the server's clock at request
+ * time.
+ *
+ * @stability experimental
+ */
+export const updateTranscriptSchema = z
+  .object({
+    title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional(),
+    recordedAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .refine((v) => v.title !== undefined || v.recordedAt !== undefined, {
+    message: 'Nothing to update: send `title`, `recordedAt`, or both.',
+  });
+
+/**
+ * The parsed shape of {@link updateTranscriptSchema}.
+ *
+ * @stability experimental
+ */
+export type UpdateTranscriptDto = z.infer<typeof updateTranscriptSchema>;
+
+// -----------------------------------------------------------------------------
+// Query
+// -----------------------------------------------------------------------------
+
+/**
+ * `GET /api/transcripts` query string.
+ *
+ * @stability experimental
+ */
+export const transcriptListQuerySchema = z.object({
+  /**
+   * `owned` (the caller's own), `shared` (shared with them), or both.
+   *
+   * Defaults to `all`: a user's list is the list of transcripts they can open,
+   * and splitting that by provenance is a filter, not the default view.
+   */
+  scope: z.enum(['owned', 'shared', 'all']).optional().default('all'),
+  /**
+   * Filter by TOP-LEVEL status only.
+   *
+   * Deliberately not by `transcription_status` or `playback_status`: those are
+   * sub-pipeline detail, and filtering a list by one would require the caller
+   * to know that top-level `processing` can mean either sub-pipeline, or both
+   * (spec §1.4).
+   */
+  status: z.enum(TRANSCRIPT_STATUSES).optional(),
+  /** Case-insensitive substring of the title. */
+  q: z.string().trim().max(200).optional(),
+  /** `nextCursor` from the previous page. */
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
+/**
+ * The parsed shape of {@link transcriptListQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type TranscriptListQueryDto = z.infer<typeof transcriptListQuerySchema>;
+
+/**
+ * `GET /api/transcripts/:id/words` query string.
+ *
+ * @stability experimental
+ */
+export const transcriptWordsQuerySchema = z
+  .object({
+    /** Window start, milliseconds. Defaults to the beginning. */
+    fromMs: z.coerce.number().int().min(0).optional().default(0),
+    /**
+     * Window end, milliseconds. Defaults to a five-minute window from
+     * `fromMs` — long enough to cover a player's look-ahead, short enough that
+     * a careless client cannot ask for a six-hour recording's entire word
+     * index in one response.
+     */
+    toMs: z.coerce.number().int().min(0).optional(),
+  })
+  .refine((value) => value.toMs === undefined || value.toMs > value.fromMs, {
+    message: 'toMs must be greater than fromMs',
+  });
+
+/**
+ * The parsed shape of {@link transcriptWordsQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type TranscriptWordsQueryDto = z.infer<typeof transcriptWordsQuerySchema>;
+
+/**
+ * The default width of a `GET /:id/words` window when `toMs` is omitted.
+ *
+ * @stability experimental
+ */
+export const DEFAULT_WORDS_WINDOW_MS = 5 * 60_000;
+
+/**
+ * The widest window one `GET /:id/words` call may ask for.
+ *
+ * @stability experimental
+ */
+export const MAX_WORDS_WINDOW_MS = 30 * 60_000;
+
+// -----------------------------------------------------------------------------
+// Create response
+// -----------------------------------------------------------------------------
+
+/**
+ * `POST /api/transcripts` — the transcript AND the upload it is waiting for.
+ *
+ * ⚠ TWO OBJECTS IN ONE RESPONSE, ON PURPOSE. Creating a transcript and
+ * beginning its upload are one user action ("transcribe this file") and two
+ * rows, and a client that had to make two calls could get the first to succeed
+ * and the second to fail — leaving a transcript in `uploading` with no
+ * multipart upload behind it for `transcripts.housekeeping` to find and fail
+ * later. One call, one 201, both rows, or neither.
+ *
+ * `upload` is exactly `InitUploadResponseDto`, restated structurally rather
+ * than `$ref`-ed so this schema stays readable in the published document; the
+ * two are checked against each other by `transcripts.service.ts`'s return type.
+ *
+ * @stability experimental
+ */
+export const createTranscriptResponseSchema = z.object({
+  transcript: transcriptDetailSchema,
+  upload: z.object({
+    objectId: z.string(),
+    uploadId: z.string(),
+    partSize: z.number().int().positive(),
+    totalParts: z.number().int().positive(),
+    presignedUrls: z.array(
+      z.object({
+        partNumber: z.number().int().positive(),
+        url: z.string(),
+      }),
+    ),
+  }),
+});

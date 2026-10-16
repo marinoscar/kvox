@@ -90,6 +90,8 @@ jobs:
       # package, not application code), so its pinned `@playwright/test` is a
       # separate install.
       - run: npm ci
+      # The web app imports @marinoscar/kvox-contract from its built output (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
       - run: npm ci
         working-directory: tests/visual
 

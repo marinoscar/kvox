@@ -135,6 +135,16 @@ export function entryKeys(manifest) {
   return Object.keys(manifest.exports ?? {}).filter((key) => key !== './package.json');
 }
 
+/**
+ * The entry points that are compiled code: an `exports` value that is an object
+ * of conditions (`import`/`require`). A plain string target is a data file the
+ * package ships as-is (the contract's `./schemas/transcript-export.v1.json`):
+ * the README must name it, but TypeDoc has no source entry for it.
+ */
+export function codeEntryKeys(manifest) {
+  return entryKeys(manifest).filter((key) => typeof manifest.exports[key] !== 'string');
+}
+
 /** `.` -> `./src/index.ts`; `./core` -> `./src/core/index.ts`; `./a/b` -> `./src/a/b/index.ts`. */
 export function entrySourcePath(key) {
   return key === '.' ? './src/index.ts' : `./src/${key.slice(2)}/index.ts`;
@@ -201,7 +211,7 @@ export function checkPackageDocs({ root, dir, manifest }) {
   if (!typedoc) add('typedoc-config', `packages/${dir}/typedoc.json does not exist or does not parse`);
   else {
     const configured = new Set((typedoc.entryPoints ?? []).map((p) => p.replace(/^\.\//, '')));
-    const wanted = new Set(entryKeys(manifest).map((key) => entrySourcePath(key).replace(/^\.\//, '')));
+    const wanted = new Set(codeEntryKeys(manifest).map((key) => entrySourcePath(key).replace(/^\.\//, '')));
     for (const path of wanted) if (!configured.has(path)) add('typedoc-config', `packages/${dir}/typedoc.json has no entry point '${path}' for an exported subpath`);
     for (const path of configured) if (!wanted.has(path)) add('typedoc-config', `packages/${dir}/typedoc.json lists '${path}', which no exports entry points at`);
   }

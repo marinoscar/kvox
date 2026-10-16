@@ -2,7 +2,7 @@
 
 **Audience:** whoever changes the ontology definition, and whoever operates the
 deployment that ships the change.
-**Applies to:** `packages/shared/src/ontology/migrations.ts` and the
+**Applies to:** `src/ontology/migrations.ts` of `@marinoscar/kvox-contract` and the
 `kg.migrate` job (`apps/api/src/graph/migrate/`, issue #384). Design:
 [`docs/specs/ontology.md`](../specs/ontology.md) §11 and §17.4.
 
@@ -59,19 +59,20 @@ Every step below goes in the same pull request.
 
    No step may name a user attribute (`u_*`, rule 17): those are keyed by their
    definition id and are never renamed.
-5. **Rebuild** the compiled output and commit it with the source:
+5. **Rebuild** the contract so the API and web see the change (its output is
+   `dist/`, git-ignored, so there is nothing to commit):
 
    ```bash
-   npm run build:ontology --workspace=@app/shared
+   npm run build --workspace=@marinoscar/kvox-contract
    ```
 
-6. **Run the parity test** (`apps/api/test/ontology/ontology-parity.spec.ts`).
+6. **Run the parity test** (`npm run test:run --workspace=@marinoscar/kvox-contract`, `test/ontology/ontology-parity.test.ts`).
    Rules 14–17 check the migration against the CHANGELOG, the registry and
    `SHIPPED_KEYS`; every failure message names the migration, the step and the
    rule.
 
 Every op is idempotent (applying it to its own output changes nothing), and
-`apps/api/test/ontology/migrations.spec.ts` asserts that per op — keep it true
+`test/ontology/migrations.test.ts` of `@marinoscar/kvox-contract` asserts that per op — keep it true
 for any new op.
 
 ---

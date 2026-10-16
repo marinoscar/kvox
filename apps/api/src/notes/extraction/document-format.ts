@@ -16,15 +16,15 @@
 // standing up a container.
 // =============================================================================
 
-/** Every MIME type a note source document may be uploaded as. */
-export const NOTE_DOCUMENT_MIME_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-] as const;
-
-/** One accepted document MIME type. */
-export type NoteDocumentMimeType = (typeof NOTE_DOCUMENT_MIME_TYPES)[number];
+import {
+  NOTE_DOCUMENT_MIME_TYPES,
+  type NoteDocumentMimeType,
+} from '@marinoscar/kvox-contract/notes';
+// The wire schemas of this file moved to `@marinoscar/kvox-contract/notes` (issue #488, file `notes/document-format.ts`); they are re-exported below so no importer changes.
+export {
+  NOTE_DOCUMENT_MIME_TYPES,
+  type NoteDocumentMimeType,
+} from '@marinoscar/kvox-contract/notes';
 
 /**
  * Aliases browsers and operating systems send for the three accepted types.

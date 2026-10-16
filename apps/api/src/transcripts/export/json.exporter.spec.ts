@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 
@@ -32,7 +31,9 @@ import { renderToString } from './__fixtures__/collect';
 // test does, and only to read a file the repository already ships.
 // =============================================================================
 
-const SCHEMA_PATH = resolve(__dirname, '../../../../../docs/specs/transcript-export.v1.schema.json');
+// The schema lives in the contract package (issue #488); `docs/specs/transcript-export.v1.schema.json`
+// is a byte-identical copy that the contract's own test guards.
+const SCHEMA_PATH = require.resolve('@marinoscar/kvox-contract/schemas/transcript-export.v1.json');
 
 function validator() {
   const ajv = new Ajv2020({ strict: false, allErrors: true });

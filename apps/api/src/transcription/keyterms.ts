@@ -24,47 +24,19 @@
 
 import type { TranscriptionKeytermsCapability } from './providers/transcription-provider.interface';
 
-/** Most keyterms `POST /api/transcripts` accepts. */
-export const MAX_TRANSCRIPT_KEYTERMS = 200;
-
-/** Longest single keyterm, in characters. */
-export const MAX_KEYTERM_LENGTH = 100;
-
-/** Most whitespace-separated words one keyterm may contain. */
-export const MAX_KEYTERM_WORDS = 6;
-
-/** Whitespace-separated word count of an already-trimmed term. */
-export function keytermWordCount(term: string): number {
-  return term.length === 0 ? 0 : term.split(/\s+/).length;
-}
-
-/**
- * Trim, collapse internal whitespace, drop empties, and de-duplicate
- * case-insensitively keeping the FIRST spelling — the user's own capitalisation
- * of a name is the one worth sending.
- *
- * Pure normalisation; it never rejects. Validation of the normalised list is
- * the schema's job.
- */
-export function normalizeKeyterms(terms: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-
-  for (const raw of terms) {
-    const term = raw.trim().replace(/\s+/g, ' ');
-
-    if (term.length === 0) continue;
-
-    const key = term.toLowerCase();
-
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-    out.push(term);
-  }
-
-  return out;
-}
+import {
+  MAX_TRANSCRIPT_KEYTERMS,
+  keytermWordCount,
+  normalizeKeyterms,
+} from '@marinoscar/kvox-contract/transcription';
+// The wire schemas of this file moved to `@marinoscar/kvox-contract/transcription` (issue #488, file `transcription/keyterms.ts`); they are re-exported below so no importer changes.
+export {
+  MAX_TRANSCRIPT_KEYTERMS,
+  MAX_KEYTERM_LENGTH,
+  MAX_KEYTERM_WORDS,
+  keytermWordCount,
+  normalizeKeyterms,
+} from '@marinoscar/kvox-contract/transcription';
 
 /**
  * Read the stored keyterms back out of `transcripts.provider_options`.

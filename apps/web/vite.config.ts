@@ -98,7 +98,21 @@ export default defineConfig({
   // the same trap: compiled CommonJS (`exports.ONTOLOGY_VERSION = ...`) behind
   // the workspace symlink. Pre-bundling is per ENTRY, not per package, so the
   // subpath needs its own line — listing `@app/shared` alone does not cover it.
-  optimizeDeps: { include: ['@app/shared', '@app/shared/ontology'] },
+  //
+  // `@marinoscar/kvox-contract` (issue #488) is linked from the workspace, so
+  // Vite would not pre-bundle it on its own (a linked package is treated as
+  // source), and `@app/shared/ontology` is now a CommonJS re-export of its
+  // `./ontology` subpath. Listing the package and that subpath makes the
+  // optimizer build both entries together, so the ontology is one instance.
+  // Each entry is listed because pre-bundling is per entry, not per package.
+  optimizeDeps: {
+    include: [
+      '@app/shared',
+      '@app/shared/ontology',
+      '@marinoscar/kvox-contract',
+      '@marinoscar/kvox-contract/ontology',
+    ],
+  },
   server: {
     port: 5173,
     host: true,

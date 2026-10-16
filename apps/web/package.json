@@ -48,7 +48,8 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.17.0",
     "remark-gfm": "^4.0.1",
-    "sigma": "^3.0.3"
+    "sigma": "^3.0.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
