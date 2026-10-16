@@ -32,6 +32,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -39,8 +40,7 @@ import {
 import { Prisma, type TranscriptNameCheck } from '@prisma/client';
 import { createHash } from 'node:crypto';
 
-import { AiConfigService } from '../ai/ai-config.service';
-import { AiProviderRegistry } from '../ai/ai-provider.registry';
+import { KVOX_AI, type KvoxAi } from '../ai-port/kvox-ai';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import { readKeyterms } from '../transcription/keyterms';
@@ -97,8 +97,7 @@ export class TranscriptNameCheckService {
     private readonly prisma: PrismaService,
     private readonly access: TranscriptAccessService,
     private readonly editing: TranscriptEditingService,
-    private readonly aiConfig: AiConfigService,
-    private readonly providers: AiProviderRegistry,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly jobs: JobsService,
   ) {}
 
@@ -472,10 +471,18 @@ export class TranscriptNameCheckService {
     userId: string,
     requireKey: boolean,
   ): Promise<{ providerId: string; model: string; countTokens: (text: string) => number }> {
-    const config = await this.aiConfig.getConfig(userId);
-    const provider = config.provider ? this.providers.get(config.provider) : undefined;
+    // The deployment default model: a check names none of its own.
+    const readiness = await this.ai.readiness(userId, 'transcript_name_check');
 
-    if (!config.available || !provider || !config.defaultModel) {
+    // Anything but "the caller has no key" means the deployment cannot run the
+    // feature at all. A missing key still names the model, which is all an
+    // estimate needs (a key is needed to SPEND tokens, not to count them).
+    const deploymentReady =
+      readiness.provider !== null &&
+      readiness.model !== null &&
+      (readiness.ok || readiness.reason === 'ai_key_missing');
+
+    if (!deploymentReady) {
       throw new ConflictException({
         message:
           'AI features are not configured for this deployment, so names cannot be checked. ' +
@@ -484,7 +491,7 @@ export class TranscriptNameCheckService {
       });
     }
 
-    if (requireKey && !config.keyConfigured) {
+    if (requireKey && !readiness.hasKey) {
       throw new ConflictException({
         message:
           'You have not saved an AI API key. A name check runs on your own provider account, so it ' +
@@ -493,11 +500,11 @@ export class TranscriptNameCheckService {
       });
     }
 
-    const model = config.defaultModel;
+    const model = readiness.model as string;
     return {
-      providerId: provider.id,
+      providerId: readiness.provider as string,
       model,
-      countTokens: (text: string) => provider.countTokens(text, model),
+      countTokens: (text: string) => this.ai.countTokens(text, model),
     };
   }
 

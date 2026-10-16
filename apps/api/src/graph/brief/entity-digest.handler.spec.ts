@@ -34,19 +34,15 @@ function setup(over: { resolve?: jest.Mock; generateStructured?: jest.Mock; enti
     over.generateStructured ??
     jest.fn().mockResolvedValue({
       value: { statements: [{ text: 'Acme chose blue', factRefs: ['F1'] }, { text: 'Uncited', factRefs: [] }] },
-      usage: { promptTokens: 120, completionTokens: 30 },
-      finishReason: 'stop',
+      model: 'model-x',
+      usage: { inputTokens: 120, outputTokens: 30 },
     });
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    settingsSchema: { safeParse: () => ({ success: true, data: {} }) },
-    generateStructured,
-  };
+  // A plain mock rather than `FakeKvoxAi`: this spec asserts call ORDER against the throttle registration.
+  const ai = { generateStructured };
   const resolver = {
     resolve:
       over.resolve ??
-      jest.fn().mockResolvedValue({ provider, providerId: 'openai', model: 'model-x', reasoningEffort: 'low', policy: { providers: {} } }),
+      jest.fn().mockResolvedValue({ providerId: 'openai', model: 'model-x', reasoningEffort: 'low', policy: {} }),
   };
   const prisma = {
     kgEntity: {
@@ -63,7 +59,6 @@ function setup(over: { resolve?: jest.Mock; generateStructured?: jest.Mock; enti
     },
   };
   const registry = { register: jest.fn() };
-  const credentials = { getSecret: jest.fn().mockResolvedValue('sk-user') };
   const throttle = { registerProviderKey: jest.fn() };
   const ontology = {
     effectiveSchemaFor: jest.fn().mockResolvedValue({
@@ -75,11 +70,11 @@ function setup(over: { resolve?: jest.Mock; generateStructured?: jest.Mock; enti
     registry as never,
     prisma as never,
     resolver as never,
-    credentials as never,
+    ai as never,
     throttle as never,
     ontology as never,
   );
-  return { handler, prisma, resolver, credentials, throttle, generateStructured, registry };
+  return { handler, prisma, resolver, throttle, generateStructured, registry };
 }
 
 beforeEach(() => {
@@ -123,10 +118,19 @@ describe('EntityDigestHandler', () => {
     // Registered BEFORE the call.
     expect(throttle.registerProviderKey.mock.invocationCallOrder[0]).toBeLessThan(generateStructured.mock.invocationCallOrder[0]);
 
-    const request = generateStructured.mock.calls[0][1];
-    expect(request).toMatchObject({ model: 'model-x', schemaName: 'entity_digest', maxOutputTokens: 1200, timeoutMs: 60_000 });
-    expect(request.userContent).toContain('F1: [2026-09-10, decision] Acme chose the blue plan');
-    expect(request.userContent).not.toMatch(UUID);
+    const request = generateStructured.mock.calls[0][0];
+    expect(request).toMatchObject({
+      userId: OWNER,
+      feature: 'graph_digest',
+      jobId: 'job-1',
+      model: 'model-x',
+      schemaName: 'entity_digest',
+      maxOutputTokens: 1200,
+      jsonSchema: expect.any(Object),
+      signal: expect.any(AbortSignal),
+    });
+    expect(request.user).toContain('F1: [2026-09-10, decision] Acme chose the blue plan');
+    expect(request.user).not.toMatch(UUID);
 
     const upsert = prisma.kgEntityDigest.upsert.mock.calls[0][0];
     expect(upsert.where).toEqual({ entityId: ENTITY });
@@ -175,8 +179,8 @@ describe('EntityDigestHandler', () => {
   it('fails the job and keeps the previous digest when every statement is uncited', async () => {
     const generateStructured = jest.fn().mockResolvedValue({
       value: { statements: [{ text: 'x', factRefs: [] }, { text: 'y', factRefs: ['F42'] }] },
-      usage: { promptTokens: 1, completionTokens: 1 },
-      finishReason: 'stop',
+      model: 'model-x',
+      usage: { inputTokens: 1, outputTokens: 1 },
     });
     const { handler, prisma } = setup({ generateStructured });
     await expect(handler.process(makeJob())).rejects.toBeInstanceOf(DigestCitationError);

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { GraphExtractionModule } from '../graph/extraction/extraction.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
@@ -60,10 +59,9 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //   • `JobsModule` — `JobHandlerRegistry` for `note.generate` to register with,
 //     and `ProviderThrottleService` for the PER-USER rate-limit bucket (spec
 //     §2.3). `JobsService` joins when #53 starts enqueueing.
-//   • `AiModule` — the provider registry, the deployment policy, and
-//     `UserAiCredentialsService`, which is the only way to reach a user's own
-//     decrypted key. That module is deliberately NOT `@Global()` precisely so
-//     this import shows up in a diff.
+//   • `KVOX_AI` — the one way to reach a model (issue #475). It comes from the
+//     global `KvoxAiModule`, so there is nothing to import: the user's own key
+//     is resolved by the platform inside each call and never reaches this module.
 //   • `NotificationsService` — the two owner-addressed events (global since
 //     #470: the platform's notifications slice, nothing to import).
 //   • `KvoxObjectsModule` — `KvoxManagedObjects`, which `NoteObjectsService`
@@ -92,7 +90,6 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 @Module({
   imports: [
     PrismaModule,
-    AiModule,
     TranscriptsModule,
     KvoxObjectsModule,
     // The semantic index (#188, epic #165). ONE-WAY, exactly as in
@@ -129,9 +126,9 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // Naming a generated note (#182). It hangs off `NoteGenerationService.commit`
     // rather than off the handler, because a note is titled once its BODY is
     // durable — the one moment at which there is something to name and nothing
-    // left that a failure could spoil. It needs `AiModule`'s three exports for
-    // its first rank and nothing new: the resolution it performs is the one
-    // `NoteGenerateHandler` already performs, reached through the same services.
+    // left that a failure could spoil. It needs only `KVOX_AI`
+    // for its first rank: the readiness it asks is the one `NoteGenerateHandler`
+    // already asks, through the same port.
     NoteTitleService,
     // `note.retitle` (#184) — the retroactive half of the same epic. It is a
     // handler and NOT a migration on purpose: titling spends the note owner's

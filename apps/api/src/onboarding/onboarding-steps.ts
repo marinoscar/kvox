@@ -155,7 +155,7 @@ export interface OnboardingUserContext extends OnboardingBaseContext {
   readonly audience: 'user';
 
   /**
-   * `AiConfigService.getConfig(userId)`, already per-caller.
+   * `KvoxAi.readiness(userId, ...)` for this caller, already per-caller.
    *
    * ⚠ `provider` and `available` are INDEPENDENT, and issue #83 is what
    * conflating them cost. `provider` names the vendor a key would belong to and
@@ -188,19 +188,16 @@ export interface OnboardingAdminContext extends OnboardingBaseContext {
   readonly audience: 'admin';
 
   /**
-   * The deployment's AI POLICY — not the per-caller config projection.
+   * Whether the DEPLOYMENT can run AI, from `KvoxAi.readiness` for the
+   * administrator's own account (issue #475).
    *
-   * An administrator's step is about whether the deployment is configured, and
-   * `AiConfigService.getConfig`'s `available` folds in facts (a model that can
-   * be budgeted, coherent token ceilings) that would make the step report
-   * `pending` for reasons the AI settings page does not present as missing
-   * configuration. `enabled` + `provider` + `allowedModelCount` is the exact
-   * triple that page's own empty state is about.
+   * An administrator's step is about the deployment being configured (AI switched
+   * on, a provider slot on, a default model enabled), not about their own key:
+   * a missing key is the separate `user.ai_key` step, so `ai_key_missing` still
+   * counts as configured here.
    */
   readonly aiPolicy: {
-    readonly enabled: boolean;
-    readonly provider: string | null;
-    readonly allowedModelCount: number;
+    readonly configured: boolean;
   };
 
   /** `EmailSettingsService.describeForAdmin()`: a provider chosen AND switched on. */
@@ -393,12 +390,7 @@ export const BASE_ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdmi
       skippable: false,
       applies: () => true,
       evaluate: (ctx) => ({
-        status:
-          ctx.aiPolicy.enabled &&
-          ctx.aiPolicy.provider !== null &&
-          ctx.aiPolicy.allowedModelCount > 0
-            ? 'satisfied'
-            : 'pending',
+        status: ctx.aiPolicy.configured ? 'satisfied' : 'pending',
       }),
     },
     {

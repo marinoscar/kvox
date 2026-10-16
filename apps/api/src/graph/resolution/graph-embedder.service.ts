@@ -3,34 +3,32 @@
 // =============================================================================
 //
 // The batch embedding path for the graph: profile vectors for `kg.embed`, and
-// mention vectors for resolution's kNN arm. NOT a second embedder — it asks
-// `SearchQueryEmbedder.resolve(userId)` whether embedding is possible at all
-// (same reasons, same order, same model/dimension contract, §7 "a second
-// embedder is rejected"), and only then batches through the same provider's
-// `embed`, which the query path deliberately cannot (one text, never throws).
+// mention vectors for resolution's kNN arm. It asks `KvoxAi.readiness` whether
+// embedding is possible at all (same reasons the search indexer reports, same
+// model/dimension contract, §7 "a second embedder is rejected"), and only then
+// batches through `KvoxAi.embed`, which the search query path deliberately does
+// one text at a time and never throws.
 //
 // Unlike the query path this one THROWS — its callers are queue jobs, where a
 // swallowed error is a job reporting success having embedded nothing. The
-// caller registers the per-user throttle key through `beforeCall` so a 429
-// defers the right job on the right bucket.
+// caller registers the per-user throttle key immediately before `embed`, so a
+// 429 defers the right job on the right bucket.
 //
-// ⚠ The user's own key: resolved at the moment of use, never stored on a
-// field, never logged.
+// ⚠ The user's own key is resolved by the platform at the moment of the call;
+// it never reaches this file.
 // =============================================================================
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import { createProviderContext, EMBEDDING_DIMENSIONS } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import { SearchQueryEmbedder } from '../../search/search-query-embedder.service';
+import { EMBEDDING_DIMENSIONS } from '../../ai-port/embedding-catalog';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
+import { searchReasonFor } from '../../search/indexing/job-types';
 
 export type GraphEmbedderResolution =
   | {
       ok: true;
       providerId: string;
-      /** The provider's embedding model id — part of every profile hash. */
+      /** The embedding model id — part of every profile hash. */
       model: string;
       maxBatchSize: number;
       /** One vector per text, in order. Throws on any provider failure. */
@@ -40,50 +38,44 @@ export type GraphEmbedderResolution =
 
 @Injectable()
 export class GraphEmbedder {
-  constructor(
-    private readonly queryEmbedder: SearchQueryEmbedder,
-    private readonly settings: AiSettingsService,
-    private readonly providers: AiProviderRegistry,
-    private readonly credentials: UserAiCredentialsService,
-  ) {}
+  constructor(@Inject(KVOX_AI) private readonly ai: KvoxAi) {}
 
-  async resolve(userId: string): Promise<GraphEmbedderResolution> {
-    const gate = await this.queryEmbedder.resolve(userId);
-    if (!gate.ok) return { ok: false, reason: gate.reason };
+  /**
+   * Whether `userId` can embed for the graph, and the function that does it.
+   * `jobId` is the queue job running the call, so the usage row links to it.
+   */
+  async resolve(userId: string, jobId?: string): Promise<GraphEmbedderResolution> {
+    const readiness = await this.ai.readiness(userId, 'graph_embed');
+    const gate = searchReasonFor(readiness);
+    if (gate !== null) return { ok: false, reason: gate };
 
-    const policy = await this.settings.get();
-    const provider = policy.provider ? this.providers.get(policy.provider) : undefined;
-    if (!provider?.embedding || typeof provider.embed !== 'function') {
-      return { ok: false, reason: 'embedding_unsupported' };
-    }
-    const settings = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) return { ok: false, reason: 'ai_not_configured' };
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) return { ok: false, reason: 'ai_key_missing' };
+    const capability = this.ai.embeddingCapability();
+    const maxBatchSize = Math.max(1, capability.maxBatchSize);
 
-    const capability = provider.embedding;
-    const embed = provider.embed.bind(provider);
     return {
       ok: true,
-      providerId: provider.id,
+      providerId: readiness.provider ?? 'openai',
       model: capability.model,
-      maxBatchSize: Math.max(1, capability.maxBatchSize),
+      maxBatchSize,
       embed: async (texts) => {
         const out: number[][] = [];
-        for (let i = 0; i < texts.length; i += capability.maxBatchSize) {
-          const batch = texts.slice(i, i + capability.maxBatchSize);
-          const result = await embed(createProviderContext(apiKey, settings.data), { inputs: [...batch] });
+        for (let i = 0; i < texts.length; i += maxBatchSize) {
+          const batch = texts.slice(i, i + maxBatchSize);
+          const result = await this.ai.embed({
+            userId,
+            feature: 'graph_embed',
+            ...(jobId !== undefined ? { jobId } : {}),
+            texts: [...batch],
+          });
           if (result.vectors.length !== batch.length) {
             throw new Error(
-              `Provider "${provider.id}" returned ${result.vectors.length} vector(s) for a ${batch.length}-input batch.`,
+              `The embedding provider returned ${result.vectors.length} vector(s) for a ${batch.length}-input batch.`,
             );
           }
           for (const v of result.vectors) {
             if (v.length !== EMBEDDING_DIMENSIONS || !v.every((c) => Number.isFinite(c))) {
               throw new Error(
-                `Provider "${provider.id}" returned an unusable ${v.length}-component vector; ` +
+                `The embedding provider returned an unusable ${v.length}-component vector; ` +
                   `graph embeddings are exactly ${EMBEDDING_DIMENSIONS} components.`,
               );
             }

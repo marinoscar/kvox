@@ -183,20 +183,33 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
   }
 
   /**
-   * The service, with the AI policy and the credential store stubbed and
+   * The service, with the `KvoxAi` port stubbed and
    * EVERYTHING ELSE REAL — including `SearchIndexService`, so the candidate
    * selection runs through the one enqueue path the whole epic shares.
    */
   function buildService(options: { hasKey?: boolean; embedding?: boolean } = {}) {
     const { hasKey = true, embedding = true } = options;
 
-    const provider = {
-      id: 'openai',
-      label: 'OpenAI',
-      embedding: embedding
-        ? { model: MODEL, dimensions: 1536, maxInputTokens: 8191, maxBatchSize: 128 }
-        : undefined,
-      embed: embedding ? async () => ({ vectors: [] }) : undefined,
+    const reason = !embedding ? 'model_lacks_capability' : hasKey ? null : 'ai_key_missing';
+
+    const ai = {
+      readiness: async () => ({
+        ok: reason === null,
+        reason,
+        provider: 'openai',
+        model: MODEL,
+        source: 'default',
+        contextWindowTokens: null,
+        maxOutputTokens: null,
+        reasoningEffort: 'none',
+        hasKey,
+      }),
+      embeddingCapability: () => ({
+        model: MODEL,
+        dimensions: 1536,
+        maxInputTokens: 8191,
+        maxBatchSize: 128,
+      }),
     };
 
     // Typed with its real single-argument signature so the assertions below can
@@ -208,9 +221,7 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
 
     const service = new SearchIndexStatusService(
       prisma as never,
-      { get: (id: string) => (id === 'openai' ? provider : undefined) } as never,
-      { get: async () => ({ enabled: true, provider: 'openai', providers: { openai: {} } }) } as never,
-      { hasKey: async () => hasKey } as never,
+      ai as never,
       index,
     );
 

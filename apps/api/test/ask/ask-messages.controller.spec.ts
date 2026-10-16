@@ -1,8 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import request from 'supertest';
 
-import { AiTaskModelResolver } from '../../src/ai/ai-task-model-resolver.service';
+import { KVOX_AI } from '../../src/ai-port/kvox-ai';
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { postAskMessageResponseSchema } from '../../src/ask/dto/ask-messages.dto';
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock, mockPrismaTransaction } from '../mocks/prisma.mock';
@@ -14,10 +14,11 @@ import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 // =============================================================================
 //
 // The REAL `AppModule` — guards, Zod pipe, envelope — with `PrismaService`
-// and the task-model resolver mocked. What it pins:
+// and the AI port a `FakeKvoxAi`. What it pins:
 //   - 401 / 403 (without `graph:read`, before any row is read) / 400 bodies;
 //   - 404 for a conversation that is not the caller's;
-//   - the resolver's 409s and 400 passed through UNCHANGED, before any write;
+//   - the readiness refusals answered as the 409s and 400 the product always sent,
+//     before any write;
 //   - the running-turn index violation → 409 `ask_turn_running`;
 //   - 202 with both messages, the job enqueued at priority −10 with the
 //     assistant message as its subject, and the derived title.
@@ -27,7 +28,7 @@ import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 const CONV = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const URL = `/api/ask/conversations/${CONV}/messages`;
 
-const resolver = { resolve: jest.fn() };
+const ai = new FakeKvoxAi();
 
 function stripPermission(userId: string, permission: string): void {
   const original = prismaMock.user.findUnique.getMockImplementation();
@@ -74,7 +75,7 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
   beforeAll(async () => {
     context = await createTestApp({
       useMockDatabase: true,
-      overrideProviders: [{ provide: AiTaskModelResolver, useValue: resolver }],
+      overrideProviders: [{ provide: KVOX_AI, useValue: ai }],
     });
   });
 
@@ -86,8 +87,8 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     resetPrismaMock();
     setupBaseMocks();
     mockPrismaTransaction();
-    resolver.resolve.mockReset();
-    resolver.resolve.mockResolvedValue({ model: 'gpt-test', providerId: 'openai', reasoningEffort: 'low', source: 'task' });
+    ai.reset();
+    ai.setReadiness({ model: 'gpt-test', reasoningEffort: 'low', source: 'task' });
     prismaMock.askConversation.findFirst.mockResolvedValue({ id: CONV, ownerId: 'x', title: null, scopeEntityId: null } as never);
   });
 
@@ -107,7 +108,7 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     stripPermission(user.id, 'graph:read');
     await post(user.accessToken, { content: 'Hi?' }).expect(403);
     expect(prismaMock.askConversation.findFirst).not.toHaveBeenCalled();
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(ai.callsOf('readiness')).toHaveLength(0);
   });
 
   it.each([
@@ -130,29 +131,30 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
     prismaMock.askConversation.findFirst.mockResolvedValue(null as never);
     await post(user.accessToken, { content: 'Hi?' }).expect(404);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(ai.callsOf('readiness')).toHaveLength(0);
     const where = (prismaMock.askConversation.findFirst.mock.calls[0][0] as { where: unknown }).where;
     expect(where).toEqual({ id: CONV, ownerId: user.id });
   });
 
-  it.each(['graph_disabled', 'ai_not_configured', 'ai_key_missing', 'model_lacks_capability'])(
-    'passes the resolver 409 %s through unchanged, writing nothing',
+  it.each(['graph_disabled', 'ai_not_configured', 'ai_key_missing', 'model_lacks_capability'] as const)(
+    'answers the readiness refusal %s as a 409 with that reason, writing nothing',
     async (reason) => {
       const user = await createMockTestUser(context, { roleName: 'viewer' });
-      resolver.resolve.mockRejectedValue(new ConflictException({ message: 'Refused.', details: { reason } }));
+      ai.setNotReady(reason);
       const res = await post(user.accessToken, { content: 'Hi?' }).expect(409);
-      expect(JSON.stringify(res.body)).toContain(reason);
+      expect(res.body.details).toMatchObject({ reason });
       expect(prismaMock.askMessage.create).not.toHaveBeenCalled();
     },
   );
 
-  it('passes the resolver 400 for an unpermitted model through, and asks for the override', async () => {
+  it('answers 400 model_not_permitted for an unpermitted model, listing the enabled ones', async () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
-    resolver.resolve.mockRejectedValue(
-      new BadRequestException({ message: 'Not permitted.', details: { reason: 'model_not_permitted' } }),
-    );
-    await post(user.accessToken, { content: 'Hi?', model: 'gpt-nope' }).expect(400);
-    expect(resolver.resolve).toHaveBeenCalledWith(user.id, 'graph.agent', 'gpt-nope');
+    ai.setNotReady('model_not_permitted');
+    prismaMock.aiModel.findMany.mockResolvedValue([{ modelId: 'gpt-a' }, { modelId: 'gpt-b' }] as never);
+    const res = await post(user.accessToken, { content: 'Hi?', model: 'gpt-nope' }).expect(400);
+    expect(res.body.details).toMatchObject({ reason: 'model_not_permitted', task: 'graph.agent' });
+    expect(res.body.message).toContain('gpt-a, gpt-b');
+    expect(ai.lastCall('readiness')).toMatchObject({ userId: user.id, feature: 'graph_agent', model: 'gpt-nope' });
     expect(prismaMock.askMessage.create).not.toHaveBeenCalled();
   });
 

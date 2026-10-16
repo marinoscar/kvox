@@ -105,8 +105,10 @@ export interface CommitInput {
   content: string;
   promptTokens: number | null;
   completionTokens: number | null;
-  /** `AiProvider.label`, for the notification only. */
+  /** The vendor's display name, for the notification only. */
   providerLabel: string;
+  /** The `note.generate` job running the commit, so a titling call links to it. */
+  jobId?: string;
   /**
    * The generating template's body format (issue #334), snapshotted onto the
    * note together with the body it describes. Omitted (or unrecognised) means
@@ -344,6 +346,7 @@ export class NoteGenerationService {
         body: content,
         providerId: generation.providerId,
         model: generation.model,
+        ...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
       });
     } catch (error) {
       this.logger.warn(

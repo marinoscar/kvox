@@ -1,6 +1,5 @@
 import request from 'supertest';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service';
 import { NOTE_CONFLICT_REASONS } from '../../src/notes/dto/note.dto';
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';
@@ -11,6 +10,8 @@ import {
 } from '../../src/notes/job-types';
 import { encodeCursor } from '../../src/notes/notes.service';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
+import { invalidateAiResolverCache, primeAiReadiness, storedSystemSettings } from '../helpers/ai-readiness.fixtures';
+import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
@@ -56,22 +57,6 @@ const TEMPLATE_ID = '33333333-3333-4333-8333-333333333333';
 const TRANSCRIPT_ID = '44444444-4444-4444-8444-444444444444';
 const GENERATION_ID = '55555555-5555-4555-8555-555555555555';
 const JOB_ID = '66666666-6666-4666-8666-666666666666';
-
-/** `ai` policy with the feature actually switched on. */
-const ENABLED_AI_SETTINGS = {
-  ...DEFAULT_SYSTEM_SETTINGS,
-  ai: {
-    ...DEFAULT_SYSTEM_SETTINGS.ai,
-    enabled: true,
-    providers: {
-      openai: {
-        ...DEFAULT_SYSTEM_SETTINGS.ai.providers.openai,
-        allowedModels: ['gpt-4o'],
-        defaultModel: 'gpt-4o',
-      },
-    },
-  },
-};
 
 const templateRow = (overrides: Record<string, unknown> = {}) => ({
   id: TEMPLATE_ID,
@@ -155,16 +140,10 @@ describe('Notes API (#53)', () => {
       describe: 'transcript at version 3',
     });
 
-    prismaMock.systemSettings.findUnique.mockResolvedValue({
-      key: 'global',
-      value: ENABLED_AI_SETTINGS,
-      version: 1,
-      updatedAt: new Date(),
-      updatedByUser: null,
-    });
-
-    // A saved key, so the ordinary path is "configured".
-    prismaMock.userAiCredential.findUnique.mockResolvedValue({ id: 'cred-1' });
+    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, and a saved key, so the
+    // ordinary path is "configured".
+    invalidateAiResolverCache(context);
+    primeAiReadiness();
     prismaMock.noteTemplate.findUnique.mockResolvedValue(templateRow());
     prismaMock.note.findMany.mockResolvedValue([]);
     prismaMock.note.count.mockResolvedValue(0);
@@ -310,7 +289,7 @@ describe('Notes API (#53)', () => {
       const user = await createMockTestUser(context);
 
       ownedTranscript(user.id);
-      prismaMock.userAiCredential.findUnique.mockResolvedValue(null);
+      primeAiReadiness({ hasKey: false });
 
       const response = await request(context.app.getHttpServer())
         .post(NOTES)
@@ -332,13 +311,9 @@ describe('Notes API (#53)', () => {
       const user = await createMockTestUser(context);
 
       ownedTranscript(user.id);
-      prismaMock.systemSettings.findUnique.mockResolvedValue({
-        key: 'global',
-        value: DEFAULT_SYSTEM_SETTINGS,
-        version: 1,
-        updatedAt: new Date(),
-        updatedByUser: null,
-      });
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSystemSettings(DEFAULT_SYSTEM_SETTINGS.ai as never) as never,
+      );
 
       const response = await request(context.app.getHttpServer())
         .post(NOTES)

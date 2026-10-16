@@ -5,7 +5,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks, setupMockUserSettings } from '../fixtures/mock-setup.helper';
 import { createMockAdminUser, authHeader } from '../helpers/auth-mock.helper';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
+import { invalidateAiResolverCache, primeAiReadiness } from '../helpers/ai-readiness.fixtures';
 import { EmailSettingsService } from '@marinoscar/platform-api/email';
 import { PushConfigService } from '@marinoscar/platform-api/notifications';
 
@@ -62,12 +62,16 @@ describe('Onboarding Integration', () => {
     context.prismaMock.note.count.mockResolvedValue(0);
     context.prismaMock.user.count.mockResolvedValue(1);
     context.prismaMock.allowedEmail.count.mockResolvedValue(1);
-    // ⚠ EXPLICITLY `null`, not left to `mockDeep`. `UserAiCredentialsService
-    // .hasKey` returns `row !== null`, and an unconfigured deep mock answers
-    // `undefined` — which is `!== null`, so every caller would appear to have
-    // stored an AI key and `user.ai_key` would report `satisfied` on a
-    // deployment where nobody has one.
-    context.prismaMock.userAiCredential.findUnique.mockResolvedValue(null);
+    // ⚠ EXPLICITLY `null`, not left to `mockDeep`. `KvoxAi.readiness` reads
+    // whether the caller has a key as `row !== null`, and an unconfigured deep
+    // mock answers `undefined` — which is `!== null`, so every caller would
+    // appear to have stored an AI key and `user.ai_key` would report `satisfied`
+    // on a deployment where nobody has one. The enabled-model list is the same
+    // case: an empty catalogue, not a mock's `undefined`.
+    context.prismaMock.userAiKey.findUnique.mockResolvedValue(null);
+    context.prismaMock.aiModel.findMany.mockResolvedValue([]);
+    // The resolver reuses what it read for five seconds per process.
+    invalidateAiResolverCache(context);
   });
 
   afterEach(() => {
@@ -100,28 +104,6 @@ describe('Onboarding Integration', () => {
 
     const accessToken = jwtService.sign({ sub: id, email, roles: [] });
     return { id, accessToken };
-  }
-
-  /**
-   * Point the `system_settings` mock at a specific stored value.
-   *
-   * ⚠ The base mock answers the SAME row for every `key`, so this replaces the
-   * whole settings blob rather than one namespace — which is why the caller
-   * spreads `DEFAULT_SYSTEM_SETTINGS` rather than passing a fragment. A
-   * fragment would fail each namespace's own `safeParse` and silently fall back
-   * to those same defaults, producing a test that passes without testing
-   * anything.
-   */
-  function withSystemSettings(value: unknown): void {
-    context.prismaMock.systemSettings.findUnique.mockResolvedValue({
-      id: 'settings-global',
-      key: 'global',
-      value,
-      version: 1,
-      updatedByUserId: null,
-      updatedByUser: null,
-      updatedAt: new Date(),
-    });
   }
 
   function stepOf(body: any, key: string): any {
@@ -199,6 +181,8 @@ describe('Onboarding Integration', () => {
       // Reading `permissions` straight off `@CurrentUser()` here therefore
       // yields `undefined`, an empty set, and a 200 whose checklist is missing
       // three of its four steps with no error anywhere. See `OnboardingCaller`.
+      // The OpenAI slot is on, which is what makes a key savable (and the step relevant).
+      primeAiReadiness({ hasKey: false });
       const admin = await createMockAdminUser(context);
 
       const response = await request(context.app.getHttpServer())
@@ -229,16 +213,12 @@ describe('Onboarding Integration', () => {
       expect(stepOf(response.body, 'user.first_note')).toBeUndefined();
     });
 
-    it('omits `user.ai_key` entirely when this deployment names no AI vendor', async () => {
-      // ABSENT, not pending: with `ai.provider` null there is no vendor a key
-      // could belong to, so the step would lead to a form that cannot be filled
-      // in. (#83's argument runs the other way for a NAMED provider with AI
-      // switched off, which is the ordinary fresh-deployment state below.)
-      withSystemSettings({
-        ...DEFAULT_SYSTEM_SETTINGS,
-        ai: { ...DEFAULT_SYSTEM_SETTINGS.ai, provider: null },
-      });
-
+    it('omits `user.ai_key` entirely on a fresh deployment, where no AI provider is switched on', async () => {
+      // ABSENT, not pending: the platform refuses to store a key for a provider
+      // whose slot is off (`AI_PROVIDER_DISABLED`), so until an administrator
+      // switches the OpenAI slot on there is no vendor a key could belong to and
+      // the step would lead to a form that cannot be filled in. The default
+      // `system_settings` row ships exactly that state.
       const admin = await createMockAdminUser(context);
 
       const response = await request(context.app.getHttpServer())
@@ -249,11 +229,10 @@ describe('Onboarding Integration', () => {
       expect(stepOf(response.body, 'user.ai_key')).toBeUndefined();
     });
 
-    it('offers `user.ai_key` on a fresh deployment, where a vendor is named but AI is off', async () => {
-      // The #83 state, which every deployment of this application starts in:
-      // `DEFAULT_SYSTEM_SETTINGS.ai` ships `enabled: false` with
-      // `provider: 'openai'`, precisely so the first administrator can save the
-      // key they need in order to load the model list that turns AI on.
+    it('offers `user.ai_key` once the provider is on, even before any model is enabled', async () => {
+      // The slot is on, so a key can be saved now: the step is actionable and never
+      // blocked, whatever else the administrator still has to finish (a model, a default).
+      primeAiReadiness({ hasKey: false, models: [] });
       const admin = await createMockAdminUser(context);
 
       const response = await request(context.app.getHttpServer())

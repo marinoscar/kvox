@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
-import { computeTokenBudget } from '../ai/ai-token-budget';
+import { computeTokenBudget } from './ai-token-budget';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   AiTasksConfig,

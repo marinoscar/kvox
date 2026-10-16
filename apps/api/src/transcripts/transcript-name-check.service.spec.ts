@@ -4,6 +4,7 @@
 
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 
+import { FakeKvoxAi } from '../ai-port/testing/fake-kvox-ai';
 import { NAME_CHECK_CONFLICT_REASONS } from './dto/transcript-name-check.dto';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from './job-types';
 import {
@@ -127,19 +128,7 @@ function transcriptRow(overrides: Record<string, unknown> = {}) {
 function harness() {
   const access = { require: jest.fn().mockResolvedValue({ transcript: transcriptRow(), role: 'owner' }) };
   const editing = { applyOperations: jest.fn(), currentResult: jest.fn() };
-  const aiConfig = {
-    getConfig: jest.fn().mockResolvedValue({
-      available: true,
-      provider: 'openai',
-      providerLabel: 'OpenAI',
-      models: [],
-      defaultModel: 'gpt-4o',
-      keyConfigured: true,
-    }),
-  };
-  const providers = {
-    get: jest.fn().mockReturnValue({ id: 'openai', label: 'OpenAI', countTokens: (t: string) => Math.ceil(t.length / 4) }),
-  };
+  const ai = new FakeKvoxAi();
   const jobs = { enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }) };
 
   const prisma = {
@@ -203,12 +192,11 @@ function harness() {
     prisma as never,
     access as never,
     editing as never,
-    aiConfig as never,
-    providers as never,
+    ai,
     jobs as never,
   );
 
-  return { service, access, editing, aiConfig, providers, jobs, prisma };
+  return { service, access, editing, ai, jobs, prisma };
 }
 
 describe('TranscriptNameCheckService.create', () => {
@@ -226,15 +214,17 @@ describe('TranscriptNameCheckService.create', () => {
   });
 
   it('409s with ai_not_configured when AI is unavailable for this deployment', async () => {
-    const { service, aiConfig } = harness();
-    aiConfig.getConfig.mockResolvedValue({
-      available: false,
-      provider: null,
-      providerLabel: null,
-      models: [],
-      defaultModel: null,
-      keyConfigured: false,
+    const { service, ai } = harness();
+    ai.setNotReady('ai_not_configured');
+
+    await expect(service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER)).rejects.toMatchObject({
+      response: expect.objectContaining({ details: { reason: NAME_CHECK_CONFLICT_REASONS.AI_NOT_CONFIGURED } }),
     });
+  });
+
+  it('409s with ai_not_configured when the default model is not enabled', async () => {
+    const { service, ai } = harness();
+    ai.setNotReady('model_not_permitted');
 
     await expect(service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER)).rejects.toMatchObject({
       response: expect.objectContaining({ details: { reason: NAME_CHECK_CONFLICT_REASONS.AI_NOT_CONFIGURED } }),
@@ -242,19 +232,33 @@ describe('TranscriptNameCheckService.create', () => {
   });
 
   it('409s with ai_key_missing when the caller has no saved API key', async () => {
-    const { service, aiConfig } = harness();
-    aiConfig.getConfig.mockResolvedValue({
-      available: true,
-      provider: 'openai',
-      providerLabel: 'OpenAI',
-      models: [],
-      defaultModel: 'gpt-4o',
-      keyConfigured: false,
-    });
+    const { service, ai } = harness();
+    ai.setNotReady('ai_key_missing');
 
     await expect(service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER)).rejects.toMatchObject({
       response: expect.objectContaining({ details: { reason: NAME_CHECK_CONFLICT_REASONS.AI_KEY_MISSING } }),
     });
+  });
+
+  it('asks readiness for the name-check feature on the default model, as the caller', async () => {
+    const { service, ai, prisma } = harness();
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+
+    await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
+
+    expect(ai.lastCall('readiness')).toMatchObject({ userId: 'user-1', feature: 'transcript_name_check' });
+    expect(ai.lastCall('readiness')?.model ?? null).toBeNull();
+  });
+
+  it('records the provider and model the run will use', async () => {
+    const { service, prisma } = harness();
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+
+    await service.create(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
+
+    expect(prisma.transcriptNameCheck.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ providerId: 'openai', model: 'gpt-4o' }) }),
+    );
   });
 
   it('409s with name_check_running when a run is already pending or running', async () => {
@@ -685,5 +689,30 @@ describe('TranscriptNameCheckService.apply', () => {
 
     const options = editing.applyOperations.mock.calls[0][3];
     expect(options.summary).toBe('Applied 1 AI name correction');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// estimate — a key is needed to SPEND tokens, not to count them
+// -----------------------------------------------------------------------------
+
+describe('TranscriptNameCheckService.estimate', () => {
+  it('counts tokens for a caller with no saved key', async () => {
+    const { service, ai, prisma } = harness();
+    ai.setNotReady('ai_key_missing');
+    prisma.transcriptSpeaker.findMany.mockResolvedValue([{ id: 's-a', label: 'A', displayName: 'Oscar' }]);
+
+    const estimate = await service.estimate(TRANSCRIPT_ID, { mode: 'standard' } as never, USER);
+
+    expect(estimate).toEqual(expect.objectContaining({ inputTokens: expect.any(Number) }));
+  });
+
+  it('still 409s ai_not_configured when the deployment cannot run the feature', async () => {
+    const { service, ai } = harness();
+    ai.setNotReady('ai_not_configured');
+
+    await expect(service.estimate(TRANSCRIPT_ID, { mode: 'standard' } as never, USER)).rejects.toMatchObject({
+      response: expect.objectContaining({ details: { reason: NAME_CHECK_CONFLICT_REASONS.AI_NOT_CONFIGURED } }),
+    });
   });
 });

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../../ai/ai.module';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { NoteOriginService } from '../../notes/note-origin.service';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -34,7 +33,7 @@ import { SpanValidator } from './span-validator';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, AiModule, GraphModule, GraphResolutionModule],
+  imports: [PrismaModule, GraphModule, GraphResolutionModule],
   controllers: [GraphProposalsController],
   providers: [
     NoteAccessService,

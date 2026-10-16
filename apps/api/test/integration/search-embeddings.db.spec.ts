@@ -38,7 +38,7 @@
 //   4. THE WIDTH CONTRACT IS ENFORCED BY THE DATABASE: inserting a
 //      768-dimension vector is rejected. This is the point of storing the
 //      width as a real Postgres type rather than trusting application code
-//      alone — the boot-time `AiProviderRegistry` check the header describes
+//      alone — the catalog's 1536 constant the header describes
 //      is belt-and-braces, not the only guard.
 //   5. CASCADE: deleting a `search_chunks` row deletes its
 //      `search_embeddings` row (the one REAL foreign key this migration

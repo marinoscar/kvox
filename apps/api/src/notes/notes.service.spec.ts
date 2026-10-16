@@ -135,9 +135,10 @@ describe('NotesService', () => {
         sourceObjectId: null,
       }),
       resolveModel: jest.fn().mockResolvedValue({
-        provider: { id: 'openai' },
+        providerId: 'openai',
         model: 'gpt-4o',
-        policy: {},
+        readiness: {},
+        caps: { maxInputTokens: null, maxOutputTokens: null },
       }),
       assertPromptFits: jest.fn(),
     };

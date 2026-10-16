@@ -28,6 +28,7 @@
 // fail with `FROZEN`.
 // =============================================================================
 
+import { APP_SLUG } from '@app/shared';
 import { registerAiFeature, type AiFeatureDefinition } from '@marinoscar/platform-api/ai';
 
 import { APP_SLUG } from '@app/shared';

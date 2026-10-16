@@ -6,9 +6,9 @@
 // score sits between `newThreshold` and `autoLinkThreshold`, ask the
 // `graph.adjudicate` task model `same | different | uncertain`.
 //
-//   model     `AiTaskModelResolver.resolve(userId, 'graph.adjudicate')` — never
+//   model     `GraphAiRunResolver.resolve(userId, 'graph.adjudicate')` — never
 //             an extraction run's override, which applies to `graph.extract`
-//   batching  ≤ 20 pairs per `generateStructured` call (`kg_adjudication`)
+//   batching  ≤ 20 pairs per `KvoxAi.generateStructured` call (`kg_adjudication`)
 //   throttle  `aiProviderThrottleKey(userId)` registered for the CALLING job's
 //             type immediately before each call; a `RateLimitError` propagates
 //             (it defers the whole `kg.extract` / `kg.resolve` job)
@@ -25,15 +25,14 @@
 // rationale.
 // =============================================================================
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { z } from 'zod';
 
-import { AiAuthError, AiInputError } from '../../ai/ai-errors';
-import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
-import { createProviderContext } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { extractionBudget } from '../extraction/graph-extraction.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
 import {
   ADJUDICATION_BATCH_SIZE,
@@ -72,6 +71,8 @@ export interface AdjudicationResult {
 export interface AdjudicateOptions {
   /** The job type the calling job runs under — the throttle key is registered for it. */
   jobType: string;
+  /** The queue job making the calls, so each usage row links to it. */
+  jobId?: string;
 }
 
 const LIVE = ['accepted', 'edited'] as const;
@@ -85,8 +86,8 @@ function formatYears(y0: number | null, y1: number | null): string {
 export class AdjudicationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly resolver: AiTaskModelResolver,
-    private readonly credentials: UserAiCredentialsService,
+    private readonly resolver: GraphAiRunResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly throttle: ProviderThrottleService,
     private readonly ontology: GraphOntologyService,
   ) {}
@@ -104,7 +105,7 @@ export class AdjudicationService {
     const out = new Map<string, AdjudicationResult>();
     if (pairs.length === 0) return out;
 
-    const { resolution, provider, context, maxOutputTokens } = await this.prepare(userId);
+    const { resolution, maxOutputTokens } = await this.prepare(userId);
     const schema = await this.ontology.effectiveSchemaFor(userId);
     const typeKeys = [...new Set(pairs.map((p) => p.type))].sort();
     const types: AdjudicationTypeInfo[] = typeKeys.map((key) => {
@@ -117,15 +118,19 @@ export class AdjudicationService {
       const batch = pairs.slice(i, i + ADJUDICATION_BATCH_SIZE);
       const batchTypes = types.filter((t) => batch.some((p) => p.type === t.key));
       this.throttle.registerProviderKey(options.jobType, aiProviderThrottleKey(userId));
-      const result = await provider.generateStructured!(context, {
+      // `schema` is the pass-through validator: `readVerdicts` is this feature's
+      // own tolerant reader (an unknown or missing verdict degrades to `uncertain`).
+      const result = await this.ai.generateStructured({
+        userId,
+        feature: 'graph_adjudicate',
+        ...(options.jobId !== undefined ? { jobId: options.jobId } : {}),
         model: resolution.model,
-        systemPrompt: buildAdjudicationSystemPrompt(batchTypes),
-        userContent: buildAdjudicationUserContent(batch),
-        schema: outputSchema,
+        system: buildAdjudicationSystemPrompt(batchTypes),
+        user: buildAdjudicationUserContent(batch),
         schemaName: ADJUDICATION_SCHEMA_NAME,
+        schema: z.unknown(),
+        jsonSchema: outputSchema,
         maxOutputTokens,
-        timeoutMs: resolution.policy.requestTimeoutMs,
-        reasoningEffort: resolution.reasoningEffort,
       });
       const verdicts = readVerdicts(result.value, new Set(batch.map((p) => p.pairId)));
       for (const pair of batch) {
@@ -154,20 +159,22 @@ export class AdjudicationService {
     const out = new Map<string, ItemAdjudication & { model: string }>();
     if (pairs.length === 0) return out;
 
-    const { resolution, provider, context, maxOutputTokens } = await this.prepare(userId);
+    const { resolution, maxOutputTokens } = await this.prepare(userId);
     const outputSchema = buildItemAdjudicationOutputSchema();
     for (let i = 0; i < pairs.length; i += ITEM_ADJUDICATION_BATCH_SIZE) {
       const batch = pairs.slice(i, i + ITEM_ADJUDICATION_BATCH_SIZE);
       this.throttle.registerProviderKey(options.jobType, aiProviderThrottleKey(userId));
-      const result = await provider.generateStructured!(context, {
+      const result = await this.ai.generateStructured({
+        userId,
+        feature: 'graph_adjudicate',
+        ...(options.jobId !== undefined ? { jobId: options.jobId } : {}),
         model: resolution.model,
-        systemPrompt: buildItemAdjudicationSystemPrompt(batch),
-        userContent: buildItemAdjudicationUserContent(batch),
-        schema: outputSchema,
+        system: buildItemAdjudicationSystemPrompt(batch),
+        user: buildItemAdjudicationUserContent(batch),
         schemaName: ITEM_ADJUDICATION_SCHEMA_NAME,
+        schema: z.unknown(),
+        jsonSchema: outputSchema,
         maxOutputTokens,
-        timeoutMs: resolution.policy.requestTimeoutMs,
-        reasoningEffort: resolution.reasoningEffort,
       });
       for (const [pairId, v] of readItemVerdicts(result.value, new Set(batch.map((p) => p.pairId)))) {
         out.set(pairId, { ...v, model: resolution.model });
@@ -177,32 +184,14 @@ export class AdjudicationService {
   }
 
   /**
-   * The shared call path: resolve `graph.adjudicate`, check structured-output
-   * support and the deployment's provider settings, and read the caller's own
-   * key at the moment of use (never stored on a field, never logged).
+   * The shared call path: resolve `graph.adjudicate` (graph switch, AI
+   * configured, the caller's key, a model with structured output) and size the
+   * answer. No key is read here; the platform resolves it per call.
    */
   private async prepare(userId: string) {
     const resolution = await this.resolver.resolve(userId, 'graph.adjudicate');
-    const provider = resolution.provider;
-    if (typeof provider.generateStructured !== 'function') {
-      throw new AiInputError(
-        `The "${provider.id}" provider cannot return structured output, which adjudication needs.`,
-        undefined,
-        provider.id,
-      );
-    }
-    const settings = provider.settingsSchema.safeParse(
-      (resolution.policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AiInputError(`This deployment's configuration for provider "${provider.id}" is invalid.`, undefined, provider.id);
-    }
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) throw new AiAuthError(`No ${provider.label} API key is saved for your account.`, provider.id);
     return {
       resolution,
-      provider,
-      context: createProviderContext(apiKey, settings.data as never),
       maxOutputTokens: extractionBudget(resolution, ADJUDICATION_MAX_OUTPUT_TOKENS).maxOutputTokens,
     };
   }

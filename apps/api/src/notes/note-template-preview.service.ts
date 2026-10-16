@@ -140,7 +140,7 @@ export class NoteTemplatePreviewService {
     // created — see the header on why this check cannot be deferred to the job.
     const selector = await this.requests.resolveSource(dto.source, user);
 
-    const { provider, model, policy } = await this.requests.resolveModel(
+    const { providerId, model, readiness, caps } = await this.requests.resolveModel(
       user.id,
       dto.model ?? template.model ?? null,
       'preview',
@@ -165,9 +165,10 @@ export class NoteTemplatePreviewService {
     });
 
     this.requests.assertPromptFits({
-      provider,
+      providerId,
       model,
-      policy,
+      readiness,
+      caps,
       systemPrompt: prompt.systemPrompt,
       userContent: prompt.userContent,
     });
@@ -197,7 +198,7 @@ export class NoteTemplatePreviewService {
           sourceTranscriptId: selector.sourceTranscriptId,
           sourceNoteId: selector.sourceNoteId,
           sourceObjectId: selector.sourceObjectId,
-          providerId: provider.id,
+          providerId,
           model,
           expiresAt,
         },
@@ -249,7 +250,7 @@ export class NoteTemplatePreviewService {
       jobId,
       templateId: template.templateId,
       templateName: template.name,
-      providerId: provider.id,
+      providerId,
       model,
       expiresAt: expiresAt.toISOString(),
     };

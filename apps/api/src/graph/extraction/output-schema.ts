@@ -23,7 +23,7 @@
 import { buildPropsJsonSchema, type EffectiveEntityType } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
+import type { JsonSchema } from '../../ai-port/kvox-ai';
 import { CONTEXT_ALIAS, offeredContextText, type ExtractionContext } from './extraction-context';
 import type { ExtractionRowCaps } from './row-caps';
 

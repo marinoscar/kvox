@@ -1,4 +1,4 @@
-import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
+import { assertStrictJsonSchema } from '../../ai-port/strict-json-schema';
 import { goodAnswer, makeContext, makeInput, schemaFor } from '../../../test/graph/extraction-fixtures';
 import { buildExtractionContext } from './extraction-context';
 import { extractionRowCaps } from './row-caps';

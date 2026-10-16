@@ -49,16 +49,16 @@
 // Never a label, a statement, the prompt or the answer.
 // =============================================================================
 
-import { BadRequestException, ConflictException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, type Job } from '@prisma/client';
 import { z } from 'zod';
 
-import { AiInputError, AiAuthError } from '../../ai/ai-errors';
-import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
-import { createProviderContext } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { AiAuthError } from '../../ai-port/ai-errors';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
+import type { GraphAiRun } from '../graph-ai-run';
 import { READABLE_ENTITY_STATUSES } from '../read/readable';
 import { KG_ENTITY_DIGEST_JOB_TYPE } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
@@ -110,8 +110,8 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
-    private readonly resolver: AiTaskModelResolver,
-    private readonly credentials: UserAiCredentialsService,
+    private readonly resolver: GraphAiRunResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly throttle: ProviderThrottleService,
     private readonly ontology: GraphOntologyService,
   ) {}
@@ -145,7 +145,7 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
     }
 
     // Admin task model, no per-run override: nobody is choosing a model for a background refresh.
-    let resolution: Awaited<ReturnType<AiTaskModelResolver['resolve']>>;
+    let resolution: GraphAiRun;
     try {
       resolution = await this.resolver.resolve(ownerId, 'graph.digest');
     } catch (err) {
@@ -156,11 +156,7 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
       }
       throw err;
     }
-    const { provider, model, policy } = resolution;
-    if (typeof provider.generateStructured !== 'function') {
-      this.logger.log({ msg: 'entity digest skipped', entityId, reason: 'no_structured_output' });
-      return;
-    }
+    const { model } = resolution;
 
     // -- Input ----------------------------------------------------------------
     const now = new Date();
@@ -242,39 +238,31 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
     });
 
     // -- The call, on the owner's own key -------------------------------------
-    const settings = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AiInputError(
-        `This deployment's configuration for provider "${provider.id}" is invalid. An administrator must correct it first.`,
-      );
-    }
-    const apiKey = await this.credentials.getSecret(ownerId, provider.id);
-    if (!apiKey) {
-      // The resolver saw a key a moment ago; it was removed since. A domain outcome.
-      this.logger.log({ msg: 'entity digest skipped', entityId, reason: 'ai_key_missing' });
-      return;
-    }
-
     // ⚠ THE PER-USER BUCKET, immediately before the call: a 429 defers THIS owner's work only.
     this.throttle.registerProviderKey(this.type, aiProviderThrottleKey(ownerId));
 
-    let result: Awaited<ReturnType<NonNullable<typeof provider.generateStructured>>>;
+    // `schema` is the pass-through validator on purpose: the answer is checked
+    // with `answerSchema` below, with this job's own failure message.
+    let result: Awaited<ReturnType<KvoxAi['generateStructured']>>;
     try {
-      result = await provider.generateStructured(createProviderContext(apiKey, settings.data as never), {
+      result = await this.ai.generateStructured({
+        userId: ownerId,
+        feature: 'graph_digest',
+        jobId: job.id,
         model,
-        systemPrompt: prompt.systemPrompt,
-        userContent: prompt.userContent,
-        schema: DIGEST_RESPONSE_SCHEMA,
+        system: prompt.systemPrompt,
+        user: prompt.userContent,
         schemaName: DIGEST_SCHEMA_NAME,
+        schema: z.unknown(),
+        jsonSchema: DIGEST_RESPONSE_SCHEMA,
         maxOutputTokens: DIGEST_MAX_OUTPUT_TOKENS,
-        timeoutMs: DIGEST_TIMEOUT_MS,
-        reasoningEffort: resolution.reasoningEffort,
+        signal: AbortSignal.timeout(DIGEST_TIMEOUT_MS),
       });
     } catch (err) {
       if (err instanceof RateLimitError) throw err;
       if (err instanceof AiAuthError) {
+        // The key was refused (or removed since the check above). Logged by id
+        // and model only; rethrown so the job fails and the backoff applies.
         this.logger.warn({ msg: 'entity digest provider refused the key', entityId, model });
       }
       throw err;
@@ -310,8 +298,8 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
       msg: 'entity digest written',
       entityId,
       model,
-      promptTokens: result.usage.promptTokens,
-      completionTokens: result.usage.completionTokens,
+      promptTokens: result.usage.inputTokens,
+      completionTokens: result.usage.outputTokens,
       dropped: validated.dropped,
       ms: Date.now() - started,
     });

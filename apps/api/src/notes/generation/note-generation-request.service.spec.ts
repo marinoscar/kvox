@@ -1,187 +1,231 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException } from '@nestjs/common';
 
+import {
+  FakeKvoxAi,
+  notReadyReadiness,
+  readyReadiness,
+} from '../../ai-port/testing/fake-kvox-ai';
+import { NOTE_CONFLICT_REASONS } from '../dto/note.dto';
 import { NoteGenerationRequestService } from './note-generation-request.service';
-import type { SystemAiValue } from '../../ai/ai-settings.schema';
-import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 
 // =============================================================================
-// NoteGenerationRequestService.assertPromptFits (issue #78, epic #45)
+// NoteGenerationRequestService (issues #53, #78, #360, #475)
 // =============================================================================
 //
-// Since #78, a model known only through its OWN policy entry — one the build
-// catalogue has never heard of, adopted from the discovery dropdown — is
-// budget-checked here exactly like a model this build ships knowing about.
-// Before this file's own fix, `assertPromptFits` looked the model up only in
-// `input.provider.capabilities.models` (the build catalogue) and silently
-// returned when it found nothing there — which meant an over-budget prompt for
-// such a model sailed past this 400 and was only ever discovered as a
-// `failed` job minutes later, the exact outcome docs/specs/notes.md §3.3
-// exists to prevent. `assertPromptFits` now resolves through
-// `resolveAllowedModel` (the same function `AiConfigService` and
-// `AiSettingsService` use), so the ENTRY's own numbers are what gets checked.
-//
-// `assertPromptFits` is synchronous and touches nothing but its argument, so
-// the service under test needs no working collaborators — every constructor
-// dependency below is an inert stand-in.
+// `resolveModel` turns one `KvoxAi.readiness` answer into the refusal the notes
+// routes have always answered with (the same `details.reason` strings and the same
+// per-intent sentences), and `assertPromptFits` refuses an over-budget prompt with
+// the numbers in a 400. The port is the FakeKvoxAi; the deployment's two spend caps
+// come from a stand-in settings service.
 // =============================================================================
 
-function service(): NoteGenerationRequestService {
+const NOTE_MESSAGES = {
+  notConfigured:
+    'AI features are not configured for this deployment, so a note cannot be generated. An administrator can enable them in system settings.',
+  keyMissing:
+    'You have not saved an AI API key. A note is generated on your own provider account, so it needs your key. Add one in your settings and try again.',
+};
+
+const PREVIEW_MESSAGES = {
+  notConfigured:
+    'AI features are not configured for this deployment, so a template cannot be previewed. An administrator can enable them in system settings.',
+  keyMissing:
+    'You have not saved an AI API key. A preview is a real generation on your own provider account, so it needs your key. Add one in your settings and try again.',
+};
+
+function caps(overrides: Partial<{ maxInputTokens: number | null; maxOutputTokens: number | null }> = {}) {
+  return { maxInputTokens: null, maxOutputTokens: null, ...overrides };
+}
+
+function service(
+  ai: FakeKvoxAi,
+  options: { caps?: ReturnType<typeof caps>; models?: string[] } = {},
+): NoteGenerationRequestService {
+  const settings = { get: jest.fn().mockResolvedValue(options.caps ?? caps()) };
+  const prisma = {
+    aiModel: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue((options.models ?? ['gpt-5.4', 'gpt-5.4-mini']).map((modelId) => ({ modelId }))),
+    },
+  };
+
   return new NoteGenerationRequestService(
-    {} as never, // PrismaService — unused by assertPromptFits
-    {} as never, // AiTaskModelResolver
+    prisma as never,
+    ai,
+    settings as never,
     {} as never, // TranscriptAccessService
     {} as never, // NoteAccessService
     {} as never, // KvoxManagedObjectsService
   );
 }
 
-/** A provider whose BUILD CATALOGUE knows nothing — every model must resolve, if at all, from its own policy entry. */
-function providerWithEmptyCatalogue(): AiProvider<never> {
-  return {
-    id: 'openai',
-    label: 'OpenAI',
-    capabilities: { models: [], streaming: true, modelDiscovery: false },
-    settingsSchema: {} as never,
-    fieldDescriptors: [],
-    testConnection: jest.fn(),
-    // One "token" per character — deterministic and trivial to reason about.
-    countTokens: (text: string) => text.length,
-    generate: (async function* () {})(),
-  } as unknown as AiProvider<never>;
+async function refusalOf(promise: Promise<unknown>): Promise<HttpException> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as HttpException;
+  }
+  throw new Error('expected a refusal');
 }
 
-function policyPermitting(model: {
-  id: string;
-  contextWindowTokens?: number;
-  maxOutputTokens?: number;
-}): SystemAiValue {
-  return {
-    enabled: true,
-    provider: 'openai',
-    providers: {
-      openai: {
-        baseUrl: 'https://api.openai.com/v1',
-        allowedModels: [model],
-        defaultModel: model.id,
-      },
-    },
-    maxInputTokens: 2_000_000,
-    maxOutputTokens: 200_000,
-    requestTimeoutMs: 60_000,
-    reasoningEffort: 'none',
-    maxDocumentBytes: 1_000_000,
-    taskModels: {},
-    graphEnabled: false,
-  };
+function bodyOf(error: HttpException): { message?: string; details?: Record<string, unknown> } {
+  const body = error.getResponse();
+
+  return typeof body === 'string' ? { message: body } : (body as { message?: string });
 }
 
-describe('assertPromptFits — a model known only through its own policy entry (#78)', () => {
-  it('refuses an over-budget prompt with the numbers in the error, rather than deferring to a failed job', () => {
-    const svc = service();
-    const provider = providerWithEmptyCatalogue(); // build catalogue: nothing
-    const policy = policyPermitting({
-      id: 'gpt-6-turbo',
-      contextWindowTokens: 2_000,
-      maxOutputTokens: 500,
+describe('NoteGenerationRequestService.resolveModel', () => {
+  it('asks readiness for note_generate with the requested model and returns the resolution', async () => {
+    const ai = new FakeKvoxAi();
+    ai.setReadiness({ model: 'gpt-5.4-mini' });
+
+    const resolved = await service(ai).resolveModel('u1', null);
+
+    expect(resolved.providerId).toBe('openai');
+    expect(resolved.model).toBe('gpt-5.4-mini');
+    expect(resolved.caps).toEqual(caps());
+    expect(ai.lastCall('readiness')).toMatchObject({ userId: 'u1', feature: 'note_generate' });
+  });
+
+  it('passes a requested model through', async () => {
+    const ai = new FakeKvoxAi();
+
+    const resolved = await service(ai).resolveModel('u1', 'gpt-5.4', 'preview');
+
+    expect(resolved.model).toBe('gpt-5.4');
+    expect(ai.lastCall('readiness')?.model).toBe('gpt-5.4');
+  });
+
+  it('returns the deployment spend caps beside the model', async () => {
+    const ai = new FakeKvoxAi();
+
+    const resolved = await service(ai, { caps: caps({ maxInputTokens: 9_000, maxOutputTokens: 800 }) }).resolveModel(
+      'u1',
+      null,
+    );
+
+    expect(resolved.caps).toEqual({ maxInputTokens: 9_000, maxOutputTokens: 800 });
+  });
+
+  it.each([
+    ['note', NOTE_MESSAGES],
+    ['preview', PREVIEW_MESSAGES],
+  ] as const)('not configured (%s) is a 409 ai_not_configured with the intent sentence', async (intent, messages) => {
+    const ai = new FakeKvoxAi().setReadiness(notReadyReadiness('ai_not_configured'));
+
+    const error = await refusalOf(service(ai).resolveModel('u1', null, intent));
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getStatus()).toBe(409);
+    expect(bodyOf(error)).toEqual({
+      message: messages.notConfigured,
+      details: { reason: NOTE_CONFLICT_REASONS.AI_NOT_CONFIGURED },
     });
+  });
 
-    // budget = contextWindow(2000) - min(modelMaxOutput(500), policyMaxOutput(200000))(500) - 500 safety margin = 1000
-    const systemPrompt = 'x'.repeat(10);
-    const userContent = 'y'.repeat(5_000); // "\n"-joined length is 5011, well over 1000
+  it.each([
+    ['note', NOTE_MESSAGES],
+    ['preview', PREVIEW_MESSAGES],
+  ] as const)('no key (%s) is a 409 ai_key_missing with the intent sentence', async (intent, messages) => {
+    const ai = new FakeKvoxAi().setReadiness(notReadyReadiness('ai_key_missing'));
+
+    const error = await refusalOf(service(ai).resolveModel('u1', null, intent));
+
+    expect(error.getStatus()).toBe(409);
+    expect(bodyOf(error)).toEqual({
+      message: messages.keyMissing,
+      details: { reason: NOTE_CONFLICT_REASONS.AI_KEY_MISSING },
+    });
+  });
+
+  it('a model the deployment has not enabled is a 400 naming the permitted list', async () => {
+    const ai = new FakeKvoxAi().setReadiness(notReadyReadiness('model_not_permitted'));
+
+    const error = await refusalOf(service(ai).resolveModel('u1', 'gpt-x'));
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(error.getStatus()).toBe(400);
+    expect(bodyOf(error)).toEqual({
+      message: 'The model "gpt-x" is not one this deployment permits. Choose one of: gpt-5.4, gpt-5.4-mini.',
+      details: { reason: 'model_not_permitted' },
+    });
+  });
+
+  it('still refuses (without the list) when the permitted list cannot be read', async () => {
+    const ai = new FakeKvoxAi().setReadiness(notReadyReadiness('model_not_permitted'));
+    const svc = service(ai);
+    (svc as unknown as { prisma: { aiModel: { findMany: jest.Mock } } }).prisma.aiModel.findMany.mockRejectedValue(
+      new Error('db down'),
+    );
+
+    const error = await refusalOf(svc.resolveModel('u1', 'gpt-x'));
+
+    expect(error.getStatus()).toBe(400);
+    expect(bodyOf(error).details).toEqual({ reason: 'model_not_permitted' });
+  });
+});
+
+describe('NoteGenerationRequestService.assertPromptFits', () => {
+  // The fake counts with the real local estimate (max of chars/4 and words), so the
+  // prompts below are sized in characters and the expectations use the counted value.
+  function fits(ai: FakeKvoxAi, readiness: ReturnType<typeof readyReadiness>, userContent: string, capsValue = caps()) {
+    return service(ai).assertPromptFits({
+      providerId: 'openai',
+      model: 'gpt-6-turbo',
+      readiness,
+      caps: capsValue,
+      systemPrompt: 'x'.repeat(8),
+      userContent,
+    });
+  }
+
+  it('refuses an over-budget prompt with the numbers in the error, rather than deferring to a failed job', () => {
+    const ai = new FakeKvoxAi();
+    // window 2,000 - min(model 500, reserve) 500 - safety margin 500 = 1,000 available.
+    const readiness = readyReadiness({ model: 'gpt-6-turbo', contextWindowTokens: 2_000, maxOutputTokens: 500 });
 
     let thrown: unknown;
     try {
-      svc.assertPromptFits({
-        provider,
-        model: 'gpt-6-turbo',
-        policy,
-        systemPrompt,
-        userContent,
-      });
-    } catch (err) {
-      thrown = err;
+      fits(ai, readiness, 'y'.repeat(5_000));
+    } catch (error) {
+      thrown = error;
     }
 
     expect(thrown).toBeInstanceOf(BadRequestException);
     const message = (thrown as BadRequestException).message;
-    // The real counts, not a generic refusal — the whole reason §3.3 requires
-    // them, and the reason an over-budget request must be refused here rather
-    // than an hour later as an opaque failed generation.
-    expect(message).toContain('5,011');
+    // The real counts, not a generic refusal: §3.3's whole argument.
+    expect(message).toContain('1,253'); // ceil((8 + 1 + 5000) / 4)
     expect(message).toContain('1,000');
     expect(message).toContain('gpt-6-turbo');
   });
 
-  it('does NOT refuse when the prompt fits within a policy-only model\'s budget', () => {
-    const svc = service();
-    const provider = providerWithEmptyCatalogue();
-    const policy = policyPermitting({
-      id: 'gpt-6-turbo',
-      contextWindowTokens: 2_000_000,
-      maxOutputTokens: 500,
+  it('does not refuse when the prompt fits', () => {
+    const readiness = readyReadiness({ contextWindowTokens: 2_000_000, maxOutputTokens: 500 });
+
+    expect(() => fits(new FakeKvoxAi(), readiness, 'also short')).not.toThrow();
+  });
+
+  it('does not refuse a model with no recorded context window: the job is the backstop', () => {
+    const readiness = readyReadiness({ contextWindowTokens: null, maxOutputTokens: null });
+
+    expect(() => fits(new FakeKvoxAi(), readiness, 'y'.repeat(500_000))).not.toThrow();
+  });
+
+  it('applies the deployment input cap under the model window', () => {
+    const readiness = readyReadiness({ contextWindowTokens: 2_000_000, maxOutputTokens: 500 });
+
+    expect(() =>
+      fits(new FakeKvoxAi(), readiness, 'y'.repeat(5_000), caps({ maxInputTokens: 300 })),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rethrows anything that is not a budget refusal', () => {
+    const ai = new FakeKvoxAi();
+    jest.spyOn(ai, 'countTokens').mockImplementation(() => {
+      throw new Error('boom');
     });
 
-    expect(() =>
-      svc.assertPromptFits({
-        provider,
-        model: 'gpt-6-turbo',
-        policy,
-        systemPrompt: 'short',
-        userContent: 'also short',
-      }),
-    ).not.toThrow();
-  });
-
-  it('does not refuse a model NOTHING can describe — no entry numbers and no catalogue — the job is the backstop', () => {
-    // `resolveModel` already established the model is permitted; a model that
-    // resolves to nothing has no context window to check the prompt against,
-    // so this method deliberately does not refuse it here, however long the
-    // prompt is. `note.generate`'s own check is what backstops this case.
-    const svc = service();
-    const provider = providerWithEmptyCatalogue();
-    const policy = policyPermitting({ id: 'gpt-6-turbo' }); // no numbers at all
-
-    expect(() =>
-      svc.assertPromptFits({
-        provider,
-        model: 'gpt-6-turbo',
-        policy,
-        systemPrompt: 'x'.repeat(10),
-        userContent: 'y'.repeat(50_000),
-      }),
-    ).not.toThrow();
-  });
-
-  it('still budgets correctly against the BUILD catalogue when the entry carries no numbers of its own', () => {
-    // Regression guard the other direction: the #78 fix must not stop
-    // budgeting a model the build already knows just because the policy entry
-    // itself carries no numbers.
-    const svc = service();
-    const provider = {
-      ...providerWithEmptyCatalogue(),
-      capabilities: {
-        models: [
-          {
-            id: 'gpt-4o',
-            label: 'GPT-4o',
-            contextWindowTokens: 2_000,
-            maxOutputTokens: 500,
-          },
-        ],
-        streaming: true,
-        modelDiscovery: false,
-      },
-    } as unknown as AiProvider<never>;
-    const policy = policyPermitting({ id: 'gpt-4o' });
-
-    expect(() =>
-      svc.assertPromptFits({
-        provider,
-        model: 'gpt-4o',
-        policy,
-        systemPrompt: 'x'.repeat(10),
-        userContent: 'y'.repeat(5_000),
-      }),
-    ).toThrow(BadRequestException);
+    expect(() => fits(ai, readyReadiness(), 'y')).toThrow('boom');
   });
 });

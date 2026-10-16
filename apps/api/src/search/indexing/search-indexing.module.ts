@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../../ai/ai.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SearchIndexController } from './search-index.controller';
 import { SearchIndexStatusService } from './search-index-status.service';
@@ -34,22 +33,21 @@ import { SearchIndexService } from './search-index.service';
 // THE DEPENDENCY DIRECTION IS ONE-WAY, AND THAT IS WHAT KEEPS IT ACYCLIC
 // -----------------------------------------------------------------------------
 //
-// This module imports `PrismaModule`, `JobsModule` and `AiModule`, and NEITHER
+// This module imports `PrismaModule` (the jobs and AI modules are global), and NEITHER
 // `TranscriptsModule` NOR `NotesModule` — it reads both documents' rows through
 // Prisma directly rather than through their services, precisely so those two
 // can import this one. `TranscriptsModule`, `NotesModule` and `UserDataModule`
 // each import it to reach `SearchIndexService`; nothing here reaches back, so
 // there is no `forwardRef` anywhere in this epic and there should not be one.
 //
-// The handler needs `AiModule`'s three exports (`AiProviderRegistry`,
-// `AiSettingsService`, `UserAiCredentialsService`) and nothing new from it: the
-// resolution it performs — deployment policy, active provider, the OWNER's own
-// key — is the one `NoteGenerateHandler` already performs, reached through the
-// same services.
+// The handler needs one thing from the AI side, the global `KVOX_AI` port: the
+// resolution it performs - deployment policy, the embeddings model, the OWNER's
+// own key - is the one `NoteGenerateHandler` performs, reached through the same
+// port.
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, AiModule],
+  imports: [PrismaModule],
   // ⚠ THE CONTROLLER LIVES HERE, NOT IN `SearchModule` (issue #191). Its two
   // routes are an INDEXING surface — they read the AI policy, the caller's
   // credential and the job queue — while `SearchModule` is a query surface that

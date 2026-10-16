@@ -1,18 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, SearchIndexStatus } from '@prisma/client';
 
-import { AiAuthError, RateLimitError } from '../../ai/ai-errors';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import {
-  createProviderContext,
-  EMBEDDING_DIMENSIONS,
-  type AiEmbeddingCapability,
-  type AiProvider,
-} from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { AiAuthError, RateLimitError } from '../../ai-port/ai-errors';
+import { EMBEDDING_DIMENSIONS } from '../../ai-port/embedding-catalog';
+import { KVOX_AI, type KvoxAi, type KvoxEmbeddingCapability } from '../../ai-port/kvox-ai';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -27,10 +20,8 @@ import {
   SEARCH_DOC_TRANSCRIPT,
   SEARCH_INDEX_JOB_TYPE,
   SEARCH_REASON_DIMENSION_MISMATCH,
-  SEARCH_REASON_EMBEDDING_UNSUPPORTED,
   SEARCH_REASON_KEY_INVALID,
-  SEARCH_REASON_KEY_MISSING,
-  SEARCH_REASON_NOT_CONFIGURED,
+  searchReasonFor,
   type SearchDocumentType,
 } from './job-types';
 import { SearchIndexService } from './search-index.service';
@@ -201,9 +192,7 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
-    private readonly providers: AiProviderRegistry,
-    private readonly settings: AiSettingsService,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly throttle: ProviderThrottleService,
     private readonly index: SearchIndexService,
   ) {}
@@ -268,63 +257,27 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
     // 2. Can anything be embedded at all? Three deployment facts, then one
     //    account fact — cheapest and most permanent first.
     // -------------------------------------------------------------------------
-    const policy = await this.settings.get();
-
-    // `enabled` false, `provider` null (nobody has chosen one) and `provider`
-    // naming a vendor this build has never heard of (a rollback across the
-    // addition of a provider) are ONE outcome here, deliberately. All three are
-    // ordinary states of a deployment nobody has finished setting up, all three
-    // are an administrator's business rather than the document owner's, and
-    // there is nothing a reader of this row could do differently between them.
-    // `AiConfigService.getConfig` collapses the same three for the same reason.
-    const provider = policy.enabled && policy.provider ? this.providers.get(policy.provider) : undefined;
-
-    if (!provider) {
-      await this.skip(documentType, documentId, ownerId, SEARCH_REASON_NOT_CONFIGURED);
-
-      return;
-    }
-
-    // ⚠ ASKED, NOT ASSUMED. `embedding` + `embed` are optional and declared as
-    // a pair (`ai-provider.interface.ts`'s EMBEDDINGS section): a vendor with
-    // no embeddings endpoint, or an OpenAI-compatible gateway proxying only
-    // `/chat/completions`, is a perfectly registrable CHAT provider whose notes
-    // generate exactly as before. Its deployment simply has no semantic search,
-    // which is a fact worth recording per document rather than a crash inside a
-    // queue job.
-    const capability = provider.embedding;
-
-    if (!capability || typeof provider.embed !== 'function') {
-      await this.skip(documentType, documentId, ownerId, SEARCH_REASON_EMBEDDING_UNSUPPORTED);
-
-      return;
-    }
-
-    const settingsParse = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-
-    if (!settingsParse.success) {
-      // The deployment's own configuration block for this provider is invalid,
-      // which is the same kind of fact as "no provider is chosen" and has the
-      // same fix and the same person to talk to.
-      await this.skip(documentType, documentId, ownerId, SEARCH_REASON_NOT_CONFIGURED);
-
-      return;
-    }
-
+    // ONE QUESTION, ANSWERED BY THE PORT. `readiness` folds the deployment
+    // facts (AI switched off, no provider chosen, the embeddings model not
+    // usable) and the account fact (the OWNER's key) into one reason, in the
+    // order they are cheapest and most permanent. `searchReasonFor` spells it
+    // the way `search_index_state.reason` has always spelled it.
+    //
     // ⚠ THE OWNER'S KEY, NOT THE CALLER'S. There is no caller: this job runs
     // unattended, minutes or hours after whoever edited the document has gone.
     // Content is embedded ONCE, by the account of the person who owns it, which
     // is the only attribution that stays true no matter who later reads or
     // searches it.
-    const apiKey = await this.credentials.getSecret(ownerId, provider.id);
+    const readiness = await this.ai.readiness(ownerId, 'search_embed');
+    const gate = searchReasonFor(readiness);
 
-    if (!apiKey) {
-      await this.skip(documentType, documentId, ownerId, SEARCH_REASON_KEY_MISSING);
+    if (gate !== null) {
+      await this.skip(documentType, documentId, ownerId, gate);
 
       return;
     }
+
+    const capability = this.ai.embeddingCapability();
 
     // -------------------------------------------------------------------------
     // 3. Chunk, and ask the one question that makes an unedited document free.
@@ -386,10 +339,8 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
         documentType,
         documentId,
         ownerId,
-        provider,
+        jobId: job.id,
         capability,
-        apiKey,
-        settings: settingsParse.data,
         chunkIds: chunkRows,
       });
 
@@ -710,13 +661,11 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
     documentType: SearchDocumentType;
     documentId: string;
     ownerId: string;
-    provider: AiProvider;
-    capability: AiEmbeddingCapability;
-    apiKey: string;
-    settings: unknown;
+    jobId: string;
+    capability: KvoxEmbeddingCapability;
     chunkIds: readonly string[];
   }): Promise<number> {
-    const { documentType, documentId, ownerId, provider, capability } = input;
+    const { documentType, documentId, ownerId, jobId, capability } = input;
 
     // ⚠ THE WHOLE POINT, EXPRESSED AS ONE `none` FILTER: a chunk with a vector
     // for THIS model is not embedded again, whether it was written by this run,
@@ -743,15 +692,19 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
     // registering here is what makes a per-user key expressible at all.
     this.throttle.registerProviderKey(this.type, aiProviderThrottleKey(ownerId));
 
-    const ctx = createProviderContext(input.apiKey, input.settings);
-    const embed = provider.embed!.bind(provider);
-
     let embedded = 0;
 
     for (let offset = 0; offset < pending.length; offset += capability.maxBatchSize) {
       const batch = pending.slice(offset, offset + capability.maxBatchSize);
 
-      const result = await embed(ctx, { inputs: batch.map((chunk) => chunk.text) });
+      // ⚠ The platform records one usage row per round trip, under the
+      // `search_embed` feature and this job's id; nothing is recorded here.
+      const result = await this.ai.embed({
+        userId: ownerId,
+        feature: 'search_embed',
+        jobId,
+        texts: batch.map((chunk) => chunk.text),
+      });
 
       if (result.vectors.length !== batch.length) {
         // The provider contract says one vector per input in input order and
@@ -760,7 +713,7 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
         // position would attach vectors to the wrong chunks — the one failure
         // mode nothing downstream can detect.
         throw new Error(
-          `Provider "${provider.id}" returned ${result.vectors.length} vector(s) for a ` +
+          `The embeddings provider returned ${result.vectors.length} vector(s) for a ` +
             `${batch.length}-input batch while indexing ${documentType} ${documentId}.`,
         );
       }
@@ -775,7 +728,7 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
           });
 
           throw new Error(
-            `Provider "${provider.id}" returned a ${vector.length}-dimension vector while ` +
+            `The embeddings provider returned a ${vector.length}-dimension vector while ` +
               `indexing ${documentType} ${documentId}; this application stores vectors of ` +
               `exactly ${EMBEDDING_DIMENSIONS} components and can store nothing else.`,
           );
@@ -786,10 +739,6 @@ export class SearchIndexHandler implements JobHandler, OnModuleInit {
 
       embedded += batch.length;
     }
-
-    // Provenance for the settings page, fire-and-forget by contract. Recorded
-    // once per job rather than once per batch: it is a timestamp, not a counter.
-    await this.credentials.markUsed(ownerId, provider.id);
 
     return embedded;
   }

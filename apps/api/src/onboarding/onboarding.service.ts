@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { AiConfigService } from '../ai/ai-config.service';
+import { KVOX_AI, type KvoxAi, type KvoxAiReadiness } from '../ai-port/kvox-ai';
 import { EmailSettingsService } from '@marinoscar/platform-api/email';
 import { PushConfigService } from '@marinoscar/platform-api/notifications';
 import { SystemSettingsService, UserSettingsService } from '@marinoscar/platform-api/settings';
@@ -120,6 +120,21 @@ export interface OnboardingSnapshot<Ctx extends OnboardingContext> {
  */
 export type OnboardingCaller = RequestUser | AuthenticatedUser;
 
+/**
+ * Whether the DEPLOYMENT can run AI: it is switched on, a provider slot is on and a
+ * default model is enabled. A caller who merely has no key of their own still
+ * counts as configured: that is the caller's step (`user.ai_key`), not the
+ * administrator's.
+ */
+function deploymentConfigured(readiness: KvoxAiReadiness): boolean {
+  return readiness.ok || readiness.reason === 'ai_key_missing';
+}
+
+/** The vendor's display name for the checklist. */
+function providerLabelOf(providerId: string): string {
+  return providerId === 'openai' ? 'OpenAI' : providerId;
+}
+
 /** Resolve either shape to the one this service reasons about. */
 function normalizeCaller(user: OnboardingCaller): RequestUser {
   return Array.isArray((user as RequestUser).permissions)
@@ -131,7 +146,7 @@ function normalizeCaller(user: OnboardingCaller): RequestUser {
 export class OnboardingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiConfig: AiConfigService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly userSettings: UserSettingsService,
     private readonly systemSettings: SystemSettingsService,
     private readonly emailSettings: EmailSettingsService,
@@ -180,10 +195,10 @@ export class OnboardingService {
   async buildUserContext(
     userId: string,
   ): Promise<OnboardingSnapshot<OnboardingUserContext>> {
-    const [facts, ai, settings] =
+    const [facts, readiness, settings] =
       await Promise.all([
         this.resolveFacts('user', userId),
-        this.aiConfig.getConfig(userId),
+        this.ai.readiness(userId, 'note_generate'),
         // Two facts from one read: `profile.displayName` for `user.profile`,
         // and the caller's `onboarding.skipped[]` (#272).
         //
@@ -205,10 +220,12 @@ export class OnboardingService {
         userId,
         facts,
         ai: {
-          available: ai.available,
-          provider: ai.provider,
-          providerLabel: ai.providerLabel,
-          keyConfigured: ai.keyConfigured,
+          // Usable by this caller, or usable once they add a key: the key is a
+          // separate question (`keyConfigured`), as it always was.
+          available: readiness.ok || readiness.reason === 'ai_key_missing',
+          provider: readiness.provider,
+          providerLabel: readiness.provider === null ? null : providerLabelOf(readiness.provider),
+          keyConfigured: readiness.hasKey,
         },
         displayName: settings.profile?.displayName ?? null,
       },
@@ -228,7 +245,7 @@ export class OnboardingService {
   ): Promise<OnboardingSnapshot<OnboardingAdminContext>> {
     const [
       facts,
-      aiPolicy,
+      aiReadiness,
       backup,
       email,
       push,
@@ -237,10 +254,10 @@ export class OnboardingService {
       allowedEmailCount,
     ] = await Promise.all([
       this.resolveFacts('admin', userId),
-      // The POLICY, not `AiConfigService`'s per-caller projection — see
-      // `OnboardingAdminContext.aiPolicy` for why the two answer different
-      // questions and why an administrator's step is about the first one.
-      this.systemSettings.getAiPolicy(),
+      // The DEPLOYMENT's readiness, seen through the administrator's own account:
+      // see `OnboardingAdminContext.aiPolicy` for why an administrator's step is
+      // about the deployment and not about their own key.
+      this.ai.readiness(userId, 'note_generate'),
       this.systemSettings.getDatabaseBackupPolicy(),
       this.emailSettings.describeForAdmin(),
       this.pushConfig.describeForAdmin(),
@@ -249,30 +266,12 @@ export class OnboardingService {
       this.prisma.allowedEmail.count(),
     ]);
 
-    // PLATFORM-ADOPTION-SHIM(#477): the `ai` namespace is the platform's since #473 and
-    // carries no `provider` / `allowedModels`; those two legacy keys survive in the
-    // stored value until #474 migrates them. Read them defensively so this step keeps
-    // its meaning on an un-migrated row and degrades to "not configured" on a migrated one.
-    const legacyAi = aiPolicy as unknown as {
-      provider?: string | null;
-      providers?: Record<string, { allowedModels?: unknown[] } | undefined>;
-    };
-
     return {
       context: {
         audience: 'admin',
         userId,
         facts,
-        aiPolicy: {
-          enabled: aiPolicy.enabled,
-          provider: legacyAi.provider ?? null,
-          // Read through the policy's own active-provider axis (#78) rather
-          // than a hardcoded `'openai'`: a deployment that switched vendors
-          // would otherwise be judged on the list belonging to the old one.
-          allowedModelCount: legacyAi.provider
-            ? (legacyAi.providers?.[legacyAi.provider]?.allowedModels?.length ?? 0)
-            : 0,
-        },
+        aiPolicy: { configured: deploymentConfigured(aiReadiness) },
         // A provider chosen AND the feature switched on. Either alone sends no
         // mail, and reporting it configured would make a silently undelivered
         // invitation look like a working one.

@@ -1,4 +1,4 @@
-import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
+import { assertStrictJsonSchema } from '../../ai-port/strict-json-schema';
 import { buildDigestFactList, itemAllowedInPrompt, relationAllowedInPrompt, type DigestItemFact } from './brief-facts';
 import { buildDigestPrompt, DIGEST_RESPONSE_SCHEMA, DIGEST_SYSTEM_PROMPT } from './brief-prompt';
 

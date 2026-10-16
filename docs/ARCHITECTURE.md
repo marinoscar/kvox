@@ -287,7 +287,7 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
 │   │   │   │   └── ai/               # AiModule.forRoot, AiHostModule (binds AI_TARGET_RESOLVER), the ai namespace extension
 │   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership, AI features (ai.ts)
-│   │   │   ├── ai-port/              # Task chooser, KvoxAiTargetResolver, feature-to-task map, AiError mapper, /api/ai-tasks/*
+│   │   │   ├── ai-port/              # KvoxAi (KVOX_AI) + PlatformKvoxAi: the only call path to a model; embedding catalog, countTokens, task chooser, KvoxAiTargetResolver, feature map, mapAiError, /api/ai-tasks/*
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
 │   │   │   ├── kvox-objects/         # Ownership side table, managed-objects gateway, multipart routes, files list, delete veto, transcript upload processor
 │   │   │   ├── settings/             # registry/ (namespace manifests) only
@@ -918,7 +918,7 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   (`'phonetic'`/`'discovery'`), and `status` (`pending`/`accepted`/`rejected`/`stale`).
   Accepting one never writes `transcript_segments.text` directly — it becomes an ordinary
   `segment.update_text` op through the same `/operations` path every other correction uses
-- `user_ai_credentials` - One AI provider API key per `(userId, provider)` (issue #47, epic
+- `user_ai_credentials` - **Retired by the AI port (#475): no feature code reads it.** Live keys are in the platform's `user_ai_keys`; user-data deletion still counts and deletes these rows until #477 drops the table. One AI provider API key per `(userId, provider)` (issue #47, epic
   #45): each user's own key, never a deployment-wide one — see `docs/specs/notes.md` §9.
   `secret` is `encryptSecret(rawKey, 'ai-key')` (from `@marinoscar/platform-api/core`) — the same cipher every other secret in this
   application uses, under a new purpose string for domain separation, so a ciphertext lifted
@@ -1421,7 +1421,7 @@ registers what is its own and binds two host ports.
 | Encrypted `(purpose, name)` store, the AES-256-GCM cipher, the boot-time `SECRETS_ENCRYPTION_KEY` check | platform credentials slice and `core` | `platform/credentials/credentials.config.ts` (`CredentialsModule`, not global; `UserCredentialsModule`, `OrgCredentialsModule` mounted and unused), `main.ts` calls `verifyEncryptionKeyAtStartup` from `@marinoscar/platform-api/core` |
 | Credential purposes `smtp`, `email_ses`, `push_vapid` | platform definitions (strings equal the ones KVox always stored) | `platform/credentials/credential-purposes.manifest.ts` |
 | Credential purpose `transcription` | KVox | registered in `kvox.manifest.ts` under `[registry:credential-purposes]` (the base-domain-boundary test forbids `platform/credentials` importing `transcription`) |
-| Per-user AI keys | KVox | `user_ai_credentials`, encrypted with the core `encryptSecret`/`decryptSecret`, purpose `'ai-key'`; never in `credentials` |
+| Per-user AI keys | platform AI slice | `user_ai_keys`, written and resolved by the platform (`/api/ai/keys`); never in `credentials`. KVox code never reads one: `KvoxAi` (#475) passes the user id and the platform resolves the key. The retired `user_ai_credentials` table stays until #477 |
 
 A purpose is also the AES-GCM sub-key domain, so a purpose string is permanent. The cipher is byte-compatible with the one
 KVox ran before (verified in both directions on existing ciphertext), which is why adopting the slice needed no data
@@ -1556,8 +1556,11 @@ AI is the platform's slice (`@marinoscar/platform-api/ai`), mounted in `apps/api
 | Nine registered features (group `kvox`) | KVox | `app-registrations/ai.ts`; ids to task keys in `ai-port/features.ts` |
 | `AiError` to wire reason or job error class | KVox | `ai-port/kvox-ai-errors.ts` (`mapAiError`) |
 | `GET /api/ai-tasks/config`, `GET`/`PUT /api/ai-tasks/settings` | KVox | `ai-port/ai-tasks.controller.ts` |
+| The one way code reaches a model | KVox | `KvoxAi` (`ai-port/kvox-ai.ts`, token `KVOX_AI`), implemented by `PlatformKvoxAi` over `AiService.forUser` (#475) |
 
-Design, the feature table and the mapping table: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice".
+**AI call path (#475).** Feature code (notes, transcripts, search, the graph) injects `KVOX_AI` and calls `readiness`, `streamText`, `generateStructured`, `embed` or `countTokens` with a registered feature id; it imports no platform AI type, and a guard spec (`test/ai/ai-port-boundary.spec.ts`) fails on one outside `ai-port/` and `platform/ai/`. `PlatformKvoxAi` calls `AiService.forUser(userId, { orgId, jobId, feature })`, so the platform resolves the user's key from `user_ai_keys`, runs its gates, records one usage row per round trip and traces the call. Failures leave through `mapAiError`. `chat` (the Ask loop) is declared and lands with #476.
+
+Design, the feature table, the mapping table and the `KvoxAi` contract: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice" and "`KvoxAi` call path". Embeddings: [`specs/search.md`](specs/search.md) §11.
 
 ---
 

@@ -9,7 +9,7 @@
 // names the handles it relies on.
 // =============================================================================
 
-import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
+import type { JsonSchema } from '../../ai-port/kvox-ai';
 import type { DigestFact } from './brief-facts';
 
 /** At most this many statements survive into a digest. */

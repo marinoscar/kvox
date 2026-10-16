@@ -20,7 +20,7 @@
 
 import { z } from 'zod';
 
-import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
+import type { JsonSchema } from '../../ai-port/kvox-ai';
 import type { ItemAdjudication } from './dedup-core';
 
 export const ITEM_ADJUDICATION_SCHEMA_NAME = 'kg_item_adjudication';

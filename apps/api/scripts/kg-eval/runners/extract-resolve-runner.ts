@@ -26,12 +26,9 @@
 // Item dedup needs an embedding and an adjudication call, neither of which an
 // eval run makes; it is covered by the stage's own tests instead.
 //
-// ⚠ The key reaches the provider context only (inside `runExtraction`).
+// ⚠ The key reaches the direct client only (inside `runExtraction`'s default).
 // =============================================================================
 
-import { AiProviderRegistry } from '../../../src/ai/ai-provider.registry';
-import type { AiProvider } from '../../../src/ai/providers/ai-provider.interface';
-import { OpenAiProvider } from '../../../src/ai/providers/openai.provider';
 import { normalizeForMatch } from '../../../src/graph/extraction/extraction-context';
 import type { ProposedRow } from '../../../src/graph/extraction/validate';
 import { computeEffectiveSchema } from '@app/shared/ontology';
@@ -52,6 +49,7 @@ import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../../../src/g
 import { decide } from '../../../src/graph/resolution/resolution.service';
 import { bandFor, rankCandidates, scoreCandidate } from '../../../src/graph/resolution/score';
 import { normalizeAlias } from '../../../src/graph/write/normalize';
+import { directStructuredClient } from '../direct-structured';
 import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';
 import type { KgEvalPrediction } from '../prediction-schema';
@@ -197,11 +195,10 @@ export function applyDedupStagesInMemory(
 }
 
 export function createExtractResolveRunner(deps: ExtractRunnerDeps = {}): KgEvalRunner {
-  const provider = deps.provider ?? (new OpenAiProvider(new AiProviderRegistry()) as unknown as AiProvider<unknown>);
   return {
     name: 'extract+resolve',
     async run(fixture: GoldenFixture, opts: KgEvalRunOptions): Promise<KgEvalPrediction> {
-      const extracted = await runExtraction(provider, fixture, opts);
+      const extracted = await runExtraction(deps.ai ?? directStructuredClient(opts.apiKey), fixture, opts);
       if (!extracted) {
         return { fixtureId: fixture.id, model: opts.model, entities: [], relations: [], items: [], stats: { invalidOutput: 1 } };
       }

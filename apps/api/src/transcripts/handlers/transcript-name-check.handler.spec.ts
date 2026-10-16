@@ -2,22 +2,13 @@
 // `transcript.name_check` (issues #328 and #330, epic #326)
 // =============================================================================
 //
-// Follows the shape of `notes/handlers/note-generate.handler.spec.ts`: a fake
-// provider whose stream is scripted per test, and a Prisma stand-in whose
-// `$transaction` just runs the callback against a shared `tx`-like object.
+// Follows the shape of `notes/handlers/note-generate.handler.spec.ts`: the
+// `FakeKvoxAi` port whose streams are scripted per test, and a Prisma stand-in
+// whose `$transaction` just runs the callback against a shared `tx`-like object.
 // =============================================================================
 
-import { z } from 'zod';
-
-import { AiAuthError, AiInputError } from '../../ai/ai-errors';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-  AiProviderContext,
-} from '../../ai/providers/ai-provider.interface';
-import { OPENAI_PROVIDER_ID } from '../../ai/providers/openai.provider';
+import { AiAuthError, AiInputError, AiRefusedError } from '../../ai-port/ai-errors';
+import { FakeKvoxAi } from '../../ai-port/testing/fake-kvox-ai';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';
 import {
   TRANSCRIPT_NAME_CHECK_MAX_RUNTIME_MS,
@@ -37,19 +28,10 @@ const USER_ID = 'user-1';
 const TRANSCRIPT_ID = 'transcript-1';
 const CHECK_ID = 'check-1';
 
-const policy = {
-  enabled: true,
-  provider: 'openai',
-  providers: {
-    openai: {
-      baseUrl: 'https://api.openai.com/v1',
-      allowedModels: ['gpt-4o'],
-      defaultModel: 'gpt-4o',
-    },
-  },
+/** The deployment's two spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`). */
+const caps = {
   maxInputTokens: 100_000,
   maxOutputTokens: 4_000,
-  requestTimeoutMs: 60_000,
 };
 
 const speakerRows = [{ id: 's-a', label: 'A', displayName: 'Speaker A' }];
@@ -82,44 +64,21 @@ function runRow(overrides: Record<string, unknown> = {}) {
 
 const job = (payload: unknown = { checkId: CHECK_ID }) => ({ id: 'job-1', payload }) as never;
 
-/** A provider whose stream is scripted per call. */
-class FakeProvider implements AiProvider<unknown> {
-  readonly id = OPENAI_PROVIDER_ID;
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [{ id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false }],
-    streaming: true as const,
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
-
-  calls = 0;
-  requests: AiGenerateRequest[] = [];
-
-  constructor(private readonly scripts: Array<() => AsyncIterable<AiDelta>>) {}
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  generate(_ctx: AiProviderContext<unknown>, request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    this.requests.push(request);
-    const script = this.scripts[Math.min(this.calls, this.scripts.length - 1)]!;
-    this.calls += 1;
-    return script();
-  }
+/** One scripted model answer: the text, with the provider's own token counts. */
+function answer(text: string) {
+  return { deltas: [text], usage: { inputTokens: 50, outputTokens: 10 } };
 }
 
-function answer(text: string, finishReason: 'stop' | 'length' | 'content_filter' = 'stop'): () => AsyncIterable<AiDelta> {
-  return async function* (): AsyncIterable<AiDelta> {
-    yield { kind: 'delta', text };
-    yield { kind: 'done', finishReason, usage: { promptTokens: 50, completionTokens: 10 } };
-  };
+/** A port that answers each call with the next text, in order. */
+function answering(...texts: string[]): FakeKvoxAi {
+  const ai = new FakeKvoxAi();
+  for (const text of texts) ai.queueStream(answer(text));
+  return ai;
+}
+
+/** The `user` prompts the port was called with, in order. */
+function userPrompts(ai: FakeKvoxAi): string[] {
+  return ai.callsOf('streamText').map((call) => (call.request as { user: string }).user);
 }
 
 /** A keep-everything adjudication answer. */
@@ -131,7 +90,7 @@ const replaceJson = JSON.stringify({
 
 interface Harness {
   handler: TranscriptNameCheckHandler;
-  providers: AiProviderRegistry;
+  ai: FakeKvoxAi;
   throttle: ProviderThrottleService;
   prisma: {
     transcriptNameCheck: { findUnique: jest.Mock; updateMany: jest.Mock };
@@ -145,27 +104,21 @@ interface Harness {
     transcriptNameSuggestion: { createMany: jest.Mock };
   };
   settings: { get: jest.Mock };
-  credentials: { getSecret: jest.Mock };
 }
 
 function harness(options: {
-  provider?: AiProvider<unknown>;
+  ai?: FakeKvoxAi;
   run?: Record<string, unknown>;
-  apiKey?: string | null;
-  policyOverride?: Record<string, unknown>;
+  capsOverride?: Record<string, unknown>;
   segments?: typeof segmentRows;
   currentVersion?: number;
   checkStatus?: string;
 } = {}): Harness {
-  const providers = new AiProviderRegistry();
-  providers.register(options.provider ?? new FakeProvider([answer(keepJson)]));
+  const ai = options.ai ?? answering(keepJson);
 
   const throttle = new ProviderThrottleService({ get: () => undefined } as never);
 
-  const settings = { get: jest.fn().mockResolvedValue({ ...policy, ...(options.policyOverride ?? {}) }) };
-  const credentials = {
-    getSecret: jest.fn().mockResolvedValue(options.apiKey === undefined ? 'sk-test' : options.apiKey),
-  };
+  const settings = { get: jest.fn().mockResolvedValue({ ...caps, ...(options.capsOverride ?? {}) }) };
 
   const run = options.run ?? runRow();
 
@@ -193,13 +146,12 @@ function harness(options: {
   const handler = new TranscriptNameCheckHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
+    ai,
     settings as never,
-    credentials as never,
     throttle,
   );
 
-  return { handler, providers, throttle, prisma, tx, settings, credentials };
+  return { handler, ai, throttle, prisma, tx, settings };
 }
 
 // -----------------------------------------------------------------------------
@@ -299,8 +251,7 @@ describe('TranscriptNameCheckHandler — registration and profile', () => {
 
 describe('TranscriptNameCheckHandler — a standard run', () => {
   it('persists an accepted suggestion and marks the run ready, with token counts', async () => {
-    const provider = new FakeProvider([answer(replaceJson)]);
-    const { handler, tx, prisma } = harness({ provider });
+    const { handler, tx, prisma } = harness({ ai: answering(replaceJson) });
 
     await handler.process(job());
 
@@ -337,18 +288,33 @@ describe('TranscriptNameCheckHandler — a standard run', () => {
     expect(data.outputTokens).toBeGreaterThan(0);
   });
 
-  it("passes responseFormat: 'json' to the provider", async () => {
-    const provider = new FakeProvider([answer(keepJson)]);
-    const { handler } = harness({ provider });
+  it('calls the port as the requesting user, for the name-check feature, linked to the job', async () => {
+    const { handler, ai } = harness();
 
     await handler.process(job());
 
-    expect(provider.requests[0]?.responseFormat).toBe('json');
+    expect(ai.lastCall('readiness')).toMatchObject({ userId: USER_ID, feature: 'transcript_name_check' });
+    expect(ai.lastCall('streamText')).toMatchObject({
+      userId: USER_ID,
+      feature: 'transcript_name_check',
+      jobId: 'job-1',
+    });
+  });
+
+  it('records the provider and model the run ran on', async () => {
+    const { handler, tx } = harness();
+
+    await handler.process(job());
+
+    expect(tx.transcriptNameCheck.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ providerId: 'openai', model: 'gpt-4o' }),
+      }),
+    );
   });
 
   it('registers the per-user throttle key on every call', async () => {
-    const provider = new FakeProvider([answer(keepJson)]);
-    const { handler, throttle } = harness({ provider });
+    const { handler, throttle } = harness();
 
     const spy = jest.spyOn(throttle, 'registerProviderKey');
 
@@ -393,14 +359,13 @@ describe('TranscriptNameCheckHandler — a standard run', () => {
 
 describe('TranscriptNameCheckHandler — malformed answers', () => {
   it('retries once on invalid JSON before giving up on that request', async () => {
-    const provider = new FakeProvider([answer('not json at all'), answer('still not json')]);
-    const { handler } = harness({ provider });
+    const { handler, ai } = harness({ ai: answering('not json at all', 'still not json') });
 
     await handler.process(job());
 
-    expect(provider.calls).toBe(2);
+    expect(ai.callsOf('streamText')).toHaveLength(2);
     // Second request carries the retry instruction.
-    expect(provider.requests[1]?.userContent).toContain('Return only valid JSON');
+    expect(userPrompts(ai)[1]).toContain('Return only valid JSON');
   });
 
   it('a malformed batch is skipped WITHOUT failing the whole run, when another request is usable', async () => {
@@ -411,8 +376,11 @@ describe('TranscriptNameCheckHandler — malformed answers', () => {
     const segments = [
       { id: 'seg-1', rev: 1, speakerId: 's-a', startMs: 0, text: 'They called him Skar yesterday.', words: null },
     ];
-    const provider = new FakeProvider([answer('garbage'), answer('garbage'), answer(replaceJson)]);
-    const { handler, tx, prisma } = harness({ provider, run: runRow({ mode: 'thorough' }), segments });
+    const { handler, tx, prisma } = harness({
+      ai: answering('garbage', 'garbage', replaceJson),
+      run: runRow({ mode: 'thorough' }),
+      segments,
+    });
 
     await handler.process(job());
 
@@ -427,18 +395,16 @@ describe('TranscriptNameCheckHandler — malformed answers', () => {
   });
 
   it('recovers when the retry succeeds', async () => {
-    const provider = new FakeProvider([answer('not json'), answer(replaceJson)]);
-    const { handler, tx } = harness({ provider });
+    const { handler, tx, ai } = harness({ ai: answering('not json', replaceJson) });
 
     await handler.process(job());
 
-    expect(provider.calls).toBe(2);
+    expect(ai.callsOf('streamText')).toHaveLength(2);
     expect(tx.transcriptNameSuggestion.createMany).toHaveBeenCalledTimes(1);
   });
 
   it('fails the run with "refusal" when EVERY request produced no usable answer', async () => {
-    const provider = new FakeProvider([answer('garbage'), answer('still garbage')]);
-    const { handler, prisma } = harness({ provider });
+    const { handler, prisma } = harness({ ai: answering('garbage', 'still garbage') });
 
     await handler.process(job());
 
@@ -456,12 +422,8 @@ describe('TranscriptNameCheckHandler — malformed answers', () => {
 
 describe('TranscriptNameCheckHandler — failure handling', () => {
   it('rethrows RateLimitError and leaves the run running (not failed)', async () => {
-    class ThrottledProvider extends FakeProvider {
-      generate(): AsyncIterable<AiDelta> {
-        throw new RateLimitError('slow down');
-      }
-    }
-    const { handler, prisma } = harness({ provider: new ThrottledProvider([]) });
+    const ai = new FakeKvoxAi().queueStreamError(new RateLimitError('slow down'));
+    const { handler, prisma } = harness({ ai });
 
     await expect(handler.process(job())).rejects.toBeInstanceOf(RateLimitError);
 
@@ -473,28 +435,67 @@ describe('TranscriptNameCheckHandler — failure handling', () => {
   });
 
   it('marks the run failed with errorClass "auth" when no API key is saved, and returns normally', async () => {
-    const { handler, prisma } = harness({ apiKey: null });
+    const ai = new FakeKvoxAi().setNotReady('ai_key_missing');
+    const { handler, prisma } = harness({ ai });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
     expect(prisma.transcriptNameCheck.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'failed', errorClass: 'auth' }) }),
     );
+    expect(ai.callsOf('streamText')).toHaveLength(0);
+  });
+
+  it.each([
+    ['AI is not configured', 'ai_not_configured'],
+    ['the model is no longer enabled', 'model_not_permitted'],
+  ] as const)('marks the run failed with errorClass "input" when %s', async (_name, reason) => {
+    const ai = new FakeKvoxAi().setNotReady(reason);
+    const { handler, prisma } = harness({ ai });
+
+    await expect(handler.process(job())).resolves.toBeUndefined();
+
+    expect(prisma.transcriptNameCheck.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'failed', errorClass: 'input' }) }),
+    );
   });
 
   it('marks the run failed as "other" AND rethrows for an unrecognised error', async () => {
-    class ExplodingProvider extends FakeProvider {
-      generate(): AsyncIterable<AiDelta> {
-        throw new Error('kaboom, unexpected');
-      }
-    }
-    const { handler, prisma } = harness({ provider: new ExplodingProvider([]) });
+    const ai = new FakeKvoxAi().queueStreamError(new Error('kaboom, unexpected'));
+    const { handler, prisma } = harness({ ai });
 
     await expect(handler.process(job())).rejects.toThrow('kaboom, unexpected');
 
     expect(prisma.transcriptNameCheck.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'failed', errorClass: 'other' }) }),
     );
+  });
+
+  it('treats a content-policy refusal on one batch as an unusable answer, not a failed run', async () => {
+    // The first call is declined (retried once), the retry is declined too, so the
+    // batch is skipped; with no usable request at all the run is a "refusal".
+    const ai = new FakeKvoxAi()
+      .queueStreamError(new AiRefusedError('declined'))
+      .queueStreamError(new AiRefusedError('declined'));
+    const { handler, prisma } = harness({ ai });
+
+    await expect(handler.process(job())).resolves.toBeUndefined();
+
+    expect(ai.callsOf('streamText')).toHaveLength(2);
+    expect(prisma.transcriptNameCheck.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'failed', errorClass: 'refusal' }) }),
+    );
+  });
+
+  it('a refusal on one batch does not stop a later batch from being usable', async () => {
+    const ai = new FakeKvoxAi()
+      .queueStreamError(new AiRefusedError('declined'))
+      .queueStream(answer(replaceJson));
+    const { handler, tx } = harness({ ai });
+
+    await handler.process(job());
+
+    expect(tx.transcriptNameSuggestion.createMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -526,9 +527,8 @@ describe('TranscriptNameCheckHandler — thorough mode', () => {
         { id: 'c2', verdict: 'replace', replacement: 'Oscar' },
       ],
     });
-    const provider = new FakeProvider([answer(discoveryAnswer), answer(bothReplaceJson)]);
-    const { handler, tx } = harness({
-      provider,
+    const { handler, tx, ai } = harness({
+      ai: answering(discoveryAnswer, bothReplaceJson),
       run: runRow({ mode: 'thorough' }),
       segments,
     });
@@ -536,7 +536,7 @@ describe('TranscriptNameCheckHandler — thorough mode', () => {
     await handler.process(job());
 
     // Two provider calls: one discovery chunk, one adjudication batch.
-    expect(provider.calls).toBe(2);
+    expect(ai.callsOf('streamText')).toHaveLength(2);
     expect(tx.transcriptNameSuggestion.createMany).toHaveBeenCalledTimes(1);
     const suggestions = tx.transcriptNameSuggestion.createMany.mock.calls[0][0].data as Array<{
       source: string;
@@ -555,8 +555,7 @@ describe('TranscriptNameCheckHandler — thorough mode', () => {
 
 describe('TranscriptNameCheckHandler — the settle transaction re-checks status', () => {
   it('does not persist when the run stopped being "running" by the time the write happens', async () => {
-    const provider = new FakeProvider([answer(replaceJson)]);
-    const { handler, tx } = harness({ provider, checkStatus: 'failed' });
+    const { handler, tx } = harness({ ai: answering(replaceJson), checkStatus: 'failed' });
 
     await handler.process(job());
 

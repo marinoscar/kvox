@@ -1,8 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import type { Job } from '@prisma/client';
-import { z } from 'zod';
 
-import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai/ai-errors';
+import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai-port/ai-errors';
+import { FakeKvoxAi } from '../../ai-port/testing/fake-kvox-ai';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { ProposalStageRegistry, type ProposalStage } from '../extraction/proposal-stage';
 import type { ProposedRow } from '../extraction/validate';
@@ -25,25 +25,17 @@ const job = (p: unknown = payload) => ({ id: 'job-1', payload: p }) as unknown a
 
 function harness(options: { answer?: unknown; stages?: ProposalStage[] } = {}) {
   const calls: string[] = [];
-  const generateStructured = jest.fn(async () => {
+  const ai = new FakeKvoxAi().setStructuredHandler(() => {
     calls.push('provider');
-    return { value: options.answer ?? goodAnswer(), usage: { promptTokens: 1234, completionTokens: 321 }, finishReason: 'stop' };
+    return { value: options.answer ?? goodAnswer(), usage: { inputTokens: 1234, outputTokens: 321 } };
   });
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    settingsSchema: z.object({}).passthrough(),
-    countTokens: (t: string) => Math.ceil(t.length / 4),
-    generateStructured,
-  };
   const resolution = {
     providerId: 'openai',
-    provider,
     model: 'gpt-4o',
     reasoningEffort: 'medium',
     countTokens: (t: string) => Math.ceil(t.length / 4),
-    descriptor: { id: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: true },
-    policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, requestTimeoutMs: 60_000, providers: { openai: {} } },
+    modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+    policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, reasoningEffort: 'none' },
     source: 'requested',
     keyConfigured: true,
   };
@@ -84,7 +76,6 @@ function harness(options: { answer?: unknown; stages?: ProposalStage[] } = {}) {
   const registry = { register: jest.fn() };
   const loader = { load: jest.fn(async () => makeInput()) };
   const resolver = { resolve: jest.fn(async () => resolution) };
-  const credentials = { getSecret: jest.fn(async () => 'sk-test-key') };
   const throttle = {
     registerProviderKey: jest.fn(() => {
       calls.push('throttle');
@@ -99,13 +90,13 @@ function harness(options: { answer?: unknown; stages?: ProposalStage[] } = {}) {
     prisma as never,
     loader as never,
     resolver as never,
-    credentials as never,
+    ai,
     throttle as never,
     writer as never,
     stages,
     preferences as never,
   );
-  return { handler, calls, writer, prisma, resolver, credentials, throttle, generateStructured, loader, registry };
+  return { handler, calls, writer, prisma, resolver, throttle, ai, loader, registry };
 }
 
 describe('KgExtractHandler (#363)', () => {
@@ -159,7 +150,7 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it('records the prompt BEFORE the provider call, and registers the per-user throttle key right before it', async () => {
-    const { handler, calls, writer, throttle, generateStructured } = harness();
+    const { handler, calls, writer, throttle, ai } = harness();
     await handler.process(job());
     expect(calls.indexOf('recordPrompt')).toBeLessThan(calls.indexOf('provider'));
     expect(calls.indexOf('throttle')).toBe(calls.indexOf('provider') - 1);
@@ -168,10 +159,15 @@ describe('KgExtractHandler (#363)', () => {
       PROPOSAL,
       expect.objectContaining({ model: 'gpt-4o', provider: 'openai', systemPrompt: expect.any(String), userContent: expect.any(String) }),
     );
-    expect(generateStructured).toHaveBeenCalledWith(
-      expect.anything(),
-      // #436: the 8,000 cap plus 'medium' effort's 16,384 reasoning headroom exceeds the model's own 16,000.
-      expect.objectContaining({ model: 'gpt-4o', schemaName: 'kg_extraction', maxOutputTokens: 16_000, timeoutMs: 60_000 }),
+    // #436: the 8,000 cap plus 'medium' effort's 16,384 reasoning headroom exceeds the model's own 16,000.
+    expect(ai.lastCall('generateStructured')).toEqual(
+      expect.objectContaining({
+        userId: IDS.owner,
+        feature: 'graph_extract',
+        jobId: 'job-1',
+        model: 'gpt-4o',
+        request: expect.objectContaining({ schemaName: 'kg_extraction', maxOutputTokens: 16_000 }),
+      }),
     );
   });
 
@@ -182,8 +178,8 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it('rethrows a RateLimitError and leaves the proposal untouched', async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured.mockRejectedValueOnce(new RateLimitError('slow down', 30_000));
+    const { handler, writer, ai } = harness();
+    ai.queueStructuredError(new RateLimitError('slow down', 30_000));
     await expect(handler.process(job())).rejects.toBeInstanceOf(RateLimitError);
     expect(writer.markFailed).not.toHaveBeenCalled();
     expect(writer.finalize).not.toHaveBeenCalled();
@@ -194,19 +190,19 @@ describe('KgExtractHandler (#363)', () => {
     ['refusal', new AiRefusedError('Declined.', undefined, 'openai')],
     ['invalid_output', new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai')],
   ])('a terminal %s failure marks the proposal failed and returns', async (errorClass, error) => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured.mockRejectedValueOnce(error);
+    const { handler, writer, ai } = harness();
+    ai.queueStructuredError(error);
     await expect(handler.process(job())).resolves.toBeUndefined();
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), { errorClass, message: error.message });
   });
 
   it('a truncated answer is re-asked once; a second truncation is a terminal truncated failure (#435)', async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured
-      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'))
-      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
+    const { handler, writer, ai } = harness();
+    ai
+      .queueStructuredError(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'))
+      .queueStructuredError(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
     await expect(handler.process(job())).resolves.toBeUndefined();
-    expect(generateStructured).toHaveBeenCalledTimes(2);
+    expect(ai.callsOf('generateStructured')).toHaveLength(2);
     expect(writer.markFailed).toHaveBeenCalledWith(
       PROPOSAL,
       expect.objectContaining({ truncationRetry: true }),
@@ -215,26 +211,26 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   /** The `At most N.` number a call's entities-array description names. */
-  function entitiesCapOf(call: unknown[]): number {
-    const request = call[1] as { schema: { properties: { entities: { description?: string } } } };
-    const description = request.schema.properties.entities.description ?? '';
+  function entitiesCapOf(call: { request: unknown }): number {
+    const request = call.request as { jsonSchema: { properties: { entities: { description?: string } } } };
+    const description = request.jsonSchema.properties.entities.description ?? '';
     const match = /At most (\d+)\./.exec(description);
     if (!match) throw new Error(`no cap found in description: ${description}`);
     return Number(match[1]);
   }
 
   it('a truncated first call, then success, finalizes the proposal with truncationRetry recorded, the second call sized from HALVED row caps, and usage summed across both calls (#435)', async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured.mockRejectedValueOnce(
+    const { handler, writer, ai } = harness();
+    ai.queueStructuredError(
       new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 111, completionTokens: 222 }),
     );
     // The second (successful) call uses the harness default usage: { promptTokens: 1234, completionTokens: 321 }.
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
-    expect(generateStructured).toHaveBeenCalledTimes(2);
-    const firstCap = entitiesCapOf(generateStructured.mock.calls[0]);
-    const secondCap = entitiesCapOf(generateStructured.mock.calls[1]);
+    expect(ai.callsOf('generateStructured')).toHaveLength(2);
+    const firstCap = entitiesCapOf(ai.callsOf('generateStructured')[0]);
+    const secondCap = entitiesCapOf(ai.callsOf('generateStructured')[1]);
     // planExtraction sizes {entities:5, relations:5, items:5} from this
     // harness's model/policy/effort combination (the floor); halving gives 2.
     expect(firstCap).toBe(5);
@@ -249,9 +245,9 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it("a truncated answer with no usage on the error still succeeds on retry and sums only the second call's usage", async () => {
-    const { handler, writer, generateStructured } = harness();
+    const { handler, writer, ai } = harness();
     // No usage carried on this truncation (an older / bare construction).
-    generateStructured.mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
+    ai.queueStructuredError(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
 
     await handler.process(job());
 
@@ -260,10 +256,10 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it('a truncated answer twice is a terminal truncated failure carrying truncatedMessage, with usage recorded (non-zero) on the failure path (#435)', async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured
-      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 50 }))
-      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 25 }));
+    const { handler, writer, ai } = harness();
+    ai
+      .queueStructuredError(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 50 }))
+      .queueStructuredError(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 25 }));
 
     await handler.process(job());
 
@@ -282,12 +278,12 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it("an invalid_json failure is 'invalid_output' with NO retry — the provider is called exactly once", async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured.mockRejectedValueOnce(new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai', { promptTokens: 10, completionTokens: 20 }));
+    const { handler, writer, ai } = harness();
+    ai.queueStructuredError(new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai', { promptTokens: 10, completionTokens: 20 }));
 
     await handler.process(job());
 
-    expect(generateStructured).toHaveBeenCalledTimes(1);
+    expect(ai.callsOf('generateStructured')).toHaveLength(1);
     const [, stats, failure] = writer.markFailed.mock.calls[0] as unknown as [string, Record<string, unknown>, { errorClass: string }];
     expect(failure.errorClass).toBe('invalid_output');
     expect(stats.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
@@ -301,21 +297,23 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it('an over-budget prompt is a budget failure, and the provider is never called', async () => {
-    const { handler, writer, generateStructured, resolver } = harness();
+    const { handler, writer, ai, resolver } = harness();
     const r = await resolver.resolve();
     resolver.resolve.mockResolvedValueOnce({ ...r, policy: { ...r.policy, maxInputTokens: 10 } });
     await handler.process(job());
-    expect(generateStructured).not.toHaveBeenCalled();
+    expect(ai.callsOf('generateStructured')).toHaveLength(0);
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), expect.objectContaining({ errorClass: 'budget' }));
     // The prompt was recorded all the same.
     expect(writer.recordPrompt).toHaveBeenCalled();
   });
 
-  it('a missing key is an auth failure, and the provider is never called', async () => {
-    const { handler, writer, credentials, generateStructured } = harness();
-    credentials.getSecret.mockResolvedValueOnce(null as never);
+  it('a missing key (the resolver refuses with ai_key_missing) is an auth failure, and the provider is never called', async () => {
+    const { handler, writer, ai, resolver } = harness();
+    resolver.resolve.mockRejectedValueOnce(
+      new ConflictException({ message: 'You have not saved an AI API key.', details: { reason: 'ai_key_missing' } }),
+    );
     await handler.process(job());
-    expect(generateStructured).not.toHaveBeenCalled();
+    expect(ai.callsOf('generateStructured')).toHaveLength(0);
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), expect.objectContaining({ errorClass: 'auth' }));
   });
 
@@ -332,8 +330,8 @@ describe('KgExtractHandler (#363)', () => {
   });
 
   it('an unexpected error marks the proposal failed and rethrows', async () => {
-    const { handler, writer, generateStructured } = harness();
-    generateStructured.mockRejectedValueOnce(new Error('socket hang up'));
+    const { handler, writer, ai } = harness();
+    ai.queueStructuredError(new Error('socket hang up'));
     await expect(handler.process(job())).rejects.toThrow('socket hang up');
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), {
       errorClass: 'other',
@@ -351,6 +349,8 @@ describe('KgExtractHandler (#363)', () => {
         ctx.stats.ran = true;
         expect(ctx.preferences).toBe(GRAPH_PREFERENCE_DEFAULTS);
         expect(ctx.proposalId).toBe(PROPOSAL);
+        // The queue job rides along so a stage's model calls link to it (#475).
+        expect(ctx.jobId).toBe('job-1');
       },
     });
     const { handler, calls, writer } = harness({ stages: [stage('temporal-closing', 300), stage('resolution', 100), stage('work-item-dedup', 200)] });

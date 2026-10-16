@@ -2,7 +2,8 @@ import type { ModuleRef } from '@nestjs/core';
 
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import type { AiConfigService } from '../../src/ai/ai-config.service';
+import type { KvoxAi, KvoxAiReadiness } from '../../src/ai-port/kvox-ai';
+import { notReadyReadiness, readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
 import type { EmailSettingsService } from '@marinoscar/platform-api/email';
 import type { PushConfigService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -65,9 +66,10 @@ export interface OnboardingKit {
   };
   emailSettings: { describeForAdmin: jest.Mock };
   pushConfig: { describeForAdmin: jest.Mock };
-  systemSettings: { getAiPolicy: jest.Mock; getDatabaseBackupPolicy: jest.Mock };
+  systemSettings: { getDatabaseBackupPolicy: jest.Mock };
   userSettings: { getSettings: jest.Mock };
-  aiConfig: { getConfig: jest.Mock };
+  /** The AI port: only `readiness` is read by the checklist. */
+  ai: { readiness: jest.Mock };
 }
 
 export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
@@ -84,28 +86,27 @@ export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
     allowedEmail: { count: jest.fn(counted(facts.allowedEmailCount ?? 1)) },
   };
 
-  const aiConfig = {
-    getConfig: jest.fn(
-      counted({
-        available: true,
-        provider: 'openai',
-        providerLabel: 'OpenAI',
-        keyConfigured: true,
-        ...facts.ai,
-      }),
-    ),
-  };
+  // ⚠ `in`, not `??`: `provider` is legitimately `null` (no vendor chosen), and a
+  // `??` default would turn that case back into the configured one.
+  const provider = facts.ai && 'provider' in facts.ai ? (facts.ai.provider ?? null) : 'openai';
+  const available = facts.ai?.available ?? true;
+  const keyConfigured = facts.ai?.keyConfigured ?? true;
+  const deploymentConfigured = facts.aiPolicy?.configured ?? true;
 
-  // ⚠ `in`, not `??`. Both of the facts below are legitimately `null`, and a
-  // `??` default would quietly turn the two cases this suite most needs to
-  // drive — no AI provider chosen, no display name set — back into the
-  // configured ones, passing every assertion for the wrong reason.
+  /** The one `KvoxAi.readiness` answer both audiences' AI facts are derived from. */
+  const readiness: KvoxAiReadiness = (() => {
+    if (!available || !deploymentConfigured) {
+      return { ...notReadyReadiness('ai_not_configured'), provider, hasKey: keyConfigured };
+    }
+    if (!keyConfigured) return { ...notReadyReadiness('ai_key_missing'), provider };
+    return readyReadiness({ provider });
+  })();
+
+  const ai = { readiness: jest.fn(counted(readiness)) };
+
+  // ⚠ `in`, not `??`: no display name set is legitimately `null`.
   const displayName =
     'displayName' in facts ? (facts.displayName ?? null) : 'Ada Lovelace';
-  const aiProvider =
-    facts.aiPolicy && 'provider' in facts.aiPolicy
-      ? (facts.aiPolicy.provider ?? null)
-      : 'openai';
 
   const userSettings = {
     getSettings: jest.fn(
@@ -117,20 +118,6 @@ export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
   };
 
   const systemSettings = {
-    getAiPolicy: jest.fn(
-      counted({
-        enabled: facts.aiPolicy?.enabled ?? true,
-        provider: aiProvider,
-        providers: {
-          openai: {
-            allowedModels: Array.from(
-              { length: facts.aiPolicy?.allowedModelCount ?? 1 },
-              (_, index) => ({ id: `model-${index}` }),
-            ),
-          },
-        },
-      }),
-    ),
     getDatabaseBackupPolicy: jest.fn(counted({ enabled: facts.backupEnabled ?? true })),
   };
 
@@ -166,7 +153,7 @@ export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
 
   const service = new OnboardingService(
     prisma as unknown as PrismaService,
-    aiConfig as unknown as AiConfigService,
+    ai as unknown as KvoxAi,
     userSettings as unknown as UserSettingsService,
     systemSettings as unknown as SystemSettingsService,
     emailSettings as unknown as EmailSettingsService,
@@ -182,9 +169,8 @@ export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
       for (const stub of [
         prisma.user.count,
         prisma.allowedEmail.count,
-        aiConfig.getConfig,
+        ai.readiness,
         userSettings.getSettings,
-        systemSettings.getAiPolicy,
         systemSettings.getDatabaseBackupPolicy,
         emailSettings.describeForAdmin,
         pushConfig.describeForAdmin,
@@ -203,7 +189,7 @@ export function buildOnboardingKit(facts: KitFacts = {}): OnboardingKit {
     pushConfig,
     systemSettings,
     userSettings,
-    aiConfig,
+    ai,
   };
 }
 
