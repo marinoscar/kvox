@@ -212,7 +212,7 @@ import configuration from './config/configuration';
     // dashboard, the stack-agent surface, the assistant (unavailable until #472)
     // and the `telemetry.*` jobs, at `/api/admin/telemetry/*` and
     // `GET /api/telemetry/config` (`telemetry:read|write|query`). Replaces the
-    // Uptrace stack. The SDK that emits traces and metrics is `instrumentation.ts`.
+    // previous observability stack. The SDK that emits traces and metrics is `instrumentation.ts`.
     telemetryModule,
 
     // About (#124, epic #118; the platform's since #464): `GET /api/admin/about`,

@@ -8,7 +8,7 @@
 // (SQL, schema, export), the dashboard with its metric groups and health verdict,
 // the stack-agent surface, the assistant, two server-only job types
 // (`telemetry.retention.apply`, `telemetry.stack.deploy`) and five Doctor checks.
-// It replaces the Uptrace stack and this app's own OpenTelemetry setup (the SDK
+// It replaces this app's own OpenTelemetry setup (the SDK
 // itself is `instrumentation.ts`, over `@marinoscar/platform-api/otel-core/sdk`).
 //
 // Permissions: `telemetry:read|write|query` (admin only, registered by the
