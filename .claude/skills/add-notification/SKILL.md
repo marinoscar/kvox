@@ -40,7 +40,7 @@ No migration and no preference row: the sparse `notifications` user setting trea
 - A notification is never a long-running job. Do not render or send inline in a handler; `notify` schedules the dispatch.
 - Do not register `registerAndroidAppNotificationChannel`; this app has no Android client.
 - The operational and broadcast events (`jobs.job_failed`, `nodes.node_offline`, `admin.broadcast`, `admin.broadcast_critical`) come from the platform's own arrays (`OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS`, `BROADCASTS_NOTIFICATIONS`), registered in the manifest as they are. Never redeclare one.
-- The service worker never calls the API and `sw.js` stays `no-cache` (`apps/web/src/sw.ts`, composed from `registerNotificationServiceWorkerHandlers`; local exceptions in `docs/platform-adoption/local-exceptions.md`).
+- The service worker never calls the API and `sw.js` stays `no-cache` (`apps/web/src/sw.ts`, registers the package's `registerNotificationServiceWorkerHandlers`).
 
 ## Verify
 

@@ -175,16 +175,31 @@ code. Everything else in this document still holds.
 
 ### The service worker (#453 parity)
 
-`apps/web/src/sw.ts` keeps the app's workbox precache and navigation routes and
-registers its notification handlers through
-`registerNotificationServiceWorkerHandlers(self, options)` from
-`@marinoscar/platform-web/notifications/headless`. The worker still never calls
-the API, and `sw.js` is still served `no-cache`. The behaviours #453 added are
-pending agent report (frontend agent): for each of the focused-tab rule
-(Section 7), the no-duplicate-toast rule and the `push-test-received`
-acknowledgement, record whether the package does the same or the app composes its
-own `push` listener from `handlePushEvent`. A composed listener is a row in
-[local-exceptions.md](../platform-adoption/local-exceptions.md).
+`apps/web/src/sw.ts` keeps the app's workbox precache, the denylisted navigation
+route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its three
+notification listeners with
+`registerNotificationServiceWorkerHandlers(self, { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' })`
+imported from `@marinoscar/platform-web/notifications/service-worker` (the
+worker-safe entry). The worker still never calls the API, and `sw.js` is still
+served `no-cache`.
+
+The package ports the behaviour of #449 to #451 unchanged, so nothing is composed
+locally and there is no local exception:
+
+- **A real push is always shown by the worker**, even when a window client is
+  focused (#450). It is the **page** that stays quiet: its SSE handler raises no
+  OS toast for a focused tab, and none for a frame flagged `pushed` (#451). So a
+  focused user gets exactly one alert, the push.
+- **No duplicate toast for one notification.** The `tag` is `payload.id` (or
+  `payload.tag`), so a repeated push for one id reuses the tag and replaces the
+  toast.
+- **A test push is shown even when focused**, then acknowledged to every window
+  client with `hadFocusedClient`, which is what `POST /api/admin/push-config/test`
+  and the packaged diagnostics panel expect.
+- A malformed payload still shows a generic notification (every path through a
+  `push` event awaits `showNotification`).
+- `notificationclick` re-validates the link before opening it, and
+  `pushsubscriptionchange` re-subscribes best effort.
 
 ## Why this shape, and not the obvious one
 
@@ -611,7 +626,8 @@ wider audience; #226 introduces one, purpose-built.
 > (`NotificationProvider`), and the server side of the `pushed` flag by the
 > platform's `NotificationStreamService`. The push-side rules (a real push shows
 > even to a focused client) live in `apps/api` nowhere any more: they are the
-> service worker's, composed in `apps/web/src/sw.ts`; see
+> service worker's, registered in `apps/web/src/sw.ts` through the package's
+> `registerNotificationServiceWorkerHandlers`; see
 > [The service worker](#the-service-worker-453-parity).
 
 Two independent mechanisms solve two independent problems, and neither
@@ -1425,8 +1441,7 @@ event key registered with its channels and `mandatory` flag, every `email`
 channel has a template), `apps/api/test/notifications/preferences-continuity.db.spec.ts`
 (a pre-migration `notifications` preference row still applies), the `email` and
 `notifications` suites of `apps/api/test/conformance.spec.ts` (with an empty
-`afterCommitAllowlist`) and the service-worker unit test for the focused-tab
-rule. A duplicate toast or a toast while the app is focused (the #453
-regressions) is only visible in a real browser: after a deploy, finish a
-transcript with the tab focused, then with it backgrounded, and expect no OS
-toast in the first case and exactly one in the second.
+`afterCommitAllowlist`) and the service-worker unit test. A duplicate toast (the #453 regression) is only visible in a real
+browser: after a deploy, finish a transcript with the tab focused, then with it
+backgrounded, and expect exactly one OS toast each time (the worker's push; the
+page raises none while focused or when the frame is flagged `pushed`).
