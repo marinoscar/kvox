@@ -72,7 +72,10 @@ COPY apps/cli/package.json ./apps/cli/
 # The WHOLE shared package, not just its manifest — the production stage
 # inherits this directory, and a symlink pointing at an empty one produces an
 # image that builds clean and dies at boot with ERR_MODULE_NOT_FOUND.
-COPY packages/shared ./packages/shared/
+# Every workspace package under packages/ (`@app/shared` and the four
+# domain packages the apps depend on): whole directories, not just manifests, for
+# the same reason as above.
+COPY packages ./packages/
 RUN npm ci --workspace=cli --include-workspace-root --ignore-scripts
 
 # -----------------------------------------------------------------------------

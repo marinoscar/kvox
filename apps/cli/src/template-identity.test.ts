@@ -342,6 +342,25 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'typedoc.base.json',
 
   // ---------------------------------------------------------------------
+  // Added by issue #487 (epic #486), the `@marinoscar/kvox-*` package pipeline.
+  //
+  // The files under `packages/kvox-*/` and `scripts/kvox-packages/` are exempt
+  // by prefix (`EXEMPT_PREFIXES` below). These are the pipeline's other files:
+  // they name the published packages and their folders, the dist-tags, the
+  // workflow files and branch the registry's trusted publisher is attached to
+  // (`kvox-release.yml`, `npm-publish`), the repository slug in
+  // `repository.url`, and the copyright holder of the MIT LICENSE. None of it
+  // can be reworded without republishing under another name.
+  // ---------------------------------------------------------------------
+  '.changeset/kvox-packages-scaffold.md',
+  '.github/workflows/kvox-packages.yml',
+  '.github/workflows/kvox-release.yml',
+  '.gitignore',
+  'docs/PACKAGES.md',
+  'docs/runbooks/release-kvox-packages.md',
+  'LICENSE',
+
+  // ---------------------------------------------------------------------
   // Added by issue #130 (epic #168), the VPS bootstrap script.
   //
   // `apps/cli/bootstrap-vps.sh` has exactly the standing of `install.sh`
@@ -450,6 +469,15 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
 
 const MANIFEST_FILE_LINE_RE = /\bkvox\.(?:settings-)?manifest(?:\.ts)?\b/;
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * Folders whose every file is exempt (issue #487): the `@marinoscar/kvox-*`
+ * packages are named after the product by design (their folders, `bin` name,
+ * `repository` fields, READMEs and the pipeline scripts that check them), and a
+ * published package name is not a rebrand target. Listing each file would add
+ * ~50 entries that every new package file must extend.
+ */
+const EXEMPT_PREFIXES: readonly string[] = ['packages/kvox-', 'scripts/kvox-packages/'];
 const BINARY_EXT_RE = /\.(png|ico|jpg|jpeg|gif|woff2?|ttf|pdf|zip)$/i;
 const EXTRA_EXEMPT: ReadonlySet<string> = new Set([
   // A generated lockfile, not authored prose; renaming rewrites it via
@@ -580,6 +608,7 @@ function findOffenders(files: string[], patterns: { value: string; re: RegExp }[
 
   for (const file of files) {
     if (ALLOWLIST.has(file) || EXTRA_EXEMPT.has(file)) continue;
+    if (EXEMPT_PREFIXES.some((prefix) => file.startsWith(prefix))) continue;
     if (TEST_FILE_RE.test(file)) continue; // .test.ts/.spec.ts/.test.tsx/.spec.tsx — see below
     if (BINARY_EXT_RE.test(file)) continue;
 

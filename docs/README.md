@@ -28,6 +28,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Add or change an endpoint | [API.md](API.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md), then `/api/docs` (OpenAPI) |
 | Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
 | Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)) |
+| Add a slice to, check or release a `@marinoscar/kvox-*` package | [PACKAGES.md](PACKAGES.md), [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md) |
 | Baseline a database onto the platform history | [runbooks/application-role.md](runbooks/application-role.md) | You move an existing database to the ordinary application role the API connects as (row-level security), or roll back |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
@@ -65,6 +66,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas, repository tooling (platform pin, single-instance check, changesets) |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
+| [PACKAGES.md](PACKAGES.md) | The four publishable `@marinoscar/kvox-*` packages: slices, the README/TSDoc/TypeDoc standard, peers per slice, the `host-neutral` rule, the checks and CI |
 | [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines, [local exceptions](platform-adoption/local-exceptions.md) (every shim and deviation, and the issue that removes it) |
 | [personal-access-tokens.md](personal-access-tokens.md) | Creating and using `pat_` tokens for scripts and CI |
 | [RENAMING.md](RENAMING.md) | Renaming or rebranding the application |
@@ -114,6 +116,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [runbooks/node-job-secrets.md](runbooks/node-job-secrets.md) | You configure per-job database credentials for worker nodes |
 | [runbooks/ontology-migration.md](runbooks/ontology-migration.md) | An ontology bump needs `kg.migrate` run or retried |
 | [runbooks/postgres-client-version.md](runbooks/postgres-client-version.md) | `pg_dump` fails on a client/server version mismatch |
+| [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md) | You publish the `@marinoscar/kvox-*` packages, set up npm trusted publishing, roll a release back or leave pre mode |
 | [runbooks/rotate-secrets-encryption-key.md](runbooks/rotate-secrets-encryption-key.md) | You rotate `SECRETS_ENCRYPTION_KEY` |
 | [runbooks/s3-cors.md](runbooks/s3-cors.md) | Browser uploads or playback need bucket CORS |
 | [runbooks/storage-configuration.md](runbooks/storage-configuration.md) | You configure, move or diagnose object storage (`/admin/settings/storage`), or change the multipart part size |

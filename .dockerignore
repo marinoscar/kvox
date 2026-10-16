@@ -6,8 +6,8 @@
 # repo, so trimming it here matters for build speed.
 #
 # Do NOT exclude: package.json, package-lock.json, apps/*/package.json,
-# packages/ (the api and web images both install @app/shared as a workspace
-# dependency and copy the package itself), scripts/, tsconfig*.json, or
+# packages/ (the api, web and cli images install @app/shared and the
+# @marinoscar/kvox-* packages as workspace dependencies and copy them), scripts/, tsconfig*.json, or
 # apps/api/prisma/ — the builds need all of them.
 # =============================================================================
 

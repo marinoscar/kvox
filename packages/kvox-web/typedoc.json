@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "extends": ["../../typedoc.base.json"],
+  "tsconfig": "./tsconfig.json",
+  "entryPoints": ["./src/core/index.ts"],
+  "entryPointStrategy": "resolve",
+  "name": "@marinoscar/kvox-web",
+  "out": "./docs-api/html",
+  "json": "./docs-api/api.json"
+}

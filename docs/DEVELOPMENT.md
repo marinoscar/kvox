@@ -852,7 +852,7 @@ Authentication and the role and permission guards are the platform's (`@Auth`, `
 
 ## Repository tooling
 
-Root-level tooling added for the platform adoption (epic #457, issue #461). Nothing here changes runtime behaviour: it pins the `@marinoscar/platform-*` packages, guards against duplicate copies of singleton libraries, and prepares the (still empty) `@marinoscar/kvox-*` package pipeline. The adoption baselines are in [platform-adoption/README.md](platform-adoption/README.md).
+Root-level tooling added for the platform adoption (epic #457, issue #461). Nothing here changes runtime behaviour: it pins the `@marinoscar/platform-*` packages, guards against duplicate copies of singleton libraries, and runs the `@marinoscar/kvox-*` package pipeline (issue #487: [PACKAGES.md](PACKAGES.md), [release runbook](runbooks/release-kvox-packages.md)). The adoption baselines are in [platform-adoption/README.md](platform-adoption/README.md).
 
 ### Pinned platform packages
 
@@ -897,19 +897,21 @@ The root `package.json` carries `"overrides": { "@marinoscar/platform-contract":
 |---|---|
 | `npm run check:platform-pin` | Runs `scripts/check-platform-pin.mjs`. Reads the root and every workspace `package.json` and fails (exit 1) when a `@marinoscar/platform-*` spec is not an exact version or a release tarball URL, when two entries differ, when `package-lock.json` resolves any `node_modules/@marinoscar/platform-*` (at any depth) to another version, or when the contract override is missing. Success prints `platform pin: <version> (N entries)`. Exit 2 is a usage error. |
 | `node scripts/check-platform-pin.mjs --self-test` | Runs three inline fixtures (ok, caret range, mismatch) to prove the checker itself still detects what it should. Accepts `--root <dir>` for the normal mode. |
-| `npm run check:single-instance` | Runs `scripts/check-single-instance.mjs`. Fails (exit 1) when a library with module-level state resolves to more than one copy: Nest, Fastify, Prisma client, Zod, `reflect-metadata`, `@opentelemetry/api`, React, React Router, MUI, Emotion, `ink`, plus any `packages/platform-*` workspace. It scans the lockfile and, after `npm ci`, resolves each name from every workspace and compares real paths. Flags: `--lockfile-only` (no `node_modules` needed), `--json`, `--lockfile <path>`, `--root <dir>`, `--guard <name>`. A duplicate is usually fixed by aligning a range in the workspace that drifted. |
+| `npm run check:single-instance` | Runs `scripts/check-single-instance.mjs`. Fails (exit 1) when a library with module-level state resolves to more than one copy: Nest, Fastify, Prisma client, Zod, `reflect-metadata`, `@opentelemetry/api`, React, React Router, MUI, Emotion, `ink`, plus any `packages/platform-*` workspace. It scans the lockfile and, after `npm ci`, resolves each name from every workspace and compares real paths. Flags: `--lockfile-only` (no `node_modules` needed), `--json`, `--lockfile <path>`, `--root <dir>`, `--guard <name>`. `node scripts/kvox-packages/check-single-instance.mjs` wraps it for the packages pipeline: it also accepts `--guard '@marinoscar/platform-*'` patterns and always guards every `@marinoscar/kvox-*` workspace. A duplicate is usually fixed by aligning a range in the workspace that drifted. |
 | `npm run check:platform-imports` | ESLint over `apps/{api,web,cli}/src/**/*.{ts,tsx}` with `--max-warnings=0`. Only the deep-import ban applies: app code may not reach into a platform or `@marinoscar/kvox-*` package's `src/`, `dist/` or `internal/` paths. |
-| `npm run lint:packages` | ESLint over `packages/kvox-*/src/**/*.{ts,tsx}` (`--no-error-on-unmatched-pattern`, so it passes while no such package exists). Enforces the no-deep-import rule and the slice-direction rule. |
-| `npm run build:packages`, `typecheck:packages`, `test:packages`, `docs:packages` | Run the `build`, `typecheck`, `test:run` and `docs` script of every `@marinoscar/kvox-*` workspace through `scripts/run-kvox-packages.mjs`. |
+| `npm run lint:packages` | ESLint over `packages/kvox-*/src/**/*.{ts,tsx}` (`--no-error-on-unmatched-pattern`). Enforces the no-deep-import rule and the slice-direction rule. |
+| `npm run build:kvox-packages`, `typecheck:kvox-packages`, `test:kvox-packages`, `docs:kvox-packages` | Run the `build`, `typecheck`, `test:run` and `docs` script of the four `@marinoscar/kvox-{contract,db,api,web}` workspaces. `build:packages`, `typecheck:packages`, `docs:packages` are aliases; `test:packages` also runs `test:kvox-scripts`. |
+| `npm run test:kvox-scripts` | The tests of `scripts/kvox-packages/` (`node --test`), including the fixture that pins the `host-neutral` rule. |
+| `npm run check:kvox-slice-peers`, `check:kvox-package-docs`, `check:kvox-pack` | The slice and peer rules, the README and TSDoc standard, and the pack check. All three are described in [PACKAGES.md](PACKAGES.md#checks-and-commands). |
 
-`scripts/run-kvox-packages.mjs <script> [--if-present]` lists the workspaces whose name starts with `@marinoscar/kvox-` and runs `npm run <script> -w <name>...` for all of them in one call. While none exist it prints `no @marinoscar/kvox-* packages yet; nothing to <script>` and exits 0, so the four `*:packages` scripts are safe no-ops until Phase 2.
+`scripts/run-kvox-packages.mjs <script> [--if-present]` is a generic helper kept from issue #461: it lists the workspaces whose name starts with `@marinoscar/kvox-` and runs `npm run <script> -w <name>...` for all of them in one call (for example `node scripts/run-kvox-packages.mjs build`). The root `*:kvox-packages` scripts name the four packages explicitly instead, so a package added later is a deliberate edit of the root `package.json` and the workflows.
 
 ### Lint, TSDoc and TypeDoc configuration
 
 | File | Purpose |
 |---|---|
 | `eslint.config.mjs` | Flat ESLint 10 config adapted from EnterpriseAppBase. Rule A: no deep imports into a package (only its `exports` map; no relative path that leaves the package, no app code, no `@app/shared`). Rule B: a slice under `packages/kvox-<pkg>/src/` may import another slice only when `packages/kvox-slices.json` lists it, and only through that slice's `index.ts`. Also applies the app deep-import ban. The apps' own `lint` scripts are untouched, and ESLint 10 ignores the legacy `.eslintrc.js`. |
-| `packages/kvox-slices.json` | The slice dependency graph, `{ "kvox-<pkg>": { "<slice>": ["<allowed dependency slice>"] } }`. Currently empty for `kvox-contract`, `kvox-api` and `kvox-web`. Append-only. |
+| `packages/kvox-slices.json` | The slice dependency graph, `{ "kvox-<pkg>": { "<slice>": ["<allowed dependency slice>"] } }`. Slices of the four packages are declared; `packages/kvox-slice-peers.json` lists the peers each slice needs ([PACKAGES.md](PACKAGES.md#peer-dependencies-per-slice)). Append-only. |
 | `tsdoc.json` | TSDoc configuration. Extends TypeDoc's and declares the custom `@stability` and `@extensionPoint` block tags. |
 | `typedoc.base.json` | Shared TypeDoc options for the `@marinoscar/kvox-*` packages. Each package's own `typedoc.json` extends it and sets its tsconfig, entry points and output. The generated `docs-api/` folder is git-ignored. |
 
@@ -917,17 +919,13 @@ The root `package.json` carries `"overrides": { "@marinoscar/platform-contract":
 
 Releases of the `@marinoscar/kvox-*` packages use [Changesets](https://github.com/changesets/changesets) in pre mode: `.changeset/pre.json` has `"mode": "pre"` and `"tag": "next"`, so releases are `x.y.z-next.N` on the `next` dist-tag. Do not edit or delete `pre.json` by hand.
 
-**There is nothing to do until Phase 2 (Epic 5, issue 5.1) publishes the first `@marinoscar/kvox-*` package.** Until then:
+The four packages are one `fixed` group in `.changeset/config.json`, so they always share a version; `api`, `web`, `cli` and `@app/shared` are listed under `ignore`: they are versioned by their own rules (the CLI by the version bump in [AGENTS.md](../AGENTS.md)), never through a changeset. `onlyUpdatePeerDependentsWhenOutOfRange` is on, for the reason in [PACKAGES.md](PACKAGES.md#the-contract-peer-range).
 
-- No pull request needs a changeset, and `npx changeset status` reports nothing to release.
-- `fixed` in `.changeset/config.json` stays empty, because Changesets rejects package names that do not exist yet. Issue 5.1 adds the `@marinoscar/kvox-*` group.
-- `api`, `web`, `cli` and `@app/shared` are listed under `ignore`: they are versioned by their own rules (the CLI by the version bump in [AGENTS.md](../AGENTS.md)), never through a changeset.
-
-Once a package exists, run `npx changeset` in any pull request that changes it. Writing guidance is in [`.changeset/README.md`](../.changeset/README.md). `npm run version-packages` and `npm run release` are maintainer steps at release time.
+Run `npx changeset` in any pull request that changes a package; `npx changeset --empty` records that a change has no release impact. Writing guidance is in [`.changeset/README.md`](../.changeset/README.md). The version pull request and the publish are automated: `.github/workflows/kvox-release.yml`, procedure in the [release runbook](runbooks/release-kvox-packages.md). `npm run version-packages` is what the workflow runs; `npm run release` (`changeset publish`) is a manual escape hatch and does not publish with provenance.
 
 ### CI: the `tooling` job
 
-`.github/workflows/ci.yml` has a `tooling` job (Repository tooling) that runs concurrently with the others (no `needs:`). After `npm ci` it runs, in order: `check:platform-pin`, `node scripts/check-platform-pin.mjs --self-test`, `check:single-instance`, `check:platform-imports`, `lint:packages`, `build:packages`, `typecheck:packages`, `test:packages` and `npx changeset status`. To reproduce a failure locally, run the same commands from the repository root.
+`.github/workflows/ci.yml` has a `tooling` job (Repository tooling) that runs concurrently with the others (no `needs:`). After `npm ci` it runs, in order: `check:platform-pin`, `node scripts/check-platform-pin.mjs --self-test`, `check:single-instance`, `check:platform-imports`, `lint:packages`, `build:packages`, `typecheck:packages`, `test:packages` and `npx changeset status` (skipped on the `kvox-release/version` pull request, which consumes the changesets). The docs, peers, pack and smoke-import checks run in `.github/workflows/kvox-packages.yml` when a package changes. To reproduce a failure locally, run the same commands from the repository root.
 
 ### The `MonoRepo` tag
 

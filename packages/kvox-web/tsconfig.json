@@ -1,0 +1,18 @@
+{
+  // Typecheck only. The package is "type": "module": every relative import
+  // keeps its `.js` extension, or Node's ESM loader fails with
+  // ERR_MODULE_NOT_FOUND in a consumer.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}

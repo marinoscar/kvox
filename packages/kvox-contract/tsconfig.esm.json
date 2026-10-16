@@ -1,0 +1,10 @@
+{
+  // ES module build: dist/esm. The package is "type": "module", so NodeNext
+  // emits ESM and requires the `.js` extension on every relative import.
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist/esm"
+  }
+}

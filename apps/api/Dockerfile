@@ -94,7 +94,10 @@ COPY apps/web/package.json ./apps/web/
 # The cost is that editing the package busts this layer's npm ci cache. It
 # holds one string that changes only when the product is renamed, so that is a
 # trade worth making to remove the failure mode entirely.
-COPY packages/shared ./packages/shared/
+# Every workspace package under packages/ (`@app/shared` and the four
+# domain packages the apps depend on): whole directories, not just manifests, for
+# the same reason as above.
+COPY packages ./packages/
 # Prisma schema and config are needed by `prisma generate` below
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/

@@ -1,0 +1,10 @@
+{
+  // CommonJS build: dist/cjs. `bundler` resolution keeps the `.js` extensions
+  // of the ESM sources resolvable while emitting `require` calls.
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "outDir": "dist/cjs"
+  }
+}
