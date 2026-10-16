@@ -59,6 +59,8 @@ const PLATFORM_AI_REGISTRATIONS: Readonly<Record<string, string>> = {
  */
 const LEGACY_AI_IMPORTERS: Readonly<Record<string, string>> = {
   'app.module.ts': '#477: mounts the old module until it is deleted',
+  'ai-port/migrate/ai-legacy-migrate.ts': '#477: the one-off legacy migration command reads the old module; deleted with it',
+  'ai-port/migrate/ai-legacy-plan.ts': '#477: the migration planner reads the old settings schema and model resolution; deleted with them',
   'ask/ask.module.ts': '#476: the Ask tool loop',
   'ask/ask-history.ts': '#476: the Ask tool loop',
   'ask/handlers/ask-respond.handler.ts': '#476: the Ask tool loop',
