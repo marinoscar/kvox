@@ -74,6 +74,16 @@ name: Deploy E2E
 #     placeholders on a reserved name, which is what `--skip-oauth-check` is for.
 #   - `deploy about --json` prints `{ status, path, document }`, the record
 #     itself under `document`, and never asks the API.
+#   - The environment file is `repo/infra/compose/.env` (`ENV_FILE`), a regular
+#     file; nothing is written to the app folder's root and nothing is linked.
+#   - The secrets the wizard generated before (JWT_SECRET, COOKIE_SECRET,
+#     SECRETS_ENCRYPTION_KEY) must be answered in an unattended run, so a step
+#     generates them for this run into a private copy of the answers file.
+#   - The deployed commit is the version-bump commit, so the push of that commit
+#     back to the repository is made to SUCCEED (`updateInstead` below) instead
+#     of being refused, and the commit assertions follow it.
+#   - Telemetry (greptimedb, the collector, the stack agent) is part of every
+#     deployment, so the diagnostics and the teardown name its compose files.
 # =============================================================================
 
 on:
@@ -120,6 +130,10 @@ env:
   APP_NAME: e2e
   APPS_ROOT: /tmp/apps
   APP_DIR: /tmp/apps/e2e
+  # Where the platform CLI writes the environment file: the compose directory
+  # of the clone, as a regular file (the pre-platform CLI kept it in APP_DIR
+  # behind a symlink). It is git-ignored, so the clone stays clean.
+  ENV_FILE: /tmp/apps/e2e/repo/infra/compose/.env
   BIND_PORT: '3535'
   # Stands in for the shared proxy's directory layout, for `deploy doctor`
   # only (it cannot skip the proxy checks). Install and update pass
@@ -151,17 +165,13 @@ jobs:
         # for.
         #
         # ⚠ pgvector's image, not plain `postgres:17` (issue #179, epic #165).
-        # `database-vector-extension` is a REQUIRED preflight check, so a server
-        # with no `vector` available is refused before install writes anything —
-        # which is the whole point of the check, and which made this job's own
-        # fixture invalid the moment the check landed. On plain `postgres:17`
-        # this job now fails at preflight, correctly.
-        #
-        # Moving it is the right fix rather than skipping the check here,
-        # because it makes this job PROVE the check passes against a real server
-        # instead of merely proving it can be bypassed. A production deployment
-        # must satisfy this prerequisite; the end-to-end rehearsal of that
-        # deployment should have to satisfy it too.
+        # The application needs the `vector` extension, and it is not a trusted
+        # one, so an ordinary role cannot create it: the "Install the database
+        # extensions" step below creates it as `postgres`, which needs the
+        # server to OFFER it, and only this image does. (The pre-platform CLI
+        # also refused such a server in a `database-vector-extension` preflight
+        # check; the platform has none — see apps/cli/README.md — so without
+        # this image the job fails at that step, or at the first migration.)
         #
         # ⚠ pg17, so this is deliberately NOT the same string as the
         # `pgvector/pgvector:pg16` that ci.yml and the two compose overlays
@@ -265,6 +275,13 @@ jobs:
           git config user.name "Deploy E2E"
           git checkout -B "$APP_NAME"
           git rev-parse --abbrev-ref HEAD
+          # The install's clone has this checkout as its `origin`, and the CLI
+          # pushes its version-bump commit to the branch checked out here.
+          # git refuses that by default; `updateInstead` accepts it and moves
+          # this working tree along, provided the tree is clean — which is
+          # asserted, so a dirty tree reads as that rather than as a refused push.
+          git config receive.denyCurrentBranch updateInstead
+          test -z "$(git status --porcelain)" || { git status --short; exit 1; }
 
       # -----------------------------------------------------------------------
       # 1. doctor, twice, around the one thing it is allowed to report but not
@@ -347,6 +364,22 @@ jobs:
       #    from `localhost`, and a domain would put the DNS checks in the
       #    preflight, where `.invalid` can never resolve.
       # -----------------------------------------------------------------------
+      - name: Write the answers file, with this run's generated secrets
+        run: |
+          # The wizard asks for these and cannot generate them unattended.
+          # Generated here so no fixture can predict them, which is what the
+          # journal redaction step below relies on. Outside the workspace, so
+          # the tree stays clean, and 0600 like the .env it feeds.
+          answers="$RUNNER_TEMP/answers.env"
+          ( umask 077
+            cp .github/e2e/answers.env "$answers"
+            {
+              echo "JWT_SECRET=$(openssl rand -base64 32)"
+              echo "COOKIE_SECRET=$(openssl rand -base64 32)"
+              echo "SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            } >> "$answers" )
+          echo "ANSWERS_FILE=$answers" >> "$GITHUB_ENV"
+
       - name: Install the database extensions as the bootstrap superuser
         run: |
           docker run --rm --network host \
@@ -369,7 +402,7 @@ jobs:
             --skip-oauth-check \
             --provision-app-role \
             --non-interactive \
-            --answers-file .github/e2e/answers.env
+            --answers-file "$ANSWERS_FILE"
 
       # -----------------------------------------------------------------------
       # 3. The layout on disk. Every one of these is something the unit tests
@@ -382,18 +415,16 @@ jobs:
 
           # 0600: it holds the database password, the JWT secret and the OAuth
           # client secret.
-          mode=$(stat -c '%A' "$APP_DIR/.env")
-          echo "$APP_DIR/.env is $mode"
+          mode=$(stat -c '%A' "$ENV_FILE")
+          echo "$ENV_FILE is $mode"
           test "$mode" = "-rw-------"
 
-          # The link, not a copy: the .env survives `rm -rf repo`, and compose
-          # still finds it at its own `env_file: .env`.
-          link="$APP_DIR/repo/infra/compose/.env"
-          test -L "$link"
-          target=$(readlink "$link")
-          echo "$link -> $target"
-          test "$target" = "../../../.env"
-          test -r "$link"
+          # Where compose reads it (`env_file: .env`, next to the compose
+          # files), a file and not a link — and not tracked by git, which is
+          # what keeps the clone clean for the update legs below.
+          test -f "$ENV_FILE"
+          test ! -L "$ENV_FILE"
+          test -z "$(git -C "$APP_DIR/repo" status --porcelain)"
 
           # 0644 and readable by the api container's user: the deploy-info
           # directory is bind-mounted read-only into it.
@@ -411,29 +442,29 @@ jobs:
           # .env is what `resolveApiVersion()` reads at runtime, and
           # deploy-info is what the About page reports.
           #
-          # ⚠ THE PUSH BACK TO THE REPOSITORY FAILS HERE, BY DESIGN AND
-          # UNAVOIDABLY. `--repo file://$GITHUB_WORKSPACE` points at the
-          # runner's own non-bare checkout, which has branch `$APP_NAME`
-          # checked out — git's `receive.denyCurrentBranch` refuses a push to a
-          # branch that is checked out, always. So this job exercises the
-          # DEGRADED path: the deployment completes, carries the new version,
-          # and reports a warning. That is the same path a fork with no push
-          # access and a `--ref <tag>` deploy take, and it is worth having
-          # covered end to end. The clone is restored afterwards, which is what
-          # the two `update` legs below depend on.
-          version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
+          # The deployed commit is the version-bump commit, and the install
+          # PUSHES it to the repository's `$APP_NAME` branch (the runner's own
+          # checkout, which accepts it: `receive.denyCurrentBranch` is
+          # `updateInstead`). So the clone, the repository and the deployment
+          # record all name the same commit, and the manifests carry the new
+          # version everywhere. A refused push would leave the record naming a
+          # commit that exists nowhere else, and every comparison below would
+          # be about that instead of about the pipeline.
+          version=$(sed -n 's/^APP_VERSION=//p' "$ENV_FILE" | head -n 1)
           echo "APP_VERSION=$version"
           test -n "$version"
           # A patch bump of whatever the manifests currently ship.
           test "$version" = "$E2E_VERSION_AFTER_INSTALL"
           jq -e --arg v "$version" '.app.version == $v' "$APP_DIR/deploy-info/info.json"
 
-          # The clone was restored after the refused push, so it still reads
-          # what the repository says. Without that restore the clone would sit
-          # permanently one commit ahead of origin and the `update --check`
-          # below would report `current != latest` for ever.
-          jq -e --arg v "$E2E_BASE_VERSION" '.version == $v' "$APP_DIR/repo/apps/api/package.json"
-          jq -e --arg v "$E2E_BASE_VERSION" '.version == $v' "$APP_DIR/repo/apps/web/package.json"
+          # The bump landed in the clone's manifests, in the repository's
+          # branch, and is the commit the record names.
+          jq -e --arg v "$E2E_VERSION_AFTER_INSTALL" '.version == $v' "$APP_DIR/repo/apps/api/package.json"
+          jq -e --arg v "$E2E_VERSION_AFTER_INSTALL" '.version == $v' "$APP_DIR/repo/apps/web/package.json"
+          deployed=$(jq -r '.app.commitSha' "$APP_DIR/deploy-info/info.json")
+          test "$deployed" = "$(git rev-parse HEAD)"
+          test "$deployed" = "$(git -C "$APP_DIR/repo" rev-parse HEAD)"
+          echo "$deployed" > "$DIAG_DIR/installed-sha.txt"
 
           # `-p <name>` reached compose: without it every app on a host is the
           # project `compose`, and a second app's `up -d` replaces the first's
@@ -518,7 +549,7 @@ jobs:
           # `version` step is `skipWhenUnchanged` for exactly this: an update
           # from cron must not become a version generator that moves the
           # default branch every few minutes.
-          test "$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)" = "$E2E_VERSION_AFTER_INSTALL"
+          test "$(sed -n 's/^APP_VERSION=//p' "$ENV_FILE" | head -n 1)" = "$E2E_VERSION_AFTER_INSTALL"
 
           docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
             | sort > "$DIAG_DIR/images-after.txt"
@@ -564,7 +595,16 @@ jobs:
 
           info="$APP_DIR/deploy-info/info.json"
           jq . "$info"
-          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.app.commitSha == $sha' "$info"
+          # The deployed commit is the update's own version-bump commit, built
+          # on the commit this job moved the branch to and pushed back to it.
+          deployed=$(jq -r '.app.commitSha' "$info")
+          new_sha=$(cat "$DIAG_DIR/new-sha.txt")
+          test "$deployed" != "$new_sha"
+          git merge-base --is-ancestor "$new_sha" "$deployed"
+          test "$(git rev-list --count "$new_sha..$deployed")" -eq 1
+          test "$deployed" = "$(git rev-parse HEAD)"
+          test "$deployed" = "$(git -C "$APP_DIR/repo" rev-parse HEAD)"
+          echo "$deployed" > "$DIAG_DIR/updated-sha.txt"
           # ISO-8601 UTC with a Z suffix throughout (deploy-info.ts), so a
           # string comparison is a chronological one.
           jq -e '.updatedAt > .installedAt' "$info"
@@ -575,7 +615,7 @@ jobs:
           # against the highest of the clone
           # and the RUNNING deployment's own APP_VERSION, so a bump that could
           # not be published to the repository still cannot repeat itself.
-          version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
+          version=$(sed -n 's/^APP_VERSION=//p' "$ENV_FILE" | head -n 1)
           echo "APP_VERSION=$version"
           test "$version" = "$E2E_VERSION_AFTER_UPDATE"
           jq -e --arg v "$version" '.app.version == $v' "$info"
@@ -593,7 +633,7 @@ jobs:
           jq -e '.status == "ok"' "$DIAG_DIR/about.json"
           expected=$(jq -r '.updatedAt' "$APP_DIR/deploy-info/info.json")
           jq -e --arg at "$expected" '.document.updatedAt == $at' "$DIAG_DIR/about.json"
-          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.document.app.commitSha == $sha' \
+          jq -e --arg sha "$(cat "$DIAG_DIR/updated-sha.txt")" '.document.app.commitSha == $sha' \
             "$DIAG_DIR/about.json"
 
       # -----------------------------------------------------------------------
@@ -638,7 +678,7 @@ jobs:
 
           # And the generated ones, which no fixture could have predicted.
           for key in POSTGRES_PASSWORD GOOGLE_CLIENT_SECRET JWT_SECRET COOKIE_SECRET SECRETS_ENCRYPTION_KEY; do
-            value=$(sed -n "s/^$key=//p" "$APP_DIR/.env" | head -n 1)
+            value=$(sed -n "s/^$key=//p" "$ENV_FILE" | head -n 1)
             [ -n "$value" ] || continue
             if grep -rqF -- "$value" "$logs"; then
               echo "::error::$key's value appears verbatim in the deploy journal"
@@ -666,7 +706,9 @@ jobs:
               -p "$APP_NAME" \
               -f "$compose_dir/base.compose.yml" \
               -f "$compose_dir/prod.compose.yml" \
+              -f "$compose_dir/telemetry.compose.yml" \
               -f "$compose_dir/vps.compose.yml" \
+              -f "$compose_dir/vps.telemetry.compose.yml" \
               --project-directory "$compose_dir" \
               logs --no-color --timestamps > "$DIAG_DIR/compose-logs.txt" 2>&1 || true
           fi
@@ -694,7 +736,9 @@ jobs:
               -p "$APP_NAME" \
               -f "$compose_dir/base.compose.yml" \
               -f "$compose_dir/prod.compose.yml" \
+              -f "$compose_dir/telemetry.compose.yml" \
               -f "$compose_dir/vps.compose.yml" \
+              -f "$compose_dir/vps.telemetry.compose.yml" \
               --project-directory "$compose_dir" \
               down -v --remove-orphans || true
           fi

@@ -762,6 +762,7 @@ what to do instead.
 | `certs renew [--all --dry-run --install-cron --json]` | `certs --renew` | **cron files written by earlier versions call this**; they keep working. `--all` and `--install-cron` are dropped with a note, `--dry-run` reports without renewing |
 | `certs status` | `certs` | reports and changes nothing |
 | `node install-deps` installing `ffmpeg` | not done | the platform's step list has no `ffmpeg` and no extension point; install `ffmpeg` (it ships `ffprobe`) yourself. `node doctor` names what is missing; the worker image has it |
+| preflight `database-vector-extension` (required in 1.9: the server must offer `vector`) | not done | the platform has no such check and an app check cannot read the database password, so a server without `vector` fails later, at the first migration (`extension "vector" is not available`). Use a pgvector image (`pgvector/pgvector`) and create the extensions as the bootstrap superuser before the first install (`infra/compose/postgres-init/20-kvox-extensions.sh`, `docs/runbooks/application-role.md` section 3.1) |
 | server-fact suggestions for `APP_BIND_PORT`, `JOBS_WORKER_CONCURRENCY`, `API_MEM_LIMIT`, `WEB_MEM_LIMIT` | not done | these take the template default unless answered; `POSTGRES_SSL` is validated but no longer asked by default (pass `--all`, `--answer POSTGRES_SSL=true`) |
 
 Other differences an operator can see:
@@ -772,6 +773,12 @@ Other differences an operator can see:
   it. Read-only commands never rewrite it.
 - `deploy status` has no "Update" line, and `deploy about` shows the record
   only.
+- The environment file is `repo/infra/compose/.env`, written as a regular file;
+  1.9 kept it in the app folder behind a symlink in the checkout. An unattended
+  install must be given `JWT_SECRET`, `COOKIE_SECRET` and
+  `SECRETS_ENCRYPTION_KEY` (the wizard no longer generates them without a
+  terminal), and the version-bump commit is the deployed commit even when it
+  could not be pushed.
 - `deploy install` provisions a dedicated ordinary database role (`<app>_app`);
   a superuser login with no consent flag stops the install.
 - `deploy uninstall --purge-storage` runs `npm run storage:purge` inside the
