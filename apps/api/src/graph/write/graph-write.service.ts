@@ -923,13 +923,15 @@ export class GraphWriteService {
    */
   private async requireViewableSpeaker(tx: Tx, ownerId: string, speakerId: string): Promise<string> {
     const speaker = await tx.transcriptSpeaker.findFirst({
-      where: {
-        id: speakerId,
-        transcript: { deletedAt: null, OR: [{ ownerId }, { shares: { some: { userId: ownerId } } }] },
-      },
+      where: { id: speakerId, transcript: { deletedAt: null } },
       select: { id: true, transcriptId: true },
     });
-    if (!speaker) throw invalid('The speaker is not in a transcript you can view.', 'fromSpeakerId');
+    const viewable = speaker
+      ? await this.evidenceValidator.viewableTranscriptIds(ownerId, [speaker.transcriptId], tx)
+      : new Set<string>();
+    if (!speaker || !viewable.has(speaker.transcriptId)) {
+      throw invalid('The speaker is not in a transcript you can view.', 'fromSpeakerId');
+    }
     return speaker.transcriptId;
   }
 

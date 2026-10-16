@@ -64,6 +64,8 @@ import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
 import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { buildNotesService } from '../notes/notes-service-test-factory';
+import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
+import { createSharingKit } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('user-data-purge.db.spec');
 
@@ -161,6 +163,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
           });
         },
       } as never,
+      createSharingKit(prisma).grants,
     );
 
     const notes = buildNotesService({
@@ -266,7 +269,9 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
         await tx.notification.deleteMany({ where: user });
         await tx.userSettings.deleteMany({ where: user });
         await tx.searchIndexState.deleteMany({ where: owner });
-        await tx.transcriptShare.deleteMany({ where: user });
+        await tx.grant.deleteMany({
+          where: { resourceType: 'transcript', OR: [{ granteeUserId: { in: ids } }, { grantedById: { in: ids } }] },
+        });
         await tx.kvoxObjectOwnership.deleteMany({ where: { object: { storageKey: { startsWith: KEY_PREFIX } } } });
         await tx.auditEvent.deleteMany({ where: { actorUserId: { in: ids } } });
         await tx.job.deleteMany({ where: { type: 'user.data.purge', subjectId: { in: ids } } });
@@ -298,7 +303,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
   async function transcript(ownerId: string, title: string, withPlayback = false) {
     const source = await upload(ownerId, `${title}-source`, 'transcripts');
     const playback = withPlayback ? await upload(ownerId, `${title}-playback`, 'transcripts') : null;
-    const row = await prisma.transcript.create({
+    const row = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title,
@@ -352,9 +357,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
     const t2 = await transcript(a.id, 'T2');
     const tB = await transcript(b.id, 'TB');
 
-    await prisma.transcriptShare.create({
-      data: { transcriptId: t1.row.id, userId: b.id, role: 'viewer', grantedById: a.id },
-    });
+    await shareTranscript(prisma, { transcriptId: t1.row.id, userId: b.id, role: 'viewer', grantedById: a.id });
 
     const tpl = (ownerId: string | null, name: string) =>
       prisma.noteTemplate.create({
@@ -585,7 +588,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
     // Gone: both transcripts, their share, their source audio and playback rendition.
     expect(await has.transcript(s.t1.row.id)).toBe(false);
     expect(await has.transcript(s.t2.row.id)).toBe(false);
-    expect(await prisma.transcriptShare.count({ where: { transcriptId: s.t1.row.id } })).toBe(0);
+    expect(await prisma.grant.count({ where: { resourceType: 'transcript', resourceId: s.t1.row.id } })).toBe(0);
     for (const object of [s.t1.source, s.t1.playback as { id: string }, s.t2.source]) {
       expect(await has.object(object.id)).toBe(false);
       expect(await has.ownership(object.id)).toBe(false);

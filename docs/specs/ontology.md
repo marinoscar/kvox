@@ -1781,7 +1781,7 @@ and confirming a specific entity id exists (a 403 would do exactly that) is
 itself information a stranger has no business learning.
 
 **Sharing does not propagate.** A transcript share (`docs/specs/
-transcription.md`'s `transcript_shares`, `viewer`/`editor`) does **not**
+transcription.md` §6.3, a platform `grants` row, `viewer`/`editor`) does **not**
 share the graph rows derived from that transcript. The graph is the owner's
 own curated memory built *from* the recording; the share was of the
 recording itself, a different object entirely. The stated consequence:

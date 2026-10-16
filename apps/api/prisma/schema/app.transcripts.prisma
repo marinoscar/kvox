@@ -115,9 +115,8 @@
 // "label" IS NOT NULL` clause that scopes the constraint to labelled rows.
 // See that migration file's own header for the full accounting. Every OTHER
 // uniqueness constraint below (`transcript_versions` on `(transcriptId,
-// version)` and `(transcriptId, clientBatchId)`, `transcript_shares` on
-// `(transcriptId, userId)`) is fully expressible as a plain `@@unique` and is
-// declared that way — Postgres's standard "NULLS DISTINCT" behaviour already
+// version)` and `(transcriptId, clientBatchId)`) is fully expressible as a
+// plain `@@unique` and is declared that way — Postgres's standard "NULLS DISTINCT" behaviour already
 // gives `clientBatchId` exactly the semantics spec §5 wants (many versions
 // with a null `clientBatchId`, at most one per transcript for any given
 // non-null value) with no partial index required.
@@ -154,6 +153,13 @@ model Transcript {
   id String @id @default(uuid()) @db.Uuid
 
   ownerId  String  @map("owner_id") @db.Uuid
+  // The organization this transcript belongs to (issue #485): the scope the
+  // platform sharing slice decides access in (`grants.org_id` must equal it).
+  // Single-organization deployment, so every row carries the default
+  // organization. `transcripts` is deliberately NOT under row-level security:
+  // `AccessPolicy` and the conformance suite need only this column (spike in
+  // the PR for #485, `registerResourceType` in `app-registrations/sharing.ts`).
+  orgId    String  @map("org_id") @db.Uuid
   title    String
   language String?
 
@@ -249,6 +255,7 @@ model Transcript {
   titleSearchVector Unsupported("tsvector")? @map("title_search_vector")
 
   owner           User           @relation("TranscriptOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  org             Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   sourceObject    StorageObject  @relation("TranscriptSourceObject", fields: [sourceObjectId], references: [id], onDelete: Restrict)
   playbackObject  StorageObject? @relation("TranscriptPlaybackObject", fields: [playbackObjectId], references: [id], onDelete: Restrict)
   rawResultObject StorageObject? @relation("TranscriptRawResultObject", fields: [rawResultObjectId], references: [id], onDelete: Restrict)
@@ -256,7 +263,6 @@ model Transcript {
   speakers      TranscriptSpeaker[]
   segments      TranscriptSegment[]
   versions      TranscriptVersion[]
-  shares        TranscriptShare[]
   exports       TranscriptExport[]
   // Every note that named this transcript as its source (issue #48, epic
   // #45) — Restrict on `notes.source_transcript_id`, so a transcript with a
@@ -281,6 +287,8 @@ model Transcript {
   // "Every transcript in state X" — `transcripts.housekeeping`'s scans
   // (spec §1.5.8) and any future admin-adjacent health check.
   @@index([status])
+  // The organization column's foreign key (issue #485).
+  @@index([orgId])
   @@map("transcripts")
 }
 
@@ -473,36 +481,6 @@ model TranscriptVersion {
   // `transcript_speakers`' label uniqueness above.
   @@unique([transcriptId, clientBatchId])
   @@map("transcript_versions")
-}
-
-enum TranscriptShareRole {
-  viewer
-  editor
-}
-
-model TranscriptShare {
-  id           String              @id @default(uuid()) @db.Uuid
-  transcriptId String              @map("transcript_id") @db.Uuid
-  userId       String              @map("user_id") @db.Uuid
-  // No default — matching `DatabaseBackupTrigger`'s own "a run with no known
-  // origin is a run nobody can attribute" reasoning: every share is granted
-  // with an explicit role, on purpose, every time.
-  role         TranscriptShareRole
-  grantedById  String              @map("granted_by_id") @db.Uuid
-  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
-
-  transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
-  // Cascade: a share row has no meaning once either party to it is gone —
-  // the recipient can no longer be granted access, and (today) the granter
-  // is always the owner, whose own deletion already cascades the transcript
-  // and therefore this row via `transcriptId` above regardless.
-  user       User       @relation("TranscriptShareUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy  User       @relation("TranscriptShareGrantedBy", fields: [grantedById], references: [id], onDelete: Cascade)
-
-  // `POST /api/transcripts/:id/shares` (spec §6.3) upserts on this pair —
-  // one role per (transcript, user), never two competing rows.
-  @@unique([transcriptId, userId])
-  @@map("transcript_shares")
 }
 
 enum TranscriptExportStatus {

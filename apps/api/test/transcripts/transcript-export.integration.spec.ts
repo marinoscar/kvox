@@ -2,7 +2,7 @@ import request from 'supertest';
 
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
@@ -47,6 +47,7 @@ const configuredSettings = {
 const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   id: TRANSCRIPT_ID,
   ownerId: OWNER_ID,
+  orgId: TEST_DEFAULT_ORG_ID,
   title: 'A recording',
   status: 'ready',
   transcriptionStatus: 'completed',
@@ -299,7 +300,7 @@ describe('Transcript exports integration', () => {
       const sharee = await createMockTestUser(context, { email: 'sharee@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue({ role: 'viewer' });
+      mockTranscriptShare('viewer');
       prismaMock.transcriptExport.findFirst.mockResolvedValue(null);
       prismaMock.transcriptExport.create.mockResolvedValue(
         exportRow({ requestedById: sharee.id }),
@@ -318,7 +319,7 @@ describe('Transcript exports integration', () => {
       const stranger = await createMockTestUser(context, { email: 'stranger@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       const denied = await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/exports`)

@@ -45,6 +45,7 @@ import { SearchIndexStatusService } from '../../src/search/indexing/search-index
 import { SEARCH_INDEX_REQUEST_CAP } from '../../src/search/indexing/dto/search-index-status.dto';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('search-index-status.db.spec');
 
@@ -127,7 +128,7 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
     });
     createdObjectIds.push(object.id);
 
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `Recording ${randomUUID().slice(0, 8)}`,

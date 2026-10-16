@@ -58,7 +58,6 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   'components/library/NotesLibraryView.tsx': WHY.libraryView,
 
   'components/transcripts/ExportDialog.tsx': WHY.dialog,
-  'components/transcripts/ShareDialog.tsx': WHY.dialog,
   'components/transcripts/NameCheckDialog.tsx': WHY.dialog,
   'components/notes/NoteContextDialog.tsx': WHY.dialog,
   'components/notes/NoteExportDialog.tsx': WHY.dialog,

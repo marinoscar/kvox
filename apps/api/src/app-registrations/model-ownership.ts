@@ -24,11 +24,17 @@ const user = (model: Prisma.ModelName, rationale: string): Def => ({
 
 export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   // Transcripts
-  user('Transcript', 'A transcript belongs to the user who owns the recording.'),
+  {
+    model: 'Transcript',
+    kind: 'user',
+    // The organization the sharing slice decides access in (#485). A reference,
+    // not an isolation key: `transcripts` is not under row-level security.
+    orgReference: 'orgId',
+    rationale: 'A transcript belongs to the user who owns the recording; org_id is the sharing slice’s scope, not an isolation key.',
+  },
   user('TranscriptSpeaker', 'A speaker belongs to its transcript, and so to the transcript’s owner.'),
   user('TranscriptSegment', 'A segment belongs to its transcript, and so to the transcript’s owner.'),
   user('TranscriptVersion', 'A snapshot belongs to its transcript, and so to the transcript’s owner.'),
-  user('TranscriptShare', 'A share is the owner’s grant of access to one other user, not an organization asset.'),
   user('TranscriptExport', 'An export is requested by, and served to, one user.'),
   user('TranscriptNameCheck', 'A name check runs on, and belongs to, one transcript.'),
   user('TranscriptNameSuggestion', 'A suggestion belongs to a name check, and so to the transcript’s owner.'),

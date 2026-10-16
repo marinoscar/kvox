@@ -32,6 +32,7 @@ import {
 import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { createFakeManagedObjects } from '../helpers/fake-managed-objects.helper';
+import { TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 
 const USER = 'user-1';
@@ -66,6 +67,10 @@ describe('NoteSourceNameService (#192)', () => {
     prismaMock.transcript.findMany.mockResolvedValue([]);
     prismaMock.note.findMany.mockResolvedValue([]);
     prismaMock.storageObject.findMany.mockResolvedValue([]);
+    // The org scope the shared half of "owned or shared" is read in (#485).
+    prismaMock.organization.findFirst.mockResolvedValue({ id: TEST_DEFAULT_ORG_ID });
+    prismaMock.runInOrg.mockImplementation(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock));
+    prismaMock.grant.groupBy.mockResolvedValue([{ resourceId: 'shared-1' }]);
   });
 
   describe('noteSourceId', () => {
@@ -154,9 +159,11 @@ describe('NoteSourceNameService (#192)', () => {
       const where = prismaMock.transcript.findMany.mock.calls[0][0].where;
 
       expect(where.deletedAt).toBeNull();
+      // The shared half is the platform's `accessibleWhere` over `grants` (#485): the ids
+      // an active grant names for the caller, in the default organization.
       expect(where.OR).toEqual([
         { ownerId: USER },
-        { shares: { some: { userId: USER } } },
+        { AND: [{ orgId: TEST_DEFAULT_ORG_ID }, { id: { in: ['shared-1'] } }] },
       ]);
     });
 

@@ -55,12 +55,15 @@ const SAMPLE_DATA: Record<string, unknown> = {
     retryable: true,
     appUrl: 'https://app.example.com',
   },
-  'transcript-shared': {
-    transcriptId: 'transcript-1',
-    title: HOSTILE_SCRIPT,
+  'shared-with-you': {
+    resourceType: 'transcript',
+    resourceId: 'transcript-1',
     role: 'editor',
-    ownerName: 'Ana Rivera',
-    appUrl: 'https://app.example.com',
+    title: HOSTILE_SCRIPT,
+    path: '/transcripts/transcript-1',
+    sharedBy: 'Ana Rivera',
+    openUrl: 'https://app.example.com/transcripts/transcript-1',
+    signInUrl: 'https://app.example.com',
   },
   'note-ready': {
     noteId: 'note-1',
@@ -126,12 +129,12 @@ function referencedContentIds(document: string): string[] {
 }
 
 describe('the names this app registers are persisted and stay put', () => {
-  it('registers exactly the reminder, the three transcript and the two note templates', () => {
+  it('registers exactly the reminder, the two transcript, the share and the two note templates', () => {
     expect(KVOX_EMAIL_TEMPLATES.map((entry) => entry.name)).toEqual([
       'allowlist-invitation-reminder',
       'transcript-ready',
       'transcript-failed',
-      'transcript-shared',
+      'shared-with-you',
       'note-ready',
       'note-failed',
     ]);

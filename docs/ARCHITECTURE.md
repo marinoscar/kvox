@@ -837,7 +837,9 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   independent status enums (`status`, `transcriptionStatus`, `playbackStatus`) rather than
   one, because transcode and transcription run **concurrently** and a single enum would need
   one member per combination of the two — the same `worker_nodes`-style split of "stated
-  intent" from "sub-pipeline progress." `ownerId` **cascades** on user deletion (a transcript
+  intent" from "sub-pipeline progress." `orgId` (issue #485, NOT NULL, `Cascade`) is the
+  organization the platform sharing slice decides the transcript's access in; every row carries
+  the default organization in single-organization mode. `ownerId` **cascades** on user deletion (a transcript
   has no meaning, and this app grants no path to read it, once its owner is gone — there is
   deliberately no `transcripts:read_any`); `sourceObjectId`/`playbackObjectId`/
   `rawResultObjectId` all **restrict** instead, the opposite direction of ownership: they
@@ -894,10 +896,14 @@ Every table the schema defines beyond the ERD in §6.1, with the cascade, indexi
   clientBatchId])` is a retried-save idempotency key that needs **no** hand-written partial
   index — Postgres's standard NULLS-DISTINCT behaviour already lets any number of
   `NULL`-`clientBatchId` versions (ingest, restore) coexist for free.
-- `transcript_shares` - `viewer`/`editor` grants, unique on `(transcriptId, userId)`.
-  `TranscriptAccessService` combines a share with `transcripts:write` for `edit`-level access
-  — a share alone can raise a viewer's ceiling, never grant authority this app's own RBAC
-  withholds from their role.
+- `grants` (the platform sharing slice's table, `resource_type = 'transcript'`; issue #485,
+  which retired `transcript_shares` and the `TranscriptShareRole` enum) - A transcript share is
+  one active `viewer`/`editor` user grant, unique per `(resource, user)` by the platform's
+  partial index `grants_active_user_uniq_idx`. The table is org-scoped under forced row-level
+  security; `transcripts` itself carries `org_id` (the organization the decision is made in) but
+  is **not** under row-level security. `TranscriptAccessService` delegates to `AccessPolicy` and
+  combines a share with `transcripts:write` for `edit`-level access — a share alone can raise a
+  viewer's ceiling, never grant authority this app's own RBAC withholds from their role.
 - `transcript_exports` - One row per rendered export file, content-addressed by
   `(transcriptId, version, format, optionsHash)` (the index this issue declares specifically
   for `POST /:id/exports`'s reuse check, per `docs/specs/transcription.md` §8.5) so an
@@ -1296,6 +1302,12 @@ The complete set of roles and permission strings the API enforces. The machine-r
   404-never-403 posture, because a built-in template's existence is public by design (it is
   in every account's own catalogue) while another user's template's existence is private.
   Both permissions are org-scoped and granted to all three org roles.
+- `sharing:read/write` - The platform sharing slice (issue #485): `GET /api/grants/shared-with-me`
+  and the records you can share (`sharing:read`), and `POST|PATCH|DELETE /api/grants` (`sharing:write`).
+  Org-scoped; the platform grants them to Admin and Contributor (`sharing:read` to Viewer too), and
+  the app seed adds `viewer -> sharing:write` (`VIEWER_SHARING_GRANTS`) so a new account can still
+  share its own recording. What anyone may share is bounded by the resource type: only the owner of a
+  transcript holds its `share` action. `groups:*` routes are mounted by the slice but have no UI here.
 - `ai:use` - Call AI through the platform AI slice (every `/api/ai/*` route carries `AiEnabledGuard` and this permission). Org-scoped, granted to **Admin, Contributor and Viewer** by the app seed (#473): every member may use AI, and spending is still bounded by the caller's own key. `ai_config:read/write` - The deployment `ai` policy, provider slots, model catalogue and usage report. System scope, **Admin only**. `GET`/`PUT /api/ai-tasks/settings` (task models, #473) are gated on this pair; `GET /api/ai-tasks/config` stays on `notes:read`
 - `graph:read/write` - Connected knowledge (issue #354, epic #344): read your own graph
   (entities, relations, facts, proposals, the effective ontology) vs. curate it (commit

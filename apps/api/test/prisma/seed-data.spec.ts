@@ -536,15 +536,20 @@ describe('seed data (catalogs and seed-app)', () => {
 // The AI grants (#473): `ai:use` reaches the Viewer role through the app seed
 // =============================================================================
 
-describe('seed-app AI grants (#473)', () => {
+describe('seed-app viewer grants (#473, #485)', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { seedApp, VIEWER_AI_GRANTS } = require('../../prisma/seed-app') as typeof import('../../prisma/seed-app');
+  const { seedApp, VIEWER_AI_GRANTS, VIEWER_SHARING_GRANTS } = require('../../prisma/seed-app') as typeof import('../../prisma/seed-app');
 
-  function fakePrisma(present: { role: boolean; permission: boolean }) {
+  /** `permissionNames` are the permissions the platform seed created; any other lookup answers null. */
+  function fakePrisma(present: { role: boolean; permissionNames: string[] }) {
     return {
       noteTemplate: { upsert: jest.fn().mockResolvedValue({}) },
       role: { findUnique: jest.fn().mockResolvedValue(present.role ? { id: 'role-viewer' } : null) },
-      permission: { findUnique: jest.fn().mockResolvedValue(present.permission ? { id: 'perm-ai-use' } : null) },
+      permission: {
+        findUnique: jest.fn(async ({ where }: { where: { name: string } }) =>
+          present.permissionNames.includes(where.name) ? { id: `perm-${where.name}` } : null,
+        ),
+      },
       rolePermission: { upsert: jest.fn().mockResolvedValue({}) },
     };
   }
@@ -553,24 +558,31 @@ describe('seed-app AI grants (#473)', () => {
     expect(VIEWER_AI_GRANTS).toEqual([{ role: 'viewer', permission: 'ai:use' }]);
   });
 
-  it('upserts the viewer -> ai:use row, and keeps an existing one as it is', async () => {
-    const prisma = fakePrisma({ role: true, permission: true });
+  it('grants sharing:write to viewer (#485), and to nothing else: a new account can still share its own recording', () => {
+    expect(VIEWER_SHARING_GRANTS).toEqual([{ role: 'viewer', permission: 'sharing:write' }]);
+  });
+
+  it('upserts the viewer -> ai:use and viewer -> sharing:write rows, and keeps existing ones as they are', async () => {
+    const prisma = fakePrisma({ role: true, permissionNames: ['ai:use', 'sharing:write'] });
 
     await seedApp(prisma as never);
     await seedApp(prisma as never);
 
     expect(prisma.role.findUnique).toHaveBeenCalledWith({ where: { name: 'viewer' } });
     expect(prisma.permission.findUnique).toHaveBeenCalledWith({ where: { name: 'ai:use' } });
-    expect(prisma.rolePermission.upsert).toHaveBeenCalledTimes(2);
-    expect(prisma.rolePermission.upsert).toHaveBeenCalledWith({
-      where: { roleId_permissionId: { roleId: 'role-viewer', permissionId: 'perm-ai-use' } },
-      update: {},
-      create: { roleId: 'role-viewer', permissionId: 'perm-ai-use' },
-    });
+    expect(prisma.permission.findUnique).toHaveBeenCalledWith({ where: { name: 'sharing:write' } });
+    expect(prisma.rolePermission.upsert).toHaveBeenCalledTimes(4);
+    for (const permission of ['ai:use', 'sharing:write']) {
+      expect(prisma.rolePermission.upsert).toHaveBeenCalledWith({
+        where: { roleId_permissionId: { roleId: 'role-viewer', permissionId: `perm-${permission}` } },
+        update: {},
+        create: { roleId: 'role-viewer', permissionId: `perm-${permission}` },
+      });
+    }
   });
 
   it('skips quietly when the platform seed did not create the role or permission', async () => {
-    const prisma = fakePrisma({ role: true, permission: false });
+    const prisma = fakePrisma({ role: true, permissionNames: [] });
 
     await seedApp(prisma as never);
 

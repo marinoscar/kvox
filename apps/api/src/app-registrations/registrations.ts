@@ -22,6 +22,7 @@ import {
 import { registerKvoxCredentialPurposes } from '../platform/credentials/credential-purposes.manifest';
 import './db-backup';
 import './jobs';
+import './sharing';
 import { KVOX_MODEL_OWNERSHIP } from './model-ownership';
 import { KVOX_PERMISSIONS } from './permissions';
 import { KVOX_USER_OWNED_MODELS } from './user-owned-models';

@@ -10,6 +10,9 @@ const FOREIGN_NOTE = '33333333-3333-4333-8333-333333333333';
 const TRANSCRIPT = '44444444-4444-4444-8444-444444444444';
 const OTHER_TRANSCRIPT = '55555555-5555-4555-8555-555555555555';
 const SEGMENT = '66666666-6666-4666-8666-666666666666';
+const ORG = '88888888-8888-4888-8888-888888888888';
+const OTHER_OWNER = '99999999-9999-4999-8999-999999999999';
+const OWNER_STRANGER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_SEGMENT = '77777777-7777-4777-8777-777777777777';
 
 const noteEv = (noteId: string, noteVersion = 1) =>
@@ -37,8 +40,11 @@ function fakeTx() {
     transcript: {
       // TRANSCRIPT is shared with the owner (the query's OR matches it);
       // OTHER_TRANSCRIPT is somebody else's and not shared.
+      // Live transcripts that exist: the one the owner can view and a stranger's.
       findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
-        where.id.in.filter((id) => id === TRANSCRIPT).map((id) => ({ id })),
+        where.id.in
+          .filter((id) => id === TRANSCRIPT || id === OTHER_TRANSCRIPT)
+          .map((id) => ({ id, ownerId: id === TRANSCRIPT ? OTHER_OWNER : OWNER_STRANGER, orgId: ORG })),
       ),
     },
     transcriptSegment: {
@@ -53,9 +59,19 @@ function fakeTx() {
 describe('EvidenceValidator', () => {
   // The object gateway answers the import-object ownership lookup (#469).
   const managed = { findMany: jest.fn(async () => [] as Array<{ id: string }>) };
-  const validator = new EvidenceValidator(managed as never);
+  // The platform's batched decision (#485): the owner holds a viewer share on TRANSCRIPT
+  // (owned by someone else) and nothing on OTHER_TRANSCRIPT.
+  const transcriptAccess = {
+    rolesFor: jest.fn(async (_userId: string, rows: Array<{ id: string }>) =>
+      new Map(rows.filter((row) => row.id === TRANSCRIPT).map((row) => [row.id, 'viewer'] as const)),
+    ),
+  };
+  const validator = new EvidenceValidator(managed as never, transcriptAccess as never);
 
-  beforeEach(() => managed.findMany.mockClear());
+  beforeEach(() => {
+    managed.findMany.mockClear();
+    transcriptAccess.rolesFor.mockClear();
+  });
 
   async function invalidIndexes(evidence: EvidenceInput[], tx = fakeTx()): Promise<number[] | null> {
     try {
@@ -100,14 +116,12 @@ describe('EvidenceValidator', () => {
   it('accepts a segment of a transcript shared with the owner', async () => {
     const tx = fakeTx();
     await expect(invalidIndexes([segEv(TRANSCRIPT, SEGMENT)], tx)).resolves.toBeNull();
+    // Live rows only, then ONE batched decision (the platform's `AccessPolicy`) for the shares.
     expect(tx.transcript.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          deletedAt: null,
-          OR: [{ ownerId: OWNER }, { shares: { some: { userId: OWNER } } }],
-        }),
-      }),
+      expect.objectContaining({ where: expect.objectContaining({ deletedAt: null }) }),
     );
+    expect(transcriptAccess.rolesFor).toHaveBeenCalledTimes(1);
+    expect(transcriptAccess.rolesFor).toHaveBeenCalledWith(OWNER, expect.any(Array));
   });
 
   it('refuses a segment that belongs to another transcript', async () => {

@@ -37,11 +37,11 @@ import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhoo
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { UUID_ANYWHERE } from './ask-tool-fakes';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-tools.db.spec');
 
@@ -58,7 +58,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
-    const transcriptAccess = new TranscriptAccessService(p);
+    const transcriptAccess = createTranscriptAccess(p);
     const preferences = new GraphPreferencesService(p);
     const ontology = new GraphOntologyService(p, preferences);
     const reads = new GraphReadService(p, access, ontology, transcriptAccess);

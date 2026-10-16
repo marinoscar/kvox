@@ -55,6 +55,7 @@ import { Injectable } from '@nestjs/common';
 import type { Note } from '@prisma/client';
 
 import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
+import { sharedTranscriptsWhere } from '../app-sharing/transcript-visibility';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** What the resolver needs off a note. A full `Note` satisfies it structurally. */
@@ -133,8 +134,9 @@ export class NoteSourceNameService {
               // rather than a per-row authorisation. A transcript the caller
               // was shown and later unshared from falls out here and resolves
               // to `null`, which is the correct answer and the one the client
-              // used to get from a 404.
-              OR: [{ ownerId: userId }, { shares: { some: { userId } } }],
+              // used to get from a 404. The shared half is the platform's
+              // `accessibleWhere` (a `grants` row since #485).
+              OR: [{ ownerId: userId }, await sharedTranscriptsWhere(this.prisma, userId)],
             },
             select: { id: true, title: true },
           }),

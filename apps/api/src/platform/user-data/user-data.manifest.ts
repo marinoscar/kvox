@@ -83,8 +83,7 @@ import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
 // platform never collects a user's whole object list. Its media step still deletes
 // the objects named by an INLINE model's `storageObjectColumns`; this app has none.
 //
-// Models that have only an actor column (`TranscriptShare`, `TranscriptVersion`,
-// `TranscriptExport`, `TranscriptNameCheck`, `NoteVersion`, `NoteExport`, ...) are
+// Models that have only an actor column (`TranscriptVersion`, `TranscriptExport`, `TranscriptNameCheck`, `NoteVersion`, `NoteExport`, ...) are
 // not owner models and need no hint: they go with their transcript or note when
 // the per-item purge deletes it, and another user's history on a transcript keeps
 // its rows, as before.

@@ -44,9 +44,9 @@ import { allowlistInvitationEmail } from './allowlist-invitation.email';
 import { allowlistInvitationReminderEmail } from './allowlist-invitation-reminder.email';
 import { noteFailedEmail } from './note-failed.email';
 import { noteReadyEmail } from './note-ready.email';
+import { sharedWithYouEmail } from './shared-with-you.email';
 import { transcriptFailedEmail } from './transcript-failed.email';
 import { transcriptReadyEmail } from './transcript-ready.email';
-import { transcriptSharedEmail } from './transcript-shared.email';
 import { userWelcomeEmail } from './user-welcome.email';
 
 /** The registrant recorded for these templates in the bootstrap log. */
@@ -57,7 +57,7 @@ export const KVOX_EMAIL_TEMPLATES: readonly EmailTemplateEntry[] = [
   { name: 'allowlist-invitation-reminder', render: allowlistInvitationReminderEmail, registrant: KVOX_EMAIL_REGISTRANT },
   { name: 'transcript-ready', render: transcriptReadyEmail, registrant: KVOX_EMAIL_REGISTRANT },
   { name: 'transcript-failed', render: transcriptFailedEmail, registrant: KVOX_EMAIL_REGISTRANT },
-  { name: 'transcript-shared', render: transcriptSharedEmail, registrant: KVOX_EMAIL_REGISTRANT },
+  { name: 'shared-with-you', render: sharedWithYouEmail, registrant: KVOX_EMAIL_REGISTRANT },
   { name: 'note-ready', render: noteReadyEmail, registrant: KVOX_EMAIL_REGISTRANT },
   { name: 'note-failed', render: noteFailedEmail, registrant: KVOX_EMAIL_REGISTRANT },
 ];
@@ -105,5 +105,5 @@ export function registerKvoxEmailTemplates(): void {
 }
 
 export { allowlistInvitationEmail, allowlistInvitationReminderEmail, noteFailedEmail, noteReadyEmail };
-export { transcriptFailedEmail, transcriptReadyEmail, transcriptSharedEmail, userWelcomeEmail };
+export { sharedWithYouEmail, transcriptFailedEmail, transcriptReadyEmail, userWelcomeEmail };
 export { emailBrandMark, EMAIL_LOGO_CID, EMAIL_LOGO_PATH, EMAIL_LOGO_RENDERED_SIZE } from './brand-logo';

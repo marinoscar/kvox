@@ -41,6 +41,8 @@ import type { EvidenceInput } from '../../src/graph/dto/graph-evidence.dto';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-write.db.spec');
 
@@ -56,7 +58,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
-    write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE)));
+    write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
   });
 
   afterAll(async () => {
@@ -72,7 +74,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     await prisma.kgItem.deleteMany({ where: owner });
     await prisma.kgEntity.deleteMany({ where: owner });
     await prisma.kgEvidence.deleteMany({ where: owner });
-    await prisma.transcriptShare.deleteMany({ where: { user: { email: { startsWith: EMAIL_PREFIX } } } });
+    await prisma.grant.deleteMany({ where: { resourceType: 'transcript', granteeUser: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.transcriptSegment.deleteMany({ where: { transcript: owner } });
     await prisma.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
     await prisma.transcript.deleteMany({ where: owner });
@@ -113,7 +115,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
         uploadedById: ownerId,
       },
     });
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: { ownerId, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
     });
     const speaker = await prisma.transcriptSpeaker.create({
@@ -476,9 +478,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
         const sharer = await createUser('seg-sharer');
         const shared = await createTranscript(sharer.id);
         const other = await createTranscript(sharer.id);
-        await prisma.transcriptShare.create({
-          data: { transcriptId: shared.transcript.id, userId: owner.id, role: 'viewer', grantedById: sharer.id },
-        });
+        await shareTranscript(prisma, { transcriptId: shared.transcript.id, userId: owner.id, role: 'viewer', grantedById: sharer.id });
 
         const create = (evidence: EvidenceInput) =>
           prisma.$transaction((tx) =>

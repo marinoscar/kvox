@@ -294,6 +294,7 @@ async function seedTranscriptAndNote(ctx: Ctx, fixture: GoldenFixture): Promise<
     const transcript = await ctx.tx.transcript.create({
       data: {
         ownerId: ctx.ownerId,
+        orgId: await defaultOrgId(ctx.tx),
         title: fixture.title,
         sourceObjectId: source.id,
         provider: 'assemblyai',

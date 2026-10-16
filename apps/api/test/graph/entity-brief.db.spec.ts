@@ -40,11 +40,11 @@ import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { SearchQueryEmbedder } from '../../src/search/search-query-embedder.service';
 import { SearchService } from '../../src/search/search.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('entity-brief.db.spec');
 
@@ -65,7 +65,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
-    const transcriptAccess = new TranscriptAccessService(p);
+    const transcriptAccess = createTranscriptAccess(p);
     evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
 
     const registry = new JobHandlerRegistry();

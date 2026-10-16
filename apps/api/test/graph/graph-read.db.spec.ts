@@ -32,10 +32,11 @@ import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.servic
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
 import { encodeGraphCursor } from '../../src/graph/read/graph-cursor';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { shareTranscript } from '../helpers/transcript.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-read.db.spec');
 
@@ -52,7 +53,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
-    const transcriptAccess = new TranscriptAccessService(p);
+    const transcriptAccess = createTranscriptAccess(p);
     reads = new GraphReadService(p, access, new GraphOntologyService(p, new GraphPreferencesService(p)), transcriptAccess);
     evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
   });
@@ -344,9 +345,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const { user: bob, g: bobGraph } = await owner('bob');
     // Alice's transcript, shared with Bob; Bob's own note.
     const { transcript, segment } = await aliceGraph.transcript({ recordedAt: new Date('2026-02-01T00:00:00Z'), title: 'Board call' });
-    const share = await prisma.transcriptShare.create({
-      data: { transcriptId: transcript.id, userId: bob.id, role: 'viewer', grantedById: alice.id },
-    });
+    const share = await shareTranscript(prisma, { transcriptId: transcript.id, userId: bob.id, role: 'viewer', grantedById: alice.id });
     const note = await bobGraph.note({ title: 'Prep', versions: 2 });
 
     const person = await bobGraph.entity('Person', 'Sarah');
@@ -407,7 +406,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     expect((await evidence.getOne(bob.id, fromSegment.id)).source).toMatchObject({ currentSegmentRev: 2, textChanged: true });
 
     // Alice revokes the share: the link goes, the quote stays.
-    await prisma.transcriptShare.delete({ where: { id: share.id } });
+    await prisma.grant.delete({ where: { id: share.id } });
     const revoked = await evidence.getOne(bob.id, fromSegment.id);
     expect(revoked.quote).toBe('Sarah joined Acme');
     expect(revoked.source).toMatchObject({

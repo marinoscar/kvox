@@ -41,7 +41,6 @@ import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
 import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
@@ -59,6 +58,8 @@ import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
 import { JobScope, type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-export.db.spec');
 
@@ -104,7 +105,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
     objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
 
     const materialize = new TranscriptMaterializeService(service, objects);
-    const access = new TranscriptAccessService(service);
+    const access = createTranscriptAccess(prisma);
 
     // A REAL `jobs` row, not a stub id: `transcript_exports.job_id` is a
     // foreign key, and a fake id would fail the constraint the moment the
@@ -245,7 +246,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
   }
 
   async function seedTranscript(): Promise<Seed> {
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `${TITLE_PREFIX}${randomUUID()}`,

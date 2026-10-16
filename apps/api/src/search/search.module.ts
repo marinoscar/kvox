@@ -2,9 +2,10 @@
 // SearchModule (issue #175, epic #164)
 // =============================================================================
 //
-// This module reads `transcripts`, `transcript_segments`, `transcript_shares`,
-// `notes`, `search_chunks`, `search_embeddings` and `search_index_state`
-// through raw `SELECT`s, and it imports NEITHER `TranscriptsModule` NOR
+// This module reads `transcripts`, `transcript_segments`, `notes`,
+// `search_chunks`, `search_embeddings` and `search_index_state` through raw
+// `SELECT`s (a transcript's shares through the platform's `accessibleSql`, never
+// the `grants` table itself), and it imports NEITHER `TranscriptsModule` NOR
 // `NotesModule`.
 //
 // That is deliberate rather than lazy. Importing them would pull the whole

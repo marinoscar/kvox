@@ -1253,6 +1253,25 @@ only `view`. `edit` additionally requires the caller to hold
 `transcripts:write` — a share alone cannot grant an editor access this
 application's own RBAC withholds from their role.
 
+**Since issue #485 the decision is the platform's.** A share is a `grants`
+row of the platform sharing slice (`@marinoscar/platform-api/sharing`), the
+`transcript` resource type is registered in
+`apps/api/src/app-registrations/sharing.ts`, and `TranscriptAccessService`
+keeps its public signature while delegating to `AccessPolicy`: `view` is the
+type's `read` action, `edit` its `write`, `own` its `delete`
+(`roles: viewer < editor`, `actions: { read: viewer, write: editor, share:
+owner, delete: owner }`, `write` and `delete` also needing `transcripts:write`
+even for the owner). Two rules the platform's own refusal would blur stay
+here: one shared 404 body (`Transcript not found`, never the platform's
+`Resource not found`), and the 403 naming `transcripts:write` only for a
+caller who can already see the row at the level asked for (the platform checks
+the permission before the role, so a stranger without it would otherwise learn
+the transcript exists). `transcripts.org_id` carries the organization the
+decision is made in; `transcripts` is **not** under row-level security, since
+`AccessPolicy` and the sharing conformance suite need the column and not a
+policy (the spike for #485). Only user grants are grantable: no group grants,
+no link shares.
+
 **No access is a 404, never a 403.** A 403 confirms the resource exists and
 merely refuses the caller; a 404 reveals nothing about whether transcript
 `abc123` exists at all. For a product whose stated privacy stance is that a
@@ -1293,17 +1312,30 @@ today.
 
 ### 6.3 Sharing: viewer and editor, and the narrow email lookup
 
-`transcript_shares` (`transcript_id`, `user_id`, `role`: `viewer | editor`,
-`granted_by_id`; unique on `(transcript_id, user_id)`) is populated only
-through `POST /api/transcripts/:id/shares`, callable only by the owner. It
-looks up an **active** user by **exact, case-insensitive email** — never a
-partial match, never a listing — and answers a generic 404 ("No KVox user
-with that email") for no match, rate-limited per owner, for the reason §6.1
-already states: a system that must not leak whether transcript `X` exists
-must equally not leak whether user `Y` has an account, and the two checks
-share the same "answer identically for absent and for forbidden" posture.
-Revocation and role changes take effect on the **next request** — there is
-no cached grant anywhere for `TranscriptAccessService` to invalidate.
+A share is one **active** `grants` row (`resource_type = 'transcript'`,
+`resource_id` the transcript, `grantee_kind = 'user'`, `role`: `viewer |
+editor`, `granted_by_id`; one active grant per transcript and user, enforced
+by the platform's partial unique index `grants_active_user_uniq_idx`). It is
+created by `POST /api/grants` (the platform's route, which the web's share
+dialog calls) or by the deprecated `POST /api/transcripts/:id/shares`
+adapter (§6.3.1), callable only by the owner. Both look up an **active** user
+of the organization by **exact, case-insensitive email** — never a partial
+match, never a listing — and answer a generic 404 ("No user with that
+email") for no match on the deprecated route (the platform's route answers
+its own `422 NOT_AN_ORG_MEMBER`, equally generic), rate-limited per owner by
+the slice's `MemberLookupThrottle`, for the reason §6.1 already states: a
+system that must not leak whether transcript `X` exists must equally not
+leak whether user `Y` has an account, and the two checks share the same
+"answer identically for absent and for forbidden" posture. Revocation (a soft
+`revoked_at`, pruned later by the `sharing.grants.prune` job) and role changes
+take effect on the **next request** — there is no cached grant anywhere for
+`TranscriptAccessService` to invalidate.
+
+Before #485 a share was a `transcript_shares` row; migration
+`20261016120100_transcript_shares_to_grants` moved every row (same role,
+grantor and creation time) and dropped the table and the `TranscriptShareRole`
+enum. Deleting a transcript deletes its grants in the same transaction
+(`GrantsService.deleteForResources` in `transcript.purge`).
 
 The exact 404 text is **"No user with that email"**, with no product name in
 it. That is deliberate and is not a slip against the wording above: this
@@ -1314,6 +1346,14 @@ must name *nothing*, and the product is one more thing it does not need to
 name.
 
 ### 6.3.1 Four endpoints, and the one that is not owner-only
+
+**Deprecated since #485, kept for one release.** The platform's own routes
+(`GET|POST /api/grants`, `PATCH|DELETE /api/grants/:id`, `GET
+/api/grants/shared-with-me`) are where clients go; the web already uses them.
+These four are thin adapters over `GrantsService` (`TranscriptSharesAdapter`)
+with the **same request and response shapes, status codes and 404 bodies** as
+before, marked `deprecated` in OpenAPI. `:userId` is still the *recipient's*
+user id; a share's `id` is now the grant's id.
 
 | Endpoint | Who | Level asked of `TranscriptAccessService` |
 |---|---|---|
@@ -1351,20 +1391,15 @@ than a probe.
 Re-sharing with somebody who already holds a share **updates their role**
 rather than failing: the dialog's email field does not know who is already on
 the list, and a 409 would make the owner delete a row in order to type it
-again. `@@unique([transcript_id, user_id])` is what makes the upsert's
-"exactly one row per pair" a property of the database rather than of the
+again. The platform's partial unique index `grants_active_user_uniq_idx` is what
+makes the upsert's "exactly one active row per pair" a property of the database rather than of the
 service.
 
 ### 6.3.2 Rate-limiting the lookup: per caller, misses only, in process
 
-There was **no rate-limiting precedent in this repository to reuse** when
-issue #29 landed, and the three things that look like one are all about
-something else: `jobs/provider-throttle.service.ts` shares an *outbound*
-bucket so a vendor is not hammered; `jobs/rate-limit.error.ts` classifies a
-429 a provider returned *to us*; and the device-authorization poll interval
-is a hint in a response body, not an enforced limit. So
-`ShareLookupThrottleService` is deliberately the simplest correct thing, with
-three properties stated rather than implied:
+The lookup is rate limited by the sharing slice's `MemberLookupThrottle` (this
+app's own `ShareLookupThrottleService` is retired by #485), which keeps the
+three properties issue #29 chose and states them rather than implying them:
 
 - **Per authenticated caller, not per IP.** That is who the oracle answers
   to: an attacker behind a thousand addresses is still one account, and an
@@ -1372,22 +1407,18 @@ three properties stated rather than implied:
 - **Only a miss spends budget.** Sharing with eight colleagues in a row is
   the feature working; it is the run of misses that is the enumeration.
   Charging only failures makes the limit invisible to every honest user and
-  immediate for the attack it exists to stop.
+  immediate for the attack it exists to stop. Sharing with yourself is a 400
+  and costs nothing.
 - **In process**, which is a real limit and not a hidden one: N replicas
   permit N times the budget and a restart forgets everything. That is an
   acceptable trade for a control whose job is to turn "ten thousand addresses
-  in a minute" into "ten thousand addresses in a week", and it is the honest
-  shape for a codebase with no shared cache — a Postgres-backed counter would
-  put a write on the hot path of every failed lookup, and a Redis-backed one
-  would add infrastructure this deployment does not have. The service is the
-  seam to replace if a shared limiter is ever wanted; nothing outside it
-  knows how the counting is done.
+  in a minute" into "ten thousand addresses in a week".
 
-Audit: `transcript:share:grant`, `transcript:share:update` and
-`transcript:share:revoke`, all `targetType: 'transcript'`. A **leave**
-records the revoke with the person leaving as the actor and `left: true` in
-its meta, so an audit reader does not have to compare two ids to tell the two
-shapes apart.
+Audit: the platform's `grant:create`, `grant:update` and `grant:revoke`
+(`targetType: 'grant'`, the transcript in `meta.resourceId`, the role and the
+grantee's user id, never an address; before #485 they were
+`transcript:share:grant|update|revoke`). A **leave** is a revoke with the
+person leaving as the actor.
 
 ### 6.4 Why the admin card reuses `system_settings:*`, and not a new permission
 
@@ -2031,34 +2062,36 @@ triggering write commits, outside any transaction:
 - **`transcripts.transcript_failed`** — raised by whichever stage set
   `status: failed` (§1.6), carrying the failure reason and a link that opens
   straight to the retry action, to the owner.
-- **`transcripts.transcript_shared`** — raised by `POST /:id/shares` (issue
-  #29), to the **recipient only**, naming the owner, the transcript's title
-  and the granted role. Default-enabled, **not** `mandatory: true` — unlike
-  `security.role_changed`, being told about a share is a courtesy a
-  recipient can reasonably choose to mute, not a security-relevant change to
-  their own privileges. Three things it deliberately does **not** do:
+- **`sharing.shared_with_you`** — the platform sharing slice's event (issue
+  #485; it replaces `transcripts.transcript_shared` of issue #29), raised by
+  `GrantsService` after the grant's transaction commits, to the **recipient
+  only**, naming the sharer, the transcript's title (from the resource type's
+  `describe()`) and the granted role. Default-enabled, **not** `mandatory:
+  true` — unlike `security.role_changed`, being told about a share is a
+  courtesy a recipient can reasonably choose to mute, not a security-relevant
+  change to their own privileges. Things it deliberately does **not** do:
   - It is **not raised for a no-op re-share** (the same address at the same
-    role, from an owner clicking twice or a retried request): mailing
-    somebody again about access they already have is how a useful
-    notification becomes one people mute.
-  - It is **not raised for a demotion**. "*Owner* shared *Title* with you
-    (Viewer)" is simply the wrong message for "you can no longer correct
-    this", and there is no second event for it. A demotion is silent and
-    takes effect on the next request, exactly as a revocation does.
-  - There is **no `transcript_unshared` counterpart at all**. "Your access
-    was removed" is a message whose main effect is to tell somebody they were
-    discussed; an owner is entitled to un-share a private conversation
-    without composing an explanation.
+    role): mailing somebody again about access they already have is how a
+    useful notification becomes one people mute.
+  - It is **not raised for a demotion** (editor to viewer): "*Owner* shared
+    *Title* with you (Viewer)" is simply the wrong message for "you can no
+    longer correct this". The platform raises it for any role change, so
+    `SharingNotifierAdapter` (`apps/api/src/platform/sharing/`) drops that one
+    transition for transcripts. A demotion is silent and takes effect on the
+    next request, exactly as a revocation does.
+  - There is **no "unshared" counterpart at all**. "Your access was removed"
+    is a message whose main effect is to tell somebody they were discussed; an
+    owner is entitled to un-share a private conversation without composing an
+    explanation.
 
-  The email template carries the **role**, not just a link — "someone shared
-  a recording with you" leaves the reader to click through to discover
-  whether they can fix the misheard name they are about to find. It carries
-  the title in the body and **deliberately not in the subject line**, which
-  is the one part of an email that renders on a lock screen and in a
-  notification preview: the title of somebody else's private conversation has
-  no business appearing there before the recipient has opened the message.
-  The browser template does carry it, because a toast is only shown to
-  somebody already inside the application.
+  The email is the slice's `shared-with-you` template under this app's layout
+  (`email-templates/shared-with-you.email.ts`). It carries the title in the
+  body and **not in the subject line**, which is the one part of an email that
+  renders on a lock screen and in a notification preview: the title of
+  somebody else's private conversation has no business appearing there before
+  the recipient has opened the message. A user who muted the old
+  `transcripts.transcript_shared` event gets this one at its default: the
+  stored preference was keyed by the retired event.
 
 None of the three is a job-queue operational event in the sense
 `docs/specs/job-queue.md`'s own "Notifying somebody a job gave up" section

@@ -23,6 +23,7 @@ import { exportNoteSkeleton, RealDataNotFoundError, RealDataPathError } from '..
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-eval-export.db.spec');
 
@@ -77,7 +78,7 @@ describeWithDb('kg:eval --export-note (real Postgres)', () => {
         uploadedById: ownerId,
       },
     });
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: 'Planning call',

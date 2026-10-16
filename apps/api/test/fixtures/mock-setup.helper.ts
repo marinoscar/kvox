@@ -666,7 +666,21 @@ export function setupBaseMocks(): void {
   // "this caller cannot name that source", which is a real production state
   // (a deleted or unshared source) and resolves to `sourceName: null`. A suite
   // that asserts a NAME overrides these, and one that does not is unaffected.
-  (prismaMock.transcript.findMany as jest.Mock).mockResolvedValue([]);
+  // `transcript.findMany` is `loadOwners` of the `transcript` resource type when it is asked
+  // for `{ id, orgId, ownerId }` (the platform's `AccessPolicy`, #485): it answers from
+  // whatever row the spec configured on `transcript.findUnique`, so a spec that arranges
+  // ONE transcript for the access check arranges it for the policy too. Any other shape
+  // (a list read) is `[]` until the spec says otherwise.
+  (prismaMock.transcript.findMany as jest.Mock).mockImplementation(async (args?: any) => {
+    const ids: string[] = args?.where?.id?.in ?? [];
+    if (!(args?.select?.ownerId && args?.select?.orgId) || ids.length === 0) return [];
+
+    const lookup = (prismaMock.transcript.findUnique as jest.Mock).getMockImplementation();
+    const row = lookup ? await lookup({ where: { id: ids[0] } }) : null;
+    if (!row || !ids.includes(row.id) || row.deletedAt) return [];
+
+    return [{ id: row.id, orgId: row.orgId ?? TEST_DEFAULT_ORG_ID, ownerId: row.ownerId }];
+  });
   (prismaMock.storageObject.findMany as jest.Mock).mockResolvedValue([]);
   (prismaMock.note.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -686,10 +700,45 @@ export function setupBaseMocks(): void {
     fn(prismaMock),
   );
   (prismaMock.forOrg as jest.Mock).mockImplementation(() => prismaMock);
+  // Sharing (#485): no transcript is shared with anybody until a spec says so
+  // (`mockTranscriptShare`). `groupBy` is the shared-with-me read of a list, `findMany`
+  // the grant read of an access decision.
+  (prismaMock.grant.findMany as jest.Mock).mockResolvedValue([]);
+  (prismaMock.grant.groupBy as jest.Mock).mockResolvedValue([]);
   (prismaMock.kvoxObjectOwnership.findMany as jest.Mock).mockResolvedValue([]);
   (prismaMock.kvoxObjectOwnership.upsert as jest.Mock).mockResolvedValue({});
 
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);
   (prismaMock.$disconnect as jest.Mock).mockResolvedValue(undefined);
+}
+
+/**
+ * Arranges the one grant the platform's `AccessPolicy` reads for a transcript (#485): the
+ * CALLER holds a `role` share on the transcript the decision asks about, or none (`null`).
+ * The caller and the transcript are read off the query itself (`granteeUserId` and
+ * `resourceId` in the `where`), so a spec does not need either id. Replaces the old
+ * `transcriptShare.findUnique.mockResolvedValue({ role })`.
+ */
+export function mockTranscriptShare(role: 'viewer' | 'editor' | null): void {
+  (prismaMock.grant.findMany as jest.Mock).mockImplementation(async (args?: any) => {
+    if (!role) return [];
+
+    const where = JSON.stringify(args?.where ?? {});
+    const userId = /"granteeUserId":"([^"]+)"/.exec(where)?.[1];
+    const resourceId = /"resourceId":\{"in":\["([^"]+)"/.exec(where)?.[1];
+    if (!userId || !resourceId) return [];
+
+    return [
+      {
+        resourceType: 'transcript',
+        resourceId,
+        granteeKind: 'user',
+        granteeUserId: userId,
+        granteeGroupId: null,
+        granteeRef: null,
+        role,
+      },
+    ];
+  });
 }

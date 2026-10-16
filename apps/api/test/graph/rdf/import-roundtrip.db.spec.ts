@@ -49,13 +49,13 @@ import { ResolutionService } from '../../../src/graph/resolution/resolution.serv
 import { ResolutionStage } from '../../../src/graph/resolution/resolution.stage';
 import { NoteAccessService } from '../../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
-import { TranscriptAccessService } from '../../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { buildServices } from '../kg-proposal-db-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { importFixture, type ImportFixture } from './import-fixtures';
 import { createStorageObject } from '../../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../../helpers/db-managed-objects.helper';
+import { createTranscriptAccess } from '../../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('import-roundtrip.db.spec');
 
@@ -120,7 +120,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     await prisma.$connect();
     db = prisma as unknown as PrismaService;
     ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
-    source = new GraphExportSource(db, ontology, new TranscriptAccessService(db), new NoteAccessService(db));
+    source = new GraphExportSource(db, ontology, createTranscriptAccess(db), new NoteAccessService(db));
     services = buildServices(prisma);
   });
 

@@ -80,6 +80,9 @@ import { TranscriptObjectsService } from '../transcript-objects.service';
 import { readTranscriptId, TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { GrantsService } from '@marinoscar/platform-api/sharing';
+
+import { TRANSCRIPT_RESOURCE_TYPE } from '../../app-registrations/sharing';
 
 @Injectable()
 export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
@@ -96,6 +99,7 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     private readonly runtime: TranscriptionRuntimeService,
     private readonly searchIndex: SearchIndexService,
     private readonly pipeline: TranscriptPipelineService,
+    private readonly grants: GrantsService,
   ) {}
 
   onModuleInit(): void {
@@ -195,7 +199,8 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
 
     // ------------------------------------------------------------------------
     // The rows. `Cascade` takes the children — speakers, segments, versions,
-    // shares, exports — so one delete is enough.
+    // exports — so one delete is enough (the shares are `grants` rows, deleted
+    // with it below).
     // ------------------------------------------------------------------------
     //
     // ⚠ THE SOURCE OBJECT IS DELETED AFTER THIS ROW, NOT BEFORE, AND THERE IS
@@ -235,7 +240,20 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     // which IS a real foreign key inside that module's own tables.)
     await this.searchIndex.forget(SEARCH_DOC_TRANSCRIPT, transcript.id);
 
-    await this.prisma.transcript.delete({ where: { id: transcript.id } });
+    // The transcript's grants go in the SAME transaction (#485): `grants` names a
+    // record polymorphically (`resource_type` + `resource_id`, no foreign key), so
+    // the old `transcript_shares` cascade is now this call. `grants` is under forced
+    // row-level security, hence `runInOrg` (the platform's `sharing.grants.prune` job
+    // sweeps whatever a missed call leaves).
+    // A long timeout: the delete cascades the segments, versions and speakers.
+    await this.prisma.runInOrg(
+      { orgId: transcript.orgId },
+      async (tx) => {
+        await this.grants.deleteForResources(tx, TRANSCRIPT_RESOURCE_TYPE, [transcript.id]);
+        await tx.transcript.delete({ where: { id: transcript.id } });
+      },
+      { timeout: 120_000 },
+    );
 
     if (await this.objects.deleteIfPresent(sourceObjectId)) removed += 1;
 

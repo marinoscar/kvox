@@ -25,8 +25,10 @@
 //     with NULLs free to repeat — the idempotent-retry key for a batch save
 //     (§5), expressible as a plain Prisma `@@unique` because Postgres's
 //     standard NULLS-DISTINCT behaviour already gives the wanted semantics.
-//   - `(transcript_id, user_id)` unique on `transcript_shares` — one role
-//     per (transcript, user) (§6.3).
+//   - `transcripts.org_id` NOT NULL with a foreign key to `organizations` —
+//     the organization the sharing slice decides a transcript's access in
+//     (issue #485; a share is a platform `grants` row, whose own constraints
+//     are the platform's to test).
 //   - `(transcript_id, label)` on `transcript_speakers` — the ONE
 //     hand-written, Prisma-inexpressible constraint in this migration (a
 //     partial unique index, `WHERE label IS NOT NULL`), scoped to labelled
@@ -49,6 +51,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const HAND_WRITTEN_INDEX_NAMES = ['transcript_speakers_transcript_id_label_key'];
 
@@ -127,9 +130,6 @@ describeWithDb('Transcript schema (real Postgres)', () => {
     await prisma.transcriptExport.deleteMany({
       where: { transcript: { title: { startsWith: 'test-transcript-' } } },
     });
-    await prisma.transcriptShare.deleteMany({
-      where: { transcript: { title: { startsWith: 'test-transcript-' } } },
-    });
     await prisma.transcriptVersion.deleteMany({
       where: { transcript: { title: { startsWith: 'test-transcript-' } } },
     });
@@ -166,7 +166,7 @@ describeWithDb('Transcript schema (real Postgres)', () => {
   }
 
   async function createTranscript(ownerId: string, sourceObjectId: string, suffix: string) {
-    return prisma.transcript.create({
+    return createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `test-transcript-${suffix}`,
@@ -269,35 +269,51 @@ describeWithDb('Transcript schema (real Postgres)', () => {
   });
 
   // ===========================================================================
-  // transcript_shares: (transcript_id, user_id)
+  // transcripts.org_id (issue #485)
   // ===========================================================================
 
-  describe('transcript_shares uniqueness', () => {
-    it('rejects a second share row for the same (transcriptId, userId)', async () => {
-      const owner = await createUser('share-owner');
-      const recipient = await createUser('share-recipient');
-      const source = await createSourceObject(owner.id, 'share');
-      const transcript = await createTranscript(owner.id, source.id, 'share');
-
-      await prisma.transcriptShare.create({
-        data: {
-          transcriptId: transcript.id,
-          userId: recipient.id,
-          role: 'viewer',
-          grantedById: owner.id,
-        },
-      });
+  describe('transcripts.org_id', () => {
+    it('is NOT NULL: a transcript cannot exist outside an organization', async () => {
+      const owner = await createUser('org-owner');
+      const source = await createSourceObject(owner.id, 'org');
 
       await expect(
-        prisma.transcriptShare.create({
+        prisma.$executeRaw`
+          INSERT INTO transcripts (id, owner_id, title, source_object_id, provider, updated_at)
+          VALUES (gen_random_uuid(), ${owner.id}::uuid, 'test-transcript-org-null', ${source.id}::uuid, 'assemblyai', now())`,
+      ).rejects.toThrow(/org_id|null value/i);
+    });
+
+    it('is a foreign key to organizations', async () => {
+      const owner = await createUser('org-fk-owner');
+      const source = await createSourceObject(owner.id, 'org-fk');
+
+      await expect(
+        createTranscriptRow(prisma, {
           data: {
-            transcriptId: transcript.id,
-            userId: recipient.id,
-            role: 'editor',
-            grantedById: owner.id,
+            ownerId: owner.id,
+            orgId: '00000000-0000-4000-8000-00000000dead',
+            title: 'test-transcript-org-fk',
+            sourceObjectId: source.id,
+            provider: 'assemblyai',
           },
         }),
-      ).rejects.toMatchObject({ code: 'P2002' });
+      ).rejects.toMatchObject({ code: 'P2003' });
+    });
+
+    it('is NOT under row-level security: a plain query sees the row without an org scope', async () => {
+      const [row] = await prisma.$queryRaw<Array<{ relrowsecurity: boolean }>>`
+        SELECT relrowsecurity FROM pg_class WHERE relname = 'transcripts'`;
+
+      // The spike for #485: AccessPolicy needs the column, not a policy.
+      expect(row.relrowsecurity).toBe(false);
+    });
+
+    it('no longer has a transcript_shares table: a share is a grants row', async () => {
+      const [row] = await prisma.$queryRaw<Array<{ name: string | null }>>`
+        SELECT to_regclass('public.transcript_shares')::text AS name`;
+
+      expect(row.name).toBeNull();
     });
   });
 

@@ -10,7 +10,9 @@
 //   * retention policies for the nightly retention purge: none;
 //   * node span attributes a worker node may relay: none;
 //   * the labels of RETIRED job types, so an old row still renders with a name in
-//     the admin Jobs list after its handler is gone.
+//     the admin Jobs list after its handler is gone;
+//   * the label of a platform job type whose handler declares none
+//     (`sharing.grants.prune`).
 //
 // A live handler declares its own `label`; the registry records it when the
 // handler registers. Only a type with no handler needs a line here.
@@ -52,6 +54,14 @@ export const RETIRED_JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'example.checksum': 'Example: checksum (retired)',
 };
 
+/**
+ * Labels for platform job types whose handler declares none. The sharing slice's
+ * prune job (issue #485) is server-only housekeeping the admin Jobs list shows.
+ */
+export const PLATFORM_JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
+  'sharing.grants.prune': 'Sharing: prune revoked and expired grants',
+};
+
 let registered = false;
 
 if (!registered) {
@@ -59,7 +69,7 @@ if (!registered) {
   APP_JOB_REASONS.forEach(registerJobReason);
   APP_RETENTION_POLICIES.forEach(registerRetentionPolicy);
   APP_NODE_SPAN_ATTRIBUTES.forEach(registerNodeSpanAttribute);
-  for (const [type, label] of Object.entries(RETIRED_JOB_TYPE_LABELS)) {
+  for (const [type, label] of Object.entries({ ...RETIRED_JOB_TYPE_LABELS, ...PLATFORM_JOB_TYPE_LABELS })) {
     registerJobTypeLabel(type, label);
   }
 }

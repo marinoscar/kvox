@@ -3,7 +3,7 @@ import request from 'supertest';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../../src/transcripts/job-types';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { invalidateAiResolverCache, primeAiReadiness } from '../helpers/ai-readiness.fixtures';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
@@ -32,6 +32,7 @@ const SPEAKER_A = '44444444-5555-4666-8777-888888888888';
 const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   id: TRANSCRIPT_ID,
   ownerId: 'owner-user-id',
+  orgId: TEST_DEFAULT_ORG_ID,
   title: 'A recording',
   status: 'ready',
   transcriptionStatus: 'completed',
@@ -188,7 +189,7 @@ describe('AI name correction Integration', () => {
       const stranger = await createMockTestUser(context, { email: 'stranger@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow() as never);
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null as never);
+      mockTranscriptShare(null);
 
       const response = await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/name-checks`)
@@ -204,7 +205,7 @@ describe('AI name correction Integration', () => {
       const sharee = await createMockTestUser(context, { email: 'sharee@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow() as never);
-      prismaMock.transcriptShare.findUnique.mockResolvedValue({ role: 'viewer' } as never);
+      mockTranscriptShare('viewer');
 
       await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/name-checks`)

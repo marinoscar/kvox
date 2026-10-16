@@ -21,12 +21,12 @@ vi.mock('../../../services/transcripts', async () => {
   return { ...actual, deleteTranscript: vi.fn() };
 });
 
-vi.mock('../../../services/transcriptShares', async () => {
+vi.mock('../../../services/transcriptSharing', async () => {
   const actual =
-    await vi.importActual<typeof import('../../../services/transcriptShares')>(
-      '../../../services/transcriptShares',
+    await vi.importActual<typeof import('../../../services/transcriptSharing')>(
+      '../../../services/transcriptSharing',
     );
-  return { ...actual, removeShare: vi.fn() };
+  return { ...actual, leaveTranscript: vi.fn() };
 });
 
 // `services/api` is NOT mocked: the component distinguishes an `ApiError`
@@ -34,11 +34,11 @@ vi.mock('../../../services/transcriptShares', async () => {
 import { ApiError } from '../../../services/api';
 import { deleteTranscript } from '../../../services/transcripts';
 import type { TranscriptListItem } from '../../../services/transcripts';
-import { removeShare } from '../../../services/transcriptShares';
+import { leaveTranscript } from '../../../services/transcriptSharing';
 import { TranscriptRowActions } from '../../../components/library/TranscriptRowActions';
 
 const mockDeleteTranscript = vi.mocked(deleteTranscript);
-const mockRemoveShare = vi.mocked(removeShare);
+const mockLeaveTranscript = vi.mocked(leaveTranscript);
 
 function item(overrides: Partial<TranscriptListItem> = {}): TranscriptListItem {
   return {
@@ -86,7 +86,7 @@ function renderActions(
 
 beforeEach(() => {
   mockDeleteTranscript.mockReset().mockResolvedValue(undefined);
-  mockRemoveShare.mockReset().mockResolvedValue(undefined);
+  mockLeaveTranscript.mockReset().mockResolvedValue(undefined);
 });
 
 describe('TranscriptRowActions — the Play button', () => {
@@ -242,7 +242,7 @@ describe('TranscriptRowActions — deleting (owner)', () => {
 });
 
 describe('TranscriptRowActions — leaving (non-owner)', () => {
-  it('confirms, calls removeShare with the CALLER’S OWN id, and refreshes', async () => {
+  it('confirms, leaves through the grants API (the caller\u2019s own grant), and refreshes', async () => {
     const user = userEvent.setup();
     const { onChanged } = renderActions(item({ id: 't1', access: 'viewer' }));
 
@@ -252,9 +252,7 @@ describe('TranscriptRowActions — leaving (non-owner)', () => {
     expect(await screen.findByText('Leave this transcript?')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Leave' }));
 
-    await waitFor(() =>
-      expect(mockRemoveShare).toHaveBeenCalledWith('t1', mockAdminUser.id),
-    );
+    await waitFor(() => expect(mockLeaveTranscript).toHaveBeenCalledWith('t1'));
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   });
 });

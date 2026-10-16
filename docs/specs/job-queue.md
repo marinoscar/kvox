@@ -2331,6 +2331,7 @@ Forty-two type strings are pinned. A type string is permanent once rows exist.
 | `db.backup.run` | db-backup | Node-eligible; brokered database credential (worker-nodes.md §20.1) |
 | `db.backup.sweep`, `db.restore.old-db-drop` | db-backup | Housekeeping; server-only |
 | `db.restore.run` | db-backup | Server-only permanently |
+| `sharing.grants.prune` | platform sharing | Housekeeping; server-only (reads every resource type's `loadOwners`); registered through `SHARING_JOBS` (`platform/sharing/sharing-jobs.adapter.ts`, issue #485); `orgId` null |
 | `auth.token.cleanup`, `device-auth.code.cleanup` | platform identity | Registered through `IDENTITY_JOBS` (`identity-jobs.adapter.ts`), strings unchanged |
 | `example.echo`, `example.checksum` | retired | Handler deleted; label kept |
 

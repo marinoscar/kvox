@@ -13,7 +13,7 @@
 //
 // OWNER vs ACTOR. A row with an `ownerField` belongs to the user. A row with
 // only `actorFields` merely records who acted (an editor, an author, a
-// requester, the two parties of a share) and is not the actor's data.
+// requester, the requester of an export) and is not the actor's data.
 //
 // The registration itself (`registerPlatformUserOwnedModels`) is
 // `registrations.ts`; this file only declares.
@@ -51,21 +51,6 @@ export const KVOX_USER_OWNED_MODELS: readonly Def[] = [
     purge: 'detach',
     export: 'include',
     rationale: 'A snapshot of a transcript; the author is only recorded and the version outlives them.',
-  },
-  {
-    model: 'TranscriptShare',
-    // Both keys are `Cascade`, and the `user-owned-data` suite refuses an
-    // owned model whose ACTOR field cascades ("deleting the actor would delete
-    // a row another user owns"). A share is deleted when EITHER party is, so it
-    // is registered as actor-only on both keys and purged with `delete`, rather
-    // than as owned by the grantee with the granter as an actor (the issue's
-    // first draft).
-    // PLATFORM-ADOPTION-SHIM(#465): deviation from the issue's table, see above.
-    actorFields: ['userId', 'grantedById'],
-    purge: 'delete',
-    export: 'include',
-    rationale:
-      'A transcript shared with a user. The row is deleted when either the grantee or the granting owner is (both keys cascade), and neither owns it alone.',
   },
   {
     model: 'TranscriptExport',

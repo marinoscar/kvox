@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
+import { GrantsService } from '@marinoscar/platform-api/sharing';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
@@ -26,8 +28,11 @@ const TRANSCRIPT_ID = 'transcript-1';
 const job = (payload: unknown = { transcriptId: TRANSCRIPT_ID }): Job =>
   ({ id: 'job-1', payload } as unknown as Job);
 
+const ORG_ID = 'org-1';
+
 const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   id: TRANSCRIPT_ID,
+  orgId: ORG_ID,
   sourceObjectId: 'obj-source',
   playbackObjectId: 'obj-playback',
   rawResultObjectId: 'obj-raw',
@@ -47,7 +52,9 @@ describe('TranscriptPurgeHandler', () => {
     transcriptExport: { updateMany: jest.Mock; };
     note: { updateMany: jest.Mock };
     auditEvent: { create: jest.Mock };
+    runInOrg: jest.Mock;
   };
+  let grants: { deleteForResources: jest.Mock };
   let pipeline: { enqueuePurge: jest.Mock };
   let searchIndex: { forget: jest.Mock; forgetOwnerDocuments: jest.Mock };
   let objects: { deleteIfPresent: jest.Mock };
@@ -68,7 +75,11 @@ describe('TranscriptPurgeHandler', () => {
       transcriptExport: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       note: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
+      runInOrg: jest.fn(),
     };
+    // `runInOrg` hands the fake itself to the callback as the transaction client.
+    prisma.runInOrg.mockImplementation((_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
+    grants = { deleteForResources: jest.fn().mockResolvedValue(0) };
     pipeline = { enqueuePurge: jest.fn().mockResolvedValue(undefined) };
     searchIndex = {
       forget: jest.fn(),
@@ -92,6 +103,7 @@ describe('TranscriptPurgeHandler', () => {
         // cascade and no housekeeping cron is ever coming for those rows.
         { provide: SearchIndexService, useValue: searchIndex },
         { provide: TranscriptPipelineService, useValue: pipeline },
+        { provide: GrantsService, useValue: grants },
       ],
     }).compile();
 
@@ -112,6 +124,25 @@ describe('TranscriptPurgeHandler', () => {
     expect(new Set(deleted)).toEqual(
       new Set(['obj-playback', 'obj-raw', 'obj-snapshot', 'obj-export', 'obj-source']),
     );
+  });
+
+  it('deletes the transcript\'s grants in the SAME organization transaction as the row, grants first (#485)', async () => {
+    const order: string[] = [];
+
+    grants.deleteForResources.mockImplementation(async () => {
+      order.push('grants');
+      return 2;
+    });
+    prisma.transcript.delete.mockImplementation(async () => {
+      order.push('row');
+      return {};
+    });
+
+    await handler.process(job());
+
+    expect(prisma.runInOrg).toHaveBeenCalledWith({ orgId: ORG_ID }, expect.any(Function), expect.anything());
+    expect(grants.deleteForResources).toHaveBeenCalledWith(prisma, 'transcript', [TRANSCRIPT_ID]);
+    expect(order).toEqual(['grants', 'row']);
   });
 
   it('deletes the source object AFTER the row, which the Restrict FK forces', async () => {

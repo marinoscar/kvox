@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------
 //
 // `GET`, `POST` and `PATCH` under `:id/shares` are owner-only, enforced by
-// `require(..., 'own')` inside `TranscriptSharingService` and therefore
+// `require(..., 'own')` inside `TranscriptSharesAdapter` and therefore
 // answering the same 404 a stranger gets. `DELETE :id/shares/:userId` is the
 // exception: a RECIPIENT passing their OWN user id is leaving, which needs no
 // more authority than holding the share did — and so it is gated on
@@ -157,7 +157,7 @@ import {
 import { TranscriptExportService } from './export/transcript-export.service';
 import { identitiesFingerprint } from './editing/speaker-identity';
 import { TranscriptEditingService } from './transcript-editing.service';
-import { TranscriptSharingService } from './transcript-sharing.service';
+import { TranscriptSharesAdapter } from './transcript-shares.adapter';
 import { TranscriptsService } from './transcripts.service';
 
 /**
@@ -219,7 +219,7 @@ export class TranscriptsController {
   constructor(
     private readonly transcripts: TranscriptsService,
     private readonly editing: TranscriptEditingService,
-    private readonly sharing: TranscriptSharingService,
+    private readonly sharing: TranscriptSharesAdapter,
     private readonly exports: TranscriptExportService,
   ) {}
 
@@ -802,14 +802,23 @@ export class TranscriptsController {
   }
 
   // ===========================================================================
-  // Sharing (issue #29, spec §6.3)
+  // Sharing (issue #29, spec §6.3) — DEPRECATED since #485
   // ===========================================================================
+  //
+  // A share is a platform `grants` row now. These four routes stay for ONE
+  // release as thin adapters over `GrantsService` (`transcript-shares.adapter.ts`),
+  // with the request and response shapes unchanged; new clients use `GET|POST
+  // /api/grants`, `PATCH|DELETE /api/grants/:id` and `GET /api/grants/shared-with-me`.
 
   @Get(':id/shares')
   @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
   @ApiOperation({
+    deprecated: true,
     summary: 'List who a transcript is shared with',
     description:
+      '**Deprecated** (issue #485): a share is a platform grant now. Use `/api/grants` ' +
+      '(`resourceType: "transcript"`); this route is kept for one release with the same ' +
+      'request and response shapes.\n\n' +
       'Owner only. Every share on this transcript, oldest first, with each recipient\'s ' +
       'address, display name and role.\n\n' +
       '**Owner only, not viewer-or-better**, deliberately: who else can read a recording ' +
@@ -831,8 +840,12 @@ export class TranscriptsController {
   @Post(':id/shares')
   @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
   @ApiOperation({
+    deprecated: true,
     summary: 'Share a transcript with somebody',
     description:
+      '**Deprecated** (issue #485): a share is a platform grant now. Use `/api/grants` ' +
+      '(`resourceType: "transcript"`); this route is kept for one release with the same ' +
+      'request and response shapes.\n\n' +
       'Owner only. Grants `viewer` (read, play, export) or `editor` (everything a viewer ' +
       'can do, plus corrections, which create versions).\n\n' +
       'The recipient is found by **exact, case-insensitive email** — never a prefix, never ' +
@@ -870,8 +883,12 @@ export class TranscriptsController {
   @Patch(':id/shares/:userId')
   @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
   @ApiOperation({
+    deprecated: true,
     summary: 'Change what a share grants',
     description:
+      '**Deprecated** (issue #485): a share is a platform grant now. Use `/api/grants` ' +
+      '(`resourceType: "transcript"`); this route is kept for one release with the same ' +
+      'request and response shapes.\n\n' +
       'Owner only. Promotes a viewer to editor or demotes an editor to viewer. Takes ' +
       'effect on the **next request** — there is no cached grant anywhere, so a demoted ' +
       'editor\'s next correction is refused without anything having to be invalidated.\n\n' +
@@ -896,8 +913,12 @@ export class TranscriptsController {
   @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
+    deprecated: true,
     summary: 'Revoke a share, or leave one',
     description:
+      '**Deprecated** (issue #485): a share is a platform grant now. Use `/api/grants` ' +
+      '(`resourceType: "transcript"`); this route is kept for one release with the same ' +
+      'request and response shapes.\n\n' +
       'Two callers, one route. The **owner** may remove anybody; a **recipient** may pass ' +
       'their own user id to give up their own access ("leave"). Nobody else can remove ' +
       'anybody — an editor cannot revoke a viewer.\n\n' +

@@ -332,7 +332,6 @@ describe('RBAC System (Integration)', () => {
       const m = context.prismaMock;
       m.transcript.findMany.mockResolvedValue([]);
       m.transcript.count.mockResolvedValue(0);
-      m.transcriptShare.findMany.mockResolvedValue([]);
       m.note.findMany.mockResolvedValue([]);
       m.note.count.mockResolvedValue(0);
       m.noteTemplate.findMany.mockResolvedValue([]);

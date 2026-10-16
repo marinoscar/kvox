@@ -1494,8 +1494,8 @@ level collapses to a single ownership check: **there is no `note_shares`
 table in v1**, so only the owner ever satisfies any level, and everyone else
 gets a uniform 404. Keeping the three-level interface now — rather than a
 bare `requireOwner(userId, noteId)` — means the day note sharing is built, it
-slots into `NoteAccessService` exactly the way `transcript_shares` slots into
-`TranscriptAccessService`, with **zero** call-site changes anywhere that
+slots into `NoteAccessService` exactly the way a transcript share (a platform
+`grants` row since #485) slots into `TranscriptAccessService`, with **zero** call-site changes anywhere that
 already asks for `'view'`, `'edit'`, or `'own'`.
 
 **No access is a 404, never a 403** — carried across, not restated loosely,
@@ -1512,8 +1512,8 @@ The epic states this as an explicit scope line, and the reasoning is worth
 carrying forward precisely rather than restating loosely: note sharing is
 **out of scope for epic #45 entirely**, deferred to a later, not-yet-filed
 epic, so that when it is built it can be modelled directly on
-`transcript_shares`' already-proven shape (`docs/specs/transcription.md`
-§6.3) — the narrow exact-email lookup, the generic "no user with that
+the transcript share's already-proven shape (`docs/specs/transcription.md`
+§6.3; a platform grant since #485: register a `note` resource type) — the narrow exact-email lookup, the generic "no user with that
 email" 404, the per-caller rate-limited lookup throttle, `viewer`/`editor`
 roles, revocation taking effect on the next request with nothing cached to
 invalidate — rather than inventing a second sharing model that could disagree
