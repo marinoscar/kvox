@@ -9,7 +9,7 @@
 > in the header (`NotificationContext.tsx`, `NotificationSettings.tsx`,
 > `pushSubscription.ts`, `PushConfigPage.tsx`, ...) names a file that **no
 > longer exists**; read it as the description of the packaged behaviour. The
-> map from the old files to the new owners, what KVox still owns and the
+> map from the old files to the new owners, what this app still owns and the
 > places where the package differs are in
 > [Packaged implementation (#470)](#packaged-implementation-470) below.
 
@@ -85,7 +85,7 @@
 
 ## Packaged implementation (#470)
 
-Issue #470 (epic #467) deleted KVox's own email and notification stacks and
+Issue #470 (epic #467) deleted the application's own email and notification stacks and
 mounted the platform's. Routes, permissions, table names and every persisted
 string are **unchanged**, so no data moved: stored `notifications` preferences,
 `notification_deliveries` rows, `push_subscriptions`, the `webPush` settings row
@@ -101,11 +101,11 @@ and the `push_vapid` credential are read by the packaged code as they are.
 | `jobs.job_failed`, `nodes.node_offline` | platform | `OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS`; `JobFailureNotifier` is gone |
 | VAPID administration and the diagnostics (`/api/admin/push-config/*`, including `POST test`) | platform | `PushConfigService`, `PushTestService`; operator procedure in [vapid-keys.md](../runbooks/vapid-keys.md) |
 | Email rendering, SMTP and SES transports, `/api/email-settings` | platform | `EmailModule.forRoot(EMAIL_MODULE_OPTIONS)`, `apps/api/src/platform/email/` |
-| **Event declarations** (key, label, description, channels, `defaultEnabled`, `mandatory`) | KVox | `apps/api/src/notifications-registry/*.notifications.ts` |
-| **Email templates** and the brand mark | KVox | `apps/api/src/email-templates/` (`brand-logo.ts` is the layout brand mark) |
-| The registration order | KVox | `apps/api/src/platform/notifications/notification.manifest.ts` |
+| **Event declarations** (key, label, description, channels, `defaultEnabled`, `mandatory`) | this app | `apps/api/src/notifications-registry/*.notifications.ts` |
+| **Email templates** and the brand mark | this app | `apps/api/src/email-templates/` (`brand-logo.ts` is the layout brand mark) |
+| The registration order | this app | `apps/api/src/platform/notifications/notification.manifest.ts` |
 | Web: bell, banner, user and admin pages | platform | `@marinoscar/platform-web/notifications/{headless,ui}` and `/email/ui`, bound in `apps/web/src/platform/notifications.ts` (`configureNotificationsWeb`) |
-| Service worker | KVox composes, platform supplies the handlers | `apps/web/src/sw.ts` (see below) |
+| Service worker | the app composes, the platform supplies the handlers | `apps/web/src/sw.ts` (see below) |
 
 The registration order in `notification.manifest.ts` is load-bearing, because
 each step validates against the one before it: platform channels, the email
@@ -133,7 +133,7 @@ freeze when the application bootstraps.
 
 ### Differences from the code this document was written against
 
-These are the places where the package behaves differently from KVox's former
+These are the places where the package behaves differently from the app's former
 code. Everything else in this document still holds.
 
 - **No VAPID environment fallback.** Section 11.2's first case (no `webPush`
@@ -150,7 +150,7 @@ code. Everything else in this document still holds.
   `POST /api/admin/broadcasts/:id/resume`. Broadcast routes accept either the
   system permission (`broadcasts:read|write`) or its organization-scoped twin
   (`org_broadcasts:read|write`, held by the `org_admin` role in
-  `apps/api/prisma/catalog/permissions.json`), where KVox required the `admin`
+  `apps/api/prisma/catalog/permissions.json`), where this app required the `admin`
   role together with the system permission. **Authorization widens:** an
   `org_admin` can now reach the broadcast routes for the active organization,
   which in this single-organization deployment is every user (pending agent
@@ -170,14 +170,14 @@ code. Everything else in this document still holds.
 
 ### The service worker (#453 parity)
 
-`apps/web/src/sw.ts` keeps KVox's workbox precache and navigation routes and
+`apps/web/src/sw.ts` keeps the app's workbox precache and navigation routes and
 registers its notification handlers through
 `registerNotificationServiceWorkerHandlers(self, options)` from
 `@marinoscar/platform-web/notifications/headless`. The worker still never calls
 the API, and `sw.js` is still served `no-cache`. The behaviours #453 added are
 pending agent report (frontend agent): for each of the focused-tab rule
 (Section 7), the no-duplicate-toast rule and the `push-test-received`
-acknowledgement, record whether the package does the same or KVox composes its
+acknowledgement, record whether the package does the same or the app composes its
 own `push` listener from `handlePushEvent`. A composed listener is a row in
 [local-exceptions.md](../platform-adoption/local-exceptions.md).
 
@@ -695,7 +695,7 @@ unrelated, still-open bug.
 > **Packaged since #470.** `PushNotificationChannel`, `PushSubscriptionService`,
 > `PushConfigService` and `PushTestService` are the platform's
 > (`@marinoscar/platform-api/notifications`); the file and line references in
-> this section name the deleted KVox originals. The behaviour described (its own
+> this section name the deleted originals. The behaviour described (its own
 > row per channel, `Promise.allSettled` fan-out, 404/410 prune, `failureCount`
 > up to 5, the always-registered channel, the always-200 test route that writes
 > no delivery row) is unchanged. `VAPID_SUBJECT` is no longer read from the
@@ -822,7 +822,7 @@ page lays out Enable, Status, Diagnostics, then the Danger zone (issue #452).
 > **Packaged since #470.** `jobs.job_failed` and `nodes.node_offline` are the
 > platform's `OPS_NOTIFICATIONS` and `NODES_NOTIFICATIONS`, and the four email
 > templates are the platform's (`job-failed`, `node-offline`, `backup-failed`,
-> `restore-completed`). KVox registers the two database-backup events from
+> `restore-completed`). This app registers the two database-backup events from
 > `apps/api/src/notifications-registry/db-backup.notifications.ts` (keys,
 > channels and the `mandatory` flag on `db_backup.restore_completed` unchanged).
 > `notifyPermissionHolders` is the platform dispatcher's. The file paths in the
@@ -1000,7 +1000,7 @@ place.
 
 > **Packaged since #470, and the env fallback is gone.** The service, controller
 > and schema are the platform's (`PushConfigService`, `PUSH_CONFIG_KEY`
-> `'webPush'`, credential purpose `push_vapid`, name `default`: the strings KVox
+> `'webPush'`, credential purpose `push_vapid`, name `default`: the strings this app
 > always stored, so existing keys keep working with no re-subscription). The
 > platform retired the environment fallback of Section 11.2 (its #635); read
 > 11.2's cases 1 and 4 with that change: no row, or `enabled: false`, means off,
@@ -1415,7 +1415,7 @@ notification. Per the epic's own success criteria, none of the platform rows
 above can be marked done from this repository alone.
 
 **After #470.** The page and API logic above are covered by the platform's own
-suites; KVox's pins are `apps/api/test/notifications/kvox-events.spec.ts` (every
+suites; this app's pins are the notification events spec under `apps/api/test/notifications/` (every
 event key registered with its channels and `mandatory` flag, every `email`
 channel has a template), `apps/api/test/notifications/preferences-continuity.db.spec.ts`
 (a pre-migration `notifications` preference row still applies), the `email` and

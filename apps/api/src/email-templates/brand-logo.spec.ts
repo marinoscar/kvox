@@ -43,8 +43,8 @@ describe('the committed email logo asset', () => {
   });
 
   it('resolves to the same absolute path from dist/ as from src/', () => {
-    // `brand-logo.ts` computes `resolve(__dirname, '../../../assets/email')`.
-    // `src/email/templates` and `dist/email/templates` are the same depth
+    // `brand-logo.ts` computes `resolve(__dirname, '../../assets/email')`.
+    // `src/email-templates` and `dist/email-templates` are the same depth
     // below `apps/api`, which is the entire reason there is no copy step and
     // no environment variable. Recomputing it here for the dist side is the
     // only way to catch a `..` miscount, since a test never runs from dist.

@@ -727,6 +727,13 @@ database. It is never written to `system_settings.value`: the write schemas
 so a client that sends it has the key silently stripped by the global
 `ZodValidationPipe` before the request reaches the settings service.
 
+> Since #470 the dispatcher, the policy functions and the SSE stream named in
+> the next two paragraphs are the platform's (`NotificationPolicyService`,
+> `policyChannels`, `isBrowserToastAllowed` in `@marinoscar/platform-api/notifications`);
+> the declaration of the `notifications` namespace is the platform's too
+> (`NOTIFICATIONS_SYSTEM_SETTINGS`). The stored shape and the enforcement points
+> are unchanged. See [7.9](#79-platform-email-and-notifications-slices).
+
 `notifications` (issue #225, epic #215) is a modelled block rather than an
 entry in an open, untyped map — the now-removed `features` namespace was
 exactly that shape (`z.record(z.string(), z.boolean())`, no schema, no
@@ -1378,7 +1385,7 @@ the binding:
 
 | Port | KVox binding | Replaced by |
 |------|--------------|-------------|
-| `IDENTITY_NOTIFIER` | `IdentityNotifierAdapter` over `NotificationsService` (`security.role_changed`, `user.welcome`, `allowlist.invitation`; org invitations log and drop in single-org mode) | #468 |
+| `IDENTITY_NOTIFIER` | `IdentityNotifierAdapter` over the platform `NotificationsService` (`security.role_changed`, `user.welcome`, `allowlist.invitation`; org invitations log and drop in single-org mode); the events are registered in `notifications-registry/identity.notifications.ts` ([7.9](#79-platform-email-and-notifications-slices)) | stays while identity reaches notifications through `IDENTITY_NOTIFIER` |
 | `IDENTITY_JOBS` | `IdentityJobsAdapter`: registers `auth.token.cleanup` and `device-auth.code.cleanup` into `JobHandlerRegistry`, enqueues through `JobsService` | #470 |
 | `USER_DEFAULTS`, `IDENTITY_PROFILE_IMAGES` | `KvoxUserDefaults` (the settings slice's default user-settings document) and the platform's profile-image helpers (`ProfileImageModule`, #469) | none left (profile images removed in #469) |
 | `IDENTITY_NODE_CREDENTIALS` | `NodeCredentialService` | #470 |
@@ -1459,6 +1466,29 @@ What KVox adds through registries (`app-registrations/host.ts`, imported first b
 Temporary shims in this slice, each with its removal issue in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): `platform/http/not-modified.interceptor.ts` (a `304` must skip the envelope), `platform/about/about-contributors.module.ts` (hands the `SettingsResolver` to the Transcription contributor) and, on the web, the `isFeatureEnabled` read in `platform/platformHost.tsx`. Known gap: `kvox deploy about` cannot read the new About response until #482.
 
 On the web, `PlatformHostProvider` (`apps/web/src/platform/platformHost.tsx`, inside `AuthProvider`), `MaintenanceGate`, `MaintenanceBanner`, `InstallPrompt`, `UpdatePrompt`, the About and Maintenance pages (`@marinoscar/platform-web/host/ui`) and the Doctor page (`@marinoscar/platform-web/doctor/ui`) replaced the local components, hooks and pages.
+
+
+### 7.9 Platform email and notifications slices
+
+Email, notifications, broadcasts and Web Push are the platform's slices (`@marinoscar/platform-api/email`, `/notifications`; `@marinoscar/platform-web/notifications/{headless,ui}` and `/email/ui`), not KVox code (issue #470, epic #467). KVox's own `apps/api/src/email/` and `apps/api/src/notifications/` folders and the matching web files were deleted. Routes, permissions, table names (`notifications`, `notification_deliveries`, `push_subscriptions`, `notification_broadcasts`) and every persisted string (event keys, channel ids, template names, the `push_vapid` purpose, the `webPush` settings key, the job types `admin.broadcast.start` and `admin.broadcast.chunk`) are unchanged, so no data moved.
+
+| Concern | Owner | Where in KVox |
+|---------|-------|---------------|
+| `/api/notifications/*` (inbox, SSE, push subscriptions, `config`, `events`, `channels`), `/api/admin/push-config/*` (including `POST test`), the dispatcher (`notify`, `notifyNow`, `notifyAddress`, `notifyPermissionHolders`), the email, browser and push channels, the preference matrix, retention jobs | platform notifications slice | `platform/notifications/notifications.config.ts` (`NotificationsModule.forRoot`, a global mount); host ports in `platform/notifications/notifications-host.module.ts` (`NOTIFICATIONS_EVENT_BUS` over the host `EVENT_BUS`, `NOTIFICATIONS_METRICS` over `AppMetricsService`) |
+| `/api/admin/broadcasts/*`, `admin.broadcast` and `admin.broadcast_critical`, the two broadcast job handlers | platform `BroadcastsModule` | mounted in `app.module.ts` |
+| `jobs.job_failed`, `nodes.node_offline` | platform `OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS` | registered in the manifest |
+| `/api/email-settings`, the SMTP and SES transports, the nine platform templates (`test-email`, `broadcast`, `job-failed`, `node-offline`, `backup-failed`, `restore-completed`, `user-welcome`, `role-changed`, `allowlist-invitation`) | platform email slice | `platform/email/email.config.ts` (`EmailModule.forRoot(EMAIL_MODULE_OPTIONS)`), `platform/email/email.options.ts` (layout theme from `packages/shared/identity.json`, brand mark from `email-templates/brand-logo.ts`) |
+| Email templates of the application | KVox | `apps/api/src/email-templates/` (`KVOX_EMAIL_TEMPLATES`, the `EmailTemplateDataMap` augmentation) |
+| Event declarations: `user.welcome`, `allowlist.invitation`, `security.role_changed`, `allowlist.invitation_reminder`, `db_backup.backup_failed`, `db_backup.restore_completed`, `transcripts.*`, `notes.*` | KVox | `apps/api/src/notifications-registry/*.notifications.ts`, each entry a `registerNotification` registration copied verbatim (key, label, description, channels, `defaultEnabled`, `mandatory`) |
+| The registration order | KVox | `platform/notifications/notification.manifest.ts`: platform channels, `configureEmailRendering`, platform email templates, `registerEmailTemplates(KVOX_EMAIL_TEMPLATES)`, then `registerNotifications([...])` |
+
+A module that sends a notification injects the platform `NotificationsService` and imports nothing (the mount is global); every call stays after the triggering write commits, outside `$transaction`, which the `after-commit` conformance suite scans for (this application's allowlist is empty). The recipe for a new event is the [`add-notification` skill](../.claude/skills/add-notification/SKILL.md); the design is in [`specs/browser-notifications.md`](specs/browser-notifications.md) and [`specs/notification-broadcasts.md`](specs/notification-broadcasts.md).
+
+Registration order matters in the same way as for settings (7.7): the registries freeze when the application bootstraps, so `notification.manifest.ts` is imported by `notifications.config.ts` before `NotificationsModule.forRoot` composes. Two registrations of one event key throw `DUPLICATE_ID` at import. The credential purposes `smtp`, `email_ses` and `push_vapid` are registered in `platform/credentials/credential-purposes.manifest.ts` (7.7). The `notifications` namespaces are declared by the platform and listed in the settings manifests (7.7).
+
+Differences a reader of the old code would not expect: Web Push and Amazon SES read **no environment variables** (VAPID keys and SES credentials are configured only at `/admin/settings/push` and `/admin/settings/email`); the broadcast routes accept `broadcasts:*` or `org_broadcasts:*` (so `org_admin` reaches them) instead of requiring the `admin` role; `POST /api/admin/broadcasts/:id/resume` and `GET /api/notifications/channels` are new. See [`API.md`](API.md#notifications) and [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
+
+On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in `AppBar.tsx`; the breakpoint gate is untouched), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps KVox's workbox precache and navigation routes and composes the notification handlers from `registerNotificationServiceWorkerHandlers` (pending agent report: the #453 parity details).
 
 ---
 

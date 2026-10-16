@@ -4,13 +4,14 @@
 //
 // The platform's email slice owns the layout, the safe-HTML helpers, the
 // registry and the transports (`@marinoscar/platform-api/email`); this folder
-// holds what is KVox's: the templates of its own events and the brand mark.
+// holds what belongs to this app: the templates of its own events and the brand mark.
 //
 //   KVOX_EMAIL_TEMPLATES            new names, registered with
 //                                   `registerEmailTemplates` (a duplicate name
 //                                   throws at import, so nothing here may share
 //                                   a name with a platform template)
 //   KVOX_EMAIL_TEMPLATE_OVERRIDES   this app's wording for two platform names
+//   registerKvoxEmailTemplateOverrides()   the overrides alone, for the manifest
 //   registerKvoxEmailTemplates()    both, in the order the registry needs
 //
 // THE TWO OVERRIDES, AND THE ONE DROP. The platform ships the identity trio
@@ -67,25 +68,40 @@ export const KVOX_EMAIL_TEMPLATE_OVERRIDES = {
   'allowlist-invitation': allowlistInvitationEmail,
 } as const;
 
-let registered = false;
+let overridesRegistered = false;
 
 /**
- * Registers {@link KVOX_EMAIL_TEMPLATES} and then the overrides. Call it AFTER
+ * Registers {@link KVOX_EMAIL_TEMPLATE_OVERRIDES}. Call it AFTER
  * `registerPlatformEmailTemplates()` (an override of a name nothing registered
  * throws) and BEFORE the registries freeze at bootstrap. Idempotent per
- * process.
+ * process. `platform/notifications/notification.manifest.ts` calls it right
+ * after `registerEmailTemplates(KVOX_EMAIL_TEMPLATES)`.
  */
-export function registerKvoxEmailTemplates(): void {
-  if (registered) return;
-  registered = true;
+export function registerKvoxEmailTemplateOverrides(): void {
+  if (overridesRegistered) return;
+  overridesRegistered = true;
 
-  registerEmailTemplates(KVOX_EMAIL_TEMPLATES);
   for (const [name, render] of Object.entries(KVOX_EMAIL_TEMPLATE_OVERRIDES)) {
     registerEmailTemplate(name as keyof typeof KVOX_EMAIL_TEMPLATE_OVERRIDES, render as never, {
       override: true,
       registrant: KVOX_EMAIL_REGISTRANT,
     });
   }
+}
+
+let registered = false;
+
+/**
+ * Registers {@link KVOX_EMAIL_TEMPLATES} and then the overrides: the whole
+ * set, for a caller that is not the app's manifest (a script, a test).
+ * Idempotent per process. The manifest registers the two halves itself.
+ */
+export function registerKvoxEmailTemplates(): void {
+  if (registered) return;
+  registered = true;
+
+  registerEmailTemplates(KVOX_EMAIL_TEMPLATES);
+  registerKvoxEmailTemplateOverrides();
 }
 
 export { allowlistInvitationEmail, allowlistInvitationReminderEmail, noteFailedEmail, noteReadyEmail };

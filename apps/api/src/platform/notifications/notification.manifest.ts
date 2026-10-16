@@ -37,7 +37,7 @@ import {
   registerPlatformEmailTemplates,
 } from '@marinoscar/platform-api/email';
 
-import { KVOX_EMAIL_TEMPLATES } from '../../email-templates';
+import { KVOX_EMAIL_TEMPLATES, registerKvoxEmailTemplateOverrides } from '../../email-templates';
 import { ALLOWLIST_REMINDER_NOTIFICATIONS } from '../../notifications-registry/allowlist-reminder.notifications';
 import { DB_BACKUP_NOTIFICATIONS } from '../../notifications-registry/db-backup.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../../notifications-registry/identity.notifications';
@@ -54,6 +54,8 @@ if (!registered) {
   configureEmailRendering(EMAIL_MODULE_OPTIONS);
   registerPlatformEmailTemplates();
   registerEmailTemplates(KVOX_EMAIL_TEMPLATES);
+  // This app's wording for `user-welcome` and `allowlist-invitation` (#470).
+  registerKvoxEmailTemplateOverrides();
 
   registerNotifications([
     ...IDENTITY_NOTIFICATIONS,

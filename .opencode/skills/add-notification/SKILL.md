@@ -32,7 +32,7 @@ No migration and no preference row: the sparse `notifications` user setting trea
    await this.notifications.notify('billing.invoice_ready', userId, payload satisfies NameEmailData);
    ```
    Place it **after** the triggering write has committed and **outside** any `$transaction`. `notify` is detached and never rejects; a send failure becomes a `notification_deliveries` row. The payload is `unknown` to `notify`, so annotate it with the template's data type. Other entry points: `notifyAddress(eventKey, email, data)` for a recipient with no account (it resolves to an account when one exists, so preferences still apply), `notifyPermissionHolders(eventKey, permission, data)` for an operational audience, and `notifyNow` when the caller needs the outcome (a broadcast test send).
-5. **Tests.** Add the event to `apps/api/test/notifications/kvox-events.spec.ts` (key, channels, `mandatory`, template) and a snapshot spec beside the template (`email-templates/<name>.email.spec.ts`). The `notifications` and `email` conformance suites (`apps/api/test/conformance.spec.ts`) include `after-commit`, `templates`, `channel-templates` and `no-secret`; `afterCommitAllowlist` stays empty.
+5. **Tests.** Add the event to the notification events spec (`apps/api/test/notifications/`) (key, channels, `mandatory`, template) and a snapshot spec beside the template (`email-templates/<name>.email.spec.ts`). The `notifications` and `email` conformance suites (`apps/api/test/conformance.spec.ts`) include `after-commit`, `templates`, `channel-templates` and `no-secret`; `afterCommitAllowlist` stays empty.
 
 ## Rules
 
@@ -45,7 +45,7 @@ No migration and no preference row: the sparse `notifications` user setting trea
 ## Verify
 
 ```bash
-cd apps/api && npm run typecheck && node scripts/jest.js --config ./test/jest.config.js --runTestsByPath test/notifications/kvox-events.spec.ts test/conformance.spec.ts -i
+cd apps/api && npm run typecheck && node scripts/jest.js --config ./test/jest.config.js --runTestsByPath test/notifications test/conformance.spec.ts -i
 ```
 
 Flag the new event for the docs agent (event table in `docs/specs/browser-notifications.md`).

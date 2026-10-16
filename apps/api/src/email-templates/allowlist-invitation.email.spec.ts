@@ -33,7 +33,7 @@ import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
 //   * the administrator's `notes` are not in it, and cannot be;
 //   * the embedded logo and its fallback, in BOTH directions;
 //   * ⚠ EVERY CLAIM CHECKED IN BOTH PARTS. There is deliberately no
-//     HTML-to-text helper in this module (layout.ts's own header says why), so
+//     HTML-to-text helper in this module (the platform layout says why), so
 //     the two halves are written separately and an edit to one that misses the
 //     other ships a message that says two different things. A test that looked
 //     only at `rendered.html` would not notice.
@@ -232,7 +232,7 @@ describe('allowlistInvitationEmail — what must never be in it', () => {
   it('escapes a hostile display name rather than rendering it as markup', () => {
     // `invitedBy` is the one free-text field here and it is administrator-
     // supplied. The `html` tag escapes every interpolation by construction
-    // (safe-html.ts); this asserts the invitation actually goes through it.
+    // (the platform's safe-HTML helpers); this asserts the invitation actually goes through it.
     const rendered = allowlistInvitationEmail({
       ...data,
       invitedBy: '<script>alert(document.cookie)</script>',

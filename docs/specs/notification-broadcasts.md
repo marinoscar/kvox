@@ -4,7 +4,7 @@
 > now `BroadcastsModule` from `@marinoscar/platform-api/notifications`
 > (`/api/admin/broadcasts/*`, the `admin.broadcast.start` and
 > `admin.broadcast.chunk` handlers) and the `BroadcastsPage` from
-> `@marinoscar/platform-web/notifications/ui`. KVox's
+> `@marinoscar/platform-web/notifications/ui`. the app's
 > `apps/api/src/notifications/broadcasts/`, its two handlers, `broadcast.email.ts`
 > and the web composer files were deleted; every path in the "Implemented in"
 > list below names a deleted original. The behaviour, the state machine, the

@@ -460,6 +460,32 @@ kvox deploy update --ref <previous-sha> --force
 Full flag reference: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
 
+### After the notifications and email slice (#470)
+
+The update that adopts the platform's email and notifications slices changes no
+table and rewrites no row: the stored email settings, the SMTP and SES
+credentials, the VAPID key pair (the `webPush` row and the `push_vapid`
+credential), every browser push subscription, each user's notification
+preferences and the broadcast history are reused as they are. Rollback is
+reverting the release; no data moves in either direction. Do three checks once
+the update is healthy, signed in as an administrator:
+
+1. **`/admin/settings/push`.** It should show the key pair configured and
+   enabled. Press **Test & diagnostics** and confirm a test push reaches your
+   device. If it shows **not configured** on a server where push worked before,
+   the server was running on the `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+   `VAPID_SUBJECT` variables, which are no longer read: press **Generate & enable**
+   (browsers re-subscribe the next time they open the app). See
+   [`docs/runbooks/vapid-keys.md`](../runbooks/vapid-keys.md#12-after-the-470-deploy).
+2. **`/admin/settings/email`.** Check the provider, sender and the masked
+   password status, then **Send test email**. Amazon SES now reads its region,
+   access key id and secret from this page only; `AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY` and `S3_REGION` are not read for email. A server that
+   sent through SES on environment credentials alone must enter them here.
+3. **Broadcasts.** `/admin/settings/broadcasts` is the packaged page; nothing to
+   do, but organization administrators can now reach it (see
+   [`docs/specs/notification-broadcasts.md`](../specs/notification-broadcasts.md#packaged-implementation-470)).
+
 ## 7. Certificates and the renewal cron
 
 Certificates live behind the shared proxy **container**, never on the host.

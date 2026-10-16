@@ -59,7 +59,7 @@ import {
 //
 // ⚠ AND THE TEXT PART SAYS THE SAME URL. `plainText` is handed the same
 // label/URL pair (it scheme-checks and writes the link out in full), so the two
-// parts cannot disagree — see the note above `plainText` in layout.ts for why
+// parts cannot disagree — see the note above `plainText` in the platform layout for why
 // no HTML-to-text helper exists to do this automatically, and why a text part
 // left behind is a text part that lies.
 // =============================================================================
@@ -229,7 +229,7 @@ export function userWelcomeEmail(data: UserWelcomeEmailData, ctx?: EmailRenderCo
   }, ctx);
 
   // Hand-written, same facts in the same order. Not stripped from the markup
-  // above — see the note above `plainText` in layout.ts for why no such
+  // above — see the note above `plainText` in the platform layout for why no such
   // function exists in this module.
   const lines: string[] = [];
   if (greetingName) {
@@ -250,7 +250,7 @@ export function userWelcomeEmail(data: UserWelcomeEmailData, ctx?: EmailRenderCo
   // that omits it would leave `plainText`'s "Get started: <url>" line stranded
   // at the end of the message with nothing explaining what it leads to — which
   // is exactly the "a text part left behind is a text part that lies" failure
-  // layout.ts's own header describes.
+  // the platform layout describes.
   if (ctaUrl) {
     lines.push(
       '',

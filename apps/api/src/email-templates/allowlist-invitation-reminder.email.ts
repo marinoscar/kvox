@@ -210,7 +210,7 @@ export function allowlistInvitationReminderEmail(
   // tint that survives forced dark-mode inversion. Copied rather than shared
   // because the two templates are each meant to be readable end to end; if a
   // third message ever needs this cell, that is the moment to lift it into
-  // `layout.ts`, not before.
+  // the layout, not before.
   const attribution = invitedBy
     ? html`<table
         role="presentation"
@@ -269,10 +269,10 @@ export function allowlistInvitationReminderEmail(
     bodyHtml,
     ctaLabel: data.signInUrl ? 'Sign in' : undefined,
     ctaUrl: data.signInUrl,
-  });
+  }, ctx);
 
   // HAND-WRITTEN, in the same five-block order as the HTML — there is
-  // deliberately no HTML-to-text helper in this module (see `layout.ts`'s note
+  // deliberately no HTML-to-text helper in this module (see the platform layout's note
   // above `plainText` for the two reasons). An edit to the markup above that is
   // not made here ships a message whose two halves say different things, which
   // no test catches unless it asserts on both; this template's spec does.

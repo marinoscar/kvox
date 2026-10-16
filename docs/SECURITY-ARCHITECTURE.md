@@ -1036,7 +1036,7 @@ Where objects are stored is runtime configuration, edited at `/admin/settings/st
 - **The secret access key** lives in the encrypted credential store (`credentials`, purpose `storage`, name `default`), under the purpose-bound AES-256-GCM sub-key of section 14. The configuration endpoint **never returns it**: it reports only whether one is stored, and a blank value on save means "keep the stored key". Every error string that leaves the connection test passes through a redaction step, because most are authored by the AWS SDK.
 - **Test and provisioning** (`POST /api/admin/storage-config/test` and `/bucket`) write one throwaway object under `storage-config-test/` and delete it; both write an audit event (`storage_config:test`, `storage_config:provision_bucket`) carrying the verdict only, never a detail or an error string. Saving writes `storage_config:replace`.
 - **A relocation is gated.** Saving a different bucket, endpoint or provider while `storage_objects` or `database_backup_runs` rows still point at the old location is refused with 409 until the request carries the typed confirmation, because the application does not copy anything.
-- **Until a configuration is saved** every route that needs the store answers 503 with the missing field names and the page to fix it; nothing falls back to environment credentials. The old `STORAGE_PROVIDER`, `S3_*` and `AWS_*` variables are not read, so a stale `.env` cannot silently override the saved configuration. (Amazon SES email, until it has its own settings, still reads AWS credentials from the environment; they are unrelated to the bucket.)
+- **Until a configuration is saved** every route that needs the store answers 503 with the missing field names and the page to fix it; nothing falls back to environment credentials. The old `STORAGE_PROVIDER`, `S3_*` and `AWS_*` variables are not read, so a stale `.env` cannot silently override the saved configuration. (Since #470 Amazon SES email reads no environment credentials either: its region, access key id and secret are saved at `/admin/settings/email`, the secret in the credential store under purpose `email_ses`.)
 - **The bucket's browser-facing origin** is the one storage value that stays in the environment (`STORAGE_CSP_ORIGIN`): nginx writes it into the Content Security Policy's `connect-src` and `media-src`, never a wildcard, and it must be set by hand. See [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md) and [`runbooks/s3-cors.md`](runbooks/s3-cors.md).
 - **Part size is a deployment-wide rule.** Parts are laid out at one `STORAGE_PART_SIZE`; changing it while uploads are in flight corrupts the objects they complete. This is an operator rule, not a control the application enforces.
 - **Least privilege for the credential**: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts` and `s3:ListBucket` on the one bucket; the bucket-provisioning permissions only for the window in which Create bucket is used. `s3:ListMultipartUploadParts` backs `GET /api/storage/objects/:id/upload/parts`, which exists so a browser never has to read a part's `ETag`; the route's errors map to a 502 with no provider text, and it never logs a key or a secret.
@@ -1279,6 +1279,44 @@ HAVING COUNT(*) > 10;
 - ❌ Never skip ownership validation on operations
 - ❌ Never expose S3 bucket names in error messages
 - ❌ Never allow executable file uploads (.exe, .sh, .bat)
+
+---
+
+## Notifications, Email and Web Push (platform slices, #470)
+
+Email, notifications, broadcasts and Web Push are the platform's slices
+(`@marinoscar/platform-api/email` and `/notifications`); the application
+registers events, templates and the brand mark and calls the dispatcher. The
+security properties, and where each is enforced:
+
+- **No secret leaves the server.** The SMTP password, the SES secret access key
+  and the VAPID private key live in the encrypted credential store (purposes
+  `smtp`, `email_ses`, `push_vapid`; the purpose is also the AES sub-key domain,
+  so the strings are permanent). The settings responses carry only a masked
+  status. The platform's `no-secret` conformance check pins it, and the push
+  diagnostics response never carries `p256dh`, `auth` or a full endpoint.
+- **No environment credentials.** The slices read no `VAPID_*` or `AWS_*`
+  variable. Web Push and SES are configured only at `/admin/settings/push` and
+  `/admin/settings/email`, so there is one source of truth for each secret.
+- **Authorization is by permission.** `/api/admin/push-config/*` needs
+  `push:read` or `push:write`; `/api/email-settings` needs `system_settings:read`
+  (`GET`) or `system_settings:write` (`PUT`, `POST test`, which only ever mails
+  the caller). `/api/admin/broadcasts/*` accepts `broadcasts:*` or the
+  organization twin `org_broadcasts:*`, which the `org_admin` role holds; KVox's
+  former code also required the `admin` role. In this single-organization
+  deployment an organization audience is every active user (pending agent
+  report: confirm in the RBAC coverage). `/api/notifications/*` is
+  `@Auth()` with no permission and scoped to the caller's own rows.
+- **Templates escape by construction.** Every email body is built with the
+  `html` tag, which escapes each interpolation, and a link goes through
+  `safeUrl`. A browser or push `link` is a root-relative path, sanitised by the
+  platform's `sanitizeLink`.
+- **`notify()` runs after the write commits**, outside any `$transaction`, and is
+  detached: it never rejects and never joins a transaction. The `after-commit`
+  conformance check scans for violations; this application's allowlist is empty.
+- **The service worker never calls the API.** It has no credentials; the push
+  payload carries everything it needs. `sw.js` is served `no-cache` so a fix
+  reaches an installed client on the next navigation.
 
 ---
 
@@ -1703,7 +1741,7 @@ apps/api/src/platform/
 └── identity/
     ├── identity.config.ts          # IdentityModule.forRoot
     ├── identity-host.module.ts     # binds the host ports
-    ├── identity-notifier.adapter.ts   # IDENTITY_NOTIFIER -> NotificationsService
+    ├── identity-notifier.adapter.ts   # IDENTITY_NOTIFIER -> platform NotificationsService
     ├── identity-jobs.adapter.ts       # IDENTITY_JOBS -> JobHandlerRegistry / JobsService
     └── identity-user.adapters.ts      # USER_DEFAULTS, IDENTITY_PROFILE_IMAGES
 apps/api/src/app-registrations/

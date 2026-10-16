@@ -36,7 +36,7 @@ import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-remind
 import { CommonModule } from './common/common.module';
 import { profileImageModule, StorageConfigModule, storageModule } from './platform/storage/storage.config';
 import { KvoxObjectsModule } from './kvox-objects/kvox-objects.module';
-import { EmailModule } from './email/email.module';
+import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
@@ -153,13 +153,14 @@ import configuration from './config/configuration';
     CredentialsModule,
     UserCredentialsModule,
     OrgCredentialsModule,
-    // Email transports (#122, epic #109) and, since #124, the admin email
-    // settings endpoints. Registered here even though nothing sends mail
-    // automatically yet: it makes a broken provider graph fail at boot rather
-    // than surfacing as a DI error in #125. It costs nothing at runtime --
-    // neither transport touches the network or reads a credential until its
-    // first send.
-    EmailModule,
+    // The platform's email slice (#470, epic #467): the SES and SMTP
+    // transports, `GET|PUT /api/email-settings`, `POST /api/email-settings/test`
+    // (`system_settings:read|write`), the template registry and layout (this
+    // app's logo and brand colour, `platform/email/email.options.ts`) and the
+    // doctor check. Replaces this app's own `email/` folder. Not global: the
+    // modules that send mail import the same `emailModule` object. Neither
+    // transport touches the network or reads a credential until its first send.
+    emailModule,
     // The platform's notifications slice (#470, epic #467): the dispatcher
     // (`NotificationsService`), the email, in-app (inbox and SSE) and Web Push
     // channels, `/api/notifications/*`, `/api/admin/push-config/*`, the VAPID

@@ -144,7 +144,7 @@ export function allowlistInvitationEmail(
   // elements and ignores most other ways of drawing a rule. The tint is the
   // page background (#f4f5f7) on the white card, so it reads as a recess under
   // forced dark-mode inversion too: both are extremes, and it is mid-tones
-  // that collapse when a client inverts (see `layout.ts`'s palette note).
+  // that collapse when a client inverts (see the platform layout's palette).
   const attribution = invitedBy
     ? html`<table
         role="presentation"
@@ -202,11 +202,11 @@ export function allowlistInvitationEmail(
     bodyHtml,
     ctaLabel: data.signInUrl ? 'Sign in' : undefined,
     ctaUrl: data.signInUrl,
-  });
+  }, ctx);
 
   // HAND-WRITTEN, in the same five-block order as the HTML — there is
   // deliberately no HTML-to-text helper anywhere in this module (see
-  // `layout.ts`'s note above `plainText` for the two reasons). It follows that
+  // the platform layout's note above `plainText` for the two reasons). It follows that
   // an edit to the markup above that is not made here ships a message whose
   // two halves say different things, which no test catches unless it asserts
   // on both. `allowlist-invitation.email.spec.ts` does.

@@ -77,7 +77,7 @@ import type { EmailBrandMark } from '@marinoscar/platform-api/email';
 // triggered it — applies to the decoration inside one just as much.
 //
 // This is also the one file read in the templates layer, which is otherwise
-// pure (see `email-template.types.ts`: "no Nest, no DI, no I/O"). The rule
+// pure (the platform's template contract: "no Nest, no DI, no I/O"). The rule
 // there is about not FETCHING THE DATA A MESSAGE RENDERS — a template that can
 // query is a template that can fail and can be slow. Reading a committed build
 // artefact once per process is the same category as `FONT_DIR`: a constant
