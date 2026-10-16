@@ -10,7 +10,7 @@ import type { TranscriptMaterializeService } from '../transcript-materialize.ser
 import type { TranscriptObjectsService } from '../transcript-objects.service';
 import { JsonTranscriptExporter } from './json.exporter';
 import { MarkdownTranscriptExporter } from './markdown.exporter';
-import { hashExportRequest } from './export-options';
+import { hashExportRequest } from '@marinoscar/platform-api/exports';
 import {
   EXPORT_JOB_PRIORITY,
   EXPORT_TTL_DAYS,

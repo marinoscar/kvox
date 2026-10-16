@@ -127,14 +127,28 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           '(`PUT`) and JSON Merge Patch (`PATCH`).',
       },
       {
-        name: 'User Data',
+        name: 'User data',
         description:
-          'The Danger Zone: an inventory of the data this deployment holds for the calling user, ' +
-          'and bulk, irreversible deletion of it. Ownership-scoped rather than permission-gated ' +
-          '— both routes are `@Auth()` with no permission string, because the resource is the ' +
-          "caller's own data and no role should decide whether a person may delete it. Nothing " +
-          'here deletes the ACCOUNT: the user record, their settings, roles and session all ' +
-          'survive every scope.',
+          'The Danger Zone (the platform user-data slice, #480): an inventory of the data this ' +
+          'deployment holds for the calling user, and bulk, irreversible deletion of it by scope ' +
+          '(`transcripts`, `notes`, `files`, `content`, `everything`; the confirmation phrase is the ' +
+          'scope id uppercased). Ownership-scoped rather than permission-gated: the routes are ' +
+          "`@Auth()` with no permission string, because the resource is the caller's own data and no " +
+          'role should decide whether a person may delete it. Nothing here deletes the ACCOUNT: the ' +
+          'user record, roles, memberships and session survive every scope.',
+      },
+      {
+        name: 'Factory reset',
+        description:
+          'Returns the whole deployment to a fresh install, keeping configuration and backups ' +
+          '(platform user-data slice). Admin only (`system:factory_reset`); refused in `saas` ' +
+          'deployment mode. This app has no page for it yet.',
+      },
+      {
+        name: 'Organization offboarding',
+        description:
+          'Deletes one organization and its data (platform user-data slice). Admin only ' +
+          '(`orgs:offboard`); needs multi-organization tenancy. This app has no page for it yet.',
       },
       {
         name: 'System Settings',

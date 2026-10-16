@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { Writable } from 'node:stream';
 
-import { optionsSchemaFor } from './export-options';
+import { optionsSchemaFor } from '@marinoscar/platform-api/exports';
 import {
   TranscriptExporterRegistry,
   type TranscriptExporter,

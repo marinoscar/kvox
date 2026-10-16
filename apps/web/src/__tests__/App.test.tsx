@@ -84,13 +84,15 @@ vi.mock('@marinoscar/platform-web/identity/ui', async (importOriginal) => ({
   UserTokensPage: () => <h1>User Tokens Page</h1>,
 }));
 
-// Issue #80. Same rationale as the stand-ins above, plus one specific to this
-// page: the real one opens a `GET /api/user-data/summary` and, while a deletion
-// is running, a repeating interval — neither of which this route-guard suite is
-// about. Its own suite covers that behaviour; this file only proves `App.tsx`
-// wires `/settings/danger-zone` to it and carries no `RequirePermission`.
-vi.mock('../pages/UserDangerZonePage', () => ({
-  default: () => <h1>User Danger Zone Page</h1>,
+// Issue #80; the platform's page since #480. Same rationale as the stand-ins above, plus one
+// specific to this page: the real one opens a `GET /api/user-data/summary` and, while a
+// deletion is running, a repeating poll - neither of which this route-guard suite is about.
+// The platform's own suite covers that behaviour; this file only proves `App.tsx` wires
+// `/settings/danger-zone` to it and carries no `RequirePermission`. Only the page is replaced:
+// the barrel's `dangerZoneSettingsPage` (read by `config/userSettingsSections.tsx`) stays real.
+vi.mock('@marinoscar/platform-web/user-data/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/user-data/ui')>()),
+  UserDangerZonePage: () => <h1>User Danger Zone Page</h1>,
 }));
 
 // Issue #126, epic #109. Same rationale as the four stand-ins above: the real

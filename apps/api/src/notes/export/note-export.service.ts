@@ -59,7 +59,7 @@ import type { Note, NoteExport, Prisma } from '@prisma/client';
 import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { hashExportRequest, type ExportOptions } from '../../export/export-options';
+import { hashExportRequest, type ExportOptions } from '@marinoscar/platform-api/exports';
 import { NoteAccessService } from '../access/note-access.service';
 import type { CreateNoteExportDto } from '../dto/note-export.dto';
 import { NOTE_EXPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../job-types';

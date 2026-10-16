@@ -8,8 +8,6 @@ import { AskConversationsService } from './ask-conversations.service';
 import { AskMessagesController } from './ask-messages.controller';
 import { AskMessagesService } from './ask-messages.service';
 import { AskRespondHandler } from './handlers/ask-respond.handler';
-import { ASK_USER_DATA_HOOKS } from './ask.user-data';
-import { AskUserDataHooks } from './ask.user-data.hooks';
 import { AskMessageStreamController } from './stream/ask-message-stream.controller';
 import { ASK_STREAM_TUNING, AskMessageStreamService } from './stream/ask-message-stream.service';
 import { AskToolsModule } from './tools/ask-tools.module';
@@ -41,7 +39,6 @@ import { AskToolsModule } from './tools/ask-tools.module';
     AskConversationsService,
     AskMessagesService,
     AskRespondHandler,
-    { provide: ASK_USER_DATA_HOOKS, useClass: AskUserDataHooks },
     AskMessageStreamService,
     { provide: ASK_STREAM_TUNING, useValue: {} },
   ],

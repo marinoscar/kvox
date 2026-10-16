@@ -151,7 +151,7 @@ COPY apps/api/scripts ./apps/api/scripts/
 # `node:24-alpine` ships NO fonts at all, so this is not a fallback for a
 # missing system family — it is the only typography the image has. The three
 # .ttf files are committed under apps/api/assets/fonts and resolved at runtime
-# as dist/transcripts/export/../../../assets/fonts, which is why they land at
+# as dist/pdf/../../assets/fonts (apps/api/src/pdf/pdf-fonts.ts), which is why they land at
 # apps/api/assets rather than beside dist/.
 #
 # WITHOUT THIS LINE THE IMAGE BUILDS GREEN, STARTS FINE, AND THROWS ON THE

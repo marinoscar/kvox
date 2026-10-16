@@ -35,7 +35,7 @@ exports[`Domain registrations characterization HTTP responses GET /api/admin/job
       },
       {
         "type": "user.data.purge",
-        "label": "Account data deletion",
+        "label": "User data deletion",
         "total": 1,
         "byStatus": {
           "pending": 1,
@@ -300,98 +300,6 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
 }"
 `;
 
-exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (nothing held, no deletion in flight) 1`] = `
-"{
-  "data": {
-    "transcripts": {
-      "count": 0,
-      "bytes": "0"
-    },
-    "notes": {
-      "count": 0,
-      "bytes": "0"
-    },
-    "files": {
-      "count": 0,
-      "bytes": "0"
-    },
-    "noteTemplates": {
-      "count": 0
-    },
-    "credentials": {
-      "aiKeys": 0,
-      "accessTokens": 0
-    },
-    "graph": {
-      "entities": 0,
-      "items": 0
-    },
-    "askConversations": {
-      "count": 0
-    },
-    "activeDeletion": null
-  },
-  "meta": {
-    "timestamp": "<request timestamp>"
-  }
-}"
-`;
-
-exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (nothing held, no deletion in flight) 2`] = `
-[
-  "transcripts",
-  "notes",
-  "files",
-  "noteTemplates",
-  "credentials",
-  "graph",
-  "askConversations",
-  "activeDeletion",
-]
-`;
-
-exports[`Domain registrations characterization HTTP responses GET /api/user-data/summary (populated, deletion in flight) 1`] = `
-"{
-  "data": {
-    "transcripts": {
-      "count": 3,
-      "bytes": "2048"
-    },
-    "notes": {
-      "count": 5,
-      "bytes": "2048"
-    },
-    "files": {
-      "count": 2,
-      "bytes": "2048"
-    },
-    "noteTemplates": {
-      "count": 4
-    },
-    "credentials": {
-      "aiKeys": 1,
-      "accessTokens": 2
-    },
-    "graph": {
-      "entities": 7,
-      "items": 9
-    },
-    "askConversations": {
-      "count": 6
-    },
-    "activeDeletion": {
-      "id": "22222222-2222-4222-8222-222222222222",
-      "scope": "notes",
-      "status": "pending",
-      "requestedAt": "2026-01-01T00:00:00.000Z"
-    }
-  },
-  "meta": {
-    "timestamp": "<request timestamp>"
-  }
-}"
-`;
-
 exports[`Domain registrations characterization pure registry values NOTIFICATION_EVENTS, in declared order 1`] = `
 [
   {
@@ -566,69 +474,4 @@ exports[`Domain registrations characterization pure registry values Object.keys(
   "note-ready",
   "note-failed",
 ]
-`;
-
-exports[`Domain registrations characterization pure registry values USER_DATA_SCOPES, in declared order 1`] = `
-[
-  "transcripts",
-  "notes",
-  "files",
-  "content",
-  "everything",
-]
-`;
-
-exports[`Domain registrations characterization pure registry values the full scopeIncludes(scope, category) matrix 1`] = `
-{
-  "content": {
-    "ask": true,
-    "credentials": false,
-    "files": true,
-    "graph": true,
-    "noteTemplates": true,
-    "notes": true,
-    "onboarding": false,
-    "transcripts": true,
-  },
-  "everything": {
-    "ask": true,
-    "credentials": true,
-    "files": true,
-    "graph": true,
-    "noteTemplates": true,
-    "notes": true,
-    "onboarding": true,
-    "transcripts": true,
-  },
-  "files": {
-    "ask": false,
-    "credentials": false,
-    "files": true,
-    "graph": false,
-    "noteTemplates": false,
-    "notes": false,
-    "onboarding": false,
-    "transcripts": false,
-  },
-  "notes": {
-    "ask": false,
-    "credentials": false,
-    "files": false,
-    "graph": false,
-    "noteTemplates": false,
-    "notes": true,
-    "onboarding": false,
-    "transcripts": false,
-  },
-  "transcripts": {
-    "ask": false,
-    "credentials": false,
-    "files": false,
-    "graph": false,
-    "noteTemplates": false,
-    "notes": false,
-    "onboarding": false,
-    "transcripts": true,
-  },
-}
 `;

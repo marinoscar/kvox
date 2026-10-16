@@ -39,8 +39,6 @@ import { NoteTemplatesService } from './note-templates.service';
 import { NotesController } from './notes.controller';
 import { NoteGenerationContextService } from './note-generation-context.service';
 import { NotesService } from './notes.service';
-import { NOTES_USER_DATA_HOOKS } from './notes.user-data';
-import { NotesUserDataHooks } from './notes.user-data.hooks';
 import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 
 // =============================================================================
@@ -75,7 +73,7 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //     discipline `AiSettingsService` states for itself.
 //   • `TranscriptsModule` — `TranscriptMaterializeService` and the Markdown
 //     exporter. ⚠ NOT for note export: `notes/export/` has its own three
-//     exporters over the GENERIC registry (`apps/api/src/export/`), which is
+//     exporters over the GENERIC registry (`@marinoscar/platform-api/exports`), which is
 //     what `docs/specs/notes.md` §8.1 means by "extracted, not
 //     re-implemented" — one registry class, two document types. ⚠ THIS IMPORT IS THE POINT OF THE EPIC: a note is generated
 //     from the transcript AS THE USER CORRECTED IT, which means going through
@@ -119,8 +117,6 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
   ],
   providers: [
     NoteGenerationService,
-    // #460 — the `notes`/`noteTemplates` user-data categories' hooks (registered by `kvox.manifest.ts`).
-    { provide: NOTES_USER_DATA_HOOKS, useClass: NotesUserDataHooks },
     NoteSourceService,
     NoteGenerateHandler,
     // Naming a generated note (#182). It hangs off `NoteGenerationService.commit`

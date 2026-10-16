@@ -52,11 +52,13 @@ import {
   type ExportDocument,
 } from './export-document';
 import {
+  endStream,
+  failStream,
   optionsSchemaFor,
+  writeChunk,
   type ExportOptionField,
   type ExportOptions,
-} from './export-options';
-import { endStream, writeChunk } from './export-stream';
+} from '@marinoscar/platform-api/exports';
 import {
   TranscriptExporterRegistry,
   type TranscriptExporter,
@@ -107,16 +109,24 @@ export class MarkdownTranscriptExporter implements TranscriptExporter, OnModuleI
     const merge = options.mergeConsecutive === true;
     const speakers = speakerIndex(doc);
 
-    await writeChunk(out, renderFrontMatter(doc));
-    await writeChunk(out, `# ${escapeMarkdown(doc.title)}\n\n`);
+    // A failure part-way destroys `out`, so a half-written file never reaches
+    // storage looking complete (the package's writer contract).
+    try {
+      await writeChunk(out, renderFrontMatter(doc));
+      await writeChunk(out, `# ${escapeMarkdown(doc.title)}\n\n`);
 
-    for (const turn of groupTurns(doc, merge)) {
-      const name = speakers.get(turn.speakerId)?.displayName ?? 'Unknown speaker';
-      const heading = includeTimestamps
-        ? `**${escapeMarkdown(name)}** · ${formatTimestamp(turn.startMs)}`
-        : `**${escapeMarkdown(name)}**`;
+      for (const turn of groupTurns(doc, merge)) {
+        const name = speakers.get(turn.speakerId)?.displayName ?? 'Unknown speaker';
+        const heading = includeTimestamps
+          ? `**${escapeMarkdown(name)}** · ${formatTimestamp(turn.startMs)}`
+          : `**${escapeMarkdown(name)}**`;
 
-      await writeChunk(out, `${heading}\n\n${escapeMarkdown(turn.text)}\n\n`);
+        await writeChunk(out, `${heading}\n\n${escapeMarkdown(turn.text)}\n\n`);
+      }
+    } catch (error) {
+      failStream(out, error);
+
+      throw error;
     }
 
     await endStream(out);

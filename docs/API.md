@@ -7291,162 +7291,133 @@ hold a share on, the same as reading them directly.
 ### User Data
 
 The "Danger Zone" — an authenticated user asking this deployment to forget
-some or all of the data it holds for them, in bulk — issue #80. The two-layer
-product design, the scope matrix, the FK-clearing order, the retry path, why
-the job is server-only, and the honest gaps are
-[`docs/specs/user-data-deletion.md`](specs/user-data-deletion.md); this
-section documents the wire contract only.
+some or all of the data it holds for them, in bulk — issue #80, served by the
+**platform user-data slice** since issue #480. The registrations (categories,
+scopes, model hints), the delegates, the owner-level payload of
+`transcript.purge`/`note.purge`, the `files.purge_unmanaged` job and the
+differences from before the swap are
+[`docs/specs/user-data-deletion.md`](specs/user-data-deletion.md); this section
+documents the wire contract only.
 
-Two routes, both `@Auth()` with **no permission string**, deliberately. The
-resource is not a feature of this application; it is the caller's **own
-data**, scoped by `userId` in the query itself — the identical posture
-`/api/pat` and `/api/user-settings` take, and
-the nearest precedent for the same reason: gating either route on a real
-permission (`transcripts:write` + `notes:write`, say) would strand exactly
-the user who needs this most. A deployment that has revoked someone's write
-permission — offboarding, a downgraded role, a misconfigured seed — would
-also have revoked their ability to remove the data it is still holding for
-them, while leaving the data there. **There is no admin surface here, for
-any role** — nobody but the owner can summarise or delete a user's data
-through this API.
+Three routes under `/api/user-data`, all gated on **`user_settings:write`**
+(held by every role; the resource is the caller's **own data**, scoped by
+`userId`, and **there is no admin surface here, for any role**: nobody but the
+owner can summarise or delete a user's data through this API). A deployment that
+has taken `user_settings:write` from a role has taken this from it.
 
-**Scope matrix.** `scopeIncludes` in `apps/api/src/user-data/job-types.ts` is
-the one definition; the table below is a rendering of it, not a second copy.
-Every narrow scope maps to exactly one category — only the two composites fan
-out:
+**Scopes.** The five scope ids, their layers and confirmation phrases are
+registered by `apps/api/src/platform/user-data/user-data.manifest.ts` and
+returned by `GET /user-data/summary`, which is how a client learns them. Each
+narrow scope maps to exactly one category; only the two composites fan out:
 
-| Scope | Transcripts | Notes | Note Templates | Files | Graph | Ask conversations | Credentials |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `transcripts` | ✓ | | | | | | |
-| `notes` | | ✓ | | | | | |
-| `files` | | | | ✓ | | | |
-| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scope | Layer | Phrase | Transcripts | Notes | Note Templates | Files | Graph | Ask | Notifications | AI history and keys | Credentials | Settings |
+|---|---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | specific | `TRANSCRIPTS` | ✓ | | | | | | | | | |
+| `notes` | specific | `NOTES` | | ✓ | | | | | | | | |
+| `files` | specific | `FILES` | | | | ✓ | | | | | | |
+| `content` | danger | `CONTENT` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | | |
+| `everything` | danger | `EVERYTHING` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-`content` is everything the user **made**; `everything` is `content` plus
-their **credentials** (AI provider keys and personal access tokens) — the
-only line the two composites differ on. ⚠ Note templates ride with
-`content`/`everything` **only** — the narrow `notes` scope does **not**
-remove them. A template is reusable configuration with its own settings
-page, not note content, and a user who clicked "Delete notes" was told they
-were deleting notes, not silently emptying a different settings page.
+`content` is everything the user **made**; `everything` is the platform's `all`:
+`content` plus notifications, AI run and usage history and provider keys,
+personal access tokens, device codes and stored credentials, and the whole
+`user_settings` row (and the display name and profile image on the user row).
+⚠ Before #480 `everything` stopped at AI keys, tokens and the `onboarding`
+namespace; it is now wider (a user-visible change recorded in
+`CHANGELOG.md`). Personal access tokens are **deleted**, so any
+CLI or script authenticating with one stops working at once. ⚠ Note templates,
+the knowledge graph and Ask conversations ride with `content`/`everything`
+**only**: no narrow scope reaches them. A `files` deletion removes only the
+caller's plain uploads, never an object a transcript or note owns.
 
-⚠ The knowledge graph (issue #357, epic #344) rides with `content`/
-`everything` too, for the same "everything you made" reasoning, and for the
-same reason no narrow scope reaches it — deleting `transcripts` must not
-silently empty a graph the caller curated by hand. It is not deleted inline:
-these two scopes enqueue a `kg.purge { scope: "all" }` job and let that
-handler own the plan, the same fan-out-to-an-existing-handler pattern
-`transcript.purge`/`note.purge` already use, rather than a second
-implementation of graph deletion living here.
-
-⚠ Saved Ask conversations (issue #376, epic #348) ride with `content`/
-`everything` as well, on the graph's line — a conversation is content you
-made — and no narrow scope reaches them. They are deleted inline (one
-`DELETE`, every message following by cascade), first, before the graph's
-`kg.purge` is queued. Like the graph, `ask` is a category of these two
-scopes, not a scope of its own: the five scope strings are unchanged.
-
-**No scope deletes the account.** The `users` row, `user_roles`,
-`refresh_tokens` and the caller's session are untouched by every scope,
-including `everything` — the caller stays signed in throughout and afterward.
-
-`everything` touches exactly one thing in `user_settings`: it clears the
-`onboarding` namespace (epic #271), so the welcome and the setup checklist are
-offered again from the start. Every other namespace — `theme`, `profile`,
-`navigation`, `notifications`, `dataTables` — survives every scope, including
-`everything`. `everything` does revoke every AI provider key and personal
-access token the caller holds, so any CLI or script authenticating with one
-stops working immediately.
+**No scope deletes the account.** The `users` row, roles, memberships and the
+caller's session are untouched by every scope, including `everything`.
 
 #### GET /user-data/summary
-Per-category row counts and the storage bytes behind them, plus whatever
-deletion is already in flight for the caller. Scoped entirely to
-`@CurrentUser('id')` — there is no parameter naming a user, so there is no
-way to ask about anybody else.
+What a deletion would delete: per category, the rows the caller owns (in every
+organization), plus every scope the caller may request with its exact
+confirmation phrase and the categories it resolves to, and the lines of what is
+always kept. Read-only, scoped to the caller.
 
-**Requires:** Authenticated, no permission
-
-`bytes` is a **decimal string**, not a number, the same convention the
-database backup's `bytes` uses: summing `storage_objects.size` (`BigInt`)
-for a large media library can exceed `Number.MAX_SAFE_INTEGER`, and a JSON
-number would silently round the figure shown in a confirmation dialog.
-Counts exclude anything already soft-deleted and awaiting purge — they
-shrink only when the caller acts, never on their own.
+**Requires:** `user_settings:write`
 
 **Response:**
 ```json
 {
   "data": {
-    "transcripts": { "count": 12, "bytes": "3821004521" },
-    "notes": { "count": 40, "bytes": "184220" },
-    "files": { "count": 3, "bytes": "552012" },
-    "noteTemplates": { "count": 2 },
-    "graph": { "entities": 7, "items": 12 },
-    "askConversations": { "count": 4 },
-    "credentials": { "aiKeys": 1, "accessTokens": 2 },
-    "activeDeletion": null
+    "categories": [
+      { "id": "transcripts", "label": "Recordings and transcripts", "description": "…", "content": true, "count": 12, "bytes": null },
+      { "id": "files", "label": "Files", "description": "…", "content": true, "count": 3, "bytes": null }
+    ],
+    "scopes": [
+      { "id": "transcripts", "label": "Recordings", "description": "…", "layer": "specific", "confirmation": "TRANSCRIPTS", "categories": ["transcripts"] },
+      { "id": "everything", "label": "Everything", "description": "…", "layer": "danger", "confirmation": "EVERYTHING", "categories": ["transcripts", "notes", "files", "noteTemplates", "graph", "ask", "notifications", "ai", "credentials", "settings"] }
+    ],
+    "kept": ["Your account and sign-in", "…"]
   }
 }
 ```
 
-`graph` counts the caller's own `kg_entities` (excluding merge tombstones —
-an entity `merged_into_id` points at someone else is not something the
-caller still holds) and `kg_items` (commitments, decisions, claims, person
-facts); a graph row has no byte size of its own the way a transcript or file
-does, so there is no `bytes` field here. `askConversations` counts the
-caller's saved Ask conversations (their messages go with them), a count
-only for the same reason.
-
-`activeDeletion` is non-null while a `user.data.purge` job is `pending` or
-`running` for this caller — `{ id, scope, status, requestedAt }`. A client
-uses it to disable its own buttons, but it is a courtesy, not the guard:
-`POST /user-data/deletions` answers 409 regardless of whether the client
-checked it first.
+`files` counts every storage object the caller uploaded, managed ones included
+(the platform counts the model as a whole); the `files` scope deletes only the
+unmanaged ones. `bytes` is `null` for every category here.
 
 ---
 
 #### POST /user-data/deletions
-Queues a `user.data.purge` job that deletes, in bulk, the data the caller
-owns in the chosen `scope`. Returns **202** as soon as the job exists;
-nothing is deleted synchronously — the work fans out across several tables
-and object storage and outlives this request.
+Queues a `user.data.purge` job that deletes, in bulk, the data the caller owns in
+the chosen `scope`. Returns **202** as soon as the job exists; nothing is deleted
+synchronously.
 
-**Requires:** Authenticated, no permission
+**Requires:** `user_settings:write`
 
 **Request:** `{ "scope": "everything", "confirmation": "EVERYTHING" }`
 
-`confirmation` must be **the scope, uppercased** — `TRANSCRIPTS`, `NOTES`,
-`FILES`, `CONTENT` or `EVERYTHING` — compared exactly, with no trimming and
-no case folding. ⚠ **The token is scope-specific on purpose**: a single
-constant like `DELETE` would let a confirmation typed into the "delete my
-files" dialog authorise whatever scope a second, unrelated click actually
-sent. A mismatch is a 400 naming the exact word required.
+`confirmation` must be **the scope's exact phrase**, the scope id uppercased
+(`TRANSCRIPTS`, `NOTES`, `FILES`, `CONTENT`, `EVERYTHING`), compared exactly. ⚠
+**The phrase is scope-specific on purpose**: a single constant would let a
+confirmation typed into the "delete my files" dialog authorise whatever scope a
+second click actually sent.
 
-⚠ **This scope ignores the per-item refusals.** `DELETE /notes/{id}` refuses
+⚠ **A bulk deletion ignores the per-item refusals.** `DELETE /notes/{id}` refuses
 (409) while a note is `generating` or while another note is derived from it;
-`DELETE /transcripts/{id}` refuses while a note cites the transcript. A bulk
-deletion honours neither — it clears the blocking references first (a note's
-`sourceNoteId`/`sourceTranscriptId`, including on **other users'** notes
-derived from a transcript the caller shared) and deletes anyway. A surviving
-note that cited a deleted transcript keeps its own text and loses only the
-provenance link.
+`DELETE /transcripts/{id}` refuses while a note cites the transcript. This clears
+the blocking references first (`sourceNoteId`/`sourceTranscriptId`, including on
+**other users'** notes derived from a transcript the caller shared) and deletes
+anyway. A surviving note keeps its own text and loses only the provenance link.
 
 **Response:** `202`
 ```json
-{
-  "data": {
-    "id": "…",
-    "scope": "everything",
-    "status": "pending",
-    "requestedAt": "2026-09-14T12:00:00.000Z"
-  }
-}
+{ "data": { "jobId": "…", "status": "pending" } }
 ```
 
+One purge per user at a time: a request while one is `pending` or `running`
+returns **that** job (202), not a 409.
+
 **Error Cases:**
-- `400` - `confirmation` did not exactly match the scope, uppercased
-- `409` - A deletion is already `pending` or `running` for this caller — the message names the scope already in flight
+- `400` `CONFIRMATION_MISMATCH` - `confirmation` did not exactly match the scope's phrase (`details.reason`)
+- `400` `UNKNOWN_SCOPE` - the scope is not registered
+
+---
+
+#### GET /user-data/deletions/{jobId}
+The status of the caller's own deletion job: `{ jobId, status, scope, result,
+error }`. `result` (once `succeeded`) carries counts per category and model,
+`storageObjectsDeleted`, `storageObjectsFailed`, `cancelledJobs` and
+`delegatedJobs`; `error` is set when the job failed. The per-module work
+(`transcript.purge`, `note.purge`, `kg.purge`, `files.purge_unmanaged` and the
+per-item purges) runs as its own jobs after this one succeeds and shows in the
+admin job list.
+
+**Requires:** `user_settings:write`
+
+**Error Cases:**
+- `404` - not the caller's purge job
+
+The platform also mounts `GET|POST /admin/factory-reset` and
+`GET|POST /admin/orgs/{orgId}/offboarding` (Admin only: `system:factory_reset`,
+`orgs:offboard`) under the `Factory reset` and `Organization offboarding` tags;
+this application has no page for either yet.
 
 ---
 

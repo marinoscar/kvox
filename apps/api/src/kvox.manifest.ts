@@ -38,19 +38,6 @@
 // IMPORT TIME (`settings/dto/*`). ES imports evaluate in order, so this file's
 // side effect has to run before any of them is loaded. See that file's header.
 import './kvox.settings-manifest';
-import { ASK_USER_DATA_CATEGORY } from './ask/ask.user-data';
-import { GRAPH_USER_DATA_CATEGORY } from './graph/graph.user-data';
-import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE } from './notes/notes.user-data';
-import {
-  TRANSCRIPTS_USER_DATA_CATEGORY,
-  TRANSCRIPTS_USER_DATA_SCOPE,
-} from './transcripts/transcripts.user-data';
-import { BASE_USER_DATA_CATEGORIES, BASE_USER_DATA_SCOPES } from './user-data/user-data.base';
-import {
-  registerUserDataCategory,
-  registerUserDataScope,
-} from './user-data/user-data.registries';
-
 // The onboarding slice's registries (#481): the platform's facts and steps, and this app's base
 // ones, register on import (the stored `onboarding` namespace's merge reads the step registry, so
 // every entry point that handles settings needs it filled). The domain halves are registered below.
@@ -113,29 +100,7 @@ if (!registered) {
     ...NOTES_ONBOARDING_STEPS,
   );
   // [registry:user-data]
-  // Category order is the summary's key order (each declares its own `order`:
-  // transcripts 10, notes 20, files 30, noteTemplates 40, credentials 50,
-  // graph 60, ask 70) and the scope order is the UI's narrowest-first order
-  // (transcripts 10, notes 20, files 30, content 40, everything 50); neither
-  // depends on the order of these calls. The PURGE order (ask 10, graph 20,
-  // credentials 30, notes 40, transcripts 50, noteTemplates 60, files 70,
-  // onboarding 80) is the `purge.order` of each category: it is load-bearing
-  // (FK clearing, docs/specs/user-data-deletion.md §4) — never edit one without
-  // the call-order spec in `user-data-purge.handler.spec.ts`.
-  for (const category of [
-    TRANSCRIPTS_USER_DATA_CATEGORY,
-    ...NOTES_USER_DATA_CATEGORIES,
-    ...BASE_USER_DATA_CATEGORIES,
-    GRAPH_USER_DATA_CATEGORY,
-    ASK_USER_DATA_CATEGORY,
-  ]) {
-    registerUserDataCategory(category);
-  }
-  for (const scope of [
-    TRANSCRIPTS_USER_DATA_SCOPE,
-    NOTES_USER_DATA_SCOPE,
-    ...BASE_USER_DATA_SCOPES,
-  ]) {
-    registerUserDataScope(scope);
-  }
+  // None here since #480: the categories, scopes and model hints are the platform
+  // user-data slice's registries, filled by `platform/user-data/user-data.manifest.ts`,
+  // imported by `platform/user-data/user-data.config.ts`.
 }
