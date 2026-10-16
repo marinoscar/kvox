@@ -51,3 +51,11 @@ export declare const REPO_SLUG: string;
  * Typed `string`, not a literal — see the note on `APP_NAME`.
  */
 export declare const REPO_URL: string;
+
+/**
+ * The CLI executable's name (`identity.json` `cliName`); seeds the config
+ * directory, the environment-variable prefix and the systemd unit.
+ *
+ * Typed `string`, not a literal — see the note on `APP_NAME`.
+ */
+export declare const CLI_NAME: string;

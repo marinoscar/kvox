@@ -54,7 +54,7 @@ This file is on the identity guard's allowlist for exactly this reason.
 
 ## 3. The nginx vhost sentinel — breaks live servers
 
-**`apps/cli/src/deploy/proxy.ts`**
+**`@marinoscar/platform-cli`'s deploy `proxy`** (its `PROXY_MANAGED_SENTINEL`; the engine moved into the package in #482)
 
 ```
 # Managed by appctl deploy
@@ -72,7 +72,7 @@ by hand to recover.
 
 ## 4. The deploy state filename and its `appctlVersion` field — orphans deployments
 
-**`apps/cli/src/deploy/state.ts`**
+**`@marinoscar/platform-cli`'s deploy `state`** (its `DEPLOY_STATE_FILENAME`; the engine moved into the package in #482)
 
 ```
 DEPLOY_STATE_FILENAME = '.appctl-deploy.json'

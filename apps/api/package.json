@@ -39,6 +39,7 @@
     "db:baseline": "node scripts/platform-env.js db baseline",
     "db:policies": "platform db policies",
     "db:test": "node scripts/test-db-connection.js",
+    "storage:purge": "node dist/storage-purge.js",
     "ai:migrate-legacy": "node dist/ai-port/migrate/ai-legacy-migrate.js",
     "smoke": "node scripts/smoke-test.mjs",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",

@@ -51,8 +51,8 @@ renamed too**, defaulting to *no*. It is a deliberately independent identity: a
 product called "Acme" may perfectly well still ship a binary called `kvox`.
 State the cost before they choose:
 
-- ~6 CLI test files assert literal environment-variable names and **are meant to
-  break** on a rename — they need fixing by hand
+- the CLI's sources and tests derive the name from `identity.json`, so they
+  follow; the Dockerfile and compose files below do not
 - `apps/cli/Dockerfile` declares 14 such `ENV` lines
 - `infra/compose/worker.compose.yml` carries the same prefix
 - Machines already running the CLI have a config directory and a systemd unit
@@ -129,8 +129,8 @@ Remind the user of what nothing in the repository can do:
 - Rename the repository on GitHub, then `git remote set-url origin <new-url>`
 - Update the OAuth redirect URIs in the Google Cloud console (and any other
   provider) so the callback still matches `APP_URL`
-- If they renamed the binary: the ~6 CLI test files and the Dockerfile `ENV`
-  block
+- If they renamed the binary: the Dockerfile `ENV` block and
+  `infra/compose/worker.compose.yml`
 
 ---
 
