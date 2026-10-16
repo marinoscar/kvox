@@ -784,7 +784,7 @@ Since issue #464 (epic #462) the cross-cutting request pipeline is the platform 
 
 The authentication guards remain per route (`@Auth(...)` or `@Public()`), applied after this pipeline. `/api/docs` and `/api/openapi.json` are mounted outside Nest's router, so no guard sees them; this is deliberate (an operator wants the API reference during a maintenance window) and they expose the contract, never data.
 
-The platform Doctor (`GET /api/admin/doctor`, `system_settings:read`) is the read-only configuration check. It reports `db.rls_role` as `fail` while the application connects as a superuser, which is **expected until #471**; see [`ARCHITECTURE.md`](ARCHITECTURE.md#78-platform-host-core-about-and-doctor). The support bundle passes every section through a central redaction pass before download.
+The platform Doctor (`GET /api/admin/doctor`, `system_settings:read`) is the read-only configuration check. It reports `db.rls_role` as `pass` when the application connects as an ordinary `NOSUPERUSER NOBYPASSRLS` role (since #471; see "Tenant isolation (RLS)" in section 6) and as `fail` for a deployment that still connects as a superuser; see [`ARCHITECTURE.md`](ARCHITECTURE.md#78-platform-host-core-about-and-doctor). The support bundle passes every section through a central redaction pass before download.
 
 ---
 
@@ -889,6 +889,67 @@ erDiagram
 | `refresh_tokens` | Active refresh tokens | SHA256 hashed, includes revocation timestamp |
 | `allowed_emails` | Email allowlist | Restricts access, tracks claim status, prevents removal if claimed |
 | `audit_events` | Security audit log | Immutable log of all security events |
+
+### Tenant isolation (RLS)
+
+**What is enforced.** Platform migration `0025_org_scoped_rls` forces row-level
+security (`FORCE ROW LEVEL SECURITY`) on `storage_objects`,
+`storage_object_chunks`, `ai_runs` and `ai_usage_events`; `0026` to `0029` do the
+same for the group, grant and organization-settings tables. A policy admits a row
+only when the session's `app.org_id` equals the row's `org_id`, or when the
+session carries the system flag `app.rls_bypass = on`. With neither, a query
+returns **zero rows**: it does not fail. Every KVox read of `storage_objects`
+therefore goes through `runInOrg` (or the job's `JobScope`) in
+`KvoxManagedObjects` (#469), and a tripwire spec fails when any other file
+touches `prisma.storageObject`.
+
+**The application role.** None of this works for a superuser or a `BYPASSRLS`
+role: both skip every policy, `FORCE` included. The API therefore connects as an
+ordinary role, `APP_DB_USER` (default `kvox_app`):
+
+| Attribute | Value | Why |
+|---|---|---|
+| `NOSUPERUSER`, `NOBYPASSRLS` | required | so the policies apply to the API |
+| owner of the database and every table | required | `FORCE ROW LEVEL SECURITY` is what applies the policies to an owner |
+| `CREATEDB` | granted | restore creates, renames and drops databases |
+| `CREATEROLE` | granted | the node-offload broker mints per-job roles (`guided` where a managed PostgreSQL denies it) |
+
+The role is never granted `SUPERUSER` or `BYPASSRLS`, not to make a backup, a
+restore or a migration work. The bootstrap login (`postgres`) is a superuser
+and is used for administration only: it creates the role, creates the
+`vector` and `pg_trgm` extensions (an ordinary role cannot create `vector`),
+and runs the one-time ownership transfer on an existing database. A fresh volume
+does this with `infra/compose/postgres-init/10-application-role.sh` (the
+platform's script, byte for byte) and `20-kvox-extensions.sh`; an existing
+deployment follows [`runbooks/application-role.md`](runbooks/application-role.md).
+
+**`kvox_object_ownership`** has no row-level security of its own: it is protected
+by its composite foreign key `(object_id, org_id)` into `storage_objects`
+(unchanged from #469).
+
+**Backups see every organization, safely.** A dump and a restore lift row-level
+security for their own session only, with **both** `--enable-row-security` and
+`PGOPTIONS=-c app.rls_bypass=on` (in the environment, never argv), over a direct
+connection. The role itself never bypasses. See
+[`specs/database-backup.md`](specs/database-backup.md) section 17.
+
+**Verification.**
+
+- Doctor `db.rls_role` (platform check, `GET /api/admin/doctor`) passes when the
+  connecting role is `rolsuper = false AND rolbypassrls = false`; it fails for
+  `postgres`. Do not loosen the check.
+- Doctor `backup.rls-bypass` compares row counts of the four org tables over the
+  system client and over a connection carrying the dump's startup option, to
+  catch the day one half of the pair is lost.
+- `apps/api/test/rls/storage-isolation.db.spec.ts` runs as the application role:
+  with `app.org_id` unset `SELECT count(*) FROM storage_objects` returns 0, inside
+  `runInOrg(defaultOrg)` it returns the real count, and a `KvoxManagedObjects`
+  read works. `apps/api/test/db-backup/kvox-dump-rls.db.spec.ts` proves a dump
+  taken as that role contains `storage_objects` and `kvox_object_ownership` rows.
+
+**Rollback.** Set `POSTGRES_USER`/`POSTGRES_PASSWORD` back to `postgres` and
+restart. Ownership can stay: a superuser ignores it. Row-level security is then
+inert again and the Doctor reports it.
 
 ### Audit Logging
 
@@ -1860,7 +1921,7 @@ apps/web/src/
 - [ ] OAuth credentials from production Google project
 - [ ] Audit logging verified and monitored
 - [ ] Error handler sanitizes responses (no stack traces; the platform `HttpExceptionFilter` shows `details.stack` outside production only)
-- [ ] Doctor reviewed: every check passes except the documented `db.rls_role` failure (until #471)
+- [ ] Doctor reviewed: every check passes, including `db.rls_role` (the API runs as the application role, not `postgres`)
 - [ ] `SECRETS_ENCRYPTION_KEY` set before any credential-store consumer (e.g. SMTP settings) goes live
 
 **Monitoring:**

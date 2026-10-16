@@ -109,7 +109,7 @@ const TEMPLATE = [
   '# ------------------------------------------------------------',
   '# Observability',
   '# ------------------------------------------------------------',
-  'UPTRACE_SITE_URL=http://localhost:14318',
+  'GREPTIME_HOST=greptimedb',
 ].join('\n');
 
 const SPECS = parseEnvExample(TEMPLATE);
@@ -220,7 +220,7 @@ describe('runEnvWizard', () => {
       ctx,
     });
 
-    expect(values.has('UPTRACE_SITE_URL')).toBe(false);
+    expect(values.has('GREPTIME_HOST')).toBe(false);
   });
 
   it('includes a group when asked for it', async () => {
@@ -233,7 +233,7 @@ describe('runEnvWizard', () => {
     });
 
     // Not essential, so it takes the template default rather than prompting.
-    expect(values.get('UPTRACE_SITE_URL')).toBe('http://localhost:14318');
+    expect(values.get('GREPTIME_HOST')).toBe('greptimedb');
   });
 
   it('uses existing values as defaults and does not re-ask for a secret', async () => {
@@ -290,7 +290,7 @@ describe('runEnvWizard', () => {
       'appdb',
       'n', // decline generation
       'a-perfectly-long-replacement-secret-value',
-      '', // the observability group's UPTRACE_SITE_URL
+      '', // the observability group's GREPTIME_HOST
       '', // PORT, in the catch-all step at the end
       'y', // review
     ]);
@@ -1231,8 +1231,8 @@ const BLANKS_TEMPLATE = [
   '# Commented out, so parseEnvExample declares it optional.',
   '# MAINTENANCE_MODE=false',
   'SECRETS_ENCRYPTION_KEY=',
-  'UPTRACE_REDIS_PASSWORD=',
-  'UPTRACE_CH_PASSWORD=',
+  'GREPTIME_WRITER_PASSWORD=',
+  'GREPTIME_READER_PASSWORD=',
   'STORAGE_CSP_ORIGIN=',
 ].join('\n');
 
@@ -1269,8 +1269,8 @@ function blanksRun(
 const BLANKS_COMPLETE = new Map([
   ...BLANKS_DATABASE,
   ['SECRETS_ENCRYPTION_KEY', generateBase64Key()],
-  ['UPTRACE_REDIS_PASSWORD', 'redis-password'],
-  ['UPTRACE_CH_PASSWORD', 'clickhouse-password'],
+  ['GREPTIME_WRITER_PASSWORD', 'writer-password'],
+  ['GREPTIME_READER_PASSWORD', 'reader-password'],
 ]);
 
 describe('runEnvWizard --non-interactive: optional and blank-by-design keys', () => {
@@ -1287,8 +1287,8 @@ describe('runEnvWizard --non-interactive: optional and blank-by-design keys', ()
     const error = await blanksRun(
       new Map([
         ...BLANKS_DATABASE,
-        ['UPTRACE_REDIS_PASSWORD', 'redis-password'],
-        ['UPTRACE_CH_PASSWORD', 'clickhouse-password'],
+        ['GREPTIME_WRITER_PASSWORD', 'writer-password'],
+        ['GREPTIME_READER_PASSWORD', 'reader-password'],
       ]),
       // Generation off, so the blank check itself is what is under test rather
       // than the `generate` branch that normally answers this key.
@@ -1307,8 +1307,8 @@ describe('runEnvWizard --non-interactive: optional and blank-by-design keys', ()
     ).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(UsageError);
-    expect((error as Error).message).toContain('UPTRACE_REDIS_PASSWORD');
-    expect((error as Error).message).toContain('UPTRACE_CH_PASSWORD');
+    expect((error as Error).message).toContain('GREPTIME_WRITER_PASSWORD');
+    expect((error as Error).message).toContain('GREPTIME_READER_PASSWORD');
   });
 
   it('still takes the template default for a required key that has a real one', async () => {

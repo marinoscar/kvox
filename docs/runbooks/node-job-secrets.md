@@ -3,7 +3,7 @@
 **Audience:** whoever operates this deployment's database and its worker node
 fleet.
 **Applies to:** the `postgres.readonly` credential kind minted by
-`apps/api/src/db-backup/pg-job-role.broker.ts` (issue #350, epic #345).
+`pg-job-role.broker` in `@marinoscar/platform-api/db-backup` (issue #350, epic #345; the app's own copy was deleted in #471). The per-job role is `NOBYPASSRLS`, like the application role: the node's `pg_dump` lifts row-level security for its own session with `--enable-row-security` and `PGOPTIONS=-c app.rls_bypass=on` (`docs/specs/database-backup.md` section 17). The API's own role holds `CREATEROLE` by default (`docs/runbooks/application-role.md`).
 
 A worker node has no database access of its own. When it is asked to run a job
 whose handler declares a **secret broker** — today only `db.backup.run`, because

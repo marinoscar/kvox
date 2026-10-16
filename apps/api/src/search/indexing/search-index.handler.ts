@@ -63,7 +63,7 @@ import {
 // The key this job spends is the DOCUMENT OWNER'S OWN long-lived, account-level
 // vendor key. `db.backup.run` is node-eligible because PostgreSQL can mint a
 // short-lived, SELECT-only role scoped to exactly one job and destroy it
-// afterwards (`db-backup/pg-job-role.broker.ts`, epic #345) — that is what a
+// afterwards (the platform `PgJobRoleBroker`, `@marinoscar/platform-api/db-backup`) — that is what a
 // `nodeSecretBroker` brokers. OpenAI offers no equivalent: there is no
 // job-scoped sub-key, no per-request capability token, nothing a broker could
 // mint and revoke. So the only way to run this on a machine this deployment

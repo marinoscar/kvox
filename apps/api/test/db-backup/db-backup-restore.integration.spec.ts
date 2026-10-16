@@ -49,8 +49,8 @@
 // database out from under the connection pool and ends by calling
 // `process.exit` — which in a Jest run means killing the worker executing this
 // file. Its own behaviour is proven against a seam in
-// `src/db-backup/database-restore.service.spec.ts` and against a real cluster
-// in `src/db-backup/database-restore.db.spec.ts`, which is exactly why that
+// the platform package's `db-backup/database-restore.service.spec.ts` and against a real cluster
+// in the platform package's `db-backup/database-restore.db.spec.ts`, which is exactly why that
 // seam exists.
 //
 // NOTHING ELSE IS SUBSTITUTED: the controller, the admin service, the DTOs, the
@@ -63,11 +63,13 @@ import request from 'supertest';
 
 import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
 import { ROLES_KEY } from '@marinoscar/platform-api/identity';
-import { DatabaseRestoreService } from '../../src/db-backup/database-restore.service';
-import { DatabaseBackupController } from '../../src/db-backup/db-backup.controller';
-import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';
-import { RESTORE_SCHEMA_OVERRIDE_FIELD } from '../../src/db-backup/restore-preflight.service';
-import { startRestoreRequestSchema } from '../../src/db-backup/dto/db-backup-restore.dto';
+import { DatabaseBackupRunnerService } from '@marinoscar/platform-api/db-backup';
+import {
+  DatabaseBackupController,
+  DatabaseRestoreService,
+  RESTORE_SCHEMA_OVERRIDE_FIELD,
+  startRestoreRequestSchema,
+} from '@marinoscar/platform-api/db-backup/testing';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';

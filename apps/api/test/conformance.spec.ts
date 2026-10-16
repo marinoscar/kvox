@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465, #464, #468, #469 and #470, epics #462 and #467)
+// Platform conformance (issues #465, #464, #468, #469, #470 and #471, epics #462 and #467)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -9,6 +9,7 @@ import { join } from 'node:path';
 
 import { buildPermissionCatalog, catalogGrants, permissionRegistry, roleRegistry, userOwnedModelRegistry } from '@marinoscar/platform-api/core';
 import '@marinoscar/platform-api/credentials/testing';
+import '@marinoscar/platform-api/db-backup/testing';
 import '@marinoscar/platform-api/doctor/testing';
 import '@marinoscar/platform-api/email/testing';
 import '@marinoscar/platform-api/host/testing';
@@ -17,6 +18,7 @@ import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/notifications/testing';
 import '@marinoscar/platform-api/settings/testing';
 import '@marinoscar/platform-api/storage/testing';
+import '@marinoscar/platform-api/telemetry/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
@@ -26,21 +28,58 @@ import { AppModule } from '../src/app.module';
 import '../src/platform/notifications/notification.manifest';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaSystemService } from '../src/prisma/prisma-system.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
 
 const API_DIR = join(__dirname, '..');
 
+/** The one statement core's `runAsSystem` sends before the callback: a session setting, not a data write. */
+function isBypassSetConfig(strings: TemplateStringsArray | string): boolean {
+  const text = typeof strings === 'string' ? strings : strings.join('?');
+  return /^\s*SELECT\s+set_config\('app\.rls_bypass',\s*'on',\s*true\)\s*$/i.test(text);
+}
+
+/**
+ * The separate system client (`PrismaSystemService`, the bypass pool) over the suite's recording
+ * double. Core's `runAsSystem` opens a transaction on it and sends `SELECT set_config('app.rls_bypass',
+ * 'on', true)` through `$executeRaw`, which the recorder would count as a write (it counts every
+ * `$executeRaw` as one). That single statement changes no data, so it is answered here and nothing else
+ * is: every other statement, read or write, still reaches the recorder, so a Doctor check that writes
+ * through the system client is still caught.
+ */
+function systemClientOver(recording: unknown) {
+  const client = recording as Record<string, (...args: unknown[]) => unknown>;
+  const transactionClient = new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === '$executeRaw') {
+        return (strings: TemplateStringsArray, ...values: unknown[]) =>
+          isBypassSetConfig(strings) ? Promise.resolve(0) : target.$executeRaw(strings, ...values);
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  return {
+    forSystem: () => transactionClient,
+    $connect: async () => undefined,
+    $disconnect: async () => undefined,
+    $transaction: async (work: (tx: unknown) => unknown) => work(transactionClient),
+  };
+}
+
 /**
  * How the app boots for the `doctor-read-only` suite: the full `AppModule` with the Prisma
- * client and the storage provider replaced by the suite's recording, write-refusing doubles.
- * `PLATFORM_PRISMA` is bound `useExisting: PrismaService`, so overriding `PrismaService`
- * covers every Prisma token the app has.
+ * client, the system (bypass) client and the storage provider replaced by the suite's recording,
+ * write-refusing doubles. `PLATFORM_PRISMA` is bound `useExisting: PrismaService`, so overriding
+ * `PrismaService` covers every Prisma token the app has except the separate system client
+ * (`PrismaSystemService`), which the backup slice's `backup.rls-bypass` check reads through
+ * `runAsSystem`.
  */
 const doctorConformanceFixture: DoctorConformanceFixture = {
   createContext: (doubles) =>
     createTestApp({
       overrideProviders: [
         { provide: PrismaService, useValue: doubles.prisma.client },
+        { provide: PrismaSystemService, useValue: systemClientOver(doubles.prisma.client) },
         { provide: STORAGE_PROVIDER, useValue: doubles.storage.provider },
       ],
     }),
@@ -65,9 +104,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'allowlist-reminders/allowlist-reminders.service.ts', why: 'The kvox_allowlist_reminders side table: atomic INSERT .. ON CONFLICT counter, a join to allowed_emails and a bounded orphan DELETE. Allowlist bookkeeping, no user-owned rows; ids are bound uuid parameters.' },
   { file: 'ask/ask-conversations.service.ts', why: 'Conversation summaries and the running-turn partial-unique-index paths Prisma cannot express; every statement filters on the authenticated owner_id.' },
   { file: 'ask/citations.ts', why: 'Resolves citation sources across transcripts and notes with a join Prisma cannot express; bound by the owner id of the conversation.' },
-  { file: 'db-backup/db-backup-runner.service.ts', why: 'Reads the server version for the backup record; instance-wide metadata, no user data.' },
-  { file: 'db-backup/migration-state.util.ts', why: 'Reads `_prisma_migrations` to compare migration state; no user data.' },
-  { file: 'db-backup/restore-preflight.service.ts', why: 'Reads pg_extension for the restore pre-flight; catalog metadata, creates and drops nothing.' },
   { file: 'graph/brief/brief-queries.ts', why: 'Entity brief aggregates over the graph (CTEs, tstzrange); every query is bound to the owner id.' },
   { file: 'graph/dedup/item-candidates.service.ts', why: 'pgvector similarity for item deduplication; scoped by owner_id in every statement.' },
   { file: 'graph/dedup/rejection-memory.stage.ts', why: 'Rejected-proposal memory lookup via array and vector operators; scoped by owner_id.' },
@@ -170,9 +206,10 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Five files hold a @Cron: db-backup-schedule, kg-export-expiry, kg-migrate-scheduler,
-    // notes-housekeeping, transcripts-housekeeping (the storage cleanup cron is the platform's since #469).
-    cronEnqueueOnly: { exempt: [], minCronFiles: 5 },
+    // Four files hold a @Cron: kg-export-expiry, kg-migrate-scheduler, notes-housekeeping,
+    // transcripts-housekeeping (the storage cleanup cron is the platform's since #469; the backup
+    // schedule and the telemetry retention crons are the platform's since #471).
+    cronEnqueueOnly: { exempt: [], minCronFiles: 4 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
     // provider). Five files hold a listener, one body each, every one a dispatch or one bounded
     // write. The job-failure and node-offline notifiers are the platform's since #470 (outside
@@ -211,8 +248,8 @@ runPlatformConformance({
         contents: readCatalog(),
         staleMessage: 'prisma/catalog/system-settings-defaults.json is stale. Run `npm run catalog:settings` in apps/api and commit the result.',
       },
-      // notifications, jobs, nodes, databaseBackup, maintenance, storage (platform declarations) + transcription, ai (KVox).
-      minSystemNamespaces: 8,
+      // notifications, jobs, nodes, databaseBackup, maintenance, storage, telemetry (platform declarations) + transcription, ai (KVox).
+      minSystemNamespaces: 9,
     },
     // Key prefixes (#469): the slice's own four plus db-backup are registered by the platform; the
     // three below are this app's writers (platform/storage/storage-key-prefix.manifest.ts, deployment scope).
@@ -229,6 +266,20 @@ runPlatformConformance({
     // `notify*` call sits inside a `$transaction` callback, and the Web Push shapes carry no secret.
     // The after-commit allowlist is EMPTY on purpose: this app has no argued exception.
     notifications: { afterCommitAllowlist: [] },
+    // The db-backup slice (#471): every dump and restore carries `--enable-row-security` together with
+    // `PGOPTIONS=-c app.rls_bypass=on` (in the child env, never argv), `db.restore.run` is server-only and
+    // `db.backup.run` node-eligible, every `db_backup:*` permission is system scope, the `database-backups/`
+    // key prefix is registered at deployment scope, and every restore carry-over binds its row. This app
+    // registers NO carry-over (every table, `kvox_object_ownership` and `kvox_allowlist_reminders` included,
+    // is inside the dump; the reason is a comment in app-registrations/db-backup.ts), so none is required.
+    dbBackup: { requiredCarryOverIds: [] },
+    // The telemetry slice (#471): metric groups are well formed and compute against an empty schema, every
+    // `/api/admin/telemetry/*` and `/api/telemetry/*` route carries exactly the permissions its shape needs,
+    // the Doctor checks are read-only, no response carries a stored GreptimeDB password, the module boots
+    // with telemetry off, and the extension registries (panels, assistant tools) are well formed. This app
+    // adds no metric group yet (optional follow-up work), so the default (every registered group) applies.
+    // The slice's retention cron lives in the package, outside this source root; its own run scans it.
+    telemetry: {},
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
   },

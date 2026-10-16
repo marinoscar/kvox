@@ -206,12 +206,11 @@ describe('parseEnvExample against the real template', () => {
     expect(byKey.get('VAPID_PUBLIC_KEY')?.optional).toBe(true);
   });
 
-  it('no longer declares the six keys #241 found unread anywhere in the repository', () => {
+  it('no longer declares the keys #241 found unread anywhere in the repository', () => {
     for (const key of [
       'MICROSOFT_CLIENT_ID',
       'MICROSOFT_CLIENT_SECRET',
       'MICROSOFT_CALLBACK_URL',
-      'UPTRACE_DSN',
       'CLICKHOUSE_USER',
       'CLICKHOUSE_PASSWORD',
     ]) {
@@ -376,7 +375,7 @@ describe('env metadata', () => {
       'COOKIE_SECRET',
       'SECRETS_ENCRYPTION_KEY',
       'GOOGLE_CLIENT_SECRET',
-      'UPTRACE_ADMIN_PASSWORD',
+      'GREPTIME_ADMIN_PASSWORD',
     ]) {
       expect(metadataFor(key).secret).toBe(true);
     }

@@ -78,6 +78,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
 import { useNavigationPrefs } from '../../hooks/useNavigationPrefs';
 import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import {
@@ -276,6 +277,7 @@ export function NavigationRail() {
   const theme = useTheme();
   const { pathname } = useLocation();
   const { hasPermission } = usePermissions();
+  const settingsFeatures = useSettingsFeatures();
   const { features } = useNavigationFeatures();
   const { railCollapsed, toggleRailCollapsed } = useNavigationPrefs();
 
@@ -326,8 +328,11 @@ export function NavigationRail() {
   // persistent chrome — filtering it would leave the user staring at navigation
   // that no longer lists where they are.
   const consoleSections = useMemo(
-    () => (consoleMode ? visibleSettingsSections(ADMIN_SECTIONS, hasPermission) : []),
-    [consoleMode, hasPermission],
+    () =>
+      consoleMode
+        ? visibleSettingsSections(ADMIN_SECTIONS, hasPermission, undefined, settingsFeatures)
+        : [],
+    [consoleMode, hasPermission, settingsFeatures],
   );
 
   // LONGEST PREFIX WINS, not `owns` alone. Admin paths genuinely nest

@@ -1250,7 +1250,7 @@ describe('environment drift on update (#291)', () => {
     // in a feature group this deployment never enabled. Nine observability
     // keys are this shape in the real template and five of them are secrets,
     // which is the larger half of the bug and the half the issue did not name.
-    'UPTRACE_ADMIN_PASSWORD=admin',
+    'GREPTIME_ADMIN_PASSWORD=change-me-admin',
     'OTEL_ENABLED=true',
   ];
 
@@ -1265,7 +1265,7 @@ describe('environment drift on update (#291)', () => {
     const env = envOf(root);
     expect(env.has('SECRETS_ENCRYPTION_KEY')).toBe(false);
     expect(env.has('VAPID_PRIVATE_KEY')).toBe(false);
-    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('GREPTIME_ADMIN_PASSWORD')).toBe(false);
     expect(env.has('OTEL_ENABLED')).toBe(false);
 
     const journal = updateJournal(root);
@@ -1376,7 +1376,7 @@ describe('environment drift on update (#291)', () => {
     const root = staged({
       template: templateWith([
         'OTEL_ENABLED=true',
-        'UPTRACE_ADMIN_PASSWORD=admin',
+        'GREPTIME_ADMIN_PASSWORD=change-me-admin',
         'OTEL_SERVICE_NAME=demo-api',
       ]),
       // `OTEL_ENABLED=false` is what the e2e deployment carries, and it is why
@@ -1389,7 +1389,7 @@ describe('environment drift on update (#291)', () => {
 
     const env = envOf(root);
     expect(env.get('OTEL_ENABLED')).toBe('false');
-    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('GREPTIME_ADMIN_PASSWORD')).toBe(false);
     expect(env.has('OTEL_SERVICE_NAME')).toBe(false);
     expect(updateJournal(root)).not.toContain('This revision adds');
   });

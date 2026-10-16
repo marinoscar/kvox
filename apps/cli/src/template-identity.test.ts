@@ -594,12 +594,13 @@ function stripRegistryScopes(lineText: string): string {
 /**
  * Identifiers the storage adoption (issue #469, epic #467) fixes by name: the `kvox-objects/` module and
  * its classes, the `kvox_object_ownership` table, the `GET /api/kvox/files` route, the `kvox.transcripts.source`
- * processor name and the retired `kvox:storage-managed-by-part-size` deviation id. They are stripped per
+ * processor name, the retired `kvox:storage-managed-by-part-size` deviation id and (#471) the
+ * `20-kvox-extensions.sh` init script and `kvox.extensions` restore-gate id. They are stripped per
  * token, like the registry scopes above, so any other mention of the product name on the same line is
  * still flagged. A rename of the product renames these with the module directory.
  */
 const STORAGE_ADOPTION_TOKEN_RE =
-  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b/g;
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b/g;
 
 function stripStorageAdoptionTokens(lineText: string): string {
   return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');

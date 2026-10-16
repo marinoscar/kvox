@@ -220,7 +220,7 @@ Directories: `__fixtures__`, `commands`, `deploy`, `init`, `node`, `tui`; root f
 | `apps/api/prisma` (tsconfig, .gitkeep) | 2 | 50% / +1/-3 | noise | `platform-db` | issue 1.1 | Config only. |
 | `infra/compose` | 11 | 20% / +35/-104 | kvox-divergence | `platform-infra` | issue 4.5 | KVox compose files (worker, vps, devdb, otel) and `.env.example`; three files already normalised-identical. |
 | `infra/nginx` | 3 | 0% / +10/-75 | noise | `platform-infra` | issue 4.5 | CSP and routing (+10/-75). |
-| `infra/otel` | 2 | 0% / +16/-182 | noise | `platform-infra` (telemetry) | issue 4.5 | Collector config (+16/-182); `uptrace.yml` is KVox-only. |
+| `infra/otel` | 2 | 0% / +16/-182 | noise | `platform-infra` (telemetry) | issue 4.5 | Collector config (+16/-182); the backend-specific config file was KVox-only (removed in #471). |
 
 ## Migrations
 
