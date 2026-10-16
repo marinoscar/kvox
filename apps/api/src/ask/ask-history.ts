@@ -18,7 +18,7 @@
 //     CLAUDE.md Notes rule 4.
 // =============================================================================
 
-import type { AiChatMessage } from '../ai/providers/ai-provider.interface';
+import type { KvoxChatMessage } from '../ai-port/kvox-ai';
 import { stripCitationMarkers } from './ask-message.mapper';
 
 export interface AskHistoryRow {
@@ -34,8 +34,8 @@ export const MESSAGE_OVERHEAD_TOKENS = 4;
  * The replayable history, oldest first, from the conversation's earlier rows
  * (oldest first, the current turn excluded), at most `limit` messages.
  */
-export function selectHistory(rows: readonly AskHistoryRow[], limit: number): AiChatMessage[] {
-  const kept: AiChatMessage[] = [];
+export function selectHistory(rows: readonly AskHistoryRow[], limit: number): KvoxChatMessage[] {
+  const kept: KvoxChatMessage[] = [];
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     if (row.role === 'user') {
@@ -55,7 +55,7 @@ export function selectHistory(rows: readonly AskHistoryRow[], limit: number): Ai
 }
 
 /** Tokens a message list costs, counted with the resolved model's tokenizer. */
-export function messageTokens(messages: readonly AiChatMessage[], countTokens: (text: string) => number): number {
+export function messageTokens(messages: readonly KvoxChatMessage[], countTokens: (text: string) => number): number {
   let total = 0;
   for (const m of messages) {
     total += MESSAGE_OVERHEAD_TOKENS;
@@ -70,7 +70,7 @@ export function messageTokens(messages: readonly AiChatMessage[], countTokens: (
 }
 
 export type FitResult =
-  | { ok: true; messages: AiChatMessage[]; droppedHistory: number; inputTokens: number }
+  | { ok: true; messages: KvoxChatMessage[]; droppedHistory: number; inputTokens: number }
   | { ok: false; requiredTokens: number };
 
 /**
@@ -81,14 +81,14 @@ export type FitResult =
  */
 export function fitToBudget(input: {
   system: string;
-  history: readonly AiChatMessage[];
+  history: readonly KvoxChatMessage[];
   question: string;
   availableTokens: number;
   reservedTokens: number;
   countTokens: (text: string) => number;
 }): FitResult {
-  const head: AiChatMessage = { role: 'system', content: input.system };
-  const tail: AiChatMessage = { role: 'user', content: input.question };
+  const head: KvoxChatMessage = { role: 'system', content: input.system };
+  const tail: KvoxChatMessage = { role: 'user', content: input.question };
   const base = messageTokens([head, tail], input.countTokens) + input.reservedTokens;
   if (base > input.availableTokens) return { ok: false, requiredTokens: base };
 

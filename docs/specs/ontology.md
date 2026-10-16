@@ -3091,6 +3091,8 @@ brief's prose is `kg.entity_digest`'s own output, shown as-is (§9.1). A
 
 ### 20.2 Capability flags
 
+> Since issue #476 the Ask loop's `chat()` is `KvoxAi.chat()`, a platform `stream()` call (`apps/api/src/ai-port/platform-kvox-ai.ts`, `chat-mapping.ts`), not `AiProvider.chat`; see §21.3 "Provider call". The text below is the original design.
+
 `generateStructured` (§6) and the tool-calling loop `ask.respond` needs
 (§21) are both new `AiProvider` capabilities this epic adds to
 `apps/api/src/ai/providers/ai-provider.interface.ts` — OpenAI's Chat
@@ -3230,8 +3232,8 @@ by `ask_messages_one_running_turn_uniq_idx` (§10), which #378 maps to 409
 **`ask.respond`** (§11) and returns **202** with both the new user message
 and a `pending` assistant message — the identical two-row-per-turn shape a
 chat UI needs to render immediately without waiting on the job.
-`ask.respond` runs the tool-calling loop (§20.2's `chat()`) against the
-resolved `graph.agent` model (§20.3, with the caller's own override honoured
+`ask.respond` runs the tool-calling loop (`KvoxAi.chat()`, see "Provider call"
+below) against the resolved `graph.agent` model (§20.3, with the caller's own override honoured
 exactly as §20.3 describes), reading prior turns in the conversation as the
 message history, calling tools as needed, and writing every delta into
 `ask_messages.content` on the way past — **the identical durable-buffer-not-
@@ -3284,7 +3286,7 @@ of a proposal.
   The model is **re-validated** at run time with the payload's model; a
   resolver refusal then fails the turn (`auth` for `ai_key_missing`, else
   `other`).
-- *The loop*: `chat()` with all seven tools, `toolChoice: 'auto'` while fewer
+- *The loop*: `KvoxAi.chat()` with all seven tools, `toolChoice: 'auto'` while fewer
   than 8 steps have run, less than 4 minutes have passed and the input budget
   still has room for one more full step (4 results at the 3000-token cap);
   otherwise one final `toolChoice: 'none'` call with the system line "Tool
@@ -3293,6 +3295,44 @@ of a proposal.
   call is appended to `tool_calls` and written immediately (#379's `step`
   frames). Output is `min(2000, the model's ceiling)` tokens a call, 60 s a
   call (narrowed by `ai.requestTimeoutMs`).
+- *Provider call (#476)*: each `KvoxAi.chat()` is one platform `stream()` call
+  on the asking user's client (`apps/api/src/ai-port/platform-kvox-ai.ts`);
+  the pure mapping is `chat-mapping.ts`. Ask no longer calls `AiProvider.chat`.
+  - *History*: the whole transcript is replayed on every call, never
+    `previousResponseId`; the loop owns its messages and budget, and a provider
+    that stores nothing works the same. Leading `system` messages become
+    `instructions` (joined by a blank line); a later `system` message (the
+    forced-answer line) is sent as a `developer` message so it keeps its place.
+    Content parts are `{ type: 'text' }`.
+  - *Tools*: each JSON Schema definition is converted once per process with
+    `z.fromJSONSchema` (the platform converts it back for the wire) and sent
+    `strict`. A schema that does not convert throws at the first call: fix the
+    tool's schema, not the mapping. The toolset still validates every call with
+    its own Zod `input`.
+  - *Tool calls*: only complete calls are yielded, once per call id. The
+    finished item's `arguments` win; streamed argument deltas are buffered as
+    the fallback; a call that only appears in `response.completed` is still
+    emitted.
+  - *Reasoning*: `reasoning` output items are kept per tool-call id in a
+    `ReasoningReplayCache`, scoped to (user, job), at most 256 entries and 15
+    minutes, and put back in front of that call's `function_call` when the next
+    call replays the step. They are opaque provider state: never logged, never
+    persisted, never shown. Replay matters only to providers that carry opaque
+    state across a tool call (thinking blocks, thought signatures). The
+    installed OpenAI Responses adapter drops a replayed reasoning item, so
+    there the cache is a harmless no-op.
+  - *Finish*: `stop`, `length`, `content_filter` and `tool_calls` pass through
+    (an unknown reason reads as `stop`); a response that ends with `error`, or
+    a stream that closes without `response.completed`, is an error, never a
+    short answer. Usage that is absent is `null`, never 0.
+  - *Errors*: every failure leaves through `mapAiError` (a 429 is
+    `RateLimitError`, which the handler defers before any text was flushed and
+    files as `rate_limit` after). The call is bounded by the shorter of the
+    request's `timeoutMs` and `ai.requestTimeoutMs`; expiry is a
+    `TimeoutError`, filed `failed`/`timeout`. The caller's own abort surfaces
+    its reason unchanged.
+  - *Attribution*: feature `graph_agent` with the job's `jobId`, so usage rows
+    and spans join the `ask.respond` job.
 - *The hold rule* (`answer-hold.ts`): a call's text is held until 64
   characters arrive with no tool call; a tool call first discards it from the
   answer (it is replayed to the model as that step's assistant message). A
@@ -3602,9 +3642,9 @@ the run's duration only (restored in `teardown()` regardless of outcome —
 leaving it wired in would silently change every other user's Ask
 conversation), and for each question calls the real `AskMessagesService`
 then invokes `AskRespondHandler.process(job)` directly — no queue poll, this
-process is the only claimer. A thin wrapper around the registered provider's
-own `chat()` captures every `messages` array actually sent, for the leak
-check.
+process is the only claimer. A thin wrapper around the registered `KvoxAi`
+port's own `chat()` (§21.3, "Provider call") captures every `messages` array
+actually sent, for the leak check.
 
 `scorer.ts` (pure) computes, per question: `citationValidity` (valid
 citations ÷ all markers — **gate: must be 1.0**), `citeFromHit` (a valid

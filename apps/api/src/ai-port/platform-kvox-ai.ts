@@ -5,6 +5,17 @@ import { AiError, AiService, type AiUserClient } from '@marinoscar/platform-api/
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AiInputError, AiRefusedError, AiStructuredOutputError } from './ai-errors';
+import {
+  ReasoningReplayCache,
+  createChatMappingState,
+  fromPlatformEvent,
+  missingToolCalls,
+  replayScope,
+  toPlatformInput,
+  toPlatformToolChoice,
+  toPlatformTools,
+  toolCallIdsOf,
+} from './chat-mapping';
 import { countTokens } from './count-tokens';
 import { EmbeddingShapeError, KVOX_EMBEDDING } from './embedding-catalog';
 import { KVOX_EMBEDDING_FEATURES, KVOX_FEATURE_TASK, type KvoxAiFeatureId } from './features';
@@ -100,6 +111,9 @@ interface FailureContext {
 @Injectable()
 export class PlatformKvoxAi implements KvoxAi {
   private readonly logger = new Logger(PlatformKvoxAi.name);
+
+  /** Reasoning items between two calls of one Ask turn (never logged, never stored). */
+  private readonly reasoningReplay = new ReasoningReplayCache();
 
   constructor(
     private readonly ai: AiService,
@@ -423,10 +437,73 @@ export class PlatformKvoxAi implements KvoxAi {
     return countTokens(text, model);
   }
 
-  chat(_req: KvoxChatRequest): AsyncIterable<KvoxChatEvent> {
-    // Implemented by issue #476 (the Ask tool loop). Until then the Ask handler stays on
-    // its own provider path and nothing calls this.
-    throw new Error('KvoxAi.chat is implemented by the Ask tool loop (issue #476).');
+  /**
+   * One Ask-loop model call: the whole history, streamed, possibly calling tools
+   * (issue #476). The mapping lives in `chat-mapping.ts`; this method owns the
+   * guard (timeout, abort), the effort and the failure translation, as every call does.
+   * A request timeout is a `TimeoutError`, which the Ask handler files as `timeout`.
+   */
+  async *chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent> {
+    const base = await this.guard(req.signal);
+    const timeoutMs = req.timeoutMs !== undefined ? Math.min(req.timeoutMs, base.timeoutMs) : base.timeoutMs;
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const guard: CallGuard = {
+      signal: req.signal ? AbortSignal.any([req.signal, timeout]) : timeout,
+      timeoutMs,
+      callerSignal: req.signal,
+      timedOut: () => timeout.aborted && req.signal?.aborted !== true,
+    };
+    const ctx: FailureContext = { feature: req.feature, inJob: req.jobId !== undefined, guard };
+    const scope = replayScope(req);
+    const state = createChatMappingState();
+
+    try {
+      const effort =
+        req.reasoningEffort !== undefined
+          ? toPlatformReasoningEffort(req.reasoningEffort)
+          : await this.effortFor(req.feature, req.model ?? null);
+      const { instructions, input } = toPlatformInput(
+        req.messages,
+        this.reasoningReplay.recall(scope, toolCallIdsOf(req.messages)),
+      );
+      const tools = req.tools !== undefined && req.tools.length > 0 ? toPlatformTools(req.tools) : undefined;
+
+      const stream = this.client(req).stream(
+        {
+          ...this.target(req),
+          ...(instructions !== undefined ? { instructions } : {}),
+          input,
+          ...(tools !== undefined ? { tools } : {}),
+          ...(tools !== undefined && req.toolChoice !== undefined
+            ? { toolChoice: toPlatformToolChoice(req.toolChoice) }
+            : {}),
+          maxOutputTokens: req.maxOutputTokens,
+          ...(effort !== undefined ? { reasoning: { effort } } : {}),
+        },
+        { signal: guard.signal },
+      );
+
+      for await (const event of stream) {
+        if (event.type === 'response.completed') {
+          for (const call of missingToolCalls(event.response, state)) yield call;
+        }
+        const mapped = fromPlatformEvent(event, state);
+        if (mapped !== null) yield mapped;
+      }
+
+      if (!state.completed) {
+        // A stream that ends without a finish reason is a dead socket, never a finished answer.
+        throw new Error('The provider closed the stream without finishing the response; the answer was truncated.');
+      }
+    } catch (err) {
+      if (guard.timedOut()) {
+        throw new DOMException(`The AI request timed out after ${guard.timeoutMs} ms.`, 'TimeoutError');
+      }
+      throw this.fail(err, ctx);
+    } finally {
+      // The reasoning of this response waits for the request that replays its step.
+      this.reasoningReplay.remember(scope, state.reasoningByCall);
+    }
   }
 
   // ---------------------------------------------------------------------------
