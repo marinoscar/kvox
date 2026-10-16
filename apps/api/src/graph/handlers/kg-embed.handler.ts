@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // Profile embeddings for entities and items — the vectors resolution's kNN
-// arm and later retrieval search. One batch of ids in, one `provider.embed`
-// call (chunked at the provider's own batch ceiling) out.
+// arm and later retrieval search. One batch of ids in, one `KvoxAi.embed`
+// call (chunked at the embedding catalog's batch ceiling) out.
 //
 //   profile   { maxRuntimeMs: 5 min, maxAttempts: 3 } — retry-safe: the input
 //             is content-hash keyed, so a retry embeds the identical text into
@@ -29,7 +29,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
-import { AiAuthError } from '../../ai/ai-errors';
+import { AiAuthError } from '../../ai-port/ai-errors';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EMBED_JOB_TYPE } from '../job-types';
@@ -90,7 +90,7 @@ export class KgEmbedHandler implements JobHandler, OnModuleInit {
     }
     const { userId, subjectKind } = payload;
 
-    const embedder = await this.embedder.resolve(userId);
+    const embedder = await this.embedder.resolve(userId, job.id);
     if (!embedder.ok) {
       this.logger.debug(`${KG_EMBED_JOB_TYPE} job ${job.id}: embedding unavailable (${embedder.reason}); nothing to do`);
       return;

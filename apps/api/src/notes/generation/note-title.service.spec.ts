@@ -1,13 +1,5 @@
-import { z } from 'zod';
-
-import { AiAuthError } from '../../ai/ai-errors';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-  AiProviderContext,
-} from '../../ai/providers/ai-provider.interface';
+import { AiAuthError, AiRefusedError } from '../../ai-port/ai-errors';
+import { FakeKvoxAi, notReadyReadiness } from '../../ai-port/testing/fake-kvox-ai';
 import { MAX_TITLE_CHARS } from '../dto/note.dto';
 import {
   buildTitleUserContent,
@@ -45,73 +37,14 @@ const MODEL = 'gpt-4o';
 const OWNER_ID = 'user-1';
 const NOTE_ID = 'note-1';
 
-const policy = (overrides: Record<string, unknown> = {}) => ({
-  enabled: true,
-  providers: {
-    [PROVIDER_ID]: {
-      baseUrl: 'https://api.openai.com/v1',
-      allowedModels: [MODEL],
-      defaultModel: MODEL,
-    },
-  },
-  maxInputTokens: 100_000,
-  maxOutputTokens: 4_000,
-  requestTimeoutMs: 60_000,
-  reasoningEffort: 'none',
-  ...overrides,
-});
-
-/** A provider whose stream is scripted by the test, mirroring the handler spec's `FakeProvider`. */
-class FakeProvider implements AiProvider<unknown> {
-  readonly id = PROVIDER_ID;
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      { id: MODEL, label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
-    ],
-    streaming: true as const,
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors: never[] = [];
-
-  calls = 0;
-
-  constructor(private readonly script: () => AsyncIterable<AiDelta>) {}
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  generate(_ctx: AiProviderContext<unknown>, _request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    this.calls += 1;
-
-    return this.script();
-  }
+/** A model that answers with `text`, reporting the provider's own counts. */
+function answering(text: string): FakeKvoxAi {
+  return new FakeKvoxAi().queueStream({ deltas: [text], usage: { inputTokens: 12, outputTokens: 4 } });
 }
 
-async function* answering(text: string): AsyncIterable<AiDelta> {
-  yield { kind: 'delta', text };
-  yield { kind: 'done', finishReason: 'stop', usage: { promptTokens: 12, completionTokens: 4 } };
-}
-
-async function* refusing(): AsyncIterable<AiDelta> {
-  yield {
-    kind: 'done',
-    finishReason: 'content_filter',
-    usage: { promptTokens: 12, completionTokens: 0 },
-  };
-}
-
-function throwing(error: unknown): () => AsyncIterable<AiDelta> {
-  return () =>
-    (async function* (): AsyncIterable<AiDelta> {
-      throw error;
-    })();
+/** A model whose call fails with `error`. */
+function throwing(error: unknown): FakeKvoxAi {
+  return new FakeKvoxAi().queueStreamError(error);
 }
 
 const noteRow = (overrides: Record<string, unknown> = {}) => ({
@@ -124,11 +57,9 @@ const noteRow = (overrides: Record<string, unknown> = {}) => ({
 });
 
 interface HarnessOptions {
-  provider?: AiProvider<unknown>;
+  ai?: FakeKvoxAi;
   /** `undefined` uses the default row; pass `null` to simulate a vanished note. */
   note?: Record<string, unknown> | null;
-  policyOverride?: Record<string, unknown>;
-  apiKey?: string | null;
   updateManyCount?: number;
   /** What a re-read after a lost `updateMany` race finds. `undefined` → the row is gone. */
   afterRaceTitle?: string | null;
@@ -152,24 +83,12 @@ function harness(options: HarnessOptions = {}) {
     },
   };
 
-  const providers = new AiProviderRegistry();
-  providers.register(options.provider ?? new FakeProvider(() => answering('Q3 revenue review')));
-
-  const settings = { get: jest.fn().mockResolvedValue(policy(options.policyOverride)) };
-  const credentials = {
-    getSecret: jest.fn().mockResolvedValue(options.apiKey === undefined ? 'sk-test' : options.apiKey),
-  };
+  const ai = options.ai ?? answering('Q3 revenue review');
   const throttle = { registerProviderKey: jest.fn() };
 
-  const service = new NoteTitleService(
-    prisma as never,
-    providers,
-    settings as never,
-    credentials as never,
-    throttle as never,
-  );
+  const service = new NoteTitleService(prisma as never, ai, throttle as never);
 
-  return { service, prisma, providers, settings, credentials, throttle };
+  return { service, prisma, ai, throttle };
 }
 
 function input(overrides: Partial<TitleNoteInput> = {}): TitleNoteInput {
@@ -189,16 +108,16 @@ function input(overrides: Partial<TitleNoteInput> = {}): TitleNoteInput {
 
 describe('titleNote — a user-chosen title is never overwritten', () => {
   it('returns the existing title and performs no update, without ever calling the model', () => {
-    const fake = new FakeProvider(() => answering('Should never be asked'));
+    const ai = answering('Should never be asked');
     const { service, prisma } = harness({
-      provider: fake,
+      ai,
       note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
     });
 
     return service.titleNote(input()).then((result) => {
       expect(result).toBe('My own name for this');
       expect(prisma.note.updateMany).not.toHaveBeenCalled();
-      expect(fake.calls).toBe(0);
+      expect(ai.callsOf('streamText')).toHaveLength(0);
     });
   });
 });
@@ -209,23 +128,23 @@ describe('titleNote — a user-chosen title is never overwritten', () => {
 
 describe('titleNote — `force: true` on a `titleSource: "user"` note', () => {
   it('proceeds to rename it, unlike the default', async () => {
-    const fake = new FakeProvider(() => answering('A suggested title'));
+    const ai = answering('A suggested title');
     const { service, prisma } = harness({
-      provider: fake,
+      ai,
       note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
     });
 
     const result = await service.titleNote(input({ force: true }));
 
     expect(result).toBe('A suggested title');
-    expect(fake.calls).toBe(1);
+    expect(ai.callsOf('streamText')).toHaveLength(1);
     expect(prisma.note.updateMany).toHaveBeenCalled();
   });
 
   it('the updateMany WHERE clause OMITS `titleSource: { not: "user" }` — the half that is easy to half-fix', async () => {
-    const fake = new FakeProvider(() => answering('A suggested title'));
+    const ai = answering('A suggested title');
     const { service, prisma } = harness({
-      provider: fake,
+      ai,
       note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
     });
 
@@ -244,9 +163,9 @@ describe('titleNote — `force: true` on a `titleSource: "user"` note', () => {
   });
 
   it('still guards `deletedAt: null` under force — no flag makes a row on its way out writable', async () => {
-    const fake = new FakeProvider(() => answering('A suggested title'));
+    const ai = answering('A suggested title');
     const { service, prisma } = harness({
-      provider: fake,
+      ai,
       note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
     });
 
@@ -260,9 +179,9 @@ describe('titleNote — `force: true` on a `titleSource: "user"` note', () => {
 
 describe('titleNote — `force: false` or absent keeps both halves of the guard exactly as they were', () => {
   it('force: false behaves identically to omitting it: the early return still applies to a user title', async () => {
-    const fake = new FakeProvider(() => answering('Should never be asked'));
+    const ai = answering('Should never be asked');
     const { service, prisma } = harness({
-      provider: fake,
+      ai,
       note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
     });
 
@@ -270,7 +189,7 @@ describe('titleNote — `force: false` or absent keeps both halves of the guard 
 
     expect(result).toBe('My own name for this');
     expect(prisma.note.updateMany).not.toHaveBeenCalled();
-    expect(fake.calls).toBe(0);
+    expect(ai.callsOf('streamText')).toHaveLength(0);
   });
 
   it('force: false still carries `titleSource: { not: "user" }` in the updateMany WHERE clause', async () => {
@@ -324,13 +243,13 @@ describe('titleNote — a deleted note is not titled', () => {
 
 describe('titleNote — rank 1 succeeds', () => {
   it('updates the note with the model-proposed title and titleSource "ai"', async () => {
-    const fake = new FakeProvider(() => answering('Q3 revenue jumps across every region'));
-    const { service, prisma } = harness({ provider: fake });
+    const ai = answering('Q3 revenue jumps across every region');
+    const { service, prisma } = harness({ ai });
 
     const result = await service.titleNote(input());
 
     expect(result).toBe('Q3 revenue jumps across every region');
-    expect(fake.calls).toBe(1);
+    expect(ai.callsOf('streamText')).toHaveLength(1);
     expect(prisma.note.updateMany).toHaveBeenCalledWith({
       where: { id: NOTE_ID, deletedAt: null, titleSource: { not: 'user' } },
       data: { title: 'Q3 revenue jumps across every region', titleSource: 'ai' },
@@ -358,65 +277,47 @@ describe('titleNote — every rank-1 failure falls through to rank 2 and never t
     );
   }
 
-  it('ai.enabled === false', async () => {
-    await expectFallthrough({ policyOverride: { enabled: false } });
+  it('AI switched off for the deployment', async () => {
+    await expectFallthrough({ ai: new FakeKvoxAi().setNotReady('ai_not_configured') });
   });
 
-  it('a provider id this build does not have', async () => {
-    const { service, prisma } = harness();
-
-    const result = await service.titleNote(
-      input({ body: FALLBACK_BODY, providerId: 'not-a-real-provider' }),
-    );
-
-    expect(result).toBe('Fallback Heading');
-    expect(prisma.note.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { title: 'Fallback Heading', titleSource: 'ai' } }),
-    );
-  });
-
-  it('a model no longer in allowedModels', async () => {
-    const { service, prisma } = harness();
-
-    const result = await service.titleNote(
-      input({ body: FALLBACK_BODY, model: 'gpt-retired-model' }),
-    );
-
-    expect(result).toBe('Fallback Heading');
-    expect(prisma.note.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { title: 'Fallback Heading', titleSource: 'ai' } }),
-    );
+  it('a model no longer enabled for this deployment', async () => {
+    await expectFallthrough({ ai: new FakeKvoxAi().setReadiness(notReadyReadiness('model_not_permitted')) });
   });
 
   it('no saved API key', async () => {
-    await expectFallthrough({ apiKey: null });
+    await expectFallthrough({ ai: new FakeKvoxAi().setNotReady('ai_key_missing') });
+  });
+
+  it('a note that names no provider or model', async () => {
+    const { service, prisma, ai } = harness();
+
+    const result = await service.titleNote(input({ body: FALLBACK_BODY, providerId: null, model: null }));
+
+    expect(result).toBe('Fallback Heading');
+    expect(ai.callsOf('readiness')).toHaveLength(0);
+    expect(prisma.note.updateMany).toHaveBeenCalled();
   });
 
   it('the provider throwing AiAuthError', async () => {
-    const fake = new FakeProvider(throwing(new AiAuthError('bad key', PROVIDER_ID)));
-
-    await expectFallthrough({ provider: fake });
+    await expectFallthrough({ ai: throwing(new AiAuthError('bad key', PROVIDER_ID)) });
   });
 
   it('the provider throwing RateLimitError — the one an unwary reader would expect to be rethrown', async () => {
-    const fake = new FakeProvider(throwing(new RateLimitError('slow down')));
+    const ai = throwing(new RateLimitError('slow down'));
 
     // Not `.rejects` — this is the whole point of the test. Everywhere else in
     // this codebase a `RateLimitError` propagates so the queue can defer the
     // job; here it must be caught and swallowed like any other rank-1 failure.
-    await expectFallthrough({ provider: fake });
+    await expectFallthrough({ ai });
   });
 
-  it('a "content_filter" finish reason', async () => {
-    const fake = new FakeProvider(refusing);
-
-    await expectFallthrough({ provider: fake });
+  it('a content-policy refusal', async () => {
+    await expectFallthrough({ ai: throwing(new AiRefusedError('declined')) });
   });
 
   it('a generic Error', async () => {
-    const fake = new FakeProvider(throwing(new Error('the vendor is down')));
-
-    await expectFallthrough({ provider: fake });
+    await expectFallthrough({ ai: throwing(new Error('the vendor is down')) });
   });
 });
 
@@ -426,8 +327,7 @@ describe('titleNote — every rank-1 failure falls through to rank 2 and never t
 
 describe('titleNote — rank 3: nothing usable', () => {
   it('leaves the title untouched when the body has no heading and no sentence, and rank 1 also fails', async () => {
-    const fake = new FakeProvider(throwing(new Error('the vendor is down')));
-    const { service, prisma } = harness({ provider: fake });
+    const { service, prisma } = harness({ ai: throwing(new Error('the vendor is down')) });
 
     const result = await service.titleNote(
       input({ body: '```\ncode only, no prose\n```' }),
@@ -476,8 +376,8 @@ describe('titleNote — the WHERE clause is the real guard against a concurrent 
 
 describe('titleNote — no write when nothing would change', () => {
   it('writes nothing when the proposed title equals the title the note already has', async () => {
-    const fake = new FakeProvider(() => answering('Meeting notes'));
-    const { service, prisma } = harness({ provider: fake });
+    const ai = answering('Meeting notes');
+    const { service, prisma } = harness({ ai });
 
     const result = await service.titleNote(input());
 
@@ -498,19 +398,49 @@ describe('titleNote — the outermost backstop', () => {
         updateMany: jest.fn(),
       },
     };
-    const providers = new AiProviderRegistry();
-    providers.register(new FakeProvider(() => answering('unused')));
-
     const service = new NoteTitleService(
       prisma as never,
-      providers,
-      { get: jest.fn() } as never,
-      { getSecret: jest.fn() } as never,
+      answering('unused'),
       { registerProviderKey: jest.fn() } as never,
     );
 
     await expect(service.titleNote(input())).resolves.toBeNull();
     expect(prisma.note.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// The call rank 1 makes through the port
+// -----------------------------------------------------------------------------
+
+describe('titleNote — the titling call', () => {
+  it('is a note_retitle call on the owner\'s account, linked to the job, with no reasoning and a tiny ceiling', async () => {
+    const { service, ai } = harness();
+
+    await service.titleNote(input({ jobId: 'job-9' }));
+
+    const call = ai.lastCall('streamText');
+
+    expect(call).toMatchObject({ userId: OWNER_ID, feature: 'note_retitle', jobId: 'job-9', model: MODEL });
+    expect(call?.request).toMatchObject({ reasoningEffort: 'none', maxOutputTokens: 32 });
+    expect((call?.request as { signal?: AbortSignal }).signal).toBeInstanceOf(AbortSignal);
+    expect(ai.lastCall('readiness')).toMatchObject({ userId: OWNER_ID, feature: 'note_retitle', model: MODEL });
+  });
+
+  it('registers the owner\'s per-user throttle key for the job type it runs inside', async () => {
+    const { service, throttle } = harness();
+
+    await service.titleNote(input({ jobType: 'note.retitle' }));
+
+    expect(throttle.registerProviderKey).toHaveBeenCalledWith('note.retitle', 'ai-provider:user-1');
+  });
+
+  it('does not register a throttle key when readiness refuses (nothing is spent)', async () => {
+    const { service, throttle } = harness({ ai: new FakeKvoxAi().setNotReady('ai_key_missing') });
+
+    await service.titleNote(input());
+
+    expect(throttle.registerProviderKey).not.toHaveBeenCalled();
   });
 });
 

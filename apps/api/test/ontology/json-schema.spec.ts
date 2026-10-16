@@ -18,11 +18,9 @@ import {
 //     additionalProperties, items, enum, anyOf, description;
 //   - nesting depth <= 5 from the props root.
 //
-// Cross-check with #358's assertStrictJsonSchema: that function does not exist
-// on this branch yet (apps/api/src/ai/structured/ does not exist). Per the
-// issue, whichever of #350/#358 merges second adds the call — so this file
-// probes for the module at run time and, when present, also calls it on every
-// schema this suite builds, without needing an edit once #358 lands.
+// Cross-check with #358's assertStrictJsonSchema (`ai-port/strict-json-schema.ts`):
+// this file probes for the module at run time and, when present, also calls it on
+// every schema this suite builds.
 // =============================================================================
 
 const ALLOWED_KEYWORDS = new Set([
@@ -89,10 +87,10 @@ function walk(node: unknown, path: string, depth: number): void {
 }
 
 function loadAssertStrictJsonSchema(): ((schema: unknown) => void) | null {
-  const modulePath = join(__dirname, '..', '..', 'src', 'ai', 'structured', 'strict-json-schema.ts');
+  const modulePath = join(__dirname, '..', '..', 'src', 'ai-port', 'strict-json-schema.ts');
   if (!existsSync(modulePath)) return null;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require('../../src/ai/structured/strict-json-schema');
+  const mod = require('../../src/ai-port/strict-json-schema');
   if (typeof mod.assertStrictJsonSchema !== 'function') return null;
   return mod.assertStrictJsonSchema as (schema: unknown) => void;
 }

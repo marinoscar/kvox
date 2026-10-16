@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchModule } from '../search/search.module';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
+import { GraphAiRunResolver } from './graph-ai-run.service';
 import { EntityBriefController } from './brief/entity-brief.controller';
 import { EntityBriefService } from './brief/entity-brief.service';
 import { EntityDigestEnqueuer } from './brief/entity-digest.enqueuer';
@@ -66,8 +66,9 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
 // module — so no `forwardRef` is needed.
 // =============================================================================
 
-// `AiModule` (#355) supplies `AiSettingsService`, read for `ai.graphEnabled`
-// before a guarded `kg.entity_digest` enqueue after a manual entity edit.
+// `GraphAiRunResolver` (#475) reads `ai.graphEnabled` and resolves the model a
+// graph task runs on, through the global `KvoxAiModule` (`KVOX_AI`); no module
+// import is needed for either.
 //
 // `NoteAccessService` (#370) decides whether a citation's note is still
 // readable by the caller. It is provided here rather than imported through
@@ -81,9 +82,11 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, TranscriptsModule, AiModule, SearchModule, KvoxObjectsModule],
+  imports: [PrismaModule, TranscriptsModule, SearchModule, KvoxObjectsModule],
   providers: [
     GraphAccessService,
+    // #475 — the graph's one question to the AI port (model, limits, graph switch).
+    GraphAiRunResolver,
     // #460 — the `graph` user-data category's hooks (registered by `kvox.manifest.ts`).
     { provide: GRAPH_USER_DATA_HOOKS, useClass: GraphUserDataHooks },
     NoteAccessService,
@@ -149,6 +152,7 @@ import { GraphUserDataHooks } from './graph.user-data.hooks';
   // kg_relations and kg_items (#355) — every later writer imports it from here.
   exports: [
     GraphAccessService,
+    GraphAiRunResolver,
     GraphOntologyService,
     GraphPreferencesService,
     EvidenceValidator,

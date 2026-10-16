@@ -11,11 +11,12 @@
 //
 //   1. `AskAccessService.requireConversation` → 404 (missing and foreign are
 //      byte-identical);
-//   2. `AiTaskModelResolver.resolve(user, 'graph.agent', model)` → 409
+//   2. `KvoxAi.readiness(user, 'graph_agent', model)` → 409
 //      `graph_disabled` / `ai_not_configured` / `ai_key_missing` /
 //      `model_lacks_capability` (the task requires `toolCalling`), 400 for a
-//      model this deployment does not permit — passed through UNCHANGED, so a
-//      client maps one set of reasons across every connected-knowledge route;
+//      model this deployment does not permit — the same bodies the retired task
+//      resolver answered with, so a client maps one set of reasons across every
+//      connected-knowledge route;
 //   3. ONE transaction: the user message, the `pending` assistant message, the
 //      `ask.respond` job (`enqueueWithin`) and the assistant row's `job_id`,
 //      the derived title, and the conversation's `updated_at`. A second
@@ -31,10 +32,11 @@
 // the claim query until commit, so it cannot run ahead of its own row.
 // =============================================================================
 
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { AiTaskModelResolver } from '../ai/ai-task-model-resolver.service';
+import { KVOX_AI, type KvoxAi } from '../ai-port/kvox-ai';
+import { readinessRefusal } from '../ai-port/readiness-refusal';
 import { PrismaService } from '../prisma/prisma.service';
 import { AskAccessService } from './ask-access.service';
 import { ASK_DERIVED_TITLE_MAX_CHARS, ASK_RESPOND_PRIORITY } from './ask-limits';
@@ -64,15 +66,30 @@ export class AskMessagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AskAccessService,
-    private readonly resolver: AiTaskModelResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly jobs: JobsService,
   ) {}
 
   async post(userId: string, conversationId: string, dto: PostAskMessage): Promise<PostAskMessageResponse> {
     const conversation = await this.access.requireConversation(userId, conversationId);
 
-    // Every 409/400 here is the resolver's own exception, rethrown unchanged.
-    const resolution = await this.resolver.resolve(userId, 'graph.agent', dto.model ?? null);
+    // Every 409/400 here is the product's own refusal for the graph agent task,
+    // built from the readiness answer before any row is written.
+    const readiness = await this.ai.readiness(userId, 'graph_agent', dto.model ?? null);
+    if (!readiness.ok || readiness.model === null) {
+      throw await readinessRefusal({
+        task: 'graph.agent',
+        readiness,
+        requested: dto.model ?? null,
+        permittedModels: () => this.enabledModelIds(),
+      });
+    }
+    const resolution = {
+      model: readiness.model,
+      providerId: readiness.provider ?? 'openai',
+      reasoningEffort: readiness.reasoningEffort,
+      source: readiness.source,
+    };
 
     // Two distinct instants: both rows would otherwise share the
     // transaction's `now()`, and the conversation orders by
@@ -152,5 +169,16 @@ export class AskMessagesService {
     });
 
     return { userMessage: toAskMessage(userMessage), assistantMessage: toAskMessage(assistantMessage) };
+  }
+
+  /** The enabled model ids a `model_not_permitted` refusal lists, read from `ai_models`. */
+  private async enabledModelIds(): Promise<string[]> {
+    const rows = await this.prisma.aiModel.findMany({
+      where: { provider: 'openai', enabled: true },
+      orderBy: { modelId: 'asc' },
+      select: { modelId: true },
+    });
+
+    return rows.map((row) => row.modelId);
   }
 }

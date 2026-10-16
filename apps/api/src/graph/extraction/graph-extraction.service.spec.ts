@@ -19,8 +19,8 @@ function resolution(over: Record<string, unknown> = {}) {
     model: 'gpt-4o',
     reasoningEffort: 'medium',
     countTokens: (t: string) => Math.ceil(t.length / 4),
-    descriptor: { id: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
-    policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, requestTimeoutMs: 60_000, providers: {} },
+    modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+    policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, reasoningEffort: 'none' },
     source: 'task',
     keyConfigured: true,
     ...over,
@@ -56,8 +56,7 @@ function harness() {
     auditEvent: { create: jest.fn(async () => ({})) },
     $transaction: jest.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
   };
-  const resolver = { resolve: jest.fn(async () => resolution()) };
-  const aiSettings = { get: jest.fn(async () => ({ graphEnabled: true })) };
+  const resolver = { resolve: jest.fn(async () => resolution()), graphEnabled: jest.fn(async () => true) };
   const preferences = { get: jest.fn(async () => GRAPH_PREFERENCE_DEFAULTS) };
   const ontology = { effectiveSchemaFor: jest.fn(async () => schemaFor()) };
   const loader = { load: jest.fn(async () => makeInput()) };
@@ -67,13 +66,12 @@ function harness() {
     prisma as never,
     new NoteAccessService(prisma as never),
     resolver as never,
-    aiSettings as never,
     preferences as never,
     ontology as never,
     loader as never,
     jobs as never,
   );
-  return { service, prisma, tx, resolver, aiSettings, preferences, loader, jobs };
+  return { service, prisma, tx, resolver, preferences, loader, jobs };
 }
 
 async function rejection(promise: Promise<unknown>): Promise<HttpException> {
@@ -219,7 +217,7 @@ describe('GraphExtractionService.request (#363)', () => {
 
     it('over budget, with the numbers', async () => {
       const { service, resolver, tx } = harness();
-      resolver.resolve.mockResolvedValueOnce(resolution({ policy: { maxOutputTokens: 8_000, maxInputTokens: 50 } }));
+      resolver.resolve.mockResolvedValueOnce(resolution({ policy: { maxOutputTokens: 8_000, maxInputTokens: 50, reasoningEffort: 'none' } }));
       const error = await rejection(service.request(USER, IDS.note, {}));
       expect(error).toBeInstanceOf(BadRequestException);
       const body = bodyOf(error);
@@ -263,7 +261,7 @@ describe('GraphExtractionService.enqueueForReadyNote (#363)', () => {
 
   type Gate = (h: ReturnType<typeof harness>) => void;
   const gates: Array<[string, Gate]> = [
-    ['ai.graphEnabled is off', (h) => h.aiSettings.get.mockResolvedValueOnce({ graphEnabled: false })],
+    ['ai.graphEnabled is off', (h) => h.resolver.graphEnabled.mockResolvedValueOnce(false)],
     ['the owner lacks graph:write', (h) => h.prisma.user.findFirst.mockResolvedValueOnce(null)],
     [
       'auto-extract is off',

@@ -1,9 +1,7 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { SearchIndexStatus } from '@prisma/client';
 
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   SEARCH_DOC_TRANSCRIPT,
@@ -11,6 +9,7 @@ import {
   SEARCH_REASON_EMBEDDING_UNSUPPORTED,
   SEARCH_REASON_KEY_MISSING,
   SEARCH_REASON_NOT_CONFIGURED,
+  searchReasonFor,
   type SearchDocumentType,
 } from './job-types';
 import { SearchIndexService } from './search-index.service';
@@ -114,25 +113,22 @@ interface LibraryEntry {
   } | null;
 }
 
-/** What this deployment can embed with, if anything. */
+/** What this deployment can embed with for one caller, if anything. */
 interface EmbeddingCapabilityView {
   available: boolean;
   model: string | null;
   /** Set only when `available` is false. */
   reason: string | null;
   /**
-   * The vendor a key would belong to — resolved INDEPENDENTLY of the master
-   * switch, and `null` only when there is genuinely no vendor to name.
+   * Has the CALLER saved a key for the embeddings provider?
    *
-   * ⚠ This is issue #83's lesson, imported wholesale. `AiConfigService` used to
-   * blank the provider whenever AI was switched off, which meant the key form
-   * could not say which vendor it was collecting a key FOR, which meant nobody
-   * could put a key in place before an administrator finished the setup that
-   * needed one. A field that names a vendor must not also mean "you are allowed
-   * to proceed". Here it decides one thing only: which provider's row in
-   * `user_ai_credentials` `hasKey` looks at.
+   * ⚠ Reported INDEPENDENTLY of the master switch where the port can: "your
+   * administrator has not switched this on" and "you have not pasted a key" are
+   * different sentences with different fixes (issue #83's lesson). It comes
+   * from `KvoxAi.readiness`, which reads the caller's `user_ai_keys` row
+   * without decrypting anything.
    */
-  providerId: string | null;
+  hasKey: boolean;
 }
 
 @Injectable()
@@ -141,9 +137,7 @@ export class SearchIndexStatusService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly providers: AiProviderRegistry,
-    private readonly settings: AiSettingsService,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     // ⚠ THE SAME `SearchIndexService` THE PIPELINE ENQUEUES THROUGH. There is
     // deliberately no second enqueue path: priority, dedup and the payload
     // shape are decided in one place, so a job queued by this button is
@@ -165,8 +159,8 @@ export class SearchIndexStatusService {
    * learned nothing it can act on.
    */
   async status(userId: string): Promise<SearchIndexStatusResponse> {
-    const capability = await this.resolveCapability();
-    const hasKey = await this.callerHasKey(userId, capability.providerId);
+    const capability = await this.resolveCapability(userId);
+    const hasKey = capability.hasKey;
 
     const libraries = await Promise.all(
       SEARCH_DOCUMENT_TYPES.map(async (type) => ({
@@ -235,7 +229,7 @@ export class SearchIndexStatusService {
    * generate.
    */
   async requestIndex(userId: string): Promise<SearchIndexRequestResult> {
-    const capability = await this.resolveCapability();
+    const capability = await this.resolveCapability(userId);
 
     if (!capability.available) {
       throw new ConflictException({
@@ -255,7 +249,7 @@ export class SearchIndexStatusService {
       });
     }
 
-    if (!(await this.callerHasKey(userId, capability.providerId))) {
+    if (!capability.hasKey) {
       throw new ConflictException({
         message:
           'You have not saved an AI provider key. This deployment holds no key of its own — ' +
@@ -319,68 +313,31 @@ export class SearchIndexStatusService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Can this deployment embed anything at all, and with which model?
+   * Can this caller embed anything at all, and with which model?
    *
-   * THE SAME FOUR FACTS `SearchIndexHandler` checks before it embeds, in the
-   * same order, so the page's "unavailable, because…" is the reason the job
-   * would have written onto every document. It is deliberately NOT
-   * `AiConfigService.getConfig().available`: that boolean additionally requires
-   * a permitted CHAT model whose token budget resolves, which has nothing to do
-   * with embeddings — a deployment with an empty `allowedModels` can index
-   * perfectly well, and reporting it as unavailable here would disable a button
-   * that works.
+   * THE SAME FACTS `SearchIndexHandler` checks before it embeds, answered by
+   * the same call (`KvoxAi.readiness('search_embed')`), so the page's
+   * "unavailable, because…" is the reason the job would have written onto every
+   * document. It is deliberately NOT a chat-model check: a deployment with no
+   * chat model enabled can index perfectly well.
+   *
+   * `ai_key_missing` is the one reason that leaves the deployment AVAILABLE:
+   * the capability exists, the caller has not added a key.
    */
-  private async resolveCapability(): Promise<EmbeddingCapabilityView> {
-    const policy = await this.settings.get();
+  private async resolveCapability(userId: string): Promise<EmbeddingCapabilityView> {
+    const readiness = await this.ai.readiness(userId, 'search_embed');
+    const gate = searchReasonFor(readiness);
 
-    // Resolved before any branch, and without consulting `enabled` — see
-    // `providerId`'s own comment for why that independence is load-bearing.
-    const named = policy.provider ? this.providers.get(policy.provider) : undefined;
-    const providerId = named?.id ?? null;
-
-    const provider = policy.enabled ? named : undefined;
-
-    if (!provider) {
-      // Off, nobody chosen, or naming a vendor this build has never heard of
-      // (a rollback across the addition of a provider). One outcome
-      // deliberately: all three are an administrator's business, and there is
-      // nothing a reader could do differently between them.
+    if (gate === null || gate === SEARCH_REASON_KEY_MISSING) {
       return {
-        available: false,
-        model: null,
-        reason: SEARCH_REASON_NOT_CONFIGURED,
-        providerId,
+        available: true,
+        model: this.ai.embeddingCapability().model,
+        reason: null,
+        hasKey: gate === null,
       };
     }
 
-    const capability = provider.embedding;
-
-    if (!capability || typeof provider.embed !== 'function') {
-      // A perfectly good CHAT provider that declares no embeddings — an
-      // OpenAI-compatible gateway proxying only `/chat/completions` is the
-      // worked example. Notes generate; nothing can be semantically searched.
-      return {
-        available: false,
-        model: null,
-        reason: SEARCH_REASON_EMBEDDING_UNSUPPORTED,
-        providerId,
-      };
-    }
-
-    return { available: true, model: capability.model, reason: null, providerId };
-  }
-
-  /**
-   * Has the CALLER saved a key for the active provider?
-   *
-   * Read without decrypting anything (`hasKey` selects `{ id: true }`): a path
-   * that decrypts a credential to answer a capability question is a path one
-   * careless `return` away from publishing it.
-   */
-  private async callerHasKey(userId: string, providerId: string | null): Promise<boolean> {
-    if (!providerId) return false;
-
-    return this.credentials.hasKey(userId, providerId);
+    return { available: false, model: null, reason: gate, hasKey: readiness.hasKey };
   }
 
   /**
@@ -410,7 +367,7 @@ export class SearchIndexStatusService {
       // ⚠ `ownerId` IS IN THE QUERY, not applied afterwards. It is the column
       // the `(owner_id, status)` index exists for, and it means a row belonging
       // to another user is never read rather than being read and filtered —
-      // the same discipline `UserAiCredentialsService.list` states.
+      // the same per-owner read discipline the key store states.
       where: { ownerId: userId, documentType: type },
       select: {
         documentId: true,

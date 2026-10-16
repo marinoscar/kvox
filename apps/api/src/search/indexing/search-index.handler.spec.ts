@@ -2,7 +2,7 @@
 // `search.index` (issue #188, epic #165) — unit tests
 // =============================================================================
 //
-// The provider is mocked; the database is a SMALL IN-MEMORY SIMULATION rather
+// The `KvoxAi` port is stubbed; the database is a SMALL IN-MEMORY SIMULATION rather
 // than a bag of `jest.fn()`s returning fixed arrays, and that choice is what
 // makes the headline test mean anything. "Only the chunks whose text moved are
 // embedded" is a claim about an interaction between three things — the
@@ -28,7 +28,9 @@
 
 import { Job } from '@prisma/client';
 
-import { AiAuthError, RateLimitError } from '../../ai/ai-errors';
+import { AiAuthError, RateLimitError } from '../../ai-port/ai-errors';
+import type { KvoxAiReadiness } from '../../ai-port/kvox-ai';
+import type { KvoxAiReason } from '../../ai-port/kvox-ai-errors';
 import { chunkNote, fingerprintDocument, type Chunk } from '../chunking';
 import {
   SEARCH_INDEX_JOB_TYPE,
@@ -212,10 +214,8 @@ interface HarnessOptions {
   body?: string;
   title?: string;
   currentVersion?: number;
-  apiKey?: string | null;
-  policy?: Record<string, unknown>;
-  /** Simulates a chat-only provider: no `embedding` capability, no `embed`. */
-  noEmbedding?: boolean;
+  /** The readiness reason `KvoxAi.readiness` answers with; omit for a ready owner. */
+  reason?: KvoxAiReason;
   maxBatchSize?: number;
 }
 
@@ -233,38 +233,35 @@ function harness(options: HarnessOptions = {}) {
     body: options.body ?? fiveParagraphBody(UNCHANGED_MARKS),
   });
 
-  const embed = jest.fn(async (_ctx: unknown, request: { inputs: string[] }) => ({
-    vectors: request.inputs.map(() => vector()),
+  const embed = jest.fn(async (request: { texts: string[] }) => ({
+    vectors: request.texts.map(() => vector()),
     promptTokens: 10,
     model: MODEL,
   }));
 
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    settingsSchema: { safeParse: () => ({ success: true as const, data: {} }) },
-    embedding: options.noEmbedding
-      ? undefined
-      : {
-          model: MODEL,
-          dimensions: DIMENSIONS,
-          maxInputTokens: 8191,
-          maxBatchSize: options.maxBatchSize ?? 128,
-        },
-    embed: options.noEmbedding ? undefined : embed,
-  };
+  const readiness = jest.fn(
+    async (): Promise<KvoxAiReadiness> => ({
+      ok: options.reason === undefined,
+      reason: options.reason ?? null,
+      provider: 'openai',
+      model: MODEL,
+      source: 'default',
+      contextWindowTokens: null,
+      maxOutputTokens: null,
+      reasoningEffort: 'none',
+      hasKey: options.reason !== 'ai_key_missing',
+    }),
+  );
 
-  const providers = {
-    get: jest.fn((id: string) => (id === 'openai' ? provider : undefined)),
-  };
-
-  const settings = {
-    get: jest.fn(async () => options.policy ?? { enabled: true, provider: 'openai', providers: { openai: {} } }),
-  };
-
-  const credentials = {
-    getSecret: jest.fn(async () => (options.apiKey === undefined ? 'sk-test' : options.apiKey)),
-    markUsed: jest.fn(async () => undefined),
+  const ai = {
+    readiness,
+    embed,
+    embeddingCapability: () => ({
+      model: MODEL,
+      dimensions: DIMENSIONS,
+      maxInputTokens: 8191,
+      maxBatchSize: options.maxBatchSize ?? 128,
+    }),
   };
 
   const throttle = { registerProviderKey: jest.fn() };
@@ -274,14 +271,12 @@ function harness(options: HarnessOptions = {}) {
   const handler = new SearchIndexHandler(
     registry,
     db.prisma as never,
-    providers as never,
-    settings as never,
-    credentials as never,
+    ai as never,
     throttle as never,
     index as never,
   );
 
-  return { handler, db, provider, embed, providers, settings, credentials, throttle, index, registry };
+  return { handler, db, embed, readiness, throttle, index, registry };
 }
 
 function job(payload: unknown = { documentType: 'note', documentId: NOTE_ID }): Job {
@@ -338,12 +333,26 @@ describe('SearchIndexHandler', () => {
     expect(asHandler.nodeSecretBroker).toBeUndefined();
   });
 
+  it("embeds as the OWNER, under the search_embed feature, linked to the job, with no key in sight", async () => {
+    const { handler, embed, readiness } = harness();
+
+    await handler.process(job());
+
+    // The owner's readiness is asked first, for the registered feature.
+    expect(readiness).toHaveBeenCalledWith(OWNER_ID, 'search_embed');
+
+    const [request] = embed.mock.calls[0]!;
+
+    expect(request).toMatchObject({ userId: OWNER_ID, feature: 'search_embed', jobId: 'job-1' });
+    expect(Object.keys(request).sort()).toEqual(['feature', 'jobId', 'texts', 'userId']);
+  });
+
   // ---------------------------------------------------------------------------
   // The skips — permanent outcomes, recorded, RETURNING NORMALLY
   // ---------------------------------------------------------------------------
 
   it('records `ai_key_missing` and does NOT throw when the owner has no key', async () => {
-    const { handler, db, embed } = harness({ apiKey: null });
+    const { handler, db, embed } = harness({ reason: 'ai_key_missing' });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
@@ -351,10 +360,8 @@ describe('SearchIndexHandler', () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it('records `ai_not_configured` when no provider is chosen', async () => {
-    const { handler, db, embed } = harness({
-      policy: { enabled: true, provider: null, providers: {} },
-    });
+  it('records `ai_not_configured` when the deployment is not set up', async () => {
+    const { handler, db, embed } = harness({ reason: 'ai_not_configured' });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
@@ -362,23 +369,18 @@ describe('SearchIndexHandler', () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it('records `ai_not_configured` when the master switch is off', async () => {
-    const { handler, db } = harness({
-      policy: { enabled: false, provider: 'openai', providers: { openai: {} } },
-    });
+  it('records `ai_not_configured` for a reason that is neither the key nor the model', async () => {
+    const { handler, db } = harness({ reason: 'graph_disabled' });
 
     await handler.process(job());
 
     expect(db.state).toMatchObject({ status: 'skipped', reason: SEARCH_REASON_NOT_CONFIGURED });
   });
 
-  it('records `embedding_unsupported` for a chat-only provider', async () => {
-    // A provider with no `embedding` capability is a perfectly REGISTRABLE chat
-    // provider — an OpenAI-compatible gateway proxying only
-    // `/chat/completions` is the worked example in the interface's own header.
-    // Its deployment simply has no semantic search, which is a fact worth
+  it('records `embedding_unsupported` when the embeddings model cannot embed', async () => {
+    // The deployment simply has no semantic search, which is a fact worth
     // recording per document rather than a crash inside a queue job.
-    const { handler, db, embed } = harness({ noEmbedding: true });
+    const { handler, db, embed } = harness({ reason: 'model_lacks_capability' });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
@@ -448,7 +450,7 @@ describe('SearchIndexHandler', () => {
     await handler.process(job());
 
     expect(embed).toHaveBeenCalledTimes(1);
-    expect(embed.mock.calls[0]![1].inputs).toHaveLength(stored.produced.length);
+    expect(embed.mock.calls[0]![0].texts).toHaveLength(stored.produced.length);
   });
 
   // ---------------------------------------------------------------------------
@@ -490,8 +492,8 @@ describe('SearchIndexHandler', () => {
     // ONE request, carrying ONE input: the edited chunk. The other four kept
     // their vectors and cost the owner nothing.
     expect(embed).toHaveBeenCalledTimes(1);
-    expect(embed.mock.calls[0]![1].inputs).toHaveLength(1);
-    expect(embed.mock.calls[0]![1].inputs[0]).toBe(moved[0]!.text);
+    expect(embed.mock.calls[0]![0].texts).toHaveLength(1);
+    expect(embed.mock.calls[0]![0].texts[0]).toBe(moved[0]!.text);
 
     // The stale vector was dropped EXPLICITLY — nothing cascaded, because
     // nothing was deleted. This is the assertion that fails if somebody
@@ -538,7 +540,7 @@ describe('SearchIndexHandler', () => {
 
     // Five chunks at two per request: 2 + 2 + 1.
     expect(embed).toHaveBeenCalledTimes(3);
-    expect(embed.mock.calls.map((call) => call[1].inputs.length)).toEqual([2, 2, 1]);
+    expect(embed.mock.calls.map((call) => call[0].texts.length)).toEqual([2, 2, 1]);
   });
 
   // ---------------------------------------------------------------------------
@@ -580,8 +582,8 @@ describe('SearchIndexHandler', () => {
 
     // A full, correctly-counted batch — every vector the WRONG WIDTH. The
     // count check is not what should catch this.
-    embed.mockImplementationOnce(async (_ctx: unknown, request: { inputs: string[] }) => ({
-      vectors: request.inputs.map(() => new Array(768).fill(0.1) as number[]),
+    embed.mockImplementationOnce(async (request: { texts: string[] }) => ({
+      vectors: request.texts.map(() => new Array(768).fill(0.1) as number[]),
       promptTokens: 1,
       model: MODEL,
     }));

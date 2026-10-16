@@ -1,14 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { modelKnowledgeOf, resolveAllowedModel } from '../../ai/ai-model-resolution';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import { createProviderContext } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MAX_TITLE_CHARS } from '../dto/note.dto';
 import { aiProviderThrottleKey, NOTE_GENERATE_JOB_TYPE } from '../job-types';
-import { readAllowedModelEntries } from './allowed-models';
 import { deriveTitleFromBody, truncateTitle } from './title-derivation';
 import { ProviderThrottleService } from '@marinoscar/platform-api/jobs';
 
@@ -127,6 +122,8 @@ export interface TitleNoteInput {
    * case — they share one quota, which is why the key is not the job type.
    */
   jobType?: string;
+  /** The queue job this pass runs inside, so the platform span and usage row link to it. */
+  jobId?: string;
 }
 
 /**
@@ -188,9 +185,7 @@ export class NoteTitleService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly providers: AiProviderRegistry,
-    private readonly settings: AiSettingsService,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly throttle: ProviderThrottleService,
   ) {}
 
@@ -331,64 +326,18 @@ export class NoteTitleService {
     }
 
     // -------------------------------------------------------------------------
-    // Policy, provider, model, settings, key — the SAME resolution
-    // `note-generate.handler.ts` performs, in the same order, deliberately not
-    // a second shape of it. A model this deployment has withdrawn, or a key the
-    // user has since erased, must stop this pass exactly where it would stop a
-    // generation.
+    // Deployment switch, model, key — the SAME readiness `note-generate.handler.ts`
+    // asks, deliberately not a second shape of it. A model this deployment has
+    // withdrawn, or a key the user has since erased, must stop this pass exactly
+    // where it would stop a generation. The key itself is never loaded here: the
+    // platform resolves it inside the call.
     // -------------------------------------------------------------------------
-    const policy = await this.settings.get();
+    const readiness = await this.ai.readiness(ownerId, 'note_retitle', model);
 
-    if (!policy.enabled) {
-      this.logger.debug('AI is switched off for this deployment; rank 1 is skipped');
-
-      return null;
-    }
-
-    const provider = this.providers.get(providerId);
-
-    if (!provider) {
-      this.logger.debug(`Provider "${providerId}" is not in this build; rank 1 is skipped`);
-
-      return null;
-    }
-
-    const entry = readAllowedModelEntries(policy.providers, provider.id).find(
-      (allowed) => allowed.id === model,
-    );
-
-    if (!entry) {
-      this.logger.debug(`Model "${model}" is no longer permitted; rank 1 is skipped`);
-
-      return null;
-    }
-
-    const descriptor = resolveAllowedModel(entry, modelKnowledgeOf(provider));
-
-    if (!descriptor) {
-      this.logger.debug(`Model "${model}" has no resolvable limits; rank 1 is skipped`);
-
-      return null;
-    }
-
-    const settings = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-
-    if (!settings.success) {
+    if (!readiness.ok) {
       this.logger.debug(
-        `Provider "${provider.id}" is misconfigured for this deployment; rank 1 is skipped`,
+        `Titling is not ready for this note's owner (${readiness.reason ?? 'unknown'}); rank 1 is skipped`,
       );
-
-      return null;
-    }
-
-    const apiKey = await this.credentials.getSecret(ownerId, provider.id);
-
-    if (!apiKey) {
-      // The key was erased between the generation and now — an ordinary thing
-      // for a user to do, and not a failure of anything.
-      this.logger.debug(`No ${provider.label} key is saved for this note's owner; rank 1 is skipped`);
 
       return null;
     }
@@ -410,45 +359,42 @@ export class NoteTitleService {
       aiProviderThrottleKey(ownerId),
     );
 
-    const ctx = createProviderContext(apiKey, settings.data);
-
     let answer = '';
-    let finishReason: string | null = null;
 
-    for await (const event of provider.generate(ctx, {
+    // `reasoningEffort` is the port's per-call override of the deployment's effort.
+    const request: Parameters<KvoxAi['streamText']>[0] = {
+      userId: ownerId,
+      feature: 'note_retitle',
+      ...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
       model,
-      systemPrompt: TITLE_SYSTEM_PROMPT,
-      userContent: buildTitleUserContent(input.body),
-      // Never more than the model itself will produce, which is what
-      // `descriptor` is resolved for — a ceiling above a model's own is a
-      // request some vendors reject outright.
-      maxOutputTokens: Math.min(TITLE_MAX_OUTPUT_TOKENS, descriptor.maxOutputTokens),
-      timeoutMs: Math.min(TITLE_REQUEST_TIMEOUT_MS, policy.requestTimeoutMs),
-      // ⚠ `'none'`, NOT `policy.reasoningEffort`, AND THIS IS NOT AN OVERSIGHT.
+      system: TITLE_SYSTEM_PROMPT,
+      user: buildTitleUserContent(input.body),
+      // Never more than the model itself will produce — a ceiling above a
+      // model's own is a request some vendors reject outright.
+      maxOutputTokens: Math.min(TITLE_MAX_OUTPUT_TOKENS, readiness.maxOutputTokens ?? TITLE_MAX_OUTPUT_TOKENS),
+      // ⚠ DELIBERATELY SHORTER THAN THE DEPLOYMENT'S REQUEST TIMEOUT — see
+      // `TITLE_REQUEST_TIMEOUT_MS`. The port combines this with its own backstop,
+      // so the smaller of the two applies.
+      signal: AbortSignal.timeout(TITLE_REQUEST_TIMEOUT_MS),
+      // ⚠ `'none'`, NOT THE DEPLOYMENT'S EFFORT, AND THIS IS NOT AN OVERSIGHT.
       // Reasoning tokens are billed and counted as OUTPUT, drawn from the same
-      // ceiling as the answer (`AiGenerateRequest.reasoningEffort`'s own
-      // warning) — so at 32 tokens a thinking model would spend the entire
-      // budget thinking and emit no title at all. The deployment's effort
+      // ceiling as the answer — so at 32 tokens a thinking model would spend the
+      // entire budget thinking and emit no title at all. The deployment's effort
       // policy is a statement about generating a note's content, not about
       // naming it.
       reasoningEffort: 'none',
-    })) {
-      if (event.kind === 'delta') {
+    };
+
+    for await (const event of this.ai.streamText(request)) {
+      if (event.type === 'delta') {
         answer += event.text;
-
-        continue;
       }
-
-      finishReason = event.finishReason;
     }
 
-    if (finishReason === 'content_filter') {
-      // The provider declined to name it. That is an answer, and it is "no".
-      this.logger.debug(`Titling note ${input.noteId} was declined by ${provider.label}`);
-
-      return null;
-    }
-
+    // A content-policy refusal arrives as a thrown `AiRefusedError`, which
+    // `proposeWithModel` logs and turns into rank 2 — the provider declining to
+    // name a note is an answer, and it is "no".
+    //
     // The handful of tokens this costs is billed to the note's owner along with
     // the generation itself and is deliberately not recorded anywhere:
     // `note_generations` counts what produced the NOTE, and a per-note token

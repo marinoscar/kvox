@@ -22,11 +22,15 @@ import { decryptSecret } from '@marinoscar/platform-api/core';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { SMTP_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/notifications';
-import { AI_CREDENTIAL_PURPOSE } from '../../src/ai/ai-credential.constants';
 import { TRANSCRIPTION_CREDENTIAL_PURPOSE } from '../../src/transcription/transcription-credential.constants';
 import '../../src/kvox.manifest';
 import '../../src/app-registrations/registrations';
 import fixture from '../fixtures/credentials/legacy-kvox-ciphertext.json';
+
+// The purpose the retired AI module wrote its rows under. Persisted, so it is pinned
+// here as a literal: the fixture's ciphertext decrypts only under it, and the retired
+// module's constant (deleted with `src/ai/` in #477) is not what this spec proves.
+const AI_CREDENTIAL_PURPOSE = 'ai-key';
 
 // The platform cipher caches its master key at module scope on first use, and
 // nothing in this file touches it before the tests run. Set the fixture's key

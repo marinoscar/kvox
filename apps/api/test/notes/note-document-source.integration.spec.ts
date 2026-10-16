@@ -23,14 +23,7 @@
 // =============================================================================
 
 import { Readable } from 'node:stream';
-import { z } from 'zod';
-
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-} from '../../src/ai/providers/ai-provider.interface';
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import { NoteSourceService } from '../../src/notes/generation/note-source.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
@@ -279,44 +272,17 @@ function createPrisma(world: World): Record<string, unknown> {
   return prisma;
 }
 
-class FakeProvider implements AiProvider<unknown> {
-  readonly id = 'openai';
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
-    ],
-    streaming: true as const,
-    // #78: this fake implements no `listModels`, so it must not claim to — the
-    // registry refuses that combination at boot.
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
+/**
+ * ⚠ CAPTURED SO THE TEST CAN LOOK AT IT. Whether the model was handed the
+ * extracted text or the raw PDF bytes is visible in exactly one place, and this
+ * is it: the request the port received, serialised.
+ */
+function capturingAi(world: World): FakeKvoxAi {
+  return new FakeKvoxAi().setStreamHandler((request) => {
+    world.prompts.push(JSON.stringify({ system: request.system, user: request.user }));
 
-  constructor(private readonly world: World) {}
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  async *generate(_ctx: unknown, request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    // ⚠ CAPTURED SO THE TEST CAN LOOK AT IT. Whether the model was handed the
-    // extracted text or the raw PDF bytes is visible in exactly one place, and
-    // this is it.
-    this.world.prompts.push(JSON.stringify(request));
-
-    yield { kind: 'delta', text: NOTE_TEXT };
-    yield {
-      kind: 'done',
-      finishReason: 'stop',
-      usage: { promptTokens: 100, completionTokens: 40 },
-    };
-  }
+    return { deltas: [NOTE_TEXT], usage: { inputTokens: 100, outputTokens: 40 } };
+  });
 }
 
 function harness(world: World) {
@@ -349,30 +315,12 @@ function harness(world: World) {
     managed,
   );
 
-  const providers = new AiProviderRegistry();
-  providers.register(new FakeProvider(world));
-
   const generate = new NoteGenerateHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
-    {
-      get: jest.fn().mockResolvedValue({
-        enabled: true,
-        providers: {
-          openai: {
-            baseUrl: 'https://api.openai.com/v1',
-            allowedModels: ['gpt-4o'],
-            defaultModel: 'gpt-4o',
-          },
-        },
-        maxInputTokens: 100_000,
-        maxOutputTokens: 4_000,
-        requestTimeoutMs: 60_000,
-        maxDocumentBytes: 26_214_400,
-      }),
-    } as never,
-    { getSecret: jest.fn().mockResolvedValue('sk-test') } as never,
+    capturingAi(world),
+    // The deployment's two spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`).
+    { get: jest.fn().mockResolvedValue({ maxInputTokens: 100_000, maxOutputTokens: 4_000 }) } as never,
     new NoteGenerationService(
       prisma as never,
       { notify: jest.fn().mockResolvedValue(undefined) } as never,

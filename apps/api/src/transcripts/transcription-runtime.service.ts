@@ -40,11 +40,8 @@ import { Injectable } from '@nestjs/common';
 
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { ProviderAuthError } from '../transcription/errors';
-import {
-  createProviderContext,
-  type TranscriptionProvider,
-  type TranscriptionProviderContext,
-} from '../transcription/providers/transcription-provider.interface';
+import { createProviderContext, type TranscriptionProviderContext } from '../transcription/provider-context';
+import type { TranscriptionProvider } from '../transcription/providers/transcription-provider.interface';
 import { TranscriptionProviderRegistry } from '../transcription/transcription-provider.registry';
 import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
 import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';

@@ -1,5 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 
+import type { KvoxAiReadiness } from '../../ai-port/kvox-ai';
+import type { KvoxAiReason } from '../../ai-port/kvox-ai-errors';
+
 import { SearchIndexStatusService } from './search-index-status.service';
 import { SEARCH_INDEX_REQUEST_CAP } from './dto/search-index-status.dto';
 import {
@@ -112,44 +115,47 @@ function buildPrisma(data: { transcripts?: FakeDocument[]; notes?: FakeDocument[
 
 function buildService(options: {
   prisma: ReturnType<typeof buildPrisma>;
-  enabled?: boolean;
-  provider?: string | null;
-  embedding?: boolean;
+  /** The readiness reason `KvoxAi.readiness` answers with; omit for a ready caller. */
+  reason?: KvoxAiReason;
+  /** Whether the caller has a key; defaults to false only for `ai_key_missing`. */
   hasKey?: boolean;
 }) {
-  const {
-    prisma,
-    enabled = true,
-    provider = 'openai',
-    embedding = true,
-    hasKey = true,
-  } = options;
+  const { prisma, reason } = options;
+  const hasKey = options.hasKey ?? reason !== 'ai_key_missing';
 
-  const registered = {
-    id: 'openai',
-    label: 'OpenAI',
-    embedding: embedding ? { model: MODEL, dimensions: 1536, maxInputTokens: 8191, maxBatchSize: 128 } : undefined,
-    embed: embedding ? jest.fn() : undefined,
+  const readiness = jest.fn(
+    async (): Promise<KvoxAiReadiness> => ({
+      ok: reason === undefined,
+      reason: reason ?? null,
+      provider: 'openai',
+      model: MODEL,
+      source: 'default',
+      contextWindowTokens: null,
+      maxOutputTokens: null,
+      reasoningEffort: 'none',
+      hasKey,
+    }),
+  );
+
+  const ai = {
+    readiness,
+    embeddingCapability: () => ({
+      model: MODEL,
+      dimensions: 1536,
+      maxInputTokens: 8191,
+      maxBatchSize: 128,
+    }),
   };
 
-  const providers = { get: jest.fn((id: string) => (id === 'openai' ? registered : undefined)) };
-  const settings = { get: jest.fn(async () => ({ enabled, provider, providers: {} })) };
-  const credentials = { hasKey: jest.fn(async () => hasKey) };
   // Typed with its real positional signature so `mock.calls[n][1]` is a string
   // rather than `never` — the assertions below read the queued document ids.
   const index = {
     enqueue: jest.fn(async (_type: string, _id: string, _reason: string) => undefined),
   };
 
-  const service = new SearchIndexStatusService(
-    prisma as never,
-    providers as never,
-    settings as never,
-    credentials as never,
-    index as never,
-  );
+  const service = new SearchIndexStatusService(prisma as never, ai as never, index as never);
 
-  return { service, index, credentials, providers, settings };
+  return { service, index, readiness };
 }
 
 describe('SearchIndexStatusService', () => {
@@ -320,7 +326,7 @@ describe('SearchIndexStatusService', () => {
 
     it('says `ai_key_missing` when the deployment is ready and the CALLER is not', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service } = buildService({ prisma, hasKey: false });
+      const { service } = buildService({ prisma, reason: 'ai_key_missing' });
 
       await expect(service.status('user-1')).resolves.toMatchObject({
         available: true,
@@ -331,7 +337,7 @@ describe('SearchIndexStatusService', () => {
 
     it('says `ai_not_configured` when AI is switched off, and still reports the key', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service } = buildService({ prisma, enabled: false });
+      const { service } = buildService({ prisma, reason: 'ai_not_configured', hasKey: true });
 
       // ⚠ `hasKey` stays TRUE. Issue #83's lesson: a user must be able to see
       // that their key is in place before an administrator finishes the setup.
@@ -343,9 +349,9 @@ describe('SearchIndexStatusService', () => {
       });
     });
 
-    it('says `embedding_unsupported` for a chat-only provider', async () => {
+    it('says `embedding_unsupported` when the embeddings model cannot embed', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service } = buildService({ prisma, embedding: false });
+      const { service } = buildService({ prisma, reason: 'model_lacks_capability' });
 
       await expect(service.status('user-1')).resolves.toMatchObject({
         available: false,
@@ -355,7 +361,7 @@ describe('SearchIndexStatusService', () => {
 
     it('never throws for a deployment that has chosen no provider at all', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service } = buildService({ prisma, provider: null });
+      const { service } = buildService({ prisma, reason: 'ai_not_configured', hasKey: false });
 
       await expect(service.status('user-1')).resolves.toMatchObject({
         available: false,
@@ -456,7 +462,7 @@ describe('SearchIndexStatusService', () => {
 
     it('refuses with `ai_key_missing` — and queues NOTHING — when the caller has no key', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service, index } = buildService({ prisma, hasKey: false });
+      const { service, index } = buildService({ prisma, reason: 'ai_key_missing' });
 
       await expect(service.requestIndex('user-1')).rejects.toBeInstanceOf(ConflictException);
       expect(index.enqueue).not.toHaveBeenCalled();
@@ -470,7 +476,7 @@ describe('SearchIndexStatusService', () => {
 
     it('refuses with `ai_not_configured` when the deployment cannot embed at all', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service, index } = buildService({ prisma, enabled: false });
+      const { service, index } = buildService({ prisma, reason: 'ai_not_configured', hasKey: true });
 
       await service.requestIndex('user-1').catch((error: ConflictException) => {
         expect(error.getResponse()).toMatchObject({
@@ -480,9 +486,9 @@ describe('SearchIndexStatusService', () => {
       expect(index.enqueue).not.toHaveBeenCalled();
     });
 
-    it('refuses with `embedding_unsupported` for a chat-only provider', async () => {
+    it('refuses with `embedding_unsupported` when the embeddings model cannot embed', async () => {
       const prisma = buildPrisma({ transcripts: [doc({ id: 't-1' })] });
-      const { service, index } = buildService({ prisma, embedding: false });
+      const { service, index } = buildService({ prisma, reason: 'model_lacks_capability' });
 
       await service.requestIndex('user-1').catch((error: ConflictException) => {
         expect(error.getResponse()).toMatchObject({

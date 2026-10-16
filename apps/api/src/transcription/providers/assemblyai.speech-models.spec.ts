@@ -1,6 +1,6 @@
 import { DEFAULT_SYSTEM_SETTINGS } from '../../settings/registry/default-system-settings';
 import { TranscriptionProviderRegistry } from '../transcription-provider.registry';
-import { createProviderContext } from './transcription-provider.interface';
+import { createProviderContext } from '../provider-context';
 import {
   ASSEMBLYAI_DEFAULT_SPEECH_MODELS,
   AssemblyAiProvider,

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { emailModule } from '../platform/email/email.config';
 import { AdminOnboardingController } from './admin-onboarding.controller';
 import { OnboardingController } from './onboarding.controller';
@@ -30,8 +29,8 @@ import { OnboardingService } from './onboarding.service';
 // green over a disabled button — and the disagreement would be invisible until
 // a user reported it.
 //
-// So: `AiModule` for the per-caller `AiConfigService`, `SettingsModule` for the AI and backup
-// policies plus the caller's own settings, `emailModule` (the platform email slice) for
+// So: `KVOX_AI` (the global `KvoxAiModule`, issue #475) for the per-caller AI readiness,
+// `SettingsModule` for the backup policy plus the caller's own settings, `emailModule` (the platform email slice) for
 // the admin-only email `describeForAdmin` view (the platform's global
 // notifications slice supplies `PushConfigService`, #470).
 // `PrismaService` needs no import — `PrismaModule` is `@Global` — and is used
@@ -51,7 +50,6 @@ import { OnboardingService } from './onboarding.service';
 
 @Module({
   imports: [
-    AiModule,
     emailModule,
   ],
   controllers: [OnboardingController, AdminOnboardingController],

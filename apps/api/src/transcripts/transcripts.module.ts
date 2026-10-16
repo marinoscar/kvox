@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { ObjectProcessingModule } from '@marinoscar/platform-api/storage';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
@@ -116,12 +115,8 @@ import { TranscriptsUserDataHooks } from './transcripts.user-data.hooks';
     // anything from here — the handler reads `transcripts` through Prisma
     // directly, precisely so this import needs no `forwardRef`.
     SearchIndexingModule,
-    // AI name correction (#328/#330, epic #326): the provider registry, the
-    // policy, the capability probe and the per-user key, for the
-    // `transcript.name_check` job and its request-time pre-flight. ONE-WAY, like
-    // the import above — `AiModule` imports nothing from here, and `NotesModule`
-    // (which imports this module) is never imported back, so no `forwardRef`.
-    AiModule,
+    // AI name correction (#328/#330, epic #326) reaches a model through `KVOX_AI`
+    // (the global `KvoxAiModule`, issue #475), so there is nothing to import.
   ],
   controllers: [TranscriptsController, TranscriptNameChecksController],
   providers: [

@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { ProviderAuthError, ProviderInputError } from '../errors';
 import { MAX_SEGMENT_MS } from '../normalized-transcript';
 import { TranscriptionProviderRegistry } from '../transcription-provider.registry';
-import { createProviderContext } from './transcription-provider.interface';
+import { createProviderContext } from '../provider-context';
 import {
   AssemblyAiProvider,
   normalizeAssemblyAiTranscript,

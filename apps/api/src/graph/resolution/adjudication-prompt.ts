@@ -20,7 +20,7 @@
 
 import { z } from 'zod';
 
-import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
+import type { JsonSchema } from '../../ai-port/kvox-ai';
 
 export const ADJUDICATION_SCHEMA_NAME = 'kg_adjudication';
 export const ADJUDICATION_BATCH_SIZE = 20;

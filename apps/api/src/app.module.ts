@@ -48,6 +48,7 @@ import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { AiPortModule } from './ai-port/ai-port.module';
+import { KvoxAiModule } from './ai-port/kvox-ai.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
@@ -258,6 +259,9 @@ import configuration from './config/configuration';
     // This app's side of the AI slice: `/api/ai-tasks/config` (the capability probe that
     // used to be `GET /api/ai/config`) and `/api/ai-tasks/settings` (task models).
     AiPortModule,
+    // The `KvoxAi` port (`KVOX_AI`, #475): the one way a feature reaches a model, over
+    // the platform `AiService`. Global; BEFORE the features that inject it.
+    KvoxAiModule,
 
     // AI (#47, epic #45): the provider framework, the OpenAI provider, the
     // deployment policy surface, the PER-USER credential surface and the

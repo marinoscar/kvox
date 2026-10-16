@@ -5,10 +5,10 @@
 // Four assertions in this file are the ones a later refactor is most likely to
 // break without noticing:
 //
-//   1. THE BUDGET IS CHECKED BEFORE THE PROVIDER IS TOUCHED. Asserted with the
-//      REAL `OpenAiProvider` over a fetch seam that fails the test if it is
-//      ever invoked — a check that ran "during" would still refuse the job, but
-//      the user would already have been billed for the input tokens.
+//   1. THE BUDGET IS CHECKED BEFORE THE PROVIDER IS TOUCHED. Asserted by the
+//      `KvoxAi` fake recording no `streamText` call — a check that ran "during"
+//      would still refuse the job, but the user would already have been billed
+//      for the input tokens.
 //   2. EVERY DOMAIN CLASS RETURNS, IT DOES NOT THROW. A thrown domain error
 //      spends the generation's single attempt rediscovering a fact that cannot
 //      change.
@@ -18,24 +18,18 @@
 //      another account's notes behind its own exhausted quota.
 // =============================================================================
 
-import { z } from 'zod';
-
-import { AiInputError } from '../../ai/ai-errors';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-  AiProviderContext,
-} from '../../ai/providers/ai-provider.interface';
-import { OPENAI_PROVIDER_ID, OpenAiProvider } from '../../ai/providers/openai.provider';
+import { AiInputError, AiRefusedError } from '../../ai-port/ai-errors';
+import {
+  FakeKvoxAi,
+  notReadyReadiness,
+  readyReadiness,
+} from '../../ai-port/testing/fake-kvox-ai';
 import { NOTE_GENERATE_JOB_TYPE, aiProviderThrottleKey } from '../job-types';
 import {
   NOTE_GENERATE_MAX_RUNTIME_MS,
   NoteGenerateHandler,
   classify,
   describe as describeError,
-  readAllowedModelEntries,
 } from './note-generate.handler';
 import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError, resolveJobProfile, resolveMaxAttempts } from '@marinoscar/platform-api/jobs';
 
@@ -46,18 +40,10 @@ import { type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimit
 const OWNER_A = 'user-a';
 const OWNER_B = 'user-b';
 
-const policy = {
-  enabled: true,
-  providers: {
-    openai: {
-      baseUrl: 'https://api.openai.com/v1',
-      allowedModels: ['gpt-4o'],
-      defaultModel: 'gpt-4o',
-    },
-  },
+/** The deployment's two spend caps, as `ai.maxInputTokens` / `ai.maxOutputTokens`. */
+const caps = {
   maxInputTokens: 100_000,
   maxOutputTokens: 4_000,
-  requestTimeoutMs: 60_000,
 };
 
 const template = {
@@ -84,7 +70,7 @@ function generationRow(overrides: Record<string, unknown> = {}): Record<string, 
     sourceTranscriptId: 'transcript-1',
     sourceNoteId: null,
     sourceObjectId: null,
-    providerId: OPENAI_PROVIDER_ID,
+    providerId: 'openai',
     model: 'gpt-4o',
     content: '',
     lastEventId: 0,
@@ -103,65 +89,15 @@ function generationRow(overrides: Record<string, unknown> = {}): Record<string, 
 const job = (payload: unknown = { generationId: 'gen-1' }) =>
   ({ id: 'job-1', payload }) as never;
 
-/** A provider whose stream is scripted by the test. */
-class FakeProvider implements AiProvider<unknown> {
-  readonly id = OPENAI_PROVIDER_ID;
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      {
-        id: 'gpt-4o',
-        label: 'GPT-4o',
-        contextWindowTokens: 128_000,
-        maxOutputTokens: 16_000,
-        structuredOutput: false,
-        toolCalling: false,
-      },
-    ],
-    streaming: true as const,
-    // #78: the fake implements no `listModels`, so it declares none.
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
-
-  calls = 0;
-  lastRequest: AiGenerateRequest | null = null;
-
-  constructor(
-    private readonly script: () => AsyncIterable<AiDelta>,
-  ) {}
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  generate(_ctx: AiProviderContext<unknown>, request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    this.calls += 1;
-    this.lastRequest = request;
-
-    return this.script();
-  }
-}
-
-/** The three deltas and a clean `done`. */
-async function* helloStream(): AsyncIterable<AiDelta> {
-  yield { kind: 'delta', text: '# Kestrel\n\n' };
-  yield { kind: 'delta', text: 'We ship on Friday.' };
-  yield {
-    kind: 'done',
-    finishReason: 'stop',
-    usage: { promptTokens: 120, completionTokens: 8 },
-  };
-}
+/** The three deltas and a clean `done` with the provider's own counts. */
+const HELLO = {
+  deltas: ['# Kestrel\n\n', 'We ship on Friday.'],
+  usage: { inputTokens: 120, outputTokens: 8 },
+};
 
 interface Harness {
   handler: NoteGenerateHandler;
-  providers: AiProviderRegistry;
+  ai: FakeKvoxAi;
   throttle: ProviderThrottleService;
   generations: {
     loadForJob: jest.Mock;
@@ -172,20 +108,17 @@ interface Harness {
     markFailed: jest.Mock;
   };
   sources: { resolve: jest.Mock };
-  credentials: { getSecret: jest.Mock };
   settings: { get: jest.Mock };
   prisma: { noteTemplate: { findUnique: jest.Mock } };
 }
 
 function harness(options: {
-  provider?: AiProvider<unknown>;
+  ai?: FakeKvoxAi;
   generation?: Record<string, unknown>;
-  policyOverride?: Record<string, unknown>;
-  apiKey?: string | null;
+  capsOverride?: Record<string, unknown>;
   sourceText?: string;
 } = {}): Harness {
-  const providers = new AiProviderRegistry();
-  providers.register(options.provider ?? new FakeProvider(helloStream));
+  const ai = options.ai ?? new FakeKvoxAi().queueStream(HELLO);
 
   const throttle = new ProviderThrottleService({
     get: () => undefined,
@@ -208,14 +141,8 @@ function harness(options: {
     }),
   };
 
-  const credentials = {
-    getSecret: jest
-      .fn()
-      .mockResolvedValue(options.apiKey === undefined ? 'sk-test' : options.apiKey),
-  };
-
   const settings = {
-    get: jest.fn().mockResolvedValue({ ...policy, ...(options.policyOverride ?? {}) }),
+    get: jest.fn().mockResolvedValue({ ...caps, ...(options.capsOverride ?? {}) }),
   };
 
   const prisma = {
@@ -225,15 +152,19 @@ function harness(options: {
   const handler = new NoteGenerateHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
+    ai,
     settings as never,
-    credentials as never,
     generations as never,
     sources as never,
     throttle,
   );
 
-  return { handler, providers, throttle, generations, sources, credentials, settings, prisma };
+  return { handler, ai, throttle, generations, sources, settings, prisma };
+}
+
+/** The single `streamText` request the handler made. */
+function streamRequest(ai: FakeKvoxAi): { system: string; user: string; maxOutputTokens?: number; model?: string | null } {
+  return ai.lastCall('streamText')?.request as never;
 }
 
 // -----------------------------------------------------------------------------
@@ -326,38 +257,67 @@ describe('NoteGenerateHandler — registration and profile', () => {
 
 describe('NoteGenerateHandler — a successful generation', () => {
   it('streams, flushes and commits the full text', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler, generations } = harness({ provider });
+    const { handler, ai, generations } = harness();
 
     await handler.process(job());
 
     expect(generations.markStreaming).toHaveBeenCalled();
-    expect(provider.calls).toBe(1);
+    expect(ai.callsOf('streamText')).toHaveLength(1);
     expect(generations.commit).toHaveBeenCalledWith(
       expect.objectContaining({ content: '# Kestrel\n\nWe ship on Friday.' }),
     );
     expect(generations.markFailed).not.toHaveBeenCalled();
   });
 
-  it('asks the provider for the policy-narrowed output allowance and timeout', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler } = harness({ provider });
+  it('commits the provider\'s own token counts, and an estimate when it reported none', async () => {
+    const reported = harness();
+    await reported.handler.process(job());
+    expect(reported.generations.commit).toHaveBeenCalledWith(
+      expect.objectContaining({ promptTokens: 120, completionTokens: 8, providerLabel: 'OpenAI' }),
+    );
+
+    // An absent usage is `null`, never `0`: the prompt falls back to this build's
+    // estimate and the completion stays unreported.
+    const silent = harness({ ai: new FakeKvoxAi().queueStream({ deltas: ['Some text.'] }) });
+    await silent.handler.process(job());
+    const committed = silent.generations.commit.mock.calls[0][0];
+    expect(committed.promptTokens).toBeGreaterThan(0);
+    expect(committed.completionTokens).toBeNull();
+  });
+
+  it('passes the feature, the job id, the user and the generation\'s model to the port', async () => {
+    const { handler, ai } = harness();
 
     await handler.process(job());
 
-    expect(provider.lastRequest?.maxOutputTokens).toBe(4_000);
-    expect(provider.lastRequest?.timeoutMs).toBe(60_000);
-    expect(provider.lastRequest?.model).toBe('gpt-4o');
+    expect(ai.lastCall('streamText')).toMatchObject({
+      userId: OWNER_A,
+      feature: 'note_generate',
+      jobId: 'job-1',
+      model: 'gpt-4o',
+    });
+    expect(ai.lastCall('readiness')).toMatchObject({
+      userId: OWNER_A,
+      feature: 'note_generate',
+      model: 'gpt-4o',
+    });
+  });
+
+  it('asks the port for the policy-narrowed output allowance', async () => {
+    const { handler, ai } = harness();
+
+    await handler.process(job());
+
+    expect(streamRequest(ai).maxOutputTokens).toBe(4_000);
   });
 
   it('sends the template in the system role and the source in the user role', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler } = harness({ provider, sourceText: 'Ana: we ship on Friday.' });
+    const { handler, ai } = harness({ sourceText: 'Ana: we ship on Friday.' });
 
     await handler.process(job());
 
-    expect(provider.lastRequest?.systemPrompt).toContain('Write meeting notes.');
-    expect(provider.lastRequest?.userContent).toContain('Ana: we ship on Friday.');
+    expect(streamRequest(ai).system).toContain('Write meeting notes.');
+    expect(streamRequest(ai).user).toContain('Ana: we ship on Friday.');
   });
 
   // -----------------------------------------------------------------------------
@@ -370,8 +330,7 @@ describe('NoteGenerateHandler — a successful generation', () => {
   // template, two consumers — never re-derived at the second site.
 
   it('passes the template\'s bodyFormat into assemblePrompt as templateBodyFormat', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler, prisma } = harness({ provider });
+    const { handler, ai, prisma } = harness();
 
     prisma.noteTemplate.findUnique.mockResolvedValue({ ...template, bodyFormat: 'plain_text' });
 
@@ -380,13 +339,12 @@ describe('NoteGenerateHandler — a successful generation', () => {
     // `plain_text` instructions steer the model away from Markdown syntax
     // (`prompt.spec.ts` pins the exact wording); this just pins that the value
     // travelled from the template row into the assembled prompt at all.
-    expect(provider.lastRequest?.systemPrompt).not.toContain('in Markdown');
-    expect(provider.lastRequest?.systemPrompt).toContain('no Markdown syntax');
+    expect(streamRequest(ai).system).not.toContain('in Markdown');
+    expect(streamRequest(ai).system).toContain('no Markdown syntax');
   });
 
   it('passes the template\'s bodyFormat into commit, unchanged', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler, generations, prisma } = harness({ provider });
+    const { handler, generations, prisma } = harness();
 
     prisma.noteTemplate.findUnique.mockResolvedValue({ ...template, bodyFormat: 'plain_text' });
 
@@ -398,8 +356,7 @@ describe('NoteGenerateHandler — a successful generation', () => {
   });
 
   it('a template row with no bodyFormat (a build from before #334) reads as markdown in commit', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler, generations } = harness({ provider });
+    const { handler, generations } = harness();
 
     await handler.process(job());
 
@@ -447,24 +404,15 @@ describe('NoteGenerateHandler — a successful generation', () => {
 // -----------------------------------------------------------------------------
 
 describe('NoteGenerateHandler — the token budget', () => {
+  // A deployment ceiling far under the assembled prompt.
+  const OVER = { capsOverride: { maxInputTokens: 256 }, sourceText: 'word '.repeat(5_000) };
+
   it('refuses an over-budget prompt WITHOUT touching the provider', async () => {
-    // The REAL OpenAI provider over a fetch seam that fails the test if called.
-    const fetchSeam = jest.fn(() => {
-      throw new Error('the provider must not be called for an over-budget prompt');
-    });
-
-    const provider = new OpenAiProvider(new AiProviderRegistry(), fetchSeam as never);
-
-    const { handler, generations } = harness({
-      provider,
-      // A deployment ceiling far under the assembled prompt.
-      policyOverride: { maxInputTokens: 256 },
-      sourceText: 'word '.repeat(5_000),
-    });
+    const { handler, ai, generations } = harness(OVER);
 
     await handler.process(job());
 
-    expect(fetchSeam).not.toHaveBeenCalled();
+    expect(ai.callsOf('streamText')).toHaveLength(0);
     expect(generations.markFailed).toHaveBeenCalledWith(
       expect.objectContaining({ errorClass: 'refusal', category: 'Too large' }),
     );
@@ -473,15 +421,7 @@ describe('NoteGenerateHandler — the token budget', () => {
   });
 
   it('names the actual and the permitted sizes in the reason', async () => {
-    const fetchSeam = jest.fn(() => {
-      throw new Error('must not be called');
-    });
-
-    const { handler, generations } = harness({
-      provider: new OpenAiProvider(new AiProviderRegistry(), fetchSeam as never),
-      policyOverride: { maxInputTokens: 256 },
-      sourceText: 'word '.repeat(5_000),
-    });
+    const { handler, generations } = harness(OVER);
 
     await handler.process(job());
 
@@ -489,19 +429,28 @@ describe('NoteGenerateHandler — the token budget', () => {
 
     expect(reason).toMatch(/\d/);
     expect(reason).toContain('gpt-4o');
+    expect(reason).toContain('256');
   });
 
   it('never marks the generation streaming when the budget refuses', async () => {
-    const fetchSeam = jest.fn();
-    const { handler, generations } = harness({
-      provider: new OpenAiProvider(new AiProviderRegistry(), fetchSeam as never),
-      policyOverride: { maxInputTokens: 256 },
-      sourceText: 'word '.repeat(5_000),
-    });
+    const { handler, generations } = harness(OVER);
 
     await handler.process(job());
 
     expect(generations.markStreaming).not.toHaveBeenCalled();
+  });
+
+  it('refuses, before any call, a model with no recorded context window', async () => {
+    const ai = new FakeKvoxAi().setReadiness({ contextWindowTokens: null, maxOutputTokens: null });
+    const { handler, generations } = harness({ ai });
+
+    await expect(handler.process(job())).resolves.toBeUndefined();
+
+    expect(ai.callsOf('streamText')).toHaveLength(0);
+    expect(generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'refusal' }),
+    );
+    expect(generations.markFailed.mock.calls[0][0].reason).toContain('context window');
   });
 });
 
@@ -511,17 +460,21 @@ describe('NoteGenerateHandler — the token budget', () => {
 
 describe('NoteGenerateHandler — domain failures return, they do not throw', () => {
   it('AiAuthError: no stored key for this user', async () => {
-    const { handler, generations } = harness({ apiKey: null });
+    const { handler, ai, generations } = harness({
+      ai: new FakeKvoxAi().setNotReady('ai_key_missing'),
+    });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
     expect(generations.markFailed).toHaveBeenCalledWith(
       expect.objectContaining({ errorClass: 'auth', category: 'Your API key' }),
     );
+    expect(ai.callsOf('streamText')).toHaveLength(0);
   });
 
   it('AiInputError: a model this deployment does not permit', async () => {
     const { handler, generations } = harness({
+      ai: new FakeKvoxAi().setReadiness(notReadyReadiness('model_not_permitted')),
       generation: generationRow({ model: 'gpt-5-ultra' }),
     });
 
@@ -534,7 +487,9 @@ describe('NoteGenerateHandler — domain failures return, they do not throw', ()
   });
 
   it('AiInputError: AI switched off for the deployment', async () => {
-    const { handler, generations } = harness({ policyOverride: { enabled: false } });
+    const { handler, generations } = harness({
+      ai: new FakeKvoxAi().setNotReady('ai_not_configured'),
+    });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
     expect(generations.markFailed).toHaveBeenCalledWith(
@@ -551,17 +506,12 @@ describe('NoteGenerateHandler — domain failures return, they do not throw', ()
     expect(generations.markFailed.mock.calls[0][0].reason).toContain('Meeting notes');
   });
 
-  it('AiRefusedError: a content-filter finish reason is not a note', async () => {
-    async function* filtered(): AsyncIterable<AiDelta> {
-      yield { kind: 'delta', text: 'I cannot' };
-      yield {
-        kind: 'done',
-        finishReason: 'content_filter',
-        usage: { promptTokens: 10, completionTokens: 2 },
-      };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(filtered) });
+  it('AiRefusedError: a content-policy refusal is not a note', async () => {
+    const ai = new FakeKvoxAi().queueStream({
+      deltas: ['I cannot'],
+      failAfter: new AiRefusedError('The provider declined to answer.'),
+    });
+    const { handler, generations } = harness({ ai });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 
@@ -572,19 +522,13 @@ describe('NoteGenerateHandler — domain failures return, they do not throw', ()
   });
 
   it('AiRefusedError: an empty completion is never committed as a ready note', async () => {
-    async function* empty(): AsyncIterable<AiDelta> {
-      yield {
-        kind: 'done',
-        finishReason: 'stop',
-        usage: { promptTokens: 10, completionTokens: 0 },
-      };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(empty) });
+    const { handler, generations } = harness({ ai: new FakeKvoxAi().queueStream({ deltas: [] }) });
 
     await expect(handler.process(job())).resolves.toBeUndefined();
     expect(generations.commit).not.toHaveBeenCalled();
-    expect(generations.markFailed).toHaveBeenCalled();
+    expect(generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'refusal', category: 'Declined by the provider' }),
+    );
   });
 
   it('a domain failure raised by source resolution is recorded, not thrown', async () => {
@@ -599,13 +543,8 @@ describe('NoteGenerateHandler — domain failures return, they do not throw', ()
 
 describe('NoteGenerateHandler — rate limits and unexpected errors', () => {
   it('rethrows a 429 and marks NOTHING failed', async () => {
-    async function* limited(): AsyncIterable<AiDelta> {
-      throw new RateLimitError('Rate limited by the provider', 30_000);
-      // eslint-disable-next-line no-unreachable
-      yield { kind: 'delta', text: 'unreachable' };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(limited) });
+    const ai = new FakeKvoxAi().queueStreamError(new RateLimitError('Rate limited by the provider', 30_000));
+    const { handler, generations } = harness({ ai });
 
     await expect(handler.process(job())).rejects.toBeInstanceOf(RateLimitError);
 
@@ -614,13 +553,8 @@ describe('NoteGenerateHandler — rate limits and unexpected errors', () => {
   });
 
   it('records AND rethrows an unrecognised failure, with no vendor text in the reason', async () => {
-    async function* broken(): AsyncIterable<AiDelta> {
-      throw new Error('socket hang up at postgres://user:pw@host/db');
-      // eslint-disable-next-line no-unreachable
-      yield { kind: 'delta', text: 'unreachable' };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(broken) });
+    const ai = new FakeKvoxAi().queueStreamError(new Error('socket hang up at postgres://user:pw@host/db'));
+    const { handler, generations } = harness({ ai });
 
     await expect(handler.process(job())).rejects.toThrow('socket hang up');
 
@@ -683,8 +617,7 @@ describe('NoteGenerateHandler — the per-user throttle key', () => {
 
   it('registers the key only after the budget check has passed', async () => {
     const { handler, throttle } = harness({
-      provider: new OpenAiProvider(new AiProviderRegistry(), jest.fn() as never),
-      policyOverride: { maxInputTokens: 256 },
+      capsOverride: { maxInputTokens: 256 },
       sourceText: 'word '.repeat(5_000),
     });
 
@@ -699,38 +632,36 @@ describe('NoteGenerateHandler — the per-user throttle key', () => {
 // -----------------------------------------------------------------------------
 
 describe('NoteGenerateHandler — recordContext (#307)', () => {
-  it('records the EXACT systemPrompt/userContent the provider receives, plus sourceVersion', async () => {
-    const provider = new FakeProvider(helloStream);
-    const { handler, generations } = harness({ provider, sourceText: 'Ana: we ship on Friday.' });
+  it('records the EXACT system/user prompt the port receives, plus sourceVersion', async () => {
+    const { handler, ai, generations } = harness({ sourceText: 'Ana: we ship on Friday.' });
 
     await handler.process(job());
 
     expect(generations.recordContext).toHaveBeenCalledWith('gen-1', {
-      systemPrompt: provider.lastRequest?.systemPrompt,
-      userContent: provider.lastRequest?.userContent,
+      systemPrompt: streamRequest(ai).system,
+      userContent: streamRequest(ai).user,
       sourceVersion: 7,
     });
   });
 
-  it('is called BEFORE the provider — recordContext precedes provider.generate', async () => {
+  it('is called BEFORE the provider — recordContext precedes streamText', async () => {
     const order: string[] = [];
-    const provider = new FakeProvider(helloStream);
-    const { handler, generations } = harness({ provider });
+    const { handler, ai, generations } = harness();
 
     generations.recordContext.mockImplementation(async () => {
       order.push('recordContext');
     });
 
-    const originalGenerate = provider.generate.bind(provider);
-    jest.spyOn(provider, 'generate').mockImplementation((...args) => {
-      order.push('provider.generate');
+    const original = ai.streamText.bind(ai);
+    jest.spyOn(ai, 'streamText').mockImplementation((req) => {
+      order.push('streamText');
 
-      return originalGenerate(...args);
+      return original(req);
     });
 
     await handler.process(job());
 
-    expect(order).toEqual(['recordContext', 'provider.generate']);
+    expect(order).toEqual(['recordContext', 'streamText']);
   });
 
   it('is called BEFORE markStreaming too', async () => {
@@ -749,17 +680,9 @@ describe('NoteGenerateHandler — recordContext (#307)', () => {
     expect(order).toEqual(['recordContext', 'markStreaming']);
   });
 
-  it('is still recorded when the provider then fails (an auth-shaped refusal)', async () => {
-    async function* filtered(): AsyncIterable<AiDelta> {
-      yield { kind: 'delta', text: 'I cannot' };
-      yield {
-        kind: 'done',
-        finishReason: 'content_filter',
-        usage: { promptTokens: 10, completionTokens: 2 },
-      };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(filtered) });
+  it('is still recorded when the provider then refuses', async () => {
+    const ai = new FakeKvoxAi().queueStreamError(new AiRefusedError('Declined.'));
+    const { handler, generations } = harness({ ai });
 
     await handler.process(job());
 
@@ -769,15 +692,9 @@ describe('NoteGenerateHandler — recordContext (#307)', () => {
     );
   });
 
-  it('is still recorded when the provider stream throws mid-flight (an unrecognised/timeout-ish failure)', async () => {
-    async function* broken(): AsyncIterable<AiDelta> {
-      yield { kind: 'delta', text: 'partial' };
-      throw new Error('stream timed out');
-      // eslint-disable-next-line no-unreachable
-      yield { kind: 'delta', text: 'unreachable' };
-    }
-
-    const { handler, generations } = harness({ provider: new FakeProvider(broken) });
+  it('is still recorded when the stream throws mid-flight (an unrecognised/timeout-ish failure)', async () => {
+    const ai = new FakeKvoxAi().queueStream({ deltas: ['partial'], failAfter: new Error('stream timed out') });
+    const { handler, generations } = harness({ ai });
 
     await expect(handler.process(job())).rejects.toThrow('stream timed out');
 
@@ -788,13 +705,8 @@ describe('NoteGenerateHandler — recordContext (#307)', () => {
   });
 
   it('is NOT called when an AiBudgetError is thrown — a refusal sends nothing, so it records nothing', async () => {
-    const fetchSeam = jest.fn(() => {
-      throw new Error('the provider must not be called for an over-budget prompt');
-    });
-
     const { handler, generations } = harness({
-      provider: new OpenAiProvider(new AiProviderRegistry(), fetchSeam as never),
-      policyOverride: { maxInputTokens: 256 },
+      capsOverride: { maxInputTokens: 256 },
       sourceText: 'word '.repeat(5_000),
     });
 
@@ -807,9 +719,7 @@ describe('NoteGenerateHandler — recordContext (#307)', () => {
   });
 
   it('records the context for a PREVIEW generation (kind: preview) too', async () => {
-    const provider = new FakeProvider(helloStream);
     const { handler, generations } = harness({
-      provider,
       generation: generationRow({ id: 'gen-preview', kind: 'preview', noteId: null, note: null }),
     });
 
@@ -835,27 +745,5 @@ describe('classify / describe', () => {
 
   it('never echoes an unknown error message to the user', () => {
     expect(describeError(new Error('at /srv/app/dist/main.js:12'))).not.toContain('/srv');
-  });
-});
-
-describe('readAllowedModelEntries', () => {
-  it('reads the allow-list out of the settings blob', () => {
-    expect(readAllowedModelEntries(policy.providers, 'openai')).toEqual([
-      { id: 'gpt-4o', label: undefined, contextWindowTokens: undefined, maxOutputTokens: undefined },
-    ]);
-  });
-
-  it('permits NOTHING when the blob cannot be read — the safe direction is closed', () => {
-    expect(readAllowedModelEntries(null, 'openai')).toEqual([]);
-    expect(readAllowedModelEntries({}, 'openai')).toEqual([]);
-    expect(readAllowedModelEntries({ openai: 'nope' }, 'openai')).toEqual([]);
-    expect(
-      readAllowedModelEntries({ openai: { allowedModels: 'gpt-4o' } }, 'openai'),
-    ).toEqual([]);
-    expect(
-      readAllowedModelEntries({ openai: { allowedModels: [1, 'gpt-4o'] } }, 'openai'),
-    ).toEqual([
-      { id: 'gpt-4o', label: undefined, contextWindowTokens: undefined, maxOutputTokens: undefined },
-    ]);
   });
 });

@@ -1,11 +1,4 @@
-import { z } from 'zod';
-
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-} from '../../src/ai/providers/ai-provider.interface';
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
 import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
@@ -43,8 +36,8 @@ import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platfor
 // by.
 //
 // ⚠ THE HANDLER IS THE REAL ONE, AND SO ARE `assemblePrompt`, `computeTokenBudget`
-// AND `NoteGenerationService`. Only Prisma, the provider and the credential
-// store are stand-ins. A test that reimplemented assembly to compare against
+// AND `NoteGenerationService`. Only Prisma, the AI port (a `FakeKvoxAi`) and the
+// deployment's spend caps are stand-ins. A test that reimplemented assembly to compare against
 // would be asserting that two copies of the test agree.
 // =============================================================================
 
@@ -73,47 +66,18 @@ interface Recorded {
   model: string;
 }
 
-class RecordingProvider implements AiProvider<unknown> {
-  readonly id = 'openai';
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
-    ],
-    streaming: true as const,
-    // #78: this fake implements no `listModels`, so it must not claim to — the
-    // registry refuses that combination at boot.
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
+/** What the handler asked the port for, on its single `streamText` call. */
+function recordedCalls(ai: FakeKvoxAi): Recorded[] {
+  return ai.callsOf('streamText').map((call) => {
+    const request = call.request as { system: string; user: string; maxOutputTokens: number };
 
-  /** What the handler actually asked for, on every call. */
-  readonly calls: Recorded[] = [];
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  async *generate(_ctx: unknown, request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    this.calls.push({
-      systemPrompt: request.systemPrompt,
-      userContent: request.userContent,
+    return {
+      systemPrompt: request.system,
+      userContent: request.user,
       maxOutputTokens: request.maxOutputTokens,
-      model: request.model,
-    });
-
-    yield { kind: 'delta', text: '# Kestrel weekly\n\nWe ship on Friday.' };
-    yield {
-      kind: 'done',
-      finishReason: 'stop',
-      usage: { promptTokens: 900, completionTokens: 40 },
+      model: call.model ?? '',
     };
-  }
+  });
 }
 
 /** A generation row, plus whatever the two runs differ in. */
@@ -190,9 +154,10 @@ function harness(generation: Record<string, unknown>, note: Record<string, unkno
 
   prisma.$transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma);
 
-  const provider = new RecordingProvider();
-  const providers = new AiProviderRegistry();
-  providers.register(provider);
+  const ai = new FakeKvoxAi().setStreamHandler(() => ({
+    deltas: ['# Kestrel weekly\n\nWe ship on Friday.'],
+    usage: { inputTokens: 900, outputTokens: 40 },
+  }));
 
   const generations = new NoteGenerationService(
     prisma as never,
@@ -216,23 +181,9 @@ function harness(generation: Record<string, unknown>, note: Record<string, unkno
   const handler = new NoteGenerateHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
-    {
-      get: jest.fn().mockResolvedValue({
-        enabled: true,
-        providers: {
-          openai: {
-            baseUrl: 'https://api.openai.com/v1',
-            allowedModels: ['gpt-4o'],
-            defaultModel: 'gpt-4o',
-          },
-        },
-        maxInputTokens: 100_000,
-        maxOutputTokens: 4_000,
-        requestTimeoutMs: 60_000,
-      }),
-    } as never,
-    { getSecret: jest.fn().mockResolvedValue('sk-test') } as never,
+    ai,
+    // The deployment's two spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`).
+    { get: jest.fn().mockResolvedValue({ maxInputTokens: 100_000, maxOutputTokens: 4_000 }) } as never,
     generations,
     {
       resolve: jest.fn().mockResolvedValue({
@@ -243,13 +194,13 @@ function harness(generation: Record<string, unknown>, note: Record<string, unkno
     new ProviderThrottleService({ get: () => undefined } as never),
   );
 
-  return { handler, provider, noteTemplateFindUnique, state };
+  return { handler, ai, noteTemplateFindUnique, state };
 }
 
 describe('preview and real generation are one mechanism (#50)', () => {
   /** Run A: a real note, template read from its stored row. */
   async function realGeneration(): Promise<{ recorded: Recorded; readTheRow: boolean }> {
-    const { handler, provider, noteTemplateFindUnique } = harness(
+    const { handler, ai, noteTemplateFindUnique } = harness(
       generationRow({ id: 'gen-real', noteId: 'note-1', kind: 'create', templateId: 'template-1' }),
       {
         id: 'note-1',
@@ -268,14 +219,14 @@ describe('preview and real generation are one mechanism (#50)', () => {
     await handler.process({ id: 'job-real', payload: { generationId: 'gen-real' } } as never);
 
     return {
-      recorded: provider.calls[0],
+      recorded: recordedCalls(ai)[0],
       readTheRow: noteTemplateFindUnique.mock.calls.length > 0,
     };
   }
 
   /** Run B: a preview of an UNSAVED template, carried in the job payload. */
   async function previewGeneration(): Promise<{ recorded: Recorded; readTheRow: boolean }> {
-    const { handler, provider, noteTemplateFindUnique } = harness(
+    const { handler, ai, noteTemplateFindUnique } = harness(
       generationRow({ id: 'gen-preview', noteId: null, kind: 'preview', templateId: null }),
       null,
     );
@@ -292,7 +243,7 @@ describe('preview and real generation are one mechanism (#50)', () => {
     } as never);
 
     return {
-      recorded: provider.calls[0],
+      recorded: recordedCalls(ai)[0],
       readTheRow: noteTemplateFindUnique.mock.calls.length > 0,
     };
   }

@@ -23,9 +23,9 @@
 //     GETs; no key → `ai_key_missing` and no job; a failure < 15 min → no job.
 // =============================================================================
 
-import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { EntityBriefService } from '../../src/graph/brief/entity-brief.service';
 import { EntityDigestEnqueuer } from '../../src/graph/brief/entity-digest.enqueuer';
@@ -38,6 +38,7 @@ import { GraphPreferencesService } from '../../src/graph/preferences/graph-prefe
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { SearchQueryEmbedder } from '../../src/search/search-query-embedder.service';
 import { SearchService } from '../../src/search/search.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
@@ -55,7 +56,8 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   let prisma: PrismaClient;
   let briefs: EntityBriefService;
   let evidence: GraphEvidenceService;
-  const resolver = { resolve: jest.fn() };
+  // The AI port: ready by default; a test flips it to "no key".
+  const ai = new FakeKvoxAi();
 
   beforeAll(async () => {
     if (!dbReachable) return;
@@ -69,9 +71,9 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const registry = new JobHandlerRegistry();
     // A stand-in handler: the brief only needs the type to be registered.
     registry.register({ type: KG_ENTITY_DIGEST_JOB_TYPE, process: async () => undefined } as never);
-    const enqueuer = new EntityDigestEnqueuer(new JobsService(p), registry, { get: async () => ({ graphEnabled: true }) } as never);
+    const enqueuer = new EntityDigestEnqueuer(new JobsService(p), registry, { graphEnabled: async () => true } as never);
     // The semantic arm is off (no key); the full-text arm runs for real.
-    const search = new SearchService(p, { resolve: async () => ({ ok: false, reason: 'ai_key_missing' }) } as never);
+    const search = new SearchService(p, { resolve: async () => ({ ok: false, reason: 'ai_key_missing' }) } as unknown as SearchQueryEmbedder);
 
     briefs = new EntityBriefService(
       p,
@@ -79,7 +81,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
       new GraphOntologyService(p, new GraphPreferencesService(p)),
       new EntityViewService(p),
       search,
-      resolver as never,
+      ai,
       enqueuer,
     );
   });
@@ -89,8 +91,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   });
 
   beforeEach(() => {
-    resolver.resolve.mockReset();
-    resolver.resolve.mockResolvedValue({ model: 'model-x' });
+    ai.reset();
   });
 
   afterEach(async () => {
@@ -216,7 +217,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     expect(brief.digest?.statements).toEqual([{ text: 'Sarah leads the migration', evidenceIds: [ownEv.id] }]);
     expect(brief.digest?.model).toBe('model-x');
     expect(brief.digestStale).toBe(false);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(ai.callsOf('readiness')).toHaveLength(0);
     const cited = [...new Set(allEvidenceIds(brief))];
     expect((await evidence.getMany(user.id, cited)).length).toBe(cited.length);
   });
@@ -278,7 +279,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
     expect(await prisma.kgEntityView.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(ai.callsOf('readiness')).toHaveLength(0);
   });
 
   it('fuses a text-only transcript (inGraph: false) with the documents the graph cites', async () => {
@@ -313,7 +314,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   it('reports a missing key and enqueues nothing', async () => {
     const { reader, g } = await owner();
     const s = await seedSarah(g);
-    resolver.resolve.mockRejectedValue(new ConflictException({ message: 'no key', details: { reason: 'ai_key_missing' } }));
+    ai.setNotReady('ai_key_missing');
     const brief = await get(reader, s.sarah);
     expect(brief).toMatchObject({ digestStale: true, digestPending: false, digestUnavailable: 'ai_key_missing' });
     expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);

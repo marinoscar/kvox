@@ -16,8 +16,8 @@
 import { randomUUID } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
 import type { PrismaClient, Job } from '@prisma/client';
-import { z } from 'zod';
 
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { GraphExtractionService } from '../../src/graph/extraction/graph-extraction.service';
 import { ExtractionInputLoader } from '../../src/graph/extraction/extraction-input.loader';
 import { ProposalStageRegistry } from '../../src/graph/extraction/proposal-stage';
@@ -70,32 +70,24 @@ describeWithDb('kg.extract (real Postgres)', () => {
   let prisma: PrismaClient;
   let service: GraphExtractionService;
   let handler: KgExtractHandler;
-  const generateStructured = jest.fn();
+  const ai = new FakeKvoxAi();
 
   beforeAll(async () => {
     if (!dbReachable) return;
     prisma = createDbClient();
     await prisma.$connect();
 
-    const provider = {
-      id: 'openai',
-      label: 'OpenAI',
-      settingsSchema: z.object({}).passthrough(),
-      countTokens: (t: string) => Math.ceil(t.length / 4),
-      generateStructured,
-    };
     const resolution = {
       providerId: 'openai',
-      provider,
       model: 'gpt-4o',
       reasoningEffort: 'medium',
       countTokens: (t: string) => Math.ceil(t.length / 4),
-      descriptor: { id: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: true },
-      policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, requestTimeoutMs: 60_000, providers: { openai: {} } },
+      modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+      policy: { maxOutputTokens: 8_000, maxInputTokens: 100_000, reasoningEffort: 'none' },
       source: 'task',
       keyConfigured: true,
     };
-    const resolver = { resolve: jest.fn(async () => resolution) };
+    const resolver = { resolve: jest.fn(async () => resolution), graphEnabled: jest.fn(async () => true) };
     const preferences = new GraphPreferencesService(prisma as never);
     const ontology = new GraphOntologyService(prisma as never, preferences);
     const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(prisma as never), ontology);
@@ -105,7 +97,6 @@ describeWithDb('kg.extract (real Postgres)', () => {
       prisma as never,
       new NoteAccessService(prisma as never),
       resolver as never,
-      { get: async () => ({ graphEnabled: true }) } as never,
       preferences,
       ontology,
       loader,
@@ -116,7 +107,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
       prisma as never,
       loader,
       resolver as never,
-      { getSecret: async () => 'sk-test' } as never,
+      ai,
       { registerProviderKey: jest.fn() } as never,
       writer,
       new ProposalStageRegistry(),
@@ -143,7 +134,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     await prisma.transcript.deleteMany({ where: owner });
     await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
-    generateStructured.mockReset();
+    ai.reset();
   });
 
   async function fixture() {
@@ -186,7 +177,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
 
   it('request → handler writes the proposal, its items and their evidence', async () => {
     const f = await fixture();
-    generateStructured.mockResolvedValue({ value: ANSWER, usage: { promptTokens: 900, completionTokens: 300 }, finishReason: 'stop' });
+    ai.queueStructured(ANSWER, { usage: { inputTokens: 900, outputTokens: 300 } });
 
     const out = await service.request(f.caller, f.note.id, {});
     const proposal0 = await prisma.kgProposal.findUniqueOrThrow({ where: { id: out.proposal.id } });
@@ -267,7 +258,8 @@ describeWithDb('kg.extract (real Postgres)', () => {
 
   it('a newer draft supersedes the older one', async () => {
     const f = await fixture();
-    generateStructured.mockResolvedValue({ value: ANSWER, usage: { promptTokens: 1, completionTokens: 1 }, finishReason: 'stop' });
+    // Two runs, one answer each.
+    ai.setStructuredHandler(() => ({ value: ANSWER, usage: { inputTokens: 1, outputTokens: 1 } }));
 
     const first = await service.request(f.caller, f.note.id, {});
     await runJob((await prisma.kgProposal.findUniqueOrThrow({ where: { id: first.proposal.id } })).jobId!);
@@ -283,7 +275,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
 
   it('a malformed answer fails the proposal with invalid_output and leaves no items', async () => {
     const f = await fixture();
-    generateStructured.mockResolvedValue({ value: { entities: 'nope' }, usage: { promptTokens: 1, completionTokens: 1 }, finishReason: 'stop' });
+    ai.queueStructured({ entities: 'nope' }, { usage: { inputTokens: 1, outputTokens: 1 } });
     const out = await service.request(f.caller, f.note.id, {});
     await runJob((await prisma.kgProposal.findUniqueOrThrow({ where: { id: out.proposal.id } })).jobId!);
     const proposal = await prisma.kgProposal.findUniqueOrThrow({ where: { id: out.proposal.id } });

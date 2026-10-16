@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, type Job, type TranscriptNameCheck } from '@prisma/client';
 
 import {
@@ -7,24 +7,14 @@ import {
   AiInputError,
   AiRefusedError,
   isTerminalAiError,
-} from '../../ai/ai-errors';
-import { modelKnowledgeOf, resolveAllowedModel } from '../../ai/ai-model-resolution';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import {
-  createProviderContext,
-  type AiProvider,
-  type AiProviderContext,
-} from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
-import type { SystemAiValue } from '../../ai/ai-settings.schema';
-import { readAllowedModelEntries } from '../../notes/generation/allowed-models';
+} from '../../ai-port/ai-errors';
 import {
   assertWithinBudget,
-  computeTokenBudget,
   outputTokensForPrompt,
   type TokenBudget,
-} from '../../ai/ai-token-budget';
+} from '../../ai-port/ai-token-budget';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
+import { budgetFromReadiness, providerLabelOf, readAiTokenCaps } from '../../notes/generation/ai-readiness';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';
@@ -51,6 +41,7 @@ import {
 } from '../name-check/prompts';
 import { loadNameCheckInput, type NameCheckInput } from '../name-check-input';
 import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
+import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 
 // =============================================================================
 // `transcript.name_check` (issues #328 and #330, epic #326)
@@ -139,11 +130,12 @@ export function readNameCheckPayload(payload: unknown): TranscriptNameCheckPaylo
 
 /** Everything one provider call needs, resolved once per run. */
 interface CallContext {
-  provider: AiProvider<never>;
-  ctx: AiProviderContext<unknown>;
+  /** The vendor id the run ran on (`transcript_name_checks.provider_id`). */
+  providerId: string;
   model: string;
-  policy: SystemAiValue;
   userId: string;
+  /** The queue job, so each platform span and usage row links to it. */
+  jobId: string;
   availableInputTokens: number;
   /**
    * The run's budget (#436). Each call requests
@@ -178,9 +170,8 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
-    private readonly providers: AiProviderRegistry,
-    private readonly settings: AiSettingsService,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
+    private readonly settings: KvoxAiSettings,
     private readonly throttle: ProviderThrottleService,
   ) {}
 
@@ -223,7 +214,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
     });
 
     try {
-      await this.check(run);
+      await this.check(run, job.id);
     } catch (error) {
       if (error instanceof RateLimitError) throw error;
 
@@ -238,8 +229,8 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
   // The run
   // ---------------------------------------------------------------------------
 
-  private async check(run: TranscriptNameCheck): Promise<void> {
-    const call = await this.resolveCall(run);
+  private async check(run: TranscriptNameCheck, jobId: string): Promise<void> {
+    const call = await this.resolveCall(run, jobId);
 
     // 1. The transcript as it is now, read consistently with its version.
     const { input, version } = await this.prisma.$transaction(
@@ -290,10 +281,10 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
 
     if (stats.requests > 0 && stats.usable === 0) {
       throw new AiRefusedError(
-        `${call.provider.label} did not return a usable answer for this name check. ` +
+        `${providerLabelOf(call.providerId)} did not return a usable answer for this name check. ` +
           'Try again, or use a different model.',
         undefined,
-        call.provider.id,
+        call.providerId,
       );
     }
 
@@ -332,7 +323,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
           suggestionCount: accepted.length,
           inputTokens: stats.inputTokens,
           outputTokens: stats.outputTokens,
-          providerId: call.provider.id,
+          providerId: call.providerId,
           model: call.model,
           errorClass: null,
           error: null,
@@ -349,10 +340,10 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
   }
 
   // ---------------------------------------------------------------------------
-  // Policy, provider, model, key — the resolution `note.generate` performs
+  // Deployment switch, model, key — the readiness `note.generate` asks
   // ---------------------------------------------------------------------------
 
-  private async resolveCall(run: TranscriptNameCheck): Promise<CallContext> {
+  private async resolveCall(run: TranscriptNameCheck, jobId: string): Promise<CallContext> {
     const userId = run.requestedById;
     if (!userId) {
       throw new AiInputError(
@@ -360,75 +351,53 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
       );
     }
 
-    const policy = await this.settings.get();
-    if (!policy.enabled) {
+    // ⚠ THE KEY NEVER REACHES THIS FILE. `readiness` reports whether the caller
+    // has one; the platform resolves it per call, inside `streamText`. The model
+    // is the one the run was queued with (null: the deployment default).
+    const readiness = await this.ai.readiness(userId, 'transcript_name_check', run.model);
+
+    if (readiness.reason === 'ai_not_configured' || readiness.provider === null || readiness.model === null) {
       throw new AiInputError(
         'AI features are switched off for this deployment. An administrator can enable them in system settings.',
       );
     }
 
-    const providerId = run.providerId ?? policy.provider;
-    const provider = providerId ? this.providers.get(providerId) : undefined;
-    if (!provider) {
+    if (readiness.reason === 'model_not_permitted' || readiness.reason === 'model_lacks_capability') {
       throw new AiInputError(
-        `The AI provider "${providerId ?? 'none'}" is not available in this version of the application.`,
+        `The model "${readiness.model ?? run.model ?? 'none'}" is not permitted by this deployment. Ask an administrator to allow one.`,
       );
     }
 
-    const allowed = readAllowedModelEntries(policy.providers, provider.id);
-    const configuredDefault = (policy.providers as Record<string, { defaultModel?: string | null } | undefined>)[
-      provider.id
-    ]?.defaultModel;
-    const model = run.model ?? configuredDefault ?? allowed[0]?.id ?? null;
-    const entry = model ? allowed.find((m) => m.id === model) : undefined;
-    if (!model || !entry) {
-      throw new AiInputError(
-        `The model "${model ?? 'none'}" is not permitted by this deployment. Ask an administrator to allow one.`,
+    if (readiness.reason === 'ai_key_missing' || !readiness.hasKey) {
+      throw new AiAuthError(
+        `No ${providerLabelOf(readiness.provider)} API key is saved for your account. Add one in your settings and check again.`,
+        readiness.provider,
       );
     }
 
-    // Resolved with the shared helper, for `note.generate`'s reason: a policy
-    // entry may carry the limits of a model this build has never heard of.
-    const descriptor = resolveAllowedModel(entry, modelKnowledgeOf(provider));
-    if (!descriptor) {
+    if (!readiness.ok) {
+      throw new AiInputError(
+        'This feature is not available for this deployment right now. An administrator can check AI settings.',
+      );
+    }
+
+    const model = readiness.model;
+
+    // The enabled model's own window and output ceiling, plus the deployment's
+    // spend caps; a model with no recorded window cannot be budgeted.
+    const budget = budgetFromReadiness(readiness, await readAiTokenCaps(this.settings));
+    if (!budget) {
       throw new AiInputError(
         `This deployment has no context window recorded for the model "${model}". ` +
           'An administrator can add one on the AI settings page.',
       );
     }
 
-    const settings = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AiInputError(
-        `This deployment's configuration for provider "${provider.id}" is invalid. ` +
-          'An administrator must correct it first.',
-      );
-    }
-
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) {
-      throw new AiAuthError(
-        `No ${provider.label} API key is saved for your account. Add one in your settings and check again.`,
-        provider.id,
-      );
-    }
-
-    const budget = computeTokenBudget({
-      contextWindowTokens: descriptor.contextWindowTokens,
-      modelMaxOutputTokens: descriptor.maxOutputTokens,
-      policyMaxOutputTokens: policy.maxOutputTokens,
-      policyMaxInputTokens: policy.maxInputTokens,
-      reasoningEffort: policy.reasoningEffort,
-    });
-
     return {
-      provider: provider as AiProvider<never>,
-      ctx: createProviderContext(apiKey, settings.data as unknown),
+      providerId: readiness.provider,
       model,
-      policy,
       userId,
+      jobId,
       availableInputTokens: budget.availableInputTokens,
       budget,
     };
@@ -445,7 +414,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
     phonetic: SourcedCandidate[],
     stats: RunStats,
   ): Promise<SourcedCandidate[]> {
-    const count = (text: string): number => call.provider.countTokens(text, call.model);
+    const count = (text: string): number => this.ai.countTokens(text, call.model);
 
     // A chunk must fit this model with room for the framing: never more than
     // the nominal 6k, less on a deployment whose budget is tighter.
@@ -483,7 +452,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
     group: SourcedCandidate[],
     stats: RunStats,
   ): Promise<AcceptedSuggestion[]> {
-    const count = (text: string): number => call.provider.countTokens(text, call.model);
+    const count = (text: string): number => this.ai.countTokens(text, call.model);
     const built = buildAdjudicationPrompt(group, input.segments, input.segmentIndex, input.speakerNames);
     const tokens = promptTokens(built.prompt, count) + count(JSON_RETRY_LINE) + 2;
 
@@ -537,14 +506,14 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
     prompt: NameCheckPrompt,
     stats: RunStats,
   ): Promise<{ text: string; finishReason: string | null }> {
-    const promptCount = promptTokens(prompt, (t) => call.provider.countTokens(t, call.model));
+    const promptCount = promptTokens(prompt, (t) => this.ai.countTokens(t, call.model));
 
     // ⚠ Never after a request: once the provider is called, the user pays.
     assertWithinBudget({
       promptTokens: promptCount,
       availableInputTokens: call.availableInputTokens,
       model: call.model,
-      providerId: call.provider.id,
+      providerId: call.providerId,
     });
 
     // ⚠ THE PER-USER BUCKET, registered immediately before the call so a 429
@@ -553,29 +522,39 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
 
     let text = '';
     let finishReason: string | null = null;
-    let usage: { promptTokens: number; completionTokens: number } | null = null;
+    let usage: { inputTokens: number | null; outputTokens: number | null } | null = null;
 
-    for await (const event of call.provider.generate(call.ctx as never, {
-      model: call.model,
-      systemPrompt: prompt.systemPrompt,
-      userContent: prompt.userContent,
-      maxOutputTokens: outputTokensForPrompt(call.budget, promptCount),
-      timeoutMs: call.policy.requestTimeoutMs,
-      reasoningEffort: call.policy.reasoningEffort,
-      responseFormat: 'json',
-    })) {
-      if (event.kind === 'delta') {
-        text += event.text;
-        continue;
+    try {
+      for await (const event of this.ai.streamText({
+        userId: call.userId,
+        feature: 'transcript_name_check',
+        jobId: call.jobId,
+        model: call.model,
+        system: prompt.systemPrompt,
+        user: prompt.userContent,
+        maxOutputTokens: outputTokensForPrompt(call.budget, promptCount),
+      })) {
+        if (event.type === 'delta') {
+          text += event.text;
+          continue;
+        }
+        finishReason = event.finishReason;
+        usage = event.usage;
       }
-      finishReason = event.finishReason;
-      usage = event.usage;
+    } catch (error) {
+      // A content-policy refusal arrives as a thrown `AiRefusedError`. For ONE
+      // batch it has always meant "no usable answer" (the caller retries once,
+      // then skips the batch), never a failed run, so it is reported the way the
+      // old `content_filter` finish was.
+      if (!(error instanceof AiRefusedError)) throw error;
+
+      finishReason = 'content_filter';
     }
 
     // The provider's own counts when it reported them; this build's estimate
     // otherwise — never zero, which would read as "this was free".
-    stats.inputTokens += usage?.promptTokens ?? promptCount;
-    stats.outputTokens += usage?.completionTokens ?? call.provider.countTokens(text, call.model);
+    stats.inputTokens += usage?.inputTokens ?? promptCount;
+    stats.outputTokens += usage?.outputTokens ?? this.ai.countTokens(text, call.model);
 
     return { text, finishReason };
   }

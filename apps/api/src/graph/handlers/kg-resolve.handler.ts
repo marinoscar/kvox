@@ -160,7 +160,7 @@ export class KgResolveHandler implements JobHandler, OnModuleInit {
     const verdicts = new Map<string, AdjudicationResult>();
     if (middle.length > 0 && thresholds.adjudication === 'llm') {
       const pairs = await this.buildPairs(userId, middle.map((s) => ({ entityId: s.entity.id, type: s.entity.type, candidateId: s.outcome.candidates[0].entityId })));
-      const result = await this.resolution.adjudicateSafely(userId, pairs.pairs, KG_RESOLVE_JOB_TYPE);
+      const result = await this.resolution.adjudicateSafely(userId, pairs.pairs, KG_RESOLVE_JOB_TYPE, job.id);
       if (result.reason) stats.adjudication = `unavailable:${result.reason}`;
       for (const [pairId, v] of result.verdicts ?? []) verdicts.set(pairs.entityByPair.get(pairId)!, v);
       stats.adjudicated = result.verdicts?.size ?? 0;

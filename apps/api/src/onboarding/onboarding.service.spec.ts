@@ -555,26 +555,19 @@ describe('OnboardingService', () => {
     // -------------------------------------------------------------------------
 
     describe('admin.ai', () => {
-      it('satisfied when enabled, with a provider and at least one permitted model', async () => {
-        const state = await adminState({
-          aiPolicy: { enabled: true, provider: 'openai', allowedModelCount: 1 },
-        });
+      it('satisfied when the deployment can run AI (switched on, a provider on, a default model enabled)', async () => {
+        const state = await adminState({ aiPolicy: { configured: true } });
         expect(requireStep(state, 'admin.ai').status).toBe('satisfied');
       });
 
-      it('pending when the master switch is off', async () => {
-        const state = await adminState({ aiPolicy: { enabled: false } });
+      it('pending when the deployment cannot run AI', async () => {
+        const state = await adminState({ aiPolicy: { configured: false } });
         expect(requireStep(state, 'admin.ai').status).toBe('pending');
       });
 
-      it('pending when no provider is chosen', async () => {
-        const state = await adminState({ aiPolicy: { provider: null } });
-        expect(requireStep(state, 'admin.ai').status).toBe('pending');
-      });
-
-      it('pending when no model is permitted', async () => {
-        const state = await adminState({ aiPolicy: { allowedModelCount: 0 } });
-        expect(requireStep(state, 'admin.ai').status).toBe('pending');
+      it('satisfied for an administrator who simply has no key of their own: that is user.ai_key', async () => {
+        const state = await adminState({ ai: { keyConfigured: false } });
+        expect(requireStep(state, 'admin.ai').status).toBe('satisfied');
       });
     });
 

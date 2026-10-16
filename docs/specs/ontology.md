@@ -832,6 +832,8 @@ about that specific pattern does not apply to this job type at all).
   something it does not, rather than inventing a fresh entity for every
   mention regardless of whether one already exists.
 
+> **Call path since issue #475.** The provider call below is `KvoxAi.generateStructured` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph are the retired path (#477 deletes them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
+
 **One provider call, structured output.** A single request per extraction
 run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
 `commitment | decision | claim | person_fact`), each carrying an
@@ -1039,9 +1041,9 @@ precise at this stage:
   misspellings and near-matches exact lookup misses.
 - **pgvector kNN** (k = 10) over each entity's own profile embedding — label,
   type, organization, role, and top co-mentions concatenated and embedded
-  through the existing `SearchQueryEmbedder`
-  (`apps/api/src/search/search-query-embedder.service.ts`, verified above) —
-  reused rather than duplicated, because a second embedder for the same
+  through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`, since #475; the
+  search side uses the same port with `search_embed`) —
+  one catalog (`ai-port/embedding-catalog.ts`), because a second embedder for the same
   model and dimension contract is a second place for those two facts to
   drift apart.
 
@@ -1713,7 +1715,7 @@ directory:
 | `kg.extract` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
-| `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
+| `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Embeds through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`) on the user's own key, resolved by the platform; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical AGENTS.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
@@ -3110,6 +3112,12 @@ unrepresentable rather than merely discouraged.
 ### 20.3 Resolution and the user override
 
 > Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes `AiTaskModelResolver`, which it replaces.
+>
+> **Graph call path since issue #475.** Every graph model call goes through `KvoxAi` and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
+>
+> `GraphAiRunResolver.resolve(userId, task, requested?, { requireKey? })` (`apps/api/src/graph/graph-ai-run.service.ts`) replaces `AiTaskModelResolver.resolve` for those three tasks. It calls `KvoxAi.readiness(userId, feature, requested)` and either returns a `GraphAiRun` (`providerId`, `model`, `reasoningEffort`, `modelLimits`, the policy caps, a `countTokens` bound to `KvoxAi.countTokens`, `keyConfigured`, `source`) or throws the same 409 or 400 the product always answered with, built from the `ai-port/kvox-ai-errors.ts` sentences: `graph_disabled`, `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`. `requireKey: false` skips only the missing-key refusal, for an estimate that spends nothing. It also owns the one read of `ai.graphEnabled`, so no graph service reads the retired settings service. No key is read or held: `readiness` reports `hasKey`, and the platform resolves the key per call.
+>
+> Calls: `kg.extract`, adjudication and the entity digest call `KvoxAi.generateStructured` with `maxAttempts: 1` and `assertWithinBudget` unchanged; the extraction truncation re-ask relies on `AiStructuredOutputError('truncated')` (see notes.md for how it is derived). `GraphEmbedder` (`graph/resolution/graph-embedder.service.ts`) calls `KvoxAi.embed` with `graph_embed` and gates on `searchReasonFor(readiness)`, the same gate as search ([search.md](search.md) §11), in batches of at most `embeddingCapability().maxBatchSize` (128). Throttle keys (`aiProviderThrottleKey(userId)`) are still registered by the handler immediately before each call.
 
 `AiTaskModelResolver.resolve(userId, task, requested?)` (planned:
 `apps/api/src/ai/ai-task-model-resolver.service.ts`) is the one function

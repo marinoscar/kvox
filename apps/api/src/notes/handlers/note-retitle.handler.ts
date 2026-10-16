@@ -202,6 +202,7 @@ export class NoteRetitleHandler implements JobHandler, OnModuleInit {
       model: note.model,
       force,
       jobType: this.type,
+      jobId: job.id,
     });
 
     this.logger.log(`Retitle job ${job.id} considered note ${note.id}; it is now "${title ?? ''}"`);

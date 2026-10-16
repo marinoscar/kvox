@@ -5,7 +5,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { AiSettingsService } from '../../src/ai/ai-settings.service';
+import { GraphAiRunResolver } from '../../src/graph/graph-ai-run.service';
 import { GraphObjectsService } from '../../src/graph/graph-objects.service';
 import { attributeOfferResponseSchema, createGraphImportResponseSchema } from '../../src/graph/import/dto/graph-import.dto';
 import { GRAPH_IMPORT_MAX_BYTES } from '../../src/graph/import/graph-import.constants';
@@ -72,7 +72,7 @@ describe('/api/graph/imports (integration)', () => {
     put = jest.spyOn(context.app.get(GraphObjectsService), 'putBuffer').mockResolvedValue({ id: OBJECT } as never);
     remove = jest.spyOn(context.app.get(GraphObjectsService), 'deleteIfPresent').mockResolvedValue(true);
     enqueueWithin = jest.spyOn(context.app.get(JobsService), 'enqueueWithin').mockResolvedValue({ id: JOB } as never);
-    settings = jest.spyOn(context.app.get(AiSettingsService), 'get').mockResolvedValue({ graphEnabled: true } as never);
+    settings = jest.spyOn(context.app.get(GraphAiRunResolver), 'graphEnabled').mockResolvedValue(true);
     prismaMock.organization.findFirst.mockResolvedValue({ id: IMPORT_ORG } as never);
     prismaMock.kgProposal.findFirst.mockResolvedValue(null as never);
     prismaMock.kgProposal.create.mockResolvedValue({ id: PROPOSAL } as never);
@@ -154,7 +154,7 @@ describe('/api/graph/imports (integration)', () => {
 
   it('is 409 graph_disabled while connected knowledge is off', async () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
-    settings.mockResolvedValue({ graphEnabled: false } as never);
+    settings.mockResolvedValue(false as never);
     const res = await upload(user.accessToken, TURTLE, 'a.ttl').expect(409);
     expect(res.body.details).toEqual({ reason: 'graph_disabled' });
     expect(put).not.toHaveBeenCalled();

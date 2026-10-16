@@ -15,8 +15,8 @@ import {
   transcriptionCredentialLabel,
   transcriptionCredentialName,
 } from './transcription-credential.constants';
+import { createProviderContext } from './provider-context';
 import {
-  createProviderContext,
   type TranscriptionConnectionTest,
   type TranscriptionProviderDescription,
 } from './providers/transcription-provider.interface';

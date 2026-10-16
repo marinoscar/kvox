@@ -1,3 +1,4 @@
+import { FakeKvoxAi } from '../../ai-port/testing/fake-kvox-ai';
 import {
   ADJUDICATION_PROMPT_HEADINGS,
   ADJUDICATION_SCHEMA_NAME,
@@ -27,57 +28,49 @@ function pair(n: number, type = 'Person'): AdjudicationPair {
   };
 }
 
-function build(options: { answer?: (req: { userContent: string }) => unknown; throwOn?: number } = {}) {
+function build(options: { answer?: (req: { user: string }) => unknown; throwOn?: number } = {}) {
   let calls = 0;
-  const generateStructured = jest.fn(async (_ctx: unknown, req: { userContent: string }) => {
+  const ai = new FakeKvoxAi().setStructuredHandler((req) => {
     calls += 1;
     if (options.throwOn === calls) throw new RateLimitError('slow down', 1000);
-    const ids = [...req.userContent.matchAll(/## Pair (p\d+)/g)].map((m) => m[1]);
+    const ids = [...req.user.matchAll(/## Pair (p\d+)/g)].map((m) => m[1]);
     return {
       value: options.answer ? options.answer(req) : { verdicts: ids.map((pairId) => ({ pairId, verdict: 'same', rationale: 'ok' })) },
-      usage: { promptTokens: 1, completionTokens: 1 },
-      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: 'gpt-adjudicate',
     };
   });
-  const provider = {
-    id: 'openai',
-    label: 'OpenAI',
-    settingsSchema: { safeParse: () => ({ success: true, data: {} }) },
-    generateStructured,
-  };
   const resolver = {
     resolve: jest.fn(async () => ({
-      provider,
       providerId: 'openai',
       model: 'gpt-adjudicate',
       reasoningEffort: 'low',
-      policy: { providers: {}, requestTimeoutMs: 1000, maxOutputTokens: 8000, maxInputTokens: 100000 },
-      descriptor: { contextWindowTokens: 128000, maxOutputTokens: 16000 },
+      policy: { maxOutputTokens: 8000, maxInputTokens: 100000, reasoningEffort: 'none' },
+      modelLimits: { contextWindowTokens: 128000, maxOutputTokens: 16000 },
     })),
   };
-  const credentials = { getSecret: jest.fn(async () => 'sk-test') };
   const throttle = { registerProviderKey: jest.fn() };
   const ontology = {
     effectiveSchemaFor: jest.fn(async () => ({
       entityType: (key: string) => ({ key, label: key, description: `A ${key}.`, disambiguation: [`Rule for ${key}.`] }),
     })),
   };
-  const service = new AdjudicationService({} as never, resolver as never, credentials as never, throttle as never, ontology as never);
-  return { service, generateStructured, resolver, throttle };
+  const service = new AdjudicationService({} as never, resolver as never, ai, throttle as never, ontology as never);
+  return { service, ai, resolver, throttle };
 }
 
 describe('AdjudicationService.adjudicate', () => {
   it('batches ≤ 20 pairs per call (45 pairs → 3 calls) on the graph.adjudicate model', async () => {
-    const { service, generateStructured, resolver } = build();
+    const { service, ai, resolver } = build();
     const pairs = Array.from({ length: 45 }, (_, i) => pair(i + 1));
     const out = await service.adjudicate(USER, pairs, { jobType: 'kg.extract' });
-    expect(generateStructured).toHaveBeenCalledTimes(3);
+    expect(ai.callsOf('generateStructured')).toHaveLength(3);
     expect(resolver.resolve).toHaveBeenCalledWith(USER, 'graph.adjudicate');
     expect(out.size).toBe(45);
     expect(out.get('p45')).toEqual({ verdict: 'same', rationale: 'ok', model: 'gpt-adjudicate' });
-    const req = generateStructured.mock.calls[0][1] as unknown as { schemaName: string; model: string };
-    expect(req.schemaName).toBe(ADJUDICATION_SCHEMA_NAME);
-    expect(req.model).toBe('gpt-adjudicate');
+    const call = ai.callsOf('generateStructured')[0];
+    expect(call).toEqual(expect.objectContaining({ userId: USER, feature: 'graph_adjudicate', model: 'gpt-adjudicate' }));
+    expect(call.request).toEqual(expect.objectContaining({ schemaName: ADJUDICATION_SCHEMA_NAME, jsonSchema: expect.any(Object) }));
   });
 
   it('ignores a verdict for an unknown pair id and treats a missing one as uncertain', async () => {
@@ -102,15 +95,21 @@ describe('AdjudicationService.adjudicate', () => {
     expect(throttle.registerProviderKey).toHaveBeenCalledWith('kg.resolve', `ai-provider:${USER}`);
   });
 
+  it('passes the calling job id so the usage row links to it', async () => {
+    const { service, ai } = build();
+    await service.adjudicate(USER, [pair(1)], { jobType: 'kg.extract', jobId: 'job-9' });
+    expect(ai.callsOf('generateStructured')[0].jobId).toBe('job-9');
+  });
+
   it('rethrows a RateLimitError', async () => {
     const { service } = build({ throwOn: 1 });
     await expect(service.adjudicate(USER, [pair(1)], { jobType: 'kg.extract' })).rejects.toBeInstanceOf(RateLimitError);
   });
 
   it('makes no call for no pairs', async () => {
-    const { service, generateStructured, resolver } = build();
+    const { service, ai, resolver } = build();
     expect((await service.adjudicate(USER, [], { jobType: 'kg.extract' })).size).toBe(0);
-    expect(generateStructured).not.toHaveBeenCalled();
+    expect(ai.callsOf('generateStructured')).toHaveLength(0);
     expect(resolver.resolve).not.toHaveBeenCalled();
   });
 });
@@ -127,9 +126,9 @@ describe('AdjudicationService.adjudicateItems (#365)', () => {
   }
 
   it('batches ≤ 20 item pairs per call on graph.adjudicate and the per-user throttle key', async () => {
-    const { service, generateStructured, resolver, throttle } = build({
+    const { service, ai, resolver, throttle } = build({
       answer: (req) => ({
-        verdicts: [...req.userContent.matchAll(/## Pair (p\d+)/g)].map((m) => ({
+        verdicts: [...req.user.matchAll(/## Pair (p\d+)/g)].map((m) => ({
           pairId: m[1],
           verdict: 'same',
           changes: { status: null, dueAt: '2026-05-01' },
@@ -138,7 +137,7 @@ describe('AdjudicationService.adjudicateItems (#365)', () => {
       }),
     });
     const out = await service.adjudicateItems(USER, Array.from({ length: 21 }, (_, i) => itemPair(i + 1)), { jobType: 'kg.extract' });
-    expect(generateStructured).toHaveBeenCalledTimes(2);
+    expect(ai.callsOf('generateStructured')).toHaveLength(2);
     expect(resolver.resolve).toHaveBeenCalledWith(USER, 'graph.adjudicate');
     expect(throttle.registerProviderKey).toHaveBeenCalledWith('kg.extract', `ai-provider:${USER}`);
     expect(out.get('p21')).toEqual({
@@ -147,8 +146,7 @@ describe('AdjudicationService.adjudicateItems (#365)', () => {
       rationale: 'new date',
       model: 'gpt-adjudicate',
     });
-    const req = generateStructured.mock.calls[0][1] as unknown as { schemaName: string };
-    expect(req.schemaName).toBe('kg_item_adjudication');
+    expect(ai.callsOf('generateStructured')[0].request).toEqual(expect.objectContaining({ schemaName: 'kg_item_adjudication' }));
   });
 
   it('leaves an unanswered pair out, and rethrows a RateLimitError', async () => {

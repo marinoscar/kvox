@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream';
 import type { ZodType } from 'zod';
 
 import type { NormalizedTranscript } from '../normalized-transcript';
+import type { TranscriptionProviderContext } from '../provider-context';
 
 // =============================================================================
 // TranscriptionProvider (issue #23, epic #19)
@@ -132,40 +133,7 @@ export interface ProviderFieldDescriptor {
   defaultValue?: string | number | boolean | null;
 }
 
-/**
- * The per-call context: the resolved credential and this provider's settings.
- *
- * ⚠ CONTAINS A SECRET. See the file header. `toJSON` is declared so that the
- * most common accidental leak — a context reaching `JSON.stringify` through a
- * log serialiser or an error's `cause` — produces a marker string rather than
- * the key. It is a backstop, not permission: the rule is still "never log this".
- */
-export interface TranscriptionProviderContext<TSettings = unknown> {
-  /** Plaintext API key, valid for this call only. NEVER log or persist. */
-  readonly apiKey: string;
-  /** This provider's validated settings — the output of `settingsSchema.parse`. */
-  readonly settings: TSettings;
-}
-
-/**
- * Build a context whose accidental serialisation is inert.
- *
- * The `toJSON` is non-enumerable so it does not show up in `Object.keys` or a
- * spread, and the object is frozen so a caller cannot remove it.
- */
-export function createProviderContext<TSettings>(
-  apiKey: string,
-  settings: TSettings,
-): TranscriptionProviderContext<TSettings> {
-  const ctx = { apiKey, settings };
-
-  Object.defineProperty(ctx, 'toJSON', {
-    value: () => ({ apiKey: '[redacted]', settings }),
-    enumerable: false,
-  });
-
-  return Object.freeze(ctx);
-}
+export type { TranscriptionProviderContext } from '../provider-context';
 
 /** Where the audio comes from, for one submission. */
 export type TranscriptionAudioSource =

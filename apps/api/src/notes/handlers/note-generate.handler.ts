@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import {
@@ -6,18 +6,15 @@ import {
   AiBudgetError,
   AiInputError,
   AiRefusedError,
-} from '../../ai/ai-errors';
+} from '../../ai-port/ai-errors';
 import {
-  modelKnowledgeOf,
-  resolveAllowedModel,
-} from '../../ai/ai-model-resolution';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
-import { AiSettingsService } from '../../ai/ai-settings.service';
-import { createProviderContext } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+  assertWithinBudget,
+  outputTokensForPrompt,
+} from '../../ai-port/ai-token-budget';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { aiProviderThrottleKey, NOTE_GENERATE_JOB_TYPE } from '../job-types';
-import { readAllowedModelEntries } from '../generation/allowed-models';
+import { budgetFromReadiness, providerLabelOf, readAiTokenCaps } from '../generation/ai-readiness';
 import {
   NoteGenerationService,
   readPayloadTemplate,
@@ -28,12 +25,8 @@ import {
 import { NoteSourceService } from '../generation/note-source.service';
 import { assemblePrompt, parseTemplateStructure } from '../generation/prompt';
 import { StreamFlusher } from '../generation/stream-flusher';
-import {
-  assertWithinBudget,
-  computeTokenBudget,
-  outputTokensForPrompt,
-} from '../../ai/ai-token-budget';
 import { type JobExecutionProfile, type JobHandler, JobHandlerRegistry, ProviderThrottleService, RateLimitError } from '@marinoscar/platform-api/jobs';
+import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 
 // =============================================================================
 // `note.generate` (issue #49, epic #45) — the heart of the epic
@@ -137,9 +130,8 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
-    private readonly providers: AiProviderRegistry,
-    private readonly settings: AiSettingsService,
-    private readonly credentials: UserAiCredentialsService,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
+    private readonly settings: KvoxAiSettings,
     private readonly generations: NoteGenerationService,
     private readonly sources: NoteSourceService,
     private readonly throttle: ProviderThrottleService,
@@ -228,80 +220,55 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     }
 
     // -------------------------------------------------------------------------
-    // 2. Deployment policy, provider, model.
+    // 2. Deployment policy, model and the user's key: one readiness answer.
     // -------------------------------------------------------------------------
-    const policy = await this.settings.get();
+    //
+    // ⚠ THE KEY IS NOT LOADED HERE AND NEVER REACHES THIS FILE. `readiness`
+    // reports whether the caller has one (and refuses with the same words the
+    // old key lookup did); the platform resolves it per call, inside `streamText`.
+    //
+    // The model is the one the note was SET UP with, passed as the requested
+    // model: a model an administrator has since withdrawn stops the job here,
+    // before anything is spent. Its window and output ceiling are the enabled
+    // model's own (`ai_models`), the same numbers `POST /api/notes` budgeted
+    // with, so the request and the job reach one number.
+    const readiness = await this.ai.readiness(userId, 'note_generate', generation.model);
 
-    if (!policy.enabled) {
+    if (readiness.reason === 'ai_not_configured' || readiness.provider === null) {
       throw new AiInputError(
         'AI features are switched off for this deployment. An administrator can enable them in system settings.',
       );
     }
 
-    const provider = this.providers.get(generation.providerId);
-
-    if (!provider) {
-      throw new AiInputError(
-        `This note was set up to use the "${generation.providerId}" provider, which this ` +
-          'version of the application does not have.',
-      );
-    }
-
-    const allowed = readAllowedModelEntries(policy.providers, provider.id);
-    const entry = allowed.find((model) => model.id === generation.model);
-
-    if (!entry) {
+    if (readiness.reason === 'model_not_permitted' || readiness.reason === 'model_lacks_capability') {
       throw new AiInputError(
         `The model "${generation.model}" is not permitted by this deployment. ` +
           'Choose one your administrator has allowed and generate again.',
       );
     }
 
-    // ⚠ RESOLVED WITH THE SHARED HELPER (#78), not by looking the id up in
-    // `capabilities.models` directly. A policy entry may carry its own context
-    // window for a model this build has never heard of, and that is exactly the
-    // model an administrator adopts from the discovery dropdown. Looking only
-    // at the build catalogue here would let `GET /api/ai/config` offer such a
-    // model, let the request-time budget check pass, and then fail the job —
-    // after the note row exists and the user is watching it generate.
-    //
-    // ⚠ `modelKnowledgeOf` RATHER THAN THE BARE CATALOGUE (#97). The provider's
-    // family derivation and conservative floor are two more ranks of the same
-    // precedence, and this is the LAST place it is applied before a user's own
-    // money is spent: a job resolving fewer ranks than `GET /api/ai/config` did
-    // would fail exactly the models the picker had just offered.
+    if (readiness.reason === 'ai_key_missing' || !readiness.hasKey) {
+      throw new AiAuthError(
+        `No ${providerLabelOf(readiness.provider)} API key is saved for your account. Add one in your settings and generate again.`,
+        readiness.provider,
+      );
+    }
 
-    const descriptor = resolveAllowedModel(entry, modelKnowledgeOf(provider));
+    if (!readiness.ok) {
+      throw new AiInputError(
+        'This feature is not available for this deployment right now. An administrator can check AI settings.',
+      );
+    }
 
-    if (!descriptor) {
+    if (readiness.contextWindowTokens === null) {
       throw new AiInputError(
         `This deployment has no context window recorded for the model "${generation.model}", ` +
           'so it cannot work out how much text will fit. An administrator can add one on the AI settings page.',
       );
     }
 
-    const settingsParse = provider.settingsSchema.safeParse(
-      (policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-
-    if (!settingsParse.success) {
-      throw new AiInputError(
-        `This deployment's configuration for provider "${provider.id}" is invalid. ` +
-          'An administrator must correct it before notes can be generated.',
-      );
-    }
-
-    // -------------------------------------------------------------------------
-    // 3. The user's own key. Resolved as late as possible and never stored.
-    // -------------------------------------------------------------------------
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-
-    if (!apiKey) {
-      throw new AiAuthError(
-        `No ${provider.label} API key is saved for your account. Add one in your settings and generate again.`,
-        provider.id,
-      );
-    }
+    const providerId = readiness.provider;
+    const caps = await readAiTokenCaps(this.settings);
 
     // -------------------------------------------------------------------------
     // 4. The template, and the source AS THE USER CORRECTED IT.
@@ -363,17 +330,10 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       sourceText: source.text,
     });
 
-    const budget = computeTokenBudget({
-      contextWindowTokens: descriptor.contextWindowTokens,
-      modelMaxOutputTokens: descriptor.maxOutputTokens,
-      policyMaxOutputTokens: policy.maxOutputTokens,
-      policyMaxInputTokens: policy.maxInputTokens,
-      // #436: the effort THIS call sends, so a typed output cap gets its
-      // reasoning headroom on top.
-      reasoningEffort: policy.reasoningEffort,
-    });
+    // Non-null: a model with no recorded window was refused above.
+    const budget = budgetFromReadiness(readiness, caps)!;
 
-    const promptTokens = provider.countTokens(
+    const promptTokens = this.ai.countTokens(
       `${prompt.systemPrompt}\n${prompt.userContent}`,
       generation.model,
     );
@@ -381,12 +341,12 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     // ⚠ THROWS `AiBudgetError` — never truncates, and never after a request has
     // been made. Once the provider has been called the input tokens are billed
     // to the user whether or not the answer is any good, so this is the last
-    // moment a refusal is free. See `ai/ai-token-budget.ts`.
+    // moment a refusal is free. See `ai-port/ai-token-budget.ts`.
     assertWithinBudget({
       promptTokens,
       availableInputTokens: budget.availableInputTokens,
       model: generation.model,
-      providerId: provider.id,
+      providerId,
     });
 
     // -------------------------------------------------------------------------
@@ -419,25 +379,25 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     let usagePromptTokens: number | null = null;
     let usageCompletionTokens: number | null = null;
 
-    const ctx = createProviderContext(apiKey, settingsParse.data);
-
-    for await (const event of provider.generate(ctx, {
+    // ⚠ A CONTENT-POLICY REFUSAL ARRIVES AS A THROWN `AiRefusedError`, from inside
+    // this loop: the port never yields a `content_filter` finish. It propagates
+    // to `process`, which files it as a refusal exactly as before.
+    for await (const event of this.ai.streamText({
+      userId,
+      feature: 'note_generate',
+      // The span and the usage row link to this job.
+      jobId: job.id,
       model: generation.model,
-      systemPrompt: prompt.systemPrompt,
-      userContent: prompt.userContent,
+      system: prompt.systemPrompt,
+      user: prompt.userContent,
       // #436: what the window has left for THIS prompt, never more than the
       // budget's ceiling — a large source shrinks the answer's allowance
       // rather than being refused to pay for an unused output reservation.
       maxOutputTokens: outputTokensForPrompt(budget, promptTokens),
-      timeoutMs: policy.requestTimeoutMs,
-      // #87. DEPLOYMENT POLICY, passed through unchanged — not a per-note or
-      // per-template choice. Reasoning tokens are billed and counted as output;
-      // since #436 the budget above adds this effort's headroom on top of a
-      // typed `maxOutputTokens` cap (bounded by the model's own maximum). See
-      // `ai.reasoningEffort`.
-      reasoningEffort: policy.reasoningEffort,
+      // The deployment's reasoning effort and request timeout are applied by the
+      // port from the `ai` namespace; they are policy, not a per-note choice.
     })) {
-      if (event.kind === 'delta') {
+      if (event.type === 'delta') {
         flusher.append(event.text);
 
         if (flusher.shouldFlush()) {
@@ -449,31 +409,21 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       }
 
       finishReason = event.finishReason;
-      usagePromptTokens = event.usage.promptTokens;
-      usageCompletionTokens = event.usage.completionTokens;
+      usagePromptTokens = event.usage.inputTokens;
+      usageCompletionTokens = event.usage.outputTokens;
     }
 
     // -------------------------------------------------------------------------
     // 7. Settle.
     // -------------------------------------------------------------------------
-    if (finishReason === 'content_filter') {
-      // The model produced something and then refused to finish it. Whatever is
-      // in the buffer is a fragment of a refused answer, not a note.
-      throw new AiRefusedError(
-        `${provider.label} declined to finish this note because of its content policy.`,
-        undefined,
-        provider.id,
-      );
-    }
-
     if (flusher.content.trim().length === 0) {
       // A stream that ended cleanly having produced nothing. Committing it
       // would set the note `ready` with an empty body, which reads exactly like
       // a note the model decided was empty.
       throw new AiRefusedError(
-        `${provider.label} returned no text for this note. Try again, or use a different model.`,
+        `${providerLabelOf(providerId)} returned no text for this note. Try again, or use a different model.`,
         undefined,
-        provider.id,
+        providerId,
       );
     }
 
@@ -485,8 +435,9 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       // which is the one wrong answer about somebody's own bill.
       promptTokens: usagePromptTokens ?? promptTokens,
       completionTokens: usageCompletionTokens,
-      providerLabel: provider.label,
+      providerLabel: providerLabelOf(providerId),
       bodyFormat: template.bodyFormat,
+      jobId: job.id,
     });
 
     this.logger.log(
@@ -545,15 +496,3 @@ export function describe(error: unknown): string {
 
   return 'This note could not be generated because of an unexpected error. Try again.';
 }
-
-/**
- * The models this deployment permits for one provider, as normalised entries.
- *
- * ⚠ RE-EXPORTED, NOT DECLARED HERE ANY MORE (#182). It moved to
- * `../generation/allowed-models` so the titling pass could ask the same
- * question without importing this handler and closing an import cycle through
- * `NoteGenerationService`. The re-export is what keeps that a move rather than
- * a rename every caller has to follow — and there is still exactly one
- * implementation, which is the property that matters.
- */
-export { readAllowedModelEntries } from '../generation/allowed-models';

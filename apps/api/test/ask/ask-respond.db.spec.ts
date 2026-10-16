@@ -23,6 +23,7 @@ import type { Job, PrismaClient } from '@prisma/client';
 import type { AiChatEvent, AiChatRequest } from '../../src/ai/providers/ai-provider.interface';
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { AskMessagesService } from '../../src/ask/ask-messages.service';
+import { readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
 import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
 import { AskToolset } from '../../src/ask/tools/ask-toolset';
 import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
@@ -123,7 +124,9 @@ describeWithDb('ask.respond (real Postgres)', () => {
       preferences,
     );
     const jobs = new JobsService(p);
-    service = new AskMessagesService(p, new AskAccessService(p), resolver as never, jobs);
+    // The message service asks the AI port only for readiness (the chat loop below is #476).
+    const ai = { readiness: async () => readyReadiness({ model: 'gpt-test', reasoningEffort: 'low', source: 'task' }) };
+    service = new AskMessagesService(p, new AskAccessService(p), ai as never, jobs);
     handler = new AskRespondHandler(
       { register: () => undefined } as never,
       p,

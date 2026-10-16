@@ -5,8 +5,8 @@
 // Runs `kg.extract`'s own pure pipeline against one golden fixture, with NO
 // database: fixture → `ExtractionInput` → `buildExtractionContext` →
 // `assembleExtractionPrompt` + `buildExtractionOutputSchema` → ONE
-// `generateStructured` call on the OpenAI provider with the key from
-// `KG_EVAL_OPENAI_API_KEY` → `validateExtraction` → the deterministic Meeting
+// `KvoxAi.generateStructured` call (a direct client holding the key from
+// `KG_EVAL_OPENAI_API_KEY`, or a fake in a test) → `validateExtraction` → the deterministic Meeting
 // and ATTENDED rows → `applyPrecheck` (default preferences) → a prediction.
 //
 // It is the production code path minus the loader and the writer, so a score
@@ -18,16 +18,13 @@
 // The golden set labels its own Meeting entity (key `meeting`); the runner
 // emits the deterministic Meeting row under the same ref.
 //
-// ⚠ The API key reaches the provider context only; it is never logged and
-// never written into a prediction (which carries `model` alone).
+// ⚠ The API key reaches the direct client only (`direct-structured.ts`); it is
+// never logged and never written into a prediction (which carries `model` alone).
 // =============================================================================
 
 import { computeEffectiveSchema } from '@app/shared/ontology';
+import { z } from 'zod';
 
-import { AiProviderRegistry } from '../../../src/ai/ai-provider.registry';
-import { DEFAULT_SYSTEM_SETTINGS } from '../../../src/settings/registry/default-system-settings';
-import { createProviderContext, type AiProvider } from '../../../src/ai/providers/ai-provider.interface';
-import { OpenAiProvider } from '../../../src/ai/providers/openai.provider';
 import {
   buildExtractionContext,
   normalizeForMatch,
@@ -41,6 +38,7 @@ import { extractionRowCaps } from '../../../src/graph/extraction/row-caps';
 import { addDeterministicRows, validateExtraction, type EvidenceDraft, type ProposedRow } from '../../../src/graph/extraction/validate';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../../src/graph/preferences/graph-preferences.defaults';
 import type { EndpointRef } from '../../../src/graph/proposals/proposal-payload.schema';
+import { directStructuredClient, type KgEvalAi } from '../direct-structured';
 import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';
 import type { KgEvalPrediction, PredictedEvidence } from '../prediction-schema';
@@ -49,6 +47,8 @@ import type { KgEvalRunner, KgEvalRunOptions } from '../runner';
 /** The completion ceiling an eval run uses (a production run takes it from policy). */
 export const EVAL_MAX_OUTPUT_TOKENS = 16_000;
 export const EVAL_TIMEOUT_MS = 180_000;
+/** The user id an eval call carries (there is no signed-in user). */
+export const EVAL_USER_ID = 'kg-eval';
 
 /** The one fixture → input mapping. Pure. */
 export function fixtureToInput(fixture: GoldenFixture): ExtractionInput {
@@ -163,8 +163,11 @@ export function rowsToPrediction(
 }
 
 export interface ExtractRunnerDeps {
-  /** The provider to call. Defaults to this build's OpenAI provider. */
-  provider?: AiProvider<unknown>;
+  /**
+   * The model port to call. Defaults to a direct OpenAI client holding the run's
+   * key (`opts.apiKey`); a test passes a fake.
+   */
+  ai?: KgEvalAi;
 }
 
 /**
@@ -174,30 +177,28 @@ export interface ExtractRunnerDeps {
  * runner resolves these rows before the pre-check runs.
  */
 export async function runExtraction(
-  provider: AiProvider<unknown>,
+  ai: KgEvalAi,
   fixture: GoldenFixture,
   opts: KgEvalRunOptions,
 ): Promise<{ rows: ProposedRow[]; stats: Record<string, number> } | null> {
-  if (typeof provider.generateStructured !== 'function') {
-    throw new Error(`Provider "${provider.id}" cannot return structured output`);
-  }
   const ctx = buildExtractionContext(fixtureToInput(fixture));
   // The row caps a production run at this ceiling would send (#435).
   const caps = extractionRowCaps(EVAL_MAX_OUTPUT_TOKENS, 'none');
   const prompt = assembleExtractionPrompt(ctx, caps);
   const schema = buildExtractionOutputSchema(ctx, caps);
-  // This build's default provider settings (the OpenAI API root), with the
-  // model the run names permitted — nothing a deployment's settings add.
-  const defaults = (DEFAULT_SYSTEM_SETTINGS.ai.providers as Record<string, Record<string, unknown>>)[provider.id] ?? {};
-  const settings = provider.settingsSchema.parse({ ...defaults, allowedModels: [opts.model], defaultModel: opts.model });
-  const result = await provider.generateStructured(createProviderContext(opts.apiKey, settings), {
+  // `schema` is the pass-through validator: `validateExtraction` below is the
+  // product's own validation, exactly as in the `kg.extract` handler.
+  const result = await ai.generateStructured({
+    userId: EVAL_USER_ID,
+    feature: 'graph_extract',
     model: opts.model,
-    systemPrompt: prompt.systemPrompt,
-    userContent: prompt.userContent,
-    schema,
+    system: prompt.systemPrompt,
+    user: prompt.userContent,
     schemaName: EXTRACTION_SCHEMA_NAME,
+    schema: z.unknown(),
+    jsonSchema: schema,
     maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
-    timeoutMs: EVAL_TIMEOUT_MS,
+    signal: AbortSignal.timeout(EVAL_TIMEOUT_MS),
   });
 
   const validated = validateExtraction(result.value, ctx);
@@ -226,11 +227,10 @@ export function precheckToPrediction(fixtureId: string, model: string, rows: Pro
 }
 
 export function createExtractRunner(deps: ExtractRunnerDeps = {}): KgEvalRunner {
-  const provider = deps.provider ?? (new OpenAiProvider(new AiProviderRegistry()) as unknown as AiProvider<unknown>);
   return {
     name: 'extract',
     async run(fixture: GoldenFixture, opts: KgEvalRunOptions): Promise<KgEvalPrediction> {
-      const extracted = await runExtraction(provider, fixture, opts);
+      const extracted = await runExtraction(deps.ai ?? directStructuredClient(opts.apiKey), fixture, opts);
       if (!extracted) {
         return { fixtureId: fixture.id, model: opts.model, entities: [], relations: [], items: [], stats: { invalidOutput: 1 } };
       }

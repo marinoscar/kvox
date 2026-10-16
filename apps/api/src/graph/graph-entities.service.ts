@@ -32,7 +32,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
-import { AiSettingsService } from '../ai/ai-settings.service';
+import { GraphAiRunResolver } from './graph-ai-run.service';
 import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphAccessService } from './access/graph-access.service';
@@ -97,7 +97,7 @@ export class GraphEntitiesService {
     private readonly write: GraphWriteService,
     private readonly jobs: JobsService,
     private readonly registry: JobHandlerRegistry,
-    private readonly aiSettings: AiSettingsService,
+    private readonly aiRuns: GraphAiRunResolver,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -229,8 +229,7 @@ export class GraphEntitiesService {
 
   /** `ai.graphEnabled` (#360), absent — and therefore off — until #360 adds it. */
   private async graphEnabled(): Promise<boolean> {
-    const policy = (await this.aiSettings.get()) as { graphEnabled?: unknown };
-    return policy.graphEnabled === true;
+    return this.aiRuns.graphEnabled();
   }
 
   private async audit(userId: string, entityId: string, meta: Record<string, unknown>): Promise<void> {

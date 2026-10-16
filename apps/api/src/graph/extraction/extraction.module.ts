@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../../ai/ai.module';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { NoteOriginService } from '../../notes/note-origin.service';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -32,7 +31,7 @@ import { ProposalWriter } from './proposal-writer.service';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, AiModule, GraphModule],
+  imports: [PrismaModule, GraphModule],
   controllers: [GraphExtractionController],
   providers: [
     NoteAccessService,

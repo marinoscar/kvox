@@ -1,10 +1,9 @@
 /**
  * The `extract` kg:eval runner (#363): kg.extract's pure pipeline over one
- * golden fixture, with a stub provider — no network, no key, no database.
+ * golden fixture, with a `FakeKvoxAi` — no network, no key, no database.
  */
 
-import { z } from 'zod';
-
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { loadGoldenSet, selectFixtures } from '../../scripts/kg-eval/load';
 import { kgEvalPredictionSchema } from '../../scripts/kg-eval/prediction-schema';
 import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
@@ -14,18 +13,8 @@ import { buildExtractionContext } from '../../src/graph/extraction/extraction-co
 
 const [m01] = selectFixtures(loadGoldenSet(), ['m01'], null);
 
-function stubProvider(answer: unknown) {
-  const generateStructured = jest.fn(async () => ({ value: answer, usage: { promptTokens: 10, completionTokens: 5 }, finishReason: 'stop' }));
-  return {
-    provider: {
-      id: 'openai',
-      label: 'OpenAI',
-      settingsSchema: z.object({}).passthrough(),
-      countTokens: () => 1,
-      generateStructured,
-    },
-    generateStructured,
-  };
+function stubAi(answer: unknown) {
+  return new FakeKvoxAi().queueStructured(answer, { usage: { inputTokens: 10, outputTokens: 5 } });
 }
 
 describe('kg:eval extract runner (#363)', () => {
@@ -54,15 +43,18 @@ describe('kg:eval extract runner (#363)', () => {
       relations: [],
       items: [],
     };
-    const { provider, generateStructured } = stubProvider(answer);
-    const runner = createExtractRunner({ provider: provider as never });
+    const ai = stubAi(answer);
+    const runner = createExtractRunner({ ai });
 
     const prediction = kgEvalPredictionSchema.parse(await runner.run(m01, { model: 'gpt-test', apiKey: 'sk-never-logged' }));
 
-    expect(generateStructured).toHaveBeenCalledTimes(1);
-    expect(generateStructured).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'sk-never-logged' }),
-      expect.objectContaining({ model: 'gpt-test', schemaName: 'kg_extraction' }),
+    expect(ai.callsOf('generateStructured')).toHaveLength(1);
+    expect(ai.lastCall('generateStructured')).toEqual(
+      expect.objectContaining({
+        feature: 'graph_extract',
+        model: 'gpt-test',
+        request: expect.objectContaining({ schemaName: 'kg_extraction', jsonSchema: expect.any(Object) }),
+      }),
     );
     expect(JSON.stringify(prediction)).not.toContain('sk-never-logged');
     expect(prediction.model).toBe('gpt-test');
@@ -83,8 +75,7 @@ describe('kg:eval extract runner (#363)', () => {
   });
 
   it('an answer that is not the extraction format scores as an empty prediction', async () => {
-    const { provider } = stubProvider({ entities: 'nope' });
-    const prediction = await createExtractRunner({ provider: provider as never }).run(m01, { model: 'gpt-test', apiKey: 'k' });
+    const prediction = await createExtractRunner({ ai: stubAi({ entities: 'nope' }) }).run(m01, { model: 'gpt-test', apiKey: 'k' });
     expect(prediction).toEqual(expect.objectContaining({ entities: [], relations: [], items: [], stats: { invalidOutput: 1 } }));
   });
 });

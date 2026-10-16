@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../../ai/ai.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GraphExtractionModule } from '../extraction/extraction.module';
 import { GraphModule } from '../graph.module';
@@ -22,7 +21,7 @@ import { KgImportHandler } from './kg-import.handler';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, AiModule, GraphModule, GraphExtractionModule, GraphResolutionModule],
+  imports: [PrismaModule, GraphModule, GraphExtractionModule, GraphResolutionModule],
   controllers: [GraphImportController],
   providers: [GraphImportService, KgImportHandler],
 })

@@ -26,7 +26,7 @@
 // -----------------------------------------------------------------------------
 //
 // They have three different fixes and three different people to talk to — the
-// argument `AiConfigService` makes for keeping `available` and `keyConfigured`
+// argument the retired `AiConfigService` made for keeping `available` and `keyConfigured`
 // separate, applied to the refusal:
 //
 //   • the DEPLOYMENT has not enabled AI, or permits no model this build can
@@ -63,34 +63,42 @@
 
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
-import { AiBudgetError } from '../../ai/ai-errors';
+import { AiBudgetError } from '../../ai-port/ai-errors';
+import { assertWithinBudget } from '../../ai-port/ai-token-budget';
+import { KVOX_AI, type KvoxAi, type KvoxAiReadiness } from '../../ai-port/kvox-ai';
 import {
-  modelKnowledgeOf,
-  resolveAllowedModel,
-} from '../../ai/ai-model-resolution';
-import type { AiAllowedModel } from '../../ai/ai-settings.schema';
-import {
-  AiTaskModelResolver,
-  type GenerationRefusalMessages,
-} from '../../ai/ai-task-model-resolver.service';
-import type { AiProvider } from '../../ai/providers/ai-provider.interface';
-import type { SystemAiValue } from '../../ai/ai-settings.schema';
+  KvoxAiConflict,
+  graphDisabledConflict,
+  notPermittedBadRequest,
+} from '../../ai-port/kvox-ai-errors';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
+import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
 import { NoteAccessService } from '../access/note-access.service';
 import type { NoteSourceDto } from '../dto/note.dto';
 import { NOTES_MANAGED_BY } from '../job-types';
-import { assertWithinBudget, computeTokenBudget } from '../../ai/ai-token-budget';
+import {
+  budgetFromReadiness,
+  readAiTokenCaps,
+  type AiTokenCaps,
+} from './ai-readiness';
 import type { SourceSelector } from './note-source.service';
 
 /** Which of the two entry points is asking. Shapes the refusal sentences only. */
 export type GenerationIntent = 'note' | 'preview';
+
+/** The two 409 sentences a caller supplies; the rest of each refusal is shared. */
+interface GenerationRefusalMessages {
+  notConfigured: string;
+  keyMissing: string;
+}
 
 /**
  * The two 409 sentences for each intent. `ai_not_configured`/`ai_key_missing`
@@ -113,18 +121,22 @@ function refusalMessagesFor(intent: GenerationIntent): GenerationRefusalMessages
   };
 }
 
-/** The provider, model and policy one generation will run under. */
+/** The provider, model and limits one generation will run under. */
 export interface ResolvedModel {
-  provider: AiProvider<never>;
+  providerId: string;
   model: string;
-  policy: SystemAiValue;
+  /** What `KvoxAi.readiness` answered: the model's own window and output ceiling. */
+  readiness: KvoxAiReadiness;
+  /** The deployment's spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`). */
+  caps: AiTokenCaps;
 }
 
 /** What the budget check needs. All of it is already resolved by the caller. */
 export interface PromptFitInput {
-  provider: AiProvider<never>;
+  providerId: string;
   model: string;
-  policy: SystemAiValue;
+  readiness: KvoxAiReadiness;
+  caps: AiTokenCaps;
   systemPrompt: string;
   userContent: string;
 }
@@ -133,7 +145,8 @@ export interface PromptFitInput {
 export class NoteGenerationRequestService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly taskModels: AiTaskModelResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
+    private readonly settings: KvoxAiSettings,
     private readonly transcriptAccess: TranscriptAccessService,
     private readonly noteAccess: NoteAccessService,
     private readonly managedObjects: KvoxManagedObjectsService,
@@ -148,16 +161,64 @@ export class NoteGenerationRequestService {
     requested: string | null,
     intent: GenerationIntent = 'note',
   ): Promise<ResolvedModel> {
-    // #360: the checks, their order, the 400 wording and the 409 reasons now
-    // live in `AiTaskModelResolver.resolveForGeneration`, shared with every
-    // connected-knowledge task. Only the SENTENCES are this caller's.
-    const r = await this.taskModels.resolveForGeneration(
-      userId,
-      requested,
-      refusalMessagesFor(intent),
-    );
+    // #475: the checks, their order and the 409 reasons are `KvoxAi.readiness`'s,
+    // shared with every connected-knowledge task. Only the SENTENCES are this
+    // caller's.
+    const readiness = await this.ai.readiness(userId, 'note_generate', requested);
 
-    return { provider: r.provider, model: r.model, policy: r.policy };
+    if (!readiness.ok || readiness.provider === null || readiness.model === null) {
+      throw await this.refusal(readiness, requested, refusalMessagesFor(intent));
+    }
+
+    return {
+      providerId: readiness.provider,
+      model: readiness.model,
+      readiness,
+      caps: await readAiTokenCaps(this.settings),
+    };
+  }
+
+  /** The refusal one not-ready answer becomes. */
+  private async refusal(
+    readiness: KvoxAiReadiness,
+    requested: string | null,
+    messages: GenerationRefusalMessages,
+  ): Promise<Error> {
+    switch (readiness.reason) {
+      case 'ai_key_missing':
+        return new KvoxAiConflict('ai_key_missing', messages.keyMissing);
+      case 'model_not_permitted':
+        return notPermittedBadRequest({
+          model: requested ?? readiness.model,
+          permitted: await this.permittedModelIds(),
+        });
+      case 'model_lacks_capability':
+        return new KvoxAiConflict(
+          'model_lacks_capability',
+          `The model "${readiness.model ?? 'none'}" cannot be used to generate a note.`,
+        );
+      case 'graph_disabled':
+        return graphDisabledConflict();
+      default:
+        // `ai_not_configured`, or a not-ready answer that names no reason.
+        return new KvoxAiConflict('ai_not_configured', messages.notConfigured);
+    }
+  }
+
+  /** The model ids an administrator has enabled, for the 400's "Choose one of". */
+  private async permittedModelIds(): Promise<string[]> {
+    try {
+      const rows = await this.prisma.aiModel.findMany({
+        where: { provider: 'openai', enabled: true },
+        orderBy: { modelId: 'asc' },
+        select: { modelId: true },
+      });
+
+      return rows.map((row) => row.modelId);
+    } catch {
+      // The list is a courtesy in the message; the refusal stands without it.
+      return [];
+    }
   }
 
   /**
@@ -223,62 +284,29 @@ export class NoteGenerationRequestService {
    * nothing was created. The job re-checks against CURRENT state anyway,
    * because a transcript can grow between this request and that claim.
    *
-   * A model NOTHING can describe is still not refused here — there is no
-   * context window to check against, and `resolveModel` has already established
-   * the model is permitted. The job's own check is the backstop. ⚠ SINCE #97
-   * THAT FALL-THROUGH IS NEARLY UNREACHABLE: `modelKnowledgeOf` carries the
-   * provider's family derivation and its conservative floor as well as its
-   * catalogue, so a permitted model almost always HAS a window to check
-   * against here. The branch is kept because the one case it was written for —
-   * a policy naming a provider this build does not implement — is still real,
-   * and because refusing a generation for want of a number nobody can supply
-   * would be worse than letting the job report it.
-   *
-   * ⚠ THE DESCRIPTOR COMES FROM THE POLICY ENTRY, NOT STRAIGHT FROM THE BUILD
-   * CATALOGUE (#78). An entry may carry its own `contextWindowTokens`, and such
-   * a model — one this build has never heard of, adopted from the discovery
-   * dropdown — is exactly the case that used to fall through the `return`
-   * below. Falling through means an over-long prompt is not refused HERE with
-   * numbers in a 400, but minutes later as a `failed` note the user has to go
-   * and look at. `resolveAllowedModel` is the same function the config probe
-   * and the job use, so all three agree about what this model's window is.
+   * A model with NO recorded context window is still not refused here — there
+   * is nothing to check against, and `resolveModel` has already established the
+   * model is enabled. The job's own check is the backstop, and it refuses such a
+   * model before the provider is touched. The window comes from the enabled
+   * model's catalogue row (`readiness.contextWindowTokens`), the same number the
+   * job and `GET /api/ai-tasks/config` use, so all three agree.
    */
   assertPromptFits(input: PromptFitInput): void {
-    const block = (
-      input.policy.providers as Record<
-        string,
-        { allowedModels?: AiAllowedModel[] } | undefined
-      >
-    )[input.provider.id];
+    // No context window recorded: nothing to check against. The job's own
+    // check is the backstop (it refuses a model with no window).
+    const budget = budgetFromReadiness(input.readiness, input.caps);
 
-    const entry = block?.allowedModels?.find(
-      (model) => model.id === input.model,
-    );
-
-    const descriptor = entry
-      ? resolveAllowedModel(entry, modelKnowledgeOf(input.provider))
-      : null;
-
-    if (!descriptor) return;
-
-    const budget = computeTokenBudget({
-      contextWindowTokens: descriptor.contextWindowTokens,
-      modelMaxOutputTokens: descriptor.maxOutputTokens,
-      policyMaxOutputTokens: input.policy.maxOutputTokens,
-      policyMaxInputTokens: input.policy.maxInputTokens,
-      // #436: the same effort `note.generate` sends, so both reach one number.
-      reasoningEffort: input.policy.reasoningEffort,
-    });
+    if (!budget) return;
 
     try {
       assertWithinBudget({
-        promptTokens: input.provider.countTokens(
+        promptTokens: this.ai.countTokens(
           `${input.systemPrompt}\n${input.userContent}`,
           input.model,
         ),
         availableInputTokens: budget.availableInputTokens,
         model: input.model,
-        providerId: input.provider.id,
+        providerId: input.providerId,
       });
     } catch (error) {
       // ⚠ THE SAME SENTENCE THE JOB WOULD HAVE WRITTEN ONTO THE GENERATION,

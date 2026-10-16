@@ -13,6 +13,7 @@ import {
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
+import { invalidateAiResolverCache, primeAiReadiness, storedSystemSettings } from '../helpers/ai-readiness.fixtures';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 
@@ -79,22 +80,6 @@ const builtInRow = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   });
 
-/** `ai` policy with the feature actually switched on. */
-const ENABLED_AI_SETTINGS = {
-  ...DEFAULT_SYSTEM_SETTINGS,
-  ai: {
-    ...DEFAULT_SYSTEM_SETTINGS.ai,
-    enabled: true,
-    providers: {
-      openai: {
-        ...DEFAULT_SYSTEM_SETTINGS.ai.providers.openai,
-        allowedModels: ['gpt-4o'],
-        defaultModel: 'gpt-4o',
-      },
-    },
-  },
-};
-
 describe('Note templates (#50)', () => {
   let context: TestContext;
   const sources = { resolve: jest.fn() };
@@ -120,13 +105,10 @@ describe('Note templates (#50)', () => {
       describe: 'transcript at version 3',
     });
 
-    prismaMock.systemSettings.findUnique.mockResolvedValue({
-      key: 'global',
-      value: ENABLED_AI_SETTINGS,
-      version: 1,
-      updatedAt: new Date(),
-      updatedByUser: null,
-    });
+    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, no key until a test
+    // says the caller has one (`readyToPreview`).
+    invalidateAiResolverCache(context);
+    primeAiReadiness({ hasKey: false });
 
     prismaMock.note.count.mockResolvedValue(0);
     prismaMock.noteTemplate.findMany.mockResolvedValue([]);
@@ -658,7 +640,7 @@ describe('Note templates (#50)', () => {
   describe('POST /api/note-templates/preview', () => {
     /** The caller has a key, and the transcript is theirs. */
     function readyToPreview(userId: string): void {
-      prismaMock.userAiCredential.findUnique.mockResolvedValue({ id: 'cred-1' });
+      primeAiReadiness({ hasKey: true });
       prismaMock.transcript.findUnique.mockResolvedValue({
         id: TRANSCRIPT_ID,
         ownerId: userId,
@@ -855,7 +837,7 @@ describe('Note templates (#50)', () => {
       const user = await createMockTestUser(context);
 
       readyToPreview(user.id);
-      prismaMock.userAiCredential.findUnique.mockResolvedValue(null);
+      primeAiReadiness({ hasKey: false });
 
       const response = await request(context.app.getHttpServer())
         .post(`${TEMPLATES}/preview`)
@@ -871,13 +853,9 @@ describe('Note templates (#50)', () => {
       const user = await createMockTestUser(context);
 
       readyToPreview(user.id);
-      prismaMock.systemSettings.findUnique.mockResolvedValue({
-        key: 'global',
-        value: DEFAULT_SYSTEM_SETTINGS,
-        version: 1,
-        updatedAt: new Date(),
-        updatedByUser: null,
-      });
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSystemSettings(DEFAULT_SYSTEM_SETTINGS.ai as never) as never,
+      );
 
       await request(context.app.getHttpServer())
         .post(`${TEMPLATES}/preview`)

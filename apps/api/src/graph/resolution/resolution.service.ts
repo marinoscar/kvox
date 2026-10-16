@@ -214,10 +214,11 @@ export class ResolutionService {
     userId: string,
     texts: readonly string[],
     jobType: string,
+    jobId?: string,
   ): Promise<{ vectors: Array<{ values: number[]; model: string } | null>; vectorArm: string }> {
     const none = (reason: string) => ({ vectors: texts.map(() => null), vectorArm: `skipped:${reason}` });
     if (texts.length === 0) return { vectors: [], vectorArm: 'ok' };
-    const embedder = await this.embedder.resolve(userId);
+    const embedder = await this.embedder.resolve(userId, jobId);
     if (!embedder.ok) return none(embedder.reason);
     try {
       this.throttle.registerProviderKey(jobType, aiProviderThrottleKey(userId));
@@ -237,10 +238,11 @@ export class ResolutionService {
     userId: string,
     pairs: readonly AdjudicationPair[],
     jobType: string,
+    jobId?: string,
   ): Promise<{ verdicts: Map<string, AdjudicationResult> | null; reason: string | null }> {
     if (pairs.length === 0) return { verdicts: new Map(), reason: null };
     try {
-      return { verdicts: await this.adjudication.adjudicate(userId, pairs, { jobType }), reason: null };
+      return { verdicts: await this.adjudication.adjudicate(userId, pairs, { jobType, jobId }), reason: null };
     } catch (error) {
       if (error instanceof RateLimitError) throw error;
       const reason =
@@ -302,7 +304,7 @@ export class ResolutionService {
     // Everything else: candidates → score → band.
     const pending = toResolve.filter((row) => !decisions.has(row.id));
     const texts = pending.map((row) => buildEntityProfileText(row.payload, this.mentionProfileContext(row, entities, others, context.labels)));
-    const embedded = await this.embedMentions(userId, texts, jobType);
+    const embedded = await this.embedMentions(userId, texts, jobType, ctx.jobId);
     stats.vectorArm = embedded.vectorArm;
     const outcomes = await this.rankMentions(
       userId,
@@ -323,7 +325,7 @@ export class ResolutionService {
     let verdicts: Map<string, AdjudicationResult> | null = null;
     if (middle.length > 0 && thresholds.adjudication === 'llm') {
       const pairs = await this.buildMentionPairs(userId, middle, outcomes);
-      const result = await this.adjudicateSafely(userId, pairs.pairs, jobType);
+      const result = await this.adjudicateSafely(userId, pairs.pairs, jobType, ctx.jobId);
       if (result.reason) stats.adjudication = `unavailable:${result.reason}`;
       if (result.verdicts) {
         verdicts = new Map();

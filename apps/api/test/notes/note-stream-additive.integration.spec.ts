@@ -1,11 +1,5 @@
-import { z } from 'zod';
-
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-} from '../../src/ai/providers/ai-provider.interface';
+import type { KvoxTextEvent } from '../../src/ai-port/kvox-ai';
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { NoteGenerationStreamService } from '../../src/notes/generation/note-generation-stream.service';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import type { NoteStreamMessage } from '../../src/notes/generation/note-stream';
@@ -168,41 +162,25 @@ function createPrisma(db: Db): Record<string, unknown> {
  * completion would land inside one macrotask and the reader would only ever see
  * the finished buffer, which is the one case this file must NOT be limited to.
  */
-class StreamingProvider implements AiProvider<unknown> {
-  readonly id = 'openai';
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
-    ],
-    streaming: true as const,
-    // #78: this fake implements no `listModels`, so it must not claim to — the
-    // registry refuses that combination at boot.
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
+class StreamingAi extends FakeKvoxAi {
+  streamText(req: Parameters<FakeKvoxAi['streamText']>[0]): AsyncIterable<KvoxTextEvent> {
+    // Record the call exactly as the fake does, then stream with pauses.
+    void super.streamText(req);
 
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
-  }
+    return (async function* (): AsyncGenerator<KvoxTextEvent> {
+      for (const chunk of CHUNKS) {
+        await delay(12);
 
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
+        yield { type: 'delta', text: chunk };
+      }
 
-  async *generate(_ctx: unknown, _request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    for (const chunk of CHUNKS) {
-      await delay(12);
-
-      yield { kind: 'delta', text: chunk };
-    }
-
-    yield {
-      kind: 'done',
-      finishReason: 'stop',
-      usage: { promptTokens: 1_200, completionTokens: 340 },
-    };
+      yield {
+        type: 'done',
+        finishReason: 'stop',
+        model: 'gpt-4o',
+        usage: { inputTokens: 1_200, outputTokens: 340 },
+      };
+    })();
   }
 }
 
@@ -226,29 +204,12 @@ function harness(db: Db): { handler: NoteGenerateHandler; prisma: Record<string,
     { enqueueForReadyNote: jest.fn().mockResolvedValue(null) } as never,
   );
 
-  const providers = new AiProviderRegistry();
-  providers.register(new StreamingProvider());
-
   const handler = new NoteGenerateHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
-    {
-      get: jest.fn().mockResolvedValue({
-        enabled: true,
-        providers: {
-          openai: {
-            baseUrl: 'https://api.openai.com/v1',
-            allowedModels: ['gpt-4o'],
-            defaultModel: 'gpt-4o',
-          },
-        },
-        maxInputTokens: 100_000,
-        maxOutputTokens: 4_000,
-        requestTimeoutMs: 60_000,
-      }),
-    } as never,
-    { getSecret: jest.fn().mockResolvedValue('sk-test') } as never,
+    new StreamingAi(),
+    // The deployment's two spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`).
+    { get: jest.fn().mockResolvedValue({ maxInputTokens: 100_000, maxOutputTokens: 4_000 }) } as never,
     generations,
     {
       resolve: jest.fn().mockResolvedValue({

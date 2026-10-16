@@ -166,11 +166,9 @@ export const SEARCH_REASON_KEY_INVALID = 'ai_key_invalid';
 export const SEARCH_REASON_NOT_CONFIGURED = 'ai_not_configured';
 
 /**
- * The active provider is a perfectly good chat provider that declares no
- * `embedding` capability — an OpenAI-compatible gateway proxying only
- * `/chat/completions` is the worked example in
- * `ai-provider.interface.ts`'s EMBEDDINGS section. A skip, and a permanent one
- * until an administrator changes providers.
+ * The active provider cannot embed: the deployment's embeddings model lacks
+ * the capability (`KvoxAi.readiness` answers `model_lacks_capability`). A skip,
+ * and a permanent one until an administrator changes the model catalog.
  */
 export const SEARCH_REASON_EMBEDDING_UNSUPPORTED = 'embedding_unsupported';
 
@@ -179,11 +177,44 @@ export const SEARCH_REASON_EMBEDDING_UNSUPPORTED = 'embedding_unsupported';
  *
  * ⚠ THE ONE `failed` REASON, AND THE ONLY ONE THAT ALSO THROWS. Every other
  * outcome above is a fact about the deployment or the user's own account, which
- * this job succeeded at determining. This one is a BUG: `AiProviderRegistry
- * .register` refuses a provider declaring any other width at boot, and
- * `OpenAiProvider.embed` refuses a response of any other width before returning
- * — so a mismatch reaching this handler means one of those two guards has been
- * removed or bypassed, and it must be visible in `Job.lastError` rather than
- * recorded quietly on the document and returned as success.
+ * this job succeeded at determining. This one is a BUG: the embedding catalog
+ * (`ai-port/embedding-catalog.ts`) declares 1536 and `KvoxAi.embed` refuses a
+ * response of any other width before returning — so a mismatch reaching this
+ * handler means one of those two guards has been removed or bypassed, and it
+ * must be visible in `Job.lastError` rather than recorded quietly on the
+ * document and returned as success.
  */
 export const SEARCH_REASON_DIMENSION_MISMATCH = 'dimension_mismatch';
+
+/** The reasons {@link searchReasonFor} can answer with. */
+export type SearchGateReason =
+  | typeof SEARCH_REASON_NOT_CONFIGURED
+  | typeof SEARCH_REASON_EMBEDDING_UNSUPPORTED
+  | typeof SEARCH_REASON_KEY_MISSING;
+
+/**
+ * Spells a `KvoxAi.readiness('search_embed')` answer the way
+ * `search_index_state.reason` and `GET /api/search`'s `semanticReason` always
+ * have: `null` when embedding can run, otherwise one of three strings.
+ *
+ * `model_lacks_capability` is the embeddings model being unusable
+ * (`embedding_unsupported`); `ai_key_missing` is the OWNER's (or searcher's)
+ * account; every other reason is the deployment not being set up
+ * (`ai_not_configured`). A key REFUSED by the vendor (`ai_key_invalid`) is not
+ * knowable from readiness: it surfaces from the call itself.
+ */
+export function searchReasonFor(readiness: {
+  ok: boolean;
+  reason: string | null;
+}): SearchGateReason | null {
+  if (readiness.ok) return null;
+
+  switch (readiness.reason) {
+    case 'ai_key_missing':
+      return SEARCH_REASON_KEY_MISSING;
+    case 'model_lacks_capability':
+      return SEARCH_REASON_EMBEDDING_UNSUPPORTED;
+    default:
+      return SEARCH_REASON_NOT_CONFIGURED;
+  }
+}

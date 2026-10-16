@@ -196,7 +196,7 @@ export class NotesService {
 
     // ⚠ THE 409s LIVE HERE — before the row, before the generation, before the
     // job. `details.reason` is `ai_not_configured` or `ai_key_missing`.
-    const { provider, model, policy } = await this.requests.resolveModel(
+    const { providerId, model, readiness, caps } = await this.requests.resolveModel(
       user.id,
       dto.model ?? template.model ?? null,
       'note',
@@ -208,9 +208,10 @@ export class NotesService {
       template,
       selector,
       contextText,
-      provider,
+      providerId,
       model,
-      policy,
+      readiness,
+      caps,
     });
 
     // ⚠ THE TITLE AND WHERE IT CAME FROM ARE DECIDED TOGETHER, here, once. A
@@ -256,7 +257,7 @@ export class NotesService {
         templateName: template.name,
         contextText,
         selector,
-        providerId: provider.id,
+        providerId,
         model,
         userId: user.id,
       });
@@ -267,7 +268,7 @@ export class NotesService {
       titleSource,
       templateId: template.id,
       sourceType: selector.sourceType,
-      provider: provider.id,
+      provider: providerId,
       model,
     });
 
@@ -280,7 +281,7 @@ export class NotesService {
       note: await this.shape(created.note),
       generationId: created.generationId,
       jobId: created.jobId,
-      providerId: provider.id,
+      providerId,
       model,
     };
   }
@@ -728,7 +729,7 @@ export class NotesService {
     // request, and a regeneration is a fresh read of the source text.
     await this.requests.resolveSource(sourceDto(selector), user);
 
-    const { provider, model, policy } = await this.requests.resolveModel(
+    const { providerId, model, readiness, caps } = await this.requests.resolveModel(
       user.id,
       dto.model ?? template.model ?? null,
       'note',
@@ -745,9 +746,10 @@ export class NotesService {
       template,
       selector,
       contextText,
-      provider,
+      providerId,
       model,
-      policy,
+      readiness,
+      caps,
     });
 
     const queued = await this.prisma.$transaction(async (tx) => {
@@ -769,7 +771,7 @@ export class NotesService {
         templateName: template.name,
         contextText,
         selector,
-        providerId: provider.id,
+        providerId,
         model,
         userId: user.id,
       });
@@ -777,7 +779,7 @@ export class NotesService {
 
     await this.audit(user.id, 'note:regenerate', note.id, {
       templateId: template.id,
-      provider: provider.id,
+      provider: providerId,
       model,
       fromVersion: note.currentVersion,
     });
@@ -791,7 +793,7 @@ export class NotesService {
       note: await this.shape(queued.note),
       generationId: queued.generationId,
       jobId: queued.jobId,
-      providerId: provider.id,
+      providerId,
       model,
     };
   }
@@ -1236,9 +1238,10 @@ export class NotesService {
     };
     selector: SourceSelector;
     contextText: string | null;
-    provider: ResolvedModel['provider'];
+    providerId: ResolvedModel['providerId'];
     model: string;
-    policy: ResolvedModel['policy'];
+    readiness: ResolvedModel['readiness'];
+    caps: ResolvedModel['caps'];
   }): Promise<void> {
     const source = await this.sources.resolve(input.selector);
 
@@ -1254,9 +1257,10 @@ export class NotesService {
     });
 
     this.requests.assertPromptFits({
-      provider: input.provider,
+      providerId: input.providerId,
       model: input.model,
-      policy: input.policy,
+      readiness: input.readiness,
+      caps: input.caps,
       systemPrompt: prompt.systemPrompt,
       userContent: prompt.userContent,
     });

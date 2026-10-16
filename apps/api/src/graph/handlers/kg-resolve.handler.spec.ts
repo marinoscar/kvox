@@ -97,7 +97,7 @@ describe('kg.resolve', () => {
   it('drops a middle-band pair the adjudicator called different', async () => {
     const t = build({ entities: [{ id: A }], outcomes: () => outcome(B, 0.7, 'middle') });
     await t.handler.process(job({ userId: USER, scope: 'all', reason: 'manual' }));
-    expect(t.resolution.adjudicateSafely).toHaveBeenCalledWith(USER, expect.any(Array), 'kg.resolve');
+    expect(t.resolution.adjudicateSafely).toHaveBeenCalledWith(USER, expect.any(Array), 'kg.resolve', expect.anything());
     expect(t.prisma.$transaction).not.toHaveBeenCalled();
   });
 

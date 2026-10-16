@@ -23,18 +23,20 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import type { AiModelResolution } from '../../ai/ai-task-model-resolver.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { GraphAiRun } from '../graph-ai-run';
 import type { GraphPreferences } from '../preferences/graph-preferences.defaults';
 
 /** The resolver's result — named as the spec names it. */
-export type ResolvedTaskModel = AiModelResolution;
+export type ResolvedTaskModel = GraphAiRun;
 
 export interface ProposalStageContext {
   proposalId: string;
   userId: string;
   /** The extracted note; null for an import proposal (#387), which has none. */
   noteId: string | null;
+  /** The queue job running the stage, so a model call's usage row links to it (#475). */
+  jobId?: string;
   /** #369 — thresholds, resolution mode, adjudication switch. */
   preferences: GraphPreferences;
   /** Resolver result for `graph.adjudicate`; null — a stage resolves lazily. */

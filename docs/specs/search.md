@@ -17,6 +17,8 @@
 > document's index and ranking already cover — a reader trying to understand
 > "how does searching this content work" needs both halves in one place, even
 > while only one of them answers real queries today.
+>
+> §11 records how embeddings are produced (`KvoxAi.embed`, issue #475): the one call path the indexer, the query embedder and the graph use.
 
 ## 1. What this solves
 
@@ -733,3 +735,27 @@ read of it would refuse.
   memory. Fusing both layers into one ranked result removes the need to
   guess.
 </content>
+
+## 11. Embedding call path (issue #475)
+
+Every embedding, for `search.index`, for the query side of `GET /api/search` (`SearchQueryEmbedder`) and for the graph (`kg.embed`), goes through `KvoxAi.embed` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path"). Nothing in `search/` imports a provider or the platform AI package, and nothing holds a key: the platform resolves the owner's key from `user_ai_keys` per call and records one `ai_usage_events` row per round trip under the feature `search_embed` (`graph_embed` for the graph) and the job id.
+
+**The catalog is the contract.** `apps/api/src/ai-port/embedding-catalog.ts` declares `KVOX_EMBEDDING`: provider `openai`, model `text-embedding-3-small`, 1536 dimensions, 8191 input tokens, batch size 128. `EMBEDDING_DIMENSIONS = 1536` is exported from there and search and the graph import it from nowhere else. 1536 is the width of the `vector(1536)` columns, so changing it is a migration and a full re-index, never an edit. The 128 batch is deliberate: the platform `embed()` accepts 256 inputs, and this app keeps 128 so a failed batch, the retry unit, wastes less of the user's quota. The model is not chosen by the admin policy; the catalog picks it.
+
+**What `KvoxAi.embed` guarantees.** It refuses an empty batch or one above 128 texts before any request (`AiInputError`). After the call it asserts one vector per text, in order, each exactly 1536 finite numbers, and throws `EmbeddingShapeError` (`kind` `count` or `dimension`) otherwise; a short or reordered batch would store one text's vector against another's chunk with nothing ever erroring. It returns `{ vectors, promptTokens, model }`, with `promptTokens` `null` (never `0`) when the provider reports no usage and `model` falling back to the catalog id.
+
+**Provenance is unchanged.** `search_embeddings` rows record the model, `text-embedding-3-small`, written from `embeddingCapability().model`. The "indexed" short-circuit in `search.index` still compares the content fingerprint **and** the model, so a document embedded under an earlier model falls through and is re-embedded. Vectors from two models are not comparable at any width; the model id is permanent once vectors are stored under it.
+
+**Status reasons.** `search_index_state.reason` and `semanticReason` keep their spellings. They are derived from `KvoxAi.readiness(userId, 'search_embed')` and from the call itself:
+
+| Reason | Source |
+|---|---|
+| `ai_not_configured` | `searchReasonFor`: any `readiness` reason other than the two below (AI off, no provider, no usable model) |
+| `ai_key_missing` | `searchReasonFor`: `readiness.reason === 'ai_key_missing'`, the OWNER's account for an index job, the searcher's for a query |
+| `embedding_unsupported` | `searchReasonFor`: `readiness.reason === 'model_lacks_capability'` |
+| `ai_key_invalid` | The call, not `readiness`: a vendor-refused key surfaces as `AiAuthError` (via `mapAiError`, platform `AI_KEY_INVALID`), which `search.index` records as `skipped` and returns without retrying. On a route, `mapAiError` answers `ai_key_invalid` for `search_embed` only |
+| `dimension_mismatch` | A `failed` row and a thrown error: `EmbeddingShapeError` or the handler's own width check. It is a bug (the catalog and `embed` both guard the width), so it must reach `Job.lastError` |
+
+`searchReasonFor(readiness)` (`search/indexing/job-types.ts`) returns `null` when `readiness.ok`, else maps `ai_key_missing` to `ai_key_missing`, `model_lacks_capability` to `embedding_unsupported` and every other reason to `ai_not_configured`. `SearchIndexStatusService`, `SearchQueryEmbedder` and `GraphEmbedder` all call it, so the page, the query path and the job agree. `readiness` makes no vendor call.
+
+**Jobs.** `search.index` registers the per-user throttle key (`aiProviderThrottleKey(ownerId)`) before the call; a 429 is a `RateLimitError` the queue defers without charging an attempt, and nothing is written to `search_index_state` for it. The query path passes an `AbortSignal.timeout` and answers full-text only when the embedding is unusable.

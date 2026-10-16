@@ -33,10 +33,11 @@
 // ⚠ Never log a label, a statement, a quote or a snippet — ids and counts only.
 // =============================================================================
 
-import { BadRequestException, HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { KgEntityDigest } from '@prisma/client';
 
-import { AI_CONFLICT_REASONS, AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
+import type { KvoxAiReason } from '../../ai-port/kvox-ai-errors';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
@@ -116,7 +117,7 @@ export class EntityBriefService {
     private readonly ontology: GraphOntologyService,
     private readonly views: EntityViewService,
     private readonly search: SearchService,
-    private readonly resolver: AiTaskModelResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly enqueuer: EntityDigestEnqueuer,
   ) {}
 
@@ -299,7 +300,7 @@ export class EntityBriefService {
 
   /**
    * Stale, nothing pending, and the caller asked for a refresh:
-   *   1. the resolver — configuration and key presence only, no provider
+   *   1. `KvoxAi.readiness` — configuration and key presence only, no provider
    *      call; a 409-class outcome is reported and nothing is enqueued;
    *   2. a failure less than 15 minutes ago → nothing is enqueued;
    *   3. otherwise one deduplicated `kg.entity_digest` job.
@@ -310,11 +311,15 @@ export class EntityBriefService {
     now: Date,
   ): Promise<{ pending: boolean; unavailable: DigestUnavailableReason | null }> {
     try {
-      await this.resolver.resolve(ownerId, 'graph.digest');
+      const readiness = await this.ai.readiness(ownerId, 'graph_digest');
+      if (!readiness.ok) {
+        const reason = digestUnavailableReason(readiness.reason);
+        // A reason the brief does not report (a model the deployment does not
+        // permit) must not break it, and nothing is enqueued either way.
+        return { pending: false, unavailable: reason };
+      }
     } catch (err) {
-      const reason = conflictReason(err);
-      if (reason) return { pending: false, unavailable: reason };
-      // Anything else (a 400, an unexpected failure) must not break the brief.
+      // `readiness` never throws by contract; an unexpected failure must not break the brief.
       this.logger.warn({ msg: 'digest model resolution failed; not enqueueing', entityId, error: errorName(err) });
       return { pending: false, unavailable: null };
     }
@@ -396,21 +401,18 @@ export class EntityBriefService {
   }
 }
 
-/** The resolver's 409 `details.reason`, when it is one the brief reports. */
-export function conflictReason(err: unknown): DigestUnavailableReason | null {
-  if (!(err instanceof HttpException) || err.getStatus() !== 409) return null;
-  const body = err.getResponse() as { details?: { reason?: unknown } } | string;
-  const reason = typeof body === 'object' ? body.details?.reason : undefined;
+/** A readiness reason, when it is one the brief reports; otherwise `null`. */
+export function digestUnavailableReason(reason: string | null): DigestUnavailableReason | null {
   return (DIGEST_UNAVAILABLE_REASONS as readonly unknown[]).includes(reason)
     ? (reason as DigestUnavailableReason)
     : null;
 }
 
+// Kept referenced so the DTO's enum cannot name a reason the port does not know.
+const _reasonParity: readonly KvoxAiReason[] = DIGEST_UNAVAILABLE_REASONS;
+void _reasonParity;
+
 function errorName(err: unknown): string {
   if (err instanceof HttpException) return `${err.name}:${err.getStatus()}`;
   return err instanceof Error ? err.name : typeof err;
 }
-
-// Kept referenced so the four resolver reasons and the DTO's enum cannot drift.
-const _reasonParity: readonly DigestUnavailableReason[] = Object.values(AI_CONFLICT_REASONS);
-void _reasonParity;

@@ -10,7 +10,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { UserAiCredentialsService } from '../ai/user-ai-credentials.service';
+import { AiUserKeysPurger } from '../platform/ai/ai-user-keys.purger';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import { ObjectsService } from '@marinoscar/platform-api/storage';
@@ -169,18 +169,22 @@ export class CredentialsUserDataHooks {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiCredentials: UserAiCredentialsService,
+    private readonly aiKeys: AiUserKeysPurger,
     private readonly pat: PatRevoker,
   ) {}
 
   /** `credentials` in `GET /api/user-data/summary`. */
   async summarize(userId: string): Promise<{ aiKeys: number; accessTokens: number }> {
-    const [aiKeys, accessTokens] = await Promise.all([
+    // PLATFORM-ADOPTION-SHIM(#477): `legacyKeys` counts the retired
+    // `user_ai_credentials` table, which #477 drops with the old AI module.
+    const [platformKeys, legacyKeys, accessTokens] = await Promise.all([
+      this.aiKeys.count(userId),
+      // Until #477 drops the table: a key saved before the AI slice moved.
       this.prisma.userAiCredential.count({ where: { userId } }),
       this.prisma.personalAccessToken.count({ where: { userId, revokedAt: null } }),
     ]);
 
-    return { aiKeys, accessTokens };
+    return { aiKeys: platformKeys + legacyKeys, accessTokens };
   }
 
   // ===========================================================================
@@ -190,14 +194,19 @@ export class CredentialsUserDataHooks {
   /**
    * Erase every AI provider key and revoke every personal access token.
    *
-   * Both go through the service that owns the rows rather than through
-   * `prisma` directly: `UserAiCredentialsService.removeAll` because a key is
-   * encrypted and audited by that module, and `PatService.revokeAllForUser`
-   * because revoking (not deleting) is that module's deliberate choice and this
-   * file should not be the second place that decision is made.
+   * The platform keys go through the service that owns them (`UserAiKeysService`
+   * via `AiUserKeysPurger`: it deletes the row and audits it, one call per
+   * provider), and the tokens through `PatRevoker` because revoking (not
+   * deleting) is that decision's one home. The old `user_ai_credentials` rows
+   * are deleted here, with the user as the only filter, until #477 drops the
+   * table.
    */
   async purge(userId: string): Promise<void> {
-    const aiKeys = await this.aiCredentials.removeAll(userId);
+    const platformKeys = await this.aiKeys.removeAll(userId);
+    // PLATFORM-ADOPTION-SHIM(#477): the retired `user_ai_credentials` rows go too,
+    // until #477 drops the table.
+    const { count: legacyKeys } = await this.prisma.userAiCredential.deleteMany({ where: { userId } });
+    const aiKeys = platformKeys + legacyKeys;
     const tokens = await this.pat.revokeAllForUser(userId);
 
     await auditUserData(this.prisma, userId, 'user_data:credentials_destroyed', {
