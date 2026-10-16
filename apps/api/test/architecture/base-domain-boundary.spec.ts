@@ -102,7 +102,7 @@ const DOMAIN_DIRS: readonly string[] = [
 const ROOT_FILES_EXEMPT: readonly string[] = [
   'app.module.ts', // imports every feature module, base and domain, to assemble the application
   'main.ts', // the HTTP entry point; imports the manifest and the app module
-  'kvox.manifest.ts', // the composition root for static registries (settings, jobs, notifications, onboarding, user-data)
+  'kvox.manifest.ts', // the composition root for static registries (settings, jobs, notifications, onboarding)
   'kvox.settings-manifest.ts', // exists only to register settings namespaces before domain providers load (imported first by kvox.manifest.ts)
   'instrumentation.ts', // OpenTelemetry bootstrap, loaded before everything else
 ];
@@ -321,7 +321,7 @@ describe('base code does not import domain code (issue #459)', () => {
     const base = deriveBaseDirs();
 
     // The directories the rule exists for are covered...
-    expect(base).toEqual(expect.arrayContaining(['ai-port', 'common', 'settings', 'onboarding', 'user-data']));
+    expect(base).toEqual(expect.arrayContaining(['ai-port', 'common', 'settings', 'onboarding']));
     // ...none of the product directories is mistaken for base...
     for (const domain of DOMAIN_DIRS) expect(base).not.toContain(domain);
     // ...and a renamed or deleted domain directory fails here instead of
@@ -396,15 +396,13 @@ const REGISTRATION_IMPORTERS: readonly string[] = [
 
 /**
  * A domain file that exists to be REGISTERED into a base registry: its
- * notifications, onboarding steps and facts, user-data categories and scopes,
- * settings namespaces, and job-type labels.
+ * notifications, onboarding steps and facts, settings namespaces, and job-type
+ * labels. (The user-data categories, scopes and model hints are the platform
+ * slice's since #480: `platform/user-data/user-data.manifest.ts`.)
  */
 const isRegistrationFile = (to: string): boolean =>
-  /\.(notifications|onboarding|user-data|system-settings|user-settings)$/.test(to) ||
+  /\.(notifications|onboarding|system-settings|user-settings)$/.test(to) ||
   /(^|\/)job-type-labels$/.test(to);
-
-/** A domain's user-data hooks provider: only its own module may wire it. */
-const isUserDataHooksFile = (to: string): boolean => /\.user-data\.hooks$/.test(to);
 
 /** Every edge, from every file under `src/`, into a domain directory. */
 function allSrcEdges(): Edge[] {
@@ -432,15 +430,6 @@ describe('domain registrations are imported by the composition roots only (issue
     expect(violations).toEqual([]);
   });
 
-  it('wires each domain user-data hooks provider from its own domain only', () => {
-    const violations = allSrcEdges()
-      .filter((edge) => isUserDataHooksFile(edge.to))
-      .filter((edge) => edge.from.split('/')[0] !== edge.domain)
-      .map((edge) => `${edge.from}:${edge.line} imports '${edge.specifier}' (domain '${edge.domain}').`);
-
-    expect(violations).toEqual([]);
-  });
-
   it('actually finds the registrations it guards (a path mistake must not make this vacuous)', () => {
     const importers = new Set(
       allSrcEdges()
@@ -456,12 +445,10 @@ describe('domain registrations are imported by the composition roots only (issue
   it.each([
     ['notes/notifications/notes.notifications', true],
     ['transcripts/transcripts.onboarding', true],
-    ['graph/graph.user-data', true],
     ['transcription/transcription.system-settings', true],
     ['graph/preferences/graph.user-settings', true],
     ['notes/job-type-labels', true],
     ['notes/notes.service', false],
-    ['notes/notes.user-data.hooks', false],
   ])('classifies %s as a registration file: %s', (to, expected) => {
     expect(isRegistrationFile(to)).toBe(expected);
   });

@@ -19,7 +19,7 @@
 // own constants would make the test follow a rename instead of catching it.
 // They were resolved from the real `readonly type` constants
 // (`transcripts/job-types.ts`, `notes/job-types.ts`, `graph/job-types.ts`,
-// `ask/job-types.ts`, `search/indexing/job-types.ts`, `user-data/job-types.ts`
+// `ask/job-types.ts`, `search/indexing/job-types.ts`, `kvox-objects/job-types.ts`
 // and each handler file), not typed from memory.
 // =============================================================================
 
@@ -85,6 +85,8 @@ const KVOX_JOB_TYPES = [
   'nodes.fleet.prune',
   // storage, notifications, backup (platform-owned after #469, #470, #471)
   'storage.cleanup.stale-uploads',
+  // this app's storage handler (#480): the Danger Zone's `files` category
+  'files.purge_unmanaged',
   'admin.broadcast.start',
   'admin.broadcast.chunk',
   'db.backup.run',
