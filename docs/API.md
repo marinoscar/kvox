@@ -2750,7 +2750,7 @@ Undoes a completed restore. Same "mode is the answer, all three are 200" contrac
 
 | Method | Path | Effect |
 |---|---|---|
-| `GET` | `/notifications/events` | The event registry for the caller's preferences matrix: `key`, `label`, `description`, `mandatory`, `defaultEnabled`, `channels` (capability intersected with administrator policy) and `declaredChannels` (the unfiltered capability). Order is the registration order in `platform/notifications/notification.manifest.ts` |
+| `GET` | `/notifications/events` | The event registry for the caller's preferences matrix: `key`, `label`, `description`, `mandatory`, `defaultEnabled`, `channels` (capability intersected with administrator policy) and `declaredChannels` (the unfiltered capability; **additive since #470**: the platform route returns it on every event, and the web client tolerates it). Order is the registration order in `platform/notifications/notification.manifest.ts` |
 | `GET` | `/notifications/channels` | **New in #470.** Every registered channel (`email`, `browser`, `push`) with its label, whether a user may toggle it, whether a critical broadcast may rely on it (`criticalCapable`) and whether a broadcast can be sent over it (`broadcastCapable`). Carries no configuration and no secret |
 | `GET` | `/notifications/config` | `{ browserEnabled, pushEnabled, vapidPublicKey }` (see System Settings above) |
 | `GET` | `/notifications/stream` | SSE (`text/event-stream`), the caller's own `notification` frames carrying `toast` and `pushed`. Liveness, not delivery: `GET /notifications` is the truth |

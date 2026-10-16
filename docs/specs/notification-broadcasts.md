@@ -645,47 +645,32 @@ screen.
 
 ## 11. Verification
 
+Since #470 the broadcast code is the platform's, so the model, handler,
+service and template claims this section used to list (the `NotificationBroadcast`
+field set and indexes, the compare-and-swap in the start handler, keyset paging,
+the status guard, `notifyNow` and the narrowing, the audit rows, the escaping
+`broadcast` email template) are covered by the platform's own suites
+(`@marinoscar/platform-api/notifications`) and the deleted `test/broadcasts/*` and
+`apps/api/src/notifications/broadcasts/*.spec.ts` files are gone. What this
+application pins itself:
+
 | Claim | Covered by |
 |---|---|
-| `NotificationBroadcast`'s generated field set and `NotificationBroadcastStatus`'s enum members match the schema | `apps/api/test/broadcasts/broadcast-model.db.spec.ts` (asserted against `Prisma.NotificationBroadcastScalarFieldEnum`, generated from `schema.prisma`) |
-| The `[status, scheduledFor]` and `[createdAt desc]` indexes and column defaults exist on the real table | `apps/api/test/broadcasts/broadcast-model.db.spec.ts` (the `resolveDbSuite`-gated half, real Postgres only) |
-| Both event keys satisfy the registry's structural invariants (unique key, non-empty channels, `mandatory` implies `defaultEnabled`, `<area>.<event>` key shape) with **no edit** to the generic test | `apps/api/src/notifications/notification-events.spec.ts` — its loops iterate `NOTIFICATION_EVENTS`, so the two new entries are covered automatically |
-| `NotifyOptions.channels` narrows a three-channel event to the requested subset, cannot resurrect a policy-dropped or user-muted channel, and an explicit `[]` means no channels | `apps/api/src/notifications/notifications.service.spec.ts`, `describe('NotifyOptions.channels')` |
-| A mandatory event is still narrowable by `options.channels` (the recipient-vs-sender ruling) | `apps/api/src/notifications/notifications.service.spec.ts`, `'a mandatory event still ignores stored preferences, and is still narrowable'` |
-| `notifyNow()` resolves only after every channel has been attempted and every delivery row written, and shares `notify()`'s narrowing | `apps/api/src/notifications/notifications.service.spec.ts`, `describe('notifyNow()')` |
-| The email template escapes every paragraph by construction and never calls `unsafeFromTrustedString` | `apps/api/src/email/templates/broadcast.email.spec.ts` |
-| Both event keys map to the one `'broadcast'` email template and the one shared browser/push renderer | `email-notification.channel.ts` / `browser-notification.channel.ts` registrations, exercised via the handler specs' dispatch assertions |
-| The start handler's claim puts `status` in the `WHERE`, stamps `startedAt`/`audienceCutoff` from one instant, counts with `audienceWhere()`, and enqueues the first chunk with `skipDedup: true` | `apps/api/src/notifications/broadcasts/handlers/broadcast-start.handler.spec.ts` |
-| A compare-and-swap that claims nothing (already `sending`/`sent`/`canceled`) re-stamps nothing and enqueues nothing | `broadcast-start.handler.spec.ts`, `describe('when the compare-and-swap claims nothing')` |
-| The chunk handler's status guard neutralises a cancelled, finished, deleted, or cutoff-less broadcast | `apps/api/src/notifications/broadcasts/handlers/broadcast-chunk.handler.spec.ts`, `describe('the status guard')` |
-| Paging is keyset (`id > cursor`, `orderBy: id asc`), frozen at the cutoff, and skips inactive users | `broadcast-chunk.handler.spec.ts`, `describe('paging')` |
-| Dispatch uses `notifyNow` (never the detached `notify`) with the broadcast's stored channels | `broadcast-chunk.handler.spec.ts`, `describe('dispatch')` |
-| The cursor and dispatched counter advance together, in one update, after sends — never before | `broadcast-chunk.handler.spec.ts`, `describe('progress')` |
-| A chunk enqueues its successor **only** with `skipDedup: true`, on a full page only, and finishes the broadcast on a short page | `broadcast-chunk.handler.spec.ts`, `describe('the chain')` |
-| A cancel landing mid-page stops the chunk without waiting out the remainder and queues no successor | `broadcast-chunk.handler.spec.ts`, `describe('cancellation mid-page')` |
-| A retried chunk resumes from the persisted cursor rather than replaying earlier pages | `broadcast-chunk.handler.spec.ts`, `describe('idempotence under at-least-once delivery')` |
-| Every database error in either handler propagates (throws to fail) rather than being swallowed | Both handler specs, `describe('throw to fail')` |
-| Literal routes (`/audience`, `/test`) resolve ahead of `/:id` through the real Nest router | `apps/api/test/broadcasts/broadcasts.integration.spec.ts`, `describe('literal routes resolve before :id')` |
-| All seven routes require Admin + the correct `broadcasts:read`/`broadcasts:write` permission | `broadcasts.integration.spec.ts`, `describe('authorization')` |
-| `critical: true` without `browser` in `channels` is a 400; the event key is derived and a client-supplied `eventKey` is ignored | `broadcasts.integration.spec.ts`, `describe('POST /admin/broadcasts validation')` |
-| Cancel is a conditional `updateMany` (status in `WHERE`), 404 for a missing row vs. 409 for a wrong-status row, and deletes no queued job row | `apps/api/src/notifications/broadcasts/broadcasts.service.spec.ts`, `describe('cancel')` |
-| Delete refuses with 409 while `sending`; a cancelled or sent broadcast can be deleted | `broadcasts.service.spec.ts`, `describe('remove')`; `broadcasts.integration.spec.ts`'s 409-on-cancel-of-sent case |
-| `sendTest` dispatches to the caller only, writes no row, queues no job | `broadcasts.service.spec.ts`, `describe('sendTest')` |
-| `audience()` counts with the same `audienceWhere()` the fan-out pages with | `broadcasts.service.spec.ts`, `describe('audience')` |
-| The approximate delivery breakdown windows by event key and `[startedAt, finishedAt ?? now]`, and is empty before `startedAt` exists | `broadcasts.service.spec.ts`, `describe('get')` |
-| Every state-changing route writes an audit event with identifiers and shape, **never the composed body** | `broadcasts.service.spec.ts` — each of `create`/`cancel`/`remove`/`sendTest`'s `'audits … without the body'` cases |
+| The routes require `broadcasts:*` or `org_broadcasts:*` (and nothing weaker), and the literal routes (`/audience`, `/test`) resolve ahead of `/:id` through the real Nest router | `apps/api/test/notifications/broadcasts-rbac.integration.spec.ts` |
+| `admin.broadcast` and `admin.broadcast_critical` keep their key, channels, `defaultEnabled` and `mandatory` flag | the notification events spec in `apps/api/test/notifications/` |
+| The job type strings `admin.broadcast.start` and `admin.broadcast.chunk` are unchanged | `apps/api/test/jobs/job-type-snapshot.spec.ts` |
 
 **What is not yet proven, honestly.** The compare-and-swap's *atomicity* —
 that two concurrent `start` executions against the same broadcast really do
 resolve to exactly one winner, that a chunk racing a cancel really cannot
 flip `canceled` back to `sent` — is a property of Postgres row locking, not
-of the handler code. Every spec listed above runs against a **mocked**
+of the handler code. Every handler spec runs against a **mocked**
 Prisma client, which can only show that the correct statement (status in the
 `WHERE`) was constructed; it cannot demonstrate that the statement is
 atomic under real concurrency, because a mock has no locking to observe.
 Issue #326 tracks the database-level suite
-(`apps/api/test/notifications/broadcasts/broadcast-fanout.db.spec.ts`, not
-yet written) that seeds real rows, runs two overlapping `start` executions
+(a database suite for the fan-out, not written; the platform's own suite is
+the place for it) that seeds real rows, runs two overlapping `start` executions
 and a cancel racing a chunk against a real Postgres instance, and asserts on
 the outcome rather than the SQL shape. Until #326 lands, that specific
 claim — the one whose failure mode is a duplicated announcement in every
