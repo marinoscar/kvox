@@ -10,51 +10,80 @@
 // statements the gate sends.
 // =============================================================================
 
+import { Client } from 'pg';
+
 import { restoreGateRegistry } from '@marinoscar/platform-api/db-backup';
 import { buildRestoreGateContext, describeRestoreGateConformance } from '@marinoscar/platform-api/db-backup/testing';
 
 import { KVOX_EXTENSIONS_GATE_ID, KVOX_REQUIRED_EXTENSIONS, checkKvoxExtensions } from './db-backup';
 
 interface RecordedClient {
-  config: Record<string, unknown>;
+  host: string | undefined;
+  port: number | undefined;
+  user: string | undefined;
+  database: string | undefined;
   queries: Array<{ text: string; values: unknown[] | undefined }>;
   ended: boolean;
 }
 
-const mockState: {
+const state: {
   clients: RecordedClient[];
   /** What `pg_available_extensions` offers in the current case. */
   offered: string[];
   connectError: Error | null;
-} = { clients: [], offered: [], connectError: null };
+  queryError: Error | null;
+} = { clients: [], offered: [], connectError: null, queryError: null };
 
-jest.mock('pg', () => ({
-  Client: jest.fn().mockImplementation((config: Record<string, unknown>) => {
-    const recorded: RecordedClient = { config, queries: [], ended: false };
-    mockState.clients.push(recorded);
-    return {
-      connect: jest.fn(async () => {
-        if (mockState.connectError) throw mockState.connectError;
-      }),
-      query: jest.fn(async (text: string, values?: unknown[]) => {
-        recorded.queries.push({ text, values });
-        const wanted = (values?.[0] ?? []) as string[];
-        return { rows: mockState.offered.filter((name) => wanted.includes(name)).map((name) => ({ name })) };
-      }),
-      end: jest.fn(async () => {
-        recorded.ended = true;
-      }),
-    };
-  }),
-}));
+// The `pg` module cannot be replaced with `jest.mock` here: the app registrations (this file's
+// subject among them) are loaded by the shared test setup before a spec's mocks exist, so the
+// gate holds the real `Client` class. Spying on its prototype works on that same class, and no
+// socket is ever opened (`connect` is stubbed).
+function recordedFor(client: unknown): RecordedClient {
+  const found = state.clients.find((entry) => (entry as unknown as { _client: unknown })._client === client);
+  if (found) return found;
+  const real = client as Pick<RecordedClient, 'host' | 'port' | 'user' | 'database'>;
+  const created: RecordedClient = {
+    host: real.host,
+    port: real.port,
+    user: real.user,
+    database: real.database,
+    queries: [],
+    ended: false,
+  };
+  Object.defineProperty(created, '_client', { value: client, enumerable: false });
+  state.clients.push(created);
+  return created;
+}
+
+function installClientSpies(): void {
+  jest.spyOn(Client.prototype, 'connect').mockImplementation(async function (this: Client) {
+    recordedFor(this);
+    if (state.connectError) throw state.connectError;
+  } as never);
+  jest.spyOn(Client.prototype, 'query').mockImplementation((async function (this: Client, text: string, values?: unknown[]) {
+    recordedFor(this).queries.push({ text, values });
+    if (state.queryError) throw state.queryError;
+    const wanted = (values?.[0] ?? []) as string[];
+    return { rows: state.offered.filter((name) => wanted.includes(name)).map((name) => ({ name })) };
+  }) as never);
+  jest.spyOn(Client.prototype, 'end').mockImplementation((async function (this: Client) {
+    recordedFor(this).ended = true;
+  }) as never);
+}
 
 /** Statements that would change the cluster; none may ever be sent. */
 const WRITE_STATEMENT = /\b(create|drop|alter|rename|insert|update|delete|truncate|grant|revoke)\b/i;
 
 beforeEach(() => {
-  mockState.clients = [];
-  mockState.offered = ['vector', 'pg_trgm', 'plpgsql'];
-  mockState.connectError = null;
+  state.clients = [];
+  state.offered = ['vector', 'pg_trgm', 'plpgsql'];
+  state.connectError = null;
+  state.queryError = null;
+  installClientSpies();
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe('the app extensions restore gate', () => {
@@ -76,7 +105,7 @@ describe('the app extensions restore gate', () => {
   });
 
   it('fails naming vector, with the remedy, when pgvector is not installable', async () => {
-    mockState.offered = ['pg_trgm', 'plpgsql'];
+    state.offered = ['pg_trgm', 'plpgsql'];
 
     const outcome = await checkKvoxExtensions(buildRestoreGateContext());
 
@@ -88,7 +117,7 @@ describe('the app extensions restore gate', () => {
   });
 
   it('fails naming pg_trgm when only the trigram extension is missing', async () => {
-    mockState.offered = ['vector'];
+    state.offered = ['vector'];
 
     const outcome = await checkKvoxExtensions(buildRestoreGateContext());
 
@@ -99,7 +128,7 @@ describe('the app extensions restore gate', () => {
   });
 
   it('names both extensions when the cluster offers neither', async () => {
-    mockState.offered = ['plpgsql'];
+    state.offered = ['plpgsql'];
 
     const outcome = await checkKvoxExtensions(buildRestoreGateContext());
 
@@ -109,11 +138,11 @@ describe('the app extensions restore gate', () => {
 
   it('issues exactly one statement, a SELECT on pg_available_extensions, and never a write', async () => {
     await checkKvoxExtensions(buildRestoreGateContext());
-    mockState.offered = [];
+    state.offered = [];
     await checkKvoxExtensions(buildRestoreGateContext());
 
-    expect(mockState.clients).toHaveLength(2);
-    for (const client of mockState.clients) {
+    expect(state.clients).toHaveLength(2);
+    for (const client of state.clients) {
       expect(client.queries).toHaveLength(1);
       const [{ text, values }] = client.queries;
       expect(text).toMatch(/^\s*SELECT\b/i);
@@ -129,36 +158,23 @@ describe('the app extensions restore gate', () => {
 
     await checkKvoxExtensions(buildRestoreGateContext({ facts: { ...base.facts, connection } }));
 
-    const [client] = mockState.clients;
-    expect(client.config).toMatchObject({ host: 'cluster.internal', port: 6543, user: 'admin_user', database: 'postgres' });
+    const [client] = state.clients;
+    expect(client).toMatchObject({ host: 'cluster.internal', port: 6543, user: 'admin_user', database: 'postgres' });
     expect(client.ended).toBe(true);
   });
 
   it('closes the connection even when the query fails', async () => {
-    const { Client } = jest.requireMock('pg') as { Client: jest.Mock };
-    Client.mockImplementationOnce((config: Record<string, unknown>) => {
-      const recorded: RecordedClient = { config, queries: [], ended: false };
-      mockState.clients.push(recorded);
-      return {
-        connect: jest.fn(async () => undefined),
-        query: jest.fn(async () => {
-          throw new Error('permission denied for view pg_available_extensions');
-        }),
-        end: jest.fn(async () => {
-          recorded.ended = true;
-        }),
-      };
-    });
+    state.queryError = new Error('permission denied for view pg_available_extensions');
 
     await expect(checkKvoxExtensions(buildRestoreGateContext())).rejects.toThrow(/permission denied/);
-    expect(mockState.clients[0].ended).toBe(true);
+    expect(state.clients[0].ended).toBe(true);
   });
 
   it('rejects when the cluster cannot be reached, so the pre-flight fails closed', async () => {
-    mockState.connectError = new Error('connect ECONNREFUSED');
+    state.connectError = new Error('connect ECONNREFUSED');
 
     await expect(checkKvoxExtensions(buildRestoreGateContext())).rejects.toThrow(/ECONNREFUSED/);
-    expect(mockState.clients[0].queries).toEqual([]);
+    expect(state.clients[0].queries).toEqual([]);
   });
 });
 

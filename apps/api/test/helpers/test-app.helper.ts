@@ -140,7 +140,14 @@ export async function createTestApp(
       // the stale-upload sweep - go through it). Against the mock it answers
       // from the same deep mock, so a spec feeds one set of tables.
       .overrideProvider(PrismaSystemService)
-      .useValue({ forSystem: () => prismaMock, $disconnect: async () => undefined });
+      // `$connect`/`$transaction` make it a client (not a transaction handle) for core's `runAsSystem`,
+      // which the db-backup slice's Doctor check runs over it (#471).
+      .useValue({
+        forSystem: () => prismaMock,
+        $connect: async () => undefined,
+        $transaction: async (fn: (tx: unknown) => unknown) => fn(prismaMock),
+        $disconnect: async () => undefined,
+      });
 
     for (const { provide, useValue } of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(provide).useValue(useValue);
