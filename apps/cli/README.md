@@ -763,7 +763,7 @@ what to do instead.
 | `certs status` | `certs` | reports and changes nothing |
 | `node install-deps` installing `ffmpeg` | not done | the platform's step list has no `ffmpeg` and no extension point; install `ffmpeg` (it ships `ffprobe`) yourself. `node doctor` names what is missing; the worker image has it |
 | preflight `database-vector-extension` (required in 1.9: the server must offer `vector`) | not done | the platform has no such check and an app check cannot read the database password, so a server without `vector` fails later, at the first migration (`extension "vector" is not available`). Use a pgvector image (`pgvector/pgvector`) and create the extensions as the bootstrap superuser before the first install (`infra/compose/postgres-init/20-kvox-extensions.sh`, `docs/runbooks/application-role.md` section 3.1) |
-| server-fact suggestions for `APP_BIND_PORT`, `JOBS_WORKER_CONCURRENCY`, `API_MEM_LIMIT`, `WEB_MEM_LIMIT` | not done | these take the template default unless answered; `POSTGRES_SSL` is validated but no longer asked by default (pass `--all`, `--answer POSTGRES_SSL=true`) |
+| server-fact suggestions for `APP_BIND_PORT`, `JOBS_WORKER_CONCURRENCY`, `API_MEM_LIMIT`, `WEB_MEM_LIMIT` | not done | these take the template default unless answered (`API_MEM_LIMIT` 512M ran `prisma:seed` out of heap in the deploy end-to-end job, so pass `--answer API_MEM_LIMIT=2g` or similar where the server has the memory); `POSTGRES_SSL` is validated but no longer asked by default (pass `--all`, `--answer POSTGRES_SSL=true`) |
 
 Other differences an operator can see:
 

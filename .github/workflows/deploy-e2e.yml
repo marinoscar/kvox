@@ -67,7 +67,7 @@ name: Deploy E2E
 #   - The API must not run as a superuser (row-level security is inert for one),
 #     and an unattended install whose login is `postgres` is refused unless it
 #     consents. `--provision-app-role` is that consent: the CLI creates
-#     `e2e_app` with the bootstrap login used once, which is the production
+#     the application role (APP_DB_USER from .env.example) with the bootstrap login used once, which is the production
 #     path. The extensions an ordinary role cannot create are installed first,
 #     by the repository's own `postgres-init/20-kvox-extensions.sh`.
 #   - The OAuth credentials are verified before the build; this job's are
