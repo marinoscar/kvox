@@ -706,7 +706,7 @@ describe('the Operations group (#266)', () => {
         // this is the card that says which two settings the product cannot run
         // without, and a hub is the wrong shape for someone on minute one. It
         // is gated on the same `system_settings:read` its controller enforces.
-        'Setup',
+        'Setup guide',
         'Email',
         'Notifications',
         // #23, epic #19 — a General card gated on the same

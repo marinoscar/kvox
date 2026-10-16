@@ -14,7 +14,7 @@
 //   transcription  transcription/transcription-settings.schema.ts
 //   ai             platform/ai/ai-settings.extension.ts
 //   graph          graph/preferences/graph-preferences.schema.ts
-//   onboarding     common/schemas/user-settings-namespaces.schema.ts
+//   onboarding     the platform's (`@marinoscar/platform-api/onboarding`, #481)
 // =============================================================================
 
 /**

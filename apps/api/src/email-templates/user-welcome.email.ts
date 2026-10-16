@@ -113,10 +113,11 @@ export interface UserWelcomeEmailData {
 /**
  * Where the CTA lands, relative to {@link UserWelcomeEmailData.appUrl}.
  *
- * ⚠ THIS STRING IS ALSO SPELLED IN `apps/web/src/components/onboarding/onboardingPaths.ts`
- * (`GETTING_STARTED_PATH`), and the two cannot be shared: `apps/api` does not
- * depend on `apps/web`, and `@app/shared` carries brand identity rather than
- * the web app's route table. So it is restated once, here, next to the only
+ * ⚠ THIS STRING IS ALSO SPELLED IN THE PLATFORM'S WEB PACKAGE
+ * (`GETTING_STARTED_PATH` of `@marinoscar/platform-web/onboarding/ui`, which the
+ * web app's `/settings/getting-started` route and card use), and the two cannot
+ * be shared: `apps/api` does not depend on `apps/web`, and `@app/shared` carries
+ * brand identity rather than the web app's route table. So it is restated once, here, next to the only
  * place in this service that needs it — and a divergence lands the recipient on
  * `App.tsx`'s `*` catch-all, which shows them the home page with no
  * explanation rather than a 404 anybody would notice.

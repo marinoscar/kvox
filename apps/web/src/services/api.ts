@@ -96,7 +96,7 @@ export async function fetchProfileImagePreview(): Promise<Blob> {
 // Allowlist API — the one call the web app still makes itself.
 //
 // The identity slice owns `/api/allowlist` and its pages (and its hooks make
-// every other call), but the Setup checklist (`pages/Admin/SetupPage.tsx`)
+// every other call), but the Setup checklist (`components/onboarding/SetupGuideRoute.tsx`)
 // invites an address through the existing service function rather than through
 // `useAllowlist`, whose `addEmail` also refetches a paginated list that page
 // does not render. One POST (`allowlist:write`), then one checklist re-read.

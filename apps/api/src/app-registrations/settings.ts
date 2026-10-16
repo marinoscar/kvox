@@ -9,7 +9,7 @@
 // `assembleUserSettingsNamespaces`) and registers the result.
 //
 //   system (app list): transcription, ai, telemetry
-//   user   (app list): onboarding, graph
+//   user   (app list): onboarding (the platform's), graph
 //
 // The PLATFORM list (notifications, jobs, nodes, databaseBackup, maintenance /
 // dataTables, navigation, notifications) is in `settings/registry/`. this app
@@ -25,6 +25,7 @@
 // =============================================================================
 
 import { AI_SYSTEM_SETTINGS } from '@marinoscar/platform-api/ai';
+import { ONBOARDING_USER_SETTINGS } from '@marinoscar/platform-api/onboarding';
 import type {
   SettingsDefaultsOverride,
   SystemSettingsNamespace,
@@ -35,8 +36,6 @@ import type {
 
 import { GRAPH_USER_SETTINGS } from '../graph/preferences/graph.user-settings';
 import type { GraphPreferencesValue } from '../graph/preferences/graph-preferences.schema';
-import type { OnboardingValue } from '../common/schemas/user-settings-namespaces.schema';
-import { ONBOARDING_USER_SETTINGS } from '../onboarding/onboarding.user-settings';
 import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
 import { KVOX_AI_SETTINGS_EXTENSION } from '../platform/ai/ai-settings.extension';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../platform/telemetry/telemetry.system-settings';
@@ -57,6 +56,10 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
 
 /** this app's user namespaces, in stored key order (after the platform's three). */
 export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
+  // The platform onboarding slice's namespace (#481): welcomeSeenAt, checklistDismissedAt,
+  // adminDismissedAt, skipped. Listed here, not in the platform list, so the stored key order
+  // stays dataTables, navigation, notifications, onboarding, graph. The slice's merge refuses a
+  // `skipped` id that is not a registered, skippable step (`platform/onboarding/onboarding.manifest.ts`).
   ONBOARDING_USER_SETTINGS as UserSettingsNamespace,
   GRAPH_USER_SETTINGS as UserSettingsNamespace,
 ];
@@ -98,13 +101,12 @@ declare module '@marinoscar/platform-api/settings' {
     transcription: typeof TRANSCRIPTION_SYSTEM_SETTINGS;
   }
 
+  // `onboarding` is declared by `@marinoscar/platform-api/onboarding` itself.
   interface UserSettingsNamespaces {
     graph: GraphPreferencesValue;
-    onboarding: OnboardingValue;
   }
 
   interface UserSettingsNamespaceDeclarations {
     graph: typeof GRAPH_USER_SETTINGS;
-    onboarding: typeof ONBOARDING_USER_SETTINGS;
   }
 }

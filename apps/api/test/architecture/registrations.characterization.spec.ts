@@ -11,10 +11,6 @@ import {
   createMockAdminUser,
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
-import {
-  ADMIN_ONBOARDING_STEPS,
-  USER_ONBOARDING_STEPS,
-} from '../../src/onboarding/onboarding-steps';
 import { emailTemplateRegistry } from '@marinoscar/platform-api/email';
 import { listNotificationEvents } from '@marinoscar/platform-api/notifications';
 // Fills the notification and email registries (the platform's, then this app's), so the two
@@ -53,6 +49,10 @@ import { JobHandlerRegistry, JobsService, jobTypeLabels } from '@marinoscar/plat
 // snapshots keep their original titles. The ONE intended difference is the
 // order of `allowlist.invitation_reminder` (now after `security.role_changed`,
 // the platform's identity group order) and, with it, the template list.
+//
+// The onboarding cases (the step lists and the three onboarding responses) were retired by #481:
+// onboarding is the platform slice now, its wire shape changed on purpose, and what pins it is
+// `test/onboarding/onboarding-steps.spec.ts` and `test/onboarding/onboarding.integration.spec.ts`.
 //
 // Determinism: the only wall-clock values on the wire are masked by
 // `stableBody` (the envelope's request instant and the jobs stats
@@ -99,47 +99,6 @@ describe('Domain registrations characterization', () => {
   // ---------------------------------------------------------------------------
 
   describe('pure registry values', () => {
-    it('ADMIN_ONBOARDING_STEPS keys, in array order', () => {
-      expect(ADMIN_ONBOARDING_STEPS.map((s) => s.key)).toMatchSnapshot();
-    });
-
-    it('USER_ONBOARDING_STEPS keys, in array order', () => {
-      expect(USER_ONBOARDING_STEPS.map((s) => s.key)).toMatchSnapshot();
-    });
-
-    it('onboarding step metadata (order, audience, tier, skippable, permission, href)', () => {
-      const describeStep = (
-        s: {
-          key: string;
-          audience: string;
-          tier: string;
-          skippable: boolean;
-          permission?: string;
-          title: string;
-          description: string;
-          actionLabel: string;
-          href: string;
-        },
-        index: number,
-      ) => ({
-        position: index,
-        key: s.key,
-        audience: s.audience,
-        tier: s.tier,
-        skippable: s.skippable,
-        permission: s.permission ?? null,
-        title: s.title,
-        description: s.description,
-        actionLabel: s.actionLabel,
-        href: s.href,
-      });
-
-      expect({
-        admin: ADMIN_ONBOARDING_STEPS.map(describeStep),
-        user: USER_ONBOARDING_STEPS.map(describeStep),
-      }).toMatchSnapshot();
-    });
-
     it('NOTIFICATION_EVENTS, in declared order', () => {
       expect(listNotificationEvents()).toMatchSnapshot();
     });
@@ -198,39 +157,6 @@ describe('Domain registrations characterization', () => {
     });
 
     const server = () => context.app.getHttpServer();
-
-    it('GET /api/onboarding (Viewer)', async () => {
-      const viewer = await createMockViewerUser(context);
-
-      const response = await request(server())
-        .get('/api/onboarding')
-        .set(authHeader(viewer.accessToken))
-        .expect(200);
-
-      expect(stableBody(response.body)).toMatchSnapshot();
-    });
-
-    it('GET /api/onboarding (Admin)', async () => {
-      const admin = await createMockAdminUser(context);
-
-      const response = await request(server())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      expect(stableBody(response.body)).toMatchSnapshot();
-    });
-
-    it('GET /api/admin/onboarding (Admin)', async () => {
-      const admin = await createMockAdminUser(context);
-
-      const response = await request(server())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      expect(stableBody(response.body)).toMatchSnapshot();
-    });
 
     it('GET /api/notifications/events', async () => {
       const viewer = await createMockViewerUser(context);

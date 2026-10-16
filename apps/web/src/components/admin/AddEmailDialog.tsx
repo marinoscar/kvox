@@ -3,7 +3,7 @@
  *
  * KEPT BY #465 (epic #462) THOUGH THE IDENTITY SLICE MOVED THE ALLOWLIST. The
  * packaged Users & Allowlist page draws its own copy of this dialog, but the
- * package does not export it, and the Setup checklist (`pages/Admin/SetupPage.tsx`)
+ * package does not export it, and the Setup checklist (`components/onboarding/SetupGuideRoute.tsx`)
  * needs the same "invite somebody" control without sending an administrator
  * through the Users page. It is the dialog the package moved out of this file,
  * restored here verbatim in behaviour: same validation, same copy, same

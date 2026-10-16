@@ -499,8 +499,7 @@ export function listGraphEntities(
  * reach React as `undefined` and throw during render, taking the WHOLE app
  * into `ErrorBoundary` rather than just the section. Rejecting here turns it
  * into an ordinary failed request, which every caller already handles (Home's
- * Knowledge section hides; the index page shows its error). Same reasoning as
- * `services/onboarding.ts`'s `parseOnboardingState`.
+ * Knowledge section hides; the index page shows its error).
  */
 export function parseGraphEntityListResponse(body: unknown): GraphEntityListResponse {
   if (typeof body === 'object' && body !== null) {

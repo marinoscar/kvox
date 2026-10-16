@@ -4,39 +4,36 @@ import { JwtService } from '@nestjs/jwt';
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks, setupMockUserSettings } from '../fixtures/mock-setup.helper';
-import { createMockAdminUser, authHeader } from '../helpers/auth-mock.helper';
+import {
+  createMockAdminUser,
+  createMockContributorUser,
+  createMockViewerUser,
+  authHeader,
+} from '../helpers/auth-mock.helper';
 import { invalidateAiResolverCache, primeAiReadiness } from '../helpers/ai-readiness.fixtures';
-import { EmailSettingsService } from '@marinoscar/platform-api/email';
-import { PushConfigService } from '@marinoscar/platform-api/notifications';
 
 // =============================================================================
-// GET /api/onboarding and GET /api/admin/onboarding (issue #275, epic #271)
+// GET /api/onboarding and GET /api/admin/onboarding/metrics (issue #481, epic #478)
 // =============================================================================
 //
-// Two routes, two gates, two prefixes — the same split `/api/nodes` and
-// `/api/admin/nodes` already make. What this suite exists to prove is that the
-// split is doing the work the design claims, and there are three separate
-// claims:
+// Onboarding is the platform's slice. One route, `GET /api/onboarding`, carries the caller's
+// stored UI state, the `user` checklist and, for a holder of `system_settings:read`, the
+// `admin` checklist; `GET /api/admin/onboarding/metrics` is the admin-only aggregate. This
+// suite drives them through the real guard stack and the real registries, with a mocked
+// database, and pins what the retired kvox suite pinned (issues #274/#275), restated in the
+// platform's wire shape:
 //
-//   1. THE USER ROUTE CARRIES NO PERMISSION STRING. A caller holding literally
-//      zero permissions — which is what a freshly invited account with no role
-//      looks like — must get 200. The fixture below is the same
-//      `createNoPermissionUser` shape `test/settings/notification-events
-//      .integration.spec.ts` established for exactly this argument.
-//
-//   2. THE ADMIN ROUTE IS 403 FOR THAT SAME CALLER, and the 403 comes from the
-//      route's own gate rather than from anything the handler decides.
-//
-//   3. ⚠ A VIEWER'S REQUEST DOES NOT MERELY OMIT ADMIN FACTS FROM ITS BODY — IT
-//      NEVER READS THEM. That is asserted with spies on `EmailSettingsService`,
-//      `PushConfigService` and the `users`/`allowed_emails` counts, deliberately
-//      NOT by inspecting the response: a body assertion passes just as happily
-//      on an implementation that reads every admin fact and then drops it,
-//      which is precisely the implementation #275 rejected.
-//
-// The rest is the wire-level half of #274's truth table: the states a client
-// will actually meet on a fresh deployment, which is the state every one of
-// these deployments starts in.
+//   1. THE USER ROUTE NEEDS ONLY `user_settings:read`, WHICH EVERY ROLE HOLDS. The route is
+//      `@Auth({ permissions })`, so the guard stack attaches the resolved permission list; a
+//      Viewer (this application's default role) gets 200 and only the steps they can act on.
+//      A caller with NO permissions at all is refused with 403, and the suite asserts that
+//      too, so the day a role is seeded without `user_settings:read` this fails loudly
+//      instead of hiding the checklist from the people it exists for.
+//   2. THE ADMIN BLOCK IS NON-NULL ONLY FOR `system_settings:read`, and a Viewer's request
+//      never runs a Doctor check or counts the allowlist (asserted on the stubs, not the
+//      body: a body assertion passes on an implementation that read everything and dropped it).
+//   3. THE STATES A CLIENT MEETS ON A FRESH DEPLOYMENT, with the retired statuses and
+//      reasons.
 // =============================================================================
 
 describe('Onboarding Integration', () => {
@@ -54,20 +51,15 @@ describe('Onboarding Integration', () => {
     resetPrismaMock();
     setupBaseMocks();
 
-    // A deployment where nobody has created anything and nobody has been
-    // invited: one account (the initial admin), one allowlist entry. The
-    // `mockDeep` default for an unconfigured `count` is `undefined`, which
-    // would compare falsely against `> 0` by accident rather than on purpose.
+    // A deployment where nobody has created anything and nobody has been invited. The `mockDeep`
+    // default for an unconfigured `count` is `undefined`, which would compare falsely against
+    // `> 0` by accident rather than on purpose.
     context.prismaMock.transcript.count.mockResolvedValue(0);
     context.prismaMock.note.count.mockResolvedValue(0);
-    context.prismaMock.user.count.mockResolvedValue(1);
     context.prismaMock.allowedEmail.count.mockResolvedValue(1);
-    // ⚠ EXPLICITLY `null`, not left to `mockDeep`. `KvoxAi.readiness` reads
-    // whether the caller has a key as `row !== null`, and an unconfigured deep
-    // mock answers `undefined` — which is `!== null`, so every caller would
-    // appear to have stored an AI key and `user.ai_key` would report `satisfied`
-    // on a deployment where nobody has one. The enabled-model list is the same
-    // case: an empty catalogue, not a mock's `undefined`.
+    context.prismaMock.pushSubscription.count.mockResolvedValue(0);
+    // ⚠ EXPLICITLY `null`, not left to `mockDeep`: `KvoxAi.readiness` reads whether the caller has a
+    // key as `row !== null`, and an unconfigured deep mock answers `undefined`, which is `!== null`.
     context.prismaMock.userAiKey.findUnique.mockResolvedValue(null);
     context.prismaMock.aiModel.findMany.mockResolvedValue([]);
     // The resolver reuses what it read for five seconds per process.
@@ -96,8 +88,6 @@ describe('Onboarding Integration', () => {
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-        // No roles at all — `toRequestUser` derives an empty permission set
-        // from an empty `userRoles` array.
         userRoles: [],
       };
     });
@@ -106,391 +96,233 @@ describe('Onboarding Integration', () => {
     return { id, accessToken };
   }
 
-  function stepOf(body: any, key: string): any {
-    return body.data.steps.find((step: { key: string }) => step.key === key);
+  const get = (token: string, path = '/api/onboarding') =>
+    request(context.app.getHttpServer()).get(path).set(authHeader(token));
+
+  function stepOf(steps: Array<{ id: string }>, id: string): any {
+    return steps.find((step) => step.id === id);
   }
 
+  const idsOf = (steps: Array<{ id: string }>) => steps.map((step) => step.id);
+
   // ---------------------------------------------------------------------------
-  // GET /api/onboarding — the user checklist
+  // GET /api/onboarding, the user block
   // ---------------------------------------------------------------------------
 
-  describe('GET /api/onboarding', () => {
+  describe('GET /api/onboarding (user block)', () => {
     it('returns 401 without auth', async () => {
       await request(context.app.getHttpServer()).get('/api/onboarding').expect(401);
     });
 
-    it('a user with an empty permission set gets 200 and `audience: "user"`', async () => {
-      // CLAIM 1. This is the whole reason the route carries no permission
-      // string: a Viewer is this application's default role, and a freshly
-      // invited account may hold nothing at all — so the users the checklist
-      // exists for would be precisely the users who could not read it.
-      const user = await createNoPermissionUser();
+    it('returns 403 for a caller who holds no permission at all', async () => {
+      // CLAIM 1, the negative half. The route's one permission is `user_settings:read`.
+      const nobody = await createNoPermissionUser();
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(response.body.data.audience).toBe('user');
-      expect(Array.isArray(response.body.data.steps)).toBe(true);
+      await get(nobody.accessToken).expect(403);
     });
 
-    it('an admin reads their own user checklist from the same route', async () => {
-      const admin = await createMockAdminUser(context);
+    it('returns 200 for a Viewer, with no admin block', async () => {
+      // CLAIM 1, the positive half: every seeded role holds `user_settings:read`.
+      const viewer = await createMockViewerUser(context);
+      const response = await get(viewer.accessToken).expect(200);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      // An administrator is also a user, and the two checklists are separate
-      // surfaces — #272 keeps `dismissedAt` and `adminDismissedAt` apart for
-      // the same reason.
-      expect(response.body.data.audience).toBe('user');
+      expect(response.body.data.admin).toBeNull();
+      expect(Array.isArray(response.body.data.user.steps)).toBe(true);
     });
 
-    it('never reads an admin-only fact on behalf of a caller who holds no permissions', async () => {
-      // CLAIM 3, and the assertion this suite is really for. Spies, not the
-      // body: an implementation that read every admin fact and then filtered it
-      // out of the response would satisfy any body assertion written here, and
-      // it is exactly the implementation #275 rejected.
-      const emailSettings = context.module.get(EmailSettingsService, {
-        strict: false,
-      });
-      const pushConfig = context.module.get(PushConfigService, { strict: false });
-      const emailSpy = jest.spyOn(emailSettings, 'describeForAdmin');
-      const pushSpy = jest.spyOn(pushConfig, 'describeForAdmin');
-
-      const user = await createNoPermissionUser();
-
-      await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(emailSpy).not.toHaveBeenCalled();
-      expect(pushSpy).not.toHaveBeenCalled();
-      expect(context.prismaMock.user.count).not.toHaveBeenCalled();
-      expect(context.prismaMock.allowedEmail.count).not.toHaveBeenCalled();
-    });
-
-    it('offers every step whose permission the caller DOES hold', async () => {
-      // ⚠ THE REGRESSION THIS PINS IS SILENT. `RolesGuard` and
-      // `PermissionsGuard` attach the resolved permission list to the request,
-      // and both return early on a route declaring neither — which is this one.
-      // Reading `permissions` straight off `@CurrentUser()` here therefore
-      // yields `undefined`, an empty set, and a 200 whose checklist is missing
-      // three of its four steps with no error anywhere. See `OnboardingCaller`.
+    it('lists the three activation steps and the platform user steps for a fresh Viewer', async () => {
       // The OpenAI slot is on, which is what makes a key savable (and the step relevant).
       primeAiReadiness({ hasKey: false });
-      const admin = await createMockAdminUser(context);
+      const viewer = await createMockViewerUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(viewer.accessToken).expect(200);
+      const steps = response.body.data.user.steps;
 
-      expect(response.body.data.steps.map((step: { key: string }) => step.key)).toEqual([
+      expect(idsOf(steps)).toEqual([
         'user.ai_key',
         'user.first_transcript',
         'user.first_note',
         'user.profile',
+        'user.notifications',
       ]);
-    });
-
-    it('a step whose destination permission the caller lacks is absent, not disabled', async () => {
-      // A zero-permission account holds neither `transcripts:write` nor
-      // `notes:write`, so neither step is offered — going to either destination
-      // would end in a 403 the checklist had promised would work.
-      const user = await createNoPermissionUser();
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      expect(stepOf(response.body, 'user.first_transcript')).toBeUndefined();
-      expect(stepOf(response.body, 'user.first_note')).toBeUndefined();
+      expect(stepOf(steps, 'user.ai_key')).toMatchObject({ status: 'todo', blockedReason: null, tier: 'required' });
+      expect(stepOf(steps, 'user.first_transcript')).toMatchObject({ status: 'blocked', tier: 'required' });
+      expect(stepOf(steps, 'user.first_transcript').blockedReason).toContain('administrator');
+      expect(stepOf(steps, 'user.first_note')).toMatchObject({ status: 'blocked', skippable: true });
+      expect(stepOf(steps, 'user.first_note').blockedReason).toContain('AI provider key');
     });
 
     it('omits `user.ai_key` entirely on a fresh deployment, where no AI provider is switched on', async () => {
-      // ABSENT, not pending: the platform refuses to store a key for a provider
-      // whose slot is off (`AI_PROVIDER_DISABLED`), so until an administrator
-      // switches the OpenAI slot on there is no vendor a key could belong to and
-      // the step would lead to a form that cannot be filled in. The default
-      // `system_settings` row ships exactly that state.
-      const admin = await createMockAdminUser(context);
+      // ABSENT, not pending: the platform refuses to store a key for a provider whose slot is off
+      // (`AI_PROVIDER_DISABLED`), so there is no vendor a key could belong to.
+      const viewer = await createMockViewerUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(viewer.accessToken).expect(200);
 
-      expect(stepOf(response.body, 'user.ai_key')).toBeUndefined();
+      expect(stepOf(response.body.data.user.steps, 'user.ai_key')).toBeUndefined();
+      expect(stepOf(response.body.data.user.steps, 'user.first_note').blockedReason).toContain('administrator');
     });
 
-    it('offers `user.ai_key` once the provider is on, even before any model is enabled', async () => {
-      // The slot is on, so a key can be saved now: the step is actionable and never
-      // blocked, whatever else the administrator still has to finish (a model, a default).
-      primeAiReadiness({ hasKey: false, models: [] });
-      const admin = await createMockAdminUser(context);
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      const step = stepOf(response.body, 'user.ai_key');
-
-      expect(step.status).toBe('pending');
-      expect(step.blockedReason).toBeNull();
-    });
-
-    it('blocks `user.first_transcript` with a reason naming the administrator', async () => {
-      // Transcription is unconfigured on a fresh deployment, so this is the
-      // first thing a new user meets. `blocked` rather than `pending` is what
-      // tells them the disabled upload button is not their to-do.
-      const admin = await createMockAdminUser(context);
-
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      const step = stepOf(response.body, 'user.first_transcript');
-
-      expect(step.status).toBe('blocked');
-      expect(step.blockedReason).toContain('administrator');
-      expect(step.blockedReason).not.toBeNull();
-    });
-
-    it('returns a skipped step, marked, and counts it out of the totals', async () => {
-      const admin = await createMockAdminUser(context);
-      setupMockUserSettings(admin.id, {
+    it('returns a skipped step, marked, and keeps `skipped` as stored', async () => {
+      const contributor = await createMockContributorUser(context);
+      setupMockUserSettings(contributor.id, {
         theme: 'system',
         profile: { imageSource: 'provider', imageObjectId: null },
-        onboarding: { skipped: ['user.profile'] },
+        onboarding: { welcomeSeenAt: '2026-01-01T00:00:00.000Z', skipped: ['user.first_note'] },
       });
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(contributor.accessToken).expect(200);
+      const { settings, user } = response.body.data;
 
-      const skipped = stepOf(response.body, 'user.profile');
-      const outstanding = response.body.data.steps.filter(
-        (step: { status: string; skipped: boolean }) =>
-          step.status !== 'satisfied' && !step.skipped,
-      );
-
-      // ⚠ STILL RETURNED. Filtering server-side would make the skip
-      // irreversible through the UI — the getting-started page has to be able
-      // to show it and offer to un-skip it.
-      expect(skipped).toBeDefined();
-      expect(skipped.skipped).toBe(true);
-      expect(skipped.skippable).toBe(true);
-      expect(response.body.data.totalRemaining).toBe(outstanding.length);
-      expect(
-        response.body.data.steps.some(
-          (step: { key: string; skipped: boolean }) =>
-            step.key !== 'user.profile' && step.skipped,
-        ),
-      ).toBe(false);
+      // STILL RETURNED: filtering server-side would make the skip irreversible through the UI.
+      expect(stepOf(user.steps, 'user.first_note')).toMatchObject({ skipped: true, skippable: true });
+      expect(settings).toMatchObject({
+        welcomeSeenAt: '2026-01-01T00:00:00.000Z',
+        checklistDismissedAt: null,
+        adminDismissedAt: null,
+        skipped: ['user.first_note'],
+      });
     });
 
-    it('counts only unsatisfied `required` steps into requiredRemaining', async () => {
+    it('counts a Viewer\'s transcripts and notes once each, however many steps name them', async () => {
+      // Facts are resolved only for the steps that survive the permission and applies gates.
+      const viewer = await createMockViewerUser(context);
+
+      await get(viewer.accessToken).expect(200);
+
+      // Resolved once each for the steps that are present, never per step.
+      expect(context.prismaMock.transcript.count).toHaveBeenCalledTimes(1);
+      expect(context.prismaMock.note.count).toHaveBeenCalledTimes(1);
+    });
+
+    it('never publishes the permission a step guards', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(admin.accessToken).expect(200);
 
-      const { steps, requiredRemaining, totalRemaining, allRequiredSatisfied } =
-        response.body.data;
-      const outstanding = steps.filter(
-        (step: { status: string; skipped: boolean }) =>
-          step.status !== 'satisfied' && !step.skipped,
-      );
-
-      expect(requiredRemaining).toBe(
-        outstanding.filter((step: { tier: string }) => step.tier === 'required').length,
-      );
-      expect(totalRemaining).toBe(outstanding.length);
-      expect(allRequiredSatisfied).toBe(requiredRemaining === 0);
-      // A fresh deployment has real required work outstanding, so this is not
-      // a vacuous comparison of two zeroes.
-      expect(requiredRemaining).toBeGreaterThan(0);
-    });
-
-    it('never publishes the permission a step guards', () => {
-      // The map of which permission guards which page is not something every
-      // account needs. Asserted on the DTO's own keys rather than on a
-      // hand-written list, so a field added to the response shape is caught.
-      const admin = createMockAdminUser(context);
-
-      return admin.then(async (user) => {
-        const response = await request(context.app.getHttpServer())
-          .get('/api/onboarding')
-          .set(authHeader(user.accessToken))
-          .expect(200);
-
-        for (const step of response.body.data.steps) {
-          expect(step).not.toHaveProperty('permission');
-          expect(step).not.toHaveProperty('audience');
-        }
-      });
+      for (const step of [...response.body.data.user.steps, ...response.body.data.admin.steps]) {
+        expect(step).not.toHaveProperty('permission');
+        expect(step).not.toHaveProperty('facts');
+      }
     });
   });
 
   // ---------------------------------------------------------------------------
-  // GET /api/admin/onboarding — the deployment checklist
+  // GET /api/onboarding, the admin block
   // ---------------------------------------------------------------------------
 
-  describe('GET /api/admin/onboarding', () => {
-    it('returns 401 without auth', async () => {
-      await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .expect(401);
-    });
-
-    it('returns 403 for the zero-permission user who gets 200 on the user route', async () => {
-      // CLAIM 2. The two routes differ by their gate and their prefix, not by a
-      // decision the handler makes — so the same caller meets a hard 403 here
-      // without any admin fact having been read to produce it.
-      const user = await createNoPermissionUser();
-
-      await request(context.app.getHttpServer())
-        .get('/api/onboarding')
-        .set(authHeader(user.accessToken))
-        .expect(200);
-
-      await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(user.accessToken))
-        .expect(403);
-    });
-
-    it('returns 200 with `audience: "admin"` for an administrator', async () => {
+  describe('GET /api/onboarding (admin block)', () => {
+    it('is present for an administrator and lists exactly one `admin.ai`', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(admin.accessToken).expect(200);
+      const steps = response.body.data.admin.steps;
 
-      expect(response.body.data.audience).toBe('admin');
+      expect(steps.filter((step: { id: string }) => step.id === 'admin.ai')).toHaveLength(1);
+      expect(idsOf(steps)).toEqual(
+        expect.arrayContaining(['admin.transcription', 'admin.smoke_test', 'admin.ai', 'admin.access']),
+      );
     });
 
-    it('reports `admin.transcription` and `admin.ai` as pending on a fresh deployment', async () => {
-      // The state every deployment of this application starts in: no
-      // transcription provider, AI switched off with an empty allow-list.
+    it('reports `admin.transcription` and `admin.ai` as todo on a fresh deployment', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(admin.accessToken).expect(200);
+      const { admin: block } = response.body.data;
 
-      expect(stepOf(response.body, 'admin.transcription').status).toBe('pending');
-      expect(stepOf(response.body, 'admin.ai').status).toBe('pending');
-      expect(response.body.data.allRequiredSatisfied).toBe(false);
+      expect(stepOf(block.steps, 'admin.transcription').status).toBe('todo');
+      expect(stepOf(block.steps, 'admin.ai').status).toBe('todo');
+      expect(block.requiredDone).toBe(false);
     });
 
-    it('blocks the smoke test behind the provider it depends on', async () => {
+    it('blocks the smoke test behind the provider it depends on, and still offers the skip control', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      const response = await get(admin.accessToken).expect(200);
+      const step = stepOf(response.body.data.admin.steps, 'admin.smoke_test');
 
-      const step = stepOf(response.body, 'admin.smoke_test');
-
-      // A step nobody can yet perform must say why, rather than sitting in the
-      // list looking like a to-do the administrator is ignoring — and since
-      // #299 this one is `recommended` and carries a skip control, which is
-      // what makes the reason load-bearing rather than decorative: skipping
-      // something that was merely blocked is a decision made on bad
-      // information. So both halves are asserted together over the wire — the
-      // step is blocked, it says by what, AND the control is offered anyway.
+      // Since #299 this step is `recommended` and skippable, which is what makes the reason
+      // load-bearing: skipping something that was merely blocked is a decision made on bad
+      // information. So all three are asserted together.
       expect(step.status).toBe('blocked');
       expect(step.blockedReason).toContain('transcription provider');
       expect(step.skippable).toBe(true);
     });
 
-    it('does read the admin facts on this route — the mirror of the Viewer assertion', async () => {
-      // Without this, the spy assertion on the user route would be satisfied by
-      // an implementation that never read those facts at all.
-      const emailSettings = context.module.get(EmailSettingsService, {
-        strict: false,
+    it('keeps a skipped `admin.smoke_test` skipped', async () => {
+      const admin = await createMockAdminUser(context);
+      setupMockUserSettings(admin.id, {
+        theme: 'system',
+        profile: { imageSource: 'provider', imageObjectId: null },
+        onboarding: { skipped: ['admin.smoke_test'] },
       });
-      const pushConfig = context.module.get(PushConfigService, { strict: false });
-      const emailSpy = jest.spyOn(emailSettings, 'describeForAdmin');
-      const pushSpy = jest.spyOn(pushConfig, 'describeForAdmin');
 
-      const admin = await createMockAdminUser(context);
+      const response = await get(admin.accessToken).expect(200);
 
-      await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      expect(emailSpy).toHaveBeenCalledTimes(1);
-      expect(pushSpy).toHaveBeenCalledTimes(1);
-      expect(context.prismaMock.user.count).toHaveBeenCalledTimes(1);
-      expect(context.prismaMock.allowedEmail.count).toHaveBeenCalledTimes(1);
+      expect(stepOf(response.body.data.admin.steps, 'admin.smoke_test').skipped).toBe(true);
     });
 
-    it('reports `admin.access` pending while only the seeded administrator exists', async () => {
+    it('reports `admin.access` todo while only the bootstrap administrator is allowlisted, and done after an invite', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
+      context.prismaMock.allowedEmail.count.mockResolvedValue(0);
+      const fresh = await get(admin.accessToken).expect(200);
+      expect(stepOf(fresh.body.data.admin.steps, 'admin.access').status).toBe('todo');
 
-      // One account, one allowlist entry — the day-zero state, which `> 0`
-      // would have called satisfied.
-      expect(stepOf(response.body, 'admin.access').status).toBe('pending');
+      // The count excludes `INITIAL_ADMIN_EMAIL`; derived on every read, nothing stored.
+      context.prismaMock.allowedEmail.count.mockResolvedValue(3);
+      const invited = await get(admin.accessToken).expect(200);
+      expect(stepOf(invited.body.data.admin.steps, 'admin.access').status).toBe('done');
     });
 
-    it('reports `admin.access` satisfied once somebody else has been invited', async () => {
-      context.prismaMock.allowedEmail.count.mockResolvedValue(2);
-
+    it('derives status on every read: nothing is stored and nothing is written', async () => {
       const admin = await createMockAdminUser(context);
 
-      const response = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-
-      expect(stepOf(response.body, 'admin.access').status).toBe('satisfied');
-    });
-
-    it('derives status on every read — nothing is stored and nothing is written', async () => {
-      // The endpoint that reports "this is set up" must not itself be what
-      // records it. Two consecutive reads against changed state must disagree,
-      // and neither may write.
-      const admin = await createMockAdminUser(context);
-
-      context.prismaMock.allowedEmail.count.mockResolvedValue(5);
-      const configured = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-      expect(stepOf(configured.body, 'admin.access').status).toBe('satisfied');
-
-      context.prismaMock.allowedEmail.count.mockResolvedValue(1);
-      const reverted = await request(context.app.getHttpServer())
-        .get('/api/admin/onboarding')
-        .set(authHeader(admin.accessToken))
-        .expect(200);
-      expect(stepOf(reverted.body, 'admin.access').status).toBe('pending');
+      await get(admin.accessToken).expect(200);
 
       expect(context.prismaMock.systemSettings.update).not.toHaveBeenCalled();
       expect(context.prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
+      expect(context.prismaMock.userSettings.create).not.toHaveBeenCalled();
+      expect(context.prismaMock.userSettings.upsert).not.toHaveBeenCalled();
       expect(context.prismaMock.auditEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('a Viewer\'s request counts no allowlist entry (an admin fact is never resolved for them)', async () => {
+      const viewer = await createMockViewerUser(context);
+
+      await get(viewer.accessToken).expect(200);
+
+      expect(context.prismaMock.allowedEmail.count).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/admin/onboarding/metrics
+  // ---------------------------------------------------------------------------
+
+  describe('GET /api/admin/onboarding/metrics', () => {
+    it('returns 401 without auth and 403 for a Viewer', async () => {
+      await request(context.app.getHttpServer()).get('/api/admin/onboarding/metrics').expect(401);
+
+      const viewer = await createMockViewerUser(context);
+      await get(viewer.accessToken, '/api/admin/onboarding/metrics').expect(403);
+    });
+
+    it('runs the one aggregate statement for an administrator and returns counts only', async () => {
+      const admin = await createMockAdminUser(context);
+      (context.prismaMock as any).$transaction.mockImplementation(async (work: (tx: unknown) => unknown) =>
+        work({
+          $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+          $queryRawUnsafe: jest.fn().mockResolvedValue([
+            { cohort_size: 4, f0_completed: 2, f1_completed: 1, f2_completed: 0, f3_completed: 0, f4_completed: 0 },
+          ]),
+        }),
+      );
+
+      const response = await get(admin.accessToken, '/api/admin/onboarding/metrics?days=14').expect(200);
+
+      expect(response.body.data).toMatchObject({ windowDays: 14, cohortSize: 4 });
+      expect(JSON.stringify(response.body.data)).not.toMatch(/@|user-id/);
     });
   });
 });
