@@ -238,7 +238,9 @@ describeWithDb('stored settings shape through the platform services (db)', () =>
       for (const key of LEGACY_NAMESPACES.filter((k) => k !== 'transcription')) {
         expect(stored[key]).toEqual(LEGACY_GLOBAL_VALUE[key]);
       }
-      expect(Object.keys(stored).sort()).toEqual([...LEGACY_NAMESPACES].sort());
+      // The platform storage slice (#469) declares a `storage` namespace; a PATCH writes the composed
+      // row, so its default is added next to the seven stored namespaces.
+      expect(Object.keys(stored).sort()).toEqual([...LEGACY_NAMESPACES, 'storage'].sort());
     });
 
     it('a PATCH bumps the row version by one and records the actor', async () => {
