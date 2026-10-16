@@ -5230,7 +5230,7 @@ applied per number: (1) the entry's own typed value, (2) an exact hit in
 this build's catalogue, (3) the provider's own family derivation — a dated
 snapshot id such as `gpt-5.4-mini-2026-03-17` takes its family's (
 `gpt-5.4-mini`'s) full window — (4) the provider's conservative floor, (5)
-unresolved. `GET /ai-settings/models` and `GET /api/ai/config` both report
+unresolved. `GET /ai-settings/models` and `GET /api/ai-tasks/config` both report
 which rank answered as `source`, plus `derivedFrom` when it was rank 3, so a
 client never presents an inference as a verified number. Typed numbers
 always outrank everything derived — see
@@ -5519,7 +5519,22 @@ a key that is not there succeeds.
 
 ---
 
-#### GET /ai/config
+### AI Tasks
+
+Task routing for this application's AI calls — issue #473, epic #472. The platform AI slice owns the `ai` namespace, `GET /api/ai/config`, `/api/ai/keys`, `/api/ai/features` and `GET /api/admin/ai/usage`; this group is what the application adds on top: the probe web reads before offering a connected-knowledge or notes surface, and the admin route for task models. See [`docs/specs/notes.md`](specs/notes.md) §2.5, §2.8.
+
+⚠ **`GET /api/ai/config` and `/api/ai/keys` are the platform's routes** (platform response shapes, gated by `AiEnabledGuard` and `ai:use`). The application's own probe is `GET /ai-tasks/config` below. Until issue #477 removes the old module, `/api/ai-settings`, `/api/ai-credentials` and the `### AI Settings` and `### AI Credentials` groups above still describe the application's previous stack.
+
+#### GET /ai-tasks/config
+Moved from `GET /ai/config` by issue #473 (epic #472): the platform AI slice
+(`@marinoscar/platform-api/ai`, mounted in `apps/api/src/platform/ai/`) now
+owns `GET /api/ai/config` and `/api/ai/keys`, so this application's probe lives
+at `/api/ai-tasks/config` with the same response shape (`AiTasksController`
+in `apps/api/src/ai-port/ai-tasks.controller.ts`). It sits outside `/api/ai/*`, so
+the platform rule that every `/api/ai/*` route carries `AiEnabledGuard` and `ai:use`
+does not apply; the gate stays `notes:read`. The key flag reads `user_ai_keys`
+(the data moves in issue #474).
+
 What this deployment permits, **and whether the calling user has a key** —
 for a client deciding whether to offer AI at all and, if so, whether to show
 the feature or the "set up your key" prompt. Modelled on
@@ -5643,6 +5658,50 @@ when `usable` is true).
   }
 }
 ```
+
+---
+
+#### GET /ai-tasks/settings
+The application's extension of the platform `ai` namespace: `taskModels`, `graphEnabled`, `defaultModel` and the four limits. The same values appear under `ai` in `GET /api/system-settings`.
+
+**Requires:** `ai_config:read` (system scope, Admin only)
+
+**Response:**
+```json
+{
+  "data": {
+    "taskModels": { "graph.extract": { "model": "gpt-5.4-mini", "reasoningEffort": "low" } },
+    "graphEnabled": false,
+    "defaultModel": null,
+    "maxInputTokens": null,
+    "maxOutputTokens": null,
+    "requestTimeoutMs": 600000,
+    "reasoningEffort": "none",
+    "maxDocumentBytes": 26214400
+  }
+}
+```
+
+Stored names are the application's previous ones, so a saved `taskModels` value survives with no rewrite. No field here can hold a key. `reasoningEffort` accepts `none | low | medium | high | xhigh`; the platform accepts `minimal | low | medium | high`, so at call time `none` omits `reasoning` and `xhigh` is sent as `high` (notes spec §2.8).
+
+---
+
+#### PUT /ai-tasks/settings
+Updates the same fields. Every field optional. `taskModels` **replaces wholesale**, as it did in `PUT /ai-settings`: no per-key merge. Each entry is validated against the **enabled `ai_models` rows** of the active provider before the write, then written through the platform `SystemSettingsService` with `If-Match`, so the write carries the platform's `system_settings` audit row.
+
+**Requires:** `ai_config:write`
+
+**Headers:** `If-Match: <version>` (optional) — `0` asserts nothing is stored yet.
+
+**Response:** the updated values, re-read from storage, in the `GET` shape above.
+
+**Error Cases:**
+- `400` - Validation error
+- `400` - A `taskModels` entry's model is not an enabled model: `details: { reason: "model_not_permitted", task, model }`
+- `400` - A `taskModels` entry's model lacks a capability its task requires: `details: { reason: "model_lacks_capability", task, model, missing }`
+- `409` - Version conflict
+
+A write through the generic `PATCH /api/system-settings` skips the two model checks. That is accepted: a task model that is not enabled falls back at run time (`staleTaskModel`, one `warn` per process) instead of refusing.
 
 ---
 

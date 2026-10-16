@@ -3109,6 +3109,8 @@ unrepresentable rather than merely discouraged.
 
 ### 20.3 Resolution and the user override
 
+> Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes `AiTaskModelResolver`, which it replaces.
+
 `AiTaskModelResolver.resolve(userId, task, requested?)` (planned:
 `apps/api/src/ai/ai-task-model-resolver.service.ts`) is the one function
 every AI-calling call site in this feature calls, extracted from
