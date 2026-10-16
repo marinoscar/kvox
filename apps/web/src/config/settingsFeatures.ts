@@ -14,6 +14,13 @@
  * never fetch. The context's default is "off", so a hub rendered outside the
  * shell fails closed, like the `knowledge` destination.
  *
+ * `telemetry` is the platform's own key (a telemetry store is deployed AND
+ * collection is on). It is read from `GET /api/telemetry/config` through the
+ * package's `useTelemetryFeatures`, which reads the shell's one copy of the
+ * answer (`platform/TelemetryConfigBinding.tsx`, mounted above the platform
+ * host in `App.tsx`) and never fetches. Without the provider it is "off", so the
+ * Explorer and Dashboard cards fail closed (issue #471).
+ *
  * Import this module once for its side effect, at module scope, before the
  * first render (`App.tsx`). Registering a new key after
  * `useSettingsFeatures()` has rendered is refused by the package.
@@ -21,6 +28,7 @@
 
 import { useOrgsFeature } from '@marinoscar/platform-web/identity/headless';
 import { registerSettingsFeature } from '@marinoscar/platform-web/settings/headless';
+import { useTelemetryFeatures } from '@marinoscar/platform-web/telemetry/headless';
 import { useNavigationFeatures } from '../contexts/NavigationFeaturesContext';
 
 declare module '@marinoscar/platform-web/settings/headless' {
@@ -38,3 +46,4 @@ declare module '@marinoscar/platform-web/settings/headless' {
 
 registerSettingsFeature('graph', () => useNavigationFeatures().features.graph === true);
 registerSettingsFeature('orgs', useOrgsFeature);
+registerSettingsFeature('telemetry', () => useTelemetryFeatures().telemetry);

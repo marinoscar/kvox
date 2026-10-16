@@ -4,25 +4,24 @@
 > gates; **#285** the scratch-database restore, the atomic swap and rollback;
 > **#286** the HTTP endpoints; **#287** the administrator's dialog and the page
 > it lives on — all four merged). Phases 6 and 7 of epic #254 are complete.
-> Implemented in
-> `apps/api/src/db-backup/admin-connection.util.ts`,
-> `apps/api/src/db-backup/restore-preflight.service.ts`,
-> `apps/api/src/db-backup/database-restore.service.ts`,
-> `apps/api/src/db-backup/migration-state.util.ts`,
-> `apps/api/src/db-backup/tasks/db-backup-schedule.task.ts`,
-> `apps/api/src/db-backup/db-backup.controller.ts`,
-> `apps/api/src/db-backup/db-backup-admin.service.ts`,
-> `apps/api/src/db-backup/dto/db-backup-restore.dto.ts` and
-> `apps/api/src/db-backup/db-backup.module.ts`, over the `restore*` columns
-> `apps/api/prisma/schema.prisma` already declares on `DatabaseBackupRun` (see
-> `docs/specs/database-backup.md` §1.1 — **neither issue adds a migration**);
-> and, on the operator-facing side, in
-> `apps/web/src/pages/Admin/DbBackupPage.tsx`,
-> `apps/web/src/components/admin/DbBackupRestoreDialog.tsx`,
-> `apps/web/src/components/admin/DbBackupConfigPanel.tsx`,
-> `apps/web/src/pages/Admin/dbBackupTable.tsx`,
-> `apps/web/src/hooks/useDbBackup.ts` and
-> `apps/web/src/services/dbBackup.ts`.
+> Implemented, since **#471**, in the platform package
+> `@marinoscar/platform-api/db-backup` (`admin-connection.util`,
+> `restore-preflight.service`, `restore-gate.registry`, `restore-gates.builtin`,
+> `database-restore.service`, `migration-state.util`, the schedule task, the
+> controller, the admin service and `dto/`), over the `restore*` columns
+> `apps/api/prisma/schema.prisma` declares on `DatabaseBackupRun` (see
+> `docs/specs/database-backup.md` §1.1 — **neither issue adds a migration**).
+> KVox's own copy, `apps/api/src/db-backup/`, was deleted. The rules in this
+> document did not change; file names it cites keep their names inside the
+> package. KVox mounts the slice in `apps/api/src/platform/db-backup/` and
+> registers one restore gate (`kvox.extensions`) in
+> `apps/api/src/app-registrations/db-backup.ts` (§2.8). The operator side is the
+> package's `DbBackupPage` and restore dialog from
+> `@marinoscar/platform-web/db-backup/ui`, wrapped in
+> `DbBackupWebAdaptersProvider` through `apps/web/src/platform/dbBackupAdapters.ts`;
+> the KVox `DbBackupPage`, `DbBackupRestoreDialog` and `DbBackupConfigPanel`
+> components, `useDbBackup` and `services/dbBackup.ts` were deleted. §10 describes
+> the interface they implement.
 >
 > **Be honest about what exists.** §1–§7 are the pre-flight: the *knowing*. §8
 > is the restore itself: the *doing*. §9 is the way in: two HTTP routes, their
@@ -183,7 +182,8 @@ use for them.
 
 ## 2. The gates
 
-Seven, evaluated in one round and **all seven reported**, including the ones
+Eight built-in gates (the table), plus every gate the app registers (§2.8),
+evaluated in one round and **all reported**, including the ones
 that passed. #287's dialog renders the whole list (§10.2): an operator about to
 replace their production database is entitled to see what was checked, and a
 gate that returns nothing when it is happy leaves no way to tell "checked,
@@ -194,6 +194,7 @@ fine" from "never ran".
 | `pg_client_version` — client major vs server major | capability | **blocks**, non-overridably |
 | `admin_connection` — maintenance database reachable | capability | → `guided` |
 | `createdb_privilege` — **probed, never assumed** | capability | → `guided` |
+| `rls_bypass` — the restore session lifts row-level security | capability | → `guided` (a `warning`, never a block) |
 | `extensions` — every installed extension is available | capability | → `guided` |
 | `disk_space` — free ≥ ~1× database (+1× when retaining) | disk | **downgrades**, never refuses |
 | `replicas` — distinct client addresses | replicas | **warning only** |
@@ -242,6 +243,22 @@ this passes. It earns its place the day the target is a *new* server,
 provisioned from a different image, where `pgcrypto` or `postgis` is simply not
 installed — `pg_restore --exit-on-error` would stop on that line, having
 already created a scratch database.
+
+### 2.3.1 The `rls_bypass` gate (#471)
+
+A restore writes the org-owned tables (`storage_objects`, `storage_object_chunks`,
+`ai_runs`, `ai_usage_events`, the group, grant and organization-settings tables)
+that row-level security forces. `pg_restore` therefore runs with
+`--enable-row-security` **and** `PGOPTIONS=-c app.rls_bypass=on`, the same pair
+every dump carries (`database-backup.md` §17); the flag alone would write the
+tables without their rows. The gate passes when the restoring role is a
+superuser or has `BYPASSRLS`, or when the maintenance connection showed that
+the startup option reached the server. Otherwise it reports a `warning` (so
+the outcome is `guided`): connect directly to the database, not through a
+transaction-mode pooler that drops startup options. The advice to grant
+`BYPASSRLS` is for a dedicated restore role only. **The application role
+(`kvox_app`) stays `NOSUPERUSER NOBYPASSRLS`** and the pair of settings is what
+lets it restore.
 
 ### 2.4 A short disk downgrades; it never refuses
 
@@ -311,6 +328,30 @@ accepts the restore-then-`migrate deploy` path.
 An archive with **no** recorded migration is a `warning`, not a block: #281
 records it best-effort, and refusing to restore an archive whose audit read
 failed would make a best-effort field load-bearing after the fact.
+
+### 2.8 App gates, and KVox's `kvox.extensions` (#471)
+
+An application registers its own gate with `registerRestoreGate({ id, label,
+kind?, check })` from a file imported before `NestFactory.create`. A gate is
+read-only, bounded by `RESTORE_GATE_TIMEOUT_MS` (10 s), receives the run, the
+policy, the live migration, read-only settings and the probes the pre-flight
+already ran, and fails closed: a throw, a timeout or a malformed answer is a
+`fail` naming the gate. The default kind is `app`, whose `fail` **blocks the
+restore outright** and is not overridable. App gates run after the built-ins,
+in registration order, and appear in the dialog like any other row.
+
+KVox registers one, in `apps/api/src/app-registrations/db-backup.ts`:
+
+| Gate | Passes when | On failure |
+|---|---|---|
+| `kvox.extensions` — "pgvector and pg_trgm are available on the target cluster" | `pg_available_extensions` on the cluster admin connection lists both `vector` and `pg_trgm` | `fail` with a remedy naming the missing extension (pending agent B report: exact wording) |
+
+It differs from the built-in `extensions` gate (§2.3), which asks whether the
+extensions the *live* database has are available. This one asks whether the
+two extensions KVox's schema **requires** are available on the target cluster,
+even when the live database has lost one. It **only reads**: a pre-flight that
+created an extension would break the rule in §5. Nothing in KVox's restore path
+creates, installs or alters an extension.
 
 ## 3. Three outcomes, and all three are normal
 
@@ -419,6 +460,12 @@ against nothing at all, which is the single most dangerous lie this subsystem
 could tell.
 
 **No migration.** The `restore*` columns were declared by #281.
+
+**Since #471 the wiring is the package's.** `DbBackupModule.forRoot` provides
+the pre-flight and the restore service; KVox supplies only the host ports
+(`database-backup.md` §18) and the gate in §2.8. The optional test seams
+(`RESTORE_PREFLIGHT_SEAM`, `RESTORE_ADMIN_CLIENT_FACTORY`) stay unbound in the
+application.
 
 ## 7. Rejected alternatives (the pre-flight)
 
@@ -771,6 +818,25 @@ tempt a future change to "roll the swap back", which at that point would mean
 discarding a database the deployment is already serving from. Losing the backup
 catalog is bad. Undoing a successful restore to avoid losing it would be worse.
 The failure logs CRITICAL and names what has to be done by hand.
+
+#### 8.7.1 Extra carry-over: KVox registers none (#471)
+
+The package carries `database_backup_runs` and the restore's own `jobs` row by
+itself (the rules above, now its code) and lets an application add tables whose
+rows must survive a restore: `registerRestoreCarryOver({ id, order,
+exportSql, reinsertSql })`, or `forRoot({ extraCarryOver })`. A carry exists for
+a fact the archive cannot hold, because it was written after the backup was
+taken or it records something outside the database.
+
+**KVox's decision is none.** Every KVox table, including `kvox_object_ownership`
+and `kvox_allowlist_reminders`, is inside the dump and is restored with it, and
+nothing KVox stores records a fact outside the database. The reason is written as
+a comment in `apps/api/src/app-registrations/db-backup.ts` next to the gate. A
+future table that holds such a fact adds a carry there, not a fork of the
+restore service.
+
+The carry's two writes run under `set_config('app.rls_bypass', 'on', true)` so a
+restore as an ordinary role can write rows that row-level security forces.
 
 ### 8.8 Migration roll-forward, and the exit
 
@@ -1509,6 +1575,8 @@ stops gating the button in exactly one of the two places that needed it most.
 See §10.1.
 
 ## 11. Verification
+
+> **Where the tests went (#471).** The tables below name KVox's own specs under `src/db-backup/` and `test/db-backup/`, deleted with the code they covered. The same claims are covered by the package's suite and the `dbBackup` suite of `runPlatformConformance()` (`apps/api/test/conformance.spec.ts`); KVox adds the restore-gate unit test for `kvox.extensions` and `test/db-backup/kvox-dump-rls.db.spec.ts`. The "Covered by" column records what proved each claim when it was written.
 
 | Claim | Covered by |
 |---|---|

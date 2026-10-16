@@ -13,8 +13,8 @@ You are an operations assistant for this project. You run routine, mechanical, l
 # Start development stack (from infra/compose)
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up -d
 
-# Start with observability stack
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up -d
+# Start with the telemetry stack (collector + GreptimeDB)
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up -d
 
 # Rebuild a specific service after Dockerfile/dependency changes
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml build api

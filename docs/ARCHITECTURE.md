@@ -129,13 +129,13 @@ This is a production-grade web application template that establishes:
                                                       │
                                                       ▼
                                      ┌────────────────────────────────┐
-                                     │    OBSERVABILITY STACK         │
+                                     │    TELEMETRY STACK (optional)  │
                                      │                                │
                                      │  • OTEL Collector              │
-                                     │  • Uptrace (Traces/Metrics)    │
-                                     │  • ClickHouse (Storage)        │
-                                     │                                │
-                                     │        Port 14318 (UI)         │
+                                     │  • GreptimeDB (Storage)        │
+                                     │  • Explorer + dashboard in the │
+                                     │    app (/admin/settings)       │
+                                     │   Port 14000 (GreptimeDB UI)   │
                                      └────────────────────────────────┘
 ```
 
@@ -243,7 +243,7 @@ All components served from the same base URL via Nginx reverse proxy:
 | **Containerization** | Docker | Application packaging |
 | **Orchestration** | Docker Compose | Local development environment |
 | **Reverse Proxy** | Nginx | Routing, SSL termination, headers |
-| **Observability** | OpenTelemetry + Uptrace | Traces, metrics, logs |
+| **Observability** | OpenTelemetry + GreptimeDB (platform telemetry slice) | Traces, metrics, logs; explorer and dashboard in the app |
 | **Logging** | Pino | Structured JSON logging |
 
 ### 4.4 Testing
@@ -337,13 +337,14 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   ├── base.compose.yml          # Core services
 │   │   ├── dev.compose.yml           # Development overrides
 │   │   ├── prod.compose.yml          # Production overrides
-│   │   ├── otel.compose.yml          # Observability stack
+│   │   ├── telemetry.compose.yml     # Telemetry stack (collector + GreptimeDB), copied from the platform
+│   │   ├── vps.telemetry.compose.yml # VPS hardening for the telemetry stack, copied from the platform
+│   │   ├── postgres-init/            # First-start role and extension scripts (10-application-role.sh, 20-kvox-extensions.sh)
 │   │   └── .env.example              # Environment template
 │   ├── nginx/
 │   │   └── nginx.conf                # Reverse proxy config
 │   └── otel/
-│       ├── otel-collector-config.yaml
-│       └── uptrace.yml
+│       └── otel-collector-config.yaml
 │
 ├── .claude/                          # AI agent configuration
 │   └── agents/
@@ -433,7 +434,7 @@ Object storage (uploads, avatars, renditions, exports, backups, the node data pl
 
 **Runtime-configured.** There is no storage environment variable for the bucket. The active driver and its non-secret settings are the `storage` system-settings namespace; the secret access key is in the credential store (`credentials`, purpose `storage`), encrypted with `SECRETS_ENCRYPTION_KEY`. An administrator edits both at `/admin/settings/storage`, and the resolving provider re-reads them on a short cache, so a change needs no restart. While nothing usable is saved, every storage call answers 503. The environment keeps only `STORAGE_CSP_ORIGIN` (nginx), `STORAGE_PART_SIZE`, `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES` and `SIGNED_URL_EXPIRY`. Operator steps: [`runbooks/storage-configuration.md`](runbooks/storage-configuration.md).
 
-**Tenancy.** `storage_objects` and `storage_object_chunks` are organization tables with forced row-level security. Every application read or write goes through `runInOrg` (or the job's `JobScope`), and only `KvoxManagedObjects` does it; a grep-based tripwire spec fails when any other file outside the platform bindings touches `prisma.storageObject`. RLS stays inert until the role switch (#471).
+**Tenancy.** `storage_objects` and `storage_object_chunks` are organization tables with forced row-level security. Every application read or write goes through `runInOrg` (or the job's `JobScope`), and only `KvoxManagedObjects` does it; a grep-based tripwire spec fails when any other file outside the platform bindings touches `prisma.storageObject`. The API connects as an ordinary `NOSUPERUSER NOBYPASSRLS` role since #471, so these policies apply ([7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role)).
 
 #### Upload Flow
 
@@ -1431,7 +1432,7 @@ before, so `APP_SYSTEM_SETTINGS_EXTENSIONS` is empty.
 Temporary shims, with the issue that removes each, are in
 [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): the `ai` declaration (#473), the
 `user-settings.namespace-changed` interceptor (`platform/settings/user-settings-change.interceptor.ts`, which re-emits the
-event the platform service does not), and `cron` in `db-backup/schedule.util.ts` (#467). The profile-image adapter was removed in #469.
+event the platform service does not), and nothing for database backup (its shim was removed in #471). The profile-image adapter was removed in #469.
 
 On the web, the hub (`SettingsHub`) and the Profile and Appearance pages come from `@marinoscar/platform-web/settings/ui`,
 and the `useSystemSettings` and `useUserSettings` hooks from `@marinoscar/platform-web/settings/headless`; KVox keeps the two
@@ -1461,7 +1462,7 @@ What KVox adds through registries (`app-registrations/host.ts`, imported first b
 
 `GET /api/admin/doctor` (`system_settings:read`) runs every registered check and returns one row per check with `pass`, `warn`, `fail` or `skip`, a remedy and the settings page that fixes it; the response is always HTTP 200. The route is **read-only by contract**: a check selects and describes, and never creates, alters or writes (no row, object or audit event, no mail or push, no model call), and the `doctor-read-only` conformance suite proves it for KVox's own checks too. Checks are time-bounded (5000 ms unless declared otherwise) and a check whose dependency failed is reported as `skip`. The support bundle (`GET /api/admin/doctor/support-bundle`) is a redacted JSON diagnostic file named after `APP_SLUG`. On the web, the packaged page is bound at `/admin/settings/doctor` and its card is appended to the Operations group of `config/adminSections.tsx` ([9.7](#97-admin-settings-groups)).
 
-> **Expected failure until #471.** The platform check `db.rls_role` reports `fail`, and so the overall verdict is `fail`, because KVox still connects to PostgreSQL as the `postgres` superuser and the check wants a `NOSUPERUSER NOBYPASSRLS` role. This is documented, not a defect to fix in the Doctor: #471 switches the role. Do not "fix" it by loosening or removing the check, and do not change `POSTGRES_USER` before #471 (see "Standing constraints" in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md)).
+> **`db.rls_role` passes since #471.** The check wants an ordinary `NOSUPERUSER NOBYPASSRLS` database role, and the API now connects as one (`APP_DB_USER`, default `kvox_app`; see [7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role)). A deployment that has not switched yet still reports `fail`: follow [`runbooks/application-role.md`](runbooks/application-role.md). Do not "fix" a failure by loosening or removing the check.
 
 Temporary shims in this slice, each with its removal issue in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md): `platform/http/not-modified.interceptor.ts` (a `304` must skip the envelope), `platform/about/about-contributors.module.ts` (hands the `SettingsResolver` to the Transcription contributor) and, on the web, the `isFeatureEnabled` read in `platform/platformHost.tsx`. Known gap: `kvox deploy about` cannot read the new About response until #482.
 
@@ -1489,6 +1490,56 @@ Email templates register in this order: the platform's first, then the applicati
 Differences a reader of the old code would not expect: Web Push reads **no environment variables** and Amazon SES reads no credentials from the environment (VAPID keys, the SES access key ID and the SES secret are configured only at `/admin/settings/push` and `/admin/settings/email`; `S3_REGION` survives only as the default SES region); every email carries the brand mark and the brand colour follows `identity.json`; the platform's `role-changed` template replaces the app's, while `user-welcome` and `allowlist-invitation` stay as registered overrides (`registerKvoxEmailTemplateOverrides` in `email-templates/`); the broadcast routes accept `broadcasts:*` or `org_broadcasts:*` (so **`org_admin` reaches broadcasts**) instead of requiring the `admin` role; the preferences matrix now lists `allowlist.invitation_reminder` after `security.role_changed`; `POST /api/admin/broadcasts/:id/resume` and `GET /api/notifications/channels` are new. See [`API.md`](API.md#notifications) and [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md).
 
 On the web, `configureNotificationsWeb` (`apps/web/src/platform/notifications.ts`, imported in `main.tsx`), `NotificationProvider` (inside `AuthProvider`), the packaged `NotificationBell` (mounted in `AppBar.tsx`; the breakpoint gate is untouched), `NotificationPermissionBanner`, `UserNotificationsPage`, `NotificationSettingsPage`, `PushConfigPage`, `BroadcastsPage` and the email settings page replaced the local components, hooks, services and pages. `apps/web/src/sw.ts` keeps the workbox precache, the denylisted navigation route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its notification listeners with `registerNotificationServiceWorkerHandlers(self, { icon, badge })` from `@marinoscar/platform-web/notifications/service-worker`. The worker always shows a real push (even with a focused client); the page raises no OS toast for a focused tab or a frame flagged `pushed`; the tag is the notification id, so a repeated push replaces its toast. No local exception is needed.
+
+### 7.10 Platform db-backup and telemetry slices, and the application role
+
+Issue #471 replaced three KVox implementations with platform slices and changed
+the identity the API uses to reach PostgreSQL.
+
+**Database backup and restore.** `@marinoscar/platform-api/db-backup` is the
+engine, the schedule, retention, the restore (pre-flight gates, swap, rollback),
+the four job types and `/api/admin/db-backup/*`. KVox's `apps/api/src/db-backup/`
+is deleted. `apps/api/src/platform/db-backup/` (`db-backup.config.ts`,
+`db-backup-host.module.ts`) mounts it with `DbBackupModule.forRoot({ appName:
+APP_NAME, imports: [DbBackupHostModule] })` and binds the notifier, maintenance
+mode, metrics and deployment-mode ports; `apps/api/src/app-registrations/db-backup.ts`
+registers the restore gate `kvox.extensions` and records the carry-over decision
+(none). Every dump and restore carries `--enable-row-security` **and**
+`PGOPTIONS=-c app.rls_bypass=on`. Design: [`specs/database-backup.md`](specs/database-backup.md)
+(§17, §18) and [`specs/database-restore.md`](specs/database-restore.md) (§2.8, §8.7.1).
+On the web, `/admin/settings/db-backup` lazy-loads the packaged `DbBackupPage`
+from `@marinoscar/platform-web/db-backup/ui`, wrapped in
+`DbBackupWebAdaptersProvider` (`apps/web/src/platform/dbBackupAdapters.ts`).
+
+**Telemetry.** `initializeOtel` from `@marinoscar/platform-api/otel-core/sdk`
+runs in `apps/api/src/instrumentation.ts` (service name from
+`common/otel/telemetry-identity.ts`, `OTEL_SERVICE_NAME=kvox-api`), and the
+`@Trace()` decorator is `otel-core`'s. `TelemetryModule.forRoot` from
+`@marinoscar/platform-api/telemetry` (mounted in `apps/api/src/platform/telemetry/`)
+adds the GreptimeDB store, the explorer, the dashboard, metric groups, Doctor
+checks and the `telemetry.*` jobs, behind `/api/admin/telemetry/*` and
+`/api/telemetry/config` (permissions `telemetry:read|write|query`). The
+`telemetry` system-settings namespace and the GreptimeDB credential purpose are
+registered by KVox; the GreptimeDB passwords live in the credential store at
+runtime and the `GREPTIME_*` environment variables are only the deployment
+default. The AI adapter answers "unavailable" until #472. Pending agent report:
+logger decision (`common/logger/`).
+
+**The application database role.** The API connects as `kvox_app`
+(`APP_DB_USER`), an ordinary role created `NOSUPERUSER NOBYPASSRLS CREATEDB
+CREATEROLE` that owns the database and every table. A superuser skips every
+policy, so as `postgres` the forced row-level security on `storage_objects`,
+`storage_object_chunks`, `ai_runs`, `ai_usage_events` and the group, grant and
+organization-settings tables (platform migrations `0025` to `0029`) would be
+inert. `CREATEDB` is what restore needs; `CREATEROLE` is what the node-offload
+broker needs. The extensions `vector` and `pg_trgm` stay owned by the
+bootstrap superuser: on a fresh volume `postgres-init/10-application-role.sh`
+(copied from the platform, never hand-edited) creates the role and
+`postgres-init/20-kvox-extensions.sh` creates the extensions before the first
+migration; an existing deployment follows
+[`runbooks/application-role.md`](runbooks/application-role.md). The bootstrap
+login stays `postgres` and is used for administration only. Design and Doctor
+check: [`SECURITY-ARCHITECTURE.md`](SECURITY-ARCHITECTURE.md) (Tenant isolation).
 
 ---
 
@@ -1572,7 +1623,7 @@ The routes are mounted, but KVox runs in single-organization mode and the web ap
 
 | Method | Path | Permission | Purpose |
 |--------|------|------------|---------|
-| `GET` | `/api/admin/doctor` | `system_settings:read` | Read-only configuration and health checks (packaged, plus two app checks; `db.rls_role` fails until #471) |
+| `GET` | `/api/admin/doctor` | `system_settings:read` | Read-only configuration and health checks (packaged, plus two app checks; `db.rls_role` passes when the API runs as the application role, [7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role)) |
 | `GET` | `/api/admin/doctor/support-bundle` | `system_settings:read` | Redacted diagnostic JSON file for a support ticket (packaged) |
 
 #### About and Maintenance (Admin)
@@ -1846,7 +1897,7 @@ controller enforces (Settings UI Pattern rule 3):
 - **Jobs** (`/admin/settings/jobs`, `jobs:read`) and **Job Insights**
   (`/admin/settings/jobs/insights`, `jobs:read`, nested under Jobs)
 - **Worker Nodes** (`/admin/settings/workers`, `nodes:read`)
-- **Database Backup** (`/admin/settings/db-backup`, `db_backup:read`)
+- **Database Backup** (`/admin/settings/db-backup`, `db_backup:read`; the packaged page, [7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role))
 - **Broadcasts** (`/admin/settings/broadcasts`, `broadcasts:read`, epic #319)
 - **Doctor** (`/admin/settings/doctor`, `system_settings:read`, issue #464), the packaged
   `doctorSettingsPage.card` appended last; see [7.8](#78-platform-host-core-about-and-doctor)
@@ -1873,11 +1924,10 @@ services:
 # PostgreSQL is not bundled in base.compose.yml - it runs as a separate
 # instance reached via POSTGRES_HOST/POSTGRES_PORT (see infra/compose/.env.example)
 
-# Observability (otel.compose.yml)
+# Telemetry (telemetry.compose.yml; vps.telemetry.compose.yml hardens it on a VPS)
 services:
-  otel-collector:  # OpenTelemetry Collector
-  uptrace:         # Trace/metric visualization (port 14318)
-  clickhouse:      # Uptrace storage backend
+  otel-collector:  # OpenTelemetry Collector (OTLP in, GreptimeDB out)
+  greptimedb:      # Telemetry storage (HTTP/SQL dashboard on 14000, PostgreSQL wire on 14003)
 ```
 
 ### 10.2 Network Topology
@@ -1894,14 +1944,14 @@ services:
 │       │              │                                      │
 │       │              ▼                                      │
 │       │         ┌─────────┐                                 │
-│       │         │  otel   │   (only with otel.compose.yml)  │
+│       │         │  otel   │ (only with telemetry.compose.yml)│
 │       │         │collector│                                 │
 │       │         └────┬────┘                                 │
 │       │              ▼                                      │
-│       │         ┌─────────┐    ┌──────────┐                 │
-│       │         │ uptrace │───▶│clickhouse│                 │
-│       │         │ :14318  │    │          │                 │
-│       │         └─────────┘    └──────────┘                 │
+│       │         ┌───────────┐                               │
+│       │         │greptimedb │◀── read by the API (explorer) │
+│       │         │:14000/03  │                               │
+│       │         └───────────┘                               │
 └───────┼─────────────────────────────────────────────────────┘
         │                              │
         ▼                              ▼
@@ -1926,9 +1976,11 @@ APP_URL=http://localhost:3535
 # Database
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_USER=postgres
+POSTGRES_USER=postgres          # bootstrap superuser (administration only)
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=appdb
+APP_DB_USER=kvox_app            # the role the API connects as (NOSUPERUSER NOBYPASSRLS)
+APP_DB_PASSWORD=<app-role-password>
 
 # JWT
 JWT_SECRET=<min-32-character-secret>
@@ -1946,6 +1998,7 @@ INITIAL_ADMIN_EMAIL=admin@example.com
 # Observability
 OTEL_ENABLED=true
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+GREPTIME_HOST=greptimedb        # plus GREPTIME_*_USER / GREPTIME_*_PASSWORD, see .env.example
 ```
 
 ---
@@ -1956,9 +2009,19 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 | Signal | Collection | Storage | Purpose |
 |--------|------------|---------|---------|
-| **Traces** | OTEL SDK auto-instrumentation | Uptrace/ClickHouse | Request flow tracking |
-| **Metrics** | OTEL SDK | Uptrace/ClickHouse | Performance monitoring |
-| **Logs** | Pino structured logs | Uptrace/ClickHouse | Debugging, audit |
+| **Traces** | `initializeOtel` (`otel-core`) auto-instrumentation | GreptimeDB, through the collector | Request flow tracking |
+| **Metrics** | `otel-core` and the collector's host, PostgreSQL and uptime receivers | GreptimeDB | Performance monitoring, the telemetry dashboard |
+| **Logs** | Pino structured logs | GreptimeDB when exported through OTLP | Debugging, audit |
+
+The collector redacts credential headers and writes into GreptimeDB with a
+write-only account; the API reads it back with a read-only account for the
+explorer and dashboard, and uses an admin account only to set retention (TTL).
+When GreptimeDB is unreachable the API reports telemetry as unavailable instead
+of failing. The explorer, dashboard and settings pages are the packaged
+`@marinoscar/platform-web/telemetry/ui` pages; see [7.10](#710-platform-db-backup-and-telemetry-slices-and-the-application-role).
+Operators can also open the GreptimeDB SQL dashboard at http://localhost:14000/dashboard
+(development); on a VPS it is not published, and the PostgreSQL wire port is
+bound to loopback only (`ssh -L 14003:127.0.0.1:14003 <host>`).
 
 ### 11.2 Trace Propagation
 
@@ -2723,7 +2786,7 @@ cd apps/web && npm run typecheck
 |---------|-----|
 | Application | http://localhost:3535 |
 | API Reference (Scalar) | http://localhost:3535/api/docs |
-| Uptrace | http://localhost:14318 |
+| GreptimeDB dashboard (with the `telemetry` overlay) | http://localhost:14000/dashboard |
 | PostgreSQL | localhost:5432 |
 
 #### Key Commands
@@ -2733,7 +2796,7 @@ cd apps/web && npm run typecheck
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 
 # Start with observability
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
 
 # Run migrations
 cd apps/api && npm run prisma:migrate:dev -- --name <name>

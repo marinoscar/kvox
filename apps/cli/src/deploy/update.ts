@@ -210,7 +210,7 @@ async function compose(
   extra: readonly string[],
   options?: { timeoutMs?: number },
 ): Promise<void> {
-  const result = await context.runCommand(composeArgv(context.name, extra), {
+  const result = await context.runCommand(composeArgv(context.name, extra, readEnvFile(context.options.deployRoot)), {
     cwd: composeCwd(context.options.deployRoot),
     timeoutMs: options?.timeoutMs ?? 30 * 60_000,
     redact: context.journal.redact,
@@ -381,13 +381,14 @@ async function recordUpdateCheck(context: UpdateContext, check: UpdateCheck): Pr
 //      DELETES it whatever the template says, so it cannot be in the file by
 //      design. `VAPID_PRIVATE_KEY` is this AND case 1.
 //   3. A KEY IN AN OPT-IN FEATURE GROUP. This is the larger half, and the
-//      issue that reported the bug did not name it: nine observability keys
-//      and four storage keys are NOT commented out in the template, so case 1
-//      does not cover them, and five of the nine are `secret: true`. `update`
-//      enables no group and never has, so all thirteen are absent from a
-//      normal deployment's .env and all thirteen read as drift - a deployment
-//      that simply never opted into Uptrace re-ran the whole wizard on every
-//      update with no optional key declined at all.
+//      issue that reported the bug did not name it: the observability keys
+//      (and, when it was reported, four storage keys) are NOT commented out in
+//      the template, so case 1 does not cover them, and several are
+//      `secret: true`. `update` enables no group and never has, so all of
+//      them are absent from a normal deployment's .env and all of them read as
+//      drift - a deployment that simply never opted into the telemetry stack
+//      re-ran the whole wizard on every update with no optional key declined
+//      at all.
 //
 // None of the three is drift, and for none of them would the wizard produce
 // anything: cases 2 and 3 are keys it REFUSES TO WRITE, so the operator was
@@ -420,8 +421,8 @@ async function recordUpdateCheck(context: UpdateContext, check: UpdateCheck): Pr
  * why, because it looks like one: nothing distinguishes `OTEL_ENABLED=true`
  * from `OTEL_ENABLED=false`, both of which are simply PRESENT. The e2e
  * deployment carries the second one, and an inference would have read it as
- * "observability is on" and written eight Uptrace placeholder defaults into a
- * live .env. Teaching `update` to enable a group means a flag on `update`,
+ * "observability is on" and written the telemetry stack's placeholder defaults into
+ * a live .env. Teaching `update` to enable a group means a flag on `update`,
  * passed to BOTH this and the wizard in the same breath - which is why the
  * parameter is here rather than the exclusion being hardcoded.
  */

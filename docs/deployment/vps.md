@@ -315,6 +315,40 @@ default answer shown above, and you're still asked. Full design and the
 rejected alternatives:
 [`docs/specs/vps-deploy.md` §20](../specs/vps-deploy.md#20-creating-the-database-on-request-only-issue-238).
 
+### 3.3 The database role, on a new install (#471)
+
+The login you give the wizard (`POSTGRES_USER` and `POSTGRES_PASSWORD`) is the
+role the API runs as, and it must be an ordinary role that owns the database:
+as a superuser it would skip row-level security and the Doctor would report
+`db.rls_role` as `fail`. The server, and the superuser who administers it, are
+yours; create the role, the database and the extensions once, as that
+superuser, before you install:
+
+```bash
+psql -h <POSTGRES_HOST> -p <POSTGRES_PORT> -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -v app_user=kvox_app -v app_password='<password>' <<'SQL'
+CREATE ROLE :"app_user" LOGIN PASSWORD :'app_password'
+  NOSUPERUSER NOBYPASSRLS CREATEDB CREATEROLE;
+ALTER ROLE :"app_user" SET createrole_self_grant = 'inherit, set';
+CREATE DATABASE appdb OWNER :"app_user";
+SQL
+
+# The extensions, in that database, as the superuser (section 3.1):
+psql -h <POSTGRES_HOST> -p <POSTGRES_PORT> -U postgres -d appdb -v ON_ERROR_STOP=1 <<'SQL'
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+SQL
+```
+
+Then run the wizard with `kvox_app` and its password. `CREATEDB` is what restore
+needs, `CREATEROLE` what the worker-node credential broker needs (without it
+the broker answers `guided`, as on any managed PostgreSQL); the extensions stay
+owned by the superuser. The role runbook,
+[`docs/runbooks/application-role.md`](../runbooks/application-role.md), is the
+same procedure for a database that already has data. Pending agent report:
+the managed-PostgreSQL variants (RDS, Cloud SQL, Azure) of the commands above.
+
 ## 4. After install: the first login (do this before anything else)
 
 **A successful `install` does not create an admin user, or any user at
@@ -490,6 +524,76 @@ the update is healthy, signed in as an administrator:
 3. **Broadcasts.** `/admin/settings/broadcasts` is the packaged page; nothing to
    do, but organization administrators can now reach it (see
    [`docs/specs/notification-broadcasts.md`](../specs/notification-broadcasts.md#packaged-implementation-470)).
+
+### After the backup, telemetry and database-role slice (#471)
+
+This update replaces three things at once, and the order matters. It changes no
+table and rewrites no row; rollback is reverting the release, plus section 7 of
+the application-role runbook if you had already switched the login.
+
+**1. The database role (do this first, before you deploy the release).** The
+API must stop connecting to PostgreSQL as `postgres`. A superuser skips
+row-level security, so tenant isolation is inert and the Doctor check
+`db.rls_role` fails. Follow
+[`docs/runbooks/application-role.md`](../runbooks/application-role.md): take a
+verified backup, rehearse on a restored copy, create the role, transfer ownership
+with `apps/api/scripts/transfer-ownership.sql` in a short window, then set
+`POSTGRES_USER` and `POSTGRES_PASSWORD` in `.env` to the role and restart.
+Your `.env` keeps the login it already names, so deploying the release alone
+changes nothing; but if it defines no `POSTGRES_USER`, the compose default is now
+`kvox_app`, which must exist first. `APP_DB_USER` and `APP_DB_PASSWORD` are for
+development and test volumes only; the deploy wizard never writes them.
+
+**2. Backups.** Database backup and restore are now the platform's. The stored
+`databaseBackup` policy, the schedule, the archives under `database-backups/`
+and the four job types are unchanged, and so are the `nodes.jobSecretBrokerEnabled`
+and `databaseBackup.nodeOffloadEnabled` values. Every dump and restore now
+carries the row-level-security flag **and** option pair, so a backup from the
+application role contains every organization's rows. After the switch, take one
+backup from `/admin/settings/db-backup`, check it completes and verifies, and
+confirm the Doctor's `backup.rls-bypass` check passes. A restore now also checks
+that the target cluster offers `vector` and `pg_trgm` (the `kvox.extensions`
+gate). A worker node running backups already carries the same pair in its own
+`pg_dump` wrapper (since #463), so no node change is needed
+(`docs/deployment/worker-nodes.md`).
+
+**3. Telemetry (optional).** The previous observability overlay is gone. The new
+one is the platform's collector plus GreptimeDB, read back by the in-app
+explorer and dashboard (`/admin/settings/telemetry` and the pages beside it). A
+deployment has it **when its `.env` carries the three GreptimeDB passwords**;
+`update` enables no group, so to turn it on edit `.env`:
+
+```bash
+# in /opt/infra/apps/<name>/.env (strong values; the template's change-me-* are refused)
+GREPTIME_WRITER_PASSWORD=...
+GREPTIME_READER_PASSWORD=...
+GREPTIME_ADMIN_PASSWORD=...
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+```
+
+then `kvox deploy update` (or `kvox deploy install --fresh` for a new box). The
+CLI then brings the stack up with `base`, `prod`, `telemetry`, `vps`,
+`vps.telemetry` in that order (`docs/specs/vps-deploy.md` section 15.1). Nothing is
+published on a public interface: the collector publishes no port, and GreptimeDB's
+PostgreSQL wire port is bound to `127.0.0.1:14003` (`GREPTIME_BIND_PG_PORT`, give
+each deployment on a shared host its own); reach it with
+`ssh -L 14003:127.0.0.1:14003 <host>` and log in as `GREPTIME_READER_USER`. The
+SQL dashboard on 4000 is not published at all.
+
+**Memory.** GreptimeDB is capped at 1 GB and the collector at 256 MB. Check that
+the host has about 1.25 GB beyond the API, web, Nginx and (if local) PostgreSQL
+limits before you enable it; on a small VPS leave telemetry off and keep
+`OTEL_ENABLED=false`. Remove any old `UPTRACE_*` lines from `.env`; they are no
+longer read.
+
+Three checks once the update is healthy, signed in as an administrator:
+
+1. **`/admin/settings/doctor`.** `db.rls_role` and `backup.rls-bypass` pass.
+2. **`/admin/settings/db-backup`.** Run a backup and confirm it completes.
+3. **With telemetry on:** make a request, then find its trace in the explorer
+   and confirm the dashboard renders. If GreptimeDB is unreachable the API
+   reports telemetry as unavailable; it does not fail.
 
 ## 7. Certificates and the renewal cron
 

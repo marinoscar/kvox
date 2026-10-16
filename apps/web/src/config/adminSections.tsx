@@ -42,6 +42,13 @@ import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 // Doctor (#464, epic #462) — the platform's health-check page, declared by the
 // package (title, description, path, `system_settings:read`) and appended below.
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
+// Telemetry (#471, epic #467) — the platform's three Observability cards,
+// declared by the package (data only, so importing them pulls no page into the
+// main chunk). Each carries the exact permission the platform's telemetry
+// controllers enforce (`telemetry:read` for the settings page, `telemetry:query`
+// for the Explorer and the Dashboard) and, on the last two, `feature:
+// 'telemetry'`, which `config/settingsFeatures.ts` resolves.
+import { telemetryAdminCards } from '@marinoscar/platform-web/telemetry/ui';
 // Operations (#266, epic #254). One icon per card, including the two cards
 // whose pages land in later issues — the card is declared now, so its icon is
 // declared now; see the `Operations` section's own header.
@@ -538,6 +545,20 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // its icon, which the package keeps beside the card.
       { ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon },
     ],
+  },
+  {
+    // Issue #471, epic #467. A NEW section APPENDED after Operations rather
+    // than three cards inserted into it, so no existing card moves in the hub,
+    // the Console rail or the AppBar's title resolver. Observability is the
+    // package's own name for this group. `Telemetry` (`telemetry:read`) has no
+    // `feature`, deliberately: it is where collection is switched on, so it must
+    // be reachable while the feature is off. The Explorer and the Dashboard
+    // (`telemetry:query`) exist only while a store is deployed and collection is
+    // on. Both nest under the Telemetry route, so the longest-prefix title
+    // resolver names them correctly. A viewer without `telemetry:read` or
+    // `telemetry:query` sees no section at all.
+    label: 'Observability',
+    cards: [...telemetryAdminCards],
   },
 ];
 

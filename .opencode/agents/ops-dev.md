@@ -41,7 +41,7 @@ You run routine, mechanical commands: start, rebuild and restart containers, app
 
 ## Rules
 
-- **Compose runs from `infra/compose/`** with explicit `-f` files: `base.compose.yml` (api, web, nginx) plus `dev.compose.yml`; add `devdb.compose.yml` for a dev Postgres and `otel.compose.yml` for Uptrace and the collector. `prod.compose.yml` is the production overlay.
+- **Compose runs from `infra/compose/`** with explicit `-f` files: `base.compose.yml` (api, web, nginx) plus `dev.compose.yml`; add `devdb.compose.yml` for a dev Postgres and `telemetry.compose.yml` for GreptimeDB and the collector. `prod.compose.yml` is the production overlay.
 - **Hot reload covers most code changes.** Rebuild only after a Dockerfile or `package.json` change; if a rebuild looks unnecessary, say so first.
 - **Use `npm run prisma:*`** from `apps/api`, never bare `npx prisma`. The API does not migrate on startup.
 - **Report real output.** Quote errors verbatim. If a migration or typecheck fails, report it and name which agent (`backend-dev`, `frontend-dev`, `database-dev`) should fix it.
@@ -50,7 +50,7 @@ You run routine, mechanical commands: start, rebuild and restart containers, app
 ## Commands
 
 ```bash
-# from infra/compose (add -f devdb.compose.yml / -f otel.compose.yml as needed)
+# from infra/compose (add -f devdb.compose.yml / -f telemetry.compose.yml as needed)
 docker compose -f base.compose.yml -f dev.compose.yml up -d
 docker compose -f base.compose.yml -f dev.compose.yml build api      # or web
 docker compose -f base.compose.yml -f dev.compose.yml restart api    # or web

@@ -15,6 +15,8 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
+import type { SettingsFeatures } from '@marinoscar/platform-web/settings/headless';
 import { DESTINATIONS, isDestinationVisible } from '../../config/destinations';
 import { APP_NAME } from '@app/shared';
 import { useThemeContext } from '../../contexts/ThemeContext';
@@ -240,13 +242,18 @@ interface DrillDown {
  * guard has already had its say. Naming a page the user is looking at leaks
  * nothing the page itself does not.
  */
-function resolveDrillDown(pathname: string, knowledgeIsTab: boolean): DrillDown | null {
+function resolveDrillDown(
+  pathname: string,
+  knowledgeIsTab: boolean,
+  settingsFeatures: SettingsFeatures,
+): DrillDown | null {
   for (const surface of SETTINGS_SURFACES) {
     const title = settingsPageTitle(
       surface.sections,
       surface.hubPath,
       surface.hubTitle,
       pathname,
+      settingsFeatures,
     );
     // `null` means "not this surface" — a different answer from "this surface's
     // own hub" (`hubTitle`). Collapsing the two would put a back arrow on every
@@ -327,10 +334,13 @@ export function AppBar() {
   // two code paths that can drift.
   const { hasPermission } = usePermissions();
   const { features } = useNavigationFeatures();
+  // A card whose deployment feature is off titles nothing (#471: the telemetry
+  // cards), so the resolver needs the same map the hub and the rail read.
+  const settingsFeatures = useSettingsFeatures();
   const knowledge = DESTINATIONS.find((d) => d.key === 'knowledge');
   const knowledgeIsTab =
     knowledge !== undefined && isDestinationVisible(knowledge, hasPermission, features);
-  const drillDown = isCompactWindow ? resolveDrillDown(pathname, knowledgeIsTab) : null;
+  const drillDown = isCompactWindow ? resolveDrillDown(pathname, knowledgeIsTab, settingsFeatures) : null;
 
   return (
     <MuiAppBar

@@ -8,20 +8,31 @@
 > Implemented in
 > `apps/api/prisma/schema.prisma` (the `DatabaseBackupRun` model and its two
 > enums),
-> `apps/api/prisma/migrations/20260907120000_add_database_backup_runs/migration.sql`,
-> `apps/api/src/db-backup/pg-dump.util.ts`,
-> `apps/api/src/db-backup/pg-restore.util.ts`,
-> `apps/api/src/db-backup/pg-version.util.ts`,
-> `apps/api/src/db-backup/schedule.util.ts`,
-> `apps/api/src/db-backup/db-backup-storage.ts`,
-> `apps/api/src/db-backup/db-backup.errors.ts`,
-> `apps/api/src/db-backup/db-backup-runner.service.ts`,
-> `apps/api/src/db-backup/db-backup-retention.service.ts`,
-> `apps/api/src/db-backup/tasks/db-backup-schedule.task.ts`,
-> `apps/api/src/db-backup/db-backup.module.ts`,
-> `apps/api/src/db-backup/db-backup.controller.ts`,
-> `apps/api/src/db-backup/db-backup-admin.service.ts` and
-> `apps/api/src/db-backup/dto/`.
+> `apps/api/prisma/migrations/20260907120000_add_database_backup_runs/migration.sql`
+> and, since **#471**, in the platform package
+> `@marinoscar/platform-api/db-backup`: the engine, retention, the schedule,
+> the admin API and the four job handlers. KVox's own `apps/api/src/db-backup/`
+> was deleted. The rules in this document did not change; the code that
+> enforces them is now the package's, mounted by
+> `apps/api/src/platform/db-backup/` (see "Implementation is packaged" below).
+>
+> **Implementation is packaged (#471).** Every implementation file this
+> document cites (`pg-dump.util`, `pg-restore.util`, `pg-version.util`, `schedule.util`,
+> `db-backup-storage`, `db-backup.errors`, `db-backup-runner.service`,
+> `db-backup-retention.service`, `db-backup-admin.service`,
+> `db-backup.controller`, `dto/`, `handlers/`, `tasks/db-backup-schedule.task`)
+> keeps its name inside `@marinoscar/platform-api/db-backup`; read the TSDoc in
+> the installed package for the contract. The package is newer than the code it
+> replaced and adds four things (§17): row-level-security handling on every dump
+> and restore, restore gates an app registers (`registerRestoreGate`), restore
+> carry-over an app registers, and the `deploymentMode` and mirror-target
+> options. The job types (`db.backup.run`, `db.backup.sweep`,
+> `db.restore.run`, `db.restore.old-db-drop`), the `database-backups/` key
+> prefix, the `databaseBackup` settings namespace and the
+> `/api/admin/db-backup/*` routes keep their persisted names. KVox mounts the
+> slice in `apps/api/src/platform/db-backup/` (`db-backup.config.ts`,
+> `db-backup-host.module.ts`) and registers its one restore gate in
+> `apps/api/src/app-registrations/db-backup.ts`.
 >
 > **On what is merged today.** §1–§3 describe the table and the guard that
 > makes "one backup at a time" true. §4–§8 describe the engine: the claim, the
@@ -1104,6 +1115,18 @@ nothing about the wire. See §13.6.
 
 ## 15. Verification
 
+> **Where the tests went (#471).** The tables below name the specs KVox wrote
+> for its own engine, scheduler, retention service and admin API under
+> `src/db-backup/` and `test/db-backup/`. That code is the package's now and
+> the specs were deleted with it. Each claim still holds and is covered in
+> three places: the package's own suite, the `dbBackup` suite of
+> `runPlatformConformance()` (run by `apps/api/test/conformance.spec.ts`), and
+> two KVox specs that prove what only this app can: `test/db-backup/kvox-dump-rls.db.spec.ts`
+> (a dump taken through the platform runner as the application role contains
+> `storage_objects` and `kvox_object_ownership` rows) and the restore-gate unit
+> test for `kvox.extensions`. The "Covered by" column is kept as the record of
+> what each claim was proved by when it was written.
+
 ### 15.1 #281: the model, the guard and the engine
 
 | Claim | Covered by |
@@ -1290,7 +1313,7 @@ stored state cannot depend on which machine produced it.
 ordinary. JSON has no integers, so a size sent as a JSON **number** is exact
 only below 2^53 — the corruption would land on exactly the largest backups,
 i.e. the deployments node offload exists for. The result contract
-(`apps/api/src/db-backup/contracts/db-backup-run.contract.ts`) therefore carries it
+(`@marinoscar/platform-contract/db-backup`) therefore carries it
 as `^\d{1,20}$` and the handler converts once with `BigInt()`, mirroring what
 `toRunDto` already does on the way out.
 
@@ -1334,3 +1357,75 @@ because it is not the one taking backups. There is deliberately no tunnelling:
 see [`worker-nodes.md`](worker-nodes.md) — a node needs a real network route,
 which for most deployments means sitting inside the same private network.
 
+## 17. Row-level security: both halves, on every dump and restore (#471)
+
+Platform migration `0025_org_scoped_rls` forces row-level security on
+`storage_objects`, `storage_object_chunks`, `ai_runs` and `ai_usage_events`,
+and `0026` to `0029` on the group, grant and organization-settings tables. A
+backup that ignores that is the worst kind of backup: it exits 0 and restores
+nothing.
+
+**The rule.** Every `pg_dump` and every `pg_restore` the platform spawns carries
+**both**:
+
+1. the `--enable-row-security` flag, and
+2. `PGOPTIONS=-c app.rls_bypass=on` in the child's **environment**, never in
+   argv (`RLS_BYPASS_PGOPTIONS`, `rlsBypassEnv()`; any `PGOPTIONS` already
+   present is merged, never replaced).
+
+Either half alone is a bug. The option alone leaves `row_security` off, and
+`pg_dump` refuses a table it cannot read in full. The flag alone **exits 0 and
+writes an archive whose org tables are empty**: a plausible, successful, empty
+backup. The policies on the org tables admit a session whose `app.rls_bypass`
+is `on`, so the pair works for an ordinary role with no `BYPASSRLS`. The API's
+role never gets `SUPERUSER` or `BYPASSRLS` to make a backup work.
+
+**The connection must be direct.** A transaction-mode pooler drops startup
+options ("unsupported startup parameter"). The dump and restore children
+connect straight to PostgreSQL (`POSTGRES_HOST`/`POSTGRES_PORT`), the same
+connection the cluster admin session uses (`database-restore.md` §1).
+
+**What guards the pair.**
+
+| Guard | What it does |
+|---|---|
+| `spawnPgDump` and the restore wrapper | Add both halves themselves; nothing in KVox wraps or rebuilds the argument vector. |
+| Doctor `backup.rls-bypass` | Counts the four org tables twice, once with the system client and once over a connection carrying the dump's startup option, and fails when the counts differ. `warn` when the option connection cannot be made (a pooler). |
+| Restore gate `rls_bypass` (built in) | Passes when the restoring role is a superuser or has `BYPASSRLS`, or when the option reached the server; otherwise a `warning` that sends the operator to a direct connection. See `database-restore.md` §2. |
+| `test/db-backup/kvox-dump-rls.db.spec.ts` | Dumps through the platform runner **as the application role** and asserts the archive holds `storage_objects` and `kvox_object_ownership` rows. |
+
+A `kvox node` running `db.backup.run` keeps the same pairing in its own
+`pg_dump` wrapper (`apps/cli/src/node/pg-dump.ts`, refusing to spawn with only
+one half); see §16 and `docs/platform-adoption/local-exceptions.md`.
+
+## 18. What the package adds, and how KVox binds it (#471)
+
+`apps/api/src/platform/db-backup/db-backup.config.ts` calls
+`DbBackupModule.forRoot({ appName: APP_NAME, imports: [DbBackupHostModule] })`.
+`DbBackupHostModule` binds the slice's ports to the services KVox already
+mounts:
+
+| Port | Bound to |
+|---|---|
+| `DB_BACKUP_NOTIFIER` | the platform `NotificationsService` (events `db_backup.backup_failed` and `db_backup.restore_completed`; the persisted keys and template names are the package's, KVox keeps its own registry file in `src/notifications-registry/db-backup.notifications.ts`) |
+| `DB_BACKUP_MAINTENANCE` | `MaintenanceModeService` |
+| `DB_BACKUP_METRICS` | `AppMetricsService` (the `app.backup.*` instruments) |
+| `DB_BACKUP_DEPLOYMENT_MODE` | `DeploymentModeService` (`self-hosted`; `saas` would turn in-app restore off and leave backups working) |
+| `DB_BACKUP_SYSTEM_DATA` | the system data client the `backup.rls-bypass` Doctor check counts with (pending agent B report: confirm the bound service) |
+
+Other facts that carry over unchanged: the archive key is
+`database-backups/<slug>/YYYY/MM/<slug>-<ts>-<runId>.dump` (the slug comes from
+`APP_NAME`; existing runs keep the key they recorded); `DB_BACKUP_SCHEDULE_ENABLED`
+keeps its meaning (§10.6); the `databaseBackup` settings namespace and the
+`database-backups/` key prefix were registered in #466 and #469. The node
+credential broker is the package's: `nodes.jobSecretBrokerEnabled` and
+`databaseBackup.nodeOffloadEnabled` keep their stored values, and where
+`CREATEROLE` is denied (managed PostgreSQL) the broker answers `guided`, as
+before (`docs/runbooks/node-job-secrets.md`).
+
+The package also adds mirror targets (`forRoot({ mirrorTargets })`, the
+`backup.mirrors` Doctor check). **KVox configures none**: archives live in the
+one object-storage destination described in §9.
+
+Restore additions (gates and carry-over) are in `database-restore.md` §2.8 and
+§8.7.

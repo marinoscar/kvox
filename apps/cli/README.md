@@ -661,6 +661,25 @@ matter how many pages the catch-all splits into. A key the template ships
 with no value (commented out, or blank) now offers "Leave unset" in place of
 "Keep", since there is nothing behind a blank field to keep.
 
+**Telemetry (`--group observability`).** Opting into the group adds the
+platform telemetry stack to the deployment: an OpenTelemetry collector and
+GreptimeDB, with the API's telemetry explorer and dashboard reading them back.
+The wizard asks for the three GreptimeDB passwords (`GREPTIME_WRITER_PASSWORD`,
+`GREPTIME_READER_PASSWORD`, `GREPTIME_ADMIN_PASSWORD`) and refuses the
+template's `change-me-*` placeholders; in a `--non-interactive` run supply them
+with `--answer`. A deployment carries the stack exactly when its `.env` holds
+all three, and then every compose command of `install`, `update`, `status` and
+`uninstall` is run with `base`, `prod`, `telemetry`, `vps`, `vps.telemetry`
+(in that order: the VPS files harden the telemetry services, so they come
+after them, and nothing is published on a public interface). Without the three
+passwords the list is unchanged: `base`, `prod`, `vps`. GreptimeDB adds roughly
+1 GiB of memory (capped at 1 GiB in `vps.telemetry.compose.yml`) on top of the
+API, the web container and the collector, so size the host for it. To add the
+stack to an existing deployment, put the three passwords in its `.env` and run
+`kvox deploy update`. `APP_DB_USER` and `APP_DB_PASSWORD` are the development
+and test database's application-role bootstrap and are never written to a
+deployment's `.env`.
+
 The wizard also no longer asks about Web Push (`VAPID_PUBLIC_KEY` /
 `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`), even under `--all` (issue #241): the
 admin UI at `/admin/settings/push` generates, rotates and enables these live,
@@ -1644,7 +1663,7 @@ enough — the SHA is all the pipeline compares). To clean up:
 
 ```bash
 cd /tmp/apps/e2e/repo/infra/compose
-docker compose -p e2e -f base.compose.yml -f prod.compose.yml -f vps.compose.yml down -v
+docker compose -p e2e -f base.compose.yml -f prod.compose.yml -f vps.compose.yml down -v   # add -f telemetry.compose.yml ... as listed above when the e2e .env opted in
 rm -rf /tmp/apps/e2e
 docker network rm devnet
 ```

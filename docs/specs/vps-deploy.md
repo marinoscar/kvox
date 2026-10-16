@@ -341,7 +341,7 @@ and it is deliberately small — annotations for keys that need behavior
 
 | Kind | Applies to | Behavior |
 |---|---|---|
-| `secret: true` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `POSTGRES_PASSWORD`, the `UPTRACE_*` credentials (`UPTRACE_PROJECT1_TOKEN`, `UPTRACE_SECRET_KEY`, `UPTRACE_ADMIN_PASSWORD`, `UPTRACE_PGPASSWORD`, `UPTRACE_REDIS_PASSWORD`, `UPTRACE_CH_PASSWORD`) | Masked input when typed (see `promptSecret` below); the value feeds `journal.ts`'s redaction list (section 7) unconditionally, whether the operator typed it or the wizard generated it. |
+| `secret: true` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `POSTGRES_PASSWORD`, the telemetry credentials (`GREPTIME_WRITER_PASSWORD`, `GREPTIME_READER_PASSWORD`, `GREPTIME_ADMIN_PASSWORD`, `POSTGRES_MONITOR_PASSWORD`; the three GreptimeDB passwords are also `essential` and refuse the template's `change-me-*` placeholders) | Masked input when typed (see `promptSecret` below); the value feeds `journal.ts`'s redaction list (section 7) unconditionally, whether the operator typed it or the wizard generated it. |
 | `generate: 'base64-32'` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` | The wizard offers "generate one" as the default action, using `node:crypto`'s `randomBytes(32).toString('base64')` **in-process** — not a shell-out to `openssl`, even though the `.env.example` comment tells a *human* to run `openssl rand -base64 32`. Shelling out would make `openssl` a new precondition this doctor check would have to verify on every VPS; Node already has the primitive. |
 | `validate: minLength(32)` | `JWT_SECRET`, `COOKIE_SECRET` | Matches the API's own documented minimum. |
 | `validate: base64Decodes32Bytes` | `SECRETS_ENCRYPTION_KEY` | Must decode to exactly 32 bytes — this is the AES-256 key the platform secret cipher (`@marinoscar/platform-api/core`) expects (see `rotate-secrets-encryption-key.md` for the cipher this key feeds). A key that merely looks base64 but decodes to the wrong length must be rejected here, before it becomes a boot-time failure the operator sees an hour later. |
@@ -552,8 +552,9 @@ left off," not "resume from a saved cursor." Steps, in order:
    `env-metadata.ts` `validate` entry, best-effort S3 reachability (a
    warning, not a hard failure — an admin can configure storage after first
    login).
-6. **Build images** — `docker compose -f base.compose.yml -f prod.compose.yml
-   -f vps.compose.yml build`, streamed through `executor.ts`.
+6. **Build images** — `docker compose` with the deployment's file list
+   (`base`, `prod`, `vps`, plus the telemetry overlays when the `.env` carries
+   them, §15.1) `build`, streamed through `executor.ts`.
 7. **Migrate** — `npm run prisma:migrate` (i.e. `prisma migrate deploy`)
    run **inside the built `api` image** (`docker compose run --rm api npm
    run prisma:migrate`), with `POSTGRES_*` exported into that run's
@@ -993,6 +994,85 @@ specifically "there is a shared proxy in front of me, and a CLI that deployed
 me" is what keeps the compose layering legible instead of every overlay
 re-deciding the same things slightly differently.
 
+### 15.1 The telemetry overlays (#471)
+
+`infra/compose/telemetry.compose.yml` and `infra/compose/vps.telemetry.compose.yml`
+are copied byte for byte from `@marinoscar/platform-infra/telemetry` (their
+`GENERATED` headers stay; never hand-edit them). They replace the previous
+observability stack (`otel.compose.yml`: a trace UI with ClickHouse, Redis and a
+metadata Postgres behind it): the OpenTelemetry
+collector writes into **GreptimeDB**, and the API reads it back for the telemetry
+explorer and dashboard.
+
+`apps/cli/src/deploy/compose-files.ts` is the one place the file list is built,
+and `install`, `update`, `health` and `uninstall` all call it:
+
+| Deployment | `-f` list, in this order |
+|---|---|
+| without telemetry | `base`, `prod`, `vps` |
+| with telemetry | `base`, `prod`, `telemetry`, `vps`, `vps.telemetry` |
+
+**The order is load-bearing.** Compose merges `-f` files left to right and a
+later file wins. `telemetry.compose.yml` adds services and publishes
+development ports on `0.0.0.0`, so it sits before `vps.compose.yml`;
+`vps.telemetry.compose.yml` replaces those ports (`ports: !override`), binds
+GreptimeDB's PostgreSQL wire port to `127.0.0.1:${GREPTIME_BIND_PG_PORT:-14003}`
+only, publishes no collector port at all, and sets restart policies, log
+rotation and memory caps, so it must come last. A file in the wrong position
+changes which ports reach a public interface. `vps.compose.yml` is applied to
+every VPS deployment, which is why the hardening for services that may not exist
+travels in its own file.
+
+**A deployment has telemetry when its `.env` says so**, not because of a
+recorded flag: `telemetry.compose.yml` interpolates the three GreptimeDB
+passwords with `${VAR:?...}`, so a stack missing any of them cannot even be
+parsed. `telemetryEnabled(env)` is true exactly when
+`GREPTIME_WRITER_PASSWORD`, `GREPTIME_READER_PASSWORD` and
+`GREPTIME_ADMIN_PASSWORD` are all non-empty. Consequences: an installation made
+before this overlay existed is unchanged until its operator adds the
+passwords; `update` still enables no group (§8), so enabling telemetry on an
+existing deployment is an `.env` edit followed by `kvox deploy update`; and
+`uninstall`'s `down -v` includes the telemetry files when the `.env` has them,
+because `down -v` removes only the volumes of the files it is given (the
+GreptimeDB data volume is declared in `telemetry.compose.yml`).
+
+The environment metadata (`env-metadata.ts`, group `observability`): the
+`GREPTIME_*` passwords are `secret` and `essential`, validated by
+`rejectPlaceholder`, with no `generate` (GreptimeDB reads its accounts from one
+comma-separated command-line value, which a generated value could break); the
+ports are validated as ports; `POSTGRES_MONITOR_USER` and
+`POSTGRES_MONITOR_PASSWORD` are optional and blank means "reuse the API's own
+login". The GreptimeDB credentials in `.env` are only the deployment default:
+an administrator can save a connection at `/admin/settings/telemetry`, stored
+in the credential store, and it is then used instead.
+
+**Memory.** The telemetry stack adds a GreptimeDB container capped at 1 GB and
+the collector capped at 256 MB on a VPS (both restated in
+`vps.telemetry.compose.yml`). Check the host before enabling it: the capped
+total (about 1.25 GB) comes on top of the API, web and Nginx limits already in
+`prod.compose.yml`, and PostgreSQL if it shares the host.
+
+### 15.2 The application database role (#471)
+
+`POSTGRES_USER` and `POSTGRES_PASSWORD` in a deployment's `.env` are the **API's
+login**, and it must be an ordinary `NOSUPERUSER NOBYPASSRLS` role that owns the
+tables (`APP_DB_USER`, default `kvox_app`). `APP_DB_USER` and `APP_DB_PASSWORD`
+are marked `never` in `env-metadata.ts`: the wizard never writes them, because a
+deployment's database already exists; they exist so `devdb.compose.yml` and
+`test.compose.yml` can create the role when they initialise an empty volume
+(`postgres-init/10-application-role.sh`, then `20-kvox-extensions.sh`). The
+install pipeline's database preflight (§9) connects as the `.env` login, and
+the pgvector check (§9.1) is unchanged: the extensions are created by the
+superuser, so the ordinary role only needs them to exist.
+
+An existing deployment moves with `docs/runbooks/application-role.md`. Its
+`.env` keeps whatever `POSTGRES_USER` it names, so the release changes nothing
+until the operator switches; but a `.env` that does not define `POSTGRES_USER`
+now gets the compose default `kvox_app`, a role that database does not have yet,
+so create the role **before** deploying the release in that case. Order for an operator: (1) take and verify a backup, (2) create the role and
+transfer ownership in a window, (3) deploy or restart with the new
+`POSTGRES_USER`, (4) check Doctor `db.rls_role`.
+
 ## 16. Rejected alternatives
 
 | Alternative | Why it lost |
@@ -1002,7 +1082,7 @@ re-deciding the same things slightly differently.
 | **A self-contained per-app nginx + certbot** | A VPS hosting one app today is a VPS hosting a second one within a year. Per-app TLS termination means N certbot renewal timers and N nginx processes contending for port 443, with no coherent answer for "what's already bound there" the moment a second app deploys. The shared proxy owns 443 exactly once. |
 | **PostgreSQL inside the app stack** | `base.compose.yml` deliberately ships no Postgres service — bundling one here would make the CLI additionally responsible for its backups, volumes, and version upgrades, none of which this repository does for any other stateful dependency (S3/storage is always external too). External-and-validated keeps deploy's blast radius to the stateless tier. |
 | **A hardcoded env-var list in the wizard** | The same drift risk `commands/api.ts`'s "one generic command" design exists to avoid — a fork that edits `.env.example` would silently desync from a wizard that doesn't read it. Parsing the file at run time is the only shape that survives a fork's own edits. |
-| **A single 34-field TUI form** | Most installs only ever touch the same dozen fields (domain, DB credentials, Google OAuth, admin email); stepping through all 34 including `UPTRACE_ADMIN_PASSWORD` on every single install is exactly the kind of form an operator abandons partway through. The essential-subset-plus-`--all` split targets the common path while keeping the full set one flag away. |
+| **A single 34-field TUI form** | Most installs only ever touch the same dozen fields (domain, DB credentials, Google OAuth, admin email); stepping through all 34 including the three GreptimeDB passwords on every single install is exactly the kind of form an operator abandons partway through. The essential-subset-plus-`--all` split targets the common path while keeping the full set one flag away. |
 
 ## 17. Suggested phasing (non-binding)
 

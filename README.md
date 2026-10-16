@@ -89,7 +89,7 @@ The product above is built on a general-purpose application foundation:
 - **Database** — PostgreSQL with Prisma ORM
 - **Auth** — Passport strategies (Google OAuth)
 - **Testing** — Jest + Supertest (API), Vitest + React Testing Library (web), Vitest (CLI)
-- **Observability** — OpenTelemetry, Uptrace, Pino structured logging
+- **Observability** — OpenTelemetry, GreptimeDB (telemetry explorer and dashboard in the app), Pino structured logging
 - **Runtime** — Docker Compose behind an Nginx same-origin reverse proxy
 
 ## Getting started
@@ -130,9 +130,9 @@ cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 |---|---|
 | Application | http://localhost:3535 |
 | API reference (Scalar) | http://localhost:3535/api/docs |
-| Uptrace (with the `otel` overlay) | http://localhost:14318 |
+| GreptimeDB dashboard (with the `telemetry` overlay) | http://localhost:14000/dashboard |
 
-Add `-f otel.compose.yml` for observability, or swap `dev.compose.yml` for
+Add `-f telemetry.compose.yml` for observability, or swap `dev.compose.yml` for
 `prod.compose.yml` for production mode.
 
 The first sign-in from `INITIAL_ADMIN_EMAIL` bypasses the email allowlist and

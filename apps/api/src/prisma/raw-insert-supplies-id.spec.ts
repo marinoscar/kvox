@@ -13,8 +13,9 @@ import { join } from 'node:path';
 // NOT NULL violation at runtime, and TypeScript cannot see it, because the
 // SQL is a string.
 //
-// That is exactly how #337 survived: `CARRY_AUDIT_SQL` in
-// `db-backup/database-restore.service.ts` omitted `id` while `CARRY_RUN_SQL`,
+// That is exactly how #337 survived: `CARRY_AUDIT_SQL` in the restore service
+// (this app's own `db-backup/database-restore.service.ts` then; the platform's
+// `@marinoscar/platform-api/db-backup` since #471) omitted `id` while `CARRY_RUN_SQL`,
 // twenty lines above it, supplied it. `reinsertCatalog` never throws by
 // design, so the failure was a `CRITICAL` log line on a restore that still
 // reported success, and the record of the restore was missing from the only
@@ -88,28 +89,38 @@ interface RawInsert {
   columns: string[] | null;
 }
 
+/** The raw INSERTs into `tables` in one file's text (comments are stripped first). */
+function insertsIn(file: string, source: string, tables: string[]): RawInsert[] {
+  const found: RawInsert[] = [];
+  const text = stripComments(source);
+  const pattern = /insert\s+into\s+"?([a-z_][a-z0-9_]*)"?\s*/gi;
+
+  for (const match of text.matchAll(pattern)) {
+    if (!tables.includes(match[1])) continue;
+
+    const rest = text.slice((match.index ?? 0) + match[0].length);
+    const close = rest.indexOf(')');
+    const columns =
+      rest.startsWith('(') && close > 0
+        ? rest
+            .slice(1, close)
+            .split(',')
+            .map((column) => column.trim().replace(/"/g, ''))
+        : null;
+
+    found.push({ file, table: match[1], columns });
+  }
+
+  return found;
+}
+
 function rawInserts(tables: string[]): RawInsert[] {
   const found: RawInsert[] = [];
 
   for (const file of [...sourceFiles(join(API_ROOT, 'src')), join(API_ROOT, 'prisma', 'seed.ts')]) {
-    const text = stripComments(readFileSync(file, 'utf8'));
-    const pattern = /insert\s+into\s+"?([a-z_][a-z0-9_]*)"?\s*/gi;
-
-    for (const match of text.matchAll(pattern)) {
-      if (!tables.includes(match[1])) continue;
-
-      const rest = text.slice((match.index ?? 0) + match[0].length);
-      const close = rest.indexOf(')');
-      const columns =
-        rest.startsWith('(') && close > 0
-          ? rest
-              .slice(1, close)
-              .split(',')
-              .map((column) => column.trim().replace(/"/g, ''))
-          : null;
-
-      found.push({ file: file.slice(API_ROOT.length + 1), table: match[1], columns });
-    }
+    found.push(
+      ...insertsIn(file.slice(API_ROOT.length + 1), readFileSync(file, 'utf8'), tables)
+    );
   }
 
   return found;
@@ -125,18 +136,22 @@ describe('raw-SQL INSERTs supply the id Prisma would have generated (#337)', () 
     expect(tables.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('finds the raw INSERTs it is meant to be guarding', () => {
-    // The carry-over's two statements are the only ones in the API today.
-    // Losing sight of them (a rename, a move) must fail here rather than
-    // leave a green test that scans nothing.
-    const hits = rawInserts([...tables, 'database_backup_runs']);
+  it('recognises the shape it is meant to be guarding', () => {
+    // The restore carry-over's two statements used to be the only ones in the API;
+    // they moved into the platform package with #471, so the app's own source holds
+    // none today. The scan is proven on sample text instead: a failure here means it
+    // no longer sees an INSERT, and the check below would pass while checking nothing.
+    const sample = [
+      '// INSERT INTO audit_events (never_scanned) -- a comment',
+      'const sql = `INSERT INTO audit_events (id, action) VALUES ($1, $2)`;',
+      'const bad = `INSERT INTO "database_backup_runs" (status) VALUES ($1)`;',
+      'const other = `INSERT INTO unrelated_table (id) VALUES ($1)`;',
+    ].join('\n');
 
-    expect(hits.map((hit) => `${hit.file}: ${hit.table}`)).toEqual(
-      expect.arrayContaining([
-        'src/db-backup/database-restore.service.ts: database_backup_runs',
-        'src/db-backup/database-restore.service.ts: audit_events',
-      ])
-    );
+    expect(insertsIn('sample.ts', sample, [...tables, 'database_backup_runs'])).toEqual([
+      { file: 'sample.ts', table: 'audit_events', columns: ['id', 'action'] },
+      { file: 'sample.ts', table: 'database_backup_runs', columns: ['status'] },
+    ]);
   });
 
   it('names an id column in every one of them', () => {

@@ -38,7 +38,8 @@ import { profileImageModule, StorageConfigModule, storageModule } from './platfo
 import { KvoxObjectsModule } from './kvox-objects/kvox-objects.module';
 import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
-import { DbBackupModule } from './db-backup/db-backup.module';
+import { dbBackupModule } from './platform/db-backup/db-backup.config';
+import { telemetryModule } from './platform/telemetry/telemetry.config';
 import { LoggerModule } from './common/logger/logger.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
@@ -190,29 +191,29 @@ import configuration from './config/configuration';
     // brokered-secret sweep. Needs `jobsModule` in the same app.
     nodesModule,
 
-    // The database backup engine (#281, epic #254): the `database_backup_runs`
-    // table's only writer, and the streaming `pg_dump` behind it. Registered
-    // here so a broken provider graph fails at boot rather than at 02:00 on
-    // the first night backups are switched on.
+    // The platform's database backup and restore slice (#471, epic #467):
+    // `/api/admin/db-backup/*` (`db_backup:read|write|restore`), the streaming
+    // `pg_dump` engine, the schedule and retention, the restore (read-only
+    // pre-flight with this app's extensions gate, swap, rollback), the four
+    // job types `db.backup.run`, `db.backup.sweep`, `db.restore.run` and
+    // `db.restore.old-db-drop` (strings unchanged) and the per-job database role
+    // broker that lets `db.backup.run` run on a worker node. Replaces this app's
+    // own `db-backup/` folder. Every dump and restore carries
+    // `--enable-row-security` AND `PGOPTIONS=-c app.rls_bypass=on`.
     //
-    // ⚠ IT IS A JOB TYPE SINCE #351 (epic #345), having deliberately not been
-    // one before. `db.backup.run` is registered by `DbBackupModule`, and the
-    // dump's lifetime is the job's lifetime. The three objections the schema
-    // used to raise — the 30-minute reaper resetting a long dump, an
-    // in-process worker that never renewed its lease, and an attempt budget
-    // that would re-run a failed multi-gigabyte dump — are answered by the
-    // handler's `{ maxRuntimeMs: 6h, maxAttempts: 1 }` profile (#346) and by
-    // #347's lease renewal. See the "### Why this WAS not a queue job" block
-    // above `DatabaseBackupRun` in prisma/schema.prisma, which keeps the
-    // history rather than pretending the objections were never valid.
-    //
-    // ⚠ CONSEQUENCE FOR AN ENQUEUE-ONLY DEPLOYMENT: with
-    // `JOBS_WORKER_MODE=off` this process queues backups and never takes them.
-    // `system` mode DOES take them (the type is server-only by derivation, so
-    // that mode claims it); only `off` does not, which is what `off` means.
-    // The stale sweep's `pending` arm is what stops those unclaimed rows
-    // holding the single active backup slot forever.
-    DbBackupModule,
+    // `DB_BACKUP_SCHEDULE_ENABLED=false` still turns the scheduler off in this
+    // process (`config/configuration.ts`, `dbBackup.scheduleEnabled`). With
+    // `JOBS_WORKER_MODE=off` this process queues backups and never takes them
+    // (`system` mode does take them; the type is server-only by derivation).
+    dbBackupModule,
+
+    // The platform's telemetry slice (#471, epic #467): the `telemetry` settings
+    // and runtime export gate, the GreptimeDB connection, the explorer, the
+    // dashboard, the stack-agent surface, the assistant (unavailable until #472)
+    // and the `telemetry.*` jobs, at `/api/admin/telemetry/*` and
+    // `GET /api/telemetry/config` (`telemetry:read|write|query`). Replaces the
+    // Uptrace stack. The SDK that emits traces and metrics is `instrumentation.ts`.
+    telemetryModule,
 
     // About (#124, epic #118; the platform's since #464): `GET /api/admin/about`,
     // the deployment record the CLI wrote plus live runtime and database facts,
