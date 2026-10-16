@@ -54,11 +54,11 @@
     "commander": "^14.0.2"
   },
   "peerDependencies": {
-    "prisma": "^7.8.0"
+    "prisma": "^7.10.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.32",
-    "prisma": "^7.8.0",
+    "prisma": "^7.10.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   }
