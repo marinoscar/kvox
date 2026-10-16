@@ -1,16 +1,21 @@
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.5 (compose) — do not edit; extend through an infra/compose/app.*.compose.yml overlay
+# Source of truth: @marinoscar/platform-infra/compose/base.compose.yml; re-materialise with `npx platform-infra sync`
 # =============================================================================
 # Docker Compose - Base Services
 # =============================================================================
 # Usage (run from infra/compose folder):
 #   docker compose -f base.compose.yml -f dev.compose.yml up
 #
-# With observability (OpenTelemetry collector + GreptimeDB):
+# With telemetry (OpenTelemetry Collector + GreptimeDB):
 #   docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
 #
 # Production:
 #   docker compose -f base.compose.yml -f prod.compose.yml up
 #
 # Note: .env file is in this folder (infra/compose/)
+#
+# GENERATED into the app from @marinoscar/platform-infra; an app changes it
+# with an infra/compose/app.*.compose.yml overlay, applied after this file.
 # =============================================================================
 
 services:
@@ -26,48 +31,24 @@ services:
       - "${NGINX_PORT:-3535}:80"
     volumes:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # The policy is mounted as it is, so the deploy CLI's stale-mount check
-      # (a byte comparison of this file with the running container's copy)
-      # holds. The Content Security Policy has to name the object store's
-      # origin — a resumable upload PUTs its parts straight to the bucket and
-      # `<audio>` plays them back from there — and nginx cannot read an
-      # environment variable at request time. The nginx image's own entrypoint
-      # renders every /etc/nginx/templates/*.template through envsubst, so only
-      # the one-line file holding that value is a template (issue #21).
       - ../nginx/csp.conf:/etc/nginx/csp.conf:ro
-      - ../nginx/storage-origin.conf:/etc/nginx/templates/storage-origin.conf.template:ro
-    environment:
-      # Where the rendered templates land. /etc/nginx, not the default
-      # /etc/nginx/conf.d, because csp.conf includes /etc/nginx/storage-origin.conf
-      # and a `map` is only valid at http scope (conf.d is included inside it).
-      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
-      # ⚠ SUBSTITUTE THIS NAME AND NOTHING ELSE. Without the filter, envsubst
-      # is handed every variable in the environment, and the template holds
-      # nginx's own `$uri` / `$csp_storage_origin` — any of which an unrelated
-      # environment variable of the same name would silently blank out.
-      NGINX_ENVSUBST_FILTER: STORAGE_CSP_ORIGIN
-      # Browser-visible origin of the object store (scheme://host[:port]), e.g.
-      # https://s3.eu-west-1.amazonaws.com or http://localhost:9000 for MinIO.
-      #
-      # NOT DERIVED, NOT DEFAULTED. The bucket, region and endpoint are runtime
-      # configuration now (/admin/settings/storage, docs/runbooks/storage-configuration.md),
-      # saved after nginx has started, so there is nothing to derive this
-      # from. Set it in .env to the origin the presigner puts in part and
-      # download URLs: https://<bucket>.s3.<region>.amazonaws.com for a
-      # DNS-compatible AWS bucket, the endpoint origin for MinIO/LocalStack,
-      # https://s3.<region>.amazonaws.com for a dotted bucket name
-      # (path-style), or the CDN/custom domain in front of the bucket. Empty
-      # leaves the policy at connect-src/media-src 'self' only, which blocks
-      # every browser upload and playback with a status-0 "network error".
-      #
-      # ⚠ THE `:-` DEFAULT IS LOAD-BEARING, not tidiness. The image's template
-      # script builds envsubst's variable list by matching NGINX_ENVSUBST_FILTER
-      # against the names actually present in the environment; if this name is
-      # absent entirely the list comes out empty and envsubst falls back to
-      # substituting EVERYTHING, which would blank nginx's own $uri and
-      # $csp_storage_origin and leave the policy map broken. Always define it, even
-      # when it is empty.
-      STORAGE_CSP_ORIGIN: ${STORAGE_CSP_ORIGIN:-}
+      # The platform's snippets (security headers, the SSE proxy body) and
+      # the app's include points (app.d/http, app.d/server, app.d/locations,
+      # app.d/permissions-policy.conf). DIRECTORY mounts, so a file added or
+      # replaced by `git checkout` is seen by path (a single-file mount pins
+      # an inode); nginx still needs a reload or a recreate to read it.
+      - ../nginx/platform:/etc/nginx/platform:ro
+      - ../nginx/app.d:/etc/nginx/app.d:ro
+    # Open-file limit for long-lived SSE (issue #684). nginx.conf raises
+    # worker_rlimit_nofile to 65536, which only takes effect when the
+    # container's HARD limit allows it; without this the limit is whatever the
+    # Docker host defaults to. Changing this block also makes `docker compose
+    # up -d` RECREATE nginx on update, which is what picks up a changed
+    # single-file nginx.conf bind mount.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     depends_on:
       - api
       - web
@@ -113,23 +94,25 @@ services:
       # Database connection (individual variables; DATABASE_URL is derived)
       - POSTGRES_HOST=${POSTGRES_HOST:-db}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      # The API signs in as an ORDINARY role (NOSUPERUSER NOBYPASSRLS) that owns
-      # the tables, never as the bootstrap superuser: row-level security does
-      # not apply to a superuser. devdb.compose.yml and test.compose.yml
-      # create this role (postgres-init/10-application-role.sh) from
-      # APP_DB_USER / APP_DB_PASSWORD, which .env.example keeps equal to these
-      # two. docs/runbooks/application-role.md moves an existing database.
-      - POSTGRES_USER=${POSTGRES_USER:-kvox_app}
+      - POSTGRES_USER=${POSTGRES_USER:-app}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-appdb}
       - POSTGRES_SSL=${POSTGRES_SSL:-false}
       # JWT lifetimes (JWT_SECRET and COOKIE_SECRET arrive via env_file)
       - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-15}
       - JWT_REFRESH_TTL_DAYS=${JWT_REFRESH_TTL_DAYS:-14}
-      # Observability: off unless asked for, so the telemetry overlay is opt-in
+      # Observability: off unless asked for, so the telemetry overlay is opt-in.
+      # GREPTIME_* (telemetry reads) arrive via env_file with no default here:
+      # absent, the API reports telemetry as unavailable.
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-kvox-api}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    # The API holds one socket per proxied SSE stream, so its descriptor limit
+    # must not become the ceiling once nginx's is raised (issue #684).
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     networks:
       - app-network
       # Shared external network carrying the central postgres container

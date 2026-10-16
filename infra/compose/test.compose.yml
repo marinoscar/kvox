@@ -1,38 +1,19 @@
-# =============================================================================
-# The test database
-# =============================================================================
-#
-# `pgvector/pgvector:pg16` rather than `postgres:16-alpine` (issue #178, epic
-# #165). The `vector` extension ships as a control file that has to be present
-# on the SERVER; `CREATE EXTENSION vector` cannot install it from the client
-# side. Plain `postgres:16-alpine` carries no such file, so the semantic-search
-# migration aborts there — and it aborts inside `prisma migrate deploy`, which
-# means CI would go red ON THE MIGRATION rather than on a test, with a Prisma
-# stack trace instead of a failing assertion.
-#
-# Same PostgreSQL major (16), so the on-disk format is unchanged and an
-# existing `test-db-data` volume keeps working. The base OS moves Alpine →
-# Debian, which is a property of the image and not of the data directory.
-#
-# TWO LOGINS. POSTGRES_USER is the image's bootstrap superuser (`postgres`,
-# administration only: the scripts in postgres-init/ connect as it). The
-# application role `kvox_app` is created on the first start of an empty volume
-# by 10-application-role.sh (NOSUPERUSER NOBYPASSRLS, owner of the database),
-# and the extensions script creates `vector` and `pg_trgm` as the superuser.
-# Tests that must exercise row-level security connect as kvox_app; an existing
-# `test-db-data` volume predates the role, so recreate it
-# (`docker compose -f test.compose.yml down -v`) to get it.
-# =============================================================================
-
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.5 (compose) — do not edit; extend through an infra/compose/app.*.compose.yml overlay
+# Source of truth: @marinoscar/platform-infra/compose/test.compose.yml; re-materialise with `npx platform-infra sync`
 services:
   db-test:
-    image: pgvector/pgvector:pg16
+    image: postgres:16-alpine
     container_name: kvox-db-test
     environment:
+      # `postgres` is the image's bootstrap superuser (administration only). The
+      # role the suites connect as is the ordinary `app`, created by
+      # postgres-init/10-application-role.sh, so row-level security is enforced
+      # for it (issue #725). The suites that create roles and databases
+      # (CREATEROLE, CREATEDB) do so as `app`.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: kvox_test
-      APP_DB_USER: kvox_app
+      APP_DB_USER: app
       APP_DB_PASSWORD: postgres
     ports:
       - "5433:5432"
@@ -44,6 +25,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Disposable GreptimeDB for telemetry integration tests. No volume: every
+  # `up` starts empty. Fixed, test-only credentials for the three accounts.
+  greptime-test:
+    image: greptime/greptimedb:v1.2.1
+    container_name: greptime-kvox-db-test
+    command:
+      - standalone
+      - start
+      - --http-addr=0.0.0.0:4000
+      - --rpc-bind-addr=0.0.0.0:4001
+      - --mysql-addr=0.0.0.0:4002
+      - --postgres-addr=0.0.0.0:4003
+      - --user-provider=static_user_provider:cmd:admin=test-admin,writer=test-writer,reader:readonly=test-reader
+    environment:
+      GREPTIMEDB_STANDALONE__ENABLE_TELEMETRY: "false"
+    ports:
+      - "14010:4000"
+      - "14013:4003"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   test-db-data:

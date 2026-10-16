@@ -73,14 +73,16 @@ export function readVersion(): string {
  * App routes the VPS host proxy must stream (no buffering, one hour).
  *
  * The platform's own three stream routes are already unbuffered; these are the
- * two note streams (`/api/notes/:id/stream`, `/api/note-generations/:id/stream`)
- * that the vhost this CLI rendered before the platform engine also carried. The
- * platform matches a location by PREFIX, so the prefix is the closest it can
- * express: the whole family under each prefix streams, which is harmless for a
- * JSON response and keeps the route from being buffered and cut at 60 seconds
- * at the edge.
+ * three this app adds, the same ones `infra/nginx/app.d/locations/app-streams.conf`
+ * gives the inner nginx: `/api/notes/:id/stream`, `/api/note-generations/:id/stream`
+ * and `/api/ask/messages/:id/stream`. The first two were carried by the vhost
+ * this CLI rendered before the platform engine; the Ask stream never was, so it
+ * was buffered and cut at 60 seconds at the edge (#483). The platform matches a
+ * location by PREFIX, so the prefix is the closest it can express: the whole
+ * family under each prefix streams, which is harmless for a JSON response and
+ * keeps the route from being buffered and cut at the edge.
  */
-export const APP_STREAM_PATHS: readonly string[] = ['/api/notes/', '/api/note-generations/'];
+export const APP_STREAM_PATHS: readonly string[] = ['/api/notes/', '/api/note-generations/', '/api/ask/messages/'];
 
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: {

@@ -13,10 +13,12 @@ import { validatePort, type EnvSpecFragment } from '@marinoscar/platform-cli/cor
 // `createCli`).
 //
 // The retired `VAPID_*` entries are gone: the platform notifications slice reads
-// no VAPID environment variable (#470), and the entries existed only so the old
-// env-spec test found every key of the template in the metadata. The three
-// commented lines stay in `.env.example` until the infra change removes them
-// (`docs/platform-adoption/local-exceptions.md`).
+// no VAPID environment variable (#470), and the commented lines were removed
+// from the template when `infra/` moved to `platform-infra sync` (#483). So is
+// `STORAGE_CSP_ORIGIN`: the platform's Content Security Policy allows `https:`
+// for connect-src and media-src, so no storage origin is written into nginx.
+// This app's own keys now live in `infra/compose/app.env.example`, appended to
+// the generated `.env.example`.
 //
 // WHAT IS NOT HERE, AND WHY. Before the platform engine the wizard also
 // SUGGESTED `APP_BIND_PORT`, `JOBS_WORKER_CONCURRENCY`, `API_MEM_LIMIT` and
@@ -58,10 +60,9 @@ export const APP_ENV_SPEC: EnvSpecFragment = {
       help: 'true or false. Set true when the server requires TLS; the database check that runs next verifies the connection either way.',
     },
 
-    // --- Storage -------------------------------------------------------------
-    // The one key whose EMPTY default is a real answer: `STORAGE_CSP_ORIGIN=` is
-    // uncommented with no value and means "no extra origin" (connect-src and
-    // media-src 'self' only), unlike an empty credential nobody supplied.
-    STORAGE_CSP_ORIGIN: { allowBlank: true },
+    // --- Knowledge graph -----------------------------------------------------
+    // Anything but `false` leaves the scheduler on (apps/api/src/config), so the
+    // wizard accepts only the two spellings the template documents.
+    KG_MIGRATE_SCHEDULE_ENABLED: { validate: validateBoolean },
   },
 };
