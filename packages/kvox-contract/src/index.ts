@@ -2,9 +2,10 @@
  * The npm name of this package.
  *
  * @remarks
- * Placeholder of the scaffold (issue 5.1): the wire schemas, error codes and
- * ontology arrive with issue 5.2. The constant exists so the package builds,
- * is documented and can be smoke-imported from both module systems.
+ * The root entry point exports only this constant. Every schema, constant and
+ * helper lives in a slice entry point (`@marinoscar/kvox-contract/ask`,
+ * `.../graph`, ...), so a consumer imports the slice it needs and a bundler
+ * drops the rest.
  *
  * @stability experimental
  */

@@ -21,7 +21,7 @@ How the four publishable KVox packages are laid out, documented, checked and rel
 
 | Package | Folder | Module format | Entry points today |
 |---|---|---|---|
-| `@marinoscar/kvox-contract` | `packages/kvox-contract` | dual ESM + CommonJS | `.` |
+| `@marinoscar/kvox-contract` | `packages/kvox-contract` | dual ESM + CommonJS | `.`, `./transcription`, `./transcripts`, `./search`, `./notes`, `./graph`, `./ask`, `./ontology`, `./errors`, `./schemas/transcript-export.v1.json` |
 | `@marinoscar/kvox-db` | `packages/kvox-db` | CommonJS, plus the `kvox-db` bin | `.` |
 | `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing` |
 | `@marinoscar/kvox-web` | `packages/kvox-web` | ESM | `./core` |
@@ -34,7 +34,7 @@ The four packages are one Changesets `fixed` group: they always share one versio
 
 ## Layout: slices and entry points
 
-A **slice** is a folder directly under `packages/kvox-<pkg>/src/`. Each slice is one entry point (`./<slice>` in `exports`, `src/<slice>/index.ts`), has a `README.md`, and may import another slice of its package only when `packages/kvox-slices.json` lists it, and only through that slice's `index.ts` (ESLint rule B, `eslint.config.mjs`). A package with a single entry (`kvox-contract`, `kvox-db`) has `src/index.ts` at the root that re-exports its slices.
+A **slice** is a folder directly under `packages/kvox-<pkg>/src/`. Each slice is one entry point (`./<slice>` in `exports`, `src/<slice>/index.ts`), has a `README.md`, and may import another slice of its package only when `packages/kvox-slices.json` lists it, and only through that slice's `index.ts` (ESLint rule B, `eslint.config.mjs`). A package with a single entry (`kvox-db`) has `src/index.ts` at the root that re-exports its slices. `kvox-contract` is the exception: its root exports only `KVOX_CONTRACT_PACKAGE`, because a root that re-exports every slice makes TypeDoc attribute each declaration to the root entry and leave the slice entries as bare references (which fail the `@stability` check). A consumer imports a slice subpath.
 
 ```
 packages/kvox-api/
@@ -45,11 +45,11 @@ packages/kvox-api/
   test/jest.config.js  test/core.spec.ts
 ```
 
-`packages/kvox-slices.json` is the slice graph, `{ "kvox-api": { "core": ["ports"] } }`. A slice may be declared before its folder exists (`kvox-contract` declares `errors` and `ontology`, which issue 5.2 creates); a folder under `src/` that the file does not declare is an error. Both data files are **append-only**: later issues add slices, they never rename or remove one, because a slice name is a published subpath.
+`packages/kvox-slices.json` is the slice graph, `{ "kvox-api": { "core": ["ports"] } }`. A slice may be declared before its folder exists; a folder under `src/` that the file does not declare is an error. Both data files are **append-only**: later issues add slices, they never rename or remove one, because a slice name is a published subpath.
 
 Import rules for sources (ESLint, `npm run lint:packages`): never a deep import into another package (`src/`, `dist/`, `internal/`), never a relative path that leaves the package, never `@app/shared`. The contract imports only `zod` and its own files. Keep the `.js` extension in every relative import of an ESM or NodeNext package; without it the typecheck can pass and a consumer fails with `ERR_MODULE_NOT_FOUND`.
 
-Subpaths are the package's public API. Document a subpath, or do not export it; an undocumented export fails `check:kvox-package-docs`.
+Subpaths are the package's public API. Document a subpath, or do not export it; an undocumented export fails `check:kvox-package-docs`. An `exports` entry whose value is a plain string is a data file shipped as-is (the contract's `./schemas/transcript-export.v1.json`): the README must name it, and `typedoc.json` has no entry point for it.
 
 ## The README
 
@@ -97,7 +97,7 @@ Describe behaviour and the reason in the comment, name units, and use `{@link Sy
 
 ## TypeDoc and the API reference
 
-`typedoc.base.json` holds the shared options (private and internal members excluded, validation of undocumented, unexported and unresolved items treated as errors, the two extra block tags). Each package's `typedoc.json` extends it and sets `tsconfig`, `entryPoints` (one `./src/<slice>/index.ts` per exported subpath, `./src/index.ts` for the root), `out` (`docs-api/html`) and `json` (`docs-api/api.json`). The `docs-api/` folder is generated and git-ignored.
+A package whose public types are mostly `z.infer` shapes (`kvox-contract`) may drop `"Property"` from `requiredToBeDocumented` in its own `typedoc.json`, with a comment saying why; every exported declaration still needs TSDoc and `@stability`. `typedoc.base.json` holds the shared options (private and internal members excluded, validation of undocumented, unexported and unresolved items treated as errors, the two extra block tags). Each package's `typedoc.json` extends it and sets `tsconfig`, `entryPoints` (one `./src/<slice>/index.ts` per exported subpath, `./src/index.ts` for the root), `out` (`docs-api/html`) and `json` (`docs-api/api.json`). The `docs-api/` folder is generated and git-ignored.
 
 ```bash
 npm run docs:kvox-packages          # TypeDoc for the four packages

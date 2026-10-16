@@ -17,7 +17,7 @@
 > .transcode` handler under `apps/api/src/transcripts/handlers/` (#26, built),
 > `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
 > /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
-> schema companion, `docs/specs/transcript-export.v1.schema.json`.
+> schema companion, `docs/specs/transcript-export.v1.schema.json` (source of truth since issue #488: `packages/kvox-contract/schemas/transcript-export.v1.schema.json`).
 >
 > **Suggested build order** (from the epic): #20 (this document) →
 > (#21 storage hardening, #23 provider framework, #24 data model, all three
@@ -1629,7 +1629,11 @@ only about how they *format* it.
 Published as
 [`docs/specs/transcript-export.v1.schema.json`](transcript-export.v1.schema.json)
 (JSON Schema, draft 2020-12) alongside this document, with an example
-instance embedded in the schema file itself. `schema: "kvox.transcript/v1"`
+instance embedded in the schema file itself. Since issue #488 the source of
+truth is `packages/kvox-contract/schemas/transcript-export.v1.schema.json`
+(published as `@marinoscar/kvox-contract/schemas/transcript-export.v1.json`);
+the file under `docs/specs/` is a byte-identical copy that a contract test
+guards. `schema: "kvox.transcript/v1"`
 is a literal, required field a consumer switches on — never an implicit
 "whatever KVox happens to export today." **The contract is permanent once
 published: a field is added, never removed or repurposed.** A breaking
@@ -2254,7 +2258,7 @@ check the built code against the same list this spec was designed against.
 | `transcripts:read`/`write` are seeded for Admin, Contributor and Viewer; no `transcripts:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | The admin transcription settings endpoints are gated on `system_settings:*`, not a new permission | An RBAC e2e asserting a Viewer gets 403 and an Admin gets 200 on `/api/transcription-settings/*` |
 | The stored API key never appears in a response body, a log line, or an audit `meta` | A dedicated assertion sweeping every response and captured log line in the settings test suite, following the same technique `email-settings.service.spec.ts` already uses for the SMTP password |
-| JSON export validates against the published `kvox.transcript/v1` schema | A schema-validation test loading `docs/specs/transcript-export.v1.schema.json` directly and validating rendered fixtures against it |
+| JSON export validates against the published `kvox.transcript/v1` schema | A schema-validation test loading the schema through `@marinoscar/kvox-contract/schemas/transcript-export.v1.json` (the `docs/specs/` copy is guarded byte-identical) and validating rendered fixtures against it |
 | Markdown escaping and PDF smoke tests, including a non-ASCII speaker name | `markdown-exporter.spec.ts` and a PDF parse-back smoke test, per issue #28's own acceptance criteria |
 | An identical export request reuses the existing row by `options_hash`; an expired one is cleaned up by housekeeping | `export.service.spec.ts` plus `transcripts-housekeeping.task.spec.ts` |
 | A 5 GB simulated upload gets presigned URLs past part 10, resumes correctly after a simulated reload, and stale cleanup never removes an upload active within the stale-upload age (72 hours since issue #469; formerly `STORAGE_STALE_UPLOAD_HOURS`) | Per issue #21's own acceptance criteria, against a mocked S3 provider |

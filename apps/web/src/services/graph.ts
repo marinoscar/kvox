@@ -34,6 +34,40 @@ import type {
 } from '@app/shared/ontology';
 
 import { api, ApiError } from './api';
+import type {
+  GraphEntityRef,
+  GraphEntityDetail,
+  GraphNode,
+  TimelineEvent,
+  TimelineResponse,
+  EvidenceLink,
+  CitedStatement,
+  BriefEntry,
+  PeopleChange,
+  RelatedSource,
+  DigestUnavailableReason,
+  ForgetEntityResponse,
+  ProposalStatus,
+  ProposalDecision,
+  ProposalItemFlag,
+  EndpointRef,
+  EvidenceSpanInput,
+  RelinkField,
+  BulkSkipReason,
+  RevertKept,
+  RevertResult,
+  ExtractionEstimate,
+  GraphConflictReason,
+  UserGuidance,
+  GraphOverviewRefreshResponse,
+  GraphExportFormat,
+  CreateGraphExportResponse,
+  GraphImportFormat,
+  GraphImportFailureReason,
+  GraphImportViolation,
+  CreateGraphImportResponse,
+} from '@marinoscar/kvox-contract/graph';
+import type { AttributeChoice } from '@marinoscar/kvox-contract/ontology';
 
 // =============================================================================
 // Ontology (#354) — the payload every graph form is generated from
@@ -62,11 +96,7 @@ export type DatePrecision = 'day' | 'month' | 'year' | 'unknown';
 export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact';
 
 /** `entityRef` in both #370 and #372. */
-export interface GraphEntityRef {
-  id: string;
-  label: string;
-  type: string;
-}
+export type { GraphEntityRef };
 
 // =============================================================================
 // Entity index + detail (#370)
@@ -121,39 +151,13 @@ export interface GraphEntityCounts {
   openCommitments: number;
 }
 
-export interface GraphEntityDetail {
-  id: string;
-  type: string;
-  label: string;
-  props: Record<string, unknown>;
-  aliases: GraphEntityAlias[];
-  /** Meeting only. */
-  occurredAt: string | null;
-  reviewStatus: 'accepted' | 'edited';
-  ontologyVersion: string;
-  firstSeenAt: string | null;
-  lastSeenAt: string | null;
-  counts: GraphEntityCounts;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { GraphEntityDetail };
 
 // =============================================================================
 // Graph slice (#370) — neighbourhood + expand
 // =============================================================================
 
-export interface GraphNode {
-  id: string;
-  nodeKind: 'entity' | 'item';
-  /** Entity type key, or item kind. */
-  type: string;
-  label: string;
-  depth: number;
-  degree: number;
-  /** Item status; null for entities. */
-  status: string | null;
-  occurredAt: string | null;
-}
+export type { GraphNode };
 
 export interface GraphValidRange {
   from: string | null;
@@ -161,6 +165,7 @@ export interface GraphValidRange {
   precision: DatePrecision;
 }
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface GraphEdge {
   /** `kg_relations.id`, or `virt:<itemId>:<TYPE>` for column-derived edges. */
   id: string;
@@ -180,6 +185,7 @@ export interface GraphEdge {
   props?: Record<string, unknown>;
 }
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface GraphSlice {
   seedIds: string[];
   asOf: string;
@@ -223,19 +229,7 @@ export interface TimelineRelation {
   valid: GraphValidRange | null;
 }
 
-export interface TimelineEvent {
-  /** Item id, `rel:<id>:start|end`, or meeting id. */
-  id: string;
-  eventKind: 'item' | 'relation_started' | 'relation_ended' | 'meeting';
-  at: string | null;
-  precision: DatePrecision;
-  item?: TimelineItem;
-  relation?: TimelineRelation;
-  meeting?: GraphEntityRef;
-  /** At most five. */
-  evidenceIds: string[];
-  evidenceCount: number;
-}
+export type { TimelineEvent };
 
 export interface TimelineParams {
   asOf?: string;
@@ -245,11 +239,7 @@ export interface TimelineParams {
   limit?: number;
 }
 
-export interface TimelineResponse {
-  items: TimelineEvent[];
-  nextCursor: string | null;
-  asOf: string;
-}
+export type { TimelineResponse };
 
 export interface EntityMention {
   kind: 'note' | 'transcript';
@@ -305,15 +295,7 @@ export interface ImportEvidenceSource {
 
 export type EvidenceSource = SegmentEvidenceSource | NoteEvidenceSource | ImportEvidenceSource;
 
-export interface EvidenceLink {
-  id: string;
-  subjectKind: 'entity' | 'relation' | 'item' | 'proposal_item' | 'import';
-  subjectId: string;
-  /** Rendered as TEXT, never HTML. */
-  quote: string;
-  createdAt: string;
-  source: EvidenceSource;
-}
+export type { EvidenceLink };
 
 /** The API's cap on one `GET /api/graph/evidence?ids=` call. */
 export const EVIDENCE_BATCH_MAX = 50;
@@ -322,57 +304,15 @@ export const EVIDENCE_BATCH_MAX = 50;
 // Brief (#372)
 // =============================================================================
 
-export interface CitedStatement {
-  text: string;
-  /** One to eight. */
-  evidenceIds: string[];
-}
+export type { CitedStatement };
 
-export interface BriefEntry {
-  itemId: string;
-  kind: GraphItemKind;
-  title: string | null;
-  statement: string;
-  occurredAt: string | null;
-  precision: DatePrecision;
-  status: string | null;
-  dueAt: string | null;
-  ownerPerson: GraphEntityRef | null;
-  counterparty: GraphEntityRef | null;
-  superseded: boolean;
-  evidenceIds: string[];
-}
+export type { BriefEntry };
 
-export interface PeopleChange {
-  relationId: string;
-  type: string;
-  change: 'started' | 'ended';
-  at: string;
-  precision: DatePrecision;
-  person: GraphEntityRef;
-  other: GraphEntityRef;
-  /** `HAS_ROLE` props.title. */
-  title: string | null;
-  evidenceIds: string[];
-}
+export type { PeopleChange };
 
-export interface RelatedSource {
-  kind: 'transcript' | 'note';
-  id: string;
-  title: string;
-  /** Already HTML-escaped with `<mark>` — render ONLY through `SearchSnippet`. */
-  snippetHtml: string | null;
-  startMs: number | null;
-  score: number;
-  inGraph: boolean;
-  occurredAt: string | null;
-}
+export type { RelatedSource };
 
-export type DigestUnavailableReason =
-  | 'graph_disabled'
-  | 'ai_not_configured'
-  | 'ai_key_missing'
-  | 'model_lacks_capability';
+export type { DigestUnavailableReason };
 
 export interface EntityDigest {
   statements: CitedStatement[];
@@ -439,11 +379,7 @@ export interface GraphEntityRecord {
 
 export const FORGET_CONFIRMATION = 'FORGET';
 
-export interface ForgetEntityResponse {
-  jobId: string;
-  entityId: string;
-  status: 'pending' | 'running';
-}
+export type { ForgetEntityResponse };
 
 // =============================================================================
 // Query-string helper
@@ -647,10 +583,7 @@ export function forgetGraphEntity(id: string): Promise<ForgetEntityResponse> {
 // Attribute definitions (#355, used by #369's settings card)
 // =============================================================================
 
-export interface AttributeChoice {
-  value: string;
-  label: string;
-}
+export type { AttributeChoice };
 
 export interface AttributeDefOptions {
   choices?: AttributeChoice[];
@@ -792,9 +725,9 @@ export function attributeDefErrorField(err: unknown): AttributeDefField | null {
 // `proposal-payload.schema.ts`, and #370's entity search. Components import
 // these types and functions; none of them learns a URL.
 
-export type ProposalStatus = 'extracting' | 'draft' | 'committed' | 'discarded' | 'failed' | 'reverted';
+export type { ProposalStatus };
 export type ProposalKind = 'extraction' | 'import' | 'resolution';
-export type ProposalDecision = 'pending' | 'accept' | 'edit' | 'reject' | 'merge_into';
+export type { ProposalDecision };
 export type ProposalGroupKey =
   | 'Person'
   | 'Organization'
@@ -844,13 +777,14 @@ export const PROPOSAL_ITEM_FLAGS = [
   'stale_ontology',
   'imported',
 ] as const;
-export type ProposalItemFlag = (typeof PROPOSAL_ITEM_FLAGS)[number];
+export type { ProposalItemFlag };
 
 export type ValidPrecisionValue = 'day' | 'month' | 'year' | 'unknown';
 
 /** `{ entityId }` — an existing committed entity; `{ ref }` — an entity row of this proposal. */
-export type EndpointRef = { entityId: string } | { ref: string };
+export type { EndpointRef };
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface ProposalCounts {
   total: number;
   pending: number;
@@ -876,6 +810,7 @@ export interface ProposalUserGuidance {
  * Distinct from `'invalid_output'`, a malformed answer. Open-ended: a class a
  * later API adds still arrives as a string and renders its server message.
  */
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export type ExtractionFailureClass =
   | 'auth'
   | 'refusal'
@@ -886,6 +821,7 @@ export type ExtractionFailureClass =
   | 'other'
   | (string & {});
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface ProposalSummary {
   id: string;
   kind: ProposalKind;
@@ -939,6 +875,7 @@ export interface ProposalResolutionCandidate {
   signals: string[];
 }
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface ProposalResolution {
   /** The linked existing entity id; null = new. */
   ref: string | null;
@@ -976,24 +913,16 @@ export interface ProposalItem {
   fills?: Record<string, unknown> | null;
 }
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface ProposalDetail {
   proposal: ProposalSummary;
   items: ProposalItem[];
   context: { systemPrompt: string; userContent: string } | null;
 }
 
-export type EvidenceSpanInput =
-  | { source: 'note'; noteVersion: number; charStart: number; charEnd: number; quote: string }
-  | {
-      source: 'segment';
-      segmentId: string;
-      segmentRev: number;
-      charStart: number;
-      charEnd: number;
-      quote: string;
-    };
+export type { EvidenceSpanInput };
 
-export type RelinkField = 'from' | 'to' | 'subject' | 'owner' | 'counterparty' | 'meeting';
+export type { RelinkField };
 
 /** #366's `patchItemSchema`. */
 export interface PatchProposalItemInput {
@@ -1012,10 +941,7 @@ export interface PatchProposalItemResult {
 
 export type BulkDecision = 'accept' | 'reject' | 'pending';
 
-export type BulkSkipReason =
-  | 'not_found'
-  | 'sensitive_requires_individual_accept'
-  | 'closing_requires_individual_accept';
+export type { BulkSkipReason };
 
 export interface BulkDecideResult {
   updated: number;
@@ -1031,6 +957,7 @@ export interface AddProposalItemInput {
   evidence: EvidenceSpanInput[];
 }
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface CommitResult {
   created: { entities: number; relations: number; items: number };
   linked: number;
@@ -1047,17 +974,9 @@ export interface CommitResult {
 
 export type RevertKeptWhy = 'edited_since' | 'referenced_since' | 'merged_since' | 'evidence_since';
 
-export interface RevertKept {
-  kind: 'entity' | 'relation' | 'item' | 'closing' | 'alias' | 'item_change' | 'relation_fill';
-  id: string;
-  label: string;
-  why: RevertKeptWhy;
-}
+export type { RevertKept };
 
-export interface RevertResult {
-  reverted: number;
-  kept: RevertKept[];
-}
+export type { RevertResult };
 
 export interface ListProposalsParams {
   status?: ProposalStatus;
@@ -1075,16 +994,7 @@ export interface RequestExtractionInput {
 }
 
 /** #363's `extractionEstimateSchema`. */
-export interface ExtractionEstimate {
-  providerId: string;
-  model: string;
-  inputTokens: number;
-  maxOutputTokens: number;
-  availableInputTokens: number;
-  fits: boolean;
-  requests: number;
-  keyConfigured: boolean;
-}
+export type { ExtractionEstimate };
 
 /** #363's `requestExtractionResponseSchema` (202). */
 export interface RequestExtractionResult {
@@ -1211,20 +1121,7 @@ export async function searchGraphEntities(params: {
  * plus the two #366 appends. Typed `| string` at the edge: a newer server may
  * send a reason this build does not know, and that must not be coerced.
  */
-export type GraphConflictReason =
-  | 'graph_disabled'
-  | 'ai_not_configured'
-  | 'ai_key_missing'
-  | 'extraction_running'
-  | 'proposal_not_draft'
-  | 'stale_note_version'
-  | 'revert_conflict'
-  | 'model_lacks_capability'
-  | 'note_not_ready'
-  | 'proposal_not_committed'
-  | 'stale_segment_rev'
-  | 'graph_empty'
-  | 'offer_decided';
+export type { GraphConflictReason };
 
 /** `details.reason` of a graph 409, like `noteConflictReason`. */
 export function graphConflictReason(err: unknown): GraphConflictReason | null {
@@ -1267,7 +1164,7 @@ export function graphValidationIssues(
 // =============================================================================
 
 /** #363's `userGuidanceSchema`, as the extract dialog holds it. */
-export type UserGuidance = ProposalUserGuidance;
+export type { UserGuidance };
 
 /** #363's `userGuidanceSchema` limits. */
 export const GUIDANCE_MAX_PINNED = 50;
@@ -1386,11 +1283,7 @@ export interface GraphOverview {
   nodesTruncated: boolean;
 }
 
-export interface GraphOverviewRefreshResponse {
-  jobId: string;
-  /** `true` when a layout job was already pending or running; that job is returned. */
-  deduplicated: boolean;
-}
+export type { GraphOverviewRefreshResponse };
 
 /** `GET /api/graph/overview` (`graph:read`) — never recomputes. */
 export function getGraphOverview(signal?: AbortSignal): Promise<GraphOverview> {
@@ -1406,7 +1299,7 @@ export function refreshGraphOverview(): Promise<GraphOverviewRefreshResponse> {
 // Export (#386) — mirrors `apps/api/src/graph/export/dto/graph-export.dto.ts`
 // =============================================================================
 
-export type GraphExportFormat = 'jsonld' | 'turtle' | 'nquads';
+export type { GraphExportFormat };
 export type GraphExportStatus = 'pending' | 'running' | 'ready' | 'failed';
 
 export interface GraphExportStats {
@@ -1434,11 +1327,7 @@ export interface GraphExport {
   filename: string;
 }
 
-export interface CreateGraphExportResponse {
-  export: GraphExport;
-  /** True when an unexpired export of the same, unchanged graph was returned (a 200). */
-  reused: boolean;
-}
+export type { CreateGraphExportResponse };
 
 /** `POST /api/graph/exports` (`graph:read`) — 202 queued, 200 reused, 409 `graph_empty`. */
 export function exportGraph(format: GraphExportFormat): Promise<CreateGraphExportResponse> {
@@ -1460,15 +1349,9 @@ export async function listGraphExports(signal?: AbortSignal): Promise<GraphExpor
 // Graph import (#387, epic #349; spec §18.3)
 // -----------------------------------------------------------------------------
 
-export type GraphImportFormat = 'turtle' | 'jsonld' | 'nquads';
+export type { GraphImportFormat };
 
-export type GraphImportFailureReason =
-  | 'parse_error'
-  | 'too_large'
-  | 'ontology_version_newer'
-  | 'migration_pending'
-  | 'shacl_violations'
-  | 'empty';
+export type { GraphImportFailureReason };
 
 /** What the file picker accepts — the extensions `POST /api/graph/imports` reads. */
 export const GRAPH_IMPORT_ACCEPT = '.ttl,.jsonld,.json,.nq';
@@ -1476,13 +1359,9 @@ export const GRAPH_IMPORT_ACCEPT = '.ttl,.jsonld,.json,.nq';
 /** The largest file an import accepts (20 MiB), checked client-side before the upload too. */
 export const GRAPH_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 
-export interface GraphImportViolation {
-  focusNode: string;
-  path: string | null;
-  message: string;
-  severity: 'Violation' | 'Warning';
-}
+export type { GraphImportViolation };
 
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface GraphImportOffer {
   offerId: string;
   iri: string;
@@ -1496,6 +1375,7 @@ export interface GraphImportOffer {
 }
 
 /** `proposal.stats` of a `kind: import` proposal. Only filename/format/bytes exist while extracting. */
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface GraphImportStats {
   filename?: string;
   format?: GraphImportFormat;
@@ -1514,10 +1394,7 @@ export function importStatsOf(summary: ProposalSummary | null | undefined): Grap
   return (summary?.stats ?? {}) as GraphImportStats;
 }
 
-export interface CreateGraphImportResponse {
-  proposalId: string;
-  jobId: string;
-}
+export type { CreateGraphImportResponse };
 
 /** `POST /api/graph/imports` (`graph:write`, multipart) — 202; 400/409/413 as `ApiError`. */
 export function uploadGraphImport(file: File): Promise<CreateGraphImportResponse> {

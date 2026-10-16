@@ -37,6 +37,7 @@
  */
 
 import { api } from './api';
+import type { SearchIndexRequestResult } from '@marinoscar/kvox-contract/search';
 
 /** The document kinds this build can index. Mirrors the API's own union. */
 export type SearchIndexDocumentType = 'transcript' | 'note';
@@ -86,12 +87,7 @@ export interface SearchIndexStatus {
 }
 
 /** `POST /api/search/index` — the 202 body. */
-export interface SearchIndexRequestResult {
-  queued: number;
-  /** Left over because the per-call cap was reached. `0` when the library is done. */
-  remaining: number;
-  cap: number;
-}
+export type { SearchIndexRequestResult };
 
 const BASE = '/search';
 

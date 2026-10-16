@@ -72,6 +72,10 @@ jobs:
 
       - run: npm ci
 
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
+
       - run: npx prisma generate
         working-directory: apps/api
 
@@ -99,9 +103,10 @@ jobs:
       # The app's own differences live in infra/compose/app.*.compose.yml,
       # infra/compose/app.env.example and infra/nginx/app.d/ (never checked).
       - run: npm run platform:infra:sync -- --check
-      # @app/shared/ontology is compiled TypeScript whose output is COMMITTED
-      # (packages/shared/ontology/): rebuild it and fail if the committed copy
-      # is stale, i.e. a source edit was committed without its rebuild.
+      # @app/shared/ontology is a thin re-export of @marinoscar/kvox-contract/ontology
+      # (issue #488): the committed files under packages/shared/ontology/ are two
+      # hand-written stubs. `build:ontology` now builds the contract; fail if a
+      # build touched the committed stubs or someone re-committed compiled output.
       - run: npm run build:ontology --workspace=@app/shared && git diff --exit-code -- packages/shared/ontology
 
       # The API unit suite runs in `api-test` below, sharded.
@@ -160,6 +165,10 @@ jobs:
           npm ci
           (cd apps/api && npx prisma generate)
           wait "$apt_pid"
+
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
 
       - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
@@ -227,6 +236,10 @@ jobs:
 
       - run: npm ci
 
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
+
       - run: npm run test:run --workspace=web -- --shard=${{ matrix.shard }}/4
 
   openapi:
@@ -243,6 +256,10 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
+
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
 
       # The dump imports AppModule, which imports @prisma/client. Preview mode
       # never instantiates PrismaService, but the generated client still has to
@@ -354,6 +371,10 @@ jobs:
       # (the seed). Only the final step runs as production.
       - run: npm ci
 
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
+
       - run: npx prisma generate
         working-directory: apps/api
 
@@ -458,6 +479,10 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
+
+      # The API and the web import @marinoscar/kvox-contract from its built
+      # output (dist/, git-ignored): build it right after the install (issue #488).
+      - run: npm run build --workspace=@marinoscar/kvox-contract
 
       - run: npx prisma generate
         working-directory: apps/api

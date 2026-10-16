@@ -156,8 +156,9 @@ export function stripComments(source) {
 const IMPORT_PATTERNS = [
   // import x from 'y' / import { x } from 'y' / export * from 'y' / export { x } from 'y'
   /\b(?:import|export)\s[^;'"`]*?\bfrom\s*['"]([^'"\n]+)['"]/g,
-  // import 'y'
-  /\bimport\s*['"]([^'"\n]+)['"]/g,
+  // import 'y' (a statement of its own: a string literal that merely CONTAINS the word,
+  // such as the enum member `'import'` in a wire schema, is not one)
+  /(?:^|[;{}])[ \t]*\bimport\s*['"]([^'"\n]+)['"]/gm,
   // import('y') and require('y')
   /\b(?:import|require)\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g,
 ];

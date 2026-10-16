@@ -199,6 +199,15 @@ test('importSpecifiers reads import, export-from, side-effect, dynamic and requi
   assert.ok(stripComments(source).includes('https://example.test'));
 });
 
+test('importSpecifiers does not read the word import inside a string literal as a side-effect import', () => {
+  const source = `
+    export const kinds = z.enum(['extraction', 'import', 'resolution']);
+    source: z.enum(['segment', 'note', 'import']).describe('the row came from a file'),
+    import 'real-side-effect';
+  `;
+  assert.deepEqual(importSpecifiers(source), ['real-side-effect']);
+});
+
 test('packageNameOf maps specifiers to package names and drops relative paths and built-ins', () => {
   assert.equal(packageNameOf('@nestjs/common'), '@nestjs/common');
   assert.equal(packageNameOf('@nestjs/common/decorators'), '@nestjs/common');

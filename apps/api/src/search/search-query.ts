@@ -16,10 +16,12 @@
 // interprets the answer — see {@link isStopwordOnly}.
 // =============================================================================
 
-/** The two document kinds `GET /api/search` can return. */
-export const SEARCH_TYPES = ['transcript', 'note'] as const;
-
-export type SearchType = (typeof SEARCH_TYPES)[number];
+import { SEARCH_TYPES, type SearchType } from '@marinoscar/kvox-contract/search';
+// The wire schemas of this file moved to `@marinoscar/kvox-contract/search` (issue #488, file `search/search-query.ts`); they are re-exported below so no importer changes.
+export {
+  SEARCH_TYPES,
+  type SearchType,
+} from '@marinoscar/kvox-contract/search';
 
 /**
  * The `types` CSV, normalised — or `null` when it names something that is not

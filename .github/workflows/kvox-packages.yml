@@ -88,7 +88,12 @@ jobs:
           node -e "require('@marinoscar/kvox-api/testing')"
           node -e "require('@marinoscar/kvox-db')"
           node -e "require('@marinoscar/kvox-contract')"
+          node -e "require('@marinoscar/kvox-contract/graph')"
+          node -e "require('@marinoscar/kvox-contract/ontology')"
+          node -e "require('@marinoscar/kvox-contract/schemas/transcript-export.v1.json')"
           node --input-type=module -e "await import('@marinoscar/kvox-contract')"
+          node --input-type=module -e "await import('@marinoscar/kvox-contract/transcripts')"
+          node --input-type=module -e "await import('@marinoscar/kvox-contract/errors')"
           node --input-type=module -e "await import('@marinoscar/kvox-web/core')"
           node packages/kvox-db/bin/kvox-db.js --help
 
