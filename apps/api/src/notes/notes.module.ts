@@ -75,7 +75,7 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //     discipline `AiSettingsService` states for itself.
 //   • `TranscriptsModule` — `TranscriptMaterializeService` and the Markdown
 //     exporter. ⚠ NOT for note export: `notes/export/` has its own three
-//     exporters over the GENERIC registry (`apps/api/src/export/`), which is
+//     exporters over the GENERIC registry (`@marinoscar/platform-api/exports`), which is
 //     what `docs/specs/notes.md` §8.1 means by "extracted, not
 //     re-implemented" — one registry class, two document types. ⚠ THIS IMPORT IS THE POINT OF THE EPIC: a note is generated
 //     from the transcript AS THE USER CORRECTED IT, which means going through
