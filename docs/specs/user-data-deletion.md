@@ -228,7 +228,9 @@ its `kg.purge` enqueue is not ordered against them by necessity either — it
 simply runs next, before all five, so that graph rows citing a transcript or
 note about to be deleted below go with them.
 
-1. **Credentials** (`everything` only) — `user_ai_credentials` and
+1. **Credentials** (`everything` only) — `user_ai_keys` (the platform's
+   per-user AI keys, erased through its service; they were
+   `user_ai_credentials` until #477) and
    `personal_access_tokens` both cascade from `users` and from nothing else,
    so this step participates in no foreign key with any step below it. It
    runs first anyway, by choice rather than necessity: revoking a key is
@@ -304,8 +306,8 @@ argument, and it has two, either one sufficient on its own:
 1. **The work has no computable result to hand back.** Node-eligibility
    means a remote worker computes something and posts a validated result the
    server persists. This job reads and writes across `transcripts`, `notes`,
-   `note_templates`, `storage_objects`, `personal_access_tokens` and
-   `user_ai_credentials` **mid-computation** — each batch's contents decide
+   `note_templates`, `storage_objects` and `personal_access_tokens`
+   **mid-computation** — each batch's contents decide
    the next query, and clearing a foreign key is what makes the delete after
    it possible. There is no "already-computed result" shape a
    `nodeResultSchema` could describe.

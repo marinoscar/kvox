@@ -88,7 +88,7 @@ export function buildRegenerateInput(
 
   // --- The model ------------------------------------------------------------
   // Same rule as the template, and the empty string is excluded for the same
-  // reason: while `GET /api/ai/config` is still in flight the dialog has no
+  // reason: while `GET /api/ai-tasks/config` is still in flight the dialog has no
   // model list, shows no selection, and must not turn that into a request that
   // names no model at all.
   if (form.model !== '' && form.model !== note.model) {

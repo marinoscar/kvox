@@ -7,8 +7,15 @@
  * declares `ai` and `telemetry`; an app adds its own key by augmenting
  * `SettingsFeatureRegistry` and registering a resolver.
  *
+ * `ai` is the platform's own key (AI is switched on in this deployment). It is
+ * read from `GET /api/ai/config` through the package's `useAiFeatures`, which
+ * reads the shell's one copy of the answer (`platform/AiConfigBinding.tsx`,
+ * mounted above the platform host in `App.tsx`) and never fetches. Without the
+ * provider it is "off", so the AI models, AI usage and AI Provider cards fail
+ * closed; the admin AI card carries no `feature` because it is the switch (#477).
+ *
  * `graph` is connected knowledge, switched by `ai.graphEnabled` and read from
- * `GET /api/ai/config`. The resolver reads the app's own
+ * `GET /api/ai-tasks/config`. The resolver reads the app's own
  * `NavigationFeaturesContext`, which already holds that answer (one fetch for
  * the shell, the destinations and now the hub), because a feature resolver must
  * never fetch. The context's default is "off", so a hub rendered outside the
@@ -26,6 +33,7 @@
  * `useSettingsFeatures()` has rendered is refused by the package.
  */
 
+import { useAiFeatures } from '@marinoscar/platform-web/ai/headless';
 import { useOrgsFeature } from '@marinoscar/platform-web/identity/headless';
 import { registerSettingsFeature } from '@marinoscar/platform-web/settings/headless';
 import { useTelemetryFeatures } from '@marinoscar/platform-web/telemetry/headless';
@@ -44,6 +52,7 @@ declare module '@marinoscar/platform-web/settings/headless' {
   }
 }
 
+registerSettingsFeature('ai', () => useAiFeatures().ai);
 registerSettingsFeature('graph', () => useNavigationFeatures().features.graph === true);
 registerSettingsFeature('orgs', useOrgsFeature);
 registerSettingsFeature('telemetry', () => useTelemetryFeatures().telemetry);

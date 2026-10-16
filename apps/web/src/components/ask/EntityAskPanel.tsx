@@ -63,7 +63,7 @@ import { useAskConversation } from '../../hooks/useAskConversation';
 import { useAskConversations } from '../../hooks/useAskConversations';
 import { ApiError } from '../../services/api';
 import { postAskMessage } from '../../services/ask';
-import type { AiConfig } from '../../services/ai';
+import type { AiTasksConfig } from '../../services/aiTasks';
 import type { AskConversationDetail, AskConversationSummary } from '../../services/ask';
 import { formatRelativeTime } from '../../utils/relativeTime';
 
@@ -138,8 +138,8 @@ export interface EntityAskPanelProps {
   conversationId: string | null;
   /** The panel opened (or started) a different conversation. */
   onConversationChange: (conversationId: string | null) => void;
-  /** `useAiConfig().config` — models, the `graph.agent` default, `keyConfigured`. */
-  config: AiConfig | null;
+  /** `useAiTasksConfig().config` — models, the `graph.agent` default, `keyConfigured`. */
+  config: AiTasksConfig | null;
 }
 
 export function EntityAskPanel({ open, onClose, entity, conversationId, onConversationChange, config }: EntityAskPanelProps) {

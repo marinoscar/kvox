@@ -127,7 +127,7 @@ describe('Evidence inside the sheet', () => {
   beforeEach(() => {
     proposalMock.reset(mockProposalDetail('draft'));
     server.use(
-      http.get('*/api/ai/config', () =>
+      http.get('*/api/ai-tasks/config', () =>
         HttpResponse.json({ data: { available: true, models: [], keyConfigured: true, graphEnabled: true } }),
       ),
     );

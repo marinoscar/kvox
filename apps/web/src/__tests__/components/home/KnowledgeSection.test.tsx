@@ -92,7 +92,7 @@ describe('KnowledgeSection', () => {
   });
 
   it('offers Ask (#380) only while connected knowledge is on', async () => {
-    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
     render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
     const section = await screen.findByRole('region', { name: 'Knowledge' });
     expect(await within(section).findByRole('link', { name: 'Ask' })).toHaveAttribute('href', '/ask');
@@ -100,7 +100,7 @@ describe('KnowledgeSection', () => {
 
   it('hides Ask while connected knowledge is off', async () => {
     server.use(
-      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
+      http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
     );
     render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
     const section = await screen.findByRole('region', { name: 'Knowledge' });

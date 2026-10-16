@@ -47,7 +47,7 @@ import { SearchIndexStatusService } from './search-index-status.service';
 // WHY NEITHER ROUTE NAMES A PERMISSION
 // -----------------------------------------------------------------------------
 //
-// The same answer `user-data.controller.ts` and `ai-credentials.controller.ts`
+// The same answer `user-data.controller.ts` and the platform's `/api/ai/keys`
 // give, and it is worth restating because the plausible alternatives all fail
 // somebody.
 //

@@ -13,8 +13,9 @@
 >
 > Planned locations: `apps/api/src/ai/` (#47 — the `AiProvider` interface and
 > registry, the OpenAI provider, the error taxonomy, per-user credentials, the
-> `ai` system-settings policy reader), the `user_ai_credentials` table (#47)
-> and the five note tables — `notes`, `note_versions`, `note_templates`,
+> `ai` system-settings policy reader; replaced by the platform AI slice and
+> `apps/api/src/ai-port/`, and the directory and its `user_ai_credentials`
+> table deleted by #477 — see §2) and the five note tables — `notes`, `note_versions`, `note_templates`,
 > `note_generations`, `note_exports` (#48) — both in `apps/api/prisma/
 > schema.prisma`, the `notes:*`/`note_templates:*` permission pair and the
 > built-in template seed rows in `apps/api/src/common/constants/
@@ -32,9 +33,11 @@
 > (#53), and `export/` alongside the new generic `apps/api/src/export/
 > exporter-registry.ts` that #54 extracts from `apps/api/src/transcripts/
 > export/transcript-exporter.registry.ts` (a behaviour-preserving refactor,
-> #54). On the web side: `apps/web/src/pages/AiKeySettingsPage.tsx` and
-> `apps/web/src/pages/Admin/AiPolicyPage.tsx` plus the matching
-> `config/userSettingsSections.tsx` / `config/adminSections.tsx` cards (#55);
+> #54). On the web side: the AI key page and the AI policy page with the
+> matching `config/userSettingsSections.tsx` / `config/adminSections.tsx` cards
+> (#55; since #477 these are the platform's `UserAiKeysPage` and `AiConfigPage`,
+> with this application's task-model, graph and ceiling sections in
+> `apps/web/src/pages/Admin/AiSettingsPage.tsx`);
 > `apps/web/src/pages/NoteTemplatesPage.tsx` (#56); the `config/
 > destinations.ts` rename to `library`, `apps/web/src/pages/
 > NotesLibraryPage.tsx`, `LibraryTabs.tsx`, `NewNotePage.tsx` and the
@@ -126,9 +129,11 @@ almost the whole weight of that:
    secrets — an SMTP password, this deployment's own AssemblyAI key — that
    must outlive whichever admin last typed them in. A personal OpenAI key is
    the opposite kind of fact: it belongs to exactly one user and has to leave
-   when they do. `user_ai_credentials` (§4) cascades on user delete and
-   reuses `encryptSecret`/`decryptSecret` from `@marinoscar/platform-api/core` completely
-   unchanged — a new table and a new foreign key, zero new cryptography.
+   when they do. The platform's `user_ai_keys` (§4.2) cascades on user delete and
+   is encrypted by the platform's own secret cipher — a new foreign key,
+   zero new cryptography. (The first implementation, #47, kept the key in this
+   application's own `user_ai_credentials` table; #474 moved the rows and
+   #477 dropped the table.)
 
 Two further postures run through every section below, worth stating once:
 
@@ -141,9 +146,9 @@ Two further postures run through every section below, worth stating once:
   weaker one — it puts the user's own provider relationship in the loop
   instead of a deployment-wide one they never agreed to. §9 states exactly
   what that does and does not let an administrator see.
-- **Nothing here is a new mechanism.** The provider registry (§2) copies
-  `TranscriptionProviderRegistry`'s shape (`docs/specs/transcription.md` §2.1)
-  down to the same required-no-op-`deleteRemote`-style discipline; prompt
+- **Nothing here is a new mechanism.** The provider layer (§2) was first
+  modelled on `TranscriptionProviderRegistry` (`docs/specs/transcription.md` §2.1)
+  and is now the platform AI slice behind the `KvoxAi` port; prompt
   assembly (§3) is pure, living beside `apps/api/src/transcripts/editing/`'s
   reducers in spirit; the five tables (§4) reuse the exact versioning and
   FK-direction discipline `transcripts` established; the export registry (§8)
@@ -259,60 +264,21 @@ what `profile.maxRuntimeMs` (§2) is sized against; this is holding a slot for
 the length of the *actual* computation, not for an external wait, so it is
 not the anti-pattern §11 exists to name.
 
-## 2. The AI provider contract
+## 2. The AI call contract
 
-> **Since issue #475 (epic #472) `KvoxAi` is the only call path.** Code under `apps/api/src` outside `ai-port/` and `platform/ai/` reaches a model through `KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`) and imports no platform AI type. `KvoxAi` is implemented over the platform `AiService.forUser`, which resolves the user's key from the platform `user_ai_keys`; a caller never sees a key. Sections 2.1 to 2.5 describe the previous `AiProvider` stack in `apps/api/src/ai/`, kept only until #477 deletes it; the contract callers use today is "`KvoxAi` call path (issue #475)" under §2.8.
+> **The AI layer is the platform's.** Since issues #473 to #477 (epic #472) this repository has no `AiProvider` interface, provider registry, hand-written OpenAI client or per-user credentials table: `apps/api/src/ai/` and `user_ai_credentials` were deleted by #477. Code under `apps/api/src` outside `ai-port/` and `platform/ai/` reaches a model through `KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`) and imports no platform AI type. `KvoxAi` is implemented over the platform `AiService.forUser`, which resolves the user's key from the platform `user_ai_keys`; a caller never sees a key. Sections 2.1 to 2.7 keep their numbers because other documents cite them, and each says what replaced its original text. The contract callers use today is "`KvoxAi` call path (issue #475)" under §2.8.
 
-### 2.1 `AiProvider`
+### 2.1 What replaced `AiProvider`
 
-`apps/api/src/ai/providers/ai-provider.interface.ts`, the same shape
-`TranscriptionProvider` already establishes (`docs/specs/transcription.md`
-§2.1) — one small interface, one settings schema, a registry, and every
-vendor-specific call confined behind `apps/api/src/ai/providers/`:
+The first design (#47) put one small interface, a settings schema and a registry between the notes pipeline and a vendor, the same shape `TranscriptionProvider` establishes (`docs/specs/transcription.md` §2.1). The platform AI slice (`@marinoscar/platform-api/ai`) now owns that layer: the provider contract and its OpenAI implementation, the `ai_models` catalogue, per-user keys (`user_ai_keys`), key policy, usage rows (`ai_usage_events`), the admin and user pages, and `/api/admin/ai/*` and `/api/ai/*`. This application owns only the port it calls (`KvoxAi`), its task routing and its limits (§2.8).
 
-```ts
-interface AiModelDescriptor {
-  id: string;              // the provider's own model id, e.g. "gpt-4o"
-  label: string;
-  contextWindowTokens: number;
-  maxOutputTokens: number;
-}
+What did not change is the shape of a call: every provider call **streams or is a single bounded request** whose answer is the work, so there is no `submit`/`getStatus`/`fetchResult` split the way `TranscriptionProvider` has one (transcription's split exists because AssemblyAI runs asynchronously on the provider's infrastructure and has to be polled). Content comes from `KvoxAi.streamText` (notes, name check), `generateStructured` (graph extraction, adjudication, digest), `chat` (the Ask tool loop) and `embed` (search, graph resolution); see the table under §2.8.
 
-interface AiProviderCapabilities {
-  models: AiModelDescriptor[];
-  streaming: true;          // every registered provider must stream; there is no non-streaming path
-}
-```
-
-and implements:
-
-| Method | Returns | Notes |
-|---|---|---|
-| `testConnection(ctx)` | `{ ok, latencyMs, detail }` | `ctx.apiKey` may be a **saved, decrypted** key or one the user is currently typing and has not saved — never persists anything, never queues a job, following `TranscriptionProvider.testConnection`'s own contract exactly |
-| `countTokens(text, model)` | `number` | Synchronous. Used both by §3's budget check and to report `promptTokens` on the generation row once known |
-| `generate(ctx, { model, systemPrompt, userContent, maxOutputTokens })` | `AsyncIterable<AiGenerateEvent>` | `ctx.apiKey` is the calling user's own decrypted key, resolved just before this call and never written anywhere but into this one outbound HTTPS request (§9) |
-| `generateStructured?<T>(ctx, request)` | `Promise<AiStructuredResult<T>>` | **Optional** — "presence is the declaration," per §2.6 below. One call, one schema-shaped answer, not a stream the caller assembles itself |
-| `chat?(ctx, request)` | `AsyncIterable<AiChatEvent>` | **Optional** — "presence is the declaration," per §2.7 below. A multi-turn, tool-calling chat turn, for the connected-knowledge Ask agent |
-
-```ts
-type AiGenerateEvent =
-  | { kind: 'delta'; text: string }
-  | { kind: 'done'; finishReason: 'stop' | 'length' | 'content_filter'; usage: { promptTokens: number; completionTokens: number } };
-```
-
-There is no `submit`/`getStatus`/`fetchResult` split the way
-`TranscriptionProvider` has one: transcription's split exists because
-AssemblyAI's job runs asynchronously on the provider's own infrastructure and
-has to be polled; a chat completion is one request whose response **is** the
-work, streamed back over the same connection. `generate` is therefore the
-provider contract's only content-producing method, and it is required to
-stream — a provider implementation that can only return a complete response
-in one shot is not eligible for registration, because there would be nothing
-for §5's durable buffer to append incrementally.
+No source file in `apps/api/src` or `apps/cli/src` names a vendor host (`api.openai.com`, `api.anthropic.com`, `generativelanguage.googleapis.com`); `apps/api/test/ai/no-vendor-host.spec.ts` fails the build if one does, and the platform `ai-no-sdk-leak` suite does the same for vendor SDK imports.
 
 ### 2.2 Error taxonomy
 
-`apps/api/src/ai/providers/errors.ts`. Three named classes, plus a default,
+`apps/api/src/ai-port/ai-errors.ts` (the job-side classes; `mapAiError` in `ai-port/kvox-ai-errors.ts` produces them from the platform's `AiError`, table under §2.8). Three named classes, plus a default,
 following the identical "positively identify, otherwise assume ordinary"
 posture `classifyRateLimit` takes for the queue generally
 (`docs/specs/job-queue.md` §5.2, restated for transcription in
@@ -322,7 +288,7 @@ posture `classifyRateLimit` takes for the queue generally
 |---|---|---|---|
 | `AiAuthError` | The key is invalid, revoked, or lacks the needed scope; the provider returns `401`/`403` | `failed` | **No** — the job returns normally, having correctly diagnosed a permanent condition, the identical posture `docs/specs/transcription.md` §1.6 gives `ProviderAuthError` |
 | `AiRefusalError` | The provider declines the request itself — a content-policy refusal, a model that rejects the input outright, an over-budget input the job's own re-check (§3) catches at run time despite the request-time check passing | `failed` | **No** — same reasoning; retrying an identical refused request gets the identical refusal |
-| `RateLimitError` (429) | The provider's own rate limit, reused verbatim from `@marinoscar/platform-api/jobs` — the same class `docs/specs/transcription.md` §1.6 shares across its three provider-calling handlers | `notes.status` **unchanged** — invisible backoff, not a failure | **No** — deferred through the throttle key in §2.4, exactly as `docs/specs/job-queue.md` §5.3 describes for the queue generally |
+| `RateLimitError` (429) | The provider's own rate limit, reused verbatim from `@marinoscar/platform-api/jobs` — the same class `docs/specs/transcription.md` §1.6 shares across its three provider-calling handlers | `notes.status` **unchanged** — invisible backoff, not a failure | **No** — deferred through the throttle key in §2.3, exactly as `docs/specs/job-queue.md` §5.3 describes for the queue generally |
 | `AiStructuredOutputError` (`reason: 'truncated' \| 'invalid_json'`, issue #358) | `generateStructured` only: `finish_reason: 'length'` (the answer was cut off mid-object), or a `stop` finish whose accumulated content does not `JSON.parse` (a gateway ignoring `response_format`) | Caller-defined — a note has no structured-output path today; §6/§7 of `docs/specs/ontology.md` treat it as a failed proposal | **No** — terminal, like `AiAuthError`/`AiRefusalError` above: re-sending the identical prompt to the identical model is not expected to change a truncation, since `maxOutputTokens` is policy, not chance |
 | Everything else (default) | A network error, an unexpected exception mid-stream, a `5xx`, a database write failing partway through a flush | `failed` | **Yes** — and because `profile.maxAttempts: 1` (§1.3, decision 3), this is the note's **only** attempt: there is no second automatic try the way an ordinary retryable failure gets elsewhere in this codebase |
 
@@ -372,361 +338,50 @@ Two branches the dialog must handle rather than assume away: a template that
 no longer exists blocks confirmation until one is chosen, and a server `409
 template_required` is rendered **inside the still-open dialog**, because it
 is a question the user can answer without losing the rest of their form. The
-model list is `GET /api/ai/config`'s, the same probe every other AI surface
+model list is `GET /api/ai-tasks/config`'s, the same probe every other AI surface
 gates on; a model the deployment no longer permits is named in helper text
 and replaced, never silently dropped. See
 [`docs/specs/ux-refresh.md`](ux-refresh.md) §4.
 
 ### 2.3 The rate-limit throttle key is per user, not per deployment
 
-`ProviderThrottleService.registerProviderKey(type, `ai-provider:${userId}`)`
-— the exact inverse of transcription's single shared
+`aiProviderThrottleKey(userId)` (`apps/api/src/notes/job-types.ts`, `ai-provider:${userId}`) is registered with `ProviderThrottleService.registerProviderKey(type, key)` by every AI job handler immediately before its first model call — the exact inverse of transcription's single shared
 `'transcription-provider'` key (`docs/specs/transcription.md` §1.5.2–4). There,
 every user's transcription shares **one** AssemblyAI account and its **one**
 rate-limit bucket, so one throttle key correctly protects it. Here, every user
-brings **their own** OpenAI account with their **own** rate limit, so a 429
+brings **their own** provider account with their **own** rate limit, so a 429
 against user A's key must defer only user A's queued generations — deferring
 everyone's on one shared key would make a single busy user's account throttle
 every other user's notes, which is not how the accounts actually relate to
-each other at all.
+each other at all. `apps/api/test/ai/kvox-ai-jobs.spec.ts` asserts that every AI job type registers the key before its first call.
 
-### 2.4 OpenAI as the reference implementation
+### 2.4 The provider is the platform's
 
-`apps/api/src/ai/providers/openai.provider.ts`, on Node's built-in `fetch`
-(injected, mockable in tests), matching every other outbound HTTP client in
-this codebase (`docs/specs/transcription.md` §2.7 makes the identical choice
-for AssemblyAI). Chat Completions with `stream: true`, read as
-server-sent-event chunks; `401` → `AiAuthError`; a `content_filter`
-`finish_reason` or a `400` naming a policy violation → `AiRefusalError`;
-`429` → `RateLimitError`, honouring `Retry-After` when present through the
-same `parseRetryAfterMs` helper `docs/specs/job-queue.md` §5.2 already uses;
-anything else defaults to the fourth row of §2.2's table.
+The vendor client (Chat Completions at first, now the platform's `AiService`) is the platform's, not this repository's: the hand-written `fetch` client of #47 (`ai/providers/openai.provider.ts`) was deleted by #477. Failure translation is the platform's `AiError` code mapped by `mapAiError` (table under §2.8): a rejected key is `AiAuthError` (no attempt spent), a content-filter finish is `AiRefusedError`, a 429 is `RateLimitError` carrying the provider's retry-after (the queue defers without charging an attempt, `docs/specs/job-queue.md` §5.2), and anything else defaults to the fourth row of §2.2's table.
 
-**⚠ Exactly like `docs/specs/transcription.md` §2.7's own AssemblyAI caveat:**
-the specific endpoint shape, streaming event format, and error-body fields
-documented here are OpenAI's Chat Completions API as of this document's
-writing (2026-09) and MUST be re-checked against OpenAI's current
-documentation before this epic is declared final — the exact same posture,
-for the exact same reason (a vendor API's shape is precisely the kind of fact
-that drifts between a spec being written and the code that implements it
-shipping).
+The caveat the original text carried still applies in spirit: a vendor API's shape drifts, so the platform package is where it is re-checked, and this application depends on it only through `KvoxAi`.
 
-### 2.5 The active-provider axis, live model discovery, and the widened `allowedModels` entry (#78; the five-rank resolution chain and derived defaults are #97)
+### 2.5 Models, discovery and limits (originally #78 and #97)
 
-> **Platform adoption (issue #473, epic #472).** The `ai` namespace is now the platform AI slice's (`@marinoscar/platform-api/ai`); the application extends it (§2.8) instead of declaring its own. The enabled-model list is the platform's `ai_models` table, so the `allowedModels` entry form, the five-rank chain and `providers.openai.allowedModels` described below are the previous stack, kept for history until the data move (#474) and the caller rewiring (#475). In this spec `GET /api/ai/config` means the application's probe, now `GET /api/ai-tasks/config`; `GET /api/ai/config` is the platform's. See §2.8 "Platform AI slice".
+The question #78 and #97 answered was *"how does a deployment adopt a model this application does not already know about, without waiting for a release?"* The platform answers it, and the application's earlier machinery for it is gone:
 
-Three changes shipped together because they answer one question — *"how does
-a deployment adopt a model this application does not already know about,
-without waiting for a release?"* — from three different angles.
-
-**`ai.provider: AiProviderId | null`.** Before #78, every consumer of the AI
-provider framework resolved the single registered provider by a hardcoded
-`'openai'` literal, because there was exactly one and nobody had to ask.
-That is now a persisted, nullable field on the `ai` namespace, resolved
-through `AiProviderRegistry`, and **every hardcoded `'openai'` consumer
-literal is gone** — `AiConfigService`, `AiSettingsService`,
-`AiModelDiscoveryService` and the generation path all call
-`this.registry.get(policy.provider)`. Adding a second OpenAI-API-compatible
-vendor now costs one id in `AI_PROVIDER_IDS`, one block in
-`aiProvidersSchema`, and one provider class — no consumer edit, in the same
-"one registry entry" shape the "add a job type" ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and "add a
-notification" ([`add-notification` skill](../../.claude/skills/add-notification/SKILL.md)) recipes already establish elsewhere in this codebase.
-
-It is **nullable, not optional**, field for field with
-`ai-settings.schema.ts`'s own reasoning and `systemTranscriptionSchema
-.provider`'s precedent: "nobody has chosen a vendor" is a *persisted fact*
-the settings page renders, not an absent key three different situations
-(unset, dropped by a partial merge, or a schema a rollback no longer models)
-would otherwise all collapse into. It defaults to `'openai'` rather than
-`null`, unlike transcription's own provider field — the divergence is
-deliberate: `enabled: false` plus an empty `allowedModels` already make a
-fresh deployment inert twice over, so a `null` default would buy no extra
-safety and would cost an administrator a second decision ("which vendor?")
-to turn on a feature this build ships exactly one implementation of.
-Transcription defaults to `null` because choosing AssemblyAI commits a
-deployment to a specific named company; choosing "the OpenAI-compatible
-provider" here commits it to nothing until a model is permitted and a user
-pastes their own key. It is still a separate axis from `enabled`: an
-operator can switch AI off for an incident without losing the vendor choice,
-and switch vendors without touching the master switch.
-
-**`listModels` and `capabilities.modelDiscovery` on `AiProvider`.** A new
-optional method, present exactly when `capabilities.modelDiscovery` is
-`true` — "presence is the declaration," the identical rule
-`JobHandler.nodeResultSchema`/`persistNodeResult` already follows in this
-codebase, except that here one of the two halves is a boolean a caller reads
-*before* spending a request, so `AiProviderRegistry.register` enforces the
-agreement at **boot** rather than leaving it to the type system alone — the
-same one-line check `TranscriptionProviderRegistry` makes for
-`capabilities.cancel`, and the same argument: an advertised capability with
-no method is a `TypeError` in the path *least likely to have been
-exercised* (an administrator pressing "load models from the provider" on a
-page opened once a quarter), and a boot failure naming the provider is a far
-better place to meet that bug than a 500 an admin reaches once a quarter.
-`OpenAiProvider.listModels` implements it against `GET {baseUrl}/models` —
-the same route `testConnection` already probes, read here for its *content*
-instead of its status code — filtered to plausible chat models by a short,
-literal substring list (`NON_CHAT_MODEL_MARKERS`) that is a convenience over
-an unstructured vendor list and *never* a gate: the filter can only hide a
-row from the discovery dropdown, and `aiAllowedModelSchema` accepts any
-model id typed by hand regardless of whether discovery would have shown it.
-
-`listModels` throws on refusal, unlike `testConnection`, because a model
-list has no partial form — the caller decides whether a refusal is a 200
-diagnosis or a real failure, not the provider.
-`AiModelDiscoveryService.discoverModels` is that caller, and is a
-**service of its own**, not a method on `AiSettingsService` — a real
-circular dependency, not a stylistic preference:
-`UserAiCredentialsService` already injects `AiSettingsService` to read the
-policy, so a `discoverModels` method needing the *caller's* credential would
-close the loop and force a `forwardRef` on both sides. `AiConfigService` is
-the standing precedent for solving this the same way: a leaf composing the
-policy, the registry and the credential service without any of them knowing
-about it.
-
-**Why discovery spends the *calling administrator's own* key, and not a
-deployment key.** There is no deployment key to spend — §9's strict
-bring-your-own-key decision means this application stores no AI credential
-of any kind, for any purpose, ever. Adding one *just for discovery* was
-considered and rejected: it would be the exact deployment-wide fallback
-credential §9 exists to rule out, introduced through a side door reachable
-only by an administrator, which does not make the privacy answer any less
-institutional than doing it through the main door would. So discovery
-authenticates as the administrator making the request, exactly as `POST
-/api/ai-credentials/test` does — with the stated consequence that an
-administrator with no key of their own gets a `409` (`ai_key_missing`), not
-an empty list, because "you have not set up a key" and "the provider offers
-nothing" are different sentences with different fixes; and that the model
-list returned is the one **that key** can reach (project-scoped, on
-OpenAI), so two administrators can legitimately see different lists — the
-policy saved from either list is checked against **neither** at generation
-time, only against each user's own key, which is the only authority that
-ever actually matters. Gated on `system_settings:write`, not `:read`, for
-the same reason `POST /api/ai-settings/test` is: it is side-effecting (it
-spends a real, billable vendor call), and looking at settings is not
-probing a third party.
-
-**Why `allowedModels` widened from `string[]` to an array of
-`{ id, label?, contextWindowTokens?, maxOutputTokens? }`, instead of a bare
-id plus a sibling metadata map.** Before #78, every entry was resolved
-against this build's own four-model `MODELS` catalogue to find the context
-window §3.3's budget needs — which made the deployment's model policy a
-**subset** of an array compiled into the application: a model the vendor
-shipped last week could be typed into `allowedModels` and saved, but never
-budgeted and therefore never offered to anyone, and adopting it required a
-release of this application. It also made discovery nearly pointless: there
-is no use listing the sixty models a key can reach if fifty-six of them can
-never be permitted. A **sibling map** keyed by model id (`{ "gpt-4o": {
-contextWindowTokens: … } }`, alongside the existing `allowedModels: string[]`)
-was the other shape considered and rejected: it is two structures that can
-name a different set of models — an id present in one array and absent from
-the other, or present in both with a stale entry nobody removed when the
-model was un-permitted — with no schema-level way to say that is wrong. A
-single array where each entry *is* both a permission and (optionally) its
-own budget numbers cannot disagree with itself about which models exist.
-
-**Two smaller consequences of #97 worth stating explicitly.** First, the
-chat-model filter `GET /api/ai-settings/models` applies
-(`NON_CHAT_MODEL_MARKERS`, a short literal substring list) can now be
-skipped with `?includeAll=true`: before #97 the filter only hid a row from
-the discovery dropdown, since an administrator could always type a filtered
-id by hand and the save path never consulted it — but "type it by hand" was
-exactly the "you must already know the answer to ask the question" state
-#97 removes everywhere else, so the escape hatch had to exist too. Second,
-`aiProvidersSchema`'s `allowedModels` cap rose from 50 to 200
-(`ai-settings.schema.ts`): it bounds the settings blob stored in the
-`global` row's JSONB, never how many models may be permitted, and 50 was an
-unreachable ceiling back when permitting an unrecognised id meant
-hand-typing two numbers per entry. Now that one click does it, a vendor
-list of a hundred-odd dated snapshots is an ordinary thing to select most
-of; 200 stays a bound on a mistake (a script writing the same id in a
-loop), which is the only thing the cap was ever for.
-
-**Resolution precedence, in one function.** `ai-model-resolution.ts`'s
-`resolveAllowedModel(entry, knowledge)` is the *only* place that answers
-"what does this deployment actually know about the model named by this
-`allowedModels` entry," because — since #97 — **three** callers ask for
-different reasons and must never be allowed to disagree: `AiSettingsService`
-to **refuse** a save it cannot honour, `AiConfigService` to **publish** a
-model to a picker, and — new in #97 — `OpenAiProvider.listModels` itself, so
-the numbers shown in the "load models from the provider" dialog are the
-exact numbers the save path will later compute for the same id. A second
-implementation anywhere in that set could answer differently with no error
-anywhere to say so, the same argument `materialize()` makes about replaying
-transcript versions through the live reducers (`docs/specs/transcription.md`
-§4.4).
-
-The precedence is applied **per number**, not per model, so an entry
-supplying only `maxOutputTokens` takes its context window from whichever
-rank below can answer next:
-
-1. **The entry's own numbers win (`explicit`)**, including over a build
-   descriptor for the same id, so a deployment can correct a stale catalogue
-   number without a release. Nothing #97 adds outranks this.
-2. **An exact hit in the build catalogue (`catalogue`)** — `MODELS` in the
-   provider, verified numbers for the models this application ships knowing
-   about.
-3. **The provider's own family derivation (`derived`, #97)** —
-   `AiProvider.deriveModelDescriptor(id)` places an unrecognised id in a
-   *known family*: `gpt-5.4-mini-2026-03-17` is a dated snapshot of
-   `gpt-5.4-mini` and takes that model's whole window, never a reduced one.
-   Real vendor lists are mostly dated snapshots of models this build already
-   knows, so this rank is what makes most of a discovered catalogue
-   permittable with one click instead of two hand-typed numbers per entry.
-4. **The provider's conservative floor (`default`, #97)** —
-   `AiProviderCapabilities.defaultModelLimits`, the smallest context window
-   and output ceiling a chat model from this vendor is known to have. See
-   below for why a floor is allowed to exist at all.
-5. **`null`**, only when none of the above can answer — since #97 this means
-   the policy names a provider this build does not implement (or a rollback
-   across the addition of one), or a provider that has deliberately declined
-   to declare a floor. It is *not* "this build has never heard of the
-   model" any more; that case now resolves at rank 3 or 4.
-
-Every resolution reports the **weakest** rank either number came from
-(`AiResolvedModel.source`) plus `derivedFrom` (non-null exactly when the
-weakest rank is `derived`), so a client can say "this build verified these
-numbers" apart from "we assumed the `gpt-5.4-mini` family" apart from "we
-used this vendor's conservative floor" — under-claiming what this
-deployment knows costs an administrator nothing, and over-claiming it costs
-them the chance to type the real number. `GET /api/ai/config` and
-`GET /api/ai-settings/models` both publish `source`/`derivedFrom` on every
-model for exactly this reason.
-
-The same function is also called from the request-time budget check
-(`NoteGenerationRequestService.assertPromptFits`) and from `note.generate`
-itself, closing a gap #78 introduced and a same-epic fix patched
-immediately: `assertPromptFits` originally looked a model up in the *build*
-catalogue directly and returned silently (i.e., un-budgeted, not refused)
-when the id was absent — which, once an entry can carry its own numbers, is
-precisely the model an administrator just adopted from the discovery list.
-Falling through meant an over-long prompt was not refused at request time
-with numbers in a `400`, but minutes later as a `failed` note with nothing
-to look at. All call sites now agree by construction.
-
-`deriveModelDescriptor` **must be pure and synchronous**, the identical
-requirement `AiProvider.countTokens` already carries and for the identical
-reason: resolution runs inside the §3.3 budget check in `POST /api/notes`'s
-own request handler and inside the `note.generate` job, so a network call or
-a read of mutable state there would put a round trip in front of every note
-creation and let the request-time and job-time answers disagree for reasons
-that have nothing to do with the model. And it belongs on the **provider**,
-never on `AiConfigService`/`AiSettingsService`: which id shapes are dated
-snapshots and which families exist is *vendor knowledge*, and a service that
-learned OpenAI's snapshot-suffix conventions would have to learn a different
-vendor's all over again for the next provider registered.
-
-**Why an unknown model's context window used to be asked for, never
-guessed — and why #97 supersedes that, without contradicting it.** Before
-#97, §3.3's rule against guessing a context window — "guessing high submits
-a prompt the vendor rejects after billing the user, and guessing low
-refuses work that would have fit" — was read as forbidding **both**
-directions equally, and `resolveAllowedModel` returned `null` for any id
-absent from the build catalogue with no numbers of its own. #97's argument
-is that the two directions are **not symmetric**, and that this is not a
-new observation but the thing the old sentence already said, read
-correctly: a window *below* the truth refuses a prompt that would have
-fit — **visible and correctable**, because the `400` names the model and an
-administrator can type a per-entry override that outranks every rank in the
-chain above. A window *above* the truth submits a prompt the vendor rejects
-**after billing the user** — invisible until the vendor's own error arrives,
-and by then unrecoverable. Only the high side is the mistake §3.3's
-"guessing" warning was actually written to prevent. That asymmetry is why
-rank 4's conservative floor is allowed to exist, and why it must stay
-exactly that — conservative, re-verified with the numbers in `MODELS`, never
-a plausible-looking estimate of a real model's size (see
-`OPENAI_DEFAULT_MODEL_LIMITS`'s own comment for the verification
-obligation).
-
-The refusal path is **kept**, not deleted — `missingModelNumbers` still
-names the fields a `400` should call out on save, and `GET /api/ai/config`
-still quietly omits a model nothing can budget for — but since #97 it fires
-only for the genuinely unanswerable case (rank 5 above), not for every model
-shipped since this build was cut. This is still the same "refuse with a
-number, never silently degrade" discipline §3.3 applies to an over-budget
-prompt; what changed is how often an id needs a human-typed number to clear
-it at all.
-
-**Why the legacy bare-string form must keep parsing, forever.** Every
-deployment that had already saved an AI policy before #78 has
-`["gpt-4o", "gpt-4o-mini"]` sitting in the `global` row's JSONB. §7.10-style
-schema evolution in this codebase is additive by convention, but the reason
-this particular case is load-bearing rather than merely tidy is
-`SystemSettingsService.readKnownSettings`'s degrade-to-defaults behaviour: a
-namespace that fails to parse is not a migration failure or a `500`, it is
-a **silent** substitution of `DEFAULT_SYSTEM_SETTINGS` — no log line an
-administrator would find, no error, just `allowedModels: []` and
-`enabled: false` from then on. A schema that rejected the string form would
-not announce itself; it would quietly reset every existing deployment's
-model policy on the next read, and the first anyone would know is users
-reporting that AI generation had stopped working with no explanation
-anywhere. So `aiAllowedModelEntrySchema` is a union with a normalising
-transform (`typeof entry === 'string' ? { id: entry } : entry`), not a
-widened object type with a one-time migration — there is no migration, and
-the old shape is accepted for as long as this namespace exists. Normalising
-at the schema boundary, rather than leaving every downstream reader to
-branch on `typeof entry === 'string'`, is the same "one implementation, not
-one per call site" argument the rest of this section makes about
-`resolveAllowedModel`: a union type callers must narrow is a `typeof` check
-that one of them, eventually, gets wrong.
-
-**The no-secret compile-time proof now covers three levels, not two.**
-`ai-settings.schema.ts`'s `CarriesNoSecret` check — the same technique
-`transcription-settings.schema.ts` uses to prove no field named `apiKey` (or
-its aliases) exists on the namespace — now also checks
-`AiAllowedModel`, the per-entry object type #78 introduced. This is not a
-formality: once an `allowedModels` entry became an object with its own
-optional fields, "this one model lives on a different account, so give it
-its own key" became a plausible-sounding one-line change for someone to
-make, and it would be exactly the deployment-wide fallback credential §9
-rejects, hidden two levels deeper in a settings blob every
-`system_settings:read` holder can already read wholesale.
+- **The enabled-model list is the platform's `ai_models` table.** An administrator adds a model, discovers models from the provider, tests a provider and sets per-model limits on the platform's AI and AI models pages (`/admin/settings/ai`, `/admin/settings/ai/models`; permission `ai_config:read`, writes `ai_config:write`). The `allowedModels` entry type, `providers.openai.allowedModels`, the `AiProvider.listModels` discovery call, the model catalogue and the five-rank resolution chain (`explicit`, `catalogue`, `derived`, `default`) no longer exist. A row with no numbers floors to 128,000 context and 16,384 output (§2.8 `readiness`), and the probe reports it with `source: 'default'`.
+- **Capability flags are per row.** `structuredOutput` and `toolCalling` come from `ai_models.capabilities` (`structured_output`, `tools`), not from a descriptor or a family table.
+- **The application's own ceilings stay.** `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort`, `maxDocumentBytes`, `defaultModel`, `taskModels` and `graphEnabled` are fields the application adds to the platform `ai` namespace (§2.8 "Platform AI slice") and edits in `Sections` of the platform AI page. They carry the bounds #97 set: `maxInputTokens` 256 to 2,000,000, `maxOutputTokens` 64 to 200,000, `requestTimeoutMs` 1,000 to 3,600,000, `maxDocumentBytes` 65,536 to 268,435,456.
+- **Provider tests and model refresh are the platform's.** They are routes under `/api/admin/ai/*` (reference at `/api/docs`), gated on `ai_config:write`, and no response echoes a key.
+- **Token budgets are unchanged.** §3.3's rule against guessing a context window still holds: an input is refused with numbers when it does not fit, using the effective figures `GET /api/ai-tasks/config` publishes per model.
 
 ### 2.6 `generateStructured` and the `structuredOutput` capability flag (issue #358)
-
-> **Call path since #475.** A structured call is `KvoxAi.generateStructured({ userId, feature, jobId, system, user, schemaName, schema, jsonSchema?, maxOutputTokens? })` (§2.8 "`KvoxAi` call path"). `schema` is the caller's Zod validator and is always applied to the parsed value; `jsonSchema`, when given, is the strict schema the vendor is held to (the per-run schema of `graph/extraction/output-schema.ts`, the adjudication and digest schemas). The `AiProvider.generateStructured` method, `AiStructuredRequest` and the OpenAI streaming core below are the retired path (removed by #477); the strict-subset rules and the `AiStructuredOutputError` taxonomy still hold. A truncated answer is `AiStructuredOutputError('truncated')`, a schema mismatch `'invalid_json'`, a refusal `AiRefusedError`; all are produced by `PlatformKvoxAi` and `mapAiError`, not by a provider. The `structuredOutput` capability is read from the enabled `ai_models` row (`capabilities.structured_output`) by `KvoxAi.readiness`, not from `AiModelDescriptor`.
 
 Connected-knowledge extraction (`docs/specs/ontology.md` §6), resolution
 adjudication (§7) and the entity digest (§9.2) all need one
 provider call that returns a **validated, schema-shaped** answer, not free
-text the caller hopes parses. `generate`'s `responseFormat: 'json'` (OpenAI's
-`json_object` mode) only guarantees syntactically valid JSON — the caller
-gets whatever keys the model felt like — so `AiProvider` gains a second,
-**optional** content-producing method beside `generate`:
+text the caller hopes parses. A JSON-object mode only guarantees syntactically
+valid JSON — the caller gets whatever keys the model felt like — so the port has a
+dedicated method, `KvoxAi.generateStructured({ userId, feature, jobId, system, user, schemaName, schema, jsonSchema?, maxOutputTokens? })` (§2.8 "`KvoxAi` call path"). `schema` is the caller's Zod validator and is always applied to the parsed value; `jsonSchema`, when given, is the strict schema the vendor is held to (the per-run schema of `graph/extraction/output-schema.ts`, the adjudication and digest schemas). The method returns `{ value, model, usage }` and `value` is the Zod-validated result.
 
-```ts
-export type JsonSchema = Record<string, unknown>;
-
-interface AiStructuredRequest {
-  model: string;
-  systemPrompt: string;
-  userContent: string;
-  schema: JsonSchema;          // root must be a strict object schema
-  schemaName: string;          // /^[a-zA-Z0-9_-]{1,64}$/
-  maxOutputTokens: number;
-  timeoutMs?: number;
-  reasoningEffort?: AiReasoningEffort;
-}
-interface AiStructuredResult<T = unknown> {
-  value: unknown;              // parsed JSON, NOT Zod-validated — the caller validates
-  usage: AiUsage;
-  finishReason: AiFinishReason; // always 'stop' — every other ending throws
-}
-
-generateStructured?<T = unknown>(ctx, request: AiStructuredRequest): Promise<AiStructuredResult<T>>;
-```
-
-It is optional for the identical "presence is the declaration" reason
-§2.5 gives `listModels`/`capabilities.modelDiscovery`: a provider without
-strict-schema decoding can still register, and a **registry boot check**
-(`AiProviderRegistry.register`) keeps the advertisement honest — if any
-model or `defaultModelFeatures` declares `structuredOutput: true` while
-`generateStructured` is not a function, registration throws at boot, naming
-the provider, the same posture the existing `modelDiscovery` check already
-takes.
-
-**The schema must be OpenAI's strict subset**, checked by
-`apps/api/src/ai/structured/strict-json-schema.ts`'s
+**The schema must be the vendor's strict subset**, checked by
+`apps/api/src/ai-port/strict-json-schema.ts`'s
 `assertStrictJsonSchema` before any network call — a violation is a
 programming error and throws a plain `Error` naming the JSON path, not a
 provider error. In brief: the root is `type: 'object'`; every object sets
@@ -735,200 +390,50 @@ keys; an optional value is spelled nullable (`.nullable()`), never
 `.optional()` — a Zod schema using `.optional()` fails the check by design;
 only `type`, `properties`, `required`, `additionalProperties`, `items`,
 `enum`, `anyOf`, `description` and an internal `$defs`/`$ref` are allowed;
-and the schema is capped at 10 levels deep and 5000 properties, OpenAI's own
+and the schema is capped at 10 levels deep and 5000 properties, the vendor's
 documented limits. `zodToStrictJsonSchema` runs `z.toJSONSchema` and then
 the same assertion, so a caller writes one Zod schema and gets both the
 wire schema and its own runtime validator from it. See that file for the
-exact rules and `apps/api/src/ai/structured/strict-json-schema.spec.ts` for
-every rejection case.
+exact rules and `apps/api/src/ai-port/` specs for every rejection case.
 
-**On OpenAI**, `generateStructured` reuses the same streaming core `generate`
-does — `apps/api/src/ai/providers/openai.provider.ts`'s private
-`streamChatCompletion` is extracted from `generate()` without changing its
-behaviour, and both methods consume it — with `response_format: { type:
-'json_schema', json_schema: { name: schemaName, strict: true, schema } }`
-and `stream: true`. **End-of-stream decisions, in this order**: no finish
-reason at all → a plain, retryable `Error`, exactly like `generate()`; a
-non-empty `delta.refusal` or a `content_filter` finish → `AiRefusalError`
-(the message quotes at most 300 chars of the refusal); `finish_reason:
-'length'` → `AiStructuredOutputError` with `reason: 'truncated'`; content
-that fails `JSON.parse` → `AiStructuredOutputError` with `reason:
-'invalid_json'` (a gateway ignoring `response_format` is the ordinary cause);
-otherwise the parsed value is returned with `finishReason: 'stop'`. A `429`
-still maps to `RateLimitError`, `401`/`403` to `AiAuthError`, `400` to
-`AiInputError`, unchanged from `generate()`.
+**End-of-call outcomes**, produced by `PlatformKvoxAi` and `mapAiError`: a truncated answer is `AiStructuredOutputError('truncated')`, a schema mismatch or unparseable answer `'invalid_json'`, a refusal or `content_filter` finish `AiRefusedError` (the message quotes at most 300 characters of the refusal), a 429 `RateLimitError`, a rejected key `AiAuthError`, a 400 `AiInputError`. Only the answer that parses and validates is returned.
 
-**The `structuredOutput` capability flag** is a `boolean` on
-`AiModelDescriptor` — required, for the identical reason
-`contextWindowTokens`/`maxOutputTokens` are required: "unknown" has no safe
-call-site interpretation. `AiProviderCapabilities` gains an optional
-`defaultModelFeatures?: AiModelFeatureFlags` (today just
-`{ structuredOutput: boolean }`, extended by issue #359 with `toolCalling`),
-the conservative floor for an id the provider cannot place, sitting beside
-`defaultModelLimits`; absent means an unplaceable id resolves the flag to
-`false`. It resolves through the *same* rank chain §2.5 established for the
-two numbers, but capability flags travel their own axis and — unlike the
-numbers — are never overridden by an entry's own typed values: an exact
-catalogue hit takes the catalogue's flag, a derived id takes its family's
-flag, and everything else falls back to `defaultModelFeatures` (or `false`
-with none declared). There is no per-model admin override of a capability
-flag in v1. `GET /api/ai/config` and the admin catalogue in `GET
-/api/ai-settings` both publish it per model — see the `### AI Settings`
-and `GET /ai/config` sections of [`docs/API.md`](../API.md).
+**The `structuredOutput` capability flag** is a boolean on the `ai_models` row (`capabilities.structured_output`), required for the identical reason the two numbers are: "unknown" has no safe call-site interpretation, so a row without the flag is `false`. `KvoxAi.readiness` reads it and the task check of §2.8 refuses a task whose model lacks it. There is no per-model override of a capability flag in the application. `GET /api/ai-tasks/config` and `GET /api/ai-tasks/settings` publish it per model — see "AI Tasks" in [`docs/API.md`](../API.md).
 
 ### 2.7 `chat` and the `toolCalling` capability flag (issue #359)
-
-> **Call path since #475.** `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` is declared on the port (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. `PlatformKvoxAi.chat` is not implemented yet: it throws until the Ask tool loop is ported by #476, and `ask.respond` stays on the retired provider path until then. The `AiProvider.chat` contract below is that retired path. The `toolCalling` capability is read from `ai_models` (`capabilities.tools`) by `readiness`.
 
 The connected-knowledge Ask agent (`docs/specs/ontology.md` §21) needs a
 **conversation**, not a prompt: it sends a growing message list, lets the
 model call read-only typed tools (§9.3), and appends each call and its result
-before asking again. `generate` cannot carry that — it takes exactly one
-system prompt and one user message — so `AiProvider` gains a third, optional
-content-producing method:
+before asking again. `streamText` cannot carry that — it takes exactly one
+system prompt and one user message — so the port has `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. Since #476 `PlatformKvoxAi.chat` is one platform `stream()` call per turn; the pure mapping between the two vocabularies is `ai-port/chat-mapping.ts`.
 
-```ts
-export interface AiToolDefinition {
-  name: string;                 // /^[a-zA-Z0-9_-]{1,64}$/, unique per request
-  description: string;          // shown to the model; 1..1024 characters
-  parameters: JsonSchema;       // an OBJECT schema in the strict subset (§2.6)
-}
-export type AiToolChoice = 'auto' | 'none' | 'required' | { name: string };
-export interface AiToolCall { id: string; name: string; argumentsJson: string }
-export type AiChatMessage =
-  | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
-  | { role: 'assistant'; content: string | null; toolCalls?: AiToolCall[] }
-  | { role: 'tool'; toolCallId: string; content: string };
-export interface AiChatRequest {
-  model: string;
-  messages: AiChatMessage[];     // at least one; the first may be 'system'
-  tools?: AiToolDefinition[];    // at most 32, unique names
-  toolChoice?: AiToolChoice;     // default 'auto' with tools; must be absent without
-  maxOutputTokens: number;
-  timeoutMs?: number;
-  reasoningEffort?: AiReasoningEffort;
-}
-export type AiChatFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls';
-export type AiChatEvent =
-  | { kind: 'delta'; text: string }
-  | { kind: 'tool_call'; id: string; name: string; argumentsJson: string }
-  | { kind: 'done'; finishReason: AiChatFinishReason; usage: AiUsage };
-
-chat?(ctx, request: AiChatRequest): AsyncIterable<AiChatEvent>;
-```
-
-**The provider transports; it never executes.** A tool definition goes out
+**The port transports; it never executes.** A tool definition goes out
 and a complete tool call comes back as an event — running the tool,
 validating its arguments and deciding whether to loop are the caller's job
-(#377/#378, ontology.md §21). This is the identical division of labour §9.3
+(ontology.md §21). This is the identical division of labour §9.3
 draws for the toolset itself: no free-form SQL/Cypher ever, only typed,
 read-only calls the agent loop executes.
 
 **Message roles.** `system` and `user` carry plain `content`; `assistant`
 carries `content` (`null` when the turn is only tool calls) plus an optional
 `toolCalls[]`; `tool` answers one **preceding** assistant message's
-`toolCalls[].id` via `toolCallId`. An orphan `toolCallId` — one no earlier
-assistant message declared — is refused before any network call (see
-"Request validation" below).
+`toolCalls[].id` via `toolCallId`. Tool definitions are unique names matching
+`/^[a-zA-Z0-9_-]{1,64}$/` with a 1..1024-character `description` and
+`parameters` in the strict subset §2.6 states. Requests carry no parallel tool calls: v1 asks for at most one call per turn.
 
-**Tool definitions.** Up to 32 per request, unique names matching
-`/^[a-zA-Z0-9_-]{1,64}$/`, a 1..1024-character `description`, and
-`parameters` checked against the identical strict-subset rules §2.6 states
-for a structured-output schema (`assertStrictJsonSchema`) — the same
-reasoning applies unchanged: a schema the vendor's `strict` mode cannot honor
-is a programming error, not something the vendor should be paid to discover.
-On OpenAI each tool is sent as `{ type: 'function', function: { name,
-description, parameters, strict: true } }`, and **`parallel_tool_calls:
-false`** accompanies every request that carries tools — v1 asks for at most
-one call per turn, because strict schemas are not guaranteed for parallel
-calls and a one-call-per-step agent loop is simpler to reason about (see
-"Alternatives" in issue #359). `tools`, `tool_choice` and
-`parallel_tool_calls` are sent **only when `tools` is present**, so a plain
-chat turn puts no tool vocabulary on the wire for a gateway to reject.
-
-**`toolChoice` mapping.** `'auto'`, `'none'` and `'required'` pass straight
-through as OpenAI's own string values; `{ name }` becomes `{ type:
-'function', function: { name } }`, forcing that one declared tool. Absent
-defaults to `'auto'` whenever `tools` is present, and setting it without
-`tools` is refused up front — a `toolChoice` naming a tool the request never
-declared has nothing to choose between.
-
-**Streamed per-index assembly.** A vendor streams a tool call's arguments in
-fragments shaped `{ index, id?, type?, function: { name?, arguments? } }`;
-assembling them is the provider's job, because the fragment format is the
-vendor's and every caller reimplementing it would be one more chance to get
-interleaving wrong. The implementation accumulates per `index`: `id` and
-`name` from the first fragment that carries them, `arguments` concatenated
-in arrival order — indexes may interleave (a gateway may stream several
-calls' fragments interleaved even with `parallel_tool_calls: false` in the
-request; assembly handles it defensively regardless). Text deltas
-(`choices[0].delta.content`) are yielded as `{ kind: 'delta' }` immediately,
-as they arrive. Only once the stream ends does assembly emit one `tool_call`
-event per index, in ascending index order — **after every text delta and
-before `done`** — so a caller never has to buffer a call itself waiting to
-see whether more fragments are coming. A call still missing `id` or `name`
-at that point is a plain, retryable `Error` ("malformed tool call") — a
-dropped or mangled frame, not a property of the request. `argumentsJson` is
-passed through exactly as streamed, unparsed and unvalidated: see "untrusted
-model output" below.
-
-**Finish reasons — `mapChatFinishReason`, deliberately separate from
-`mapFinishReason`.** `generate()` and `generateStructured()` keep using
-`mapFinishReason` unchanged, where `tool_calls`/`function_call` fold into
-`stop` because neither call shape ever sends tools. Here `tool_calls` is a
-real outcome the agent loop branches on, so `chat` maps through its own
-function:
-
-| Raw value | Result |
-|---|---|
-| `tool_calls`, or the legacy `function_call` | `'tool_calls'` |
-| `stop` | `'stop'` — **unless** at least one tool call was assembled by the end of the stream, in which case it is reported as `'tool_calls'` too, because some gateways say `stop` despite having streamed calls the caller must still act on |
-| `length` | `'length'` |
-| `content_filter` | throws `AiRefusedError`, identical to `generate()` — never reaches the caller as a `done` event |
-| unrecognised | logged with `warn`, then treated as `'stop'` (or promoted to `'tool_calls'` by the same rule as the `stop` row, if calls exist) |
-| none at all (stream closed with no finish reason) | throws a plain `Error` — a truncated stream, exactly like `generate()`'s own "no finish reason" case |
+**Streamed assembly and finish reasons.** Text deltas are yielded as they arrive. A tool call's argument fragments are assembled per index by the mapping, and one `tool_call` event per index is emitted in ascending order **after every text delta and before `done`**, so a caller never buffers a call itself. `finishReason` is `tool_calls` whenever at least one call was assembled (some gateways say `stop` despite having streamed calls), `length` for a cut-off answer, and `stop` otherwise; a `content_filter` finish throws `AiRefusedError`; a stream that ends with no finish reason throws a plain retryable `Error` (a dead socket is never a finished answer). Reasoning items the platform returns are held by the port and replayed with the matching tool results on the next step of the same turn.
 
 **`argumentsJson` is untrusted model output — the caller validates.** The
-provider never parses or validates it: it may not be JSON at all, and even
-under `strict: true` a gateway may not honor the constraint. `AiToolCall`'s
-own doc comment states this. The caller (#378) `JSON.parse`s it and
+port never parses or validates it: it may not be JSON at all, and even
+under `strict` a gateway may not honor the constraint. The Ask loop `JSON.parse`s it and
 validates the result against the tool's own Zod schema before acting on a
 single field — the identical posture ontology.md §9.3 requires of every tool
 result crossing back into the graph.
 
-**Request validation runs before any fetch**, a plain `Error` for each of:
-an empty `messages` array; a `tool` message whose `toolCallId` matches no
-preceding assistant `toolCalls[].id`; a duplicated or invalid tool name; a
-tool's `parameters` failing `assertStrictJsonSchema`; `toolChoice` set with
-no `tools`; or `toolChoice.name` naming a tool the request does not declare.
-Every one of these is a programming error in the caller's own code, not
-something worth metering a vendor call to discover — the identical posture
-§2.6 states for `generateStructured`'s schema pre-flight.
+**The `toolCalling` capability flag** is a boolean on the `ai_models` row (`capabilities.tools`), read by `readiness`, beside `structuredOutput` (§2.6) and never affected by an application ceiling. `GET /api/ai-tasks/config` and `GET /api/ai-tasks/settings` publish it per model — see "AI Tasks" in [`docs/API.md`](../API.md).
 
-**Usage** comes from the vendor when it reports it, else a `countTokens`
-estimate over the concatenated message contents (an assistant turn's own
-tool calls included) plus the tool definitions when present, and over the
-streamed completion text plus tool-call arguments on the output side — never
-zero, the same rule `generate`'s own usage fallback follows. A `429` still
-maps to `RateLimitError`; auth and input errors map exactly as `generate()`'s
-do.
-
-**The `toolCalling` capability flag** is a `boolean` on `AiModelFeatureFlags`
-(§2.6), alongside `structuredOutput`, resolved through the identical
-per-model rank chain and never affected by an entry's own typed numbers: an
-exact catalogue hit takes the catalogue's flag, a derived id takes its
-family's, everything else falls back to `defaultModelFeatures` (or `false`
-with none declared). There is no per-model admin override. The **registry
-boot check** that already refuses a provider advertising `structuredOutput`
-without `generateStructured` gains the identical clause for this flag: a
-model or `defaultModelFeatures` floor declaring `toolCalling: true` while
-`chat` is not a function throws at boot, naming the provider. `GET
-/api/ai/config` and the admin catalogue in `GET /api/ai-settings` both
-publish it per model, beside `structuredOutput` — see the `### AI Settings`
-and `GET /ai/config` sections of [`docs/API.md`](../API.md).
-
-### 2.8 Per-task models and `AiTaskModelResolver` (issue #360)
+### 2.8 Per-task models and the target resolver (issue #360)
 
 Connected knowledge (`docs/specs/ontology.md` §20) makes four kinds of model
 call with different cost and capability profiles — `graph.extract`,
@@ -936,17 +441,16 @@ call with different cost and capability profiles — `graph.extract`,
 reasonably wants a cheap model doing bulk extraction and a stronger one
 running the agent. `ai.taskModels: Partial<Record<AiTaskKey, { model:
 string; reasoningEffort?: 'low'|'medium'|'high' }>>` is a new field on the
-existing `ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
+`ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
 the deployment switch that keeps a fresh install from spending anybody's key
 on automatic extraction before an administrator turns it on. Both fields
-follow the identical settings-namespace declaration discipline §2.5 already
-establishes (declared in their module, registered in `kvox.manifest.ts`) for `allowedModels` (table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4).
+are added to the platform `ai` namespace by `KVOX_AI_SETTINGS_EXTENSION` (see "Platform AI slice" below; table inventory, [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)).
 
 **`chooseTaskModel` is the one pure function three surfaces call**, so they
 can never disagree about which model a task would run on: the run-time
-resolver below, the admin view's `taskModelStatus` (computed *without* the
+target resolver below, the admin view's `taskModelStatus` (computed *without* the
 `graphEnabled` gate, so tasks can be configured before the switch is on),
-and `GET /api/ai/config`'s per-caller `taskModels`. Its rank order:
+and `GET /api/ai-tasks/config`'s per-caller `taskModels`. Its rank order:
 
 1. `!ai.graphEnabled` → the problem is `graph_disabled` (the model is still
    computed, so the admin view can show what *would* run);
@@ -955,7 +459,7 @@ and `GET /api/ai/config`'s per-caller `taskModels`. Its rank order:
 3. else the task's configured model, when it is still in that list
    (`source: 'task'`) — a configured model no longer permitted falls through
    to the next rank instead of refusing, and the caller logs a `warn`;
-4. else `providers.<active>.defaultModel`, when it is in the list
+4. else `ai.defaultModel`, when it is in the list
    (`source: 'default'`), otherwise the problem is `no_model` and there is
    nothing to run on;
 5. the task's own `reasoningEffort` applies only when the chosen model *is*
@@ -975,43 +479,15 @@ and `GET /api/ai/config`'s per-caller `taskModels`. Its rank order:
 | `graph.agent` | `toolCalling` |
 
 A model missing a required capability the chosen rank landed on is
-`lacks_capability` — a 400 at save time (`AiSettingsService.update`, before
-`allowedModels` narrows any further) and a 409 at run time (the resolver
+`lacks_capability` — a 400 at save time (`AiTasksService.update`, against the enabled
+`ai_models` rows) and a 409 at run time (the target resolver
 below), never a silent substitution.
-
-> Since issue #473 the run-time resolver is `KvoxAiTargetResolver` (see "Platform AI slice" at the end of this section); `AiTaskModelResolver` below is the previous implementation, replaced when callers are rewired (#475) and deleted in #477.
-
-**`AiTaskModelResolver` (`apps/api/src/ai/ai-task-model-resolver.service.ts`,
-provided and exported by `AiModule`) is the one place a run decides which
-provider, model and reasoning effort it uses.** `resolve(userId, task,
-requested?)` layers `chooseTaskModel` under the checks every AI-calling path
-already needs — `ai.graphEnabled`, `AiConfigService.getConfig(userId)` for
-"is AI configured at all" and "does this caller have a key," a `requested`
-model's permission, and finally the task's capability requirement — answering
-409 `graph_disabled`/`ai_not_configured`/`ai_key_missing`/
-`model_lacks_capability` or 400 `model_not_permitted`, in that order.
-Bring-your-own-key holds by construction: a `requested` model is only ever
-matched against `AiConfigService.getConfig(userId).models`, the caller's own
-permitted, budgetable list, so no request can reach a model the deployment
-does not permit, and every resolved call still runs on the resolving user's
-own key.
-
-**`resolveForGeneration(userId, requested, messages)` is the notes path,
-extracted onto the same resolver with no behaviour change.**
-`NoteGenerationRequestService.resolveModel` — verified above as the
-behaviour to preserve — keeps its exact signature, its three messages per
-generation intent, its `NOTE_CONFLICT_REASONS` values and its check order;
-its body now delegates to `resolveForGeneration`, which has no task and no
-capability requirement, and takes the caller's own refusal sentences instead
-of a task's. This is the shared core §2.5's opening paragraph anticipated:
-one resolver, so #363/#364/#372/#378 never each reimplement the ranking
-`chooseTaskModel` already states once.
 
 #### Platform AI slice (issue #473)
 
-The application's task routing rides on the platform AI slice. Callers were rewired onto it by #475 through `KvoxAi` (next subsection).
+The application's task routing rides on the platform AI slice. Every caller reaches it through `KvoxAi` (next subsection).
 
-**The extension.** `KVOX_AI_SETTINGS_EXTENSION` (`apps/api/src/platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS`) is an `extendSystemSettingsNamespace` extension of the platform `ai` namespace, key `ai`, no `path`. It adds `taskModels`, `graphEnabled`, `defaultModel` (`string | null`, the former `providers.openai.defaultModel`, which has no platform home), `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort` (`none | low | medium | high | xhigh`) and `maxDocumentBytes`, with the bounds and defaults of §2.5 and §2.8 above. Stored names are unchanged, so the `ai` value of the `global` row is the same row before and after and a saved `taskModels` needs no rewrite. `taskModels` still replaces wholesale on merge. No added field can hold a key (a test asserts no stored key matches `/key|secret|token/i`). Until #474 runs, the stored value still holds the previous `provider` and `providers.openai.allowedModels`; the platform `read` salvages them field by field.
+**The extension.** `KVOX_AI_SETTINGS_EXTENSION` (`apps/api/src/platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS`) is an `extendSystemSettingsNamespace` extension of the platform `ai` namespace, key `ai`, no `path`. It adds `taskModels`, `graphEnabled`, `defaultModel` (`string | null`, the former `providers.openai.defaultModel`, which has no platform home), `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort` (`none | low | medium | high | xhigh`) and `maxDocumentBytes`, with the bounds and defaults of §2.5 above and the defaults of `KVOX_AI_EXTENSION_DEFAULTS`. Stored names are unchanged, so the `ai` value of the `global` row is the same row before and after and a saved `taskModels` needs no rewrite. `taskModels` still replaces wholesale on merge. No added field can hold a key (a test asserts no stored key matches `/key|secret|token/i`). A deployment that has not yet run the migration command (`docs/runbooks/ai-platform-migration.md`) still holds the previous `provider` and `providers.openai.allowedModels` in the stored value; the platform `read` salvages them field by field, and the command turns them into `ai_models` rows.
 
 **`chooseTaskModel` is ported, not changed.** `apps/api/src/ai-port/task-models.ts` copies `AI_TASK_DEFINITIONS`, `missingCapabilities` and `chooseTaskModel` and changes only the inputs: `models` are the enabled `ai_models` rows of the active provider mapped to `{ id, structuredOutput, toolCalling }` (from `capabilities.structured_output` and `capabilities.tools`), `defaultModel` is the extension's field, and `policy.provider` is the single enabled provider slot. The rank order above is unchanged.
 
@@ -1039,7 +515,7 @@ The application's task routing rides on the platform AI slice. Callers were rewi
 | `graph_embed` | `kg.embed`, resolution | `embeddings` | none (catalog) |
 | `search_embed` | `search.index`, query embed | `embeddings` | none (catalog) |
 
-**Wire code mapping.** `mapAiError(err, { feature, inJob })` (`ai-port/kvox-ai-errors.ts`) turns a platform `AiError` into the application's existing wire reason or, in a job, its job error class (`ai-port/ai-errors.ts`, re-exported from `ai/ai-errors.ts` until #477). `KvoxAiConflict` (409, `details.reason`) and `KvoxAiBadRequest` (400, `model_not_permitted`) keep the previous response bodies.
+**Wire code mapping.** `mapAiError(err, { feature, inJob })` (`ai-port/kvox-ai-errors.ts`) turns a platform `AiError` into the application's existing wire reason or, in a job, its job error class (`ai-port/ai-errors.ts`). `KvoxAiConflict` (409, `details.reason`) and `KvoxAiBadRequest` (400, `model_not_permitted`) keep the previous response bodies.
 
 | Platform `AiError.code` | HTTP route | Job |
 |---|---|---|
@@ -1072,7 +548,7 @@ The application's task routing rides on the platform AI slice. Callers were rewi
 | `embed(req)` | `{ vectors, promptTokens, model }`. Refuses locally an empty batch or one above 128 texts (`AiInputError`). Asserts one vector per text, in order, each exactly 1536 finite numbers (`EmbeddingShapeError` otherwise). See [search.md](search.md) §11. |
 | `embeddingCapability()` | The static catalog entry: `text-embedding-3-small`, 1536 dimensions, 8191 input tokens, batch 128. |
 | `countTokens(text, model)` | A local estimator (`ai-port/count-tokens.ts`): the larger of `ceil(chars / 4)` and the whitespace word count, rounded up on purpose. No network call and no model lookup; `model` is accepted for the contract and unused. Budgets are checked against it because the platform does not count tokens. |
-| `chat(req)` | Declared; implemented by the Ask tool loop (#476). |
+| `chat(req)` | One Ask-loop turn over the platform `stream()` call, §2.7. |
 
 **What stays the caller's.** `assertWithinBudget` and the token budget (§3.3) run before the call, fed `contextWindowTokens` and `maxOutputTokens` from `readiness()` and `countTokens`; over-budget stays a 400 with the required and available numbers. The per-user throttle key (`aiProviderThrottleKey(userId)`) is still registered by the handler immediately before the call. Job types, `maxAttempts: 1` profiles and the node-ineligible posture of AI jobs are unchanged. No ported file holds an `apiKey`.
 
@@ -1084,9 +560,9 @@ The application's task routing rides on the platform AI slice. Callers were rewi
 - **Usage.** An absent usage field is `null`, never `0` (0 means free).
 - **Truncation of a structured answer.** The platform's `AI_STRUCTURED_OUTPUT_INVALID` carries no finish reason. When the response reports `finishReason: 'length'`, that is honoured first (`'truncated'`). Otherwise a not-valid-JSON failure of a call that set `maxOutputTokens` is read as truncation (a strict schema guarantees well-formed JSON unless the answer was cut off), which is what the extraction retry needs; a well-formed answer that fails the schema is `'invalid_json'`. This inference is a marked shim, `PLATFORM-ADOPTION-SHIM(#475)` in `platform-kvox-ai.ts`, listed in [`local-exceptions.md`](../platform-adoption/local-exceptions.md).
 
-**Settings and graph reads.** `KvoxAiSettings` (`ai-port/kvox-ai-settings.ts`) is the typed reader of the extended `ai` namespace (`graphEnabled`, `requestTimeoutMs`, limits) and replaces every read of the retired `AiSettingsService`. It reads only; writes go through `AiTasksService`. The graph's resolver is `GraphAiRunResolver` (`graph/graph-ai-run.service.ts`), see [ontology.md](ontology.md) §20.3.
+**Settings and graph reads.** `KvoxAiSettings` (`ai-port/kvox-ai-settings.ts`) is the typed reader of the extended `ai` namespace (`graphEnabled`, `requestTimeoutMs`, limits) and replaces every read of the former AI settings service. It reads only; writes go through `AiTasksService`. The graph's resolver is `GraphAiRunResolver` (`graph/graph-ai-run.service.ts`), see [ontology.md](ontology.md) §20.3.
 
-**Tests and guards.** `ai-port/testing/fake-kvox-ai.ts` is the test double handler specs inject in place of the old registry. `platform-kvox-ai.spec.ts` drives `PlatformKvoxAi` over a fake `AiUserClient`. `test/ai/ai-port-boundary.spec.ts` fails when a file outside `ai-port/` and `platform/ai/` imports `@marinoscar/platform-api/ai`, or when a file outside `ai/` imports from `apps/api/src/ai/`.
+**Tests and guards.** `ai-port/testing/fake-kvox-ai.ts` is the test double handler specs inject in place of the old registry. `platform-kvox-ai.spec.ts` drives `PlatformKvoxAi` over a fake `AiUserClient`. `test/ai/ai-port-boundary.spec.ts` fails when a file outside `ai-port/` and `platform/ai/` imports `@marinoscar/platform-api/ai`, or when `apps/api/src/ai/` exists. `test/ai/kvox-ai-jobs.spec.ts` pins the kvox AI job types (server-only, zero calls with `ai.enabled = false`, throttle key registered before the first call), `test/ai/no-vendor-host.spec.ts` forbids a vendor host in `apps/api/src` and `apps/cli/src`, and `test/ai-conformance.spec.ts` runs the platform AI conformance suites against the real application module.
 
 ## 3. Prompt assembly and the token budget
 
@@ -1180,10 +656,10 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/ai-port/ai-token-budget.ts` (a copy of the previous `apps/api/src/ai/ai-token-budget.ts`, which #477 deletes; see [`local-exceptions.md`](../platform-adoption/local-exceptions.md)). `computeTokenBudget` is pure
+`apps/api/src/ai-port/ai-token-budget.ts`. `computeTokenBudget` is pure
 and takes the model's own `contextWindowTokens`/`maxOutputTokens` plus the deployment's policy (`ai.maxInputTokens`/`maxOutputTokens`),
 an optional per-task clamp, and the reasoning effort the call will actually
-send. Since #475 the two model numbers come from `KvoxAi.readiness()` (the enabled `ai_models` row, floored to 128,000 and 16,384 when the row carries none), not from `resolveAllowedModel` and the `allowedModels` entries of §2.5. Every caller reads them from that one function so none of them can disagree about a given model's
+send. Since #475 the two model numbers come from `KvoxAi.readiness()` (the enabled `ai_models` row, floored to 128,000 and 16,384 when the row carries none), not from per-provider `allowedModels` entries (§2.5). Every caller reads them from that one function so none of them can disagree about a given model's
 window. `KvoxAi.countTokens` (the local estimator, §2.8 "`KvoxAi` call path") measures the assembled `system +
 user` text; `assertWithinBudget` stays in each caller, immediately before the `KvoxAi` call.
 
@@ -1200,12 +676,12 @@ reasoning headroom added on top:**
   though most answers use a tenth of it, while also being the ceiling that cut
   structured graph extraction off mid-answer (#435, §6 of `ontology.md`).
 - **Unknown model capacity keeps the conservative floor, and says so.** A
-  model whose numbers resolve with `source: 'default'` (§2.5's five-rank
-  chain found nothing better) is never guessed upward — the floor is kept,
+  model whose `ai_models` row carries no numbers resolves with
+  `source: 'default'` and is never guessed upward — the floor is kept,
   budgeted against exactly like any other number, and surfaced: `GET
-  /api/ai-settings`'s `effectiveLimits` and `GET /api/ai/config`'s per-model
-  `source` both name it, and the fix is an administrator typing the model's
-  real numbers onto its `allowedModels` entry, not a rejection.
+  /api/ai-tasks/config`'s per-model `source` names it, and the fix is an
+  administrator entering the model's real limits on the platform AI models
+  page (§2.5), not a rejection.
 - **The split is demand-driven, not a fixed reservation.** Sizing the input
   budget no longer subtracts the *whole* output ceiling up front (which, with
   a typed cap gone, could be a model's entire 128,000-token maximum). It holds
@@ -1271,8 +747,8 @@ maxOutputTokens = max(0, outputCeiling)
 for the framing a provider adds beyond the literal text. `outputSource`/
 `inputSource` on the returned `TokenBudget` name which bound decided each
 number (`'policy' | 'task' | 'model'` and `'policy' | 'model'`
-respectively) — the admin `effectiveLimits` view and `GET /api/ai/config`
-both read these rather than recomputing the comparison themselves.
+respectively) — `GET /api/ai-tasks/config` reads these rather than
+recomputing the comparison itself.
 
 **If the assembled prompt exceeds the budget, the request is refused before
 anything is created — no note, no draft row, no job.** `POST /api/notes` and
@@ -1333,7 +809,7 @@ body — a document says what it is about at the top, and sending the whole note
 would bill the user a second full pass over it for information the opening
 already carried — caps the answer at 32 tokens, and asks for
 `reasoningEffort: 'none'` regardless of policy, because reasoning tokens are
-drawn from that same 32-token output ceiling (§2.1) and a thinking model would
+drawn from that same 32-token output ceiling (§2.8) and a thinking model would
 spend the whole budget thinking and emit no title. Its timeout is the smaller
 of 30 s and `ai.requestTimeoutMs`: this request is not a note, and it is
 spending runtime that belongs to a `note.generate` job whose real work is
@@ -1467,7 +943,7 @@ established for transcripts.
 | State | `status` (`NoteStatus`, §1.1), `current_version` (int, default 0), `current_generation_id` (FK `note_generations`, `SetNull`, nullable) |
 | Source | `source_type` (`'transcript' \| 'note' \| 'document'`), `source_transcript_id?` (FK `transcripts`, **Restrict**), `source_note_id?` (FK `notes`, self-relation, **Restrict**), `source_object_id?` (FK `storage_objects`, **Restrict**) — exactly one of the three is set, matching `source_type` |
 | Template | `template_id?` (FK `note_templates`, **`SetNull`**) |
-| Provenance | `provider?`, `model?` — which `AiProvider` and which model produced the current `body` |
+| Provenance | `provider?`, `model?` — which provider and which model produced the current `body` |
 | Context | `context_text?` (the optional free-text Context, §3.1) |
 | Failure | `failure_reason?` |
 | Timestamps | `deleted_at?`, `created_at`, `updated_at` |
@@ -1560,23 +1036,25 @@ loses only "which recipe produced this," never "what happened," and every
 generation's own row (§4.4) keeps a `template_name_snapshot` so that fact
 survives the template's deletion anyway.
 
-### 4.2 `user_ai_credentials`
+### 4.2 `user_ai_keys` (the platform's table)
+
+A user's own provider key is stored by the platform AI slice in `user_ai_keys`, not by this application. The first implementation (#47) kept it in this application's own `user_ai_credentials` table; the data was moved by the migration command of #474 (`docs/runbooks/ai-platform-migration.md`) and #477 dropped the table.
 
 | Column | Notes |
 |---|---|
 | `id`, `user_id` (FK `users`, **Cascade**) | The one FK `credentials` structurally cannot have (§ "Why this shape" decision 4) |
-| `provider_id` | Which registered `AiProvider` this key is for |
-| `secret` (`@db.Text`) | `encryptSecret(rawKey, 'ai-key')`'s output — the platform cipher unchanged, a new `purpose` string |
-| `hint?` | Last 4 characters, for the settings UI, mirroring `Credential.hint` |
-| `last_tested_at?`, `last_test_ok?` | The result of the most recent `testConnection` probe, so the settings page can show "last verified 2 hours ago" without re-probing on every page load |
+| `provider` | Which provider this key authenticates against, e.g. `openai` |
+| `secret` (`@db.Text`) | `encryptSecret(rawKey, 'ai_user_key')`'s output — the platform cipher, with its own `purpose` string |
+| `hint?` | `••••` and the last 4 characters, for the settings UI |
+| `verified_at?`, `last_error_code?` | When the key was last proven to work, and the provider's code for its latest failure |
+| `reachable_model_ids`, `reachable_checked_at?` | Which models this key reached on its last verification |
 | `created_at`, `updated_at` | |
-| `@@unique([user_id, provider_id])` | One key per user per provider |
+| `@@unique([user_id, provider])` | One key per user per provider |
 
-Never returned over the wire in any form (`GET /api/user-ai-credentials`
-returns `hint`, `lastTestedAt`, `lastTestOk` — never `secret`), following
+Never returned over the wire in any form: `GET /api/ai/keys` returns `hint` and the verification fields, never `secret` (the platform conformance suite `ai-secret-egress` proves it against the running application), following
 `CredentialsService.describe()`'s exact no-plaintext-egress discipline
 (the platform cipher's own header: "THIS MODULE MUST NOT LOG" — the same
-invariant extends to every consumer of it).
+invariant extends to every consumer of it). This application never reads the table: `KvoxAi` passes the user id and the platform resolves the key; `readiness` and `GET /api/ai-tasks/config` test only that a row exists.
 
 ### 4.3 `note_templates`
 
@@ -1589,7 +1067,7 @@ invariant extends to every consumer of it).
 | `body_format` (default `'markdown'`, issue #334) | `'markdown'` or `'plain_text'` — a second, independent axis from `output_format`: `output_format` names the document's *shape*, `body_format` names the *syntax* its text is written in. Plain `text`, not an enum, for the identical reason `output_format` is (§10) |
 | `structure` (`Json @db.JsonB`) | The ordered list of sections/headings the form edits as a reorderable list — the one shape a JSON array captures directly and a single prose field cannot preserve order or identity for |
 | `tone?`, `length?` | |
-| `model?` | An optional per-template override of which model to generate with. Bounded by deployment policy **at selection time**, against `GET /api/ai/config`'s permitted list (§6.4) — not by this column, which just remembers the user's choice; a model the deployment later withdraws is caught the same way an unavailable model is caught anywhere else this epic reads that list, not by a constraint on this table |
+| `model?` | An optional per-template override of which model to generate with. Bounded by deployment policy **at selection time**, against `GET /api/ai-tasks/config`'s permitted list (§6.4) — not by this column, which just remembers the user's choice; a model the deployment later withdraws is caught the same way an unavailable model is caught anywhere else this epic reads that list, not by a constraint on this table |
 | `is_archived` | Hides a template from the default list/picker view without deleting the row. This is a genuinely different action from `DELETE`, not a softer version of it: `template_id` `SetNull`s rather than `Restrict`s (§4.1), so deleting a template a user no longer wants is already possible even after it has produced notes — but deleting forfeits the definition permanently, with no `duplicated_from_id` (§7.3) to recover it from. Archiving keeps the row — still duplicable, still inspectable, reversible by un-archiving — while taking it out of the everyday list, for a user who wants "not right now" rather than "gone" |
 | `created_at`, `updated_at` | |
 | `@@unique([owner_id, name])` | Postgres's NULLS-DISTINCT behaviour — the same free property `docs/specs/transcription.md` §4's Database Tables entry notes for `transcript_versions.clientBatchId` — means this constrains only **owned** rows against each other. Any number of `owner_id IS NULL` built-ins may share a `name` as far as this index is concerned, so "no two of *your* templates can be called the same thing" is enforced with no second, narrower partial index needed to carve the built-ins back out |
@@ -2073,40 +1551,21 @@ governs generating, exactly the way `transcript.export`'s reuse endpoint is
 gated on `transcripts:read` (view access to the transcript), not on any
 permission belonging to the exporter registry itself.
 
-### 6.4 Why the admin AI policy card reuses `system_settings:*`
+### 6.4 Why the admin AI cards use `ai_config:*` and the user card `ai:use`
 
-The `ai` system-settings namespace (enabled providers, permitted models,
-token ceilings, request timeout) is gated on `system_settings:read`/`write`,
-**not** a new `ai:*` permission pair — the same SMTP-password-precedent
-reasoning `docs/specs/transcription.md` §6.4 applies to the AssemblyAI
-settings card, checked against the same four-way test `docs/specs/transcription.md` §6.4 tabulates (catalog: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §7.3) for why `push:*`/`nodes:*`/`broadcasts:*`/
-`db_backup:*` earned their own permissions: rotating a *policy* value here
-disrupts nothing already in flight (unlike `push:*`), names no
-fleet-versus-queue distinction (unlike `nodes:*`), sends nothing to anyone
-(unlike `broadcasts:*`), and touches no data more consequential than an
-ordinary settings edit (unlike `db_backup:restore`). What this namespace
-actually configures is deployment **policy about what is permitted** — never
-a credential; the per-user key itself lives in `user_ai_credentials` (§4.2)
-and is gated by ordinary self-service ownership, the same split
-`docs/specs/transcription.md` §6.4 draws between "configuring the pipe" and
-"holding the key."
+The first design (#47, #55) gated the `ai` system-settings namespace on `system_settings:read`/`write`, not on a new pair, by the SMTP-password-precedent reasoning `docs/specs/transcription.md` §6.4 applies to the AssemblyAI settings card. The platform AI slice has since made the opposite, deliberate choice, and since #477 this application follows it: the deployment-wide AI policy, the model catalogue and the usage report are gated on **`ai_config:read`** / **`ai_config:write`** (system scope, held by Admin), and calling AI on **`ai:use`** (org scope). The reason is the one #47 stated about `push:*` and `db_backup:*`, now applying here: AI policy decides where users' content may be sent and who pays, which is more consequential than an ordinary settings edit, and the split between "configure the pipe" (`ai_config:*`) and "use it" (`ai:use`) is the same split `docs/specs/transcription.md` §6.4 draws between configuring the pipe and holding the key.
 
-`GET /api/ai/config` is the one non-admin endpoint in this group, gated on
-`notes:read` following `GET /api/transcription/config`'s exact precedent
-(§6.4 of transcription.md, and `docs/specs/browser-notifications.md` §6
-before it): a regular user needs to know which providers/models this
-deployment permits, and which provider their content would go to, without
-needing `system_settings:read` to ask.
+What the cards configure is deployment **policy about what is permitted** — never a credential. The per-user key lives in the platform's `user_ai_keys` (§4.2) and is gated by ordinary self-service ownership plus `ai:use` on the platform's `/api/ai/keys`.
 
-**`GET /api/ai-settings/models` (#78) is gated on `system_settings:write`,
-not `:read`, even though it is a `GET`.** Every other read in this group is
-`:read`; this one is side-effecting — it spends a real, billable vendor call
-— which is the identical "looking is not probing" reasoning `POST
-/api/ai-settings/test` and `POST /api/transcription-settings/test` already
-establish for their own probes. It is gated no differently for the fact that
-it spends the *calling administrator's own* key rather than a deployment
-one: whose credential is charged changes who bears the cost, not whether the
-action is a read or a write.
+The routes this application serves, and their gates:
+
+| Route | Gate | Why |
+|---|---|---|
+| `GET /api/ai-tasks/config` | `notes:read` | The one non-admin endpoint in this group, following `GET /api/transcription/config`'s precedent (§6.4 of transcription.md, and `docs/specs/browser-notifications.md` §6 before it): a regular user needs to know which models this deployment permits, and whether they have a key, without needing an admin permission to ask. It deliberately sits outside `/api/ai/*`, where every route carries `AiEnabledGuard` and `ai:use`. |
+| `GET /api/ai-tasks/settings` | `ai_config:read` | The fields this application adds to the `ai` namespace. |
+| `PUT /api/ai-tasks/settings` | `ai_config:write` | Their write; it never accepts a key. |
+
+The settings cards are registry entries (`docs/specs/settings-ui.md`): `AI` (`ai_config:read`, no `feature`, so an admin can switch AI back on), `AI models` and `AI usage` (`ai_config:read`, `feature: 'ai'`), and the user card `AI Provider` (`ai:use`, `feature: 'ai'`). A model refresh or provider test is a platform route gated on `ai_config:write`, for the "looking is not probing" reason `POST /api/transcription-settings/test` establishes: it is side-effecting.
 
 ## 7. Templates and built-ins
 
@@ -2415,7 +1874,7 @@ any other system this deployment operates.
 **Under whose account.** The API key used is the **calling user's own
 saved key**, decrypted server-side for the duration of that one outbound
 request only — never written to disk beyond its encrypted column in
-`user_ai_credentials`, never logged, following the platform cipher's own
+`user_ai_keys`, never logged, following the platform cipher's own
 "THIS MODULE MUST NOT LOG" invariant. This means the content that reaches
 the provider is subject to **that individual user's own** account-level data
 and retention settings with that provider — not a blanket policy this
@@ -2456,7 +1915,7 @@ API-submitted content for model training and does not retain it beyond a
 short abuse-monitoring window — but this is the **vendor's stated policy**,
 not something this application enforces, verifies, or can act on if it
 changes. It must be re-checked before this epic is declared final, for the
-identical reason §2.4's AssemblyAI-style caveat exists.
+identical reason `docs/specs/transcription.md` §2.7's AssemblyAI caveat exists.
 
 **Why `note.purge` calls no `deleteRemote`.** `transcript.purge` calls
 `provider.deleteRemote` (`docs/specs/transcription.md` §1.5.7, §10) because
@@ -2484,7 +1943,7 @@ storage (mirroring how source documents already work) is a future option;
 nothing about §307's design requires it today.
 
 **The user is told before every generation which provider and model their
-content is being sent to.** `GET /api/ai/config` (§6.4) exposes the
+content is being sent to.** `GET /api/ai-tasks/config` (§6.4) exposes the
 deployment's permitted providers and models, and the note-creation flow
 shows — before Generate is pressed — *"This will be sent to OpenAI (gpt-4o)
 using your saved API key."* the same transparency posture
@@ -2689,35 +2148,7 @@ requested work, not a security-relevant change to their account.
   Rejected for the identical reason as the entry above: it is the same
   fallback credential §9 rules out, reintroduced through a side door that
   makes the privacy answer no less institutional than adding it through the
-  front door would. See §2.5.
-- **A sibling metadata map for model context windows (#78)**, keyed by model
-  id alongside a still-`string[]` `allowedModels`. Rejected because it is two
-  structures that can disagree about which models exist — an id present in
-  one and absent from the other, or present in both with a stale entry
-  nobody removed when the model was un-permitted — with no way for a schema
-  to say that is wrong. See §2.5.
-- **Rejecting the legacy bare-string `allowedModels` entry once the object
-  form existed (#78).** Rejected because `SystemSettingsService
-  .readKnownSettings` silently degrades a namespace that fails to parse to
-  `DEFAULT_SYSTEM_SETTINGS` — a schema that rejected the old shape would not
-  fail loudly, it would quietly reset every existing deployment's model
-  policy to empty on the next read. See §2.5.
-- **Leaving rank 4 (the provider's conservative floor) out and letting an
-  unknown id stay unresolvable forever (#97).** This is what #78 shipped,
-  and it read §3.3's rule against guessing a context window as forbidding
-  both directions of error equally. It does not: a window below the truth
-  refuses a prompt that would have fit, which is visible and correctable
-  with a per-model override that outranks the floor; a window above it
-  submits a prompt the vendor rejects **after** billing the user, which is
-  neither. Only the second is the mistake §3.3 was written to prevent. See
-  §2.5's "superseded" paragraph for the argument in full.
-- **Deriving family placement in `AiConfigService`/`AiSettingsService`
-  instead of on the provider (#97).** Rejected because which id shapes are
-  dated snapshots and which families exist is vendor knowledge, not policy
-  logic — a service that learned OpenAI's snapshot-suffix conventions would
-  have to learn a different vendor's all over again for the next provider,
-  and the two services would risk deriving differently for the same id with
-  nothing to catch the drift. See §2.5.
+  front door would.
 - **An operation log for note bodies**, mirroring `transcript_versions`'
   design. Rejected per §4.5: the arithmetic that justifies an op log for a
   90,000-word transcript (roughly 7 MB per full snapshot) does not apply to
@@ -2806,7 +2237,7 @@ the list this spec was designed against — the same purpose
 |---|---|
 | `note.generate` declares `profile: { maxAttempts: 1 }` and carries no `nodeResultSchema`/`persistNodeResult`; `note.source.extract` declares both | Unit assertions over each handler's declared members, mirroring `job-handler.registry.spec.ts`'s own pattern |
 | `notes.housekeeping`'s `@Cron` only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended — the existing test this document's job additions must not break |
-| The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against a fake `AiProvider` |
+| The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against the fake `KvoxAi` (`ai-port/testing/fake-kvox-ai.ts`) |
 | The rate-limit throttle key is `ai-provider:<userId>`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the generation's `userId`, unlike transcription's single shared key |
 | `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `ai-token-budget.spec.ts`, including a property test over the two call sites |
 | An over-budget `POST /api/notes` is refused with a 400 naming both the estimated and the allowed token counts, and creates no note, no generation row, and enqueues no job | `apps/api/test/notes/notes-create.e2e.spec.ts` |
@@ -2822,7 +2253,7 @@ the list this spec was designed against — the same purpose
 | `note_generations.job_id` survives `job.history.purge` deleting the underlying `jobs` row (`SetNull`, not cascade) | `apps/api/test/jobs/job-history-purge.task.spec.ts`, extended to assert a `note_generations` row with a purged `job_id` |
 | `note_versions.summary` is set on save and read by the version history list without a `body` fetch | `apps/api/src/notes/notes.service.spec.ts` and `apps/web/src/__tests__/pages/NoteHistoryPage.test.tsx` |
 | `DELETE /api/transcripts/:id` 409s naming the blocking note id(s) when a note still references it as its source | `apps/api/test/transcripts/transcripts-delete.e2e.spec.ts`, extended |
-| The `user_ai_credentials` row cascades on user delete; the stored key never appears in a response body, a log line, or an audit `meta` | A dedicated assertion sweeping every response and captured log line, following `email-settings.service.spec.ts`'s existing technique |
+| The `user_ai_keys` row cascades on user delete; the stored key never appears in a response body, a log line, or an audit `meta` | The platform `ai-secret-egress` and `ai-key-policy` conformance suites (`apps/api/test/ai-conformance.spec.ts`), plus the user-data deletion specs |
 | `TranscriptExporterRegistry`'s existing test suite passes unmodified after the generic `ExporterRegistry<TDoc>` extraction | `transcript-exporter.registry.spec.ts`, run as-is against the refactored class |
 | A note export carries the provenance line, renders markdown syntax correctly in PDF and Word, and reuses an identical prior export by `options_hash` | `apps/api/src/notes/export/markdown.exporter.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts`, and `note-export.service.spec.ts` |
 | `note.source.extract` is node-eligible and its extracted-text object is written and referenced exactly as §4.7 describes | `apps/api/src/notes/handlers/note-source-extract.handler.spec.ts`, plus a node-executor integration test mirroring `media-audio-transcode.ffmpeg.spec.ts`'s real-tool-output discipline |

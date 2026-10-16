@@ -1045,7 +1045,7 @@ export function emptyCommitResult(overrides: Partial<CommitResult> = {}): Commit
 // #368 — guide the graph, add from a selection, Home "Waiting for review"
 // =============================================================================
 
-/** `GET /api/ai/config` with the graph on and three models, one without structured output. */
+/** `GET /api/ai-tasks/config` with the graph on and three models, one without structured output. */
 export function mockGraphAiConfig(overrides: Record<string, unknown> = {}) {
   const model = (id: string, label: string, structuredOutput: boolean) => ({
     id,

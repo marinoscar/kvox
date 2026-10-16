@@ -2,7 +2,7 @@
  * Read what the signed-in user has stored, and ask for some of it to be
  * deleted — issue #80.
  *
- * Shaped after `hooks/useAiCredential.ts`: the same `isMounted` discipline
+ * Shaped after `hooks/useAiTasksConfig.ts`: the same `isMounted` discipline
  * (every `setState` past an `await` is guarded), the same "an error is a STRING
  * THE PAGE RENDERS, never a rejected promise" contract via `messageFor`, and
  * the same split into per-action flag groups so a destructive action does not

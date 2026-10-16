@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { buildPermissionCatalog, catalogGrants, permissionRegistry, roleRegistry, userOwnedModelRegistry } from '@marinoscar/platform-api/core';
+import '@marinoscar/platform-api/ai/testing';
 import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/db-backup/testing';
 import '@marinoscar/platform-api/doctor/testing';
@@ -32,6 +33,7 @@ import { PrismaSystemService } from '../src/prisma/prisma-system.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
 
 const API_DIR = join(__dirname, '..');
+const REPO_DIR = join(API_DIR, '..', '..');
 
 /** The one statement core's `runAsSystem` sends before the callback: a session setting, not a data write. */
 function isBypassSetConfig(strings: TemplateStringsArray | string): boolean {
@@ -281,6 +283,36 @@ runPlatformConformance({
     // adds no metric group yet (optional follow-up work), so the default (every registered group) applies.
     // The slice's retention cron lives in the package, outside this source root; its own run scans it.
     telemetry: {},
+    // The AI slice's two source scans (#477, epic #472); the five that boot the app run in
+    // `ai-conformance.spec.ts`. No provider SDK is imported anywhere this app ships: the API,
+    // the web and the CLI reach a model through the platform AI slice only, and its adapters
+    // (with their SDKs) live in the package, outside these trees. The manifests below declare
+    // none either. `minFiles` stops a mistyped root from passing on an empty tree.
+    aiNoSdkLeak: {
+      apiTrees: [{ name: 'apps/api/src', root: join(API_DIR, 'src'), minFiles: 100 }],
+      webTrees: [{ name: 'apps/web/src', root: join(REPO_DIR, 'apps', 'web', 'src'), minFiles: 50 }],
+      noSdkManifests: [
+        join(REPO_DIR, 'package.json'),
+        join(API_DIR, 'package.json'),
+        join(REPO_DIR, 'apps', 'web', 'package.json'),
+        join(REPO_DIR, 'apps', 'cli', 'package.json'),
+        join(REPO_DIR, 'packages', 'shared', 'package.json'),
+      ],
+    },
+    // No agent-orchestration framework (LangChain, LangGraph, and the like) anywhere: the Ask tool
+    // loop and the graph tasks run on the platform stream, and `allowedRoots` is EMPTY on purpose.
+    aiOrchestrationBoundary: {
+      apiSourceRoots: [join(API_DIR, 'src')],
+      webSourceRoots: [join(REPO_DIR, 'apps', 'web', 'src')],
+      packageJsonPaths: [
+        join(REPO_DIR, 'package.json'),
+        join(API_DIR, 'package.json'),
+        join(REPO_DIR, 'apps', 'web', 'package.json'),
+        join(REPO_DIR, 'apps', 'cli', 'package.json'),
+        join(REPO_DIR, 'packages', 'shared', 'package.json'),
+      ],
+      allowedRoots: {},
+    },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
   },

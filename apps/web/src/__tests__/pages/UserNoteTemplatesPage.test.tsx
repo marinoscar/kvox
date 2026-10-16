@@ -6,7 +6,7 @@
  * =============================================================================
  *
  * The SERVICE modules are mocked; every hook, every narrowing function and the
- * whole stream client are real — the same choice `UserAiPage.test.tsx` makes
+ * whole stream client are real — the same choice the other user-settings page tests make
  * and for a stronger version of its reason. This issue's central behaviour is a
  * statement about a REQUEST BODY ("preview posts the current unsaved form
  * state"), and it is only really proven when the real `toInlineTemplate`, the
@@ -52,7 +52,7 @@ vi.mock('../../services/sse', async (importOriginal) => {
   };
 });
 
-vi.mock('../../services/ai', () => ({ getAiConfig: vi.fn() }));
+vi.mock('../../services/aiTasks', () => ({ getAiTasksConfig: vi.fn() }));
 
 vi.mock('../../services/transcripts', () => ({ getTranscripts: vi.fn() }));
 
@@ -76,7 +76,7 @@ vi.mock('../../services/noteTemplates', async (importOriginal) => {
 
 import { render } from '../utils/test-utils';
 import UserNoteTemplatesPage from '../../pages/UserNoteTemplatesPage';
-import { getAiConfig } from '../../services/ai';
+import { getAiTasksConfig } from '../../services/aiTasks';
 import { getTranscripts } from '../../services/transcripts';
 import {
   createNoteTemplate,
@@ -87,11 +87,11 @@ import {
   unhideNoteTemplate,
   updateNoteTemplate,
 } from '../../services/noteTemplates';
-import type { AiConfig } from '../../services/ai';
+import type { AiTasksConfig } from '../../services/aiTasks';
 import type { NoteTemplate, NoteTemplatePreview } from '../../services/noteTemplates';
 import type { TranscriptListItem } from '../../services/transcripts';
 
-const mockGetAiConfig = vi.mocked(getAiConfig);
+const mockGetAiTasksConfig = vi.mocked(getAiTasksConfig);
 const mockGetTranscripts = vi.mocked(getTranscripts);
 const mockGetTemplates = vi.mocked(getNoteTemplates);
 const mockCreate = vi.mocked(createNoteTemplate);
@@ -107,21 +107,16 @@ const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const baseConfig: AiConfig = {
+const baseConfig: AiTasksConfig = {
   available: true,
   provider: 'openai',
   providerLabel: 'OpenAI',
-  // #97: `source`/`derivedFrom` complete the `AiConfigModel` shape — absent, a
-  // provenance assertion elsewhere would silently pass against a fallback
-  // chip instead of the real one.
   models: [
     {
       id: 'gpt-4o',
       label: 'GPT-4o',
       contextWindowTokens: 128_000,
       maxOutputTokens: 4_096,
-      source: 'catalogue',
-      derivedFrom: null,
       structuredOutput: true,
       toolCalling: true,
     },
@@ -130,8 +125,6 @@ const baseConfig: AiConfig = {
       label: 'GPT-4o mini',
       contextWindowTokens: 128_000,
       maxOutputTokens: 4_096,
-      source: 'catalogue',
-      derivedFrom: null,
       structuredOutput: true,
       toolCalling: true,
     },
@@ -140,6 +133,8 @@ const baseConfig: AiConfig = {
   maxInputTokens: 100_000,
   maxOutputTokens: 4_096,
   keyConfigured: true,
+  graphEnabled: false,
+  taskModels: {},
 };
 
 function template(overrides: Partial<NoteTemplate> = {}): NoteTemplate {
@@ -203,8 +198,8 @@ const queued: NoteTemplatePreview = {
   expiresAt: '2026-03-13T09:00:00.000Z',
 };
 
-function setup(options: { config?: Partial<AiConfig>; templates?: NoteTemplate[] } = {}) {
-  mockGetAiConfig.mockResolvedValue({ ...baseConfig, ...options.config });
+function setup(options: { config?: Partial<AiTasksConfig>; templates?: NoteTemplate[] } = {}) {
+  mockGetAiTasksConfig.mockResolvedValue({ ...baseConfig, ...options.config });
   const items = options.templates ?? [template(), builtIn];
   mockGetTemplates.mockResolvedValue({ items, total: items.length });
   mockGetTranscripts.mockResolvedValue({
@@ -315,7 +310,7 @@ describe('UserNoteTemplatesPage', () => {
   // ==========================================================================
 
   describe('the editor', () => {
-    it('offers only the models GET /api/ai/config permits, plus the deployment default', async () => {
+    it('offers only the models GET /api/ai-tasks/config permits, plus the deployment default', async () => {
       const user = userEvent.setup();
       await renderPage();
       await openEditor(user);

@@ -37,7 +37,7 @@ beforeEach(() => {
   estimateRequests = [];
   estimate = mockExtractEstimate();
   server.use(
-    http.get(`${API}/ai/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
+    http.get(`${API}/ai-tasks/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
     http.get(`${API}/graph/extract/estimate`, ({ request }) => {
       estimateRequests.push(new URL(request.url).searchParams.get('model'));
       return HttpResponse.json({ data: estimate });

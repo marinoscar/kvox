@@ -111,18 +111,6 @@ model User {
   // composed from package:storage.prisma
   storageObjects         StorageObject[]         @relation("UserStorageObjects")
 
-  // composed from app:ai-credentials.prisma
-  // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
-  // Per-user AI credentials (issue #47, epic #45). ONE relation, and it
-  // CASCADES — unlike `credentialUpdates` above, which is `SetNull` because a
-  // `credentials` row belongs to the deployment rather than to the person who
-  // last typed it in. This one belongs to the user outright: it is their own
-  // provider account's key, their own quota and their own bill, so deleting
-  // the account must take the encrypted key with it. See the block comment
-  // above `UserAiCredential` for why that FK could not be added to
-  // `credentials` instead.
-  aiCredentials UserAiCredential[] @relation("UserAiCredentials")
-
   // composed from app:ask.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Ask conversations (issue #376, epic #348). CASCADES — a saved question

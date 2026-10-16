@@ -22,9 +22,6 @@ import { UserAiKeysService } from '@marinoscar/platform-api/ai';
 // which would drag the whole slice into its import list). `get(..., { strict:
 // false })` finds it anywhere in the application graph, exactly as the user-data
 // slice resolves a domain category's hooks.
-//
-// The old `user_ai_credentials` rows are not touched here: the hook deletes them
-// itself until #477 drops that table.
 // =============================================================================
 
 @Injectable()

@@ -2,7 +2,7 @@
  * `/settings/search-index` (issue #191, epic #165).
  *
  * THE SERVICE MODULE IS MOCKED, NOT THE HOOK — the house pattern
- * `UserDangerZonePage.test.tsx` and `UserAiPage.test.tsx` both follow.
+ * `UserDangerZonePage.test.tsx` follows.
  * `useSearchIndex`'s polling contract (started by STATE rather than by the
  * click, silent on a tick, and STOPPED the moment nothing is pending) is one of
  * this page's acceptance criteria, so the real hook has to sit between the

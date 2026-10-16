@@ -536,25 +536,25 @@ describe('GraphEntityPage — Ask about … (#381)', () => {
   beforeEach(() => resetAskMock());
 
   it('hides the action while connected knowledge is off', async () => {
-    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })));
+    server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })));
     renderWithAsk();
     await pageReady();
-    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai/config'))).toBe(true));
+    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai-tasks/config'))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
   });
 
   it('hides the action when the deployment does not say (no graphEnabled)', async () => {
-    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: {} })));
+    server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: {} })));
     renderWithAsk();
     await pageReady();
-    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai/config'))).toBe(true));
+    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai-tasks/config'))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
   });
 
   it('shows the action with connected knowledge on, and syncs ?ask with the panel', async () => {
-    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
     const user = userEvent.setup();
     renderWithAsk();
     await pageReady();
@@ -567,7 +567,7 @@ describe('GraphEntityPage — Ask about … (#381)', () => {
   });
 
   it('opens the panel from ?ask on load', async () => {
-    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
     renderWithAsk(`?ask=${CONV_JOE_ID}`);
     const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
     expect(await within(dialog).findByText(/Joe committed to the Atlas launch/)).toBeInTheDocument();

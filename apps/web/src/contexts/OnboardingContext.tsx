@@ -67,7 +67,7 @@
  * something in its own body, but the SHELL surfaces must not: an error banner
  * raised from a provider mounted in `Layout` appears on every page of the
  * application at once, and the failure it is reporting — an optional checklist
- * did not load — is not worth that. `useAiConfig` takes the same position, and
+ * did not load — is not worth that. `useAiTasksConfig` takes the same position, and
  * clears its config on a failed refresh for the same reason: a surface must not
  * keep rendering an answer from ten minutes ago.
  *
@@ -296,7 +296,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
     if (!isMounted()) return;
 
-    // Cleared rather than left stale on a failure, `useAiConfig`'s position: a
+    // Cleared rather than left stale on a failure, `useAiTasksConfig`'s position: a
     // surface must not keep offering a checklist read before the deployment
     // changed under it.
     setUser(userResult.status === 'fulfilled' ? userResult.value : null);

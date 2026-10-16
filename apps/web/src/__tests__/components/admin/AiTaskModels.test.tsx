@@ -1,5 +1,6 @@
 /**
- * `AiTaskModels` — the "Task models" section of `/admin/settings/ai` (issue #361).
+ * `AiTaskModels` — the "Task models" section of `/admin/settings/ai` (issue #361;
+ * mounted in the platform AI page's `Sections` slot since #477).
  *
  * Rendered through a small stateful harness so a selection flows back in as
  * the next `value`, exactly as the page drives it, while a spy records every
@@ -21,7 +22,7 @@ import {
   type AiTaskModelsProps,
   type TaskModelsDraft,
 } from '../../../components/admin/AiTaskModels';
-import type { AiTaskDefinition, AiTaskModelStatus } from '../../../services/ai';
+import type { AiTaskDefinition, AiTaskModelStatus } from '../../../services/aiTasks';
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
@@ -60,7 +61,7 @@ const CAPABILITIES: AiTaskModelsProps['capabilities'] = {
   'gpt-4o': { structuredOutput: true, toolCalling: true },
   'gpt-4o-mini': { structuredOutput: true, toolCalling: false },
   'legacy-model': { structuredOutput: false, toolCalling: false },
-  // `gpt-new` is absent on purpose: a model added in this unsaved draft.
+  // `gpt-new` is absent on purpose: a model the catalogue does not describe.
 };
 
 function Harness({
@@ -272,7 +273,8 @@ describe('AiTaskModels', () => {
         effectiveModel: 'gpt-4o',
         source: 'default',
         missing: [],
-        problem: 'not_permitted',
+        problem: null,
+        staleTaskModel: true,
       },
       {
         task: 'graph.extract',
@@ -281,6 +283,7 @@ describe('AiTaskModels', () => {
         source: 'default',
         missing: [],
         problem: null,
+        staleTaskModel: false,
       },
     ];
     render(<Harness status={status} />);

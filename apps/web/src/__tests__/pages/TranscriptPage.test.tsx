@@ -894,7 +894,7 @@ describe('TranscriptPage — add to graph from a selection (issue #368)', () => 
     invalidateGraphOntology();
     proposalMock.reset(mockProposalDetail('draft'));
     server.use(
-      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })),
+      http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig() })),
       http.get('*/api/graph/proposals', () =>
         HttpResponse.json({ data: { items: [proposalSummaryRow(PROPOSAL_ID)], nextCursor: null } }),
       ),
@@ -937,7 +937,7 @@ describe('TranscriptPage — add to graph from a selection (issue #368)', () => 
 
   it('offers nothing while the graph is off', async () => {
     server.use(
-      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
+      http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
     );
     render(<TranscriptPage />, { wrapperOptions: { user: graphUser } });
     await screen.findByText('Line number 3');

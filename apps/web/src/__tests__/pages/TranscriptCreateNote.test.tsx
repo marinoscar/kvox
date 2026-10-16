@@ -285,7 +285,7 @@ beforeEach(() => {
     http.get(`${API_BASE}/notes`, () =>
       HttpResponse.json({ data: { items: [], nextCursor: null } }),
     ),
-    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig() })),
+    http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig() })),
     http.get(`${API_BASE}/note-templates`, () =>
       HttpResponse.json({ data: { items: [template('tpl-1', 'Meeting minutes')], total: 1 } }),
     ),
@@ -388,7 +388,7 @@ describe('TranscriptPage — where the create-note action goes', () => {
     // key hides it from exactly the people who have never heard of it. The
     // destination explains the problem and links to the one page that fixes it.
     server.use(
-      http.get(`${API_BASE}/ai/config`, () =>
+      http.get(`${API_BASE}/ai-tasks/config`, () =>
         HttpResponse.json({ data: aiConfig({ keyConfigured: false }) }),
       ),
     );

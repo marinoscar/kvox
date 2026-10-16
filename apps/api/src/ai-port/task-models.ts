@@ -258,8 +258,8 @@ export type PlatformReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
 /**
  * The app's effort as the platform request carries it. `none` means "do not send
  * the parameter" (returns `undefined`); `xhigh` is clamped to `high`, the
- * strongest value the platform accepts (record this in the admin form help text,
- * #477).
+ * strongest value the platform accepts (the admin form's help
+ * text says so).
  */
 export function toPlatformReasoningEffort(
   effort: AiReasoningEffort,

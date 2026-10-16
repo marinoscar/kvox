@@ -181,9 +181,6 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'user\'s OWN provider keys (`/api/ai/keys`), the responses, embeddings, images, audio, ' +
           'realtime and runs routes, the registered features (`GET /api/ai/features`) and the ' +
           'caller\'s usage. Every route is gated on `ai:use` and the deployment kill switch.\n\n' +
-          'The older routes this application kept until the migration completes ' +
-          '(`/api/ai-settings`, gated on `system_settings:read`/`:write`, and ' +
-          '`/api/ai-credentials`, the per-user key store) share this section.\n\n' +
           '⚠ **Keys are per-user, and there is deliberately no deployment fallback key by ' +
           'default.** A key is encrypted at rest, is never returned by any endpoint to anyone ' +
           'including an administrator, and a user with no key simply has no AI features.',

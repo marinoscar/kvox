@@ -39,8 +39,7 @@ import { UserDataService } from './user-data.service';
 //     keys through the platform's `UserAiKeysService`, which deletes the row and
 //     audits it. It resolves that service by `ModuleRef`, so this module names
 //     the dependency in its provider list and imports nothing from the AI slice
-//     (issue #475). The legacy `user_ai_credentials` rows are deleted by the
-//     credentials hook itself until #477 drops the table.
+//     (issue #475).
 //   • `SettingsModule` — `UserSettingsService.patchSettings`, for the one
 //     `user_settings` namespace `everything` clears: `onboarding`. The handler
 //     hand-writes no JSONB edit; `{ onboarding: null }` is already the tested

@@ -12,7 +12,7 @@ import { OnboardingService, type OnboardingCaller } from './onboarding.service';
 // WHY THIS ROUTE CARRIES NO PERMISSION STRING
 // --------------------------------------------
 // The resource is the caller's own onboarding state, scoped by `userId` in the
-// query itself — the identical ownership-scoped posture `/api/ai-credentials`,
+// query itself — the identical ownership-scoped posture `/api/ai/keys`,
 // `/api/pat` and `/api/user-data` already take. It must also be readable by a
 // plain Viewer, which is this application's DEFAULT role and therefore the role
 // most likely to be looking at a getting-started page, and every candidate

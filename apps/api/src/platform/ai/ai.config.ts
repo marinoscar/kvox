@@ -23,7 +23,7 @@
 // `aiModule` (the same dynamic-module object), never a second `AiModule.forRoot()`.
 //
 // The old per-feature `AiModule` (`src/ai/`, the OpenAI provider and the
-// per-user credential store) stays mounted beside this one until #477.
+// per-user credential store) was deleted in #477; this is the only AI module.
 // =============================================================================
 
 import { AiModule } from '@marinoscar/platform-api/ai';

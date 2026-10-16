@@ -160,7 +160,8 @@ point of deriving `BOTTOM_BAR_DESTINATIONS` rather than hand-listing it.
 
 `knowledge` is also the **first destination gated on a runtime feature flag
 rather than only a permission**: it requires both `graph:read` and `GET
-/api/ai/config`'s `graphEnabled` (the admin's `ai.graphEnabled` switch).
+/api/ai-tasks/config`'s `graphEnabled` (the admin's `ai.graphEnabled` switch; the
+route was `GET /api/ai/config` until the platform took that path in #473).
 Every other destination's gate resolves the instant the JWT is decoded; this
 one depends on a network response that has not necessarily returned yet, so
 the destination is **hidden** while that config is unknown or still
@@ -389,7 +390,7 @@ and the one control that can answer it on different screens.
 
 ### Model choices come from the deployment's own capability probe
 
-The dialog's model select is populated from `GET /api/ai/config`, the same
+The dialog's model select is populated from `GET /api/ai-tasks/config`, the same
 capability probe every other AI-key-aware surface in this application reads
 (`docs/specs/notes.md` §2.5), never a list baked into the dialog. A
 recorded model an administrator has since un-permitted is named explicitly
