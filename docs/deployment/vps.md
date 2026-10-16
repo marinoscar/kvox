@@ -333,12 +333,19 @@ ALTER ROLE :"app_user" SET createrole_self_grant = 'inherit, set';
 CREATE DATABASE appdb OWNER :"app_user";
 SQL
 
-# The extensions, in that database, as the superuser (section 3.1):
-psql -h <POSTGRES_HOST> -p <POSTGRES_PORT> -U postgres -d appdb -v ON_ERROR_STOP=1 <<'SQL'
+# The extensions, in that database AND in template1, as the superuser
+# (section 3.1), with their comments cleared so a restore under the ordinary
+# role works:
+for DB in appdb template1; do
+psql -h <POSTGRES_HOST> -p <POSTGRES_PORT> -U postgres -d "$DB" -v ON_ERROR_STOP=1 <<'SQL'
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+COMMENT ON EXTENSION vector IS NULL;
+COMMENT ON EXTENSION pg_trgm IS NULL;
+COMMENT ON EXTENSION "uuid-ossp" IS NULL;
 SQL
+done
 ```
 
 Then run the wizard with `kvox_app` and its password. `CREATEDB` is what restore
@@ -346,8 +353,11 @@ needs, `CREATEROLE` what the worker-node credential broker needs (without it
 the broker answers `guided`, as on any managed PostgreSQL); the extensions stay
 owned by the superuser. The role runbook,
 [`docs/runbooks/application-role.md`](../runbooks/application-role.md), is the
-same procedure for a database that already has data. Pending agent report:
-the managed-PostgreSQL variants (RDS, Cloud SQL, Azure) of the commands above.
+same procedure for a database that already has data. On RDS, Cloud SQL and Azure
+Database for PostgreSQL, run the same statements as the provider's administrative
+role (`rds_superuser` and equivalents): that role may be unable to grant
+`CREATEROLE` (the broker then answers `guided`), and it creates the extensions
+in both the application database and `template1`.
 
 ## 4. After install: the first login (do this before anything else)
 

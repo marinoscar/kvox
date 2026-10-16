@@ -1,27 +1,25 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { MIN_PG_CLIENT_MAJOR } from '../src/db-backup/pg-version.util';
+import { MIN_PG_CLIENT_MAJOR } from '@marinoscar/platform-api/db-backup/testing';
 
 // =============================================================================
-// The PostgreSQL client major is ONE decision written in TWO files
+// The PostgreSQL client major in the API image
 // =============================================================================
-// (issue #280, epic #254)
+// (issue #280, epic #254; reworked in #471 when the backup stack became the platform's)
 //
-// `apps/api/Dockerfile` installs `postgresql<N>-client`; `MIN_PG_CLIENT_MAJOR`
-// in `src/db-backup/pg-version.util.ts` is what the backup believes that N is,
-// and what its error messages tell an operator to install. Nothing at runtime
-// connects the two - the constant is never compared against the binary that is
-// actually on the PATH - so if they drift, everything still compiles, every
-// other test still passes, and the version guard starts giving advice that is
-// wrong about the image it is running in.
+// `apps/api/Dockerfile` installs `postgresql<N>-client`: that is `pg_dump` and
+// `pg_restore` for the database backup, which the platform's db-backup slice
+// spawns. The slice refuses to dump with a client older than its
+// `MIN_PG_CLIENT_MAJOR` (the platform's floor, not this app's pin), and `pg_dump`
+// refuses a server newer than itself. So the image must carry one explicit major
+// that is AT LEAST that floor.
 //
-// The people involved make that drift likely rather than exotic: the Dockerfile
-// line gets bumped by whoever is fixing an image or chasing a CVE, and the
-// constant gets read by whoever is debugging a failed backup months later.
-// This test is the only thing that brings those two people together, which is
-// why it asserts the RULE (a single, explicitly pinned major, in the base
-// stage, equal to the constant) rather than the current number.
+// What this app owns is the Dockerfile line, so that is what is asserted: a single,
+// explicitly pinned major, in the base stage, never the floating meta-package.
+// The pin is not compared for equality with the platform floor on purpose: this
+// image may run a newer client than the floor (and does), and a platform bump of the
+// floor must fail HERE, loudly, rather than as a refused backup at 02:00.
 //
 // Modelled on `production-image.spec.ts`, which guards the same class of
 // failure one layer down: a Dockerfile whose contents nothing else verifies.
@@ -63,12 +61,11 @@ function pinnedClientMajors(text: string): number[] {
 }
 
 describe('the pinned PostgreSQL client major', () => {
-  it('matches MIN_PG_CLIENT_MAJOR exactly', () => {
+  it('is one explicit major, at least the platform backup floor (MIN_PG_CLIENT_MAJOR)', () => {
     const majors = pinnedClientMajors(instructions);
 
-    // Listed rather than looped so a failure prints the number that is
-    // actually in the Dockerfile next to the one the code believes.
-    expect(majors).toEqual([MIN_PG_CLIENT_MAJOR]);
+    expect(majors).toHaveLength(1);
+    expect(majors[0]).toBeGreaterThanOrEqual(MIN_PG_CLIENT_MAJOR);
   });
 
   it('is installed in the base stage, which every other stage inherits', () => {
@@ -76,7 +73,7 @@ describe('the pinned PostgreSQL client major', () => {
     // only in production would leave `npm run start:dev` unable to take a
     // backup - so the feature would be exercised for the first time in
     // production, by a scheduled job, at 02:00.
-    expect(pinnedClientMajors(baseStage(instructions))).toEqual([MIN_PG_CLIENT_MAJOR]);
+    expect(pinnedClientMajors(baseStage(instructions))).toEqual(pinnedClientMajors(instructions));
   });
 
   it('never uses the floating postgresql-client meta-package', () => {
@@ -94,9 +91,8 @@ describe('the pinned PostgreSQL client major', () => {
     // Not style: without --no-cache the apk index stays in the image, and this
     // package lands in the BASE layer that every stage - production included -
     // inherits.
-    const install = new RegExp(
-      String.raw`RUN apk add --no-cache [^\n]*postgresql${MIN_PG_CLIENT_MAJOR}-client`
-    );
+    const [major] = pinnedClientMajors(instructions);
+    const install = new RegExp(String.raw`RUN apk add --no-cache [^\n]*postgresql${major}-client`);
 
     expect(install.test(instructions)).toBe(true);
   });

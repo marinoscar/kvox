@@ -78,11 +78,19 @@ or a restore work: those lift row-level security for their own session with
 - **Where to edit the environment.** A VPS deployment keeps the canonical file at
   `/opt/infra/apps/<name>/.env` (`docs/deployment/vps.md` section 9); a
   development checkout uses `infra/compose/.env`.
-- **Managed PostgreSQL.** Pending agent report: the managed-PostgreSQL
-  `CREATEROLE` caveat and what the provider's administrator can and cannot run
-  (the script needs a superuser; a provider administrator that is not one has to
-  run its statements by hand). The rule that holds everywhere: `ALTER ... OWNER
-  TO` requires the executing role to be a member of the new owning role.
+- **`psql` 14 or newer**, and a window in which the API **and every worker node**
+  that reads the database are stopped.
+- **Managed PostgreSQL (RDS, Cloud SQL, Azure Database for PostgreSQL).**
+  Three caveats. (1) The provider may deny `CREATEROLE` to a role you create; the
+  role then works for the API, and the worker-node credential broker answers
+  `guided` (`docs/runbooks/node-job-secrets.md`). (2) The extensions must be
+  created by the DBA or `rds_superuser` equivalent in **both** the application
+  database and `template1`, with their comments cleared (section 3.1), or a
+  restore under the ordinary role fails. (3) `transfer-ownership.sql` refuses to
+  run unless the session is a superuser; a provider administrator that is not one
+  has to run the script's statements by hand, as a member of the application role
+  (`ALTER ... OWNER TO` requires the executing role to be a member of the new
+  owning role, and `GRANT <app role> TO <admin>` provides that).
 
 Run every `psql` below from a checkout of the repository on a host that reaches
 the database, and `export PGPASSWORD` for the superuser first.
@@ -182,6 +190,40 @@ other grant: it will own everything it uses.
 
 ---
 
+### 3.1 Install the extensions, in the database and in `template1`
+
+Do this **before** the transfer, as the superuser, so the extensions stay owned
+by the superuser (the transfer skips extension members). On a fresh volume
+`20-*.sh` in `infra/compose/postgres-init/` does exactly this; for an existing
+database run it once by hand:
+
+```bash
+for DB in <POSTGRES_DB> template1; do
+psql -v ON_ERROR_STOP=1 --host=<db host> --port=<db port> --username=postgres --dbname="$DB" <<'SQL'
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+COMMENT ON EXTENSION vector IS NULL;
+COMMENT ON EXTENSION pg_trgm IS NULL;
+COMMENT ON EXTENSION "uuid-ossp" IS NULL;
+SQL
+done
+```
+
+Why all three, why `template1`, and why clear the comments:
+
+- The first migration runs `CREATE EXTENSION "uuid-ossp"`, and later ones create
+  `vector` and `pg_trgm`. `vector` is not a trusted extension, so migrating as the
+  ordinary role with no extension present fails `42501`. The migrations keep
+  `IF NOT EXISTS`; with the extensions present they are no-ops. Never edit them.
+- The platform restore creates its scratch database from `template1` with a plain
+  `CREATE DATABASE` and runs `pg_restore --exit-on-error` as the application role.
+  The archive carries `CREATE EXTENSION IF NOT EXISTS ...` and
+  `COMMENT ON EXTENSION ...` entries. Without the extensions in `template1` the
+  restore fails `permission denied to create extension "vector"`; with them but
+  with comments present it fails `must be owner of extension pg_trgm`. Clearing
+  the comments avoids the second failure.
+
 ## 4. Transfer ownership
 
 In the window, with the API **stopped** (`docker compose ... stop api`, or
@@ -210,11 +252,17 @@ It is idempotent: a re-run, or a run on a database that already belongs to the
 role, changes nothing. Output ends with
 `transfer-ownership: done; the database and every application-owned object belong to the role`.
 
-The extensions stay owned by the superuser on purpose. An ordinary role cannot
-create `vector` (it is not a trusted extension), and an extension's owner is the
-one who upgrades it. Pending agent report: extension-ownership findings from the
-rehearsal on a scratch cluster (including `pg_restore` of an archive that
-contains `CREATE EXTENSION` as the role).
+The extensions stay owned by the superuser on purpose (section 3.1). The script
+is a `psql` script using `\gexec`, not a `DO` block, because `psql` does not
+substitute `:'app'` inside a dollar-quoted body. It exits non-zero under
+`ON_ERROR_STOP` when `app` is unset, the role is missing, the role is a superuser
+or `BYPASSRLS`, `db` is not the connected database, or the session is not a
+superuser. Verify afterwards:
+
+```sql
+SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'kvox_app';          -- f | f
+SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tableowner <> 'kvox_app';  -- 0
+```
 
 ---
 
@@ -310,6 +358,12 @@ Do that only with the API stopped and after the switch back.
 
 ## What CI does and does not prove
 
+`npm run test:db` keeps a **superuser** login (`.env.test` names `postgres`, and
+`test.compose.yml` keeps `postgres` as the bootstrap login). Do not point it at
+the application role: specs that seed `storage_objects` through a bare Prisma
+client fail `42501` as an ordinary role. The new RLS and dump specs bootstrap
+their own throwaway role and database.
+
 The CI workflow runs its own `pgvector/pgvector:pg16` service container with the
 `postgres` superuser, so CI exercises neither `kvox_app` nor the `postgres-init`
 scripts. The row-level-security DB specs create their own ordinary role
@@ -317,6 +371,11 @@ scripts. The row-level-security DB specs create their own ordinary role
 the dump spec in `apps/api/test/db-backup/`). The scripts and this
 runbook are verified by the rehearsal in section 2, and a fresh `devdb` volume
 (`docker compose ... down -v`, then `up`) proves the role and extension scripts.
+
+**Fresh volumes.** `postgres-init/` runs only on an **empty** data volume: it
+creates the role, then the extensions in `$POSTGRES_DB` and `template1`.
+Migrations then run with no superuser in the API's environment. An existing
+volume is never touched, which is why this runbook exists.
 
 ## Troubleshooting
 

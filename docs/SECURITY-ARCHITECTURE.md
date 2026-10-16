@@ -923,6 +923,10 @@ does this with `infra/compose/postgres-init/10-application-role.sh` (the
 platform's script, byte for byte) and `20-kvox-extensions.sh`; an existing
 deployment follows [`runbooks/application-role.md`](runbooks/application-role.md).
 
+**`kvox_object_ownership`** has no row-level security of its own: it is protected
+by its composite foreign key `(object_id, org_id)` into `storage_objects`
+(unchanged from #469).
+
 **Backups see every organization, safely.** A dump and a restore lift row-level
 security for their own session only, with **both** `--enable-row-security` and
 `PGOPTIONS=-c app.rls_bypass=on` (in the environment, never argv), over a direct
