@@ -41,7 +41,7 @@ import type { EmailBrandMark } from '@marinoscar/platform-api/email';
 // WHY THE PATH IS `../../assets` AND WHY THERE IS NO BUILD STEP
 // -----------------------------------------------------------------------------
 //
-// This is the same arrangement `src/export/pdf-fonts.ts` uses for the bundled
+// This is the same arrangement `src/pdf/pdf-fonts.ts` uses for the bundled
 // Noto faces (issue #28), deliberately, and for the same reasons:
 //
 //   * `apps/api/assets` sits BESIDE `src` and `dist`, so
@@ -94,7 +94,7 @@ const LOGO_FILE = resolve(EMAIL_ASSET_DIR, 'logo.png');
  * The content id the layout writes into `src="cid:…"`.
  *
  * Product-neutral, for the same reason `PDF_FONTS`' aliases are
- * (`src/export/pdf-fonts.ts`): it is an internal handle no reader ever sees,
+ * (`src/pdf/pdf-fonts.ts`): it is an internal handle no reader ever sees,
  * and `apps/cli/src/template-identity.test.ts` fails a rebrand that has to
  * touch identifiers. The `@` form is what RFC 2392 expects; the right-hand
  * side is a literal, not a real domain, and is never resolved by anything.

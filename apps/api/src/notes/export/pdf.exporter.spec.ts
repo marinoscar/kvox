@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 
 import { APP_NAME } from '@app/shared';
 
-import { FONT_DIR, assertFontsPresent } from '../../export/pdf-fonts';
+import { FONT_DIR, assertFontsPresent } from '../../pdf/pdf-fonts';
 import { NoteExporterRegistry } from './note-exporter.registry';
 import { PdfNoteExporter, noteFooterText } from './pdf.exporter';
 import { collect, noteDocument } from './__fixtures__/note-document';

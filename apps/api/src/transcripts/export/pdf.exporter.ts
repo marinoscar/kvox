@@ -73,7 +73,7 @@ import {
   PDF_FONTS,
   assertFontsPresent,
   registerExportFonts,
-} from '../../export/pdf-fonts';
+} from '../../pdf/pdf-fonts';
 
 import {
   formatDuration,
@@ -82,10 +82,11 @@ import {
   type ExportDocument,
 } from './export-document';
 import {
+  failStream,
   optionsSchemaFor,
   type ExportOptionField,
   type ExportOptions,
-} from './export-options';
+} from '@marinoscar/platform-api/exports';
 import { speakerColor } from './speaker-palette';
 import {
   TranscriptExporterRegistry,
@@ -93,7 +94,7 @@ import {
 } from './transcript-exporter.interface';
 
 /**
- * ⚠ THE FACES MOVED TO `apps/api/src/export/pdf-fonts.ts` (issue #54).
+ * ⚠ THE FACES MOVED TO `apps/api/src/pdf/pdf-fonts.ts` (issue #54).
  *
  * Re-exported here rather than relocated silently, because `FONT_DIR`,
  * `PDF_FONTS` and `assertFontsPresent` are this module's published surface —
@@ -157,46 +158,50 @@ export class PdfTranscriptExporter implements TranscriptExporter, OnModuleInit {
   }
 
   async render(doc: ExportDocument, options: ExportOptions, out: Writable): Promise<void> {
-    assertFontsPresent();
+    let finished: Promise<void> | undefined;
 
-    const pdf = new PDFDocument({
-      size: 'A4',
-      bufferPages: true,
-      autoFirstPage: true,
-      margins: { top: MARGIN + HEADER_SPACE, bottom: MARGIN, left: MARGIN, right: MARGIN },
-      info: {
-        Title: doc.title,
-        Author: doc.author?.displayName ?? APP_NAME,
-        Creator: APP_NAME,
-        Producer: APP_NAME,
-        CreationDate: doc.exportedAt,
-      },
-    });
-
-    registerExportFonts(pdf);
-
-    // The promise settles on the DESTINATION's `finish`, not on the document's
-    // `end`: the exporter contract promises every byte has been handed on, and
-    // `doc.end()` only means pdfkit has stopped producing them.
-    const finished = new Promise<void>((resolvePromise, reject) => {
-      out.once('finish', resolvePromise);
-      out.once('error', reject);
-      pdf.once('error', reject);
-    });
-
-    pdf.pipe(out);
-
+    // Everything that can throw is inside the `try`, including the missing
+    // fonts check and the `PDFDocument` constructor, so every failure path
+    // destroys `out` and no half-written file reaches storage looking complete.
     try {
+      assertFontsPresent();
+
+      const pdf = new PDFDocument({
+        size: 'A4',
+        bufferPages: true,
+        autoFirstPage: true,
+        margins: { top: MARGIN + HEADER_SPACE, bottom: MARGIN, left: MARGIN, right: MARGIN },
+        info: {
+          Title: doc.title,
+          Author: doc.author?.displayName ?? APP_NAME,
+          Creator: APP_NAME,
+          Producer: APP_NAME,
+          CreationDate: doc.exportedAt,
+        },
+      });
+
+      registerExportFonts(pdf);
+
+      // The promise settles on the DESTINATION's `finish`, not on the document's
+      // `end`: the exporter contract promises every byte has been handed on, and
+      // `doc.end()` only means pdfkit has stopped producing them.
+      finished = new Promise<void>((resolvePromise, reject) => {
+        out.once('finish', resolvePromise);
+        out.once('error', reject);
+        pdf.once('error', reject);
+      });
+
+      pdf.pipe(out);
+
       if (options.includeCover !== false) drawCover(pdf, doc);
 
       drawBody(pdf, doc, options.includeTimestamps !== false);
       decoratePages(pdf, doc);
       pdf.end();
     } catch (error) {
-      // A throw mid-render leaves `out` open and half-written. Destroying it
-      // is what makes a failed export unable to reach storage looking complete
-      // — the upload sees an errored stream rather than a clean end.
-      out.destroy(error instanceof Error ? error : new Error(String(error)));
+      // `finished` rejects on the destroy and nobody awaits it past this point.
+      finished?.catch(() => undefined);
+      failStream(out, error);
 
       throw error;
     }

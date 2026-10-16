@@ -30,8 +30,8 @@
 > controller and service, #50), `generation/` (the resumable SSE stream, #52),
 > the rest of `handlers/`, `access/note-access.service.ts`, `tasks/
 > notes-housekeeping.task.ts`, `notes.controller.ts` and `notes.service.ts`
-> (#53), and `export/` alongside the new generic `apps/api/src/export/
-> exporter-registry.ts` that #54 extracts from `apps/api/src/transcripts/
+> (#53), and `export/` alongside the generic exporter registry (now
+> `@marinoscar/platform-api/exports`, #479) that #54 extracts from `apps/api/src/transcripts/
 > export/transcript-exporter.registry.ts` (a behaviour-preserving refactor,
 > #54). On the web side: the AI key page and the AI policy page with the
 > matching `config/userSettingsSections.tsx` / `config/adminSections.tsx` cards
@@ -1727,22 +1727,20 @@ instead of an empty picker with no way out.
 
 ### 8.1 The registry is extracted, not re-implemented
 
-`apps/api/src/export/exporter-registry.ts` (#54) is a **generic** extraction
-of `TranscriptExporterRegistry`'s exact shape
-(`apps/api/src/transcripts/export/transcript-exporter.registry.ts`,
-`docs/specs/transcription.md` §8.1) — a generic `Exporter<TDoc>` interface
-(`format`, `label`, `mimeType`, `extension`, `options`, `optionsSchema`, and
-`render(doc: TDoc, options, out: Writable): Promise<void>` under the exact
-same **streams, never returns a buffer** contract §8.1 states) and a generic
-`ExporterRegistry<TDoc>` class carrying `register`/`get`/`all`/`formats`
-unchanged. This is the **first** step of #54, landed as its own
-behaviour-preserving refactor commit: `apps/api/src/transcripts/export/
-transcript-exporter.registry.ts` becomes a thin instantiation —
-`class TranscriptExporterRegistry extends ExporterRegistry<ExportDocument>`
-— with its existing test suite
-(`transcript-exporter.registry.spec.ts`) passing unmodified against the
-identical public API, which is what proves the extraction changed nothing
-about transcript export before anything note-shaped is added on top of it.
+The generic registry is the platform's: `Exporter<TDoc>` and
+`ExporterRegistry<TDoc>` from `@marinoscar/platform-api/exports` (originally
+extracted from `TranscriptExporterRegistry` by #54 as `apps/api/src/export/`,
+then adopted from the package and deleted here, #479). Same shape as
+`docs/specs/transcription.md` §8.1: `format`, `label`, `mimeType`, `extension`,
+`options`, `optionsSchema`, and
+`render(doc: TDoc, options, out: Writable): Promise<void>` under the same
+**streams, never returns a buffer** contract, with `register`/`get`/`all`/
+`formats` on the registry. `TranscriptExporterRegistry` and
+`NoteExporterRegistry` are thin subclasses that only override `kind` for the
+boot log. The helpers `optionsSchemaFor`, `hashExportRequest`, `writeChunk`,
+`endStream` and `failStream` come from the same package; a failing `render`
+calls `failStream` so the destination is destroyed. The `options_hash` values
+are frozen by `apps/api/test/exports/export-hash-compat.spec.ts`.
 
 `apps/api/src/notes/export/` then gets its own `NoteExporterRegistry extends
 ExporterRegistry<NoteExportDocument>` and three self-registering exporter
@@ -1817,7 +1815,8 @@ Three real differences, not merely a smaller document:
    later generalised for transcript export as well is out of scope for #54.
 
 **What notes' PDF export *does* reuse wholesale**: the bundled Noto fonts
-(`apps/api/assets/fonts`, `docs/specs/transcription.md` §8.4) rather than a
+(`apps/api/assets/fonts`, resolved by `apps/api/src/pdf/pdf-fonts.ts`,
+`docs/specs/transcription.md` §8.4) rather than a
 second font set, and the streaming `render(doc, options, out: Writable)`
 contract itself — the two pieces of infrastructure genuinely shared between
 transcript and note PDFs.
