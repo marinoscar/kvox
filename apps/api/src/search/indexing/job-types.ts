@@ -58,6 +58,15 @@
 // forbids is a file that does not exist; this header is the guard.
 // =============================================================================
 
+import { type SearchDocumentType, SEARCH_DOCUMENT_TYPES } from '@marinoscar/kvox-contract/search';
+// The wire schemas of this file moved to `@marinoscar/kvox-contract/search` (issue #488, file `search/document-types.ts`); they are re-exported below so no importer changes.
+export {
+  SEARCH_DOC_TRANSCRIPT,
+  SEARCH_DOC_NOTE,
+  type SearchDocumentType,
+  SEARCH_DOCUMENT_TYPES,
+} from '@marinoscar/kvox-contract/search';
+
 /**
  * Chunk one document, embed the chunks whose text actually moved, and record
  * per-document why it is or is not semantically searchable.
@@ -67,41 +76,6 @@
  * `note.generate`'s.
  */
 export const SEARCH_INDEX_JOB_TYPE = 'search.index';
-
-/**
- * `search_chunks.document_type` / `search_index_state.document_type` for a
- * transcript.
- *
- * ⚠ ALSO THE JOB'S `subject_type`, deliberately the same string. `jobs
- * .subject_type` is plain text with no foreign key and no enum precisely so a
- * fork's own subjects need no schema change, and it already carries
- * `'transcript'` for every job in the transcript pipeline
- * (`TRANSCRIPT_SUBJECT_TYPE`). Using a different spelling here would mean the
- * admin job list showed two subject types for one kind of row.
- */
-export const SEARCH_DOC_TRANSCRIPT = 'transcript';
-
-/** `document_type` (and `subject_type`) for a note. See above. */
-export const SEARCH_DOC_NOTE = 'note';
-
-/**
- * The document kinds this build can index.
- *
- * A UNION OF TWO STRING LITERALS RATHER THAN A PRISMA ENUM, matching the
- * columns: `search_chunks.document_type` is plain `text` with no foreign key in
- * either direction, because the set of searchable document types is open-ended
- * and code-owned (see the `SearchChunk` model's own comment, and `Job
- * .subjectType`, which sets the precedent). A fork adding a third kind widens
- * this union and teaches `SearchIndexHandler.loadDocument` to read it; it
- * writes no migration.
- */
-export type SearchDocumentType = typeof SEARCH_DOC_TRANSCRIPT | typeof SEARCH_DOC_NOTE;
-
-/** Every value {@link SearchDocumentType} admits, for runtime validation. */
-export const SEARCH_DOCUMENT_TYPES: readonly SearchDocumentType[] = [
-  SEARCH_DOC_TRANSCRIPT,
-  SEARCH_DOC_NOTE,
-];
 
 /**
  * What travels in a `search.index` job's payload.

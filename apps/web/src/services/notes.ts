@@ -53,6 +53,7 @@
 import { api, ApiError } from './api';
 import type { NoteBodyFormat } from './noteTemplates';
 import type { PlaybackStatus, TranscriptStatus } from './transcripts';
+import type { NoteConflictReason, NoteTitleSource } from '@marinoscar/kvox-contract/notes';
 
 // =============================================================================
 // The shapes (mirrors of `dto/note.dto.ts`)
@@ -71,15 +72,7 @@ export type NoteSourceType = 'transcript' | 'note' | 'document';
  * client branches on are named as constants; the type is the full published
  * set, so a `switch` over it stays exhaustive as the API grows.
  */
-export type NoteConflictReason =
-  | 'ai_not_configured'
-  | 'ai_key_missing'
-  | 'stale_base_version'
-  | 'already_current'
-  | 'template_required'
-  | 'generating'
-  | 'derived_notes_exist'
-  | 'deleting';
+export type { NoteConflictReason };
 
 /**
  * Where a note's title came from — mirrors `noteTitleSourceSchema` (#197).
@@ -89,7 +82,7 @@ export type NoteConflictReason =
  * not in a client check. `ai` — a titling pass read it off the generated
  * content; `template` — nobody named it, so it inherited the template's name.
  */
-export type NoteTitleSource = 'ai' | 'user' | 'template';
+export type { NoteTitleSource };
 
 /** One note, as `GET /api/notes/{id}` returns it. */
 /**
@@ -166,6 +159,7 @@ export interface Note {
  * it is the kind of thing that is invisible until somebody has four hundred
  * notes.
  */
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export type NoteListItem = Omit<Note, 'body' | 'contextText'> & { excerpt: string };
 
 export interface NoteListResponse {

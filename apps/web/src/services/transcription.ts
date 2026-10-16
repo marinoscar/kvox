@@ -30,13 +30,18 @@
  */
 
 import { api } from './api';
+import type {
+  TranscriptionProviderId,
+  AssemblyAiRegion,
+  AudioDeliveryMode,
+} from '@marinoscar/kvox-contract/transcription';
 
 /** A provider this build can be configured to use. */
-export type TranscriptionProviderId = 'assemblyai';
+export type { TranscriptionProviderId };
 
-export type AssemblyAiRegion = 'us' | 'eu';
+export type { AssemblyAiRegion };
 
-export type AudioDeliveryMode = 'presigned_url' | 'upload';
+export type { AudioDeliveryMode };
 
 /**
  * What the UI may know about a stored API key. Mirrors `PrivateKeyStatus` field

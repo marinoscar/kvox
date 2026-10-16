@@ -14,7 +14,8 @@ Start at [README.md](README.md) and [docs/README.md](docs/README.md) (index with
 apps/api/        NestJS API: src/<module>/, test/, prisma/ (schema.prisma, migrations/, seed)
 apps/web/        React app: src/config/ (registries), pages/, components/, __tests__/
 apps/cli/        `kvox` CLI on `@marinoscar/platform-cli`: src/app.ts, src/executors/, src/extensions/; README.md is the usage source of truth
-packages/shared/ Shared code; ontology sources in src/ontology/, compiled output in ontology/
+packages/shared/ Shared constants; ontology/ is a re-export of @marinoscar/kvox-contract/ontology
+packages/kvox-*/ The publishable domain packages (kvox-contract: wire schemas, error codes, ontology)
 docs/            ARCHITECTURE.md, API.md, specs/, runbooks/, deployment/
 infra/compose/   GENERATED {base,dev,devdb,prod,telemetry,vps.telemetry,test,vps,worker,worker.build}.compose.yml, .env.example; app-owned app.*.compose.yml overlays, app.env.example
 infra/nginx/, infra/otel/   GENERATED nginx.conf, csp*.conf, platform/*, otel-collector-config.yaml; app-owned nginx/app.d/, otel/app-collector.yaml

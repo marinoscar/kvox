@@ -2,9 +2,36 @@
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["../../typedoc.base.json"],
   "tsconfig": "./tsconfig.json",
-  "entryPoints": ["./src/index.ts"],
+  "entryPoints": [
+    "./src/index.ts",
+    "./src/transcription/index.ts",
+    "./src/transcripts/index.ts",
+    "./src/search/index.ts",
+    "./src/notes/index.ts",
+    "./src/graph/index.ts",
+    "./src/ask/index.ts",
+    "./src/ontology/index.ts",
+    "./src/errors/index.ts"
+  ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-contract",
   "out": "./docs-api/html",
-  "json": "./docs-api/api.json"
+  "json": "./docs-api/api.json",
+  // The shared list minus "Property". Most of this package is `z.infer` types
+  // and Zod schemas whose object shapes TypeDoc expands into thousands of
+  // anonymous properties; the field meaning is carried by the schemas'
+  // `.describe()` text (what OpenAPI renders), not by TSDoc on each property.
+  // Every exported declaration still needs TSDoc and `@stability`.
+  "requiredToBeDocumented": [
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Method",
+    "Accessor",
+    "TypeAlias"
+  ]
 }

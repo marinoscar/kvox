@@ -52,7 +52,14 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    git clone <repository-url>
    cd <repository-directory>
    npm install
+   npm run build --workspace=@marinoscar/kvox-contract
    ```
+
+   The API and the web app import the domain wire schemas and the ontology from
+   `@marinoscar/kvox-contract` through its built output (`packages/kvox-contract/dist/`,
+   git-ignored), so build it once after `npm install` and again after pulling a
+   change under `packages/kvox-contract/`. CI builds it right after `npm ci`, and
+   both application Dockerfiles build it inside the image (`.dockerignore` drops every `dist/`).
 
 2. **Set up environment variables**
    ```bash

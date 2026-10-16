@@ -39,6 +39,15 @@
 
 import { api, ApiError } from './api';
 import type { TranscriptSegment, TranscriptSpeaker } from './transcripts';
+import type {
+  UpdateTextOp,
+  SetSpeakerOp,
+  JoinOp,
+  DeleteSegmentOp,
+  RenameSpeakerOp,
+  MergeSpeakersOp,
+  FindReplaceOp,
+} from '@marinoscar/kvox-contract/transcripts';
 
 // =============================================================================
 // The ops
@@ -66,19 +75,9 @@ export const MAX_SPEAKER_NAME = 120;
 /** Longest search or replacement string a find & replace may carry. */
 export const MAX_FIND_LENGTH = 500;
 
-export interface UpdateTextOp {
-  op: typeof OP_TYPES.UPDATE_TEXT;
-  segmentId: string;
-  rev: number;
-  text: string;
-}
+export type { UpdateTextOp };
 
-export interface SetSpeakerOp {
-  op: typeof OP_TYPES.SET_SPEAKER;
-  segmentId: string;
-  rev: number;
-  speakerId: string;
-}
+export type { SetSpeakerOp };
 
 /**
  * ⚠ EXACTLY ONE of `atWordIndex` / `atCharOffset`, never both and never
@@ -87,6 +86,7 @@ export interface SetSpeakerOp {
  * so it sends `atCharOffset` and lets the server resolve the word index it
  * records.
  */
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface SplitOp {
   op: typeof OP_TYPES.SPLIT;
   segmentId: string;
@@ -103,57 +103,27 @@ export interface SplitOp {
  * deliberately not a tuple — see `ops.ts` for the OpenAPI reason), so the two
  * arrays are positionally paired: `revs[0]` is `segmentIds[0]`'s.
  */
-export interface JoinOp {
-  op: typeof OP_TYPES.JOIN;
-  segmentIds: string[];
-  revs: number[];
-}
+export type { JoinOp };
 
-export interface DeleteSegmentOp {
-  op: typeof OP_TYPES.DELETE;
-  segmentId: string;
-  rev: number;
-}
+export type { DeleteSegmentOp };
 
-export interface RenameSpeakerOp {
-  op: typeof OP_TYPES.RENAME_SPEAKER;
-  speakerId: string;
-  rev: number;
-  displayName: string;
-}
+export type { RenameSpeakerOp };
 
 /** No id and no colour: both are the server's to choose, and it records them. */
+// TODO(web-domain): align with @marinoscar/kvox-contract
 export interface CreateSpeakerOp {
   op: typeof OP_TYPES.CREATE_SPEAKER;
   displayName: string;
 }
 
-export interface MergeSpeakersOp {
-  op: typeof OP_TYPES.MERGE_SPEAKERS;
-  sourceIds: string[];
-  targetId: string;
-  /**
-   * `true` (the API's default) keeps the TARGET's current display name;
-   * `false` adopts the FIRST `sourceIds` entry's name onto the target. The
-   * merge dialog's "which name to keep" radio is exactly this flag, which is
-   * why it is always sent explicitly rather than left to default.
-   */
-  keepName?: boolean;
-}
+export type { MergeSpeakersOp };
 
 /**
  * Expanded server-side into concrete `segment.update_text` ops before anything
  * is recorded (spec §4.2), which is why "Replace all" is ONE op and therefore
  * one version however many segments it rewrites.
  */
-export interface FindReplaceOp {
-  op: typeof OP_TYPES.FIND_REPLACE;
-  find: string;
-  replace: string;
-  matchCase?: boolean;
-  wholeWord?: boolean;
-  speakerId?: string | null;
-}
+export type { FindReplaceOp };
 
 export type TranscriptOp =
   | UpdateTextOp

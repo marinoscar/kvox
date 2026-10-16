@@ -19,6 +19,13 @@
  */
 
 import { api, ApiError } from './api';
+import type {
+  AskCitation,
+  AskToolCall,
+  AskConversationSummary,
+  AskConversationDetail,
+  PostAskMessageResponse,
+} from '@marinoscar/kvox-contract/ask';
 
 // =============================================================================
 // Wire schemas (#376)
@@ -50,33 +57,10 @@ export type AskMessageStatus = 'pending' | 'streaming' | 'complete' | 'failed';
  * offset contract), so the server flags it `valid: false` here and the UI
  * removes it from the rendered answer — see `components/ask/remarkAskCitations.ts`.
  */
-export interface AskCitation {
-  marker: string;
-  kind: 'evidence' | 'entity' | 'document';
-  /** Evidence id | entity id | transcript/note id; `null` when `!valid`. */
-  id: string | null;
-  via: { kind: 'item' | 'relation'; id: string } | null;
-  /** The handle was issued by a tool in this turn and is citable. */
-  valid: boolean;
-  /** Entity label / source title at answer time. */
-  label: string | null;
-  documentKind: 'transcript' | 'note' | null;
-  /** Documents: where in the recording. */
-  startMs: number | null;
-}
+export type { AskCitation };
 
 /** One tool step the agent took (#378 writes one after each tool call). */
-export interface AskToolCall {
-  index: number;
-  name: string;
-  /** As the model sent them (handles, not ids). */
-  arguments: Record<string, unknown>;
-  /** The human line, e.g. "Looked up Acme (Organization)". */
-  summary: string;
-  resultCount: number;
-  durationMs: number;
-  error: string | null;
-}
+export type { AskToolCall };
 
 export interface AskMessage {
   id: string;
@@ -102,25 +86,9 @@ export interface AskScopeEntity {
   type: string;
 }
 
-export interface AskConversationSummary {
-  id: string;
-  /** `null` until the first message; then its first 80 characters. */
-  title: string | null;
-  /** Read live; `null` when the entity was merged or forgotten. */
-  scopeEntity: AskScopeEntity | null;
-  /** ≤ 140 chars, citation markers stripped. */
-  lastMessagePreview: string | null;
-  /** A turn is pending or streaming. */
-  running: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { AskConversationSummary };
 
-export interface AskConversationDetail extends Omit<AskConversationSummary, 'lastMessagePreview'> {
-  /** Oldest → newest, at most the newest 100. */
-  messages: AskMessage[];
-  hasEarlier: boolean;
-}
+export type { AskConversationDetail };
 
 export interface AskConversationListParams {
   cursor?: string;
@@ -145,10 +113,7 @@ export interface PostAskMessageInput {
   model?: string;
 }
 
-export interface PostAskMessageResponse {
-  userMessage: AskMessage;
-  assistantMessage: AskMessage;
-}
+export type { PostAskMessageResponse };
 
 // =============================================================================
 // Requests

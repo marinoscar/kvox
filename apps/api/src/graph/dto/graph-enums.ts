@@ -1,19 +1,18 @@
-// The Prisma enum value lists, as tuples Zod can build an enum from. Kept in
-// one file so a DTO never hand-copies an enum's members. The `satisfies`
-// clauses fail the build if Prisma's enum gains or loses a member.
+// The Prisma enum value lists, as tuples Zod can build an enum from. The tuples
+// live in `@marinoscar/kvox-contract/graph` (issue #488: the contract cannot
+// import `@prisma/client`); this file keeps the parity checks. The
+// `satisfies`-style assignments below fail the build if Prisma's enum gains or
+// loses a member.
 
 import type { KgAliasSource, KgReviewStatus } from '@prisma/client';
+import { KG_ALIAS_SOURCES_FOR_DTO, KG_REVIEW_STATUSES_FOR_DTO } from '@marinoscar/kvox-contract/graph';
 
-export const KG_ALIAS_SOURCES_FOR_DTO = ['user', 'extraction', 'speaker_naming', 'import'] as const satisfies readonly KgAliasSource[];
+export { KG_ALIAS_SOURCES_FOR_DTO, KG_REVIEW_STATUSES_FOR_DTO };
 
-export const KG_REVIEW_STATUSES_FOR_DTO = [
-  'unreviewed',
-  'accepted',
-  'edited',
-  'rejected',
-  'merged',
-  'superseded',
-] as const satisfies readonly KgReviewStatus[];
+const _aliasMembers: readonly KgAliasSource[] = KG_ALIAS_SOURCES_FOR_DTO;
+const _reviewMembers: readonly KgReviewStatus[] = KG_REVIEW_STATUSES_FOR_DTO;
+void _aliasMembers;
+void _reviewMembers;
 
 // Exhaustiveness in the other direction: every Prisma member is listed.
 type Missing<A extends string, B extends readonly string[]> = Exclude<A, B[number]>;

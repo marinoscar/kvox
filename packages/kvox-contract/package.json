@@ -31,10 +31,92 @@
         "default": "./dist/cjs/index.js"
       }
     },
+    "./transcription": {
+      "import": {
+        "types": "./dist/esm/transcription/index.d.ts",
+        "default": "./dist/esm/transcription/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/transcription/index.d.ts",
+        "default": "./dist/cjs/transcription/index.js"
+      }
+    },
+    "./transcripts": {
+      "import": {
+        "types": "./dist/esm/transcripts/index.d.ts",
+        "default": "./dist/esm/transcripts/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/transcripts/index.d.ts",
+        "default": "./dist/cjs/transcripts/index.js"
+      }
+    },
+    "./search": {
+      "import": {
+        "types": "./dist/esm/search/index.d.ts",
+        "default": "./dist/esm/search/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/search/index.d.ts",
+        "default": "./dist/cjs/search/index.js"
+      }
+    },
+    "./notes": {
+      "import": {
+        "types": "./dist/esm/notes/index.d.ts",
+        "default": "./dist/esm/notes/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/notes/index.d.ts",
+        "default": "./dist/cjs/notes/index.js"
+      }
+    },
+    "./graph": {
+      "import": {
+        "types": "./dist/esm/graph/index.d.ts",
+        "default": "./dist/esm/graph/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/graph/index.d.ts",
+        "default": "./dist/cjs/graph/index.js"
+      }
+    },
+    "./ask": {
+      "import": {
+        "types": "./dist/esm/ask/index.d.ts",
+        "default": "./dist/esm/ask/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/ask/index.d.ts",
+        "default": "./dist/cjs/ask/index.js"
+      }
+    },
+    "./ontology": {
+      "import": {
+        "types": "./dist/esm/ontology/index.d.ts",
+        "default": "./dist/esm/ontology/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/ontology/index.d.ts",
+        "default": "./dist/cjs/ontology/index.js"
+      }
+    },
+    "./errors": {
+      "import": {
+        "types": "./dist/esm/errors/index.d.ts",
+        "default": "./dist/esm/errors/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/errors/index.d.ts",
+        "default": "./dist/cjs/errors/index.js"
+      }
+    },
+    "./schemas/transcript-export.v1.json": "./schemas/transcript-export.v1.schema.json",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "schemas",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

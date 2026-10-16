@@ -233,7 +233,7 @@ becomes something a generator actually runs against.
 
 **Namespace.** `kv:` / `https://kvox.app/ns#` is the IRI base for the
 RDF artefacts and the JSON-LD/RDF export (§18). It is **derived, never
-spelled**: `kvNamespace(APP_SLUG)` in `packages/shared/src/ontology/rdf-namespaces.ts`
+spelled**: `kvNamespace(APP_SLUG)` in `packages/kvox-contract/src/ontology/rdf-namespaces.ts`
 builds `https://<app slug>.app/ns#`, so a renamed fork's artefacts name its own
 namespace with no edit here. It resolves no real endpoint — an IRI is an
 identifier, not a URL anyone must serve — and since issue #385 it is what
@@ -2132,7 +2132,7 @@ anywhere, including in the effective-schema payload §17.4 publishes.
 **Built (#383):** see §17.2 for what shipped, including the three relations
 added beyond this list and the `symmetric` relation flag; the payload a user
 who never enables `personal` receives is pinned against a committed copy of
-the 1.0.0 payload (`apps/api/test/ontology/personal-domain.spec.ts`) — only
+the 1.0.0 payload (`packages/kvox-contract/test/ontology/personal-domain.test.ts`) — only
 `version` and the disabled `personal` entry in `domains` differ.
 
 **P7 — Interoperability.** The RDF/OWL and SHACL generators (§18.1, §18.2),
@@ -2163,14 +2163,15 @@ child-issue breakdown for the pattern).
 The ontology is not a fixed set of Prisma enums and a hand-maintained
 extraction prompt kept in step with them by discipline alone — it is a single
 TypeScript + Zod declaration (issue #350). Sources live at
-`packages/shared/src/ontology/`, a new directory inside the existing
-`@app/shared` package (`packages/shared/`), compiled with
-`npm run build:ontology --workspace=@app/shared` into committed CommonJS +
-`.d.ts` at `packages/shared/ontology/` and consumed via the `@app/shared/ontology`
-subpath export — because both `apps/api` and `apps/web` already depend on
-that package for exactly this reason: the API to validate and extract
-against, the web app to render a form from, one declaration shared rather
-than two hand-copied ones.
+`packages/shared/src/ontology/` in `@app/shared` and, since issue #488, in
+`packages/kvox-contract/src/ontology/` (the `@marinoscar/kvox-contract/ontology`
+entry point, built with `npm run build --workspace=@marinoscar/kvox-contract`
+into dual ESM and CommonJS). `@app/shared/ontology` remains as a two-file
+re-export (`packages/shared/ontology/index.js` and `index.d.ts`) so no import
+changed — both `apps/api` and `apps/web` consume the ontology for exactly the
+reason this section gives: the API to validate and extract against, the web
+app to render a form from, one declaration shared rather than two hand-copied
+ones.
 Zod is not a new dependency reached for here — it is already this codebase's
 single source of truth for settings (the Adding a setting rule in [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md), and
 the settings-namespace registry the platform settings slice composes its schemas from),
@@ -2472,7 +2473,7 @@ behalf, precisely the objection `docs/specs/notes.md` §3.4 ("A job, and deliber
 facing the identical shape of mistake.
 
 **The step vocabulary (issue #384).** A migration is declared, not
-scripted: `packages/shared/src/ontology/migrations.ts` holds
+scripted: `packages/kvox-contract/src/ontology/migrations.ts` holds
 `ONTOLOGY_MIGRATIONS`, ascending, each `{ to, description, steps }` with `to`
 equal to a CHANGELOG version. Six ops, each idempotent (applying one to its
 own output changes nothing) and each applied by the pure

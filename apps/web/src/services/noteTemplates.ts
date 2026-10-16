@@ -45,6 +45,7 @@
  */
 
 import { api } from './api';
+import type { NoteOutputFormat, NoteBodyFormat } from '@marinoscar/kvox-contract/notes';
 
 // =============================================================================
 // Types
@@ -66,7 +67,7 @@ export const NOTE_OUTPUT_FORMATS = [
   'custom',
 ] as const;
 
-export type NoteOutputFormat = (typeof NOTE_OUTPUT_FORMATS)[number];
+export type { NoteOutputFormat };
 
 /** How each output format is named on screen. */
 export const NOTE_OUTPUT_FORMAT_LABELS: Record<NoteOutputFormat, string> = {
@@ -85,7 +86,7 @@ export const NOTE_OUTPUT_FORMAT_LABELS: Record<NoteOutputFormat, string> = {
  */
 export const NOTE_BODY_FORMATS = ['markdown', 'plain_text'] as const;
 
-export type NoteBodyFormat = (typeof NOTE_BODY_FORMATS)[number];
+export type { NoteBodyFormat };
 
 /** How each body format is named on screen. */
 export const NOTE_BODY_FORMAT_LABELS: Record<NoteBodyFormat, string> = {

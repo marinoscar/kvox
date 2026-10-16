@@ -56,7 +56,13 @@
   },
   "kvox-contract": {
     "errors": { "peers": ["zod"] },
-    "ontology": { "peers": ["zod"] }
+    "ontology": { "peers": ["zod"] },
+    "transcription": { "peers": ["zod"] },
+    "transcripts": { "peers": ["zod"] },
+    "search": { "peers": ["zod"] },
+    "notes": { "peers": ["zod"] },
+    "graph": { "peers": ["zod"] },
+    "ask": { "peers": ["zod"] }
   },
   "kvox-db": {
     "bin": { "peers": ["prisma"] },

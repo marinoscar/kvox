@@ -23,11 +23,12 @@
     "ontology"
   ],
   "scripts": {
-    "build:ontology": "tsc -p tsconfig.ontology.json",
-    "typecheck": "tsc -p tsconfig.ontology.json --noEmit",
+    "build:ontology": "npm run build --workspace=@marinoscar/kvox-contract",
+    "typecheck": "tsc --noEmit --strict --skipLibCheck false --module nodenext --moduleResolution nodenext ontology/index.d.ts",
     "lint": "echo 'No linter configured'"
   },
   "dependencies": {
+    "@marinoscar/kvox-contract": "*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
