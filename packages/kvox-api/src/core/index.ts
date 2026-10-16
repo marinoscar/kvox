@@ -1,11 +1,12 @@
-/**
- * Marks the `core` slice of `@marinoscar/kvox-api`.
- *
- * @remarks
- * Placeholder of the scaffold (issue 5.1). Issue 5.4 fills this slice with the
- * helpers the domain slices share (the notes and transcripts helpers that cut
- * today's cross-slice cycles).
- *
- * @stability experimental
- */
-export const KVOX_API_CORE = 'kvox-api/core' as const;
+export * from './auth/kvox-auth.constants.js';
+export * from './auth/kvox-auth.guard.js';
+export * from './auth/kvox-auth.decorator.js';
+export * from './auth/current-principal.decorator.js';
+export * from './ai/throttle.js';
+export * from './ai/token-budget.js';
+export * from './stream/stream-flusher.js';
+export * from './stream/sse-stream.js';
+export * from './http/etag.js';
+export * from './events/kvox-event-emitter.events.js';
+export * from './prisma/sql.js';
+export * from './module/kvox-ports.module.js';

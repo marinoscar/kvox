@@ -37,6 +37,6 @@ import { ManagedDeleteVeto } from './managed-delete.hook';
   ],
   // Re-exports the platform's providers module and `ObjectsService` so a domain
   // module imports ONE module for everything storage-shaped.
-  exports: [KvoxObjectOwnershipStore, KvoxManagedObjectsService, StorageProvidersModule, storageModule],
+  exports: [KvoxObjectOwnershipStore, KvoxManagedObjectsService, KvoxS3PartLister, StorageProvidersModule, storageModule],
 })
 export class KvoxObjectsModule {}

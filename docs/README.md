@@ -29,6 +29,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
 | Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)), [runbooks/kvox-domain-migration.md](runbooks/kvox-domain-migration.md) for the domain tables |
 | Add a slice to, check or release a `@marinoscar/kvox-*` package | [PACKAGES.md](PACKAGES.md), [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md) |
+| Bind or implement the host ports of the domain packages (AI, object store, jobs, identity, notify, ...), run the conformance suite | [specs/kvox-ports.md](specs/kvox-ports.md), [PACKAGES.md](PACKAGES.md) |
 | Baseline a database onto the platform history | [runbooks/application-role.md](runbooks/application-role.md) | You move an existing database to the ordinary application role the API connects as (row-level security), or roll back |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
@@ -82,6 +83,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [specs/database-restore.md](specs/database-restore.md) | Restore and rollback from a backup |
 | [specs/deploy-spec.md](specs/deploy-spec.md) | Portable implementation specification of the deploy CLI |
 | [specs/job-queue.md](specs/job-queue.md) | The Postgres-backed background job queue |
+| [specs/kvox-ports.md](specs/kvox-ports.md) | The host ports of the domain packages, their web adapters, the fakes and the conformance suite |
 | [specs/maintenance-mode.md](specs/maintenance-mode.md) | The 503 maintenance window and its layers |
 | [specs/notes.md](specs/notes.md) | AI-generated notes, templates, the AI layer |
 | [specs/notification-broadcasts.md](specs/notification-broadcasts.md) | Admin broadcasts to every user |

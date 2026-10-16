@@ -92,6 +92,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodValidationPipe } from 'nestjs-zod';
 
+import { matchesETag, versionETag } from '@marinoscar/kvox-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { ApiDataResponse } from '../common/decorators/api-data-response.decorator';
@@ -160,18 +161,11 @@ import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptSharesAdapter } from './transcript-shares.adapter';
 import { TranscriptsService } from './transcripts.service';
 
-/**
- * The weak validator for a transcript at `version`.
- *
- * WEAK (`W/`) because two responses at the same version are semantically
- * equivalent rather than byte-identical — `updatedAt` moves when a poll writes
- * `last_polled_at`, and the detail response embeds timestamps that are not
- * part of what the version identifies. A strong ETag would be a promise this
- * endpoint cannot keep.
- */
-export function versionETag(version: number): string {
-  return `W/"v${version}"`;
-}
+// `versionETag` and `matchesETag` moved to `@marinoscar/kvox-api/core` (issue #490, epic #486):
+// notes and the graph's RDF export reuse them, and importing a controller for two pure
+// functions was one of the cross-slice cycles the domain split has to cut. Re-exported here,
+// unchanged, so `transcripts.controller.spec.ts` and every other importer keep compiling.
+export { matchesETag, versionETag };
 
 /**
  * The weak validator for a transcript's two polling routes (#323).
@@ -190,27 +184,6 @@ export function transcriptETag(
   const fingerprint = identitiesFingerprint(identities);
 
   return fingerprint === null ? versionETag(version) : `W/"v${version}-${fingerprint}"`;
-}
-
-/**
- * Does the request's `If-None-Match` match `etag`?
- *
- * ⚠ HANDLES A LIST AND `*`, because both are legal. A client may send several
- * validators, and a proxy may rewrite one. Weak comparison is used — which is
- * the ONLY comparison RFC 9110 permits for `If-None-Match` — so `W/"v3"` and
- * `"v3"` match each other, and a caller that stripped the `W/` prefix still
- * gets its 304 rather than a body it already has.
- */
-export function matchesETag(header: string | undefined, etag: string): boolean {
-  if (!header) return false;
-
-  const normalize = (value: string): string => value.trim().replace(/^W\//, '');
-  const wanted = normalize(etag);
-
-  return header
-    .split(',')
-    .map(normalize)
-    .some((candidate) => candidate === '*' || candidate === wanted);
 }
 
 @ApiTags('Transcripts')

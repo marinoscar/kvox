@@ -30,7 +30,7 @@ import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
 import { AiAuthError } from '../../ai-port/ai-errors';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KG_EMBED_JOB_TYPE } from '../job-types';
 import { GraphEmbedder, vectorLiteral } from '../resolution/graph-embedder.service';

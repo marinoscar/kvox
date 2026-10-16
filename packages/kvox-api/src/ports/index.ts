@@ -1,11 +1,10 @@
-/**
- * Marks the `ports` slice of `@marinoscar/kvox-api`.
- *
- * @remarks
- * Placeholder of the scaffold (issue 5.1). Issue 5.4 declares the host ports
- * here (AI, object store, jobs, identity, notify, events, Prisma, settings,
- * secrets, audit) and their injection tokens.
- *
- * @stability experimental
- */
-export const KVOX_API_PORTS = 'kvox-api/ports' as const;
+export * from './ai.port.js';
+export * from './object-store.port.js';
+export * from './jobs.port.js';
+export * from './identity.port.js';
+export * from './notify.port.js';
+export * from './events.port.js';
+export * from './prisma.port.js';
+export * from './settings.port.js';
+export * from './secrets.port.js';
+export * from './audit.port.js';

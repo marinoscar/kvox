@@ -6,7 +6,7 @@ import type { Job, SearchIndexStatus } from '@prisma/client';
 import { AiAuthError, RateLimitError } from '../../ai-port/ai-errors';
 import { EMBEDDING_DIMENSIONS } from '../../ai-port/embedding-catalog';
 import { KVOX_AI, type KvoxAi, type KvoxEmbeddingCapability } from '../../ai-port/kvox-ai';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   chunkNote,
@@ -134,7 +134,7 @@ import {
 // THE THROTTLE KEY IS PER USER, AND A SHARED ONE WOULD LOOK RIGHT
 // -----------------------------------------------------------------------------
 //
-// `aiProviderThrottleKey(ownerId)` (`notes/job-types.ts`), registered
+// `aiProviderThrottleKey(ownerId)` (`@marinoscar/kvox-api/core`), registered
 // immediately before the first provider call rather than at `onModuleInit`,
 // exactly as `NoteGenerateHandler` does and for the identical reason: the
 // bucket cannot be named until a job is running, because the bucket is the

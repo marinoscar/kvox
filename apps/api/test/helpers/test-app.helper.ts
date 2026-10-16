@@ -55,6 +55,13 @@ export interface TestAppOptions {
    * overrides only that spec knows about.
    */
   overrideProviders?: Array<{ provide: unknown; useValue: unknown }>;
+
+  /**
+   * Extra controllers mounted on the test module beside `AppModule` (issue #490's
+   * `@KvoxAuth` probe routes). They resolve their dependencies, the global ports
+   * included, exactly like a controller of a module `AppModule` imports.
+   */
+  controllers?: Array<new (...args: never[]) => unknown>;
 }
 
 /**
@@ -122,6 +129,7 @@ export async function createTestApp(
     // Create test module with mocked PrismaService
     let builder = Test.createTestingModule({
       imports: [AppModule],
+      controllers: options.controllers ?? [],
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
@@ -158,6 +166,7 @@ export async function createTestApp(
     // Create test module with real database (for true E2E tests)
     moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
+      controllers: options.controllers ?? [],
     }).compile();
   }
 

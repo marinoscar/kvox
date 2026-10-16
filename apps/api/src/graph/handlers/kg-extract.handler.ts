@@ -49,7 +49,7 @@ import {
 } from '../../ai-port/ai-errors';
 import { assertWithinBudget } from '../../ai-port/ai-token-budget';
 import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { GraphAiRun } from '../graph-ai-run';
 import { GraphAiRunResolver } from '../graph-ai-run.service';

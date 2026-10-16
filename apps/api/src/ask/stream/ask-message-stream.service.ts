@@ -6,7 +6,7 @@ import {
   DEFAULT_STREAM_POLL_INTERVAL_MS,
   STREAM_DURATION_CAP_MARGIN_MS,
 } from '../../notes/generation/note-generation-stream.service';
-import { NoteStreamCursor, toDeltaFrame } from '../../notes/generation/note-stream';
+import { KvoxStreamCursor, toDeltaFrame } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ASK_RESPOND_MAX_RUNTIME_MS } from '../ask-limits';
 import { parseAskCitations, parseAskToolCalls } from '../ask-message.mapper';
@@ -123,7 +123,7 @@ export class AskMessageStreamService {
     const { pollIntervalMs, heartbeatIntervalMs, durationCapMs, now } = this.tuning;
 
     return new Observable<AskStreamMessage>((observer) => {
-      const cursor = new NoteStreamCursor(fromOffset);
+      const cursor = new KvoxStreamCursor(fromOffset);
       const steps = new StepCursor();
       const startedAt = now();
 
