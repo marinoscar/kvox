@@ -1010,7 +1010,13 @@ re-deciding the same things slightly differently.
 
 `infra/compose/telemetry.compose.yml` and `infra/compose/vps.telemetry.compose.yml`
 are copied byte for byte from `@marinoscar/platform-infra/telemetry` (their
-`GENERATED` headers stay; never hand-edit them). They replace the previous
+`GENERATED` headers stay; never hand-edit them). Since #483 every other compose,
+nginx and env file is generated the same way by `npm run platform:infra:sync`,
+and the app's own differences are the `infra/compose/app.*.compose.yml` overlays
+(applied after every platform file, by scope), `app.env.example` and
+`infra/nginx/app.d/`; the list for a deployment is
+`composeFilesForMode('vps', { telemetry, overlays })` from `@marinoscar/platform-infra`
+(see `docs/deployment/vps.md`, "The generated infrastructure files"). They replace the previous
 observability stack (`otel.compose.yml`: a trace UI with ClickHouse, Redis and a
 metadata Postgres behind it): the OpenTelemetry
 collector writes into **GreptimeDB**, and the API reads it back for the telemetry

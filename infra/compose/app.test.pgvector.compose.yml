@@ -1,0 +1,13 @@
+# =============================================================================
+# App overlay (scope test) - the disposable test database carries pgvector
+# =============================================================================
+# Same reason as app.devdb.pgvector.compose.yml: the migrations create the
+# `vector` extension, which `postgres:16-alpine` does not ship, so the suite
+# would fail inside `prisma migrate deploy`, on the migration instead of on a
+# test. Same PostgreSQL major (16); an existing `test-db-data` volume keeps
+# working.
+# =============================================================================
+
+services:
+  db-test:
+    image: pgvector/pgvector:pg16

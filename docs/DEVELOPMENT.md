@@ -67,24 +67,28 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    `base.compose.yml` deliberately declares only `nginx`, `api`, and `web`, so
    a bundled database is never fighting a Postgres this repo doesn't own (a
    shared host, a managed instance). If you don't already have one, add the
-   opt-in `devdb.compose.yml` overlay as a third `-f`:
+   opt-in `devdb.compose.yml` overlay as a third `-f`, followed by this app's
+   `app.devdb.pgvector.compose.yml` (the platform's database image has no
+   `vector` extension, which the migrations need):
 
    ```bash
    cd infra/compose
-   docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
+   docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f app.devdb.pgvector.compose.yml up
    ```
 
    > **Two database logins.** On the first start of an empty volume the overlay
    > runs `infra/compose/postgres-init/` as the bootstrap superuser `postgres`:
    > `10-application-role.sh` creates the ordinary role the API signs in as
-   > (`APP_DB_USER`, default `kvox_app`, owner of the database) and
+   > (named by `POSTGRES_USER`, default `app` since the infra moved to
+   > `platform-infra sync`, #483; owner of the database) and
    > `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp`. The API
    > and `npm run prisma:migrate` use `POSTGRES_USER` / `POSTGRES_PASSWORD`, which
    > `.env.example` sets to that role, so no superuser is in the API's environment.
+   > The database container is `pgvector/pgvector:pg16` through the
+   > `app.devdb.pgvector.compose.yml` overlay: start it with
+   > `-f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f app.devdb.pgvector.compose.yml`.
    > Volumes created before #471 predate the init scripts: run `docker compose ... down -v`
-   > to recreate them, set `APP_DB_USER=postgres` to opt out of the role (row-level
-   > security is then inert and the Doctor says so), or follow
-   > `docs/runbooks/application-role.md`.
+   > to recreate them, or follow `docs/runbooks/application-role.md`.
 
    > **First run on a new machine:** `base.compose.yml` attaches the API to an
    > external Docker network named `devnet`, so the very first `docker compose
@@ -173,9 +177,9 @@ Key variables (see `infra/compose/.env.example` for the full list). This section
 **Database (individual connection parameters):**
 - `POSTGRES_HOST` - Database hostname (default: localhost)
 - `POSTGRES_PORT` - Database port (default: 5432)
-- `POSTGRES_USER` - The API's database login (default: `kvox_app`). It must be an **ordinary** role (`NOSUPERUSER NOBYPASSRLS`) that owns the tables: a superuser skips row-level security and the Doctor check `db.rls_role` fails. The bootstrap superuser `postgres` is for administration only
+- `POSTGRES_USER` - The API's database login (default: `app` in the generated template; a deployment keeps the name its `.env` already has, e.g. `kvox_app`). It must be an **ordinary** role (`NOSUPERUSER NOBYPASSRLS`) that owns the tables: a superuser skips row-level security and the Doctor check `db.rls_role` fails. The bootstrap superuser `postgres` is for administration only
 - `POSTGRES_PASSWORD` - That role's password (default: postgres)
-- `APP_DB_USER` / `APP_DB_PASSWORD` - Which ordinary role `devdb.compose.yml` and `test.compose.yml` create on the first start of an **empty** volume (`infra/compose/postgres-init/10-application-role.sh`, then `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp` as the superuser). Keep them equal to `POSTGRES_USER` / `POSTGRES_PASSWORD`. Not read by a deployment whose database already exists, and never written by `kvox deploy`. An existing local volume predates the role: recreate it (`docker compose ... down -v`) or follow `docs/runbooks/application-role.md`
+- The role `devdb.compose.yml` and `test.compose.yml` create on the first start of an **empty** volume is `POSTGRES_USER` / `POSTGRES_PASSWORD` itself (`infra/compose/postgres-init/10-application-role.sh`, then `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp` as the superuser). `APP_DB_USER` / `APP_DB_PASSWORD` are no longer in the template. Not read by a deployment whose database already exists. An existing local volume predates the role: recreate it (`docker compose ... down -v`) or follow `docs/runbooks/application-role.md`
 - `POSTGRES_MONITOR_USER` / `POSTGRES_MONITOR_PASSWORD` - Optional login for the telemetry collector's PostgreSQL metrics; blank reuses `POSTGRES_USER` / `POSTGRES_PASSWORD`
 - `POSTGRES_DB` - Database name (default: appdb)
 - `POSTGRES_SSL` - Enable SSL connection (default: false)
@@ -196,7 +200,7 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 
 **Object storage:**
 - There is **no variable for the bucket, region, endpoint or keys** (the former `STORAGE_PROVIDER`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `STORAGE_STALE_UPLOAD_HOURS` are no longer read). Sign in as an admin and configure the store at `/admin/settings/storage` (Amazon S3, Cloudflare R2, or an S3-compatible server such as MinIO at `http://localhost:9000`), press Test, then Save. Until then every upload answers 503. The secret access key is stored encrypted with `SECRETS_ENCRYPTION_KEY`, so set that variable first. See `docs/runbooks/storage-configuration.md`
-- `STORAGE_CSP_ORIGIN` - Browser-visible origin of the bucket (for MinIO, `http://localhost:9000`), written into nginx's Content Security Policy. **Set it by hand**: it is no longer derived from a bucket name. Empty means the browser cannot PUT parts or play audio back. Recreate the nginx container after changing it; the bucket also needs CORS (`docs/runbooks/s3-cors.md`)
+- `STORAGE_CSP_ORIGIN` is gone (#483). The generated Content Security Policy allows `https:` in `connect-src` and `media-src`, which covers presigned upload and playback URLs. A plain-http origin (MinIO at `http://localhost:9000`) is added in `infra/nginx/app.d/csp/connect-src.conf` and `media-src.conf` (`default " http://localhost:9000";`, leading space), then recreate the nginx container; the bucket also needs CORS (`docs/runbooks/s3-cors.md`). See `docs/deployment/vps.md` ("The generated infrastructure files")
 - `STORAGE_PART_SIZE` - Multipart part size in bytes for every upload (default 10485760, minimum 5242880). Deployment-wide and not stored per upload: never change it while uploads are in flight, and keep `STORAGE_PART_SIZE x 10000` above `MAX_FILE_SIZE`
 - `MAX_FILE_SIZE` / `ALLOWED_MIME_TYPES` / `SIGNED_URL_EXPIRY` - Largest accepted upload in bytes (413 above it, default 10 GiB), the generic-upload content-type allowlist (415 outside it; transcript uploads enforce their own fixed audio and video list), and the lifetime of a signed URL in seconds (default 3600)
 - Email and Web Push have **no environment variables** since #470: SMTP and Amazon SES (access key ID and secret; `S3_REGION` survives only as the default SES region) are configured at `/admin/settings/email`, and the VAPID key pair at `/admin/settings/push` (the three `VAPID_*` lines in `.env.example` are retired and not read). The platform email and notifications slices read the stored settings and the encrypted credentials only
@@ -220,7 +224,7 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 - `NODE_SECRET_SWEEP_ENABLED` - Whether this process runs the ten-minute cron that revokes expired or orphaned per-job credentials brokered to worker nodes (epic #345, issue #349) — the third permanent job-queue exemption (see the queue-job rules in [`AGENTS.md`](../AGENTS.md#mandatory-every-long-running-activity-is-a-queue-job)). Only the literal `false` turns it off (default: on). Independent of `JOBS_WORKER_MODE`, like the lease reaper, and for the same reason: a credential brokered to a node in a fleet this process does not execute jobs for still needs revoking. Whether a credential is ever brokered **at all** is the separate `nodes.jobSecretBrokerEnabled` system setting, default off — see [`docs/runbooks/node-job-secrets.md`](runbooks/node-job-secrets.md)
 
 **Maintenance Mode:**
-- `MAINTENANCE_MODE` - Environment override that outranks the persisted setting. Set to `true` to force the window open even if the app cannot start (a pre-migration deploy), or to `false` to force it shut (recovery from a window opened with `allowAdmins` false). Only the literal strings `'true'`/`'false'` count; anything else (including unset) means "no override, use the stored setting". Requires an application restart to take effect. See `docs/runbooks/maintenance-mode.md`. ⚠️ Document a value for this variable as prose ("set to `true`"), never as an inline `# MAINTENANCE_MODE=true` example — `apps/cli`'s `parseEnvExample` reads *any* commented `# KEY=value` line in `infra/compose/.env.example` as declaring an optional variable, so an illustrative assignment inside prose registers as a second declaration and fails the CLI's env-spec test. `infra/compose/.env.example` already carries exactly one commented default (`# MAINTENANCE_MODE=false`) and a comment stating this rule — do not add a second commented line for this key.
+- `MAINTENANCE_MODE` - Environment override that outranks the persisted setting. Set to `true` to force the window open even if the app cannot start (a pre-migration deploy), or to `false` to force it shut (recovery from a window opened with `allowAdmins` false). Only the literal strings `'true'`/`'false'` count; anything else (including unset) means "no override, use the stored setting". Requires an application restart to take effect. See `docs/runbooks/maintenance-mode.md`. ⚠️ Document a value for this variable as prose ("set to `true`"), never as an inline `# MAINTENANCE_MODE=true` example — `apps/cli`'s `parseEnvExample` reads *any* commented `# KEY=value` line in `infra/compose/.env.example` as declaring an optional variable, so an illustrative assignment inside prose registers as a second declaration and fails the CLI's env-spec test. `infra/compose/.env.example` is generated by `npm run platform:infra:sync`: the platform's template carries the commented defaults (`# MAINTENANCE_MODE=false` among them, all listed in `apps/cli/src/conformance.test.ts`), and an app variable goes uncommented into `infra/compose/app.env.example` — do not add a commented line for this key.
 
 **Database Backup:**
 - `DB_BACKUP_SCHEDULE_ENABLED` - Whether this process runs the backup scheduler: a ten-minute cron that enqueues the housekeeping sweep, starts a backup (by enqueuing `db.backup.run`) when the configured schedule has come due, and enqueues the retained-database drop. Defaults to on; only the literal `false` turns it off, and it is deliberately independent of `JOBS_WORKER_MODE` — the *tick* is not itself queue work (it only decides whether to enqueue), so an API running as a pure control plane must still queue its own backups even though `JOBS_WORKER_MODE=off` means nothing on this process will execute them. Everything about the schedule itself (enabled, frequency, time of day, timezone, retention count, stale window) is a `databaseBackup` system setting, not an environment variable — as is `nodeOffloadEnabled` (default **false**), which decides whether a worker node may take the dump at all. See `docs/specs/database-backup.md`.
@@ -236,7 +240,7 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 - `GREPTIME_WRITER_USER` / `GREPTIME_READER_USER` / `GREPTIME_ADMIN_USER` and the three `*_PASSWORD` values - The three GreptimeDB accounts. The writer is the collector's ingest login only. The reader and admin are the **deployment default**: an administrator can save a connection at `/admin/settings/telemetry` (stored encrypted in the credential store) and it then replaces both with no restart. `telemetry.compose.yml` refuses to start without the passwords
 - `GREPTIME_BIND_PG_PORT` - Host port for GreptimeDB's PostgreSQL wire protocol on a VPS (bound to `127.0.0.1` only)
 
-Local telemetry: `docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml up` starts the collector and GreptimeDB. Traces and metrics appear in the app's telemetry explorer and dashboard (Admin Console, Operations) and in GreptimeDB's own SQL dashboard at http://localhost:14000/dashboard; `psql -h localhost -p 14003 -U <GREPTIME_READER_USER>` reads them directly. The collector's OTLP ports are remapped to 4327 (gRPC) and 4328 (HTTP) on the host. The GreptimeDB container is capped at 1 GB. `scripts/dev.ps1 -Otel` uses the same overlay. Telemetry is optional: with `OTEL_ENABLED=false` or GreptimeDB unreachable the API reports telemetry as unavailable and carries on. The Pino logger in `common/logger/` is kept; `initializeOtel` forwards its records to OTLP.
+Local telemetry: `docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml -f app.devdb.pgvector.compose.yml up` starts the collector and GreptimeDB. Traces and metrics appear in the app's telemetry explorer and dashboard (Admin Console, Operations) and in GreptimeDB's own SQL dashboard at http://localhost:14000/dashboard; `psql -h localhost -p 14003 -U <GREPTIME_READER_USER>` reads them directly. The collector's OTLP ports are remapped to 4327 (gRPC) and 4328 (HTTP) on the host. The GreptimeDB container is capped at 1 GB. `scripts/dev.ps1 -Otel` uses the same overlay. Telemetry is optional: with `OTEL_ENABLED=false` or GreptimeDB unreachable the API reports telemetry as unavailable and carries on. The Pino logger in `common/logger/` is kept; `initializeOtel` forwards its records to OTLP.
 
 ---
 

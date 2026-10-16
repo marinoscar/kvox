@@ -54,7 +54,7 @@ Still environment variables, unchanged in meaning except where §5 says so:
 
 | Variable | Meaning |
 |---|---|
-| `STORAGE_CSP_ORIGIN` | The browser-visible origin of the bucket, written into nginx's Content Security Policy. **No longer derived**; see §3 step 1. |
+| `STORAGE_CSP_ORIGIN` | **Gone since #483**: the generated Content Security Policy allows `https:` in `connect-src` and `media-src`. A plain-http origin goes under `infra/nginx/app.d/csp/`; see §3 step 1. |
 | `STORAGE_PART_SIZE` | The deployment-wide multipart part size. See §5. |
 | `MAX_FILE_SIZE` | Largest upload accepted (answers 413 above it). |
 | `ALLOWED_MIME_TYPES` | Content-type allowlist (answers 415 outside it). **Keep `audio/*` and `video/*` in it**: transcript uploads pass the application's own audio and video check and then the platform's init checks this list too, so a deployment that omits them rejects every transcript upload. |
@@ -103,30 +103,22 @@ them. From the running deployment's `.env` write down:
 - the endpoint, if any (`S3_ENDPOINT`: MinIO, Wasabi, Backblaze B2 or similar),
 - the access key id and secret access key (`AWS_ACCESS_KEY_ID`,
   `AWS_SECRET_ACCESS_KEY`),
-- the current `STORAGE_CSP_ORIGIN`, **or, if it is empty, the origin it was
-  being derived to** (see step 1).
+- the origin the signed URLs point at (step 1).
 
 Keep the secret in your password manager, not in a ticket. The existing objects
 stay where they are: the new configuration must name the **same** bucket.
 
-**Step 1: set `STORAGE_CSP_ORIGIN` explicitly.** Before this change nginx
-derived it from `S3_BUCKET` and `S3_REGION` when it was empty. The bucket is
-runtime configuration now and nginx has already started by the time it is saved,
-so nothing derives it any more. If you leave it empty the policy reads
-`connect-src 'self'`, and the browser blocks every part upload and every
-playback with an opaque status-0 error even though the API and the bucket are
-fine. Set it in `infra/compose/.env` to the origin the signed URLs point at:
-
-| Bucket | `STORAGE_CSP_ORIGIN` |
-|---|---|
-| AWS, DNS-compatible name | `https://<bucket>.s3.<region>.amazonaws.com` |
-| AWS, name containing dots | `https://s3.<region>.amazonaws.com` (path-style) |
-| MinIO, LocalStack, any custom endpoint | the endpoint's origin, for example `http://localhost:9000` |
-| Behind a CDN or custom domain | that domain's origin |
-
-Never a wildcard. Nginx renders the policy only when its container starts, so
-recreate it after changing the value (the exact command is in
-[`s3-cors.md`](s3-cors.md) under "Applying the fix").
+**Step 1: check the Content Security Policy (nothing to set since #483).** The
+policy used to name one storage origin, set by hand in `STORAGE_CSP_ORIGIN`; the
+generated policy now allows any `https:` origin in `connect-src` and `media-src`,
+so an https bucket (AWS, R2, a CDN or custom domain) works with no setting, and
+the variable is ignored if it is still in `.env`. Only a **plain-http** endpoint
+(MinIO or LocalStack on `http://localhost:9000`) needs an addition: put
+`default " http://localhost:9000";` (leading space) in
+`infra/nginx/app.d/csp/connect-src.conf` and `media-src.conf` and recreate the
+nginx container (the command is in [`s3-cors.md`](s3-cors.md) under "Applying the
+fix"). Without it the browser blocks every part upload and every playback with an
+opaque status-0 error even though the API and the bucket are fine.
 
 **Step 2: deploy.** The migration moves the `managed_by` marker into the
 `kvox_object_ownership` table and drops `storage_objects.managed_by` and
@@ -177,9 +169,9 @@ and leaving a live secret in a file that nothing reads is only a liability.
 
 ## 4. A fresh install
 
-`kvox deploy install` no longer asks for a bucket. Install as usual, set
-`STORAGE_CSP_ORIGIN` in `.env` if you know the bucket's origin (step 1 above;
-recreate nginx if you set it later), sign in as the initial administrator, and
+`kvox deploy install` no longer asks for a bucket. Install as usual (no
+Content Security Policy setting is needed for an https bucket, step 1 above),
+sign in as the initial administrator, and
 complete step 4. Uploads answer 503 until you do. The CLI's `--purge-storage`
 uninstall option still reads the five old variables from the deployment's
 `.env`; see [`apps/cli/README.md`](../../apps/cli/README.md).
@@ -279,7 +271,7 @@ as stuck.
 | **Test** fails on credentials | Wrong key id or secret, or a key for a different account or endpoint. |
 | **Test** fails on the bucket | Wrong name or region, or an endpoint that needs path-style addressing. |
 | **Test** fails on the round trip | The key lacks `s3:PutObject`, `s3:GetObject` or `s3:DeleteObject` on `<bucket>/*`. |
-| Upload stalls at 0%, console mentions Content Security Policy | `STORAGE_CSP_ORIGIN` is empty or wrong (§3 step 1). |
+| Upload stalls at 0%, console mentions Content Security Policy | The bucket is a plain-http origin the policy does not allow (§3 step 1). |
 | Upload transfers, then fails at completion with a 502 on `.../upload/parts` | The key lacks `s3:ListMultipartUploadParts`. |
 | Upload fails with a network error and no status, console mentions CORS | The bucket's CORS rule. See [`s3-cors.md`](s3-cors.md). |
 | Playback does not start or seek | `Range` missing from the CORS rule, or `media-src` lacks the storage origin. |

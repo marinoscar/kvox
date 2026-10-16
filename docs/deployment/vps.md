@@ -208,7 +208,7 @@ SSH session), and everything below runs **on the VPS**.
    | Everything else | Every remaining `.env.example` key not already asked, only with `--all` | — |
    | Review | The full set of answers, before anything is written | — |
 
-   **Object storage is not asked.** The bucket, region, endpoint and keys are no longer `.env` variables (issue #469): after the install, sign in as the initial administrator and enter them at `/admin/settings/storage` (Test, then Save). Uploads answer 503 until you do. The one storage value that stays in `.env` is `STORAGE_CSP_ORIGIN`, the bucket's browser-visible origin for the Content Security Policy; set it before the first start, or recreate the nginx container after setting it. See [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md).
+   **Object storage is not asked.** The bucket, region, endpoint and keys are no longer `.env` variables (issue #469): after the install, sign in as the initial administrator and enter them at `/admin/settings/storage` (Test, then Save). Uploads answer 503 until you do. No storage value stays in `.env`: since #483 the Content Security Policy allows any `https:` origin in `connect-src` and `media-src`, so the bucket's origin is not written into nginx (a plain-http origin such as a local MinIO is added in `infra/nginx/app.d/csp/`, see ["The generated infrastructure files"](#the-generated-infrastructure-files-483)). See [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md).
 
    The full pipeline, in order, is: preflight → the `devnet` network →
    `gh auth setup-git` → checkout → environment (the wizard above) →
@@ -616,6 +616,73 @@ Three checks once the update is healthy, signed in as an administrator:
 3. **With telemetry on:** make a request, then find its trace in the explorer
    and confirm the dashboard renders. If GreptimeDB is unreachable the API
    reports telemetry as unavailable; it does not fail.
+
+### The generated infrastructure files (#483)
+
+`infra/` is no longer maintained by hand. `npm run platform:infra:sync` renders it
+from `@marinoscar/platform-infra` (pinned in the root `package.json`) with the
+identity in `packages/shared/identity.json`, writes `infra/platform-infra.lock.json`,
+and CI fails on drift with `npm run platform:infra:sync -- --check`. The files are
+committed, because a VPS deploy runs Compose in a git checkout with no `node_modules`.
+
+| Generated (header `GENERATED from @marinoscar/platform-infra`; never edit) | App-owned (created once, edit freely) |
+|---|---|
+| `infra/compose/{base,dev,devdb,prod,vps,worker,worker.build,test}.compose.yml`, `telemetry.compose.yml`, `vps.telemetry.compose.yml`, `postgres-init/10-application-role.sh` | `infra/compose/app.*.compose.yml` overlays, applied after every platform file |
+| `infra/compose/.env.example`, `.env.worker.example` | `infra/compose/app.env.example`, appended to `.env.example` |
+| `infra/nginx/{nginx.conf,csp.conf,csp.dev.conf}`, `infra/nginx/platform/*` | `infra/nginx/app.d/` (`locations/`, `csp/`, `http/`, `server/`, `permissions-policy.conf`) |
+| `infra/otel/otel-collector-config.yaml` | `infra/otel/app-collector.yaml`, `postgres-init/20-*.sh` |
+
+What this app adds, and why each one is an overlay and not an edit:
+
+| File | Scope | What it does |
+|---|---|---|
+| `app.prod.memory-limits.compose.yml` | prod, vps | The API and web memory limits read `API_MEM_LIMIT` and `WEB_MEM_LIMIT` (defaults 512M and 128M, equal to `prod.compose.yml`). |
+| `app.vps.no-stack-agent.compose.yml` | vps | Puts `stack-agent` (the one container that holds the Docker socket) in the `disabled` profile. |
+| `app.devdb.pgvector.compose.yml`, `app.test.pgvector.compose.yml` | devdb, test | `pgvector/pgvector:pg16` for the development and test databases; the migrations create `vector`, which the platform's `postgres:16-alpine` does not ship. |
+| `app.env.example` | `.env.example` | `API_MEM_LIMIT`, `WEB_MEM_LIMIT`, `KG_MIGRATE_SCHEDULE_ENABLED`. |
+| `app.d/locations/app-streams.conf` | nginx | The three SSE routes (`/api/notes/:id/stream`, `/api/note-generations/:id/stream`, `/api/ask/messages/:id/stream`) through the platform's unbuffered, 600 s `sse-proxy.conf`. The edge proxy has the same three through the CLI's `proxy.streamPaths`. |
+| `app.d/locations/app-uploads.conf` | nginx | `client_max_body_size` for the two multipart routes (`POST /api/graph/imports`, 21m; `POST /api/notes/sources/documents`, 257m, the API enforces `ai.maxDocumentBytes`). The generated `/api` location sets none, so nginx's 1 MiB default applied to them before. |
+| `app.d/permissions-policy.conf` | nginx | `microphone=()`, as this app has always sent it (the platform default is `microphone=(self)`). |
+
+**What changed for an operator**
+
+- **Content Security Policy is wider.** The old policy named one storage origin in
+  `connect-src` and `media-src`; the platform's allows `https:` in both, which
+  covers presigned upload and playback URLs wherever the bucket lives. `script-src`,
+  `default-src`, `object-src` and `frame-ancestors` are unchanged. `STORAGE_CSP_ORIGIN`
+  is gone from `.env.example` and is ignored if left in `.env`. A **plain-http**
+  origin (a local MinIO at `http://localhost:9000`) is no longer allowed: add
+  `infra/nginx/app.d/csp/connect-src.conf` and `media-src.conf` containing
+  `default " http://localhost:9000";` (a leading space; see the platform's
+  `connect-src.conf.example`) and recreate nginx. To keep the strict one-origin
+  policy instead, mount your own `csp.conf` over `/etc/nginx/csp.conf` with an
+  `app.*.compose.yml` overlay (the platform README's "The CSP override").
+- **The development database role defaults to `app`**, not `kvox_app`: the
+  generated `.env.example` carries `POSTGRES_USER=app` and `devdb`/`test` create that
+  role. Deployments keep whatever their `.env` names; this is only the template default.
+  `APP_DB_USER` and `APP_DB_PASSWORD` are gone from `.env.example` (`devdb` derives
+  them from `POSTGRES_USER`/`POSTGRES_PASSWORD`).
+- **Two values became required on the VPS stack.** The platform's `vps.compose.yml`
+  refuses to render without `DEPLOY_ROOT` (it also defaults the deploy-info mount to
+  `./.deploy`, where this app's file used `../../..`) and without `STACK_AGENT_TOKEN`,
+  even though this app switches the stack agent off. A server deployed by CLI 1.8.0
+  has neither guaranteed. `kvox deploy update` records `DEPLOY_ROOT` from the
+  deployment root and generates `STACK_AGENT_TOKEN` (hex, never asked) before it runs
+  Compose, so nothing to do. If you run `docker compose` by hand against an un-updated
+  `.env`, add both: the error names the variable; `openssl rand -hex 32` makes a token.
+- **Ports and limits are unchanged**: nginx still binds `${NGINX_PORT:-3535}` in dev
+  and `127.0.0.1:${APP_BIND_PORT}` on a VPS; nginx and the API now raise their
+  open-file limit (65536) and nginx its worker connections for long-lived SSE.
+- **The old trace UI stack is gone** (`otel.compose.yml`, Uptrace, #471); telemetry is
+  the platform's `telemetry.compose.yml` (GreptimeDB and the collector).
+
+**Changing it.** A change to a generated file goes into the platform package (a new
+release, then `npm run platform:infra:sync`); a change for this app goes into an
+app-owned file above. Never edit a generated file: `--check` fails the build and the
+next sync overwrites it. After a rename (`scripts/rename.mjs`), run the sync again so
+the identity and the lock follow. CI's `Build & Test` job runs `sync --check` and the
+infra conformance suite (`apps/cli/src/infra-conformance.test.ts`): `docker compose config`
+for every mode with the overlays, and `nginx -t` over `app.d/` with both CSP files.
 
 ## 7. Certificates and the renewal cron
 

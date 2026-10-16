@@ -27,7 +27,7 @@ menu can do is also a plain subcommand, and the subcommands are what this
 document covers: they're what you'd script or run in CI.
 
 `kvox --version` prints `<cli version> (platform <engine version>)`, for
-example `1.10.0 (platform 0.1.0-next.5)`.
+example `1.10.1 (platform 0.1.0-next.5)`.
 
 ## Install
 
@@ -71,7 +71,7 @@ KVOX_SRC=/path/to/repo bash /path/to/repo/install.sh
 ### Verify the install
 
 ```bash
-kvox --version      # 1.10.0 (platform 0.1.0-next.5)
+kvox --version      # 1.10.1 (platform 0.1.0-next.5)
 kvox --help
 ```
 

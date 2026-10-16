@@ -1,6 +1,6 @@
 {
   "name": "cli",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "private": true,
   "description": "First-party command-line client for the API (epic #110), built on @marinoscar/platform-cli (epic #478).",
   "type": "module",

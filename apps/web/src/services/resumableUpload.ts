@@ -535,7 +535,7 @@ export class UploadFailedError extends Error {
  * spends every attempt and its backoff on a policy decision that is identical
  * on every try, then reports `Part N failed after N attempts` — which reads as
  * a flaky network and sends the user to find better Wi-Fi, when the only fix
- * is an operator adding the storage origin to the policy (issue #84). The
+ * is an operator adding the storage origin to the policy (issue #84; the policy allows `https:` by default, so only a plain-http origin needs this). The
  * `securitypolicyviolation` DOM event is the one signal that tells the two
  * apart, so the engine listens for it and fails fast with a message naming
  * the origin and the setting. Every other part targets the same origin under
@@ -544,7 +544,7 @@ export class UploadFailedError extends Error {
 export function cspBlockedUploadMessage(origin: string): string {
   return (
     `Your browser blocked the upload to storage (${origin}) because of this site's ` +
-    'Content Security Policy. An administrator needs to add that origin to STORAGE_CSP_ORIGIN.'
+    'Content Security Policy. An administrator needs to allow that origin in infra/nginx/app.d/csp/ (connect-src and media-src).'
   );
 }
 

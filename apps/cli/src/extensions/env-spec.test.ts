@@ -20,6 +20,20 @@ beforeEach(() => {
 });
 
 describe('the app environment keys', () => {
+  it('are the ones infra/compose/app.env.example declares, and nothing retired is declared', () => {
+    const appKeys = parseEnvExample(readFileSync(join(REPO_ROOT, 'infra', 'compose', 'app.env.example'), 'utf8')).map(
+      (spec) => spec.key,
+    );
+    expect(appKeys.sort()).toEqual(['API_MEM_LIMIT', 'KG_MIGRATE_SCHEDULE_ENABLED', 'WEB_MEM_LIMIT']);
+
+    const template = readFileSync(join(REPO_ROOT, 'infra', 'compose', '.env.example'), 'utf8');
+    // Storage, Web Push and tracing backends are runtime-configured or gone: no variable names them.
+    for (const retired of ['STORAGE_PROVIDER', 'S3_BUCKET', 'S3_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'STORAGE_CSP_ORIGIN', 'STORAGE_STALE_UPLOAD_HOURS', 'UPTRACE_']) {
+      expect(template, retired).not.toMatch(new RegExp(`^#?\\s*${retired}[A-Z_]*=`, 'm'));
+    }
+    expect(template).not.toMatch(/^#?\s*VAPID_(PUBLIC_KEY|PRIVATE_KEY|SUBJECT)=/m);
+  });
+
   it('only describe keys the template declares (a renamed key must not leave dead metadata)', () => {
     const declared = new Set(
       parseEnvExample(readFileSync(join(REPO_ROOT, 'infra', 'compose', '.env.example'), 'utf8')).map((spec) => spec.key),
@@ -33,8 +47,8 @@ describe('the app environment keys', () => {
   it('are registered with the CLI, and resolve through the platform registry', () => {
     createCli(APP_CLI_OPTIONS);
 
-    expect(resolveEnvMetadata('STORAGE_CSP_ORIGIN')).toMatchObject({ allowBlank: true });
     expect(resolveEnvMetadata('API_MEM_LIMIT')).toBeDefined();
+    expect(resolveEnvMetadata('KG_MIGRATE_SCHEDULE_ENABLED')).toBeDefined();
   });
 
   it('validate the sizings the wizard no longer suggests', () => {
@@ -47,5 +61,7 @@ describe('the app environment keys', () => {
     expect(check('WEB_MEM_LIMIT', 'lots')).toBeDefined();
     expect(check('POSTGRES_SSL', 'true')).toBeUndefined();
     expect(check('POSTGRES_SSL', 'yes')).toBeDefined();
+    expect(check('KG_MIGRATE_SCHEDULE_ENABLED', 'false')).toBeUndefined();
+    expect(check('KG_MIGRATE_SCHEDULE_ENABLED', 'off')).toBeDefined();
   });
 });

@@ -1,3 +1,5 @@
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.5 (compose) — do not edit; extend through an infra/compose/app.*.compose.yml overlay
+# Source of truth: @marinoscar/platform-infra/compose/dev.compose.yml; re-materialise with `npx platform-infra sync`
 # =============================================================================
 # Docker Compose - Development Overrides
 # =============================================================================
@@ -18,11 +20,6 @@ services:
       # inline React Refresh preamble script that `script-src 'self'` blocks,
       # which leaves the app a blank page; this policy permits it.
       # Development only.
-      #
-      # ⚠ THE CONTAINER PATH MUST MATCH base.compose.yml'S EXACTLY, or Compose
-      # keeps BOTH mounts and the strict policy wins. It is /etc/nginx/csp.conf;
-      # the storage origin is rendered into /etc/nginx/storage-origin.conf by
-      # base.compose.yml's template mount, which this file inherits unchanged.
       - ../nginx/csp.dev.conf:/etc/nginx/csp.conf:ro
 
   # ---------------------------------------------------------------------------
