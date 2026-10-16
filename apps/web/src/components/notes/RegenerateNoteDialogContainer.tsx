@@ -39,7 +39,7 @@
 import { useCallback, useState } from 'react';
 
 import { useNoteTemplateDetail, useNoteTemplates } from '../../hooks/useNoteTemplates';
-import type { AiConfigModel } from '../../services/ai';
+import type { AiTasksConfigModel } from '../../services/aiTasks';
 import type { Note, RegenerateNoteInput } from '../../services/notes';
 import { RegenerateNoteDialog } from './RegenerateNoteDialog';
 
@@ -71,7 +71,7 @@ function writeShowHidden(value: boolean): void {
 export interface RegenerateNoteDialogContainerProps {
   open: boolean;
   note: Note;
-  models: AiConfigModel[];
+  models: AiTasksConfigModel[];
   defaultModel: string | null;
   busy: boolean;
   error: string | null;

@@ -1,7 +1,7 @@
 # Runbook: Rotate `SECRETS_ENCRYPTION_KEY`
 
 This runbook covers rotating the key that encrypts runtime-configured credentials
-(the `credentials` table) and every user's own AI key (the `user_ai_credentials`
+(the `credentials` table) and every user's own AI key (the platform's `user_ai_keys`
 table), and the separate, more serious situation of losing that key entirely.
 
 For the underlying cipher and key model, see
@@ -13,8 +13,10 @@ Source of truth for every claim below:
   validation (`verifyEncryptionKeyAtStartup`, called from `apps/api/src/main.ts`).
 - `@marinoscar/platform-api/credentials` — the store (`CredentialsService`),
   mounted by `apps/api/src/platform/credentials/credentials.config.ts`.
-- `apps/api/src/ai/user-ai-credentials.service.ts` — the per-user AI keys, which use
-  the same cipher with the purpose `'ai-key'`.
+- `UserAiKeysService` in `@marinoscar/platform-api/ai` — the per-user AI keys, which use
+  the same cipher with the purpose `'ai_user_key'`. (Until issue #477 the app kept them
+  in its own `user_ai_credentials` table under the purpose `'ai-key'`; that table is
+  dropped.)
 
 Until issue #466 the cipher, the startup check and the store were the app's own files
 (`common/crypto/`, `credentials/`). The packaged versions are byte-compatible with
@@ -28,8 +30,7 @@ that describes the cipher still holds. What changed is where the code lives.
 | Table | Sub-key domain (the `purpose` passed to the cipher) | Written by |
 |---|---|---|
 | `credentials` | the row's own `purpose` column (`smtp`, `push_vapid`, `transcription`, `storage`, ...) | `CredentialsService.setSecret` |
-| `user_ai_credentials` | the constant `'ai-key'` for every row | `UserAiCredentialsService` |
-| `user_ai_keys` | the constant `'ai_user_key'` for every row (the platform AI slice; filled by `npm run ai:migrate-legacy`, see [ai-platform-migration.md](ai-platform-migration.md)) | the platform `UserAiKeysService` |
+| `user_ai_keys` | the constant `'ai_user_key'` for every row (the platform AI slice; the rows written by the key migration of [ai-platform-migration.md](ai-platform-migration.md) are in it too) | the platform `UserAiKeysService` |
 | `user_credentials`, `org_credentials` | `user:<userId>:<purpose>` and `org:<orgId>:<purpose>` | the platform's per-user and per-organization stores. Mounted but unused: this deployment writes no row, so both are empty. If one ever is not, rotate it too |
 
 A rotation that rewrites only `credentials` leaves every user's AI key undecryptable
@@ -56,7 +57,7 @@ script safely, not a command you can copy-paste as-is.
   where a credential *written* during the rotation can be missed. The safest
   approach is to freeze credential writes for the duration: the admin surfaces that
   call `CredentialsService.setSecret` (email, push and transcription settings) and
-  the users' AI key save route (`PUT /api/ai-credentials`).
+  the users' AI key save route (`PUT /api/ai/keys/:provider`).
 
 - **Confirm you have the OLD key available too.** Rotation is a
   decrypt-with-old / re-encrypt-with-new operation. You need both keys
@@ -69,7 +70,7 @@ script safely, not a command you can copy-paste as-is.
 |---|---|
 | `CredentialsService.describe` / `.list` (reads that never touch `secret`) | Yes — unaffected by a rotation running elsewhere |
 | Reading a credential via `getSecret` for existing, unrotated rows | Yes, as long as the app's configured key is still the OLD key |
-| **Writing a new credential** (`setSecret`, or saving an AI key through `PUT /api/ai-credentials`) | **No** — see section 4 |
+| **Writing a new credential** (`setSecret`, or saving an AI key through `PUT /api/ai/keys/:provider`) | **No** — see section 4 |
 
 Reads that never touch the ciphertext (`describe`, `list`) are always safe.
 The dangerous operation is a **write** landing after your rotation script has
@@ -143,10 +144,10 @@ at all), and it applies equally to your script's own `console.log` calls.
 2. Load the cipher module fresh (section 3).
 3. Read every row of every table in the list above:
    `prisma.credential.findMany({ select: { id: true, purpose: true, name: true, secret: true } })`
-   and `prisma.userAiCredential.findMany({ select: { id: true, secret: true } })`
+   and `prisma.userAiKey.findMany({ select: { id: true, secret: true } })`
    (and, should they ever hold rows, `user_credentials` and `org_credentials`).
 4. For each `credentials` row, call `decryptSecret(row.secret, row.purpose)`. For each
-   `user_ai_credentials` row, call `decryptSecret(row.secret, 'ai-key')`.
+   `user_ai_keys` row, call `decryptSecret(row.secret, 'ai_user_key')`.
 5. Hold the decrypted plaintexts in memory only, keyed by row `id`. Do not
    write them anywhere.
 
@@ -158,13 +159,13 @@ at all), and it applies equally to your script's own `console.log` calls.
 7. Set `SECRETS_ENCRYPTION_KEY` to the NEW key.
 8. Load the cipher module fresh again.
 9. For each held plaintext, call `encryptSecret(plaintext, purpose)` (same
-   `purpose` as the row it came from, `'ai-key'` for an AI key — the sub-key derivation is
+   `purpose` as the row it came from, `'ai_user_key'` for an AI key — the sub-key derivation is
    purpose-bound, so getting this wrong produces a ciphertext that fails to
    decrypt later even though nothing else went wrong).
 
 **Phase D — write the new ciphertext back.**
 10. For each row, `prisma.credential.update({ where: { id }, data: { secret: newCiphertext } })`
-    (or `prisma.userAiCredential.update(...)` for an AI key), addressed by `id` (not by
+    (or `prisma.userAiKey.update(...)` for an AI key), addressed by `id` (not by
     `purpose`/`name` upsert — you are updating an existing row, not creating one).
     Write the `secret` column only, so `hint`, `label` and `updated_by_user_id` stay as they are.
 11. Discard the in-memory plaintexts once every row is confirmed rewritten.
@@ -177,12 +178,12 @@ at all), and it applies equally to your script's own `console.log` calls.
     well-formed and log that encrypted credential storage is available.
     Remember: **this check does not verify the key can decrypt existing
     rows** — it only counts the `credentials` table (see the decision table in
-    `SECURITY-ARCHITECTURE.md` section 14), and never looks at `user_ai_credentials`.
+    `SECURITY-ARCHITECTURE.md` section 14), and never looks at `user_ai_keys`.
     A row missed in step 3 (written
     after your read pass, still under the OLD key) will pass this boot check
     silently and only fail later: as an `InternalServerErrorException` from
     `CredentialsService.getSecret` for a `credentials` row, or as a failed decrypt in
-    the AI key path for a `user_ai_credentials` row, the first time something tries to read
+    the AI key path for a `user_ai_keys` row, the first time something tries to read
     it. This is exactly why section 2's write-freeze / maintenance window
     matters — there is no safety net at boot for a row rotation missed.
 14. Once you've confirmed the app is healthy against the new key, securely
@@ -241,7 +242,7 @@ is present, absent, or wrong.
 Once you have that list, contact whoever owns each `purpose`/`name` pair and
 have them re-enter the secret through the normal write path for that purpose (the
 email, push or transcription settings page). For AI keys,
-`SELECT user_id, provider, hint, updated_at FROM user_ai_credentials` lists
+`SELECT user_id, provider, hint, updated_at FROM user_ai_keys` lists
 who needs to re-save theirs.
 
 ## 6. Summary checklist
@@ -249,7 +250,7 @@ who needs to re-save theirs.
 - [ ] New key generated with `openssl rand -base64 32` and stored outside the repo and the database
 - [ ] Maintenance window scheduled or credential writes frozen
 - [ ] Rotation script written per section 4, decrypting under OLD key and re-encrypting under NEW key in the same process, with an explicit module-cache reload of the cipher file between the two phases
-- [ ] Every table in the list at the top is covered: `credentials` and `user_ai_credentials` (and `user_credentials` / `org_credentials` if they hold rows)
+- [ ] Every table in the list at the top is covered: `credentials` and `user_ai_keys` (and `user_credentials` / `org_credentials` if they hold rows)
 - [ ] No plaintext logged or written to disk at any point
 - [ ] All rows confirmed rewritten under the new key before the deployment's env var is changed
 - [ ] Deployment's `SECRETS_ENCRYPTION_KEY` updated to the NEW key and app restarted

@@ -6,7 +6,7 @@
  * OWNED BY THE `home` DESTINATION, with no bottom-bar tab of its own (the bar
  * is at its four-tab ceiling by design — CLAUDE.md, Navigation Destination
  * Model). Reached from Home's Knowledge section. Gated on `graph:read` in
- * `App.tsx`; the whole page is behind `GET /api/ai/config`'s `graphEnabled`
+ * `App.tsx`; the whole page is behind `GET /api/ai-tasks/config`'s `graphEnabled`
  * — with it off, an info state and no composer.
  *
  * LAYOUT. ≥ 600 px: the saved conversations in a 280 px left pane that scrolls
@@ -54,11 +54,11 @@ import { askComposerAlert } from '../components/ask/askComposerAlert';
 import { ASK_DISABLED_COPY } from '../components/ask/askErrorCopy';
 import { EntityTypeIcon } from '../components/graph/entityTypeIcon';
 import { entityPath } from '../components/graph/EntityListRow';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useAskConversation } from '../hooks/useAskConversation';
 import { useAskConversations } from '../hooks/useAskConversations';
 import { postAskMessage } from '../services/ask';
-import type { AiConfig } from '../services/ai';
+import type { AiTasksConfig } from '../services/aiTasks';
 import type { AskConversationDetail, AskConversationSummary } from '../services/ask';
 
 /** How `/ask` hands a just-created conversation's rows to `/ask/:id`. */
@@ -74,7 +74,7 @@ export interface AskLocationState {
 const PAGE_HEIGHT = { xs: 'calc(100dvh - 160px)', sm: 'calc(100dvh - 112px)' } as const;
 
 export default function AskPage() {
-  const ai = useAiConfig();
+  const ai = useAiTasksConfig();
   const config = ai.config;
 
   if (ai.isLoading) return <AskPageSkeleton />;
@@ -119,7 +119,7 @@ function ThreadSkeleton() {
   );
 }
 
-function AskWorkspace({ config }: { config: AiConfig | null }) {
+function AskWorkspace({ config }: { config: AiTasksConfig | null }) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();

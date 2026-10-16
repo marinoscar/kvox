@@ -7,7 +7,7 @@
  * be a second place the "which affordances does this row get?" question is
  * answered, and the answer is already one field on one row.
  *
- * Shaped after `useAiCredential`: one read, `isMounted()` after every await, a
+ * Shaped after `useAiTasksConfig`: one read, `isMounted()` after every await, a
  * per-action error that is a STRING the page renders rather than an exception
  * the page has to catch. Every mutation returns the row (or `null`), so a
  * caller can act on success without re-reading the list.

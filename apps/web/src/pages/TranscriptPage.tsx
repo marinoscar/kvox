@@ -46,7 +46,7 @@
  *   no `notes:write`      ABSENT. A control a role can never use is noise, and
  *                         nothing on the destination would help them.
  *   `keyConfigured` false PRESENT, and it navigates. ⚠ This page deliberately
- *                         does NOT read `useAiConfig()`. Hiding the feature
+ *                         does NOT read `useAiTasksConfig()`. Hiding the feature
  *                         from the users who have not set up a key yet hides it
  *                         from exactly the people who have never heard of it;
  *                         the destination renders `AiKeyRequired` (#55), which
@@ -86,7 +86,7 @@
  * =============================================================================
  *
  * Offered to anyone who can edit, by the same discoverability argument as
- * Create note: the page does NOT read `useAiConfig()` for it. The start dialog
+ * Create note: the page does NOT read `useAiTasksConfig()` for it. The start dialog
  * (`NameCheckDialog`) reads the config when opened and renders `AiKeyRequired`
  * itself. The one exception is the post-rename nudge, which is only worth
  * showing when a check could actually run — `NameCheckRenamePrompt` reads the

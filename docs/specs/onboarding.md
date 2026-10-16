@@ -43,7 +43,8 @@ only after pressing a button that does not work — and there were **13 admin
 settings cards** across three groups with nothing saying which two of them
 the product cannot run without.
 
-The ordinary user's gap is different in kind, not degree. `user_ai_credentials`
+The ordinary user's gap is different in kind, not degree. The per-user AI key
+(the platform's `user_ai_keys`; `user_ai_credentials` when this was written)
 has no deployment-wide fallback **by design** (`docs/specs/notes.md` §9):
 every note generation is billed to the user's own vendor account, and the
 key that authorises it must come from the user, not the deployment. Nothing
@@ -253,7 +254,7 @@ Every step reports one of `satisfied` / `pending` / `blocked`, and `blocked`
 is the whole reason a boolean was rejected: it is what keeps "your
 administrator has not connected a transcription provider" distinct from
 "you have not recorded anything yet." That is the identical distinction
-`apps/api/src/ai/dto/ai-config.dto.ts` already draws by keeping `available`
+`apps/api/src/ai-port/dto/ai-tasks.dto.ts` (`GET /api/ai-tasks/config`) already draws by keeping `available`
 (may this deployment offer AI at all) and `keyConfigured` (has *this*
 caller saved a key) independent fields rather than one collapsed answer —
 two different sentences, with two different fixes, and two different
@@ -308,8 +309,9 @@ runtime check inside one shared handler.
 
 **Why the user route carries no permission string.** The resource is the
 caller's own onboarding state, scoped by `userId` in the query itself — the
-identical ownership-scoped posture `/api/ai-credentials`, `/api/pat` and
-`/api/user-data` already take. It must be readable by a plain Viewer, this
+identical ownership-scoped posture `/api/pat` and `/api/user-data` take (and
+`/api/ai-credentials` did, before #477 replaced it with the platform's
+`/api/ai/keys`, which requires `ai:use`). It must be readable by a plain Viewer, this
 application's default role and therefore the role most likely to be looking
 at a getting-started page, and every candidate permission string is either
 seeded Admin-only or belongs to a controller this route has nothing to do

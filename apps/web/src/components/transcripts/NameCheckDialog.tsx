@@ -11,7 +11,7 @@
  * THE AI GATE LIVES HERE, NOT ON THE PAGE
  * =============================================================================
  *
- * `TranscriptPage` deliberately does not read `useAiConfig()` for its AI
+ * `TranscriptPage` deliberately does not read `useAiTasksConfig()` for its AI
  * entry points (see its header): hiding a feature from users who have not set
  * up a key hides it from exactly the people who have never heard of it. So the
  * page always offers "Fix names with AI" to an editor, and THIS dialog — only
@@ -43,7 +43,7 @@ import { useTheme } from '@mui/material/styles';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AiKeyRequired } from '../ai/AiKeyRequired';
-import { useAiConfig } from '../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useIsMounted } from '../../hooks/useIsMounted';
 import { ApiError } from '../../services/api';
 import {
@@ -102,7 +102,7 @@ function DialogBody({
   onOpenResults,
 }: Omit<NameCheckDialogProps, 'open'>) {
   const isMounted = useIsMounted();
-  const { keyConfigured, available, isLoading: aiLoading } = useAiConfig();
+  const { keyConfigured, available, isLoading: aiLoading } = useAiTasksConfig();
 
   const namedSpeakers = useMemo(
     () => speakers.filter((speaker) => !isGenericSpeakerName(speaker.displayName)),

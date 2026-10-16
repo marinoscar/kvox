@@ -512,7 +512,7 @@ export async function teardownSeededGraph(prisma: PrismaClient, userId: string):
       await tx.noteVersion.deleteMany({ where: { note: { ownerId: userId } } });
       await tx.note.deleteMany({ where: { ownerId: userId } });
       await tx.storageObject.deleteMany({ where: { uploadedById: userId } });
-      await tx.userAiCredential.deleteMany({ where: { userId } });
+      await tx.userAiKey.deleteMany({ where: { userId } });
       await tx.job.deleteMany({ where: { payload: { path: ['userId'], equals: userId } } });
       await tx.userRole.deleteMany({ where: { userId } });
       await tx.user.deleteMany({ where: { id: userId } });

@@ -30,9 +30,8 @@
 // orphan (the SES access key id and secret are now saved at
 // `/admin/settings/email`).
 //
-// NOT HERE: `ai-key`. Every AI key is per user in `user_ai_credentials`, never
-// in `credentials`; that table uses the cipher (`encryptSecret` /
-// `decryptSecret` with purpose `'ai-key'`) but no `credentials` row.
+// NOT HERE: `ai-key`. Every AI key is per user in the platform's `user_ai_keys`,
+// never in `credentials` (the former `user_ai_credentials` table is gone, #477).
 // =============================================================================
 
 import { AI_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/ai';

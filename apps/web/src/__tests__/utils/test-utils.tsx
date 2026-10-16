@@ -117,6 +117,13 @@ export const mockAdminUser: MockUser = {
     'telemetry:read',
     'telemetry:write',
     'telemetry:query',
+    // Present because the seeded `admin` role grants the platform AI set
+    // (#473, #477): `ai_config:*` for the AI, AI models and AI usage cards, and
+    // `ai:use` because an administrator should not need a second grant to use
+    // what they configure.
+    'ai_config:read',
+    'ai_config:write',
+    'ai:use',
   ],
   isActive: true,
   createdAt: new Date().toISOString(),

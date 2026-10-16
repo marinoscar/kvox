@@ -28,6 +28,13 @@
 > Update, issue #361: the AI settings card (`/admin/settings/ai`) gained two
 > new sections, "Connected knowledge" and "Task models" — sections within
 > that existing card, not a new card, route or tab.
+>
+> Update, issue #477 (epic #472): the AI pages are the platform's
+> (`@marinoscar/platform-web/ai/ui`). The admin `AI` card now renders
+> `AiConfigPage` and gates on `ai_config:read`, two cards were appended
+> (`AI models`, `AI usage`), and the user `AI Provider` card renders
+> `UserAiKeysPage` and gates on `ai:use`. The application's own sections moved
+> into the platform page's `Sections` slot. See §8.
 
 The admin console and the per-user `/settings` surface both used to be
 tab-strip pages — `SystemSettingsPage` with three tabs, `UserManagementPage`
@@ -192,6 +199,8 @@ controllers below, not assumed:
 | `db_backup:read` | the database-backup controller — `PERMISSIONS.DB_BACKUP_READ` |
 | `broadcasts:read` | the platform's broadcasts controller (`@marinoscar/platform-api/notifications`, `/api/admin/broadcasts`) — `broadcasts:read` (or the organization twin `org_broadcasts:read`) |
 | `push:read` | the platform's push-config controller (`/api/admin/push-config`) — `push:read` |
+| `ai_config:read` (writes: `ai_config:write`) | the platform AI slice's admin controllers (`@marinoscar/platform-api/ai`: `GET /api/admin/ai/config`, `/models`, `/usage`) and the application's own `GET`/`PUT /api/ai-tasks/settings` (`apps/api/src/ai-port/ai-tasks.controller.ts`) — system scope, held by Admin. It replaced `system_settings:read` on the AI card in #477 |
+| `ai:use` | the platform's per-user AI routes (`/api/ai/keys`, `/api/ai/config`) — org scope, seeded to Admin, Contributor and Viewer by #473. Gates the user `AI Provider` card |
 
 The reason this has to be a mirror and never an invented string is what a
 registry is *for*: the hub, the rail and the title resolver decide whether a
@@ -404,6 +413,30 @@ this suite silently stops asserting pixels for." Any change that adds a new
 `permission` string to either registry must add it to
 `DEFAULT_PERMISSIONS` in the same change, or the baselines are testing a
 smaller grid than the one that ships.
+
+## 8. The AI cards (issue #477)
+
+Four cards, three admin and one per-user, all pointing at pages the platform AI slice ships. The registry entries are the application's; the pages are not.
+
+| Card | Registry | Path | Permission | `feature` | Page |
+|---|---|---|---|---|---|
+| `AI` | `ADMIN_SECTIONS`, General | `/admin/settings/ai` | `ai_config:read` | none | `AiConfigPage`, with the application's sections in its `Sections` slot |
+| `AI models` | `ADMIN_SECTIONS`, General, appended | `/admin/settings/ai/models` | `ai_config:read` | `'ai'` | `AiModelsPage` |
+| `AI usage` | `ADMIN_SECTIONS`, General, appended | `/admin/settings/ai/usage` | `ai_config:read` | `'ai'` | `AiUsagePage` |
+| `AI Provider` | `USER_SETTINGS_SECTIONS`, Account | `/settings/ai` | `ai:use` | `'ai'` | `UserAiKeysPage` |
+
+The `feature` field is a registry-level gate, resolved in `apps/web/src/config/settingsFeatures.ts`, that hides a card while the deployment has AI switched off. It is separate from the permission, which is still the exact string the API enforces. `ai` is the platform's own key (read from the shell's one copy of `GET /api/ai/config` through `useAiFeatures`; it fails closed without the provider). The application also registers `graph` (connected knowledge, `ai.graphEnabled`, read from `GET /api/ai-tasks/config` through `NavigationFeaturesContext`, which already holds that answer, because a feature resolver must never fetch); no card uses it yet.
+
+- **The `AI` card carries no `feature`, on purpose.** It is where an administrator switches AI on, so it must stay reachable while AI is off. The `AI models`, `AI usage` and `AI Provider` cards hide until it is on, because with AI off there is no catalogue to browse, no usage to report and nothing a key could be used for. The platform's AI rules call this AI rule 5.
+- **The application's sections are content, never a tab or a card.** `AiGraphSettings` (the `graphEnabled` switch and who pays), `AiTaskModels` (the model and effort per connected-knowledge task) and `AiModelLimits` (the default model and the ceilings) are mounted in `AiConfigPage`'s `Sections` slot by `apps/web/src/pages/Admin/AiSettingsPage.tsx`, in that order, over one draft and one Save (`AiTasksSettingsSections`). They read and write `GET`/`PUT /api/ai-tasks/settings` through `apps/web/src/services/aiTasks.ts`. This is rule 2 applied: tabs are for parallel content inside one destination, and these sections are content inside the one `AI` destination. The slot object is a module constant because the platform keys on its identity.
+- **Writes are gated inside the page.** The card shows for `ai_config:read`; without `ai_config:write` every control stays visible and disabled, so an administrator diagnosing why a note was refused can still see which switch is off.
+- **The user card has a gate the old one did not.** Before #477 the `AI Provider` card had no `permission`, because `/api/ai-credentials` enforced none. The platform's `/api/ai/keys` enforces `ai:use`, so the card mirrors it (§3). A role without `ai:use` sees no card and gets 403 from the route.
+- **`AiPlaygroundPage` is not offered.** This app is not a general chat product, so no card is registered for it, and the org AI keys page is out of scope for a single-organization deployment.
+- **The browser never calls a provider.** The pages read and write settings; every model call goes through `KvoxAi` on the API.
+
+The visual harness (§7) needs `ai_config:read` and `ai:use` in `DEFAULT_PERMISSIONS` for these cards to appear in its baselines.
+
+The registry tests that pin the four rows: `apps/web/src/__tests__/config/settingsRegistry.test.ts` and `userSettingsSections.test.ts`.
 
 ## Rejected alternatives
 

@@ -331,7 +331,7 @@ describe('NotesPage', () => {
     // initializer, which is the only hook this suite has on it — the
     // `wrapperOptions.theme` field exists in the helper's type and is not read
     // by it, so passing it would render the LIGHT theme and quietly assert
-    // nothing. Same approach `UserAiPage.test.tsx` takes.
+    // nothing. Same approach the other settings page tests take.
     //
     // What this actually guards is that nothing about the dark render changes
     // the STRUCTURE (a themed component swapping an element or dropping a

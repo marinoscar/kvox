@@ -11,7 +11,7 @@
  *   4. Timeline — with the opt-in sensitive-facts switch.
  *   5. Mentions.
  *
- * ASK (#381). With connected knowledge on (`GET /api/ai/config`'s
+ * ASK (#381). With connected knowledge on (`GET /api/ai-tasks/config`'s
  * `graphEnabled`), the header's `actions` slot carries "Ask about {label}",
  * opening `EntityAskPanel` — a drawer over the page, scoped to this entity.
  * Its state lives in the URL: `?ask=1` open on a new conversation,
@@ -51,7 +51,7 @@ import { GRAPH_NOT_FOUND_MESSAGE } from '../hooks/graphHookUtils';
 import { useGraphBrief } from '../hooks/useGraphBrief';
 import { useGraphEntity } from '../hooks/useGraphEntity';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { entityTypeLabel } from '../utils/graphDisplay';
 import type { GraphIndexLocationState } from './GraphIndexPage';
@@ -82,7 +82,7 @@ export default function GraphEntityPage() {
   // --- Ask (#381) -------------------------------------------------------------
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const ai = useAiConfig();
+  const ai = useAiTasksConfig();
   // Only an explicit `true` offers the action: an older server that does not
   // say, or a failed read, is not a reason to advertise a feature.
   const askEnabled = ai.config?.graphEnabled === true;

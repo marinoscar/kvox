@@ -75,7 +75,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
 import type { UseNoteTemplateDetailResult } from '../../hooks/useNoteTemplates';
-import type { AiConfigModel } from '../../services/ai';
+import type { AiTasksConfigModel } from '../../services/aiTasks';
 import type { Note, RegenerateNoteInput } from '../../services/notes';
 import type { NoteTemplate } from '../../services/noteTemplates';
 import { ModelSelect } from './ModelSelect';
@@ -124,7 +124,7 @@ export interface RegenerateNoteDialogProps {
    */
   showHiddenTemplates?: boolean;
   onShowHiddenTemplatesChange?: (value: boolean) => void;
-  models: AiConfigModel[];
+  models: AiTasksConfigModel[];
   defaultModel: string | null;
   busy: boolean;
   error: string | null;
@@ -152,7 +152,7 @@ export interface RegenerateNoteDialogProps {
  */
 function initialModel(
   note: Note,
-  models: AiConfigModel[],
+  models: AiTasksConfigModel[],
   currentTemplate: NoteTemplate | null,
   defaultModel: string | null,
 ): string {
@@ -210,7 +210,7 @@ export function RegenerateNoteDialog({
   /**
    * Fill the model in once the list lands — and ONLY then.
    *
-   * The dialog can open before `GET /api/ai/config` has answered, in which case
+   * The dialog can open before `GET /api/ai-tasks/config` has answered, in which case
    * the seed above resolves to `''` because nothing is permitted yet. This is
    * the narrowest possible repair: it fires only while the selection is empty,
    * which is a state the user cannot produce themselves (the select offers no

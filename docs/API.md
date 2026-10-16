@@ -1179,8 +1179,7 @@ Get system-wide settings. The `ui` and `features` namespaces were removed as
 unused by issue #366 — nothing at runtime ever read either one. The stored
 value models exactly seven namespaces, in this order: the platform's
 `notifications`, `jobs`, `nodes`, `databaseBackup` and `maintenance`, then
-the app's `transcription` and `ai` (the same documents `GET /transcription-settings`
-and `GET /ai-settings` serve), plus the computed `security` block. Every
+the app's `transcription` and `ai` (the `ai` namespace is the platform's, extended by this application; its added fields are what `GET /ai-tasks/settings` serves), plus the computed `security` block. Every
 namespace is always present in the response: an absent stored block reads as its
 default. Registration order is the stored key order; a new namespace is appended.
 
@@ -1279,7 +1278,7 @@ default. Registration order is the stored key order; a new namespace is appended
 | `nodes.jobSecretBrokerEnabled` | boolean | Whether a worker node may be issued short-lived, job-scoped database credentials at all (epic #345). Default off |
 | `databaseBackup.*` | — | Backup schedule and retention policy — see `GET /admin/db-backup/config` and `docs/specs/database-backup.md`. The platform declaration is wider than the app's old one: `frequency` also accepts `cron`, and `cron` and `retention` (`count`, `maxAgeDays`) exist. `storageProvider` keeps the app's default `s3` (the platform's is empty). **Known behaviour change, closed by #467:** `PUT /admin/db-backup/config` now also accepts `frequency: "cron"`, without the minimum-interval validation the other frequencies get |
 | `transcription.*` | — | Speech-to-text policy. Registered by the app (`transcription/transcription.system-settings.ts`); see `GET /transcription-settings` and `docs/specs/transcription.md`. Carries no API key |
-| `ai.*` | — | AI policy. Registered by the app (`ai/ai.system-settings.ts`, `PLATFORM-ADOPTION-SHIM(3.1)` until #473); see `GET /ai-settings` and `docs/specs/notes.md`. Carries no API key |
+| `ai.*` | — | AI policy. The platform AI slice's namespace, extended by the app (`platform/ai/ai-settings.extension.ts`); see `GET /ai-tasks/settings`, the platform `/api/admin/ai/*` routes and `docs/specs/notes.md`. Carries no API key |
 | `maintenance.*` | — | Maintenance-window state — see `GET /admin/maintenance` and `docs/specs/maintenance-mode.md` |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 | `updatedBy` | object | User who last updated settings |
@@ -1939,7 +1938,7 @@ The configuration is held in the `storage` system-settings namespace plus the cr
 
 ### Personal Access Tokens
 
-Long-lived, user-created bearer tokens (`pat_…`) for non-browser clients such as the CLI or CI. Served by the platform identity slice (`/api/pat`). Three routes, all `@Auth()` with **no permission string** — deliberately: the resource is the caller's own token, scoped by `userId` in the query itself, the same ownership-scoped posture `/api/user-settings`, `/api/ai-credentials` and `/api/user-data` take. A PAT presents as `Authorization: Bearer pat_…` and carries the permissions of the user who minted it. Only a SHA-256 hash of the token is stored.
+Long-lived, user-created bearer tokens (`pat_…`) for non-browser clients such as the CLI or CI. Served by the platform identity slice (`/api/pat`). Three routes, all `@Auth()` with **no permission string** — deliberately: the resource is the caller's own token, scoped by `userId` in the query itself, the same ownership-scoped posture `/api/user-settings` and `/api/user-data` take. A PAT presents as `Authorization: Bearer pat_…` and carries the permissions of the user who minted it. Only a SHA-256 hash of the token is stored.
 
 #### POST /pat
 Create a new personal access token.
@@ -5087,551 +5086,25 @@ still answers `204`.
 
 ---
 
-### AI Settings
-
-The deployment AI policy — is AI on, which provider is active, which models
-are permitted, and the token/timeout/document ceilings every generation runs
-under — issue #47, epic #45; the active-provider axis, live model discovery
-and the widened `allowedModels` entry are issue #78; the five-rank
-resolution chain that lets a model be permitted with **no typed numbers at
-all**, and the raised `allowedModels` cap, are issue #97. See
-[`docs/specs/notes.md`](specs/notes.md) §2.5, §6.4.
-
-Gated on `system_settings:read` / `system_settings:write`, **not a
-permission pair of its own**: this configuration is the `ai` namespace of
-the `global` `system_settings` row that `system-settings.controller.ts`
-already gates on exactly those strings, so a separate pair would make the
-same bytes reachable under two different authorities — the same argument the
-Transcription section above makes for its own settings.
-
-⚠ **Nothing here ever touches a credential, and there is no admin path to
-one.** Epic #45 is strict bring-your-own-key: every AI key belongs to an
-individual user (`/api/ai-credentials` below), encrypted at rest and
-unreadable through the API by design, for any role including an
-administrator. There is deliberately no deployment-wide fallback key — a
-user with no key has no AI features. **`GET /ai-settings/models` below is the
-one exception to "no credential is touched here" in spirit, not in storage**:
-it spends the *calling administrator's own* saved key to ask the provider a
-question, but never accepts, stores or returns one. The absence of a key field
-is enforced at compile time: `ai-settings.schema.ts` carries a type-level proof
-that no key-shaped property exists on the settings schema, which since #78 also
-covers the per-model `allowedModels` entry type.
-
-#### GET /ai-settings
-The deployment AI policy and the provider catalogue (models and form fields)
-the admin page renders itself from.
-
-**Requires:** `system_settings:read`
-
-**Response:**
-```json
-{
-  "data": {
-    "settings": {
-      "enabled": true,
-      "provider": "openai",
-      "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [ "gpt-4o", { "id": "gpt-4o-mini" }, { "id": "o5-preview", "label": "O5 Preview", "contextWindowTokens": 300000, "maxOutputTokens": 32768 } ], "defaultModel": "gpt-5.4-mini" } },
-      "maxInputTokens": null,
-      "maxOutputTokens": null,
-      "requestTimeoutMs": 600000,
-      "reasoningEffort": "none",
-      "maxDocumentBytes": 26214400,
-      "taskModels": { "graph.extract": { "model": "gpt-5.4-mini" } },
-      "graphEnabled": false
-    },
-    "providers": [ { "id": "openai", "label": "OpenAI", "capabilities": { "models": [ "…" ], "streaming": true, "modelDiscovery": true }, "fieldDescriptors": [ "…" ] } ],
-    "unknownModels": [],
-    "tasks": [ { "key": "graph.extract", "label": "Graph extraction", "description": "…", "requires": ["structuredOutput"] } ],
-    "modelCapabilities": [ { "id": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true, "source": "catalogue" } ],
-    "taskModelStatus": [ { "task": "graph.extract", "configuredModel": "gpt-5.4-mini", "effectiveModel": "gpt-5.4-mini", "source": "task", "missing": [], "problem": null } ],
-    "effectiveLimits": [
-      { "modelId": "gpt-5.4-mini", "label": "GPT-5.4 mini", "source": "catalogue", "derivedFrom": null, "modelContextWindowTokens": 400000, "modelMaxOutputTokens": 128000, "maxInputTokens": 366732, "maxOutputTokens": 128000, "inputSource": "model", "outputSource": "model" }
-    ],
-    "version": 3,
-    "updatedAt": "2024-01-01T00:00:00.000Z",
-    "updatedBy": { "id": "…", "email": "admin@example.com" }
-  }
-}
-```
-
-**`maxInputTokens`/`maxOutputTokens` are `number | null` (issue #436).** `null`
-— the default for a fresh deployment, and the value migration
-`20260927050000_ai_token_limits_follow_model` moved every existing deployment
-to on upgrade if it still carried the two old shipped defaults (16,384 /
-100,000) verbatim — means "the selected model's own maximum governs"; a typed
-number is an administrator's deliberate spend cap under it, never a ceiling
-nobody chose. See [`docs/specs/notes.md`](specs/notes.md) §3.3 for the full
-demand-driven budget this feeds and why the fixed-reservation arithmetic it
-replaces was wrong for both a note (§3.3) and graph extraction (#435, below).
-
-**`effectiveLimits` (issue #436)** is what each resolvable permitted model of
-the active provider actually gets under the **saved** policy, computed with
-the identical `computeTokenBudget` every request runs (at the deployment's
-`reasoningEffort`) — the admin Limits card renders this rather than
-recomputing the arithmetic itself. Per entry: `modelContextWindowTokens`/
-`modelMaxOutputTokens` are the model's own numbers (`source`/`derivedFrom` as
-in `modelCapabilities`); `maxInputTokens`/`maxOutputTokens` are what a request
-against this model would actually get; `inputSource`/`outputSource` name
-which bound decided each (`'policy' | 'model'` for input, `'policy' | 'model'`
-for output here — `'task'` never appears, since no per-task clamp applies to
-the saved policy in the abstract). A `source: 'default'` entry is surfaced
-here rather than refused (#436): the provider's conservative floor is kept,
-never guessed upward, and the card is where an administrator is told to type
-the model's real numbers onto its `allowedModels` entry instead.
-
-**`taskModels`/`graphEnabled` (issue #360)** are the connected-knowledge
-policy: `taskModels` maps an `AiTaskKey` (`graph.extract`/`graph.adjudicate`/
-`graph.digest`/`graph.agent` — there is deliberately no `graph.brief`; the
-entity brief never calls a model in a request, it shows `graph.digest`'s own
-output) to `{ model, reasoningEffort? }`. An absent task key means that task
-uses `providers.<provider>.defaultModel`. `graphEnabled` (default `false`) is
-the spending switch: while off, no graph task calls a model on anybody's
-key, but already-curated graph data stays readable — this never gates a
-`graph:*` read.
-
-**`tasks`/`modelCapabilities`/`taskModelStatus` (issue #360)** are additive,
-admin-only projections that let the form render itself without hardcoding
-anything:
-- `tasks` is `AI_TASK_DEFINITIONS` verbatim — every task's label,
-  description and required capabilities (`structuredOutput`/`toolCalling`).
-- `modelCapabilities` is the capability flags of every stored
-  `allowedModels` entry this build can resolve, in policy order — filter a
-  task's picker by its `requires`. An entry nothing can resolve is in
-  `unknownModels` instead.
-- `taskModelStatus` reports, per task, what would run *right now*:
-  `configuredModel` (the administrator's own pick, or null), `effectiveModel`
-  (what actually resolves), `source` (`task`/`default`/`none`), `missing`
-  (required capabilities `effectiveModel` lacks) and `problem`
-  (`lacks_capability`/`no_model`, or null). **Computed without the
-  `graphEnabled` gate**, so an administrator can configure every task before
-  switching the feature on. `problem: 'not_permitted'` is part of the
-  published union but never reported here: a configured task model that is
-  no longer in `allowedModels` falls back to the default (`source:
-  'default'`) rather than being treated as broken — removing a model a task
-  used is an accepted change, not an error.
-
-`provider` (#78) is the active provider, or `null` when none has been
-chosen — a separate axis from `enabled`, so an operator can switch vendors
-without touching the master switch or vice versa. Every hardcoded `'openai'`
-consumer literal is gone from this application; adding a second
-OpenAI-API-compatible vendor costs an id in `AI_PROVIDER_IDS`, a block in the
-provider schema and a provider class, with no consumer edit anywhere.
-
-**`allowedModels` entries are now objects**, not bare strings (#78): each is
-`{ id, label?, contextWindowTokens?, maxOutputTokens? }`. A bare string
-(`"gpt-4o"`) is still accepted on write and always will be — every
-deployment that saved a policy before #78 has strings stored right now — and
-it is read back normalised to `{ id: "gpt-4o" }`.
-
-**Since issue #97, `contextWindowTokens`/`maxOutputTokens` are optional in
-practice, not merely in the schema.** An administrator no longer has to
-supply either number to permit a model. Resolution is a five-rank chain,
-applied per number: (1) the entry's own typed value, (2) an exact hit in
-this build's catalogue, (3) the provider's own family derivation — a dated
-snapshot id such as `gpt-5.4-mini-2026-03-17` takes its family's (
-`gpt-5.4-mini`'s) full window — (4) the provider's conservative floor, (5)
-unresolved. `GET /ai-settings/models` and `GET /api/ai-tasks/config` both report
-which rank answered as `source`, plus `derivedFrom` when it was rank 3, so a
-client never presents an inference as a verified number. Typed numbers
-always outrank everything derived — see
-[`docs/specs/notes.md`](specs/notes.md) §2.5 for the full precedence and the
-argument for why a conservative floor is safe to fall back to when a typed
-number is not, an asymmetry that supersedes the narrower "an unknown model
-needs both numbers typed" reading §2.5 previously stated.
-
-`unknownModels` lists model ids the policy permits that **nothing** in this
-deployment can budget for — no typed numbers on the entry, no catalogue
-hit, no family derivation, and no provider floor. Such a model is never
-offered to a user. **Since #97 this is a much narrower list than it used to
-be**: in practice it now means only a policy naming a provider this build
-does not implement (or a rollback across the addition of one), or a
-provider that has deliberately declined to declare a floor — not "this
-build has never heard of the model," which resolves automatically now.
-
-`providers[].capabilities.modelDiscovery` (#78) says whether
-`GET /ai-settings/models` will work for that provider at all — a provider
-with no live model list still accepts any model id typed by hand.
-
-**Every model in the admin catalogue now also carries `structuredOutput:
-boolean`** (issue #358) — whether that model can return schema-constrained
-structured output (OpenAI strict JSON schema), which connected-knowledge
-extraction, adjudication, the entity digest and the brief all require.
-Unlike `contextWindowTokens`/`maxOutputTokens`, capability flags are
-resolved by the same per-model rank chain (exact catalogue hit → catalogue;
-derived family → the family's flag) but are **never** affected by an
-administrator's typed numbers on an `allowedModels` entry — there is no
-per-model flag override in v1. `providers[].capabilities.defaultModelFeatures`
-is the conservative floor applied when a model id can be placed in neither
-the catalogue nor a known family; it sits beside `defaultModelLimits` and is
-optional ("presence is the declaration") — when absent, an unplaceable id's
-flags all resolve to `false`.
-
-**Every model in the admin catalogue also carries `toolCalling: boolean`
-(issue #359)**: "Whether this model supports tool (function) calling. The
-connected-knowledge Ask agent requires it." It sits beside `structuredOutput`
-on the identical axis — resolved by the same per-model rank chain (exact
-catalogue hit → catalogue; derived family → the family's flag; otherwise
-`providers[].capabilities.defaultModelFeatures`, or `false` with none
-declared), never affected by an administrator's typed numbers, and with no
-per-model override in v1.
-
----
-
-#### PUT /ai-settings
-Updates the AI policy. Every field optional — send only what changed. **This
-endpoint never accepts an API key** — there is no field for one.
-`allowedModels` **replaces the stored list wholesale**, RFC 7396's rule for
-arrays: a merging list could never express "stop permitting this model."
-`provider` may be set to `null` to unset the active provider, or to one of
-the ids in `AI_PROVIDER_IDS`; when a request changes `provider` in the same
-body as `allowedModels`, the submitted models are validated against the
-**new** provider's catalogue, not the previously stored one.
-
-An `allowedModels` entry may be a **bare model id** (`"gpt-4o"`) or an
-**object** (`{ "id": "o5-preview", "label": "O5 Preview",
-"contextWindowTokens": 300000, "maxOutputTokens": 32768 }`). Both forms are
-accepted forever and both are read back as objects. **Since #97 the two
-numbers are optional on the object form too** — see the resolution chain
-above; they remain the way to override what this deployment would otherwise
-derive or fall back to, which is the one rank nothing below it can beat.
-`allowedModels` is capped at **200 entries** (raised from 50 by #97, since a
-vendor's whole discovered catalogue is now realistically selectable in one
-pass rather than hand-typed two numbers at a time) — the cap bounds the
-stored settings blob, not how many models a deployment may permit.
-
-**`taskModels` (issue #360) replaces wholesale, exactly like
-`allowedModels`** — the admin form always sends the full map, and there is
-no per-key merge. Every entry **present in the patch** is validated before
-the write: its `model` must be in the effective allow-list (the patch's own
-`allowedModels` when the same request carries one, the stored list
-otherwise), and the resolved model must support every capability its task
-requires. **Narrowing `allowedModels` so a stored task model is no longer
-permitted is allowed** — the resolver falls back to the default at run time
-and `taskModelStatus` reports it; a task model never blocks removing a
-model.
-
-**Requires:** `system_settings:write`
-
-**Headers:** `If-Match: <version>` (optional) — `0` asserts nothing is stored yet; omit to overwrite unconditionally.
-
-**Response:** the updated policy, re-read from storage, in the `GET` shape above.
-
-**Error Cases:**
-- `400` - Validation error, or an `allowedModels` entry **nothing** in this deployment can budget for — no typed numbers, no catalogue hit, no family derivation, and no provider floor (in practice: the policy names a provider this build does not implement). The message names the missing field(s) and is not a statement that the model is forbidden.
-- `400` - A `taskModels` entry's model is not in the effective allow-list: `details: { reason: "model_not_permitted", task, model }`, message naming the task's label and the model, e.g. `The task model for "Graph extraction" (gpt-x) is not in the permitted models list.`
-- `400` - A `taskModels` entry's model lacks a capability its task requires: `details: { reason: "model_lacks_capability", task, model, missing }`, e.g. a `graph.agent` entry pointing at a model with no `toolCalling` support
-- `409` - Version conflict
-
----
-
-#### GET /ai-settings/models
-Asks the configured (or a named) provider's own API which models it offers,
-so `allowedModels` can be chosen from a live list instead of typed from
-memory (#78). This is what makes the policy independent of the handful of
-models compiled into this build's own catalogue.
-
-⚠ **This spends a real vendor call, on the *calling administrator's own* API
-key** — this deployment stores no AI key of any kind (every key belongs to
-an individual user), so discovery has to authenticate as the administrator
-making the request. The list returned is the one **that key** can reach,
-which on OpenAI is project-scoped: two administrators can legitimately see
-different lists. The policy saved from this list is checked against
-**neither** — it is checked against each user's own key, at generation time,
-which is the only authority that matters when a request is actually made.
-This is also why the route is gated on `system_settings:write` rather than
-`:read`: looking at settings is not probing a third party.
-
-⚠ **This returns HTTP 200 even when the provider refused the call.** Read
-`ok` and show `detail` — it distinguishes "the key is wrong," "the account
-has no credit" and "the endpoint is unreachable." This is the thing a client
-author is most likely to get wrong: a non-2xx is *not* the only failure mode
-here, because there isn't one — the route answers 200 either way.
-
-**Requires:** `system_settings:write`
-
-**Query:**
-- `?provider=` (optional) — which provider to ask; defaults to the active
-  one. Naming a different provider lets an administrator inspect its
-  catalogue **before** switching to it.
-- `?includeAll=true` (optional, issue #97) — skip the plausible-chat-model
-  filter and return the provider's **whole** list. The filter
-  (`NON_CHAT_MODEL_MARKERS`) is a convenience over an unstructured vendor
-  list — OpenAI's `GET /models` returns embeddings, TTS voices and
-  moderation endpoints in the same flat array as chat models, with no
-  capability field to tell them apart — and it can only hide a row from this
-  dropdown, never make a model unusable: `allowedModels` accepts any id
-  typed by hand regardless of whether discovery showed it. `includeAll` is
-  the escape hatch for when the heuristic hides something real.
-
-**Response (success):**
-```json
-{
-  "data": {
-    "ok": true,
-    "detail": "The provider listed 42 chat-capable model(s). Models this build already knows the context window of are marked as such; for any other, a context window and output ceiling were derived or a conservative default was used.",
-    "models": [
-      { "id": "gpt-4o", "label": "GPT-4o", "known": true, "contextWindowTokens": 128000, "maxOutputTokens": 16384, "source": "catalogue", "derivedFrom": null },
-      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "known": false, "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini" },
-      { "id": "o5-preview", "label": "o5-preview", "known": false, "contextWindowTokens": 128000, "maxOutputTokens": 16384, "source": "default", "derivedFrom": null }
-    ]
-  }
-}
-```
-
-**Response (vendor refusal — still HTTP 200):**
-```json
-{ "data": { "ok": false, "detail": "The provider rejected this API key (HTTP 401). Check that you pasted the whole key and that it has not been revoked in your provider account.", "models": [] } }
-```
-
-**Every model now comes back with a usable `contextWindowTokens` and
-`maxOutputTokens` (issue #97).** Before #97 both were `null` for any id
-absent from the build catalogue, and a client had to collect them from the
-administrator by hand before the model could be saved into `allowedModels`.
-They are now filled by the same five-rank resolution `PUT /ai-settings`
-itself uses — the exact catalogue entry, then the model's family (a dated
-snapshot such as `gpt-5.4-mini-2026-03-17` takes `gpt-5.4-mini`'s window),
-then the provider's conservative floor — and `source` names which rank
-answered (`'catalogue' | 'derived' | 'default'`; `'explicit'` cannot appear
-here, since discovery resolves a bare id with no policy entry behind it).
-`derivedFrom` names the family, non-null exactly when `source` is
-`'derived'`. **The two numbers remain nullable** and `null` still means
-"nothing could answer" — reachable now only for a provider that declares no
-conservative floor. `known` is **unchanged** and still means an exact
-build-catalogue hit; it does **not** mean "needs numbers typed before it can
-be permitted" any more — `source` is the field that answers how much of the
-pair is verified knowledge versus an inference. The list is sorted
-known-models-first, then by resolution strength, then alphabetically.
-
-**Error Cases:**
-- `400` - No provider is active and none was named in the query, the named provider is not implemented by this build, the provider cannot list models at all (`capabilities.modelDiscovery: false`), or this deployment's stored settings for that provider are invalid
-- `409` - `details.reason: "ai_key_missing"` — **you**, the calling administrator, have saved no API key for that provider under `/api/ai-credentials`. There is no deployment key to fall back to.
-
----
-
-#### POST /ai-settings/test
-Checks that the configured API base URL resolves, terminates TLS and
-answers like an OpenAI-compatible API. Supply `baseUrl` to probe a URL
-**before** saving it.
-
-⚠ **This is a reachability probe, not a credential probe** — it sends no
-key, because this deployment holds none. ⚠ **An HTTP 401 or 403 from the
-endpoint is reported as `ok: true`** — an unauthenticated request to a
-correctly configured API root is *supposed* to be refused, and that refusal
-is the proof the endpoint exists and speaks the protocol; treating it as a
-failure would make a correctly configured deployment look broken. ⚠ **This
-returns HTTP 200 even when the probe failed** — read the `ok` field and show
-`detail`, which distinguishes "unreachable", "wrong path" and "answering
-normally".
-
-**Requires:** `system_settings:write` — probing is side-effecting (it spends
-an outbound request), and `:read` is held by anyone who may look at
-settings. Looking is not probing.
-
-**Request:** `{ "baseUrl": "https://api.openai.com/v1" }` (optional)
-
-**Response:** `{ "data": { "ok": true, "latencyMs": 212, "detail": "…" } }`
-
----
-
-### AI Credentials
-
-A user's own AI provider key — issue #47, epic #45. See
-[`docs/specs/notes.md`](specs/notes.md) §4.2, §9.
-
-Four operations, all `@Auth()` with **no permission string**, and that is the
-deliberate answer, not an oversight: the resource is not a feature of this
-application, it is the caller's **own credential**, scoped by `userId` in the
-query itself. An RBAC permission gates what a role may do to the
-application's resources; nothing about a role should decide whether a person
-may manage a secret that belongs to them and is billed to them. The nearest
-precedent is `/api/user-settings` and `/api/pat`, likewise
-ownership-scoped rather than permission-scoped. Ownership is enforced by
-`@CurrentUser('id')` reaching every service call's `where` clause — there is
-no route parameter naming a user, so there is no id for a caller to
-substitute.
-
-⚠ **The key itself is never returned by any response, on any route, for any
-role.** It is encrypted at rest by the platform secret cipher (`@marinoscar/platform-api/core`) under the `'ai-key'` purpose,
-and no endpoint's presentation query even selects the ciphertext column.
-
-#### GET /ai-credentials
-The caller's **own** stored AI keys — one entry per provider — with a masked
-hint, their label and timestamps.
-
-**Requires:** Authenticated, no permission
-
-**Response:** `{ "data": { "credentials": [ { "provider": "openai", "configured": true, "hint": "••••a1b2", "label": "work", "lastUsedAt": "…", "updatedAt": "…" } ] } }`
-
----
-
-#### PUT /ai-credentials
-Stores the caller's **own** provider API key, encrypted. Replacing an
-existing key for the same provider overwrites it; there is never a second
-row.
-
-**Requires:** Authenticated, no permission
-
-**Request:** `{ "provider": "openai", "apiKey": "sk-…", "label": "work" }` — `apiKey` is **write-only** and never returned. Blank or absent **keeps the stored key** (useful for changing only the label) — blank never means "erase"; erasing is the `DELETE` below.
-
-⚠ Billed to **your** provider account. This application never uses it for
-anybody but you, and there is no deployment-wide fallback.
-
-**Error Cases:**
-- `400` - Unknown provider, or no key supplied and none stored
-
----
-
-#### POST /ai-credentials/test
-Probes the provider with the supplied key, or the caller's stored key when
-none is supplied. **The supplied key does not need to have been saved** —
-proving a key before committing it is the workflow this endpoint exists for.
-
-⚠ **This returns HTTP 200 even when the probe failed**, the same convention
-`POST /transcription-settings/test` establishes for its own probe. A refused
-probe is a successful diagnosis — read the `ok` field and show `detail`,
-which distinguishes "the key is wrong" (HTTP 401), "the key is valid but the
-account is restricted" (403), "the key is valid but rate-limited or out of
-credit" (429), and "the endpoint was unreachable" (a transport failure, not
-an API one). Treating 200 as "the key works" reports success for every
-misconfiguration there is.
-
-**Requires:** Authenticated, no permission
-
-**Request:** `{ "provider": "openai", "apiKey": "sk-…" }` — `apiKey` optional, falls back to the caller's stored key
-
-**Response:** `{ "data": { "ok": false, "latencyMs": 340, "detail": "The provider rejected this API key (HTTP 401). Check that you pasted the whole key and that it has not been revoked in your provider account." } }`
-
-**Error Cases:**
-- `400` - Unknown provider, or no key supplied and none stored — a different thing from a failed probe
-
----
-
-#### DELETE /ai-credentials/{provider}
-Erases the caller's own stored key for one provider. **The only way to
-remove a key** — an empty `apiKey` on `PUT` preserves the stored one,
-deliberately, because the form renders that box empty. Idempotent: removing
-a key that is not there succeeds.
-
-**Requires:** Authenticated, no permission · **Response:** `204`
-
-**Error Cases:**
-- `400` - Unknown provider
-
----
-
 ### AI Tasks
 
-Task routing for this application's AI calls — issue #473, epic #472. The platform AI slice owns the `ai` namespace, `GET /api/ai/config`, `/api/ai/keys`, `/api/ai/features` and `GET /api/admin/ai/usage`; this group is what the application adds on top: the probe web reads before offering a connected-knowledge or notes surface, and the admin route for task models. See [`docs/specs/notes.md`](specs/notes.md) §2.5, §2.8.
+Task routing for this application's AI calls — issues #473 and #477, epic #472. Everything about AI that is not specific to this application belongs to the platform AI slice (`@marinoscar/platform-api/ai`, mounted in `apps/api/src/platform/ai/`) and is documented in the platform's own reference at `/api/docs` (Scalar): `GET /api/ai/config`, `/api/ai/keys` (a user's own key; returns a hint only, never the key), `/api/ai/features`, `/api/admin/ai/*` (provider slots, key policy, the `ai_models` catalogue, model discovery and tests) and `GET /api/admin/ai/usage`. This group is what the application adds on top: the probe web reads before offering a connected-knowledge or notes surface, and the admin route for the fields this application adds to the `ai` settings namespace. See [`docs/specs/notes.md`](specs/notes.md) §2.5, §2.8.
 
-⚠ **`GET /api/ai/config` and `/api/ai/keys` are the platform's routes** (platform response shapes, gated by `AiEnabledGuard` and `ai:use`). The application's own probe is `GET /ai-tasks/config` below. Until issue #477 removes the old module, `/api/ai-settings`, `/api/ai-credentials` and the `### AI Settings` and `### AI Credentials` groups above still describe the application's previous stack.
+⚠ **`GET /api/ai/config` and `/api/ai/keys` are the platform's routes** (platform response shapes, gated by `AiEnabledGuard` and `ai:use`). The application's own probe is `GET /ai-tasks/config` below. The application's former `/api/ai-settings` and `/api/ai-credentials` routes were removed by issue #477: the deployment policy is edited on the platform AI page (`/admin/settings/ai`, permission `ai_config:read` / `ai_config:write`), a user's key on `/settings/ai` (`ai:use`).
 
 #### GET /ai-tasks/config
-Moved from `GET /ai/config` by issue #473 (epic #472): the platform AI slice
-(`@marinoscar/platform-api/ai`, mounted in `apps/api/src/platform/ai/`) now
-owns `GET /api/ai/config` and `/api/ai/keys`, so this application's probe lives
-at `/api/ai-tasks/config` with the same response shape (`AiTasksController`
-in `apps/api/src/ai-port/ai-tasks.controller.ts`). It sits outside `/api/ai/*`, so
-the platform rule that every `/api/ai/*` route carries `AiEnabledGuard` and `ai:use`
-does not apply; the gate stays `notes:read`. The key flag reads `user_ai_keys`
-(the data moves in issue #474).
+What this deployment permits, **and whether the calling user has a key** — for a client deciding whether to offer AI at all and, if so, whether to show the feature or the "set up your key" prompt. It sits outside `/api/ai/*`, so the platform rule that every `/api/ai/*` route carries `AiEnabledGuard` and `ai:use` does not apply: the users this capability governs must be able to read it while AI is off or before they hold a key.
 
-What this deployment permits, **and whether the calling user has a key** —
-for a client deciding whether to offer AI at all and, if so, whether to show
-the feature or the "set up your key" prompt. Modelled on
-`GET /transcription/config` and `GET /notifications/config` for the identical
-reason: the deployment policy (`GET /ai-settings` above) is gated on
-`system_settings:read`, which the seeded Viewer and Contributor roles do not
-hold — so the users this capability affects are precisely the users who
-cannot read it.
+**Requires:** `notes:read` — org-scoped and granted to all three org roles.
 
-**Requires:** `notes:read` — org-scoped and granted to all three org roles, exactly like
-`transcripts:read` gates `GET /transcription/config`, rather than left merely
-authenticated: naming a real permission the feature actually has, since the
-permission is universal here.
+`available` is true when AI is enabled, the provider slot is on and at least one model is enabled. ⚠ **`keyConfigured` is the single boolean every AI surface in this application gates on** — false means show the "set up your AI key" prompt, true means show the feature. It is per-**caller**, read from `user_ai_keys` by existence only (the secret column is never selected), and deliberately **independent of `available`**: a user can save a key before an administrator finishes enabling the feature. `provider` and `providerLabel` name the vendor a key would belong to (`openai` / `OpenAI`); they are independent of `available` for the same reason.
 
-`available` is true only when AI is enabled, the configured provider is
-registered in this build, at least one permitted model is one this build can
-budget requests for, and the token ceilings leave room for input.
-⚠ **`keyConfigured` is the single boolean every AI surface in this
-application gates on** — false means show the "set up your AI key" prompt,
-true means show the feature. It is per-**caller**, resolved without
-decrypting anything, and deliberately **independent of `available`**: a user
-can save and verify a key before an administrator finishes enabling the
-feature, and an enabled deployment still does nothing for a user with no key.
+**No configuration detail is published here** — not the base URL, not the request timeout, and nothing derived from anyone's key beyond the boolean fact that the caller has one. `models` are the **enabled `ai_models` rows** of the active provider, ordered by id.
 
-⚠ **`provider`/`providerLabel` are independent of `available` for the same
-reason (issue #83)** — they answer *which vendor a key would belong to*, not
-*may AI be used right now*. `provider` is populated whenever this deployment
-names a provider this build recognises, including while AI is switched off
-or nothing is permitted yet, specifically so a user can save and verify
-their own key before an administrator finishes enabling the feature: a
-non-null `provider` alongside `available: false` is the ordinary state of a
-deployment mid-setup, not a bug. `provider: null` means only that there is
-genuinely no vendor to name — either none is configured, or the configured
-one is unknown to this build — **never** that AI is unavailable. A client
-that reads `provider: null` as "AI is unavailable," or that gates the
-key-entry form on `available` rather than on `provider`, reproduces exactly
-the setup deadlock #83 fixed.
-
-**No configuration detail is published here** — not the base URL, not the
-request timeout, and nothing derived from anyone's key beyond the boolean
-fact that the caller has one. `models`/`defaultModel` are already narrowed by
-policy, so a client can offer them directly without re-checking.
-
-**`maxInputTokens`/`maxOutputTokens` are `number | null` (issue #436)** — this
-deployment's *optional* spend cap, or `null` (the default) when each model's
-own ceiling governs. Read each `models[]` entry's own `contextWindowTokens`/
-`maxOutputTokens` rather than these two top-level numbers when deciding what
-one call can actually use: those are already the per-model **effective**
-figures, computed by `computeTokenBudget` for the deployment's
-`reasoningEffort`, while these two remain the raw policy value (`null` or a
-number) with no per-model narrowing applied.
-
-**Each model carries `source`/`derivedFrom` (issue #97)**, resolved through
-the same five-rank chain `PUT /ai-settings` and `GET /ai-settings/models`
-use: `explicit` (an administrator typed the numbers), `catalogue` (an exact
-hit in this build's verified list), `derived` (placed in a known family —
-`derivedFrom` names it), or `default` (this vendor's conservative floor,
-because nothing better was available). It is the **weakest** of the two
-numbers' sources, so a model whose window was derived but whose output
-ceiling fell back to the floor still reports `default`. All four are
-usable; a client showing an inference as a verified figure is the one thing
-this field exists to prevent. The `contextWindowTokens`/`maxOutputTokens`
-values here are already narrowed by deployment policy — since issue #436
-via the same demand-driven `computeTokenBudget` every request runs (never a
-flat `Math.min` against `maxInputTokens`/`maxOutputTokens`: `maxOutputTokens`
-here is the ceiling `outputTokensForPrompt` would shrink further once a
-concrete prompt is known, and `contextWindowTokens` already holds back only
-the reserve, not the whole ceiling) — that narrowing never changes `source`.
-
-**Each model also carries `structuredOutput: boolean` (issue #358)**: "Whether
-this model can return schema-constrained structured output (OpenAI strict
-JSON schema). Connected-knowledge extraction, adjudication, digest and brief
-require it." Resolved by the identical per-model rank chain as `source`
-above, but on its own axis — a flag, not a number, so it is never narrowed
-by `Math.min` and never overridden by an administrator's typed
-`contextWindowTokens`/`maxOutputTokens`.
-
-**Each model also carries `toolCalling: boolean` (issue #359)**: "Whether
-this model supports tool (function) calling. The connected-knowledge Ask
-agent requires it." Resolved through the identical per-model rank chain and
-axis as `structuredOutput` above — its own independent boolean, never
-narrowed by `Math.min` and never overridden by an administrator's typed
-numbers.
-
-**`graphEnabled`/`taskModels` (issue #360)** let a picker for the
-connected-knowledge features offer the right model without re-deriving
-`AiTaskModelResolver`'s own logic. `graphEnabled` mirrors the stored
-`ai.graphEnabled` switch. `taskModels` always carries all four `AiTaskKey`
-entries (`graph.extract`/`graph.adjudicate`/`graph.digest`/`graph.agent`),
-each computed for **this caller** with the identical `chooseTaskModel`
-function the admin view and the resolver use: `model` (the task's default,
-computed even while `graphEnabled` is false, filtering only through this
-caller's own permitted models), `source` (`task`/`default`/`none`),
-`reasoningEffort`, `requires` (the capabilities a per-run override must
-have — filter `models` by these before offering it as a pick), `usable`,
-and `reason` (`graph_disabled`/`model_lacks_capability`/`no_model`, or null
-when `usable` is true).
+- `maxInputTokens` / `maxOutputTokens` are `number | null`: the deployment's *optional* spend caps, or `null` when each model's own ceiling governs. Decide what one call can use from each `models[]` entry's own `contextWindowTokens` / `maxOutputTokens`, which are the **effective** figures (the model's own, narrowed by `computeTokenBudget` for the deployment's `reasoningEffort` and caps).
+- Each model carries `source` (`catalogue` when the `ai_models` row has both numbers, otherwise `default`, the conservative floor of 128,000 / 16,384) and `derivedFrom` (always `null`; kept so the response shape did not change). The enum also admits `explicit` and `derived`; the current implementation does not produce them.
+- Each model carries `structuredOutput` (required by connected-knowledge extraction, adjudication and digest) and `toolCalling` (required by the Ask agent), both read from the model row.
+- `graphEnabled` mirrors the stored `ai.graphEnabled` switch. `taskModels` always carries all four task keys (`graph.extract`, `graph.adjudicate`, `graph.digest`, `graph.agent`), each computed for this caller with the same `chooseTaskModel` the run-time resolver (`KvoxAiTargetResolver`) uses: `model`, `source` (`task` / `default` / `none`), `reasoningEffort`, `requires` (the capabilities a per-run override must have), `usable`, and `reason` (`graph_disabled` / `model_lacks_capability` / `no_model`, or `null` when `usable` is true).
 
 **Response:**
 ```json
@@ -5641,8 +5114,7 @@ when `usable` is true).
     "provider": "openai",
     "providerLabel": "OpenAI",
     "models": [
-      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null, "structuredOutput": true, "toolCalling": true },
-      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true }
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null, "structuredOutput": true, "toolCalling": true }
     ],
     "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": null,
@@ -5662,7 +5134,7 @@ when `usable` is true).
 ---
 
 #### GET /ai-tasks/settings
-The application's extension of the platform `ai` namespace: `taskModels`, `graphEnabled`, `defaultModel` and the four limits. The same values appear under `ai` in `GET /api/system-settings`.
+The application's extension of the platform `ai` namespace, as the admin page renders it: the stored fields, the task definitions, the enabled models and what each task would run on right now. The same stored values appear under `ai` in `GET /api/system-settings`. The provider slots, key policy and model catalogue are the platform's (`/api/admin/ai/*`).
 
 **Requires:** `ai_config:read` (system scope, Admin only)
 
@@ -5670,30 +5142,44 @@ The application's extension of the platform `ai` namespace: `taskModels`, `graph
 ```json
 {
   "data": {
-    "taskModels": { "graph.extract": { "model": "gpt-5.4-mini", "reasoningEffort": "low" } },
-    "graphEnabled": false,
-    "defaultModel": null,
-    "maxInputTokens": null,
-    "maxOutputTokens": null,
-    "requestTimeoutMs": 600000,
-    "reasoningEffort": "none",
-    "maxDocumentBytes": 26214400
+    "settings": {
+      "taskModels": { "graph.extract": { "model": "gpt-5.4-mini", "reasoningEffort": "low" } },
+      "graphEnabled": false,
+      "defaultModel": null,
+      "maxInputTokens": null,
+      "maxOutputTokens": null,
+      "requestTimeoutMs": 600000,
+      "reasoningEffort": "none",
+      "maxDocumentBytes": 26214400
+    },
+    "tasks": [
+      { "key": "graph.extract", "label": "Graph extraction", "description": "…", "requires": ["structuredOutput"] }
+    ],
+    "models": [
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "structuredOutput": true, "toolCalling": true }
+    ],
+    "taskModelStatus": [
+      { "task": "graph.extract", "configuredModel": "gpt-5.4-mini", "effectiveModel": "gpt-5.4-mini", "source": "task", "missing": [], "problem": null, "staleTaskModel": false }
+    ],
+    "version": 12
   }
 }
 ```
+
+`taskModelStatus` is computed **without** the `graphEnabled` gate, so an administrator can configure tasks before switching the feature on. `staleTaskModel` is true when the configured task model is no longer enabled and the default is used instead. `version` is the `If-Match` token of the `PUT`.
 
 Stored names are the application's previous ones, so a saved `taskModels` value survives with no rewrite. No field here can hold a key. `reasoningEffort` accepts `none | low | medium | high | xhigh`; the platform accepts `minimal | low | medium | high`, so at call time `none` omits `reasoning` and `xhigh` is sent as `high` (notes spec §2.8).
 
 ---
 
 #### PUT /ai-tasks/settings
-Updates the same fields. Every field optional. `taskModels` **replaces wholesale**, as it did in `PUT /ai-settings`: no per-key merge. Each entry is validated against the **enabled `ai_models` rows** of the active provider before the write, then written through the platform `SystemSettingsService` with `If-Match`, so the write carries the platform's `system_settings` audit row.
+Updates the same fields. Every field optional (the body is the `settings` object above, partial). `taskModels` **replaces wholesale**: no per-key merge, and `{}` clears it. Each entry is validated against the **enabled `ai_models` rows** of the active provider before the write, then written through the platform `SystemSettingsService` with `If-Match`, so the write carries the platform's `system_settings` audit row. This endpoint never accepts a key.
 
 **Requires:** `ai_config:write`
 
 **Headers:** `If-Match: <version>` (optional) — `0` asserts nothing is stored yet.
 
-**Response:** the updated values, re-read from storage, in the `GET` shape above.
+**Response:** the updated view, re-read from storage, in the `GET` shape above.
 
 **Error Cases:**
 - `400` - Validation error
@@ -7814,7 +7300,7 @@ section documents the wire contract only.
 Two routes, both `@Auth()` with **no permission string**, deliberately. The
 resource is not a feature of this application; it is the caller's **own
 data**, scoped by `userId` in the query itself — the identical posture
-`ai-credentials.controller.ts` takes (see `### AI Credentials` above), and
+`/api/pat` and `/api/user-settings` take, and
 the nearest precedent for the same reason: gating either route on a real
 permission (`transcripts:write` + `notes:write`, say) would strand exactly
 the user who needs this most. A deployment that has revoked someone's write
@@ -7981,7 +7467,7 @@ note, set a display name).
 
 **Requires:** Authenticated, **no permission** — the resource is the
 caller's own state, scoped by their user id in the query itself, the same
-ownership-scoped posture `/api/ai-credentials`, `/api/pat` and
+ownership-scoped posture `/api/pat`, `/api/user-settings` and
 `/api/user-data` already take. Readable by a Viewer holding no permissions
 at all, which is what a freshly invited account looks like.
 

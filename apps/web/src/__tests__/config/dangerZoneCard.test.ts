@@ -91,15 +91,18 @@ describe('USER_SETTINGS_SECTIONS — Delete My Data card (issue #80)', () => {
   // The wider claim, mirroring `userSettingsSections.test.ts`'s own
   // whole-registry assertion: adding this card must not be the first card in
   // the file to invent a permission gate the API does not enforce.
-  it('no card in USER_SETTINGS_SECTIONS declares a permission except the Knowledge graph card (#369) — this card did not regress that', () => {
-    // One deliberate exception since #369: the Knowledge graph card carries
+  it('no card in USER_SETTINGS_SECTIONS declares a permission except the AI Provider (#477) and Knowledge graph (#369) cards — this card did not regress that', () => {
+    // Two deliberate exceptions. Since #369 the Knowledge graph card carries
     // `graph:write`, the exact string its attribute-definition write routes
-    // enforce (Settings UI rule 3). Every other card stays ungated.
+    // enforce (Settings UI rule 3). Since #477 the AI Provider card carries
+    // `ai:use`, the string the platform's per-user AI routes enforce. Every
+    // other card stays ungated.
     const allCards = USER_SETTINGS_SECTIONS.flatMap((section) => section.cards);
     const gated = allCards
       .filter((card) => card.permission !== undefined)
       .map((card) => ({ path: card.path, permission: card.permission }));
     expect(gated).toEqual([
+      { path: '/settings/ai', permission: 'ai:use' },
       { path: '/settings/knowledge-graph', permission: 'graph:write' },
     ]);
   });

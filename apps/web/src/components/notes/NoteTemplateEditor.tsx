@@ -14,7 +14,7 @@
  * picker be bounded by deployment policy at all.
  *
  * =============================================================================
- * ⚠ THE MODEL PICKER OFFERS ONLY WHAT `GET /api/ai/config` PERMITS
+ * ⚠ THE MODEL PICKER OFFERS ONLY WHAT `GET /api/ai-tasks/config` PERMITS
  * =============================================================================
  *
  * `models` on that response is ALREADY narrowed by the deployment's policy, so
@@ -57,7 +57,7 @@ import type {
   NoteOutputFormat,
   NoteTemplateDraft,
 } from '../../services/noteTemplates';
-import type { AiConfigModel } from '../../services/ai';
+import type { AiTasksConfigModel } from '../../services/aiTasks';
 
 /**
  * The placeholder for `instructions` — a WORKED EXAMPLE, not a hint.
@@ -91,8 +91,8 @@ const LENGTH_SUGGESTIONS = ['short', 'medium', 'detailed'];
 export interface NoteTemplateEditorProps {
   draft: NoteTemplateDraft;
   onChange: (draft: NoteTemplateDraft) => void;
-  /** The permitted models, from `GET /api/ai/config`. Never widened here. */
-  models: AiConfigModel[];
+  /** The permitted models, from `GET /api/ai-tasks/config`. Never widened here. */
+  models: AiTasksConfigModel[];
   /** The deployment default, named in the "use the default" option. */
   defaultModel: string | null;
   disabled?: boolean;

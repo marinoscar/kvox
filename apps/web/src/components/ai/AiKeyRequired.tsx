@@ -6,7 +6,7 @@
  * =============================================================================
  *
  * Every AI surface in this epic (#56, #57, #58, #59) renders THIS and nothing
- * else when `useAiConfig().keyConfigured` is false. That is the issue's
+ * else when `useAiTasksConfig().keyConfigured` is false. That is the issue's
  * rejected alternative made structural: four pages each inventing their own
  * empty state is four copies of one message, and the moment the copy, the link
  * or the reassurance about billing differs between two of them, a user who read
@@ -25,7 +25,7 @@
  * who typed the key — is the single most important thing a user meets here, and
  * it belongs at the point of the ask rather than behind the link.
  *
- * IT DOES NOT FETCH ANYTHING. The caller already holds the `useAiConfig()`
+ * IT DOES NOT FETCH ANYTHING. The caller already holds the `useAiTasksConfig()`
  * answer it branched on; a second request from inside the empty state would be
  * one more round trip for a question just answered.
  */

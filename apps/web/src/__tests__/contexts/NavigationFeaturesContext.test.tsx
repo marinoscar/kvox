@@ -1,10 +1,10 @@
 /**
  * `NavigationFeaturesProvider` / `useNavigationFeatures` — issue #438.
  *
- * `useAiConfig` is mocked rather than exercised over MSW: this provider is a
+ * `useAiTasksConfig` is mocked rather than exercised over MSW: this provider is a
  * thin derivation over that hook's own `config`/`refresh` (see the file
  * header's "ONE read per shell" comment), and the hook's own network
- * behaviour — retries, error mapping, `isMounted` — is `useAiConfig`'s own
+ * behaviour — retries, error mapping, `isMounted` — is `useAiTasksConfig`'s own
  * test's job, not this one's. What this file has to pin is the DERIVATION:
  * `graph` reads `false` while unanswered (loading, erroring, or never asked at
  * all — outside a provider), and `true` only once `graphEnabled === true` has
@@ -21,19 +21,19 @@ import {
   useNavigationFeatures,
 } from '../../contexts/NavigationFeaturesContext';
 
-vi.mock('../../hooks/useAiConfig', () => ({
-  useAiConfig: vi.fn(),
+vi.mock('../../hooks/useAiTasksConfig', () => ({
+  useAiTasksConfig: vi.fn(),
 }));
 
-import { useAiConfig } from '../../hooks/useAiConfig';
-import type { UseAiConfigReturn } from '../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
+import type { UseAiTasksConfigReturn } from '../../hooks/useAiTasksConfig';
 
-const mockUseAiConfig = vi.mocked(useAiConfig);
+const mockUseAiTasksConfig = vi.mocked(useAiTasksConfig);
 
 /** Only the fields `NavigationFeaturesProvider` actually reads. */
 function aiConfigReturn(
-  overrides: Partial<UseAiConfigReturn> = {},
-): UseAiConfigReturn {
+  overrides: Partial<UseAiTasksConfigReturn> = {},
+): UseAiTasksConfigReturn {
   return {
     config: null,
     isLoading: false,
@@ -67,7 +67,7 @@ function renderProbe() {
 
 describe('NavigationFeaturesProvider', () => {
   it('reads graph as false while the config is still loading', () => {
-    mockUseAiConfig.mockReturnValue(aiConfigReturn({ isLoading: true, config: null }));
+    mockUseAiTasksConfig.mockReturnValue(aiConfigReturn({ isLoading: true, config: null }));
 
     renderProbe();
 
@@ -75,7 +75,7 @@ describe('NavigationFeaturesProvider', () => {
   });
 
   it('reads graph as false once loaded when graphEnabled is false', () => {
-    mockUseAiConfig.mockReturnValue(
+    mockUseAiTasksConfig.mockReturnValue(
       aiConfigReturn({
         config: {
           available: true,
@@ -97,9 +97,9 @@ describe('NavigationFeaturesProvider', () => {
   });
 
   it('reads graph as false when the config load errored', () => {
-    // A failed load leaves `config: null` (see `useAiConfig`'s own catch
+    // A failed load leaves `config: null` (see `useAiTasksConfig`'s own catch
     // branch) — the case this provider's header calls "UNKNOWN IS OFF".
-    mockUseAiConfig.mockReturnValue(
+    mockUseAiTasksConfig.mockReturnValue(
       aiConfigReturn({ config: null, loadError: 'Failed to load AI configuration' }),
     );
 
@@ -109,7 +109,7 @@ describe('NavigationFeaturesProvider', () => {
   });
 
   it('reads graph as true once graphEnabled lands true', () => {
-    mockUseAiConfig.mockReturnValue(
+    mockUseAiTasksConfig.mockReturnValue(
       aiConfigReturn({
         config: {
           available: true,
@@ -132,7 +132,7 @@ describe('NavigationFeaturesProvider', () => {
 
   it('exposes the hook’s own refresh function, not a fresh wrapper', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
-    mockUseAiConfig.mockReturnValue(aiConfigReturn({ refresh }));
+    mockUseAiTasksConfig.mockReturnValue(aiConfigReturn({ refresh }));
 
     const user = userEvent.setup();
     renderProbe();
@@ -145,7 +145,7 @@ describe('NavigationFeaturesProvider', () => {
 
 describe('useNavigationFeatures outside a provider', () => {
   it('defaults to graph false and a no-op refresh', async () => {
-    // No mocked `useAiConfig` return matters here — there is no provider to
+    // No mocked `useAiTasksConfig` return matters here — there is no provider to
     // call the hook at all, which is the point: every consumer must survive a
     // shell mount that has not wrapped it (`Layout` mounting order, a stray
     // test render).

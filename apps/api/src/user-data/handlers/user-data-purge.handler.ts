@@ -53,7 +53,7 @@ import {
 // opts out owes an argument. This one has two, and either alone is sufficient.
 //
 // It reads and writes across `transcripts`, `notes`, `note_templates`,
-// `storage_objects`, `personal_access_tokens` and `user_ai_credentials`
+// `storage_objects` and `personal_access_tokens`
 // MID-COMPUTATION — each batch's contents decide the next query, and clearing a
 // foreign key is what makes the delete after it possible. There is no
 // "already-computed result" a remote machine could post back; the work IS the
@@ -65,7 +65,7 @@ import {
 // replaces the live database, and this is the same shape pointed at one
 // account. A `nodeSecretBroker` cannot help — there is no credential narrow
 // enough to mean "may delete exactly this user's rows and nothing else", so
-// brokering one would mean handing a worker node write access to six tables.
+// brokering one would mean handing a worker node write access to five tables.
 //
 // -----------------------------------------------------------------------------
 // ⚠ `profile: { maxAttempts: 1 }` — NEVER AUTOMATICALLY RETRIED

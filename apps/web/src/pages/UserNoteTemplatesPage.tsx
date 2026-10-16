@@ -63,7 +63,7 @@ import { NoteTemplateList } from '../components/notes/NoteTemplateList';
 import { TemplateEditorActions } from '../components/notes/TemplateEditorActions';
 import { TemplatePreviewPanel } from '../components/notes/TemplatePreviewPanel';
 import type { PreviewSourceOption } from '../components/notes/TemplatePreviewPanel';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
 import { useTemplatePreview } from '../hooks/useTemplatePreview';
@@ -125,7 +125,7 @@ export default function UserNoteTemplatesPage() {
     isLoading: isConfigLoading,
     loadError: configError,
     keyConfigured,
-  } = useAiConfig();
+  } = useAiTasksConfig();
 
   const {
     templates,

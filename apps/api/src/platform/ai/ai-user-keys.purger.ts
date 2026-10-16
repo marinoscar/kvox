@@ -3,6 +3,8 @@ import { ModuleRef } from '@nestjs/core';
 
 import { UserAiKeysService } from '@marinoscar/platform-api/ai';
 
+import { PrismaService } from '../../prisma/prisma.service';
+
 // =============================================================================
 // Erasing a user's AI keys through the platform (issue #475, epic #472)
 // =============================================================================
@@ -22,36 +24,41 @@ import { UserAiKeysService } from '@marinoscar/platform-api/ai';
 // which would drag the whole slice into its import list). `get(..., { strict:
 // false })` finds it anywhere in the application graph, exactly as the user-data
 // slice resolves a domain category's hooks.
-//
-// The old `user_ai_credentials` rows are not touched here: the hook deletes them
-// itself until #477 drops that table.
 // =============================================================================
 
 @Injectable()
 export class AiUserKeysPurger {
   private readonly logger = new Logger(AiUserKeysPurger.name);
 
-  constructor(private readonly moduleRef: ModuleRef) {}
+  constructor(
+    private readonly moduleRef: ModuleRef,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  /** The number of keys the user has saved, across providers. */
+  /**
+   * The number of keys the user has saved, across providers. Read from the table,
+   * not from the service's `list`, which answers nothing while AI or a provider
+   * slot is switched off: a key saved earlier is still personal data to erase.
+   */
   async count(userId: string): Promise<number> {
-    const views = await this.keys().list(userId);
-
-    return views.filter((view) => view.configured).length;
+    return this.prisma.userAiKey.count({ where: { userId } });
   }
 
   /** Removes every key the user saved, one call per provider. Returns how many. */
   async removeAll(userId: string): Promise<number> {
     const keys = this.keys();
-    const views = (await keys.list(userId)).filter((view) => view.configured);
+    const rows = await this.prisma.userAiKey.findMany({
+      where: { userId },
+      select: { provider: true },
+    });
 
-    for (const view of views) {
-      await keys.remove(userId, view.provider);
+    for (const row of rows) {
+      await keys.remove(userId, row.provider);
     }
 
-    this.logger.log(`Removed ${views.length} platform AI key(s) for user: ${userId}`);
+    this.logger.log(`Removed ${rows.length} platform AI key(s) for user: ${userId}`);
 
-    return views.length;
+    return rows.length;
   }
 
   private keys(): UserAiKeysService {

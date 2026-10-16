@@ -19,7 +19,7 @@
  * it. Before this boundary existed, a harness stub answering `{}` crashed
  * the whole app into the root `ErrorBoundary` (PR #415's visual regression).
  *
- * The "Ask" button (#380) opens `/ask`. It asks `GET /api/ai/config` only once
+ * The "Ask" button (#380) opens `/ask`. It asks `GET /api/ai-tasks/config` only once
  * the section itself is on screen, and appears only when the answer says
  * connected knowledge is on (`graphEnabled === true`, the `GraphReviewCard`
  * rule) — Ask would only answer "turned off" otherwise.
@@ -40,7 +40,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { EntityTypeIcon } from '../graph/entityTypeIcon';
 import { entityPath } from '../graph/EntityListRow';
-import { useAiConfig } from '../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useGraphEntities } from '../../hooks/useGraphEntities';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { initials } from '../../utils/graphDisplay';
@@ -140,7 +140,7 @@ function KnowledgeSectionContent() {
 
 /** "Ask" → `/ask`, only while connected knowledge is on (#380). */
 function KnowledgeAskButton() {
-  const { config } = useAiConfig();
+  const { config } = useAiTasksConfig();
   if (config?.graphEnabled !== true) return null;
   return (
     <Button size="small" component={RouterLink} to="/ask" startIcon={<QuestionAnswerOutlinedIcon />}>

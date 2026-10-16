@@ -2,18 +2,22 @@
 // THE AI PORT BOUNDARY (issue #475, epic #472)
 // =============================================================================
 //
-// `KvoxAi` (`src/ai-port/`) is the only way this app's code reaches a model. Two
-// rules keep it that way, and both are invisible from inside the file that breaks
-// them (one import line compiles, passes every test and works), so they are
+// `KvoxAi` (`src/ai-port/`) is the only way this app's code reaches a model. Three
+// rules keep it that way, and each is invisible from inside the file that breaks
+// it (one import line compiles, passes every test and works), so they are
 // executable:
 //
 //   1. No file under `src/` outside `ai-port/` and `platform/ai/` imports the
 //      platform AI package (`@marinoscar/platform-api/ai`). A feature that does
 //      holds a platform type, so the port stops being the seam it is meant to be
-//      and the later extraction of the port into its own package breaks.
-//   2. No file outside `src/ai/` (in `src/` or `test/`) imports from `src/ai/`, the
-//      retired provider module that issue #477 deletes. A new edge into it is a file
-//      #477 cannot delete.
+//      and the later extraction of the port into its own package breaks. Two named
+//      kinds of file are exempt: the registration manifests, and the adapters that
+//      bind a port another platform slice asks for (the telemetry assistant).
+//   2. `src/ai/` does not exist. It was the retired provider module (a hand-written
+//      OpenAI client, the per-user credential store, the settings service); issue #477
+//      deleted it, and the platform AI slice replaced it.
+//   3. Nothing in `src/` or `test/` imports from a `src/ai/` path. With the folder gone
+//      this is what stops it coming back by a stray `mkdir`, and it has no allowlist.
 //
 // "Imports" is read with the TypeScript compiler API, not a regular expression, so
 // a specifier inside a comment or a string is not an edge and no spelling of a real
@@ -27,7 +31,7 @@
 // `FakeKvoxAi` from `src/ai-port/testing/fake-kvox-ai.ts`.
 // =============================================================================
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import * as ts from 'typescript';
@@ -53,17 +57,13 @@ const PLATFORM_AI_REGISTRATIONS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Files outside `src/ai/` that still import from it, each with the issue that
- * removes the edge. The list only shrinks. Keys are relative to `src/` for source
- * files and `test/...` for test files.
+ * Files that import the platform AI package to BIND A PORT another platform slice asks the
+ * application for, not to call a model for a feature of this app: the telemetry assistant spends
+ * the calling user's own key through `AiService.forUser`, exactly as the slice's README prescribes.
+ * Each is an adapter with no prompt of its own. Do not add a feature file here.
  */
-const LEGACY_AI_IMPORTERS: Readonly<Record<string, string>> = {
-  'app.module.ts': '#477: mounts the old module until it is deleted',
-  'ai-port/migrate/ai-legacy-migrate.ts': '#477: the one-off legacy migration command reads the old module; deleted with it',
-  'ai-port/migrate/ai-legacy-plan.ts': '#477: the migration planner reads the old settings schema and model resolution; deleted with them',
-  'test/ai/ai-settings.integration.spec.ts': '#477: tests the old module; deleted with it',
-  'test/ai/ai-credentials.integration.spec.ts': '#477: tests the old module; deleted with it',
-  'test/helpers/ai-task-model.fixtures.ts': '#477: fixtures of the old resolver; deleted with it',
+const PLATFORM_AI_PORT_BINDINGS: Readonly<Record<string, string>> = {
+  'platform/telemetry/telemetry-ai.adapter.ts': 'the telemetry slice\'s AI port, bound over AiService (#471, bound in #477)',
 };
 
 const JEST_MODULE_CALLS = new Set([
@@ -174,7 +174,7 @@ function sourceEdges(): Edge[] {
   return edges;
 }
 
-/** True when a relative `specifier` written in a file of `dir` lands inside `src/ai/` (not `src/ai-port/`). */
+/** True when a relative `specifier` written in a file of `dir` lands inside a `src/ai/` path (not `src/ai-port/`). */
 function landsInLegacyAi(dir: string, specifier: string): boolean {
   if (!specifier.startsWith('.')) return false;
   const target = posix(relative(SRC, resolve(dir, specifier)));
@@ -190,31 +190,33 @@ describe('the AI port boundary (#475)', () => {
       .filter(({ specifier }) => specifier === PLATFORM_AI || specifier.startsWith(`${PLATFORM_AI}/`))
       .filter(({ file }) => !PLATFORM_AI_HOMES.some((home) => file.startsWith(home)))
       .filter(({ file }) => !(file in PLATFORM_AI_REGISTRATIONS))
+      .filter(({ file }) => !(file in PLATFORM_AI_PORT_BINDINGS))
       .map(({ file, line, specifier }) => `${file}:${line} imports "${specifier}"`);
 
     expect(violations).toEqual([]);
   });
 
-  it('nothing outside src/ai/ imports from src/ai/ (except the listed legacy edges)', () => {
+  it('src/ai/ does not exist (the retired provider module is gone, #477)', () => {
+    expect(existsSync(join(SRC, 'ai'))).toBe(false);
+  });
+
+  it('nothing imports from a src/ai/ path', () => {
     const violations = edges
-      .filter(({ file }) => !file.startsWith('ai/'))
       .filter(({ dir, specifier }) => landsInLegacyAi(dir, specifier))
-      .filter(({ file }) => !(file in LEGACY_AI_IMPORTERS))
       .map(({ file, line, specifier }) => `${file}:${line} imports "${specifier}"`);
 
     expect(violations).toEqual([]);
   });
 
-  it('every legacy allowlist entry is still needed (the list only shrinks)', () => {
-    const stillImporting = new Set(
+  it('every port-binding allowlist entry still imports the platform AI package', () => {
+    const importing = new Set(
       edges
-        .filter(({ file }) => !file.startsWith('ai/'))
-        .filter(({ dir, specifier }) => landsInLegacyAi(dir, specifier))
+        .filter(({ file }) => !file.startsWith('test/'))
+        .filter(({ specifier }) => specifier.startsWith(PLATFORM_AI))
         .map(({ file }) => file),
     );
 
-    const stale = Object.keys(LEGACY_AI_IMPORTERS).filter((file) => !stillImporting.has(file));
-    expect(stale).toEqual([]);
+    expect(Object.keys(PLATFORM_AI_PORT_BINDINGS).filter((file) => !importing.has(file))).toEqual([]);
   });
 
   it('every registration allowlist entry still imports the platform AI package', () => {

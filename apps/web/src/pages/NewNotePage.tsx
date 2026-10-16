@@ -20,7 +20,7 @@
  * ⚠ THE AI KEY GATE COMES FIRST, AND IT IS THE SHARED COMPONENT
  * =============================================================================
  *
- * `useAiConfig().keyConfigured` false renders `AiKeyRequired` (#55) and nothing
+ * `useAiTasksConfig().keyConfigured` false renders `AiKeyRequired` (#55) and nothing
  * else — the rule that component's own header states for all four AI surfaces
  * in this epic. The same component is rendered again if `POST /api/notes`
  * answers **409 `ai_key_missing`** anyway, which is not belt-and-braces: the
@@ -74,7 +74,7 @@ import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-d
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { ModelSelect } from '../components/notes/ModelSelect';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
 import { ApiError } from '../services/api';
@@ -125,7 +125,7 @@ export function NewNotePage() {
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchParams] = useSearchParams();
 
-  const { config, keyConfigured, available, isLoading: aiLoading } = useAiConfig();
+  const { config, keyConfigured, available, isLoading: aiLoading } = useAiTasksConfig();
   // ⚠ The DEFAULT hook: hidden templates are excluded (issue #311), so the
   // pre-selection below can never land on one the user chose to hide.
   const { templates, isLoading: templatesLoading } = useNoteTemplates();
