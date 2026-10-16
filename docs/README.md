@@ -32,7 +32,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Write or run tests | [TESTING.md](TESTING.md) |
 | Add a job type or any long-running work | the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)), [specs/job-queue.md](specs/job-queue.md); the queue itself is `@marinoscar/platform-api/jobs` (contract in the package README and the `JobHandler` TSDoc) |
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
-| Add a notification event | [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md), [specs/browser-notifications.md](specs/browser-notifications.md) |
+| Add a notification event or an email template | the `add-notification` skill ([../.claude/skills/add-notification/SKILL.md](../.claude/skills/add-notification/SKILL.md)), [specs/browser-notifications.md](specs/browser-notifications.md), [ARCHITECTURE.md](ARCHITECTURE.md) §7.9 |
 | Add a settings page (admin or per-user) | [specs/settings-ui.md](specs/settings-ui.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md), the `add-settings-page` skill ([../.claude/skills/add-settings-page/SKILL.md](../.claude/skills/add-settings-page/SKILL.md)) |
 | Add a settings namespace (system or per-user) or a credential purpose | [DEVELOPMENT.md](DEVELOPMENT.md#settings-namespace-registry), [ARCHITECTURE.md](ARCHITECTURE.md) §7.7, [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md) |
 | Change navigation, the bottom bar or the rail | [specs/ux-refresh.md](specs/ux-refresh.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md) |
@@ -123,7 +123,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 |---|---|
 | [../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md) | Adding a job type on the packaged queue (`@marinoscar/platform-api/jobs`): handler, explicit `orgId`, labels, node eligibility |
 | [../apps/api/src/notes/contracts/README.md](../apps/api/src/notes/contracts/README.md) | Job contracts: the result shape a worker node posts back, kept beside the module that owns the job type |
-| [../apps/api/src/notifications/README.md](../apps/api/src/notifications/README.md) | Adding a notification: event, templates, `notify()` |
+| [../.claude/skills/add-notification/SKILL.md](../.claude/skills/add-notification/SKILL.md) | Adding a notification on the packaged slices (`@marinoscar/platform-api/notifications`, `/email`): template in `email-templates/`, `registerNotification` in `notifications-registry/`, `notify()` after commit |
 | [../apps/cli/README.md](../apps/cli/README.md) | `kvox`: install, `login`, `api`, `config`, `deploy`, `node`, CI usage |
 
 ## Agent rules

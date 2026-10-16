@@ -279,32 +279,6 @@ export default () => {
     partSize: parseInt(process.env.STORAGE_PART_SIZE || '10485760', 10), // 10MB default
   },
 
-  // Email transports (issue #122, epic #109)
-  //
-  // NO NEW SECRET IS INTRODUCED HERE. SES reuses the AWS credentials this
-  // deployment already has in its environment for S3 — the same two variables,
-  // read again, so an operator who has storage working has email working with
-  // no additional key to issue, rotate, or leak.
-  //
-  // Read from `process.env` DIRECTLY rather than from `storage.s3.*` above,
-  // deliberately. What email shares with storage is the ENVIRONMENT, not
-  // storage's configuration: pointing email at `storage.s3` would make it
-  // break the day someone gives storage its own credential source, and it is
-  // the same coupling epic #109 explicitly rejects (MemoriaHub's SES provider
-  // reads the S3 storage provider's database credentials, so email silently
-  // depends on storage being configured at all).
-  //
-  // `sesRegionFallback` has NO DEFAULT, unlike `storage.s3.region`. A wrong
-  // region does not fail as "wrong region": SES answers that the sending
-  // identity is not verified, because the identity is verified in the region
-  // the admin actually uses. An unset region reported as "SES region is not
-  // configured" is a far better error than us-east-1 guessing wrong.
-  email: {
-    awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    sesRegionFallback: process.env.S3_REGION || '',
-  },
-
   logLevel: process.env.LOG_LEVEL || 'info',
   };
 };

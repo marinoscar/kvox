@@ -22,11 +22,12 @@ import { server } from '../mocks/server';
 import { IdentityProviders } from '../../identity/IdentityProviders';
 import { api } from '../../services/api';
 
-vi.mock('../../services/pushSubscription', () => ({
+vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
   removePushSubscription: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { removePushSubscription } from '../../services/pushSubscription';
+import { removePushSubscription } from '@marinoscar/platform-web/notifications/headless';
 
 const mockRemovePushSubscription = vi.mocked(removePushSubscription);
 

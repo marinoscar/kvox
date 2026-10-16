@@ -2,7 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import type { NotificationsService } from '../notifications/notifications.service';
+import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ShareLookupThrottleService } from './share-lookup-throttle.service';
 import type { TranscriptAccessService } from './transcript-access.service';

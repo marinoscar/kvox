@@ -179,6 +179,9 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "channels": [
         "email"
       ],
+      "declaredChannels": [
+        "email"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -189,14 +192,7 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "channels": [
         "email"
       ],
-      "defaultEnabled": true,
-      "mandatory": false
-    },
-    {
-      "key": "allowlist.invitation_reminder",
-      "label": "Invitation reminder",
-      "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
-      "channels": [
+      "declaredChannels": [
         "email"
       ],
       "defaultEnabled": true,
@@ -210,14 +206,36 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "email",
         "browser"
       ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
       "defaultEnabled": true,
       "mandatory": true
+    },
+    {
+      "key": "allowlist.invitation_reminder",
+      "label": "Invitation reminder",
+      "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
+      "channels": [
+        "email"
+      ],
+      "declaredChannels": [
+        "email"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
     },
     {
       "key": "admin.broadcast",
       "label": "Announcements",
       "description": "Occasional messages an administrator sends to everyone using this application.",
       "channels": [
+        "email",
+        "browser",
+        "push"
+      ],
+      "declaredChannels": [
         "email",
         "browser",
         "push"
@@ -234,6 +252,11 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "browser",
         "push"
       ],
+      "declaredChannels": [
+        "email",
+        "browser",
+        "push"
+      ],
       "defaultEnabled": true,
       "mandatory": true
     },
@@ -244,6 +267,9 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "channels": [
         "email"
       ],
+      "declaredChannels": [
+        "email"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -252,6 +278,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "label": "Worker node went offline",
       "description": "Sent when a worker node stops heartbeating and the fleet sweep marks it offline. Capacity has dropped until it comes back.",
       "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
         "email",
         "browser"
       ],
@@ -266,6 +296,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "email",
         "browser"
       ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -274,6 +308,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "label": "Database restored",
       "description": "Sent when a database restore finishes and the restored copy becomes the live database. This cannot be turned off.",
       "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
         "email",
         "browser"
       ],
@@ -288,6 +326,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "email",
         "browser"
       ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -296,6 +338,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "label": "Transcription failed",
       "description": "Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.",
       "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
         "email",
         "browser"
       ],
@@ -310,6 +356,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "email",
         "browser"
       ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -321,6 +371,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
         "email",
         "browser"
       ],
+      "declaredChannels": [
+        "email",
+        "browser"
+      ],
       "defaultEnabled": true,
       "mandatory": false
     },
@@ -329,6 +383,10 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       "label": "Note generation failed",
       "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
       "channels": [
+        "email",
+        "browser"
+      ],
+      "declaredChannels": [
         "email",
         "browser"
       ],
@@ -597,15 +655,6 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
   {
     "channels": [
       "email",
-    ],
-    "defaultEnabled": true,
-    "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
-    "key": "allowlist.invitation_reminder",
-    "label": "Invitation reminder",
-  },
-  {
-    "channels": [
-      "email",
       "browser",
     ],
     "defaultEnabled": true,
@@ -613,6 +662,15 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "key": "security.role_changed",
     "label": "Your roles changed",
     "mandatory": true,
+  },
+  {
+    "channels": [
+      "email",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.",
+    "key": "allowlist.invitation_reminder",
+    "label": "Invitation reminder",
   },
   {
     "channels": [
@@ -735,13 +793,13 @@ exports[`Domain registrations characterization pure registry values Object.keys(
   "test-email",
   "user-welcome",
   "allowlist-invitation",
-  "allowlist-invitation-reminder",
   "role-changed",
   "broadcast",
   "job-failed",
   "node-offline",
   "backup-failed",
   "restore-completed",
+  "allowlist-invitation-reminder",
   "transcript-ready",
   "transcript-failed",
   "transcript-shared",

@@ -95,8 +95,8 @@ import type { DatabaseBackupStatus, DatabaseBackupTrigger } from '@prisma/client
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
-import type { BackupFailedEmailData } from '../../email';
-import { NotificationsService } from '../../notifications/notifications.service';
+import type { BackupFailedEmailData } from '@marinoscar/platform-api/email';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {

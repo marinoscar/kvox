@@ -22,7 +22,7 @@ import {
   IdentityWebAdaptersProvider,
 } from '@marinoscar/platform-web/identity/headless';
 import { api } from '../services/api';
-import { removePushSubscription } from '../services/pushSubscription';
+import { removePushSubscription } from '@marinoscar/platform-web/notifications/headless';
 import { appIdentityAdapters } from './identityAdapters';
 
 export function IdentityProviders({ children }: { children: ReactNode }) {

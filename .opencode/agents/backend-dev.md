@@ -52,7 +52,7 @@ You write backend code in `apps/api/src/<module>/`: NestJS 11 on Fastify, Prisma
 - **AI jobs are server-only** (`note.generate`, `kg.*`, `ask.respond`, `transcript.name_check`): they run on the caller's own key in `user_ai_credentials`, throttled by `aiProviderThrottleKey(userId)`.
 - **Domain specs**: transcripts `docs/specs/transcription.md` (`apps/api/src/transcripts/editing/` stays pure); notes `docs/specs/notes.md`; graph and Ask `docs/specs/ontology.md` (every graph write goes through `GraphWriteService`).
 - **No env vars for runtime-configured features**: system settings plus the encrypted credential store (`apps/api/src/credentials/`).
-- **`notify()` runs after the write commits**, outside any `$transaction`. Events: `apps/api/src/notifications/notification-events.ts`.
+- **`notify()` runs after the write commits**, outside any `$transaction`. Events are registered in `apps/api/src/notifications-registry/` (recipe: `.opencode/skills/add-notification/SKILL.md`).
 - **OpenAPI is generated**: annotate controllers and DTOs; endpoint docs live in `docs/API.md`.
 - Hand schema and migration work to `database-dev`.
 

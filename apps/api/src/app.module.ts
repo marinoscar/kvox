@@ -36,9 +36,8 @@ import { AllowlistRemindersModule } from './allowlist-reminders/allowlist-remind
 import { CommonModule } from './common/common.module';
 import { profileImageModule, StorageConfigModule, storageModule } from './platform/storage/storage.config';
 import { KvoxObjectsModule } from './kvox-objects/kvox-objects.module';
-import { EmailModule } from './email/email.module';
-import { BroadcastsModule } from './notifications/broadcasts/broadcasts.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { emailModule } from './platform/email/email.config';
+import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TranscriptionModule } from './transcription/transcription.module';
@@ -154,28 +153,28 @@ import configuration from './config/configuration';
     CredentialsModule,
     UserCredentialsModule,
     OrgCredentialsModule,
-    // Email transports (#122, epic #109) and, since #124, the admin email
-    // settings endpoints. Registered here even though nothing sends mail
-    // automatically yet: it makes a broken provider graph fail at boot rather
-    // than surfacing as a DI error in #125. It costs nothing at runtime --
-    // neither transport touches the network or reads a credential until its
-    // first send.
-    EmailModule,
-    // Notifications (#121/#124/#125, epic #109): the event registry endpoint,
-    // and since #125 the dispatcher, preference resolution and delivery
-    // records. Registered here even though no real event is wired yet (#128)
-    // so a broken channel graph — a duplicate channel registration, a missing
-    // transport — fails at boot rather than at the first notification.
-    NotificationsModule,
-    // Admin notification broadcasts -- the fan-out half (#323, epic #319): the
-    // `admin.broadcast.start` and `admin.broadcast.chunk` job handlers, which
-    // turn one composed announcement into a chunked, resumable send to every
-    // active user over the existing dispatcher. Registered here for the reason
-    // `NotificationsModule` and `JobsModule` above are: a handler's only
-    // wiring is the `registry.register(this)` in its own `onModuleInit`, so
-    // being in the graph IS the registration, and a broken one fails at boot
-    // rather than the first time an admin presses Send. The admin API (#324)
-    // and page (#325) land on top of this module later.
+    // The platform's email slice (#470, epic #467): the SES and SMTP
+    // transports, `GET|PUT /api/email-settings`, `POST /api/email-settings/test`
+    // (`system_settings:read|write`), the template registry and layout (this
+    // app's logo and brand colour, `platform/email/email.options.ts`) and the
+    // doctor check. Replaces this app's own `email/` folder. Not global: the
+    // modules that send mail import the same `emailModule` object. Neither
+    // transport touches the network or reads a credential until its first send.
+    emailModule,
+    // The platform's notifications slice (#470, epic #467): the dispatcher
+    // (`NotificationsService`), the email, in-app (inbox and SSE) and Web Push
+    // channels, `/api/notifications/*`, `/api/admin/push-config/*`, the VAPID
+    // Doctor check and the `jobs.job_failed` / `nodes.node_offline` notifiers.
+    // Replaces this app's own `notifications/` folder. GLOBAL: a module that
+    // injects `NotificationsService` imports nothing. The event registry is
+    // filled by `platform/notifications/notification.manifest.ts`
+    // (this app's events are in `notifications-registry/`).
+    notificationsModule,
+    // Admin broadcasts (#323/#324, epic #319; the platform's since #470):
+    // `/api/admin/broadcasts/*` and the `admin.broadcast.start` and
+    // `admin.broadcast.chunk` job handlers (type strings unchanged). A handler's
+    // only wiring is the `registry.register(this)` in its own `onModuleInit`, so
+    // being in the module graph IS the registration.
     BroadcastsModule,
     // The platform's jobs slice (#468, epic #467): the queue (enqueue with dedup,
     // claim, leases, the terminal state machine), the in-process worker pool,

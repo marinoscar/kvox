@@ -1,5 +1,18 @@
 # Browser Notifications & Web Push
 
+> **Implementation moved to the platform (#470, epic #467).** The behaviour
+> this document specifies (the dispatcher, the three channels, the preference
+> matrix, the SSE stream, Web Push fan-out, VAPID administration and the
+> diagnostics) is now served by `@marinoscar/platform-api/notifications` and
+> `@marinoscar/platform-web/notifications`. Every file path below under
+> `apps/api/src/notifications/`, `apps/api/src/email/` and the web files named
+> in the header (`NotificationContext.tsx`, `NotificationSettings.tsx`,
+> `pushSubscription.ts`, `PushConfigPage.tsx`, ...) names a file that **no
+> longer exists**; read it as the description of the packaged behaviour. The
+> map from the old files to the new owners, what this app still owns and the
+> places where the package differs are in
+> [Packaged implementation (#470)](#packaged-implementation-470) below.
+
 > Epic #215, issues #216–#233 (#216 brand icons and theme colours, #217
 > manifest generation, #218 service worker with `injectManifest`, #219
 > service-worker update prompt and PWA install prompt, #220 nginx caching and
@@ -69,6 +82,124 @@
 > `AuthProvider` from the platform's web identity package (the app's `apps/web/src/contexts/AuthContext.tsx` was deleted by #465; `apps/web/src/identity/IdentityProviders.tsx` binds the push-unsubscribe `onBeforeLogout`),
 > `apps/web/src/components/settings/NotificationSettings.tsx`, and
 > `apps/web/src/pages/UserNotificationsPage.tsx`.
+
+## Packaged implementation (#470)
+
+Issue #470 (epic #467) deleted the application's own email and notification stacks and
+mounted the platform's. Routes, permissions, table names and every persisted
+string are **unchanged**, so no data moved: stored `notifications` preferences,
+`notification_deliveries` rows, `push_subscriptions`, the `webPush` settings row
+and the `push_vapid` credential are read by the packaged code as they are.
+
+### Who owns what now
+
+| Concern | Owner | Where |
+|---|---|---|
+| Dispatcher (`notify`, `notifyNow`, `notifyAddress`, `notifyPermissionHolders`), delivery rows, preferences, admin policy, SSE stream, inbox, Web Push subscriptions | platform | `NotificationsModule.forRoot` in `apps/api/src/platform/notifications/notifications.config.ts` (a global mount; the host ports are `platform/notifications/notifications-host.module.ts`) |
+| The `email`, `browser` and `push` channels | platform | `registerPlatformNotificationChannels()`; no Android channel is registered, this app has no Android client |
+| Broadcasts (`admin.broadcast`, `admin.broadcast_critical`), the `admin.broadcast.start` and `admin.broadcast.chunk` handlers | platform | `BroadcastsModule`; job type strings unchanged ([notification-broadcasts.md](notification-broadcasts.md)) |
+| `jobs.job_failed`, `nodes.node_offline` | platform | `OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS`; `JobFailureNotifier` is gone |
+| VAPID administration and the diagnostics (`/api/admin/push-config/*`, including `POST test`) | platform | `PushConfigService`, `PushTestService`; operator procedure in [vapid-keys.md](../runbooks/vapid-keys.md) |
+| Email rendering, SMTP and SES transports, `/api/email-settings` | platform | `EmailModule.forRoot(EMAIL_MODULE_OPTIONS)`, `apps/api/src/platform/email/` |
+| **Event declarations** (key, label, description, channels, `defaultEnabled`, `mandatory`) | this app | `apps/api/src/notifications-registry/*.notifications.ts` |
+| **Email templates** and the brand mark | this app | `apps/api/src/email-templates/` (`brand-logo.ts` is the layout brand mark) |
+| The registration order | this app | `apps/api/src/platform/notifications/notification.manifest.ts` |
+| Web: bell, banner, user and admin pages | platform | `@marinoscar/platform-web/notifications/{headless,ui}` and `/email/ui`, bound in `apps/web/src/platform/notifications.ts` (`configureNotificationsWeb`) |
+| Service worker | the app composes, the platform supplies the handlers | `apps/web/src/sw.ts` (see below) |
+
+The registration order in `notification.manifest.ts` is load-bearing, because
+each step validates against the one before it: platform channels, the email
+rendering context (layout theme and brand mark), the platform email templates,
+`registerEmailTemplates(KVOX_EMAIL_TEMPLATES)`, then `registerNotifications` for
+identity, the allowlist reminder, `BROADCASTS_NOTIFICATIONS`,
+`OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS`, db-backup, transcripts and notes.
+The array order is the order of the `/settings/notifications` matrix. Two
+registrations of one event key throw `DUPLICATE_ID` at import, and the registries
+freeze when the application bootstraps.
+
+### Old file to new owner
+
+| Deleted | Replaced by |
+|---|---|
+| `notifications/notification-events.ts`, `channels/*-notification.channel.ts` (`EVENT_EMAIL_TEMPLATES`, `EVENT_BROWSER_TEMPLATES`) | `registerNotification({ event, emailTemplate, browserTemplate })` entries in `notifications-registry/` |
+| `notifications/notifications.{module,service,controller}.ts`, `notification-delivery.service.ts`, `notification-policy*.ts`, `notification-preferences.ts`, `notification-store.service.ts`, `notification-stream.service.ts` | the platform slice |
+| `notifications/push-config.*`, `push-test.service.ts`, `push-subscription.service.ts`, `dto/*push*` | the platform slice (`PushConfigService`, `PushTestService`) |
+| `notifications/broadcasts/**` | `BroadcastsModule` |
+| `notifications/ops/job-failure-notifier.ts` | `OPS_NOTIFICATIONS` |
+| `notifications/ops/node-offline-notifier.ts` (the `NodeOfflineNotifier` shim) | `NODES_NOTIFICATIONS` (audience `nodes:read`; the shim row in local-exceptions.md is removed) |
+| `email/**` (module, providers, settings controller and service, test send) and `email/templates/**` | `@marinoscar/platform-api/email` plus `email-templates/` |
+| `contexts/NotificationContext.tsx`, `hooks/{useNotificationCapability,useBrowserNotificationPermission,usePushSubscriptionSync,...}.ts`, `services/{pushSubscription,pushDiagnostics,browserNotifications,notificationStream,...}.ts` | `@marinoscar/platform-web/notifications/headless` |
+| `components/navigation/NotificationBell.tsx`, `components/notifications/NotificationPermissionBanner.tsx`, `pages/UserNotificationsPage.tsx`, `components/settings/NotificationSettings.tsx`, `pages/Admin/{NotificationSettingsPage,PushConfigPage,BroadcastsPage,EmailSettingsPage}.tsx`, `components/admin/{PushTestPanel,PushConfigConfirmDialog,BroadcastComposer,BroadcastDetailDialog}.tsx` | `@marinoscar/platform-web/notifications/ui` and `/email/ui` |
+
+### Differences from the code this document was written against
+
+These are the places where the package behaves differently from the app's former
+code. Everything else in this document still holds.
+
+- **No VAPID environment fallback.** Section 11.2's first case (no `webPush`
+  row, fall back to `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`)
+  no longer exists. The platform retired it (its #635): push is off until an
+  admin generates a key pair at `/admin/settings/push`. A row with `enabled:
+  false`, or no row, means nothing is active; an enabled row with a missing
+  public key or private-key credential is treated as disabled and logged. A
+  deployment that relied on the three variables alone must generate keys in the
+  admin UI after the deploy; the variables are then unread (see the deploy note
+  in [vps.md](../deployment/vps.md#after-the-notifications-and-email-slice-470)).
+- **Extra and wider routes.** The platform adds `GET /api/notifications/channels`
+  (the channel descriptors the preference matrix is drawn from) and
+  `POST /api/admin/broadcasts/:id/resume`. Broadcast routes accept either the
+  system permission (`broadcasts:read|write`) or its organization-scoped twin
+  (`org_broadcasts:read|write`, held by the `org_admin` role in
+  `apps/api/prisma/catalog/permissions.json`), where this app required the `admin`
+  role together with the system permission. **Authorization widens:** an
+  `org_admin` can now reach the broadcast routes for the active organization,
+  which in this single-organization deployment is every user (pending agent
+  report: confirm in the RBAC coverage). Details in
+  [API.md](../API.md#notifications).
+- **`/api/email-settings`** has the same three routes and permissions
+  (`system_settings:read` for `GET`, `system_settings:write` for `PUT` and
+  `POST test`). The body and response are supersets: `provider` is any
+  registered transport id and the response adds `transports` and `descriptors`.
+  The legacy `smtp*` and `ses*` fields are unchanged.
+- **Amazon SES reads no credentials from the environment.** The SES access key
+  ID lives in the `email` settings row and the secret in the credential
+  `email_ses` / `default`; `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are
+  no longer read, so a deployment on SES re-enters both at
+  `/admin/settings/email` after the deploy. `S3_REGION` is kept only as a
+  default SES region (`sesRegionFallback` in
+  `apps/api/src/platform/email/email.options.ts`). SMTP is unaffected.
+  [DEVELOPMENT.md](../DEVELOPMENT.md) said the opposite until #470.
+- **Every email carries the brand mark** (before, only the two invitations did),
+  and the brand colour follows the theme colour in `packages/shared/identity.json`
+  instead of the old hardcoded blue.
+
+### The service worker (#453 parity)
+
+`apps/web/src/sw.ts` keeps the app's workbox precache, the denylisted navigation
+route, `clientsClaim` and the `SKIP_WAITING` handshake, and replaces its three
+notification listeners with
+`registerNotificationServiceWorkerHandlers(self, { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' })`
+imported from `@marinoscar/platform-web/notifications/service-worker` (the
+worker-safe entry). The worker still never calls the API, and `sw.js` is still
+served `no-cache`.
+
+The package ports the behaviour of #449 to #451 unchanged, so nothing is composed
+locally and there is no local exception:
+
+- **A real push is always shown by the worker**, even when a window client is
+  focused (#450). It is the **page** that stays quiet: its SSE handler raises no
+  OS toast for a focused tab, and none for a frame flagged `pushed` (#451). So a
+  focused user gets exactly one alert, the push.
+- **No duplicate toast for one notification.** The `tag` is `payload.id` (or
+  `payload.tag`), so a repeated push for one id reuses the tag and replaces the
+  toast.
+- **A test push is shown even when focused**, then acknowledged to every window
+  client with `hadFocusedClient`, which is what `POST /api/admin/push-config/test`
+  and the packaged diagnostics panel expect.
+- A malformed payload still shows a generic notification (every path through a
+  `push` event awaits `showNotification`).
+- `notificationclick` re-validates the link before opening it, and
+  `pushsubscriptionchange` re-subscribes best effort.
 
 ## Why this shape, and not the obvious one
 
@@ -489,6 +620,16 @@ wider audience; #226 introduces one, purpose-built.
 
 ## 7. Foreground suppression and cross-tab dedup
 
+> **Packaged since #470.** The page-side half of this section (the focused-tab
+> check, the `registration.getNotifications({ tag })` dedup and the `pushed`
+> frame flag) is implemented by `@marinoscar/platform-web/notifications/headless`
+> (`NotificationProvider`), and the server side of the `pushed` flag by the
+> platform's `NotificationStreamService`. The push-side rules (a real push shows
+> even to a focused client) live in `apps/api` nowhere any more: they are the
+> service worker's, registered in `apps/web/src/sw.ts` through the package's
+> `registerNotificationServiceWorkerHandlers`; see
+> [The service worker](#the-service-worker-453-parity).
+
 Two independent mechanisms solve two independent problems, and neither
 subsumes the other. `NotificationContext.tsx:414-462` states the distinction
 directly:
@@ -571,6 +712,15 @@ CSP changes can be reviewed, merged, and rolled back independently of an
 unrelated, still-open bug.
 
 ## 9. Web Push: fan-out, failure handling, and the id it mints
+
+> **Packaged since #470.** `PushNotificationChannel`, `PushSubscriptionService`,
+> `PushConfigService` and `PushTestService` are the platform's
+> (`@marinoscar/platform-api/notifications`); the file and line references in
+> this section name the deleted originals. The behaviour described (its own
+> row per channel, `Promise.allSettled` fan-out, 404/410 prune, `failureCount`
+> up to 5, the always-registered channel, the always-200 test route that writes
+> no delivery row) is unchanged. `VAPID_SUBJECT` is no longer read from the
+> environment, see [Differences](#differences-from-the-code-this-document-was-written-against).
 
 `PushNotificationChannel` (`apps/api/src/notifications/channels/push-notification.channel.ts`)
 is the third `NotificationChannelSender`, and the first that leaves this
@@ -689,6 +839,15 @@ request, browser checklist, stepwise test with a step log and device receipt
 page lays out Enable, Status, Diagnostics, then the Danger zone (issue #452).
 
 ## 10. Operational events: an audience that is a permission, not a user
+
+> **Packaged since #470.** `jobs.job_failed` and `nodes.node_offline` are the
+> platform's `OPS_NOTIFICATIONS` and `NODES_NOTIFICATIONS`, and the four email
+> templates are the platform's (`job-failed`, `node-offline`, `backup-failed`,
+> `restore-completed`). This app registers the two database-backup events from
+> `apps/api/src/notifications-registry/db-backup.notifications.ts` (keys,
+> channels and the `mandatory` flag on `db_backup.restore_completed` unchanged).
+> `notifyPermissionHolders` is the platform dispatcher's. The file paths in the
+> box below name deleted originals.
 
 > Issue #288, epic #254. Scoped here, in the framework document, rather than
 > in `job-queue.md`, `worker-nodes.md` or `database-backup.md`, because the
@@ -859,6 +1018,15 @@ as a fifth entry point on `NotificationsService` — the gate must stay in one
 place.
 
 ## 11. Runtime-configurable VAPID keys: the admin surface (issue #355)
+
+> **Packaged since #470, and the env fallback is gone.** The service, controller
+> and schema are the platform's (`PushConfigService`, `PUSH_CONFIG_KEY`
+> `'webPush'`, credential purpose `push_vapid`, name `default`: the strings this app
+> always stored, so existing keys keep working with no re-subscription). The
+> platform retired the environment fallback of Section 11.2 (its #635); read
+> 11.2's cases 1 and 4 with that change: no row, or `enabled: false`, means off,
+> and a broken enabled row is treated as disabled and logged. The page is the
+> packaged `PushConfigPage`.
 
 > Issue #355, not part of epic #215 — see the note at the top of this
 > document. Implemented in `apps/api/src/notifications/push-config.service.ts`,
@@ -1266,3 +1434,14 @@ malformed-payload fallback, the dedup check — and it is not a substitute for
 a real Android Chrome or iOS Safari device showing a real OS-level
 notification. Per the epic's own success criteria, none of the platform rows
 above can be marked done from this repository alone.
+
+**After #470.** The page and API logic above are covered by the platform's own
+suites; this app's pins are the notification events spec under `apps/api/test/notifications/` (every
+event key registered with its channels and `mandatory` flag, every `email`
+channel has a template), `apps/api/test/notifications/preferences-continuity.db.spec.ts`
+(a pre-migration `notifications` preference row still applies), the `email` and
+`notifications` suites of `apps/api/test/conformance.spec.ts` (with an empty
+`afterCommitAllowlist`) and the service-worker unit test. A duplicate toast (the #453 regression) is only visible in a real
+browser: after a deploy, finish a transcript with the tab focused, then with it
+backgrounded, and expect exactly one OS toast each time (the worker's push; the
+page raises none while focused or when the frame is flagged `pushed`).

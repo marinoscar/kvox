@@ -11,8 +11,8 @@ import type { DatabaseBackupRun, Job, Prisma } from '@prisma/client';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { MaintenanceModeService } from '@marinoscar/platform-api/host';
 import type { SystemDatabaseBackupValue } from '@marinoscar/platform-contract/db-backup';
-import type { RestoreCompletedEmailData } from '../email';
-import { NotificationsService } from '../notifications/notifications.service';
+import type { RestoreCompletedEmailData } from '@marinoscar/platform-api/email';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {

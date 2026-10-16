@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { NotificationsModule } from '../notifications/notifications.module';
 import { StorageProvidersModule } from '@marinoscar/platform-api/storage';
 import { DatabaseRestoreService } from './database-restore.service';
 import { DatabaseBackupAdminService } from './db-backup-admin.service';
@@ -51,7 +50,7 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 // `SettingsModule` for `SystemSettingsService.getDatabaseBackupPolicy()` — the
 // compression level, the stale window and the storage-provider name. The
 // direction is acyclic: settings depends on nothing here. `JobsModule` and
-// `NotificationsModule` import it for exactly the same kind of narrow read.
+// the platform notifications slice import it for exactly the same kind of narrow read.
 //
 // ⚠ `StorageProvidersModule` AND NOT `StorageModule`, deliberately, and this
 // is the same choice `JobsModule` and `NodesModule` already made. The provider
@@ -177,10 +176,11 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// #288 ADDS `NotificationsModule`, AND THREE CALL SITES BEHIND IT
+// #288 ADDS THE NOTIFICATIONS DISPATCHER, AND THREE CALL SITES BEHIND IT
 // -----------------------------------------------------------------------------
 //
-// Imported for `NotificationsService`'s permission-addressed entry points, used
+// The platform's global `NotificationsService` (#470; nothing to import),
+// permission-addressed entry points, used
 // from three places in this module and nowhere else:
 //
 //   - `DatabaseBackupRunnerService.markFailed` — a run that reported an error.
@@ -194,7 +194,7 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 //     would drop a detached dispatch outright. That call site carries the full
 //     argument; do not "tidy" it into the detached form.
 //
-// The direction is acyclic, like every other import here: `NotificationsModule`
+// The direction is acyclic, like every other import here: the notifications slice
 // reaches `PrismaModule`, `EmailModule` and `SettingsModule`, and none of those
 // reaches back into backups.
 //
@@ -213,7 +213,7 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 // new handler self-registers with it). The direction stays acyclic, which is
 // the property that makes this import safe at all: `JobsModule` reaches
 // `PrismaModule`, `SettingsModule`, `StorageProvidersModule` and
-// `NotificationsModule`, and NOTHING in the queue reaches back into backups —
+// the notifications slice, and NOTHING in the queue reaches back into backups —
 // the queue does not know this type exists, which is precisely the promise of
 // the one-class extension point.
 //
@@ -260,7 +260,6 @@ import { DatabaseBackupScheduleTask } from './tasks/db-backup-schedule.task';
 @Module({
   imports: [
     StorageProvidersModule,
-    NotificationsModule,
   ],
   controllers: [DatabaseBackupController],
   providers: [

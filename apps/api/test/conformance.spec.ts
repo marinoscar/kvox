@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465, #464, #468 and #469, epics #462 and #467)
+// Platform conformance (issues #465, #464, #468, #469 and #470, epics #462 and #467)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -10,15 +10,20 @@ import { join } from 'node:path';
 import { buildPermissionCatalog, catalogGrants, permissionRegistry, roleRegistry, userOwnedModelRegistry } from '@marinoscar/platform-api/core';
 import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/doctor/testing';
+import '@marinoscar/platform-api/email/testing';
 import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
+import '@marinoscar/platform-api/notifications/testing';
 import '@marinoscar/platform-api/settings/testing';
 import '@marinoscar/platform-api/storage/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
+// The notification and email registries are filled by this import (it is also reached through
+// AppModule); the suites below read them, so name the dependency.
+import '../src/platform/notifications/notification.manifest';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
@@ -93,6 +98,73 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'transcripts/transcript-editing.service.ts', why: 'Row locks and ordered segment rewrites inside the edit transaction; scoped to a transcript the caller owns.' },
 ] as const;
 
+const HOSTILE = '<script>alert(1)</script>';
+
+/**
+ * One sample per template this app registers or overrides. Text fields carry markup so the suite's
+ * escaping check (the HTML must not contain the raw string) has something to catch. Shapes follow
+ * the `EmailTemplateDataMap` augmentations in `src/email-templates/*.email.ts`.
+ */
+const EMAIL_TEMPLATE_SAMPLES: Record<string, unknown> = {
+  'allowlist-invitation-reminder': {
+    recipientEmail: 'guest@example.test',
+    invitedAt: new Date('2026-01-15T10:00:00.000Z'),
+    invitedBy: HOSTILE,
+    signInUrl: 'https://app.example.test/login',
+  },
+  'transcript-ready': {
+    transcriptId: 'transcript-1',
+    title: HOSTILE,
+    durationMs: 3_725_000,
+    speakerCount: 4,
+    wordCount: 18_402,
+    providerLabel: HOSTILE,
+    appUrl: 'https://app.example.test',
+  },
+  'transcript-failed': {
+    transcriptId: 'transcript-1',
+    title: HOSTILE,
+    reason: HOSTILE,
+    stage: HOSTILE,
+    retryable: true,
+    appUrl: 'https://app.example.test',
+  },
+  'transcript-shared': {
+    transcriptId: 'transcript-1',
+    title: HOSTILE,
+    role: 'editor',
+    ownerName: HOSTILE,
+    appUrl: 'https://app.example.test',
+  },
+  'note-ready': {
+    noteId: 'note-1',
+    title: HOSTILE,
+    templateName: HOSTILE,
+    providerLabel: HOSTILE,
+    model: HOSTILE,
+    wordCount: 412,
+    appUrl: 'https://app.example.test',
+  },
+  'note-failed': {
+    noteId: 'note-1',
+    title: HOSTILE,
+    reason: HOSTILE,
+    category: HOSTILE,
+    appUrl: 'https://app.example.test',
+  },
+  'user-welcome': {
+    recipientEmail: 'new@example.test',
+    recipientName: HOSTILE,
+    roles: ['viewer'],
+    appUrl: 'https://app.example.test',
+  },
+  'allowlist-invitation': {
+    recipientEmail: 'guest@example.test',
+    invitedBy: HOSTILE,
+    signInUrl: 'https://app.example.test/login',
+  },
+};
+
 runPlatformConformance({
   sourceRoots: [join(API_DIR, 'src')],
   suites: {
@@ -102,20 +174,19 @@ runPlatformConformance({
     // notes-housekeeping, transcripts-housekeeping (the storage cleanup cron is the platform's since #469).
     cronEnqueueOnly: { exempt: [], minCronFiles: 5 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
-    // provider). Seven files hold a listener, one body each, every one a dispatch or one bounded
-    // write. The two transcript upload listeners and storage/processing/object-processing.service.ts
+    // provider). Five files hold a listener, one body each, every one a dispatch or one bounded
+    // write. The job-failure and node-offline notifiers are the platform's since #470 (outside
+    // this source root, scanned by the package's own run). The two transcript upload listeners and storage/processing/object-processing.service.ts
     // are gone (#469): the pipeline starts from transcripts/transcript-upload.processor.ts, a
     // platform ObjectProcessor that runs in the storage.object.process job.
     onEventNoIo: {
-      minListenerFiles: 7,
-      minListenerBodies: 7,
+      minListenerFiles: 5,
+      minListenerBodies: 5,
       mustScan: [
         'graph/layout/graph-layout.listener.ts',
         'graph/listeners/speaker-identified.listener.ts',
         'graph/preferences/graph-preferences-change.forwarder.ts',
         'graph/resolution/listeners/graph-preferences.listener.ts',
-        'notifications/ops/job-failure-notifier.ts',
-        'notifications/ops/node-offline-notifier.ts',
         'transcripts/listeners/transcript-job-failure.listener.ts',
       ],
     },
@@ -148,6 +219,16 @@ runPlatformConformance({
     // The suite fails on a malformed or overlapping prefix, a missing id, an org-scoped prefix that
     // builds a key without an organization, and a secret-named field in the storage settings schemas.
     storage: { requiredPrefixIds: ['transcripts', 'notes', 'graph'] },
+    // The email slice (#470): the platform templates are registered, every sampled template renders a
+    // complete document and escapes markup in its data, and no email settings shape carries a secret.
+    // The platform's own templates are sampled by the suite; these are this app's six plus its two
+    // overrides of platform names (`user-welcome`, `allowlist-invitation`).
+    email: { samples: EMAIL_TEMPLATE_SAMPLES },
+    // The notifications slice (#470): the platform channels and events are registered, every event that
+    // declares `email` has a template, every other channel has a template or renders raw data, no
+    // `notify*` call sits inside a `$transaction` callback, and the Web Push shapes carry no secret.
+    // The after-commit allowlist is EMPTY on purpose: this app has no argued exception.
+    notifications: { afterCommitAllowlist: [] },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
   },

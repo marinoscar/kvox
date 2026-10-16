@@ -252,6 +252,19 @@ describe('src/sw.ts', () => {
     expect(source).toMatch(/'SKIP_WAITING'/);
   });
 
+  it('hosts the notification handlers through the platform helper, with no local push listener (#470)', () => {
+    // The `push`, `notificationclick` and `pushsubscriptionchange` listeners are
+    // the platform's (`registerNotificationServiceWorkerHandlers`), which ports
+    // the #453 behaviour verbatim. A local `addEventListener('push', ...)` here
+    // would register a SECOND push listener and toast every notification twice.
+    // The worker-safe entry is used so the bundle pulls in no React.
+    expect(source).toMatch(
+      /from '@marinoscar\/platform-web\/notifications\/service-worker'/,
+    );
+    expect(source).toMatch(/registerNotificationServiceWorkerHandlers\(\s*self/);
+    expect(source).not.toMatch(/addEventListener\(\s*'(push|notificationclick|pushsubscriptionchange)'/);
+  });
+
   it('never calls the API', () => {
     // The access token is memory-only and the refresh cookie is one-shot and
     // rotated, so a worker that fetched `/api` would spend the page's refresh
@@ -577,6 +590,28 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
       expect(showNotification).toHaveBeenCalledTimes(1);
       expect(showNotification).toHaveBeenCalledWith('Hello', EXPECTED_OPTIONS);
       expect(client.postMessage).not.toHaveBeenCalled();
+    });
+
+    it('collapses a repeated push for one notification id onto the same tag, so the OS shows one entry (#453 no-duplicate rule)', async () => {
+      const focused = { visibilityState: 'visible', focused: true, postMessage: vi.fn() };
+      clientsMatchAll.mockResolvedValue([focused]);
+
+      await firePush({ json: () => PAYLOAD });
+      await firePush({ json: () => PAYLOAD });
+
+      expect(showNotification).toHaveBeenCalledTimes(2);
+      const tags = showNotification.mock.calls.map(([, options]) => options.tag);
+      expect(tags).toEqual(['notif-1', 'notif-1']);
+    });
+
+    it('tags two different notifications differently, so they stack rather than replace each other', async () => {
+      clientsMatchAll.mockResolvedValue([]);
+
+      await firePush({ json: () => PAYLOAD });
+      await firePush({ json: () => ({ ...PAYLOAD, id: 'notif-2' }) });
+
+      const tags = showNotification.mock.calls.map(([, options]) => options.tag);
+      expect(tags).toEqual(['notif-1', 'notif-2']);
     });
 
     it('shows the notification and postMessages no client, whatever mix of clients is open', async () => {
