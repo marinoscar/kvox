@@ -867,6 +867,9 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
         sourceObjectId,
         provider: 'assemblyai',
         status: 'ready' as const,
+        // The viewer's own rows are the NEWEST, so they are on the first page of `all`
+        // (ordered by `updatedAt`, then id): the page then holds both roles, deterministically.
+        ...(index >= SHARED ? { updatedAt: new Date(Date.now() + 60_000) } : {}),
       }));
 
       await prisma.transcript.createMany({ data: rows });
