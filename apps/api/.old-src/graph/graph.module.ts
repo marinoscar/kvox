@@ -1,0 +1,170 @@
+import { Module } from '@nestjs/common';
+
+import { AiModule } from '../ai/ai.module';
+import { NoteAccessService } from '../notes/access/note-access.service';
+import { PrismaModule } from '../prisma/prisma.module';
+import { SearchModule } from '../search/search.module';
+import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
+import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { GraphAccessService } from './access/graph-access.service';
+import { EntityBriefController } from './brief/entity-brief.controller';
+import { EntityBriefService } from './brief/entity-brief.service';
+import { EntityDigestEnqueuer } from './brief/entity-digest.enqueuer';
+import { EntityDigestHandler } from './brief/entity-digest.handler';
+import { EntityViewService } from './brief/entity-view.service';
+import { GraphAttributeDefsController } from './attribute-defs/graph-attribute-defs.controller';
+import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs.service';
+import { GraphEntitiesController } from './graph-entities.controller';
+import { GraphEntitiesService } from './graph-entities.service';
+import { GraphController } from './graph.controller';
+import { GraphExportController } from './export/graph-export.controller';
+import { GraphExportService } from './export/graph-export.service';
+import { GraphExportSource } from './export/graph-export.source';
+import { KgExportExpiryTask } from './export/kg-export-expiry.task';
+import { KgExportHandler } from './export/kg-export.handler';
+import { GraphObjectsService } from './graph-objects.service';
+import { KgPurgeHandler } from './handlers/kg-purge.handler';
+import { GraphLayoutEnqueuer } from './layout/graph-layout.enqueuer';
+import { KgGraphLayoutHandler } from './layout/graph-layout.handler';
+import { GraphLayoutListener } from './layout/graph-layout.listener';
+import { GraphOverviewController } from './layout/graph-overview.controller';
+import { GraphOverviewService } from './layout/graph-overview.service';
+import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { GraphPreferencesChangeForwarder } from './preferences/graph-preferences-change.forwarder';
+import { GraphPreferencesService } from './preferences/graph-preferences.service';
+import { GraphRdfController } from './rdf/graph-rdf.controller';
+import { GraphRdfService } from './rdf/graph-rdf.service';
+import { KgPurgeService } from './purge/kg-purge.service';
+import { KgMigrateHandler } from './migrate/kg-migrate.handler';
+import { KgMigrateRepository } from './migrate/kg-migrate.repository';
+import { KgMigrateSchedulerTask } from './migrate/kg-migrate-scheduler.task';
+import { GraphEvidenceService } from './read/graph-evidence.service';
+import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
+import { GraphReadController } from './read/graph-read.controller';
+import { GraphReadService } from './read/graph-read.service';
+import { KgSpeakerLinkHandler } from './handlers/kg-speaker-link.handler';
+import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener';
+import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler';
+import { EvidenceValidator } from './write/evidence-validator.service';
+import { GraphWriteService } from './write/graph-write.service';
+import { GRAPH_USER_DATA_HOOKS } from './graph.user-data';
+import { GraphUserDataHooks } from './graph.user-data.hooks';
+
+// =============================================================================
+// GraphModule (#354, epic #344, docs/specs/ontology.md)
+// =============================================================================
+//
+// The one module every connected-knowledge feature hangs its services,
+// handlers and controllers on. Later issues add providers and controllers HERE
+// and nowhere else, unless a sub-module is clearly warranted (e.g. #363 may add
+// `graph/extraction/extraction.module.ts`, imported here).
+//
+// `TranscriptsModule` is imported now even though nothing here uses it yet:
+// #355's evidence validation needs `TranscriptAccessService`, and settling the
+// import list in the scaffold keeps parallel issues from each editing it.
+// The dependency runs one way — nothing in TranscriptsModule imports this
+// module — so no `forwardRef` is needed.
+// =============================================================================
+
+// `AiModule` (#355) supplies `AiSettingsService`, read for `ai.graphEnabled`
+// before a guarded `kg.entity_digest` enqueue after a manual entity edit.
+//
+// `NoteAccessService` (#370) decides whether a citation's note is still
+// readable by the caller. It is provided here rather than imported through
+// `NotesModule`: NotesModule imports GraphExtractionModule (#363), which
+// imports this module, so importing NotesModule back would be a cycle. The
+// service needs only PrismaService — the same choice GraphExtractionModule makes.
+//
+// `SearchModule` (#372) supplies `SearchService`, the entity brief's text
+// arm (spec §9.4: a brief is never graph-only). One way as well.
+//
+// `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
+// the `managed_by: 'graph'` storage the export files live in. One way too.
+@Module({
+  imports: [PrismaModule, TranscriptsModule, AiModule, SearchModule, KvoxObjectsModule],
+  providers: [
+    GraphAccessService,
+    // #460 — the `graph` user-data category's hooks (registered by `kvox.manifest.ts`).
+    { provide: GRAPH_USER_DATA_HOOKS, useClass: GraphUserDataHooks },
+    NoteAccessService,
+    // #369 — the `graph` user-settings namespace, resolved with defaults.
+    GraphPreferencesService,
+    // #459 — turns the generic `user-settings.namespace-changed` event for `graph`
+    // (emitted by `platform/settings/user-settings-change.interceptor.ts` since
+    // #466) into `graph.preferences_changed`.
+    GraphPreferencesChangeForwarder,
+    GraphOntologyService,
+    EvidenceValidator,
+    GraphWriteService,
+    GraphEntitiesService,
+    GraphAttributeDefsService,
+    // #357 — `kg.purge`: forget-a-person and the Danger Zone's `graph` category.
+    KgPurgeService,
+    KgPurgeHandler,
+    // #370 — the read layer (exported for the brief #372 and the Ask agent #377).
+    GraphReadService,
+    GraphNeighborhoodService,
+    GraphEvidenceService,
+    // #356: speaker naming → Person + IDENTIFIED_AS, via `kg.speaker_link`.
+    SpeakerLinkReconciler,
+    KgSpeakerLinkHandler,
+    SpeakerIdentifiedListener,
+    // #371 — `kg.graph_layout`: the whole-graph overview snapshot, its three
+    // enqueue triggers (refresh, bootstrap, material change) and the read.
+    GraphLayoutEnqueuer,
+    KgGraphLayoutHandler,
+    GraphLayoutListener,
+    GraphOverviewService,
+    // #372 — the entity brief, and `kg.entity_digest` (the only producer of brief prose).
+    EntityViewService,
+    EntityDigestEnqueuer,
+    EntityDigestHandler,
+    EntityBriefService,
+    // #385 — the generated OWL/RDFS and SHACL artefacts (ETag + LRU).
+    GraphRdfService,
+    // #384 — `kg.migrate`: per-user reshaping of rows on an ontology bump.
+    // `KG_MIGRATE_DEFINITION` is deliberately NOT provided: the handler falls
+    // back to the shipped definition, and only a test injects a fixture one.
+    KgMigrateRepository,
+    KgMigrateHandler,
+    KgMigrateSchedulerTask,
+    // #386 — `kg.export`: RDF data export (JSON-LD/Turtle/N-Quads) and its sweep.
+    GraphObjectsService,
+    GraphExportSource,
+    GraphExportService,
+    KgExportHandler,
+    KgExportExpiryTask,
+  ],
+  controllers: [
+    GraphController,
+    GraphEntitiesController,
+    GraphAttributeDefsController,
+    GraphReadController,
+    GraphOverviewController,
+    EntityBriefController,
+    GraphRdfController,
+    GraphExportController,
+  ],
+  // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
+  // kg_relations and kg_items (#355) — every later writer imports it from here.
+  exports: [
+    GraphAccessService,
+    GraphOntologyService,
+    GraphPreferencesService,
+    EvidenceValidator,
+    GraphWriteService,
+    // #364 — `MergeService` reuses its guarded kg.embed/kg.entity_digest enqueue.
+    GraphEntitiesService,
+    GraphReadService,
+    GraphNeighborhoodService,
+    GraphEvidenceService,
+    EntityBriefService,
+    EntityDigestEnqueuer,
+    // #387 — `kg.import`: stores the upload, offers attribute definitions,
+    // and refuses an import while the owner's rows await `kg.migrate`.
+    GraphObjectsService,
+    GraphAttributeDefsService,
+    KgMigrateRepository,
+  ],
+})
+export class GraphModule {}

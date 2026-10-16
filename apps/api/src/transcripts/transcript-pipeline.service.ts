@@ -35,9 +35,9 @@ import type {
   TranscriptionStatus as TranscriptionStatusEnum,
 } from '@prisma/client';
 
-import type { TranscriptFailedEmailData } from './notifications/transcript-failed.email';
-import type { TranscriptReadyEmailData } from './notifications/transcript-ready.email';
-import { NotificationsService } from '../notifications/notifications.service';
+import type { TranscriptFailedEmailData } from '../email-templates/transcript-failed.email';
+import type { TranscriptReadyEmailData } from '../email-templates/transcript-ready.email';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';

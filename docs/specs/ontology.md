@@ -2278,7 +2278,7 @@ is not something to depend on. `index.ts` imports each domain module and
 passes it to `buildOntologyRegistry([coreDomain, workDomain, ...], ...)`
 directly — one import and one array entry is the whole cost of adding a
 domain, with the same "one registry entry" simplicity the Adding a
-job type ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and Adding a notification ([notifications README](../../apps/api/src/notifications/README.md)) recipes give their own registries, just
+job type ([`add-job-type` skill](../../.claude/skills/add-job-type/SKILL.md)) and Adding a notification ([`add-notification` skill](../../.claude/skills/add-notification/SKILL.md)) recipes give their own registries, just
 without the runtime self-registration mechanism those use:
 
 - **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,

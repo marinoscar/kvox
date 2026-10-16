@@ -1,5 +1,18 @@
 # Admin Notification Broadcasts
 
+> **Implementation moved to the platform (#470, epic #467).** Broadcasts are
+> now `BroadcastsModule` from `@marinoscar/platform-api/notifications`
+> (`/api/admin/broadcasts/*`, the `admin.broadcast.start` and
+> `admin.broadcast.chunk` handlers) and the `BroadcastsPage` from
+> `@marinoscar/platform-web/notifications/ui`. KVox's
+> `apps/api/src/notifications/broadcasts/`, its two handlers, `broadcast.email.ts`
+> and the web composer files were deleted; every path in the "Implemented in"
+> list below names a deleted original. The behaviour, the state machine, the
+> fan-out and the limits this document specifies are unchanged except where
+> [Packaged implementation (#470)](#packaged-implementation-470) says
+> otherwise. The `notification_broadcasts` table, the job type strings and the
+> `broadcasts:*` permissions are unchanged.
+
 > Epic #319, issues #320–#325 (#320 the `NotificationBroadcast` schema and the
 > `broadcasts:*` permission pair, #321 the two registry events plus
 > narrowing-only channel selection and `notifyNow()`, #322 the broadcast email
@@ -29,6 +42,37 @@
 > `services/broadcasts.ts`) is #325's slice of this epic and is described here
 > at the level of what the API contract requires of it; it is being built in
 > parallel with this document and is not asserted as merged in this checkout.
+
+## Packaged implementation (#470)
+
+| Concern | Owner now |
+|---|---|
+| Routes `GET /audience`, `POST /test`, `GET /`, `POST /`, `GET /:id`, `POST /:id/cancel`, `DELETE /:id`, and the new `POST /:id/resume` | platform `BroadcastsController` (`/api/admin/broadcasts`) |
+| Events `admin.broadcast` and `admin.broadcast_critical` | platform `BROADCASTS_NOTIFICATIONS`, registered in `apps/api/src/platform/notifications/notification.manifest.ts` (same keys, channels and flags) |
+| Job handlers `admin.broadcast.start`, `admin.broadcast.chunk` | platform handlers, registered by `BroadcastsModule`; the type strings are unchanged and stay in `KVOX_JOB_TYPES` (`apps/api/test/jobs/job-type-snapshot.spec.ts`) |
+| Email and browser templates (`broadcast`) | platform (`broadcastEmail`, `broadcastBrowserTemplate`) |
+| Audience, `notifyNow` and the narrowing intersection | platform dispatcher (`NotificationsService.notifyNow`, `audienceWhere`) |
+| Admin page and composer | platform `BroadcastsPage`, bound at `/admin/settings/broadcasts`; the registry card keeps `broadcasts:read` |
+
+What differs from the original design, all additive or authorization-related:
+
+- **Resume.** `POST /api/admin/broadcasts/:id/resume` (`broadcasts:write`)
+  continues a `failed` broadcast from where its fan-out stopped, as a
+  compare-and-swap `failed` to `sending` (`409` for any other state), and
+  writes the audit action `notification_broadcast.resumed`. Section 4's state
+  machine gains the edge `failed` to `sending`.
+- **Organization scope.** The platform scopes a broadcast to an organization
+  (`target_org_id`). The routes accept the system permission
+  (`broadcasts:read|write`) or the organization twin (`org_broadcasts:read|write`,
+  held by `org_admin`). The `admin` role is no longer required alongside the
+  permission. In this single-organization deployment an organization audience
+  is every active user, so the Section 3 audience definition holds, but an
+  `org_admin` can now compose and send (pending agent report: confirm in the
+  RBAC coverage).
+- **The `failed` recall.** `cancel` also closes a `failed` broadcast that will
+  not be resumed.
+- **No `README` recipe.** Adding a broadcast channel or event is the
+  [`add-notification` skill](../../.claude/skills/add-notification/SKILL.md).
 
 ## 1. What this is, and what it is not
 

@@ -1,0 +1,861 @@
+{
+  "id": "6t9x-unpunctuated",
+  "status": "completed",
+  "audio_duration": 62.95,
+  "language_code": "en_us",
+  "speech_model": "universal",
+  "text": "word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 word30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59 word60 word61 word62 word63 word64 word65 word66 word67 word68 word69 word70 word71 word72 word73 word74 word75 word76 word77 word78 word79 word80 word81 word82 word83 word84 word85 word86 word87 word88 word89 word90 word91 word92 word93 word94 word95 word96 word97 word98 word99 word100 word101 word102 word103 word104 word105 word106 word107 word108 word109 word110 word111 word112 word113 word114 word115 word116 word117 word118 word119 word120 word121 word122 word123 word124 word125 word126 word127 word128 word129 word130 word131 word132 word133 word134 word135 word136 word137 word138 word139",
+  "confidence": 0.9,
+  "utterances": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 62950,
+      "text": "word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 word30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59 word60 word61 word62 word63 word64 word65 word66 word67 word68 word69 word70 word71 word72 word73 word74 word75 word76 word77 word78 word79 word80 word81 word82 word83 word84 word85 word86 word87 word88 word89 word90 word91 word92 word93 word94 word95 word96 word97 word98 word99 word100 word101 word102 word103 word104 word105 word106 word107 word108 word109 word110 word111 word112 word113 word114 word115 word116 word117 word118 word119 word120 word121 word122 word123 word124 word125 word126 word127 word128 word129 word130 word131 word132 word133 word134 word135 word136 word137 word138 word139",
+      "confidence": 0.9,
+      "words": [
+        {
+          "text": "word0",
+          "start": 0,
+          "end": 400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word1",
+          "start": 450,
+          "end": 850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word2",
+          "start": 900,
+          "end": 1300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word3",
+          "start": 1350,
+          "end": 1750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word4",
+          "start": 1800,
+          "end": 2200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word5",
+          "start": 2250,
+          "end": 2650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word6",
+          "start": 2700,
+          "end": 3100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word7",
+          "start": 3150,
+          "end": 3550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word8",
+          "start": 3600,
+          "end": 4000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word9",
+          "start": 4050,
+          "end": 4450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word10",
+          "start": 4500,
+          "end": 4900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word11",
+          "start": 4950,
+          "end": 5350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word12",
+          "start": 5400,
+          "end": 5800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word13",
+          "start": 5850,
+          "end": 6250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word14",
+          "start": 6300,
+          "end": 6700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word15",
+          "start": 6750,
+          "end": 7150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word16",
+          "start": 7200,
+          "end": 7600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word17",
+          "start": 7650,
+          "end": 8050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word18",
+          "start": 8100,
+          "end": 8500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word19",
+          "start": 8550,
+          "end": 8950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word20",
+          "start": 9000,
+          "end": 9400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word21",
+          "start": 9450,
+          "end": 9850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word22",
+          "start": 9900,
+          "end": 10300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word23",
+          "start": 10350,
+          "end": 10750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word24",
+          "start": 10800,
+          "end": 11200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word25",
+          "start": 11250,
+          "end": 11650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word26",
+          "start": 11700,
+          "end": 12100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word27",
+          "start": 12150,
+          "end": 12550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word28",
+          "start": 12600,
+          "end": 13000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word29",
+          "start": 13050,
+          "end": 13450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word30",
+          "start": 13500,
+          "end": 13900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word31",
+          "start": 13950,
+          "end": 14350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word32",
+          "start": 14400,
+          "end": 14800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word33",
+          "start": 14850,
+          "end": 15250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word34",
+          "start": 15300,
+          "end": 15700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word35",
+          "start": 15750,
+          "end": 16150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word36",
+          "start": 16200,
+          "end": 16600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word37",
+          "start": 16650,
+          "end": 17050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word38",
+          "start": 17100,
+          "end": 17500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word39",
+          "start": 17550,
+          "end": 17950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word40",
+          "start": 18000,
+          "end": 18400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word41",
+          "start": 18450,
+          "end": 18850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word42",
+          "start": 18900,
+          "end": 19300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word43",
+          "start": 19350,
+          "end": 19750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word44",
+          "start": 19800,
+          "end": 20200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word45",
+          "start": 20250,
+          "end": 20650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word46",
+          "start": 20700,
+          "end": 21100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word47",
+          "start": 21150,
+          "end": 21550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word48",
+          "start": 21600,
+          "end": 22000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word49",
+          "start": 22050,
+          "end": 22450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word50",
+          "start": 22500,
+          "end": 22900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word51",
+          "start": 22950,
+          "end": 23350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word52",
+          "start": 23400,
+          "end": 23800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word53",
+          "start": 23850,
+          "end": 24250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word54",
+          "start": 24300,
+          "end": 24700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word55",
+          "start": 24750,
+          "end": 25150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word56",
+          "start": 25200,
+          "end": 25600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word57",
+          "start": 25650,
+          "end": 26050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word58",
+          "start": 26100,
+          "end": 26500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word59",
+          "start": 26550,
+          "end": 26950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word60",
+          "start": 27000,
+          "end": 27400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word61",
+          "start": 27450,
+          "end": 27850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word62",
+          "start": 27900,
+          "end": 28300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word63",
+          "start": 28350,
+          "end": 28750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word64",
+          "start": 28800,
+          "end": 29200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word65",
+          "start": 29250,
+          "end": 29650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word66",
+          "start": 29700,
+          "end": 30100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word67",
+          "start": 30150,
+          "end": 30550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word68",
+          "start": 30600,
+          "end": 31000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word69",
+          "start": 31050,
+          "end": 31450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word70",
+          "start": 31500,
+          "end": 31900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word71",
+          "start": 31950,
+          "end": 32350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word72",
+          "start": 32400,
+          "end": 32800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word73",
+          "start": 32850,
+          "end": 33250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word74",
+          "start": 33300,
+          "end": 33700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word75",
+          "start": 33750,
+          "end": 34150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word76",
+          "start": 34200,
+          "end": 34600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word77",
+          "start": 34650,
+          "end": 35050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word78",
+          "start": 35100,
+          "end": 35500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word79",
+          "start": 35550,
+          "end": 35950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word80",
+          "start": 36000,
+          "end": 36400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word81",
+          "start": 36450,
+          "end": 36850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word82",
+          "start": 36900,
+          "end": 37300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word83",
+          "start": 37350,
+          "end": 37750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word84",
+          "start": 37800,
+          "end": 38200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word85",
+          "start": 38250,
+          "end": 38650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word86",
+          "start": 38700,
+          "end": 39100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word87",
+          "start": 39150,
+          "end": 39550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word88",
+          "start": 39600,
+          "end": 40000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word89",
+          "start": 40050,
+          "end": 40450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word90",
+          "start": 40500,
+          "end": 40900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word91",
+          "start": 40950,
+          "end": 41350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word92",
+          "start": 41400,
+          "end": 41800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word93",
+          "start": 41850,
+          "end": 42250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word94",
+          "start": 42300,
+          "end": 42700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word95",
+          "start": 42750,
+          "end": 43150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word96",
+          "start": 43200,
+          "end": 43600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word97",
+          "start": 43650,
+          "end": 44050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word98",
+          "start": 44100,
+          "end": 44500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word99",
+          "start": 44550,
+          "end": 44950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word100",
+          "start": 45000,
+          "end": 45400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word101",
+          "start": 45450,
+          "end": 45850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word102",
+          "start": 45900,
+          "end": 46300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word103",
+          "start": 46350,
+          "end": 46750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word104",
+          "start": 46800,
+          "end": 47200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word105",
+          "start": 47250,
+          "end": 47650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word106",
+          "start": 47700,
+          "end": 48100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word107",
+          "start": 48150,
+          "end": 48550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word108",
+          "start": 48600,
+          "end": 49000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word109",
+          "start": 49050,
+          "end": 49450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word110",
+          "start": 49500,
+          "end": 49900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word111",
+          "start": 49950,
+          "end": 50350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word112",
+          "start": 50400,
+          "end": 50800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word113",
+          "start": 50850,
+          "end": 51250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word114",
+          "start": 51300,
+          "end": 51700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word115",
+          "start": 51750,
+          "end": 52150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word116",
+          "start": 52200,
+          "end": 52600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word117",
+          "start": 52650,
+          "end": 53050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word118",
+          "start": 53100,
+          "end": 53500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word119",
+          "start": 53550,
+          "end": 53950,
+          "confidence": 0.9
+        },
+        {
+          "text": "word120",
+          "start": 54000,
+          "end": 54400,
+          "confidence": 0.9
+        },
+        {
+          "text": "word121",
+          "start": 54450,
+          "end": 54850,
+          "confidence": 0.9
+        },
+        {
+          "text": "word122",
+          "start": 54900,
+          "end": 55300,
+          "confidence": 0.9
+        },
+        {
+          "text": "word123",
+          "start": 55350,
+          "end": 55750,
+          "confidence": 0.9
+        },
+        {
+          "text": "word124",
+          "start": 55800,
+          "end": 56200,
+          "confidence": 0.9
+        },
+        {
+          "text": "word125",
+          "start": 56250,
+          "end": 56650,
+          "confidence": 0.9
+        },
+        {
+          "text": "word126",
+          "start": 56700,
+          "end": 57100,
+          "confidence": 0.9
+        },
+        {
+          "text": "word127",
+          "start": 57150,
+          "end": 57550,
+          "confidence": 0.9
+        },
+        {
+          "text": "word128",
+          "start": 57600,
+          "end": 58000,
+          "confidence": 0.9
+        },
+        {
+          "text": "word129",
+          "start": 58050,
+          "end": 58450,
+          "confidence": 0.9
+        },
+        {
+          "text": "word130",
+          "start": 58500,
+          "end": 58900,
+          "confidence": 0.9
+        },
+        {
+          "text": "word131",
+          "start": 58950,
+          "end": 59350,
+          "confidence": 0.9
+        },
+        {
+          "text": "word132",
+          "start": 59400,
+          "end": 59800,
+          "confidence": 0.9
+        },
+        {
+          "text": "word133",
+          "start": 59850,
+          "end": 60250,
+          "confidence": 0.9
+        },
+        {
+          "text": "word134",
+          "start": 60300,
+          "end": 60700,
+          "confidence": 0.9
+        },
+        {
+          "text": "word135",
+          "start": 60750,
+          "end": 61150,
+          "confidence": 0.9
+        },
+        {
+          "text": "word136",
+          "start": 61200,
+          "end": 61600,
+          "confidence": 0.9
+        },
+        {
+          "text": "word137",
+          "start": 61650,
+          "end": 62050,
+          "confidence": 0.9
+        },
+        {
+          "text": "word138",
+          "start": 62100,
+          "end": 62500,
+          "confidence": 0.9
+        },
+        {
+          "text": "word139",
+          "start": 62550,
+          "end": 62950,
+          "confidence": 0.9
+        }
+      ]
+    }
+  ],
+  "error": null
+}

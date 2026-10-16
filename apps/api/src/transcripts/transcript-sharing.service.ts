@@ -72,9 +72,9 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
-import type { TranscriptSharedEmailData } from './notifications/transcript-shared.email';
+import type { TranscriptSharedEmailData } from '../email-templates/transcript-shared.email';
 import type {
   CreateTranscriptShareDto,
   TranscriptShareRoleName,

@@ -30,7 +30,7 @@ Full index: [docs/README.md](docs/README.md). The most used:
 - Security design, allowlist, sessions: [docs/SECURITY-ARCHITECTURE.md](docs/SECURITY-ARCHITECTURE.md)
 - Dev loop, environment variables: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); testing: [docs/TESTING.md](docs/TESTING.md)
 - Specs: [settings-ui](docs/specs/settings-ui.md), [job-queue](docs/specs/job-queue.md), [worker-nodes](docs/specs/worker-nodes.md), [transcription](docs/specs/transcription.md), [notes](docs/specs/notes.md), [ontology](docs/specs/ontology.md)
-- Recipes: [job type](.claude/skills/add-job-type/SKILL.md), [notification](apps/api/src/notifications/README.md), [CLI and deploy](apps/cli/README.md)
+- Recipes: [job type](.claude/skills/add-job-type/SKILL.md), [notification](.claude/skills/add-notification/SKILL.md), [CLI and deploy](apps/cli/README.md)
 - Runbooks: [docs/README.md#runbooks](docs/README.md#runbooks)
 
 ## Working with a small context window
@@ -118,7 +118,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - **Raw-SQL indexes are intentional schema drift.** Partial unique, trigram, HNSW and GiST indexes exist only in `migration.sql`, never in `schema.prisma`: `jobs_active_dedup_uniq_idx`, `database_backup_runs_active_uniq_idx`, `transcript_speakers_transcript_id_label_key`, `kg_relations_speaker_link_uniq_idx`, `kg_items_live_statement_uniq_idx`, the `kg_proposals` partials, `ask_messages_one_running_turn_uniq_idx`, plus the `pg_trgm`/HNSW/GiST indexes. Never "fix" one with `@@unique` or a `findFirst` pre-check. Table inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Search vectors are `GENERATED ALWAYS ... STORED` columns, never triggers** (a trigger does not fire under `pg_restore`): [docs/specs/search.md](docs/specs/search.md).
 - **A backup archive is never buffered**: `pg_dump` streams into object storage; the upload and the dump's exit code are both awaited. **No restore pre-flight may create, drop or rename anything**; the cluster admin connection lives outside the Prisma pool ([database-backup](docs/specs/database-backup.md), [database-restore](docs/specs/database-restore.md)).
-- **`notify()` runs after the triggering write commits, outside any `$transaction`** ([recipe](apps/api/src/notifications/README.md)).
+- **`notify()` runs after the triggering write commits, outside any `$transaction`** ([recipe](.claude/skills/add-notification/SKILL.md)). Email, notifications, broadcasts and Web Push are platform slices; KVox registers events in `apps/api/src/notifications-registry/` (`registerNotification`) and templates in `apps/api/src/email-templates/`. Event keys, channel ids and template names are persisted: never rename one.
 - **A job `type` string is permanent** once jobs of that type exist.
 - **`apps/api/src/transcripts/editing/` stays pure** (no `PrismaService`, no `@Injectable`, no `randomUUID()` in a reducer), so `materialize()` replays through the same functions as live edits ([transcription §4](docs/specs/transcription.md)).
 - **Every graph write goes through `GraphWriteService`** (`apps/api/src/graph/write/`); the sole exception is `kg.migrate`. The deferred `kg_assert_has_evidence` trigger refuses an accepted/edited row with no evidence at `COMMIT` (no orphans) ([ontology](docs/specs/ontology.md)). Nothing enters the graph except through a reviewed proposal's commit (named exceptions: speaker naming, manual entity edit); retrieval never answers from the graph alone.

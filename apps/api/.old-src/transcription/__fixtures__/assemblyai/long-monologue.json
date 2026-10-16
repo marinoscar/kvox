@@ -1,0 +1,879 @@
+{
+  "id": "6t9x-long-monologue",
+  "status": "completed",
+  "audio_duration": 68.6,
+  "language_code": "en_us",
+  "speech_model": "universal",
+  "text": "The first thing to understand about the ingest pipeline is that it is asynchronous from end to end. Nothing blocks on the provider, and nothing blocks on the transcode. A recording arrives, a row is written, and a job is enqueued. That job asks object storage for a signed URL and hands it to the vendor. Minutes later the vendor says it is finished and a second job fetches the result. Only then do we write segments, and only then does the editor have anything to show. The reason this matters is that every one of those steps can fail independently. If the vendor is throttling us we back off without burning the attempt budget. If the audio is silent the vendor tells us so and we stop rather than paying twice. And if the transcode fails the transcript is still perfectly usable.",
+  "confidence": 0.94,
+  "utterances": [
+    {
+      "speaker": "A",
+      "start": 0,
+      "end": 68600,
+      "text": "The first thing to understand about the ingest pipeline is that it is asynchronous from end to end. Nothing blocks on the provider, and nothing blocks on the transcode. A recording arrives, a row is written, and a job is enqueued. That job asks object storage for a signed URL and hands it to the vendor. Minutes later the vendor says it is finished and a second job fetches the result. Only then do we write segments, and only then does the editor have anything to show. The reason this matters is that every one of those steps can fail independently. If the vendor is throttling us we back off without burning the attempt budget. If the audio is silent the vendor tells us so and we stop rather than paying twice. And if the transcode fails the transcript is still perfectly usable.",
+      "confidence": 0.94,
+      "words": [
+        {
+          "text": "The",
+          "start": 0,
+          "end": 440,
+          "confidence": 0.94
+        },
+        {
+          "text": "first",
+          "start": 480,
+          "end": 920,
+          "confidence": 0.94
+        },
+        {
+          "text": "thing",
+          "start": 960,
+          "end": 1400,
+          "confidence": 0.94
+        },
+        {
+          "text": "to",
+          "start": 1440,
+          "end": 1880,
+          "confidence": 0.94
+        },
+        {
+          "text": "understand",
+          "start": 1920,
+          "end": 2360,
+          "confidence": 0.94
+        },
+        {
+          "text": "about",
+          "start": 2400,
+          "end": 2840,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 2880,
+          "end": 3320,
+          "confidence": 0.94
+        },
+        {
+          "text": "ingest",
+          "start": 3360,
+          "end": 3800,
+          "confidence": 0.94
+        },
+        {
+          "text": "pipeline",
+          "start": 3840,
+          "end": 4280,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 4320,
+          "end": 4760,
+          "confidence": 0.94
+        },
+        {
+          "text": "that",
+          "start": 4800,
+          "end": 5240,
+          "confidence": 0.94
+        },
+        {
+          "text": "it",
+          "start": 5280,
+          "end": 5720,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 5760,
+          "end": 6200,
+          "confidence": 0.94
+        },
+        {
+          "text": "asynchronous",
+          "start": 6240,
+          "end": 6680,
+          "confidence": 0.94
+        },
+        {
+          "text": "from",
+          "start": 6720,
+          "end": 7160,
+          "confidence": 0.94
+        },
+        {
+          "text": "end",
+          "start": 7200,
+          "end": 7640,
+          "confidence": 0.94
+        },
+        {
+          "text": "to",
+          "start": 7680,
+          "end": 8120,
+          "confidence": 0.94
+        },
+        {
+          "text": "end.",
+          "start": 8160,
+          "end": 8600,
+          "confidence": 0.94
+        },
+        {
+          "text": "Nothing",
+          "start": 8640,
+          "end": 9080,
+          "confidence": 0.94
+        },
+        {
+          "text": "blocks",
+          "start": 9120,
+          "end": 9560,
+          "confidence": 0.94
+        },
+        {
+          "text": "on",
+          "start": 9600,
+          "end": 10040,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 10080,
+          "end": 10520,
+          "confidence": 0.94
+        },
+        {
+          "text": "provider,",
+          "start": 10560,
+          "end": 11000,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 11040,
+          "end": 11480,
+          "confidence": 0.94
+        },
+        {
+          "text": "nothing",
+          "start": 11520,
+          "end": 11960,
+          "confidence": 0.94
+        },
+        {
+          "text": "blocks",
+          "start": 12000,
+          "end": 12440,
+          "confidence": 0.94
+        },
+        {
+          "text": "on",
+          "start": 12480,
+          "end": 12920,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 12960,
+          "end": 13400,
+          "confidence": 0.94
+        },
+        {
+          "text": "transcode.",
+          "start": 13440,
+          "end": 13880,
+          "confidence": 0.94
+        },
+        {
+          "text": "A",
+          "start": 13920,
+          "end": 14360,
+          "confidence": 0.94
+        },
+        {
+          "text": "recording",
+          "start": 14400,
+          "end": 14840,
+          "confidence": 0.94
+        },
+        {
+          "text": "arrives,",
+          "start": 14880,
+          "end": 15320,
+          "confidence": 0.94
+        },
+        {
+          "text": "a",
+          "start": 15360,
+          "end": 15800,
+          "confidence": 0.94
+        },
+        {
+          "text": "row",
+          "start": 15840,
+          "end": 16280,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 16320,
+          "end": 16760,
+          "confidence": 0.94
+        },
+        {
+          "text": "written,",
+          "start": 16800,
+          "end": 17240,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 17280,
+          "end": 17720,
+          "confidence": 0.94
+        },
+        {
+          "text": "a",
+          "start": 17760,
+          "end": 18200,
+          "confidence": 0.94
+        },
+        {
+          "text": "job",
+          "start": 18240,
+          "end": 18680,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 18720,
+          "end": 19160,
+          "confidence": 0.94
+        },
+        {
+          "text": "enqueued.",
+          "start": 19200,
+          "end": 19640,
+          "confidence": 0.94
+        },
+        {
+          "text": "That",
+          "start": 19680,
+          "end": 20120,
+          "confidence": 0.94
+        },
+        {
+          "text": "job",
+          "start": 20160,
+          "end": 20600,
+          "confidence": 0.94
+        },
+        {
+          "text": "asks",
+          "start": 20640,
+          "end": 21080,
+          "confidence": 0.94
+        },
+        {
+          "text": "object",
+          "start": 21120,
+          "end": 21560,
+          "confidence": 0.94
+        },
+        {
+          "text": "storage",
+          "start": 21600,
+          "end": 22040,
+          "confidence": 0.94
+        },
+        {
+          "text": "for",
+          "start": 22080,
+          "end": 22520,
+          "confidence": 0.94
+        },
+        {
+          "text": "a",
+          "start": 22560,
+          "end": 23000,
+          "confidence": 0.94
+        },
+        {
+          "text": "signed",
+          "start": 23040,
+          "end": 23480,
+          "confidence": 0.94
+        },
+        {
+          "text": "URL",
+          "start": 23520,
+          "end": 23960,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 24000,
+          "end": 24440,
+          "confidence": 0.94
+        },
+        {
+          "text": "hands",
+          "start": 24480,
+          "end": 24920,
+          "confidence": 0.94
+        },
+        {
+          "text": "it",
+          "start": 24960,
+          "end": 25400,
+          "confidence": 0.94
+        },
+        {
+          "text": "to",
+          "start": 25440,
+          "end": 25880,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 25920,
+          "end": 26360,
+          "confidence": 0.94
+        },
+        {
+          "text": "vendor.",
+          "start": 26400,
+          "end": 26840,
+          "confidence": 0.94
+        },
+        {
+          "text": "Minutes",
+          "start": 26880,
+          "end": 27320,
+          "confidence": 0.94
+        },
+        {
+          "text": "later",
+          "start": 27360,
+          "end": 27800,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 27840,
+          "end": 28280,
+          "confidence": 0.94
+        },
+        {
+          "text": "vendor",
+          "start": 28320,
+          "end": 28760,
+          "confidence": 0.94
+        },
+        {
+          "text": "says",
+          "start": 28800,
+          "end": 29240,
+          "confidence": 0.94
+        },
+        {
+          "text": "it",
+          "start": 29280,
+          "end": 29720,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 29760,
+          "end": 30200,
+          "confidence": 0.94
+        },
+        {
+          "text": "finished",
+          "start": 30240,
+          "end": 30680,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 30720,
+          "end": 31160,
+          "confidence": 0.94
+        },
+        {
+          "text": "a",
+          "start": 31200,
+          "end": 31640,
+          "confidence": 0.94
+        },
+        {
+          "text": "second",
+          "start": 31680,
+          "end": 32120,
+          "confidence": 0.94
+        },
+        {
+          "text": "job",
+          "start": 32160,
+          "end": 32600,
+          "confidence": 0.94
+        },
+        {
+          "text": "fetches",
+          "start": 32640,
+          "end": 33080,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 33120,
+          "end": 33560,
+          "confidence": 0.94
+        },
+        {
+          "text": "result.",
+          "start": 33600,
+          "end": 34040,
+          "confidence": 0.94
+        },
+        {
+          "text": "Only",
+          "start": 34080,
+          "end": 34520,
+          "confidence": 0.94
+        },
+        {
+          "text": "then",
+          "start": 34560,
+          "end": 35000,
+          "confidence": 0.94
+        },
+        {
+          "text": "do",
+          "start": 35040,
+          "end": 35480,
+          "confidence": 0.94
+        },
+        {
+          "text": "we",
+          "start": 35520,
+          "end": 35960,
+          "confidence": 0.94
+        },
+        {
+          "text": "write",
+          "start": 36000,
+          "end": 36440,
+          "confidence": 0.94
+        },
+        {
+          "text": "segments,",
+          "start": 36480,
+          "end": 36920,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 36960,
+          "end": 37400,
+          "confidence": 0.94
+        },
+        {
+          "text": "only",
+          "start": 37440,
+          "end": 37880,
+          "confidence": 0.94
+        },
+        {
+          "text": "then",
+          "start": 37920,
+          "end": 38360,
+          "confidence": 0.94
+        },
+        {
+          "text": "does",
+          "start": 38400,
+          "end": 38840,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 38880,
+          "end": 39320,
+          "confidence": 0.94
+        },
+        {
+          "text": "editor",
+          "start": 39360,
+          "end": 39800,
+          "confidence": 0.94
+        },
+        {
+          "text": "have",
+          "start": 39840,
+          "end": 40280,
+          "confidence": 0.94
+        },
+        {
+          "text": "anything",
+          "start": 40320,
+          "end": 40760,
+          "confidence": 0.94
+        },
+        {
+          "text": "to",
+          "start": 40800,
+          "end": 41240,
+          "confidence": 0.94
+        },
+        {
+          "text": "show.",
+          "start": 41280,
+          "end": 41720,
+          "confidence": 0.94
+        },
+        {
+          "text": "The",
+          "start": 41760,
+          "end": 42200,
+          "confidence": 0.94
+        },
+        {
+          "text": "reason",
+          "start": 42240,
+          "end": 42680,
+          "confidence": 0.94
+        },
+        {
+          "text": "this",
+          "start": 42720,
+          "end": 43160,
+          "confidence": 0.94
+        },
+        {
+          "text": "matters",
+          "start": 43200,
+          "end": 43640,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 43680,
+          "end": 44120,
+          "confidence": 0.94
+        },
+        {
+          "text": "that",
+          "start": 44160,
+          "end": 44600,
+          "confidence": 0.94
+        },
+        {
+          "text": "every",
+          "start": 44640,
+          "end": 45080,
+          "confidence": 0.94
+        },
+        {
+          "text": "one",
+          "start": 45120,
+          "end": 45560,
+          "confidence": 0.94
+        },
+        {
+          "text": "of",
+          "start": 45600,
+          "end": 46040,
+          "confidence": 0.94
+        },
+        {
+          "text": "those",
+          "start": 46080,
+          "end": 46520,
+          "confidence": 0.94
+        },
+        {
+          "text": "steps",
+          "start": 46560,
+          "end": 47000,
+          "confidence": 0.94
+        },
+        {
+          "text": "can",
+          "start": 47040,
+          "end": 47480,
+          "confidence": 0.94
+        },
+        {
+          "text": "fail",
+          "start": 47520,
+          "end": 47960,
+          "confidence": 0.94
+        },
+        {
+          "text": "independently.",
+          "start": 48000,
+          "end": 48440,
+          "confidence": 0.94
+        },
+        {
+          "text": "If",
+          "start": 48480,
+          "end": 48920,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 48960,
+          "end": 49400,
+          "confidence": 0.94
+        },
+        {
+          "text": "vendor",
+          "start": 49440,
+          "end": 49880,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 49920,
+          "end": 50360,
+          "confidence": 0.94
+        },
+        {
+          "text": "throttling",
+          "start": 50400,
+          "end": 50840,
+          "confidence": 0.94
+        },
+        {
+          "text": "us",
+          "start": 50880,
+          "end": 51320,
+          "confidence": 0.94
+        },
+        {
+          "text": "we",
+          "start": 51360,
+          "end": 51800,
+          "confidence": 0.94
+        },
+        {
+          "text": "back",
+          "start": 51840,
+          "end": 52280,
+          "confidence": 0.94
+        },
+        {
+          "text": "off",
+          "start": 52320,
+          "end": 52760,
+          "confidence": 0.94
+        },
+        {
+          "text": "without",
+          "start": 52800,
+          "end": 53240,
+          "confidence": 0.94
+        },
+        {
+          "text": "burning",
+          "start": 53280,
+          "end": 53720,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 53760,
+          "end": 54200,
+          "confidence": 0.94
+        },
+        {
+          "text": "attempt",
+          "start": 54240,
+          "end": 54680,
+          "confidence": 0.94
+        },
+        {
+          "text": "budget.",
+          "start": 54720,
+          "end": 55160,
+          "confidence": 0.94
+        },
+        {
+          "text": "If",
+          "start": 55200,
+          "end": 55640,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 55680,
+          "end": 56120,
+          "confidence": 0.94
+        },
+        {
+          "text": "audio",
+          "start": 56160,
+          "end": 56600,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 56640,
+          "end": 57080,
+          "confidence": 0.94
+        },
+        {
+          "text": "silent",
+          "start": 57120,
+          "end": 57560,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 57600,
+          "end": 58040,
+          "confidence": 0.94
+        },
+        {
+          "text": "vendor",
+          "start": 58080,
+          "end": 58520,
+          "confidence": 0.94
+        },
+        {
+          "text": "tells",
+          "start": 58560,
+          "end": 59000,
+          "confidence": 0.94
+        },
+        {
+          "text": "us",
+          "start": 59040,
+          "end": 59480,
+          "confidence": 0.94
+        },
+        {
+          "text": "so",
+          "start": 59520,
+          "end": 59960,
+          "confidence": 0.94
+        },
+        {
+          "text": "and",
+          "start": 60000,
+          "end": 60440,
+          "confidence": 0.94
+        },
+        {
+          "text": "we",
+          "start": 60480,
+          "end": 60920,
+          "confidence": 0.94
+        },
+        {
+          "text": "stop",
+          "start": 60960,
+          "end": 61400,
+          "confidence": 0.94
+        },
+        {
+          "text": "rather",
+          "start": 61440,
+          "end": 61880,
+          "confidence": 0.94
+        },
+        {
+          "text": "than",
+          "start": 61920,
+          "end": 62360,
+          "confidence": 0.94
+        },
+        {
+          "text": "paying",
+          "start": 62400,
+          "end": 62840,
+          "confidence": 0.94
+        },
+        {
+          "text": "twice.",
+          "start": 62880,
+          "end": 63320,
+          "confidence": 0.94
+        },
+        {
+          "text": "And",
+          "start": 63360,
+          "end": 63800,
+          "confidence": 0.94
+        },
+        {
+          "text": "if",
+          "start": 63840,
+          "end": 64280,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 64320,
+          "end": 64760,
+          "confidence": 0.94
+        },
+        {
+          "text": "transcode",
+          "start": 64800,
+          "end": 65240,
+          "confidence": 0.94
+        },
+        {
+          "text": "fails",
+          "start": 65280,
+          "end": 65720,
+          "confidence": 0.94
+        },
+        {
+          "text": "the",
+          "start": 65760,
+          "end": 66200,
+          "confidence": 0.94
+        },
+        {
+          "text": "transcript",
+          "start": 66240,
+          "end": 66680,
+          "confidence": 0.94
+        },
+        {
+          "text": "is",
+          "start": 66720,
+          "end": 67160,
+          "confidence": 0.94
+        },
+        {
+          "text": "still",
+          "start": 67200,
+          "end": 67640,
+          "confidence": 0.94
+        },
+        {
+          "text": "perfectly",
+          "start": 67680,
+          "end": 68120,
+          "confidence": 0.94
+        },
+        {
+          "text": "usable.",
+          "start": 68160,
+          "end": 68600,
+          "confidence": 0.94
+        }
+      ]
+    }
+  ],
+  "error": null
+}

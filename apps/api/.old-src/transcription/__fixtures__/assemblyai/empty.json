@@ -1,0 +1,12 @@
+{
+  "id": "6t9x-empty",
+  "status": "completed",
+  "audio_duration": 0.0,
+  "language_code": null,
+  "speech_model": "universal",
+  "text": "",
+  "confidence": null,
+  "utterances": null,
+  "words": [],
+  "error": null
+}
