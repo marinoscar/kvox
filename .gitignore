@@ -107,3 +107,7 @@ apps/api/.ask-eval/
 
 # TypeDoc output per package (generated, never committed)
 docs-api/
+
+# LICENSE copied into each @marinoscar/kvox-* package by its `prepack` script
+# (scripts/kvox-packages/copy-license.mjs); the repository keeps one at the root.
+packages/kvox-*/LICENSE

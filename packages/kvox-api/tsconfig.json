@@ -1,0 +1,17 @@
+{
+  // Typecheck and ts-jest. Decorator metadata is on because the slices that
+  // arrive in Epic 6 are Nest providers; the build config repeats it.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node", "jest"]
+  },
+  "include": ["src", "test"]
+}

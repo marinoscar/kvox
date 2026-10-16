@@ -1,0 +1,16 @@
+{
+  // Typecheck only (`npm run typecheck`, the editor, the ESLint resolver).
+  // The package is "type": "commonjs"; NodeNext still wants the `.js`
+  // extension on a relative import.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}

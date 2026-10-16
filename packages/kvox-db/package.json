@@ -1,0 +1,61 @@
+{
+  "name": "@marinoscar/kvox-db",
+  "version": "0.0.0",
+  "description": "Prisma schema fragments, SQL migrations and the kvox-db command of the KVox domain (CommonJS).",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marinoscar/kvox.git",
+    "directory": "packages/kvox-db"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "kvox-db": "./bin/kvox-db.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "schema",
+    "migrations",
+    "raw-sql-indexes.json",
+    "extensions.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/kvox-packages/copy-license.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc --options typedoc.json",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "peerDependencies": {
+    "prisma": "^7.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "prisma": "^7.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

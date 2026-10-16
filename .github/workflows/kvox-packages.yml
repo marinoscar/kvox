@@ -1,0 +1,153 @@
+name: KVox packages
+
+# Build, check and pack the four publishable packages (@marinoscar/kvox-contract,
+# -db, -api, -web). Publishing is kvox-release.yml's job. The standard these
+# jobs enforce: docs/PACKAGES.md.
+#
+# `ci.yml` also runs build/typecheck/test of the packages in its `tooling` job
+# on every pull request; this workflow adds the checks that only matter when a
+# package changes (docs, peers, pack, smoke imports) and runs on the paths below.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/kvox-*/**'
+      - 'packages/kvox-*.json'
+      - 'scripts/kvox-packages/**'
+      - 'scripts/check-single-instance.mjs'
+      - '.changeset/**'
+      - 'eslint.config.mjs'
+      - 'typedoc.base.json'
+      - 'tsdoc.json'
+      - 'tsconfig.base.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/api/package.json'
+      - 'apps/web/package.json'
+      - '.github/workflows/kvox-packages.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/kvox-*/**'
+      - 'packages/kvox-*.json'
+      - 'scripts/kvox-packages/**'
+      - 'scripts/check-single-instance.mjs'
+      - '.changeset/**'
+      - 'eslint.config.mjs'
+      - 'typedoc.base.json'
+      - 'tsdoc.json'
+      - 'tsconfig.base.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/api/package.json'
+      - 'apps/web/package.json'
+      - '.github/workflows/kvox-packages.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, check and pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build:kvox-packages
+      - run: npm run typecheck:kvox-packages
+      - run: npm run lint:packages
+      # Rules graph, peers-data, manifest, imports and host-neutral for the
+      # packages, then app-installs for the two apps that depend on them.
+      - run: npm run check:kvox-slice-peers
+      # The check scripts themselves, against fixtures (including a file that
+      # breaks the host-neutral rule).
+      - run: npm run test:kvox-scripts
+      - run: npm run test:kvox-packages
+      # Asks npm what each package would publish and compares it with the
+      # manifest. Needs the build above.
+      - run: npm run check:kvox-pack
+
+      # Every entry point must load from the module system it advertises. The
+      # packages resolve through the workspace links `npm ci` created.
+      - name: Smoke-import every entry point
+        run: |
+          node -e "require('@marinoscar/kvox-api/core')"
+          node -e "require('@marinoscar/kvox-api/ports')"
+          node -e "require('@marinoscar/kvox-api/testing')"
+          node -e "require('@marinoscar/kvox-db')"
+          node -e "require('@marinoscar/kvox-contract')"
+          node --input-type=module -e "await import('@marinoscar/kvox-contract')"
+          node --input-type=module -e "await import('@marinoscar/kvox-web/core')"
+          node packages/kvox-db/bin/kvox-db.js --help
+
+  package-docs:
+    name: Package docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # TypeDoc for the four packages (fails on an undocumented export or a
+      # broken {@link}), then README, TSDoc tag and entry-point checks.
+      - run: npm run check:kvox-package-docs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kvox-api-reference
+          path: packages/*/docs-api/html
+          if-no-files-found: error
+
+  single-instance:
+    name: Single instance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: node scripts/kvox-packages/check-single-instance.mjs --root . --guard '@marinoscar/platform-*' --guard '@marinoscar/kvox-*'
+
+  changeset-status:
+    name: Changeset status
+    # A pull request that changes a package source needs a changeset. The
+    # version pull request that kvox-release.yml opens consumes the changesets
+    # and is the one exception.
+    if: github.event_name == 'pull_request' && github.head_ref != 'kvox-release/version'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: git fetch origin main
+      - run: npx changeset status --since=origin/main

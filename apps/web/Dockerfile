@@ -34,7 +34,10 @@ COPY apps/web/package.json ./apps/web/
 # The whole package is copied rather than just its manifest so the build stage
 # inherits it through `COPY --from=deps /app ./` — Vite inlines the constant
 # into the bundle, so nginx's production stage needs nothing further.
-COPY packages/shared ./packages/shared/
+# Every workspace package under packages/ (`@app/shared` and the four
+# domain packages the apps depend on): whole directories, not just manifests, for
+# the same reason as above.
+COPY packages ./packages/
 # The root postinstall (patch-react-transition-group.js) runs during npm ci
 COPY scripts ./scripts
 RUN npm ci --workspace=web --include-workspace-root

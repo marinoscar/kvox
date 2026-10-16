@@ -9,10 +9,13 @@
 // whose package.json `name` starts with `@marinoscar/kvox-`, then runs
 // `npm run <script> -w <name> ...` for all of them in ONE npm call.
 //
-// Until Phase 2 (Epic 5, issue 5.1) adds the first such package there is
-// nothing to run: the script prints
+// A generic helper: the root `*:kvox-packages` scripts (issue 5.1) name the four
+// packages explicitly, and this script remains for running any other script
+// across every @marinoscar/kvox-* workspace, for example
+//   node scripts/run-kvox-packages.mjs build
+// When no such package exists it prints
 //   no @marinoscar/kvox-* packages yet; nothing to <script>
-// and exits 0, so `npm run build:packages` and friends are safe no-ops in CI.
+// and exits 0.
 //
 // Exit code: npm's exit code when packages exist; 0 when none; 2 on bad usage.
 // Node built-ins only.

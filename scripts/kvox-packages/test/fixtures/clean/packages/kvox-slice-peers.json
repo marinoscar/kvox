@@ -1,0 +1,7 @@
+{
+  "$universal": { "kvox-api": ["core"], "kvox-web": ["core"] },
+  "$implies": { "react-dom": ["react"] },
+  "$hostOnly": { "kvox-api": ["@marinoscar/platform-api"] },
+  "kvox-api": { "core": { "peers": ["zod"] } },
+  "kvox-web": { "core": { "peers": ["react", "react-dom"] } }
+}

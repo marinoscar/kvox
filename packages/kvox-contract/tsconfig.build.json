@@ -1,0 +1,22 @@
+{
+  // The settings both builds share; tsconfig.cjs.json and tsconfig.esm.json
+  // extend it and add `module` and `outDir`.
+  //
+  // WHY TWO DECLARATION TREES (TS1479). A `.d.ts` takes its module format from
+  // the nearest package.json. This package is "type": "module", so one shared
+  // tree of declarations would be read as ESM by a CommonJS consumer, and
+  // `require('@marinoscar/kvox-contract')` would fail to typecheck. `dist/cjs`
+  // gets its own package.json ({"type":"commonjs"}, written after the build by
+  // scripts/kvox-packages/write-dist-stubs.mjs), and `exports` points each
+  // condition (`import`, `require`) at its own tree.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"],
+    "noEmitOnError": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "test", "**/*.test.ts"]
+}

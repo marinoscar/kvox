@@ -2,11 +2,29 @@
   "$schema": "https://unpkg.com/@changesets/config@3/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "@marinoscar/kvox-contract",
+      "@marinoscar/kvox-db",
+      "@marinoscar/kvox-api",
+      "@marinoscar/kvox-web"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["api", "web", "cli", "@app/shared"],
-  "privatePackages": { "version": false, "tag": false }
+  "ignore": [
+    "api",
+    "web",
+    "cli",
+    "@app/shared"
+  ],
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  },
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }

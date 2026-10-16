@@ -165,8 +165,10 @@ jobs:
 
   # Repository tooling for the platform adoption (epic #457, issue #461): the
   # pinned @marinoscar/platform-* packages, one copy of every singleton, no
-  # app code reaching into a package's src/dist, and the (currently empty)
-  # @marinoscar/kvox-* package pipeline. No `needs:` — runs concurrently.
+  # app code reaching into a package's src/dist, and the @marinoscar/kvox-*
+  # packages (issue #487: build, typecheck, test; the docs, peers, pack and
+  # smoke-import checks run in kvox-packages.yml). No `needs:` — runs
+  # concurrently.
   tooling:
     name: Repository tooling
     runs-on: ubuntu-latest
@@ -195,7 +197,10 @@ jobs:
       # diffs against (`baseBranch` in .changeset/config.json). When `main`
       # itself is checked out (a push to main) the branch already exists.
       - run: git fetch origin main && (git branch --force main origin/main || true)
-      - run: npx changeset status
+      # The version pull request that kvox-release.yml opens consumes the
+      # changesets, so it has none left to find.
+      - if: github.head_ref != 'kvox-release/version'
+        run: npx changeset status
 
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
