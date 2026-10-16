@@ -131,7 +131,7 @@ describe('buildRegenerateInput — the model', () => {
     });
   });
 
-  it('NEVER sends an empty string — an unanswered `GET /api/ai/config` is not a choice', () => {
+  it('NEVER sends an empty string — an unanswered `GET /api/ai-tasks/config` is not a choice', () => {
     expect(buildRegenerateInput(note(), form({ model: '' }))).toEqual({});
   });
 });

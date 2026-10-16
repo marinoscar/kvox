@@ -281,7 +281,7 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
    * be — and both failures are silent.
    *
    * Undefined means the destination enforces no permission at all (the
-   * ownership-scoped surfaces: `/api/ai-credentials`, `/api/user-settings`).
+   * ownership-scoped surfaces: `/api/ai/keys`, `/api/user-settings`).
    */
   readonly permission?: string;
 
@@ -541,10 +541,9 @@ export const BASE_USER_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingUserC
         'Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.',
       actionLabel: 'Add your key',
       href: '/settings/ai',
-      // NO PERMISSION. `ai-credentials.controller.ts` is `@Auth()` with no
-      // permission string — the resource is the caller's own credential, scoped
-      // by `userId` in the query itself, the same ownership-scoped posture
-      // `/api/pat` and `/api/user-data` take.
+      // NO PERMISSION ON THE STEP. The resource is the caller's own credential,
+      // scoped by `userId` in the query itself (the platform's `/api/ai/keys`),
+      // the same ownership-scoped posture `/api/pat` and `/api/user-data` take.
       skippable: false,
       // ⚠ KEYED ON `provider`, NOT ON `available` (#83). A deployment that has
       // named no vendor at all has no key for a user to add, so the step is

@@ -110,7 +110,7 @@ beforeEach(() => {
   clearEvidenceCache();
   window.sessionStorage.clear();
   aiConfig = mockGraphAiConfig();
-  server.use(http.get(`${API}/ai/config`, () => HttpResponse.json({ data: aiConfig })));
+  server.use(http.get(`${API}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig })));
 });
 
 describe('EntityAskPanel — the header action', () => {

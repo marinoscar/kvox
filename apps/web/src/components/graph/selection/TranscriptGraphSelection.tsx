@@ -2,7 +2,7 @@
  * "Add to graph" on the transcript page (#368; ontology.md §19).
  *
  * Mounted by `TranscriptPage` only for a caller holding `graph:write`; this
- * component then asks `GET /api/ai/config` whether connected knowledge is on
+ * component then asks `GET /api/ai-tasks/config` whether connected knowledge is on
  * (`graphEnabled`), so the transcript page itself keeps its rule of not
  * reading the AI config (see its header). A selection within one line becomes
  * a segment span pinned to the line's `rev`; the row joins a draft of one of
@@ -13,7 +13,7 @@
 import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 
-import { useAiConfig } from '../../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
 import type { TranscriptSegment } from '../../../services/transcripts';
 import { ProposalReviewSheet } from '../review/ProposalReviewSheet';
 import { GraphSelectionAdd } from './GraphSelectionAdd';
@@ -31,7 +31,7 @@ export interface TranscriptGraphSelectionProps {
 }
 
 export function TranscriptGraphSelection({ containerRef, transcriptId, segments, enabled }: TranscriptGraphSelectionProps) {
-  const { config } = useAiConfig();
+  const { config } = useAiTasksConfig();
   const [sheet, setSheet] = useState<{ proposalId: string; itemId: string } | null>(null);
 
   const resolve = useCallback(

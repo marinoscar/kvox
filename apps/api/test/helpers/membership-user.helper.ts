@@ -19,6 +19,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JwtService } from '@nestjs/jwt';
 
+import { VIEWER_AI_GRANTS } from '../../prisma/seed-app';
 import { registerMockUserRecord } from '../fixtures/mock-setup.helper';
 import { createMockUserWithRelations } from '../fixtures/test-data.factory';
 import type { TestUser } from './auth-mock.helper';
@@ -54,6 +55,18 @@ export function catalogPermissionsOf(roleName: string): string[] {
   return permissions;
 }
 
+/**
+ * What a seeded deployment holds for `roleName`: the catalog plus the grants `prisma/seed-app.ts` adds
+ * (the platform's registry refuses an app grant on a platform role, so `viewer -> ai:use` is a seed row,
+ * not a catalog entry). The user a spec mints must carry the seeded set, or a Viewer would lack the
+ * permission production gives it.
+ */
+export function seededPermissionsOf(roleName: string): string[] {
+  const seeded = VIEWER_AI_GRANTS.filter((grant) => grant.role === roleName).map((grant) => grant.permission);
+
+  return [...new Set([...catalogPermissionsOf(roleName), ...seeded])];
+}
+
 function roleRecord(roleName: string) {
   const roleId = randomUUID();
 
@@ -61,7 +74,7 @@ function roleRecord(roleName: string) {
     id: roleId,
     name: roleName,
     description: null,
-    rolePermissions: catalogPermissionsOf(roleName).map((name) => ({
+    rolePermissions: seededPermissionsOf(roleName).map((name) => ({
       roleId,
       permissionId: `perm-${name}`,
       permission: { id: `perm-${name}`, name, description: null },
@@ -70,6 +83,8 @@ function roleRecord(roleName: string) {
 }
 
 export interface MembershipUserOptions {
+  /** A fixed user id, for a suite whose fixtures name the user (the AI conformance harness user). */
+  id?: string;
   email?: string;
   /** System roles held in `user_roles`. Default none. */
   systemRoles?: string[];
@@ -87,7 +102,7 @@ export async function createMembershipUser(
   context: TestContext,
   options: MembershipUserOptions = {},
 ): Promise<TestUser> {
-  const base = createMockUserWithRelations({ email: options.email, isActive: options.isActive });
+  const base = createMockUserWithRelations({ id: options.id, email: options.email, isActive: options.isActive });
   const systemRoles = options.systemRoles ?? [];
   const orgRole = options.orgRole === undefined ? 'viewer' : options.orgRole;
   const orgId = 'org-default';

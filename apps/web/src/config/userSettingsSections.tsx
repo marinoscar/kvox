@@ -123,15 +123,20 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         path: '/settings/notifications',
       },
       {
-        // Issue #55, epic #45. NO `permission`, like every card here — and
-        // here the reason is the strongest in the file:
-        // `ai-credentials.controller.ts` gates all four of its routes on
-        // `@Auth()` with NO permission, deliberately, because the resource is
-        // the caller's OWN credential (scoped by `userId` in the query itself)
-        // rather than a resource of this application. Declaring a gate here
-        // would invent an authorization rule the API does not enforce, and
-        // would leave a user unable to REMOVE their own key from a deployment
-        // that had since revoked their access to the feature it was for.
+        // Issue #55, epic #45; the platform's since #477 (epic #472). The page is
+        // the platform AI slice's `UserAiKeysPage`
+        // (`@marinoscar/platform-web/ai/ui`): the caller's own provider keys
+        // (`/api/ai/keys`, which returns a hint, never the key), the models they
+        // can use, their default model and their usage.
+        //
+        // `ai:use` is the exact string the platform's per-user AI routes enforce
+        // (seeded to Admin, Contributor and Viewer by #473), and `feature: 'ai'`
+        // hides the card while AI is switched off deployment-wide: with AI off
+        // there is nothing a key could be used for. Unlike every other card in
+        // this file it therefore HAS a gate, because the API has one (before
+        // #477 the old `/api/ai-credentials` routes enforced none). The key
+        // itself is still the caller's own and billed to their own provider
+        // account: no deployment-wide fallback key exists.
         //
         // Under `Account` rather than `Security`, even though it holds a
         // credential. `Security` is for credentials THIS application issues
@@ -143,6 +148,8 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Connect your own AI provider key. AI features run on your account, and the usage is billed to you.',
         Icon: AutoAwesomeIcon,
         path: '/settings/ai',
+        permission: 'ai:use',
+        feature: 'ai',
       },
       {
         // Issue #191, epic #165. NO `permission`, like every card here, and

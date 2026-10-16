@@ -58,7 +58,7 @@ export const AI_CONFIG = {
 beforeEach(() => {
   invalidateGraphOntology();
   proposalMock.reset(mockProposalDetail('draft'));
-  server.use(http.get(`${API}/ai/config`, () => HttpResponse.json({ data: AI_CONFIG })));
+  server.use(http.get(`${API}/ai-tasks/config`, () => HttpResponse.json({ data: AI_CONFIG })));
 });
 
 afterEach(() => {

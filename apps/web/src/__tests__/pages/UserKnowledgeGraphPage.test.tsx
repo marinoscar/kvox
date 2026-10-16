@@ -87,7 +87,7 @@ function useHandlers(initialGraph?: GraphPreferencesSettings) {
       stored.version += 1;
       return HttpResponse.json({ data: settingsBody() });
     }),
-    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig })),
+    http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig })),
   );
 }
 

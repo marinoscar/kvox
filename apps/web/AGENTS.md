@@ -13,7 +13,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 1. A new settings page is a card appended to `ADMIN_SECTIONS` or `USER_SETTINGS_SECTIONS`, plus its route in `App.tsx`. No route without a card.
 2. Never add a settings page as a tab of another. Tabs only for parallel content inside one destination (live example: the packaged Users & Allowlist page, `@marinoscar/platform-web/identity/ui` `UsersPage`, with KVox's Reminders tab appended through `slots.Tabs` in `src/identity/usersPageSlots.ts`).
-3. A card's `permission` is the exact string the API controller enforces (`system_settings:read`, `users:read`, `allowlist:read`, `jobs:read`, `nodes:read`, `db_backup:read`, `broadcasts:read`, `push:read`, `storage_config:read`). Writes are gated inside the page by disabling controls.
+3. A card's `permission` is the exact string the API controller enforces (`system_settings:read`, `users:read`, `allowlist:read`, `jobs:read`, `nodes:read`, `db_backup:read`, `broadcasts:read`, `push:read`, `storage_config:read`, `ai_config:read`, `ai:use`). A card may also declare `feature: 'ai'` (hidden while AI is off; the admin `AI` card is the switch and carries none), resolved in `src/config/settingsFeatures.ts`. Writes are gated inside the page by disabling controls.
 4. Reuse the packaged `SettingsHub` (`@marinoscar/platform-web/settings/ui`); never fork it or add a local copy. Profile and Appearance are the packaged `UserProfilePage` and `UserAppearancePage` from the same entry; the `useSystemSettings` and `useUserSettings` hooks come from `@marinoscar/platform-web/settings/headless`. `src/pages/UserSettingsHubPage.tsx` is the 4-prop binding.
 5. Update the registry tests above when you add a card.
 
@@ -38,7 +38,7 @@ Change all five together or none. The boundary is `sm` (600px), never `md` (900p
 - Each non-pinned destination gates on the exact permission its controller enforces.
 - **`pinned` means a MODE, not a peer**: rendered at the rail's foot, in the avatar menu, omitted from the bottom bar. `settings` and `console` are pinned.
 - **Four bottom-bar tabs is the ceiling** (`BOTTOM_BAR_DESTINATIONS = DESTINATIONS.filter((d) => !d.pinned)`). A fifth non-pinned destination is a redesign of the bar, not an addition.
-- `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `GET /api/ai/config`'s `graphEnabled`; while that flag is unknown or loading the item is hidden, never shown then removed.
+- `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `GET /api/ai-tasks/config`'s `graphEnabled` (`useAiTasksConfig`); while that flag is unknown or loading the item is hidden, never shown then removed.
 - Graph drawing goes through `GraphCanvas.tsx`, the one file that imports sigma.
 
 ## Frontend conventions
@@ -46,6 +46,7 @@ Change all five together or none. The boundary is `sm` (600px), never `md` (900p
 - The UI presents; the API authorizes. Hiding a card or button is not security.
 - Use MUI theming and the responsive shell; write components and hooks with tests.
 - Never call an AI provider from the browser; go through `/api`.
+- The AI pages (AI, AI models, AI usage, AI Provider) are the platform's (`@marinoscar/platform-web/ai/ui`); the app's own task-model, graph and ceiling sections ride in `AiConfigPage`'s `Sections` slot (`src/pages/Admin/AiSettingsPage.tsx`, `src/components/admin/AiTasksSettingsSections.tsx`) and talk to `/api/ai-tasks/*` through `src/services/aiTasks.ts`.
 - Runtime-configured features (transcription, AI, VAPID, SMTP) are admin-UI settings, never build-time variables.
 
 Run: `npm run test:run --workspace=web`, `npm run typecheck --workspace=web`.

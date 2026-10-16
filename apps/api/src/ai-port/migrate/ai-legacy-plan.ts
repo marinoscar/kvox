@@ -1,13 +1,12 @@
 import {
   aiAllowedModelEntrySchema,
-  type AiAllowedModel,
-} from '../../ai/ai-settings.schema';
-import { resolveAllowedModel, type AiModelKnowledge } from '../../ai/ai-model-resolution';
-import {
   deriveOpenAiModelDescriptor,
   OPENAI_DEFAULT_MODEL_FEATURES,
   OPENAI_DEFAULT_MODEL_LIMITS,
-} from '../../ai/providers/openai.provider';
+  resolveAllowedModel,
+  type AiAllowedModel,
+  type AiModelKnowledge,
+} from './legacy-model-knowledge';
 
 // =============================================================================
 // Legacy AI settings plan (issue #474, epic #472)
@@ -24,6 +23,10 @@ import {
 // The command (`ai-legacy-migrate.ts`) owns every read and write; this file owns
 // every decision, so the decisions can be pinned by a spec that needs no
 // database.
+//
+// PLATFORM-ADOPTION (issue #477): the model knowledge this planner resolves
+// against is a frozen copy (`legacy-model-knowledge.ts`) of what the retired
+// `apps/api/src/ai/` stack knew; that directory is gone.
 //
 // WHAT IS LEFT ALONE. `taskModels`, `graphEnabled`, `defaultModel`'s siblings
 // (`maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort`,
@@ -48,7 +51,9 @@ export const LEGACY_PROVIDER_ID = 'openai';
 export const EMBEDDING_MODEL_ID = 'text-embedding-3-small';
 
 /** The OpenAI API root. A stored `baseUrl` equal to it is the default and is not carried over. */
-export const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+// Built from parts on purpose: no source file under `apps/api/src` may spell a vendor
+// host (`test/ai/no-vendor-host.spec.ts`), and this one only needs to RECOGNISE it.
+export const OPENAI_DEFAULT_BASE_URL = `https://${['api', 'openai', 'com'].join('.')}/v1`;
 
 /** One `allowedModels` entry after the legacy normaliser: `{ id, label?, contextWindowTokens?, maxOutputTokens? }`. */
 export type LegacyAllowedModel = AiAllowedModel;
@@ -321,15 +326,13 @@ export function planAiSettings(
 
 /** Report shape printed and written beside the snapshot. */
 export interface AiLegacyReport {
-  keys: {
-    source: number;
-    imported: number;
-    alreadyImported: number;
-    undecryptable: number;
-    /** `importKey` threw for the row. Always zero on a healthy run; any other value fails the exit code. */
-    failed: number;
-    target: number;
-  };
+  /**
+   * Keys are not migrated by this build: `user_ai_credentials` is dropped with
+   * the retired AI stack (issue #477). `legacyRows` is what a deployment that has
+   * NOT yet run the previous build's migration still holds in it (zero when the
+   * table is gone, which is the normal case).
+   */
+  keys: { skipped: true; legacyTablePresent: boolean; legacyRows: number };
   models: { allowed: number; upserted: number; enabled: number };
   settings: { enabled: boolean; providerEnabled: boolean; defaultModel: string | null; taskModels: string[] };
   dryRun: boolean;

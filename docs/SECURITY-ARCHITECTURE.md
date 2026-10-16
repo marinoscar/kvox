@@ -1854,7 +1854,7 @@ apps/api/src/
 ├── platform/credentials/
 │   ├── credentials.config.ts                     # mounts CredentialsModule (+ user/org stores, unused)
 │   └── credential-purposes.manifest.ts           # smtp, email_ses, push_vapid (the transcription purpose is in kvox.manifest.ts)
-└── ai/user-ai-credentials.service.ts             # per-user AI keys, core encryptSecret/decryptSecret, purpose 'ai-key'
+└── platform/ai/                                  # mounts the platform AI slice; its UserAiKeysService stores per-user AI keys (user_ai_keys) with core encryptSecret, purpose 'ai_user_key'
 ```
 
 **Infrastructure:**
@@ -1997,12 +1997,12 @@ Notable properties of this behaviour:
 - **`NODE_ENV` plays no role anywhere in this check.** There is no development-mode fallback key and no relaxed behaviour for non-production. A fixed fallback key would itself be a key sitting in this public repository, and whether that branch is safe would depend on `NODE_ENV` being set correctly on every deployment — which it is not guaranteed to be (Node leaves it unset by default). A deployment that forgot to set `NODE_ENV=production` would otherwise silently encrypt real secrets under a constant anyone could read off GitHub.
 - **"Absent, rows exist" is fatal in every environment on purpose.** Rows can only exist because `CredentialsService.setSecret` successfully called `encryptSecret`, which itself throws without a valid key — so rows existing is proof a key was working at some point, and its current absence is a regression, not first-time setup.
 - **"Absent, zero rows" warns and boots** because that is the state every deployment of this repository is in today — no compose file, `.env.example`, or CI job sets `SECRETS_ENCRYPTION_KEY` yet, and the credential store has no consumer yet either.
-- **The check does not attempt to decrypt any row.** It only counts rows via that `credential.count()` callback, and counts the `credentials` table alone: rows in `user_ai_credentials` do not make a missing key fatal. A key that is present and well-formed but is the *wrong* key for existing rows (e.g. a partially completed rotation) still passes startup validation cleanly — the failure only surfaces later, when `CredentialsService.getSecret` actually tries to decrypt that row. See the rotation runbook, [`docs/runbooks/rotate-secrets-encryption-key.md`](runbooks/rotate-secrets-encryption-key.md), for the operational implications.
+- **The check does not attempt to decrypt any row.** It only counts rows via that `credential.count()` callback, and counts the `credentials` table alone: rows in `user_ai_keys` do not make a missing key fatal. A key that is present and well-formed but is the *wrong* key for existing rows (e.g. a partially completed rotation) still passes startup validation cleanly — the failure only surfaces later, when `CredentialsService.getSecret` actually tries to decrypt that row. See the rotation runbook, [`docs/runbooks/rotate-secrets-encryption-key.md`](runbooks/rotate-secrets-encryption-key.md), for the operational implications.
 - An empty string (`SECRETS_ENCRYPTION_KEY=` with nothing after it — exactly what an uncommented but unfilled `.env.example` line produces) is treated as **absent**, not malformed.
 
 ### The Key Must Never Live in the Database or the Repository
 
-`SECRETS_ENCRYPTION_KEY` protects every row in the `credentials` table and every per-user AI key in `user_ai_credentials`. Storing it anywhere the ciphertext it protects also lives — the database, a config table, a committed file in this repository — would defeat encryption at rest entirely: anyone with read access to the data would also have the key that unlocks it. The **only** correct location for this key is the deployment's environment (a secret manager, an orchestrator secret, or an `.env` file that is never committed), matching every other secret in this application. It must never be committed to Git, never be embedded in application code, and never be written to the database.
+`SECRETS_ENCRYPTION_KEY` protects every row in the `credentials` table and every per-user AI key in `user_ai_keys`. Storing it anywhere the ciphertext it protects also lives — the database, a config table, a committed file in this repository — would defeat encryption at rest entirely: anyone with read access to the data would also have the key that unlocks it. The **only** correct location for this key is the deployment's environment (a secret manager, an orchestrator secret, or an `.env` file that is never committed), matching every other secret in this application. It must never be committed to Git, never be embedded in application code, and never be written to the database.
 
 ### Read Paths Never Touch the Ciphertext
 

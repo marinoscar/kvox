@@ -3,7 +3,7 @@
  * model, the cost shown first, and "Guide the graph" (#368, epic #346;
  * ontology.md §6, §19, §20).
  *
- * MODEL (§20 "Task models"). The picker lists only what `GET /api/ai/config`
+ * MODEL (§20 "Task models"). The picker lists only what `GET /api/ai-tasks/config`
  * permits AND can return structured output — a model without the flag is
  * treated as capable (an older API), the server's 409
  * `model_lacks_capability` being the backstop. It defaults to the
@@ -46,11 +46,11 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { AI_KEY_SETTINGS_PATH } from '../../ai/AiKeyRequired';
 import { ModelSelect } from '../../notes/ModelSelect';
-import { useAiConfig } from '../../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
 import { useGraphExtractEstimate } from '../../../hooks/useGraphExtractEstimate';
 import { useGraphOntology } from '../../../hooks/useGraphOntology';
 import { ApiError } from '../../../services/api';
-import type { AiConfig, AiConfigModel } from '../../../services/ai';
+import type { AiTasksConfig, AiTasksConfigModel } from '../../../services/aiTasks';
 import {
   extractBadRequest,
   graphConflictReason,
@@ -89,12 +89,12 @@ export interface ExtractDialogProps {
 export const EXTRACT_MODEL_HELPER = 'Runs on your own AI key. Choosing another model changes the cost.';
 
 /** The models a run may use: permitted, and able to return structured output. */
-export function extractionModels(config: AiConfig | null): AiConfigModel[] {
+export function extractionModels(config: AiTasksConfig | null): AiTasksConfigModel[] {
   return (config?.models ?? []).filter((model) => model.structuredOutput !== false);
 }
 
 /** The admin's `graph.extract` task model, else the default, else the first capable one. */
-export function defaultExtractionModel(config: AiConfig | null): string {
+export function defaultExtractionModel(config: AiTasksConfig | null): string {
   const models = extractionModels(config);
   const ids = models.map((model) => model.id);
   const task = config?.taskModels?.['graph.extract']?.model ?? null;
@@ -146,7 +146,7 @@ export function ExtractDialog({
 }: ExtractDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const { config, isLoading: configLoading } = useAiConfig();
+  const { config, isLoading: configLoading } = useAiTasksConfig();
   const { ontology, error: ontologyError } = useGraphOntology({ enabled: open });
 
   const models = useMemo(() => extractionModels(config), [config]);

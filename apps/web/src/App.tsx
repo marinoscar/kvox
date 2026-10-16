@@ -31,6 +31,16 @@ import {
 import { appDbBackupAdapters } from './platform/dbBackupAdapters';
 import { appTelemetryAdapters } from './platform/telemetryAdapters';
 import { AppTelemetryConfigProvider } from './platform/TelemetryConfigBinding';
+// Issue #477, epic #472. The AI, AI models, AI usage and AI Provider pages are
+// the platform's (`@marinoscar/platform-web/ai/ui`); they take this app's spinner
+// through `AiWebAdaptersProvider`, and read the one `GET /api/ai/config` answer
+// from `AppAiConfigProvider` (`platform/AiConfigBinding.tsx`), mounted ABOVE the
+// platform host because the host reads the `ai` settings feature that answer
+// drives. `RequireAiEnabled` is the feature half of the AI routes' gate.
+import { AiWebAdaptersProvider } from '@marinoscar/platform-web/ai/headless';
+import { RequireAiEnabled } from '@marinoscar/platform-web/ai/ui/require-ai-enabled';
+import { appAiAdapters } from './platform/aiAdapters';
+import { AppAiConfigProvider } from './platform/AiConfigBinding';
 import './config/settingsFeatures';
 // Issue #470, epic #467. The notification centre is the platform's; the slice is
 // configured once at module scope in `platform/notifications.ts` (imported by
@@ -133,11 +143,14 @@ const UserTokensPage = lazy(() =>
 // permanent — its own `Danger Zone` group in `userSettingsSections.tsx`, and
 // ungated here like every sibling below.
 const UserDangerZonePage = lazy(() => import('./pages/UserDangerZonePage'));
-// Issue #55, epic #45 — the user's OWN AI provider key. Every AI surface in
-// that epic is unreachable until this page has been used once.
-const UserAiPage = lazy(() => import('./pages/UserAiPage'));
+// Issue #55, epic #45; the platform's since #477 (epic #472) — the user's OWN
+// AI provider key (`UserAiKeysPage`). Every AI surface in that epic is
+// unreachable until this page has been used once.
+const UserAiKeysPage = lazy(() =>
+  import('@marinoscar/platform-web/ai/ui').then((m) => ({ default: m.UserAiKeysPage })),
+);
 // Issue #56, epic #45 — the note template editor and its live AI preview. It
-// renders `AiKeyRequired` and nothing else until `UserAiPage` above has been
+// renders `AiKeyRequired` and nothing else until `UserAiKeysPage` above has been
 // used, so the two are ordered here the way the setup actually happens.
 const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage'));
 // Issue #191, epic #165 — what of the user's own library is semantically
@@ -176,9 +189,17 @@ const PushConfigPage = lazy(() =>
 const TranscriptionSettingsPage = lazy(
   () => import('./pages/Admin/TranscriptionSettingsPage'),
 );
-// Issue #55, epic #45 — the deployment's AI POLICY. Holds no key: every AI key
-// belongs to an individual user (`UserAiPage` above).
+// Issue #55, epic #45; the platform's since #477 (epic #472) — the deployment's
+// AI policy: this app's thin binding over the packaged `AiConfigPage`, with the
+// task-model, graph and ceiling sections in its `Sections` slot. The AI models
+// and AI usage pages are the packaged `AiModelsPage` and `AiUsagePage`.
 const AiSettingsPage = lazy(() => import('./pages/Admin/AiSettingsPage'));
+const AiModelsPage = lazy(() =>
+  import('@marinoscar/platform-web/ai/ui').then((m) => ({ default: m.AiModelsPage })),
+);
+const AiUsagePage = lazy(() =>
+  import('@marinoscar/platform-web/ai/ui').then((m) => ({ default: m.AiUsagePage })),
+);
 // Issue #258, epic #254 — the maintenance window's switch and its layers
 // (the packaged page since #464). The screen a BLOCKED user sees is the
 // packaged `MaintenanceGate`'s, not a page of this app.
@@ -632,14 +653,26 @@ function AppRoutes() {
                       preferences, and the registry endpoint the page renders is
                       itself `@Auth()` with no permission for the same reason. */}
                   <Route path="/settings/notifications" element={<UserNotificationsPage />} />
-                  {/* Issue #55, epic #45. Unwrapped like its siblings, and
-                      with the strongest version of their reason:
-                      `ai-credentials.controller.ts` gates all four of its
-                      routes on `@Auth()` and NO permission, because the
-                      resource is the caller's own credential. A
-                      `RequirePermission` here would be a gate the API does not
-                      have. */}
-                  <Route path="/settings/ai" element={<UserAiPage />} />
+                  {/* Issue #55, epic #45; the platform's since #477. UNLIKE its
+                      unwrapped siblings this route IS gated, because the API
+                      is: the platform's per-user AI routes (`/api/ai/keys`)
+                      enforce `ai:use`, and the card declares `ai:use` +
+                      `feature: 'ai'`. `RequireAiEnabled` is the feature half,
+                      so a deep link replaces to `/` while AI is off instead of
+                      showing a page of refused requests. */}
+                  <Route
+                    path="/settings/ai"
+                    element={
+                      <RequirePermission
+                        permission="ai:use"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <RequireAiEnabled>
+                          <UserAiKeysPage />
+                        </RequireAiEnabled>
+                      </RequirePermission>
+                    }
+                  />
                   {/* Issue #56, epic #45. Ungated like every `/settings/*`
                       sibling: `note-templates.controller.ts` enforces
                       `note_templates:read` / `note_templates:write`, and BOTH
@@ -885,27 +918,57 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Issue #55, epic #45. Same permission string the `AI` card
-                      declares in `config/adminSections.tsx`, which is the same
-                      string `ai-settings.controller.ts` enforces on its GET —
-                      the invariant `destinations.test.ts` asserts for every
-                      card. `system_settings:read` and not `:write`: saving the
-                      policy and probing the base URL both need write, which
-                      the page disables without it, but "which models may this
-                      deployment use, under what ceilings" is worth READING for
-                      anyone diagnosing why a note was refused.
+                  {/* Issue #55, epic #45; the platform's since #477 (epic #472).
+                      Same permission string the `AI` card declares in
+                      `config/adminSections.tsx`, which is the string the
+                      platform's `ai-admin.controller` enforces on
+                      `GET /api/admin/ai/config` (and `GET /api/ai-tasks/settings`
+                      for this app's sections): `ai_config:read`. Saving needs
+                      `ai_config:write`, which the PAGE gates by disabling its
+                      controls.
 
-                      ⚠ This page holds NO API KEY — there is no deployment AI
-                      credential in epic #45 — so unlike the transcription
-                      route above, `:write` here never gates a secret. */}
+                      ⚠ NOT BEHIND `RequireAiEnabled`, deliberately (AI rule 5):
+                      this is where AI is switched on, so it must stay reachable
+                      while AI is off. Its two siblings below are behind it,
+                      exactly as their cards carry `feature: 'ai'`.
+
+                      THREE ROUTES NESTED UNDER THE SETTINGS PATH, not tabs:
+                      `settingsPageTitle`'s longest-prefix rule titles
+                      `/admin/settings/ai/models` "AI models", not "AI". */}
                   <Route
                     path="/admin/settings/ai"
                     element={
                       <RequirePermission
-                        permission="system_settings:read"
+                        permission="ai_config:read"
                         fallback={<Navigate to="/" replace />}
                       >
                         <AiSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/ai/models"
+                    element={
+                      <RequirePermission
+                        permission="ai_config:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <RequireAiEnabled>
+                          <AiModelsPage />
+                        </RequireAiEnabled>
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/ai/usage"
+                    element={
+                      <RequirePermission
+                        permission="ai_config:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <RequireAiEnabled>
+                          <AiUsagePage />
+                        </RequireAiEnabled>
                       </RequirePermission>
                     }
                   />
@@ -1211,17 +1274,21 @@ export default function App() {
     <ThemeContextProvider>
       <IdentityProviders>
         <AppTelemetryConfigProvider>
-          <AppPlatformHostProvider>
-            <JobsWebAdaptersProvider adapters={appJobsAdapters}>
-              <NodesWebAdaptersProvider adapters={appNodesAdapters}>
-                <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
-                  <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
-                    <AppRoutes />
-                  </TelemetryWebAdaptersProvider>
-                </DbBackupWebAdaptersProvider>
-              </NodesWebAdaptersProvider>
-            </JobsWebAdaptersProvider>
-          </AppPlatformHostProvider>
+          <AppAiConfigProvider>
+            <AppPlatformHostProvider>
+              <JobsWebAdaptersProvider adapters={appJobsAdapters}>
+                <NodesWebAdaptersProvider adapters={appNodesAdapters}>
+                  <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
+                    <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
+                      <AiWebAdaptersProvider adapters={appAiAdapters}>
+                        <AppRoutes />
+                      </AiWebAdaptersProvider>
+                    </TelemetryWebAdaptersProvider>
+                  </DbBackupWebAdaptersProvider>
+                </NodesWebAdaptersProvider>
+              </JobsWebAdaptersProvider>
+            </AppPlatformHostProvider>
+          </AppAiConfigProvider>
         </AppTelemetryConfigProvider>
       </IdentityProviders>
     </ThemeContextProvider>

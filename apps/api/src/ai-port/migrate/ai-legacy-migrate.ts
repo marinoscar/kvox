@@ -12,13 +12,8 @@ import { APP_SLUG } from '@app/shared';
 import { Logger } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { assertEncryptionKeyConfigured } from '@marinoscar/platform-api/core';
-import { deriveHint } from '@marinoscar/platform-api/credentials';
-import type { UserAiKeysService } from '@marinoscar/platform-api/ai';
 
 import { buildDatabaseUrl } from '../../common/database-url';
-import { AI_CREDENTIAL_PURPOSE } from '../../ai/ai-credential.constants';
-import { decryptSecret } from './legacy-cipher';
 import {
   LEGACY_PROVIDER_ID,
   planAiSettings,
@@ -28,14 +23,14 @@ import {
 } from './ai-legacy-plan';
 
 // =============================================================================
-// AI legacy migration: user AI keys and AI settings to the platform
-// (issue #474, epic #472)
+// AI legacy migration: AI settings and models to the platform
+// (issue #474, epic #472; keys retired by issue #477)
 // =============================================================================
 //
 // An OPERATOR COMMAND, run once per deployment, like `prisma:seed`:
 //
 //     node dist/ai-port/migrate/ai-legacy-migrate.js [--dry-run] [--apply]
-//          [--snapshot <file>] [--restore <file>] [--allow-undecryptable]
+//          [--snapshot <file>] [--restore <file>]
 //
 // WHY NOT A QUEUE JOB. No HTTP request and no cron starts it, so the "every
 // long-running activity is a queue job" rule does not apply, and a permanent job
@@ -44,12 +39,13 @@ import {
 // `ts-node`. Runbook: docs/runbooks/ai-platform-migration.md.
 //
 // WHAT IT DOES
-//   1. Keys. Every `user_ai_credentials` row is decrypted with this application's
-//      own cipher (`legacy-cipher.ts`, purpose `'ai-key'`) and handed to the
-//      platform's `UserAiKeysService.importKey`, which re-encrypts it under the
-//      platform's purpose, stores it unverified, audits `ai:user-key:import` with
-//      the app slug as `source` and queues `ai.keys.recheck`. A ciphertext is NEVER given
-//      to the platform.
+//   1. Keys. NOT MIGRATED BY THIS BUILD. The keys moved in the build before
+//      issue #477; that release dropped `user_ai_credentials` together with the
+//      cipher that read it. This step only LOOKS: when the table is gone (the
+//      normal case) it prints that there is nothing to migrate for keys; when the
+//      table is still there and holds rows (this build was started before
+//      `prisma:migrate` ran) it REFUSES, because running the migration drops the
+//      table and those keys would be lost. Run the previous build's command first.
 //   2. Models. One enabled `ai_models` row per `allowedModels` entry, plus the
 //      embedding model, marked `admin_override` so a later catalogue sync never
 //      rewrites them (BYOK has no deployment key, so no sync can create them).
@@ -59,42 +55,43 @@ import {
 //      update (see `writeSettings` for why this is not a `SystemSettingsService`
 //      PUT).
 //
+// PLATFORM-ADOPTION (issue #477): the model knowledge the planner resolves
+// against is a frozen copy (`legacy-model-knowledge.ts`); the retired
+// `apps/api/src/ai/` directory it came from is deleted. A deployment that has not
+// migrated its `ai` settings yet still needs this command, so it stays until the
+// local-exceptions register says every deployment has run it.
+//
 // SAFETY
 //   - `--dry-run` is the default and writes nothing: no row, no file, no job.
 //   - `--apply` writes the pre-migration snapshot FIRST and refuses to continue
-//     when it cannot be written. The snapshot never holds a key or a ciphertext.
-//   - A plaintext key exists only between `decryptSecret` and `importKey`; it is
-//     never logged, returned, audited or written to a file.
-//   - Idempotent: a key whose platform copy already carries the same hint is
-//     counted `alreadyImported` and not touched; a settings value that no longer
-//     holds a legacy key is not rewritten.
-//   - `--restore` undoes it; `user_ai_credentials` is never modified, so the old
-//     code path keeps working on a reverted build.
+//     when it cannot be written. The snapshot holds no key and no ciphertext.
+//   - Idempotent: a settings value that no longer holds a legacy key is not
+//     rewritten, and an `ai_models` row an administrator changed since is not
+//     touched.
+//   - `--restore` puts the old `ai` value and the model rows back.
 //
-// NO BYPASS CLIENT. Every table this command touches (`system_settings`,
-// `audit_events`, `ai_models`, `user_ai_keys`, `user_ai_credentials`) is outside
-// row-level security (checked against the migrations), so the ordinary client is
-// enough and no `migration-tooling` access reason is needed.
+// A BARE PRISMA CLIENT IS ENOUGH. It reads and writes `system_settings`,
+// `audit_events` and `ai_models`, all outside row-level security (checked against
+// the migrations), so no application context and no `migration-tooling` access
+// reason is needed, and no encryption key either.
 // =============================================================================
 
 /** The `system_settings` row the `ai` namespace lives in (`SettingsModule.forRoot({ systemRowKey })`). */
 export const SYSTEM_SETTINGS_ROW_KEY = 'global';
 
-/** Audit action the platform writes for an imported key. */
-export const KEY_IMPORT_AUDIT_ACTION = 'ai:user-key:import';
+/** The `source` recorded on the audit rows this command writes: the app slug (`APP_SLUG`, identity.json). */
+export const AUDIT_SOURCE: string = APP_SLUG;
 
-/** The `source` recorded on every import audit row: the app slug (`APP_SLUG`, identity.json). */
-export const KEY_IMPORT_SOURCE: string = APP_SLUG;
+/** Written by this build. Version 1 (the build before #477) is still accepted by `--restore`. */
+const SNAPSHOT_VERSION = 2;
+const ACCEPTED_SNAPSHOT_VERSIONS: readonly number[] = [1, 2];
 
-const SNAPSHOT_VERSION = 1;
 
 /** The Prisma surface the command uses; the real `PrismaClient` satisfies it. */
 export type MigratePrisma = Pick<
   PrismaClient,
   | '$queryRaw'
   | '$transaction'
-  | 'userAiCredential'
-  | 'userAiKey'
   | 'aiModel'
   | 'systemSettings'
   | 'auditEvent'
@@ -108,18 +105,13 @@ export interface MigrateLogger {
 
 export interface MigrateDeps {
   prisma: MigratePrisma;
-  /** Required for `apply`; unused by a dry run and a restore. */
-  userAiKeys?: Pick<UserAiKeysService, 'importKey'>;
   logger: MigrateLogger;
-  /** Replaceable for a spec; defaults to the copied legacy cipher. */
-  decrypt?: (payload: string, purpose: string) => string;
 }
 
 export interface MigrateOptions {
   apply: boolean;
   /** Where the pre-migration snapshot goes (apply only). */
   snapshotPath: string;
-  allowUndecryptable: boolean;
 }
 
 export interface MigrateResult {
@@ -130,16 +122,18 @@ export interface MigrateResult {
   snapshotPath: string | null;
 }
 
-/** The pre-migration state, for `--restore`. Holds no secret and no ciphertext. */
+/**
+ * The pre-migration state, for `--restore`. Holds no secret and no ciphertext.
+ * A version 1 file (written before #477) also lists key hints under `credentials`
+ * and `userAiKeys`; they are ignored.
+ */
 export interface AiLegacySnapshot {
-  version: typeof SNAPSHOT_VERSION;
+  version: number;
   /** Database clock at the moment the snapshot was taken. */
   takenAt: string;
   /** The raw `ai` value of the `global` row, or null when the row or the key was absent. */
   aiValue: unknown;
   settingsRowExisted: boolean;
-  credentials: Array<{ id: string; userId: string; provider: string; hint: string | null; label: string | null }>;
-  userAiKeys: Array<{ userId: string; provider: string; hint: string | null }>;
   aiModels: Array<{
     provider: string;
     modelId: string;
@@ -165,6 +159,16 @@ function describeError(error: unknown): string {
   return 'unknown error';
 }
 
+/** How many rows the retired key table still holds; `null` when the table does not exist. */
+async function legacyKeyRows(prisma: MigratePrisma): Promise<number | null> {
+  const present = await prisma.$queryRaw<Array<{ present: boolean }>>`
+    SELECT to_regclass('public.user_ai_credentials') IS NOT NULL AS present`;
+  if (!present[0]?.present) return null;
+  const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT count(*)::bigint AS count FROM user_ai_credentials`;
+  return Number(rows[0]?.count ?? 0);
+}
+
 async function databaseNow(prisma: MigratePrisma): Promise<Date> {
   const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() AS now`;
   return rows[0].now;
@@ -176,19 +180,30 @@ async function databaseNow(prisma: MigratePrisma): Promise<Date> {
 
 export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOptions): Promise<MigrateResult> {
   const { prisma, logger } = deps;
-  const decrypt = deps.decrypt ?? decryptSecret;
   const problems: string[] = [];
 
-  if (options.apply && !deps.userAiKeys) {
-    throw new Error('--apply needs the platform UserAiKeysService; it was not provided.');
+  // ---- keys: look only (see the header) -----------------------------------------
+  const legacyRows = await legacyKeyRows(prisma);
+  const keys: AiLegacyReport['keys'] = {
+    skipped: true,
+    legacyTablePresent: legacyRows !== null,
+    legacyRows: legacyRows ?? 0,
+  };
+  if (legacyRows === null) {
+    logger.log('keys: nothing to migrate (this build has no user_ai_credentials table; keys live in user_ai_keys)');
+  } else if (legacyRows === 0) {
+    logger.log('keys: nothing to migrate (user_ai_credentials is empty)');
+  } else {
+    const message =
+      `${legacyRows} row(s) remain in user_ai_credentials and this build cannot import them; the upgrade drops that ` +
+      "table. Run this command from the PREVIOUS build first (docs/runbooks/ai-platform-migration.md).";
+    if (options.apply) {
+      throw new Error(`Refusing to --apply: ${message} Nothing was changed.`);
+    }
+    problems.push(message);
   }
 
   // ---- read everything the plan depends on --------------------------------
-  const credentials = await prisma.userAiCredential.findMany({
-    orderBy: { id: 'asc' },
-    select: { id: true, userId: true, provider: true, secret: true, hint: true, label: true },
-  });
-  const existingKeys = await prisma.userAiKey.findMany({ select: { userId: true, provider: true, hint: true } });
   const existingModels = await prisma.aiModel.findMany({ where: { provider: LEGACY_PROVIDER_ID } });
   const settingsRow = await prisma.systemSettings.findUnique({ where: { key: SYSTEM_SETTINGS_ROW_KEY } });
 
@@ -196,7 +211,7 @@ export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOp
   const rawAi = rowValue && isRecord(rowValue.ai) ? rowValue.ai : null;
   const plan = rawAi ? planAiSettings(rawAi as unknown as LegacyAiValue) : null;
   logger.log(
-    `read: credentials=${credentials.length} platformKeys=${existingKeys.length} openaiModels=${existingModels.length} ` +
+    `read: openaiModels=${existingModels.length} ` +
       `aiValue=${rawAi ? (plan?.alreadyMigrated ? 'already-migrated' : 'legacy') : 'absent'}`,
   );
 
@@ -210,8 +225,6 @@ export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOp
       takenAt: takenAt.toISOString(),
       aiValue: rawAi,
       settingsRowExisted: settingsRow !== null,
-      credentials: credentials.map(({ id, userId, provider, hint, label }) => ({ id, userId, provider, hint, label })),
-      userAiKeys: existingKeys.map(({ userId, provider, hint }) => ({ userId, provider, hint })),
       aiModels: existingModels.map((row) => ({
         provider: row.provider,
         modelId: row.modelId,
@@ -236,72 +249,6 @@ export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOp
     }
     logger.log(`snapshot: written to ${snapshotPath}`);
   }
-
-  // ---- keys -------------------------------------------------------------------
-  const keys: AiLegacyReport['keys'] = {
-    source: credentials.length,
-    imported: 0,
-    alreadyImported: 0,
-    undecryptable: 0,
-    failed: 0,
-    target: 0,
-  };
-  const targetByPair = new Map(existingKeys.map((row) => [`${row.userId}\u0000${row.provider}`, row.hint]));
-
-  for (const row of credentials) {
-    let plaintext: string | null;
-    try {
-      plaintext = decrypt(row.secret, AI_CREDENTIAL_PURPOSE);
-    } catch {
-      plaintext = null;
-    }
-    if (plaintext === null || plaintext.trim() === '') {
-      keys.undecryptable += 1;
-      // The ciphertext is never printed. `userId` and `provider` are enough to find the row.
-      logger.warn(`keys: undecryptable credential id=${row.id} userId=${row.userId} provider=${row.provider}`);
-      continue;
-    }
-
-    const pair = `${row.userId}\u0000${row.provider}`;
-    const hasTarget = targetByPair.has(pair);
-    const targetHint = targetByPair.get(pair) ?? null;
-    // The platform derives its hint from the trimmed key; the stored one came
-    // from the key as typed. Either match means this key is already there.
-    const expectedHint = deriveHint(plaintext.trim());
-    const sameHint = hasTarget && (targetHint === (row.hint ?? null) || targetHint === (expectedHint ?? null));
-
-    if (sameHint) {
-      plaintext = null;
-      keys.alreadyImported += 1;
-      continue;
-    }
-    if (hasTarget) {
-      logger.warn(
-        `keys: replacing the platform key of userId=${row.userId} provider=${row.provider} ` +
-          '(its hint differs from the legacy key)',
-      );
-    }
-
-    if (!options.apply) {
-      plaintext = null;
-      keys.imported += 1; // planned
-      continue;
-    }
-    try {
-      await deps.userAiKeys!.importKey(row.userId, row.provider, plaintext, { source: KEY_IMPORT_SOURCE });
-      keys.imported += 1;
-      targetByPair.set(pair, expectedHint ?? null);
-    } catch (error) {
-      keys.failed += 1;
-      logger.error(`keys: import failed for credential id=${row.id} provider=${row.provider}: ${describeError(error)}`);
-    } finally {
-      plaintext = null;
-    }
-  }
-  logger.log(
-    `keys: source=${keys.source} ${options.apply ? 'imported' : 'wouldImport'}=${keys.imported} ` +
-      `alreadyImported=${keys.alreadyImported} undecryptable=${keys.undecryptable} failed=${keys.failed}`,
-  );
 
   // ---- models and settings: one transaction ----------------------------------
   const models = plan?.models ?? [];
@@ -335,8 +282,6 @@ export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOp
   }
 
   // ---- verification report ------------------------------------------------------
-  keys.target = await countImportedTargets(prisma);
-
   let enabledModels: number;
   if (options.apply) {
     enabledModels = await prisma.aiModel.count({ where: { provider: LEGACY_PROVIDER_ID, enabled: true } });
@@ -364,15 +309,6 @@ export async function runAiLegacyMigration(deps: MigrateDeps, options: MigrateOp
   };
 
   // ---- verdict ---------------------------------------------------------------------
-  if (keys.source !== keys.imported + keys.alreadyImported + keys.undecryptable) {
-    problems.push(
-      `keys do not add up: source=${keys.source} but imported+alreadyImported+undecryptable=` +
-        `${keys.imported + keys.alreadyImported + keys.undecryptable} (failed=${keys.failed})`,
-    );
-  }
-  if (keys.undecryptable > 0 && !options.allowUndecryptable) {
-    problems.push(`${keys.undecryptable} credential(s) could not be decrypted (pass --allow-undecryptable to accept)`);
-  }
   if (plan && plan.skippedEntries.length > 0) {
     logger.warn(`models: ${plan.skippedEntries.length} allowedModels entr(y/ies) were not valid and were skipped (positions ${plan.skippedEntries.join(',')})`);
   }
@@ -458,24 +394,9 @@ async function writeSettings(
       action: 'system_settings:ai-legacy-migrate',
       targetType: 'system_settings',
       targetId: rowId,
-      meta: { namespace: 'ai', removedKeys: audit.removed, modelsUpserted: audit.modelsUpserted, source: KEY_IMPORT_SOURCE },
+      meta: { namespace: 'ai', removedKeys: audit.removed, modelsUpserted: audit.modelsUpserted, source: AUDIT_SOURCE },
     },
   });
-}
-
-/** `user_ai_keys` rows that carry an import audit row from this migration (`source` is the app slug). */
-async function countImportedTargets(prisma: MigratePrisma): Promise<number> {
-  const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
-    SELECT count(*)::bigint AS count
-    FROM user_ai_keys k
-    WHERE EXISTS (
-      SELECT 1 FROM audit_events a
-      WHERE a.action = ${KEY_IMPORT_AUDIT_ACTION}
-        AND a.actor_user_id = k.user_id
-        AND a.target_id = k.provider
-        AND a.meta ->> 'source' = ${KEY_IMPORT_SOURCE}
-    )`;
-  return Number(rows[0]?.count ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -484,20 +405,18 @@ async function countImportedTargets(prisma: MigratePrisma): Promise<number> {
 
 export interface RestoreResult {
   settingsRestored: boolean;
-  keysDeleted: number;
   modelsRestored: number;
   modelsDisabled: number;
 }
 
 /**
- * Undo `--apply` from its snapshot: write the old `ai` value back, delete the
- * `user_ai_keys` rows imported after the snapshot, restore the `ai_models` rows
- * the snapshot listed and disable the ones it did not. `user_ai_credentials` is
- * never touched.
+ * Undo `--apply` from its snapshot: write the old `ai` value back, restore the
+ * `ai_models` rows the snapshot listed and disable the ones it did not.
  *
- * A platform key that existed before the migration and was REPLACED by an import
- * is deleted too: the snapshot holds hints, never secrets, so it cannot bring
- * that key back and the user enters it again.
+ * KEYS ARE NOT TOUCHED (issue #477). A key imported by the previous build is a
+ * real platform key now: the user may have replaced or tested it since, and the
+ * snapshot holds hints, never secrets, so deleting it could not be undone. A
+ * version 1 snapshot lists those keys; this build reports that it leaves them.
  */
 export async function runAiLegacyRestore(
   deps: Pick<MigrateDeps, 'prisma' | 'logger'>,
@@ -506,15 +425,10 @@ export async function runAiLegacyRestore(
 ): Promise<RestoreResult> {
   const { prisma, logger } = deps;
   const snapshot = parseSnapshot(readFileSync(resolve(snapshotPath), 'utf8'));
-  const takenAt = new Date(snapshot.takenAt);
 
-  const imports = await prisma.auditEvent.findMany({
-    where: { action: KEY_IMPORT_AUDIT_ACTION, createdAt: { gt: takenAt } },
-    select: { actorUserId: true, targetId: true, meta: true },
-  });
-  const pairs = imports
-    .filter((row) => row.actorUserId !== null && isRecord(row.meta) && row.meta.source === KEY_IMPORT_SOURCE)
-    .map((row) => ({ userId: row.actorUserId as string, provider: row.targetId }));
+  if (snapshot.version === 1) {
+    logger.warn('restore: this snapshot was written before keys left this command; imported keys are left in place');
+  }
 
   const snapshotIds = new Set(snapshot.aiModels.map((m) => m.modelId));
   const currentModels = await prisma.aiModel.findMany({ where: { provider: LEGACY_PROVIDER_ID }, select: { modelId: true, enabled: true } });
@@ -522,15 +436,13 @@ export async function runAiLegacyRestore(
 
   const result: RestoreResult = {
     settingsRestored: false,
-    keysDeleted: 0,
     modelsRestored: snapshot.aiModels.length,
     modelsDisabled: toDisable.length,
   };
 
   if (dryRun) {
-    result.keysDeleted = pairs.length;
     result.settingsRestored = snapshot.settingsRowExisted;
-    logger.log(`restore (dry run): would restore the ai value, delete up to ${pairs.length} imported key(s), restore ${result.modelsRestored} model row(s), disable ${result.modelsDisabled}`);
+    logger.log(`restore (dry run): would restore the ai value, restore ${result.modelsRestored} model row(s), disable ${result.modelsDisabled}`);
     return result;
   }
 
@@ -554,11 +466,6 @@ export async function runAiLegacyRestore(
         },
       });
       result.settingsRestored = true;
-    }
-
-    for (const pair of pairs) {
-      const deleted = await tx.userAiKey.deleteMany({ where: { userId: pair.userId, provider: pair.provider } });
-      result.keysDeleted += deleted.count;
     }
 
     for (const model of snapshot.aiModels) {
@@ -585,7 +492,7 @@ export async function runAiLegacyRestore(
   });
 
   logger.log(
-    `restore: aiValue=${result.settingsRestored ? 'restored' : 'untouched'} importedKeysDeleted=${result.keysDeleted} ` +
+    `restore: aiValue=${result.settingsRestored ? 'restored' : 'untouched'} ` +
       `modelsRestored=${result.modelsRestored} modelsDisabled=${result.modelsDisabled}`,
   );
   return result;
@@ -598,7 +505,7 @@ function parseSnapshot(text: string): AiLegacySnapshot {
   } catch {
     throw new Error('The snapshot file is not valid JSON.');
   }
-  if (!isRecord(parsed) || parsed.version !== SNAPSHOT_VERSION || typeof parsed.takenAt !== 'string' || Number.isNaN(Date.parse(parsed.takenAt)) || !Array.isArray(parsed.aiModels)) {
+  if (!isRecord(parsed) || typeof parsed.version !== 'number' || !ACCEPTED_SNAPSHOT_VERSIONS.includes(parsed.version) || typeof parsed.takenAt !== 'string' || Number.isNaN(Date.parse(parsed.takenAt)) || !Array.isArray(parsed.aiModels)) {
     throw new Error('The file is not an AI legacy migration snapshot (version or shape mismatch).');
   }
   return parsed as unknown as AiLegacySnapshot;
@@ -611,9 +518,10 @@ function parseSnapshot(text: string): AiLegacySnapshot {
 export function formatReport(report: AiLegacyReport): string {
   const { keys, models, settings } = report;
   return [
-    `${report.dryRun ? 'DRY RUN (nothing was written; imported/upserted are planned numbers)' : 'APPLIED'}`,
-    `keys: source=${keys.source} imported=${keys.imported} alreadyImported=${keys.alreadyImported} ` +
-      `undecryptable=${keys.undecryptable} failed=${keys.failed} target=${keys.target}`,
+    `${report.dryRun ? 'DRY RUN (nothing was written; upserted is a planned number)' : 'APPLIED'}`,
+    keys.legacyTablePresent
+      ? `keys: not migrated by this build; user_ai_credentials still holds ${keys.legacyRows} row(s)`
+      : 'keys: nothing to migrate (they live in user_ai_keys)',
     `models: allowed=${models.allowed} upserted=${models.upserted} enabled=${models.enabled}`,
     `settings: enabled=${settings.enabled} providerEnabled=${settings.providerEnabled} ` +
       `defaultModel=${settings.defaultModel ?? '(none)'} taskModels=${settings.taskModels.join(',') || '(none)'}`,
@@ -627,11 +535,10 @@ export function formatReport(report: AiLegacyReport): string {
 const USAGE = `Usage: node dist/ai-port/migrate/ai-legacy-migrate.js [options]
 
   --dry-run               Report what would change; write nothing (default).
-  --apply                 Import the keys, upsert ai_models, rewrite the ai settings.
+  --apply                 Upsert ai_models and rewrite the ai settings.
   --snapshot <file>       Where --apply writes the pre-migration snapshot
                           (default ./ai-legacy-snapshot-<timestamp>.json).
   --restore <file>        Undo a previous --apply from its snapshot.
-  --allow-undecryptable   Exit 0 although some stored keys cannot be decrypted.
 `;
 
 function cliLogger(): MigrateLogger {
@@ -651,7 +558,6 @@ function parseCli(argv: string[]) {
       apply: { type: 'boolean', default: false },
       snapshot: { type: 'string' },
       restore: { type: 'string' },
-      'allow-undecryptable': { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -682,9 +588,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 2;
   }
 
-  // Fail early, with the message that names the variable, before a connection opens.
-  assertEncryptionKeyConfigured();
-
   const snapshotPath =
     args.snapshot ?? `./ai-legacy-snapshot-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
@@ -693,11 +596,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 2;
   }
 
-  if (args.apply) {
-    return runApplyInApplication(logger, snapshotPath, args['allow-undecryptable'] === true);
-  }
-
-  // Dry run and restore need only the database, not the application graph.
+  // Every mode needs only the database, not the application graph.
   const prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl()) });
   try {
     await prisma.$connect();
@@ -705,63 +604,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       await runAiLegacyRestore({ prisma, logger }, args.restore, args['dry-run'] === true);
       return 0;
     }
-    const result = await runAiLegacyMigration(
-      { prisma, logger },
-      { apply: false, snapshotPath, allowUndecryptable: args['allow-undecryptable'] === true },
-    );
+    const result = await runAiLegacyMigration({ prisma, logger }, { apply: args.apply === true, snapshotPath });
     process.stdout.write(`${formatReport(result.report)}\n`);
     for (const problem of result.problems) process.stderr.write(`PROBLEM: ${problem}\n`);
     return result.exitCode;
   } finally {
     await prisma.$disconnect();
-  }
-}
-
-/**
- * `--apply` boots the application context: `importKey` needs the platform AI
- * slice wired as in the server (its settings, registry and job queue), which is
- * the one thing a bare Prisma client cannot give it. Background work is switched
- * off first so this process claims no job and runs no sweep while it works.
- */
-async function runApplyInApplication(logger: MigrateLogger, snapshotPath: string, allowUndecryptable: boolean): Promise<number> {
-  process.env.JOBS_WORKER_MODE = 'off';
-  process.env.JOBS_REAPER_ENABLED = 'false';
-  process.env.DB_BACKUP_SCHEDULE_ENABLED = 'false';
-  process.env.KG_MIGRATE_SCHEDULE_ENABLED = 'false';
-
-  // `require`, not `import()`: under NodeNext a dynamic import of a relative path
-  // is resolved as ESM and wants an extension. These loads must also happen AFTER
-  // the environment above is set, because the job and schedule modules read it
-  // while they are constructed.
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const { NestFactory } = require('@nestjs/core') as typeof import('@nestjs/core');
-  const { AppModule } = require('../../app.module') as typeof import('../../app.module');
-  const { PrismaService } = require('../../prisma/prisma.service') as typeof import('../../prisma/prisma.service');
-  const { UserAiKeysService: UserAiKeysServiceToken } =
-    require('@marinoscar/platform-api/ai') as typeof import('@marinoscar/platform-api/ai');
-  /* eslint-enable @typescript-eslint/no-require-imports */
-
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn', 'log'] });
-  try {
-    const prisma = app.get(PrismaService);
-    let userAiKeys: UserAiKeysService;
-    try {
-      userAiKeys = app.get(UserAiKeysServiceToken, { strict: false });
-    } catch {
-      throw new Error(
-        'The platform UserAiKeysService is not part of this build\'s application graph. --apply needs the ' +
-          'platform AI slice mounted (AiModule.forRoot, issue #473). Nothing was changed.',
-      );
-    }
-    const result = await runAiLegacyMigration(
-      { prisma, userAiKeys, logger },
-      { apply: true, snapshotPath, allowUndecryptable },
-    );
-    process.stdout.write(`${formatReport(result.report)}\n`);
-    for (const problem of result.problems) process.stderr.write(`PROBLEM: ${problem}\n`);
-    return result.exitCode;
-  } finally {
-    await app.close();
   }
 }
 

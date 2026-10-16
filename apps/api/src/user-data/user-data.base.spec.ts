@@ -150,10 +150,6 @@ describe('FilesUserDataHooks — only unmanaged storage objects are deleted', ()
 
 function credentialsHarness() {
   const prisma = {
-    userAiCredential: {
-      count: jest.fn().mockResolvedValue(0),
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
     personalAccessToken: { count: jest.fn().mockResolvedValue(0) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
   };
@@ -166,16 +162,14 @@ function credentialsHarness() {
 }
 
 describe('CredentialsUserDataHooks', () => {
-  it('counts AI keys (platform and legacy) and the access tokens that are not already revoked', async () => {
+  it('counts the AI keys and the access tokens that are not already revoked', async () => {
     const { hooks, prisma, aiKeys } = credentialsHarness();
-    aiKeys.count.mockResolvedValue(2);
-    prisma.userAiCredential.count.mockResolvedValue(1);
+    aiKeys.count.mockResolvedValue(3);
     prisma.personalAccessToken.count.mockResolvedValue(2);
 
     await expect(hooks.summarize(USER_ID)).resolves.toEqual({ aiKeys: 3, accessTokens: 2 });
 
     expect(aiKeys.count).toHaveBeenCalledWith(USER_ID);
-    expect(prisma.userAiCredential.count).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.personalAccessToken.count).toHaveBeenCalledWith({
       where: { userId: USER_ID, revokedAt: null },
     });
@@ -183,15 +177,12 @@ describe('CredentialsUserDataHooks', () => {
 
   it('erases AI keys and revokes access tokens through the services that own them, and audits the counts', async () => {
     const { hooks, prisma, aiKeys, pat } = credentialsHarness();
-    aiKeys.removeAll.mockResolvedValue(1);
-    prisma.userAiCredential.deleteMany.mockResolvedValue({ count: 1 });
+    aiKeys.removeAll.mockResolvedValue(2);
     pat.revokeAllForUser.mockResolvedValue(3);
 
     await hooks.purge(USER_ID);
 
     expect(aiKeys.removeAll).toHaveBeenCalledWith(USER_ID);
-    // Until #477 drops the table: the legacy rows go too, filtered by the user only.
-    expect(prisma.userAiCredential.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(pat.revokeAllForUser).toHaveBeenCalledWith(USER_ID);
     expect(prisma.auditEvent.create).toHaveBeenCalledWith({
       data: {

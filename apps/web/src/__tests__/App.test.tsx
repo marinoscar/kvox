@@ -158,6 +158,23 @@ vi.mock('../pages/TranscriptHistoryPage', () => ({
   default: () => <h1>Transcript History Page</h1>,
 }));
 
+// Issue #477, epic #472. The AI pages are the platform's
+// (`@marinoscar/platform-web/ai/ui`) and the admin AI page is this app's binding
+// over one of them. Same rationale as every stand-in above: the pages' own
+// suites cover what they render, so distinct stand-ins make the assertions
+// below about `App.tsx`'s wiring (path, permission, feature gate). Only the
+// pages are replaced; `RequireAiEnabled` is a separate entry and stays REAL, so
+// the feature half of each gate is exercised over the shell's `GET /api/ai/config`.
+vi.mock('../pages/Admin/AiSettingsPage', () => ({
+  default: () => <h1>Admin AI</h1>,
+}));
+vi.mock('@marinoscar/platform-web/ai/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/ai/ui')>()),
+  UserAiKeysPage: () => <h1>User AI Keys Page</h1>,
+  AiModelsPage: () => <h1>Admin AI Models</h1>,
+  AiUsagePage: () => <h1>Admin AI Usage</h1>,
+}));
+
 const API_BASE = '*/api';
 
 /** Overrides `GET /auth/me` for one test, so the route tree sees this user. */
@@ -799,5 +816,115 @@ describe('App', () => {
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();
     });
+  });
+  /**
+   * Issue #477, epic #472. The four AI routes, each gated on the permission the
+   * platform's AI controllers enforce AND on the AI feature, except the admin
+   * `AI` route, which is where AI is switched on and must stay reachable while
+   * it is off (AI rule 5). The feature half is the shell's one
+   * `GET /api/ai/config` answer, served per test.
+   */
+  describe('AI routes (#477)', () => {
+    function serveAi(enabled: boolean) {
+      server.use(
+        http.get(`${API_BASE}/ai/config`, () =>
+          HttpResponse.json({ data: { enabled, keyPolicy: 'byok', providers: [] } }),
+        ),
+      );
+    }
+
+    function renderAt(path: string) {
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>,
+      );
+    }
+
+    it('shows /settings/ai to a holder of ai:use while AI is on', async () => {
+      signInAs(['ai:use']);
+      serveAi(true);
+      renderAt('/settings/ai');
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: 'User AI Keys Page' })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it('redirects /settings/ai away for a user without ai:use', async () => {
+      signInAs(['user_settings:read']);
+      serveAi(true);
+      renderAt('/settings/ai');
+
+      await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      expect(screen.queryByRole('heading', { name: 'User AI Keys Page' })).not.toBeInTheDocument();
+    });
+
+    it('redirects /settings/ai away while AI is off, even for a holder of ai:use', async () => {
+      signInAs(['ai:use']);
+      serveAi(false);
+      renderAt('/settings/ai');
+
+      await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      expect(screen.queryByRole('heading', { name: 'User AI Keys Page' })).not.toBeInTheDocument();
+    });
+
+    it('keeps /admin/settings/ai reachable while AI is off — it is the switch', async () => {
+      signInAs(['ai_config:read'], ['admin']);
+      serveAi(false);
+      renderAt('/admin/settings/ai');
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: 'Admin AI' })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it('redirects /admin/settings/ai away for system_settings:read without ai_config:read', async () => {
+      signInAs(['system_settings:read'], ['admin']);
+      serveAi(true);
+      renderAt('/admin/settings/ai');
+
+      await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      expect(screen.queryByRole('heading', { name: 'Admin AI' })).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['/admin/settings/ai/models', 'Admin AI Models'],
+      ['/admin/settings/ai/usage', 'Admin AI Usage'],
+    ])('shows %s to an ai_config:read holder while AI is on', async (path, heading) => {
+      signInAs(['ai_config:read'], ['admin']);
+      serveAi(true);
+      renderAt(path);
+
+      await waitFor(() => expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument(), {
+        timeout: 5000,
+      });
+      // Isolation: never the `AI` page's stand-in.
+      expect(screen.queryByRole('heading', { name: 'Admin AI' })).not.toBeInTheDocument();
+    });
+
+    it.each(['/admin/settings/ai/models', '/admin/settings/ai/usage'])(
+      'redirects %s away while AI is off',
+      async (path) => {
+        signInAs(['ai_config:read'], ['admin']);
+        serveAi(false);
+        renderAt(path);
+
+        await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      },
+    );
+
+    it.each(['/admin/settings/ai/models', '/admin/settings/ai/usage'])(
+      'redirects %s away for a user without ai_config:read',
+      async (path) => {
+        signInAs(['user_settings:read']);
+        serveAi(true);
+        renderAt(path);
+
+        await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      },
+    );
   });
 });

@@ -1,0 +1,15 @@
+-- Drop the legacy per-user AI key table (issue #477, epic #472).
+--
+-- user_ai_credentials held each user's encrypted provider key for the retired
+-- application-owned AI stack. Keys now live in the platform's user_ai_keys
+-- table, written through the platform AI slice. The table is app-owned (not an
+-- org table, no row-level security) and nothing in the code base reads it any
+-- more.
+--
+-- IRREVERSIBLE. The rows (ciphertext) are gone for good once this runs; the
+-- only way back is a database restored from a backup taken before the upgrade.
+-- The legacy AI settings and key migration command must therefore have run on
+-- every deployment on the previous build first
+-- (docs/runbooks/ai-platform-migration.md). Dropping the table also drops its
+-- unique index (user_id, provider) and its foreign key to users.
+DROP TABLE "user_ai_credentials";

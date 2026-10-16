@@ -4,7 +4,7 @@
  * the note it came from.
  *
  * WHEN IT RENDERS: the page mounts it only for `graph:read`; it then asks
- * `GET /api/ai/config` whether connected knowledge is on, and only then
+ * `GET /api/ai-tasks/config` whether connected knowledge is on, and only then
  * lists `GET /api/graph/proposals?status=draft&limit=5`. No drafts → nothing
  * at all (a heading over nothing is the one thing a Home section must never
  * be, `NeedsAttention`'s rule). A failed read → nothing either: Home never
@@ -30,7 +30,7 @@ import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAiConfig } from '../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useIsMounted } from '../../hooks/useIsMounted';
 import { useVisiblePolling } from '../../hooks/useVisiblePolling';
 import { listProposals } from '../../services/graph';
@@ -50,7 +50,7 @@ export function GraphReviewCard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMounted = useIsMounted();
-  const { config } = useAiConfig();
+  const { config } = useAiTasksConfig();
   const graphOn = config?.graphEnabled === true;
 
   const [drafts, setDrafts] = useState<ProposalSummary[] | null>(null);

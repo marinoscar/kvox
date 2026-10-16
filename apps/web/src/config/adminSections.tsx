@@ -38,6 +38,8 @@ import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import ModelTrainingOutlinedIcon from '@mui/icons-material/ModelTrainingOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 // Doctor (#464, epic #462) — the platform's health-check page, declared by the
 // package (title, description, path, `system_settings:read`) and appended below.
@@ -85,6 +87,9 @@ import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
  *   - `push:read`             → the push-config controller (#355)
  *   - `storage_config:read`   → the platform's storage-config controller
  *                               (`@marinoscar/platform-api/storage`)
+ *   - `ai_config:read`        → the platform's AI admin controllers
+ *                               (`@marinoscar/platform-api/ai`: config, models,
+ *                               usage) and `GET /api/ai-tasks/settings`
  *
  * `Users & Allowlist` gates on `users:read` alone even though it hosts data
  * from two controllers (Users → `users:read`, Allowlist → `allowlist:read`).
@@ -215,36 +220,31 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         permission: 'system_settings:read',
       },
       {
-        // Issue #55, epic #45. `system_settings:read` is the string
-        // `ai-settings.controller.ts` enforces on its GET — the registry never
-        // invents a permission, it mirrors one. As with `Transcription` above,
-        // it is literally the same row: this page edits the `ai` NAMESPACE of
-        // the `global` system_settings document, which
-        // `system-settings.controller.ts` already gates on exactly these
-        // strings, so a permission pair of its own would mean the same bytes
-        // were reachable under two different authorities.
+        // Issue #55, epic #45; the platform's since #477 (epic #472). The page is
+        // the platform AI slice's `AiConfigPage` (`@marinoscar/platform-web/ai/ui`),
+        // with this app's task-model, graph and ceiling sections in its
+        // `Sections` slot. `ai_config:read` is the exact string the platform's
+        // `ai-admin.controller` enforces on `GET /api/admin/ai/config`
+        // (`ai_config:write` on the writes, which the PAGE gates by disabling
+        // its controls), and the app's own `GET /api/ai-tasks/settings`. It
+        // replaced `system_settings:read`: the AI policy has a permission pair
+        // of its own now, because a wrong change reaches every user of the
+        // deployment at once. An admin role seeded before #473 must hold it.
         //
-        // ⚠ THE CONTRAST WITH `Transcription` IS THE INTERESTING PART: that
-        // card's page holds a DEPLOYMENT API key, and this one holds NONE.
-        // Epic #45 has no deployment-wide AI key — every key belongs to an
-        // individual user (`/settings/ai`) and is billed to their own provider
-        // account, and `ai-settings.schema.ts` carries a compile-time proof
-        // that no secret-bearing field can enter this settings document. So
-        // this card is policy only, and the page says so in its own copy
-        // rather than leaving an administrator to hunt for a key field that
-        // does not exist.
+        // ⚠ NO `feature` ON THIS CARD, AND THAT IS THE RULE (AI rule 5). This is
+        // where AI is switched on, so it must stay reachable while AI is off;
+        // the `AI models` and `AI usage` cards below, and the user's `AI
+        // Provider` card, carry `feature: 'ai'` and are hidden until it is on.
         //
-        // Saving needs `system_settings:write`, which the PAGE gates
-        // internally by disabling its controls: the card gate is about
-        // REACHABILITY, and "which models may this deployment use, and under
-        // what ceilings" is worth reading for anyone answering "why was my
-        // note refused".
+        // The page holds no key of the caller's: every AI key a user spends is
+        // their own (`/settings/ai`), and the deployment may hold provider keys
+        // under its key policy, written only through the platform page.
         title: 'AI',
         description:
-          'Choose which AI models this deployment permits, and the token, timeout and document ceilings every generation runs under.',
+          'Switch AI on, choose the key policy and providers, and set which model each task runs on and the ceilings every generation runs under.',
         Icon: AutoAwesomeOutlinedIcon,
         path: '/admin/settings/ai',
-        permission: 'system_settings:read',
+        permission: 'ai_config:read',
       },
       {
         // Issue #258, epic #254. `system_settings:read` is the string
@@ -314,6 +314,38 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: CloudOutlinedIcon,
         path: '/admin/settings/storage',
         permission: 'storage_config:read',
+      },
+      {
+        // Issue #477, epic #472. The platform AI slice's `AiModelsPage`,
+        // APPENDED last in `General` so no card a reader has learnt moves.
+        // `ai_config:read` is the string the platform's `ai-admin.controller`
+        // enforces on `GET /api/admin/ai/models` (`ai_config:write` on enabling
+        // a model, refreshing the catalogue and editing a model's limits, which
+        // the page gates by disabling its controls). `feature: 'ai'`: with AI
+        // off there is no catalogue worth showing, and the `AI` card above is
+        // where an admin switches it back on.
+        title: 'AI models',
+        description:
+          'The model catalogue: what each model can do, which ones users may call, and each model’s limits.',
+        Icon: ModelTrainingOutlinedIcon,
+        path: '/admin/settings/ai/models',
+        permission: 'ai_config:read',
+        feature: 'ai',
+      },
+      {
+        // Issue #477, epic #472. The platform AI slice's `AiUsagePage`.
+        // `ai_config:read` is the string `ai-usage-admin.controller` enforces
+        // on `GET /api/admin/ai/usage` (every user's usage, by user, model,
+        // provider, key source or feature). `feature: 'ai'`, like `AI models`.
+        // Nested UNDER the `AI` route, which `settingsPageTitle`'s
+        // longest-prefix rule titles "AI usage", not "AI".
+        title: 'AI usage',
+        description:
+          'Calls, tokens and cost across the deployment, grouped by user, model, provider or feature.',
+        Icon: InsightsOutlinedIcon,
+        path: '/admin/settings/ai/usage',
+        permission: 'ai_config:read',
+        feature: 'ai',
       },
     ],
   },

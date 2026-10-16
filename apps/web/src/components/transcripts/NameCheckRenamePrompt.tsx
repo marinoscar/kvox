@@ -8,7 +8,7 @@
  * It is a NUDGE, so unlike the explicit "Fix names with AI" action it is shown
  * only when the check could actually run — a key saved and AI enabled. An
  * unsolicited prompt that opens onto "add your key first" is a nag, not a help.
- * That needs `useAiConfig()`, and this component exists so the page never has
+ * That needs `useAiTasksConfig()`, and this component exists so the page never has
  * to read it on load: it is mounted only after a rename has SAVED (see
  * `TranscriptPage`), so the config request happens then, and at most once per
  * prompt.
@@ -17,7 +17,7 @@
 import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
 
-import { useAiConfig } from '../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 
 export interface NameCheckRenamePromptProps {
   name: string;
@@ -30,7 +30,7 @@ export function nameCheckPromptMessage(name: string): string {
 }
 
 export function NameCheckRenamePrompt({ name, onCheck, onDismiss }: NameCheckRenamePromptProps) {
-  const { canGenerate, isLoading } = useAiConfig();
+  const { canGenerate, isLoading } = useAiTasksConfig();
 
   return (
     <Snackbar

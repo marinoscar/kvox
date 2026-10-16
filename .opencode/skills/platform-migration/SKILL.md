@@ -24,7 +24,7 @@ KVox never authors platform migrations. There is no `db:promote` and no changese
 
 ## A. Change a KVox table
 
-1. Edit the fragment of the domain in `apps/api/prisma/fragments/` (`transcripts`, `notes`, `search`, `graph`, `ask`, `ai-credentials`).
+1. Edit the fragment of the domain in `apps/api/prisma/fragments/` (`transcripts`, `notes`, `search`, `graph`, `ask`).
 2. `npm run db:compose`.
 3. `npm run prisma:migrate:dev -- --name <snake_case_name>`.
 4. `npm run prisma:generate`.

@@ -1,22 +1,24 @@
 /**
  * "Task models" — the per-task model map `ai.taskModels` on
  * `/admin/settings/ai` (issue #361, contract from #360; spec
- * `docs/specs/ontology.md` §20).
+ * `docs/specs/ontology.md` §20). Since #477 it is mounted in the `Sections`
+ * slot of the platform's `AiConfigPage` (`AiTasksSettingsSections`), and reads
+ * and writes `GET|PUT /api/ai-tasks/settings`.
  *
  * One row per connected-knowledge task, IN THE ORDER THE API LISTS THEM and
- * with the API's own label and description: `AiSettingsAdminView.tasks` is the
- * single source of that copy, so nothing here hardcodes a task name.
+ * with the API's own label and description (`AiTasksSettingsView.tasks`, with a
+ * built-in fallback), so nothing here hardcodes a task name.
  *
  * =============================================================================
  * THE THREE STATES A ROW CAN BE IN, AND WHICH ONES BLOCK A SAVE
  * =============================================================================
  *
- *   • A MODEL NO LONGER PERMITTED. The row's current value is not in the
- *     page's DRAFT permitted list — somebody removed it above. It stays a
- *     visible, selectable option (dropping it would silently put the task back
- *     on Default, a policy change nobody asked for) and it is flagged. This one
- *     BLOCKS the save — {@link taskModelsHaveError} — exactly like the page's
- *     `defaultModel` handling, which this mirrors.
+ *   • A MODEL NO LONGER PERMITTED. The row's current value is not an enabled
+ *     model — somebody disabled it on the AI models page. It stays a visible,
+ *     selectable option (dropping it would silently put the task back on
+ *     Default, a policy change nobody asked for) and it is flagged. This one
+ *     BLOCKS the save — {@link taskModelsHaveError} — exactly like the default
+ *     model's handling in `AiModelLimits`, which this mirrors.
  *
  *   • A MODEL THAT LACKS A CAPABILITY the task requires. A WARNING, never a
  *     blocker: the server enforces it on save (400 `model_lacks_capability`)
@@ -24,9 +26,8 @@
  *     select was rejected — a warning teaches WHY a model is unsuitable, a
  *     missing option does not.
  *
- *   • A MODEL WHOSE CAPABILITIES ARE UNKNOWN — one added to the permitted list
- *     in this unsaved draft and absent from the catalogue. The page cannot
- *     judge it, so it says the server will.
+ *   • A MODEL WHOSE CAPABILITIES ARE UNKNOWN — one the catalogue does not
+ *     describe. The page cannot judge it, so it says the server will.
  *
  * Default is the empty string in the select and an ABSENT KEY in the map: the
  * API replaces `taskModels` wholesale, so dropping a key is how a task returns
@@ -57,7 +58,7 @@ import type {
   AiTaskModel,
   AiTaskModelStatus,
   AiTaskReasoningEffort,
-} from '../../services/ai';
+} from '../../services/aiTasks';
 
 export type TaskModelsDraft = Partial<Record<AiTaskKey, AiTaskModel>>;
 
@@ -67,7 +68,7 @@ export interface AiTaskModelsProps {
   tasks: AiTaskDefinition[];
   value: TaskModelsDraft;
   onChange: (next: TaskModelsDraft) => void;
-  /** The page's CURRENT DRAFT permitted list — not the saved one. */
+  /** The enabled models (`GET /api/ai-tasks/settings`'s `models`). */
   permittedModelIds: string[];
   defaultModel: string;
   /** Flags per model id; `undefined` means "not known until the server sees it". */
@@ -236,7 +237,9 @@ export function AiTaskModels({
                   sx={{ width: { xs: '100%', sm: 240 }, flexShrink: 0 }}
                   slotProps={DEFAULT_SELECT_SLOT_PROPS}
                 >
-                  <MenuItem value="">{`Default (${defaultModel})`}</MenuItem>
+                  <MenuItem value="">
+                    {defaultModel ? `Default (${defaultModel})` : 'Default (no default model)'}
+                  </MenuItem>
                   {modelOptions.map((model) => (
                     <MenuItem key={model} value={model}>
                       {model}

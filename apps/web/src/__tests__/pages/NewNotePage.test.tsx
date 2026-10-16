@@ -188,7 +188,7 @@ beforeEach(() => {
     HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'Not found' }, { status: 404 });
 
   server.use(
-    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig() })),
+    http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig() })),
     http.get(`${API_BASE}/note-templates`, ({ request }) => {
       templateListQueries.push(new URL(request.url).search);
       return HttpResponse.json({
@@ -239,7 +239,7 @@ async function waitForForm() {
 describe('NewNotePage — the AI key gate', () => {
   it('renders AiKeyRequired and no form when the caller has no key', async () => {
     server.use(
-      http.get(`${API_BASE}/ai/config`, () =>
+      http.get(`${API_BASE}/ai-tasks/config`, () =>
         HttpResponse.json({ data: aiConfig({ keyConfigured: false }) }),
       ),
     );
@@ -684,7 +684,7 @@ describe('NewNotePage — choosing a model', () => {
     renderPage('/notes/new?transcriptId=t1');
     await waitForForm();
 
-    // The label `GET /api/ai/config` published, never the vendor id.
+    // The label `GET /api/ai-tasks/config` published, never the vendor id.
     expect(screen.getByLabelText('Model')).toHaveTextContent('GPT-4o mini');
     expect(screen.getByText("Defaults to the template's model.")).toBeInTheDocument();
   });

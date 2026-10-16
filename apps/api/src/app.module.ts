@@ -46,7 +46,6 @@ import { telemetryModule } from './platform/telemetry/telemetry.config';
 import { LoggerModule } from './common/logger/logger.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
-import { AiModule } from './ai/ai.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
 import { NotesModule } from './notes/notes.module';
@@ -214,7 +213,7 @@ import configuration from './config/configuration';
 
     // The platform's telemetry slice (#471, epic #467): the `telemetry` settings
     // and runtime export gate, the GreptimeDB connection, the explorer, the
-    // dashboard, the stack-agent surface, the assistant (unavailable until #472)
+    // dashboard, the stack-agent surface, the assistant (over the platform AI slice, #472)
     // and the `telemetry.*` jobs, at `/api/admin/telemetry/*` and
     // `GET /api/telemetry/config` (`telemetry:read|write|query`). Replaces the
     // previous observability stack. The SDK that emits traces and metrics is `instrumentation.ts`.
@@ -252,9 +251,8 @@ import configuration from './config/configuration';
     // realtime / runs routes, `GET /api/ai/features`, `/api/ai/usage`, `/api/admin/ai/*`
     // (policy, model catalogue, deployment and organization keys, usage), the `ai.*`
     // job types and the kill switch. `AI_TARGET_RESOLVER` is this app's
-    // `KvoxAiTargetResolver`, which keeps routing by connected-knowledge task. It runs
-    // BESIDE the old `AiModule` below until #477 deletes that one; the two share the
-    // `ai` namespace row and the old module's routes are all outside `/api/ai/*`.
+    // `KvoxAiTargetResolver`, which keeps routing by connected-knowledge task. The
+    // retired `apps/api/src/ai/` stack and its `user_ai_credentials` table are gone (#477).
     aiModule,
     // This app's side of the AI slice: `/api/ai-tasks/config` (the capability probe that
     // used to be `GET /api/ai/config`) and `/api/ai-tasks/settings` (task models).
@@ -263,21 +261,9 @@ import configuration from './config/configuration';
     // the platform `AiService`. Global; BEFORE the features that inject it.
     KvoxAiModule,
 
-    // AI (#47, epic #45): the provider framework, the OpenAI provider, the
-    // deployment policy surface, the PER-USER credential surface and the
-    // capability probe. After SettingsModule because it writes the `ai`
-    // namespace through `SystemSettingsService.patchSettings` rather than
-    // touching `system_settings` itself — the same arrangement
-    // TranscriptionModule and DbBackupModule have with their namespaces.
-    //
-    // It deliberately does NOT import CredentialsModule: this epic stores no
-    // deployment AI key. Each user's key lives in `user_ai_credentials` behind
-    // a cascading foreign key. See `AiModule`'s own header.
-    AiModule,
-
-    // Notes (#49, epic #45): the `note.generate` pipeline. AFTER AiModule
-    // (provider registry, deployment policy, the per-user credential service)
-    // and AFTER TranscriptsModule, which it imports for `materialize()` — a
+    // Notes (#49, epic #45): the `note.generate` pipeline. AFTER the AI
+    // modules above (`KvoxAiModule` is global) and AFTER TranscriptsModule,
+    // which it imports for `materialize()` — a
     // note is generated from the transcript AS THE USER CORRECTED IT, never
     // from the AI's original result.
     NotesModule,
@@ -324,17 +310,16 @@ import configuration from './config/configuration';
     // depends on somebody else's import list, which is exactly the kind of
     // action-at-a-distance this file exists to make visible.
     //
-    // It imports AiModule (registry, policy, the per-user credential service),
-    // JobsModule and PrismaModule, and NEITHER TranscriptsModule NOR
-    // NotesModule — it reads both documents' rows through Prisma directly, so
+    // It imports JobsModule and PrismaModule (the AI port, `KVOX_AI`, is
+    // global), and NEITHER TranscriptsModule NOR NotesModule — it reads both documents' rows through Prisma directly, so
     // the dependency edge runs one way and no `forwardRef` is needed anywhere.
     SearchIndexingModule,
 
     // The Danger Zone (#80): a user deleting their own data in bulk. LAST of
     // the feature modules because it imports several of them and is imported by
     // none — it reuses `NotesService`, `TranscriptPipelineService`,
-    // `ObjectsService`, `NoteTemplatesService`, `PatService` and
-    // `UserAiCredentialsService` rather than reimplementing any of the per-item
+    // `ObjectsService`, `NoteTemplatesService` and
+    // `PatService` rather than reimplementing any of the per-item
     // deletion machinery those already own.
     UserDataModule,
 

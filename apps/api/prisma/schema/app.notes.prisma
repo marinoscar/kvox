@@ -15,8 +15,7 @@
 // column, enum member and index below is named for and justified by
 // docs/specs/notes.md §1, §4, §6 and §7 — read those sections for the full
 // reasoning; this comment restates only what has to live beside the code to
-// stay correct. `user_ai_credentials` (spec §4.2) is issue #47's table, not
-// this one, and does not appear here.
+// stay correct.
 //
 // -----------------------------------------------------------------------------
 // owner_id CASCADES; the three source pointers and template_id RESTRICT or

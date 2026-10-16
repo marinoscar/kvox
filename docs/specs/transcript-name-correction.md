@@ -11,8 +11,9 @@
 > the `thorough` mode plus its discovery pass on top of #328's pipeline
 > (#330). Builds on `docs/specs/transcription.md` (the transcript pipeline
 > and its `TranscriptionProvider` contract) and `docs/specs/notes.md` §2.5–3.3
-> (the `AiProvider` interface, per-user credentials, and the token-budget
-> refusal this feature reuses verbatim).
+> (the AI call layer, per-user keys, and the token-budget
+> refusal this feature reuses verbatim; since #475 to #477 the call layer is
+> `KvoxAi` over the platform AI slice, see `notes.md` §2).
 
 ## 1. The problem, and the framing
 
@@ -206,9 +207,9 @@ request) and each is shown with:
   context" was rejected as the default).
 
 The model answers per item: `verdict` (`replace`/`keep`), `replacement`,
-`confidence` (0–1), `reason` (a few words). The request sets
-`responseFormat: 'json'` on `AiGenerateRequest` (`apps/api/src/ai/providers/
-ai-provider.interface.ts`) — a **hint**, not a guarantee, so the answer is
+`confidence` (0–1), `reason` (a few words). The call is a plain `KvoxAi.streamText` (feature `transcript_name_check`) whose
+prompt asks for JSON — a request, not a guarantee (the original design set a
+`responseFormat: 'json'` hint on the retired `AiGenerateRequest`), so the answer is
 parsed defensively (`extractJsonObject` tolerates a Markdown fence, preamble
 prose and trailing prose) and validated with Zod. A malformed answer earns
 one retry with an explicit "return only valid JSON" instruction appended; a
@@ -311,9 +312,9 @@ under-state a thorough run's true cost, never over-state it.
 ### 5.4 Every model request is billed to the user's own account
 
 Both modes run entirely on **the requesting user's own AI provider key**
-(`user_ai_credentials`, never a deployment-wide credential — `docs/specs/
+(the platform's `user_ai_keys`, never a deployment-wide credential — `docs/specs/
 notes.md` §9's bring-your-own-key posture, reused verbatim). `assertWithinBudget`
-/ `computeTokenBudget` (`apps/api/src/ai/ai-token-budget.ts`, shared with
+/ `computeTokenBudget` (`apps/api/src/ai-port/ai-token-budget.ts`, shared with
 note generation) refuse a request that would not fit the resolved model's
 context window **before** any call is made — a batch too large to fit is
 split in half rather than the whole run being refused, and only a *single*

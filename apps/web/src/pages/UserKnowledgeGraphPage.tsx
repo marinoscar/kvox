@@ -52,7 +52,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { AttributeDefsBrowser } from '../components/graph/settings/AttributeDefsBrowser';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import {
   AUTO_LINK_MAX,
@@ -116,7 +116,7 @@ function Section({ title, id, children }: { title: string; id: string; children:
 export default function UserKnowledgeGraphPage() {
   const { preferences, isLoading, loadError, saveState, saveError, update } =
     useGraphPreferences();
-  const { config: aiConfig, isLoading: aiLoading } = useAiConfig();
+  const { config: aiConfig, isLoading: aiLoading } = useAiTasksConfig();
   const { ontology, refresh: refreshOntology } = useGraphOntology();
 
   // Slider values while dragging; committed on release.

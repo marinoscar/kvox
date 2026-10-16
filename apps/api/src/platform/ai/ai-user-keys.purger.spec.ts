@@ -13,31 +13,31 @@ import { AiUserKeysPurger } from './ai-user-keys.purger';
 
 const USER_ID = 'user-1';
 
-function harness(views: Array<{ provider: string; configured: boolean }>) {
-  const keys = {
-    list: jest.fn().mockResolvedValue(views),
-    remove: jest.fn().mockResolvedValue(undefined),
-  };
+function harness(providers: string[]) {
+  const keys = { remove: jest.fn().mockResolvedValue(undefined) };
   const moduleRef = { get: jest.fn().mockReturnValue(keys) };
-  const purger = new AiUserKeysPurger(moduleRef as never);
+  const prisma = {
+    userAiKey: {
+      findMany: jest.fn().mockResolvedValue(providers.map((provider) => ({ provider }))),
+      count: jest.fn().mockResolvedValue(providers.length),
+    },
+  };
+  const purger = new AiUserKeysPurger(moduleRef as never, prisma as never);
 
-  return { purger, keys, moduleRef };
+  return { purger, keys, moduleRef, prisma };
 }
 
 describe('AiUserKeysPurger', () => {
   it('resolves the platform service anywhere in the application graph', async () => {
-    const { purger, moduleRef } = harness([]);
+    const { purger, moduleRef } = harness(['openai']);
 
     await purger.removeAll(USER_ID);
 
     expect(moduleRef.get).toHaveBeenCalledWith(UserAiKeysService, { strict: false });
   });
 
-  it('removes one key per configured provider and returns how many', async () => {
-    const { purger, keys } = harness([
-      { provider: 'openai', configured: true },
-      { provider: 'anthropic', configured: true },
-    ]);
+  it('removes one key per stored provider and returns how many', async () => {
+    const { purger, keys } = harness(['openai', 'anthropic']);
 
     await expect(purger.removeAll(USER_ID)).resolves.toBe(2);
 
@@ -45,25 +45,21 @@ describe('AiUserKeysPurger', () => {
     expect(keys.remove).toHaveBeenCalledWith(USER_ID, 'anthropic');
   });
 
-  it('skips a provider the user never configured', async () => {
-    const { purger, keys } = harness([
-      { provider: 'openai', configured: true },
-      { provider: 'anthropic', configured: false },
-    ]);
+  it('reads the stored rows, so keys saved before AI was switched off are still erased', async () => {
+    const { purger, prisma } = harness(['openai']);
 
-    await expect(purger.removeAll(USER_ID)).resolves.toBe(1);
+    await purger.removeAll(USER_ID);
 
-    expect(keys.remove).toHaveBeenCalledTimes(1);
-    expect(keys.remove).not.toHaveBeenCalledWith(USER_ID, 'anthropic');
+    expect(prisma.userAiKey.findMany).toHaveBeenCalledWith({
+      where: { userId: USER_ID },
+      select: { provider: true },
+    });
   });
 
-  it('counts only configured providers', async () => {
-    const { purger } = harness([
-      { provider: 'openai', configured: true },
-      { provider: 'anthropic', configured: false },
-    ]);
+  it('counts the stored keys', async () => {
+    const { purger } = harness(['openai', 'anthropic']);
 
-    await expect(purger.count(USER_ID)).resolves.toBe(1);
+    await expect(purger.count(USER_ID)).resolves.toBe(2);
   });
 
   it('removes nothing for a user with no keys', async () => {

@@ -4,9 +4,10 @@
  *
  * A SECTION OF THE EXISTING AI CARD, NOT A CARD OF ITS OWN. `graphEnabled` is a
  * field of the `ai` system-settings namespace, gated by the same
- * `system_settings:read`/`:write` pair the AI card already carries — a second
- * card for one namespace would split one policy across two destinations
- * (Settings UI Pattern rules 1 and 3).
+ * `ai_config:read`/`:write` pair the AI card carries (#477) — a second card for
+ * one namespace would split one policy across two destinations (Settings UI
+ * Pattern rules 1 and 3). It is mounted in the `Sections` slot of the
+ * platform's `AiConfigPage` and saved through `PUT /api/ai-tasks/settings`.
  *
  * ⚠ THE COPY STATES THE COST MODEL, AND THAT IS NOT DECORATION. Every graph
  * request runs on the requesting user's OWN key and bills their own provider
@@ -24,9 +25,9 @@ export interface AiGraphSettingsProps {
   /** The draft `graphEnabled`. */
   value: boolean;
   onChange: (next: boolean) => void;
-  /** The draft master switch (`settings.enabled`), for the "AI is off" notice. */
+  /** Whether AI is switched on deployment-wide (the platform's switch), for the "AI is off" notice. */
   aiEnabled: boolean;
-  /** True for a read-only administrator (`system_settings:read` only). */
+  /** True for a read-only administrator (`ai_config:read` only). */
   disabled: boolean;
 }
 

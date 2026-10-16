@@ -41,9 +41,6 @@ export const KVOX_MODEL_OWNERSHIP: readonly Def[] = [
   user('NoteVersion', 'A snapshot belongs to its note, and so to the note’s owner.'),
   user('NoteExport', 'An export is requested by, and served to, one user.'),
 
-  // AI credentials
-  user('UserAiCredential', 'A user’s own provider key; deliberately never an organization or deployment credential.'),
-
   // Search
   user('SearchChunk', 'Indexed text derived from one user’s documents.'),
   user('SearchEmbedding', 'A vector derived from one user’s indexed text.'),

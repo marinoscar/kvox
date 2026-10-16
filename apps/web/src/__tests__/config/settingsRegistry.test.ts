@@ -158,22 +158,26 @@ describe('visibleSettingsSections — search', () => {
 });
 
 describe('visibleSettingsSections — works identically against USER_SETTINGS_SECTIONS', () => {
-  it('shows every ungated user-settings card, and hides Knowledge graph without graph:write (#369)', () => {
-    const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false);
+  it('shows every ungated user-settings card, and hides Knowledge graph and AI Provider without their permissions (#369, #477)', () => {
+    // The deployment feature map is passed explicitly: `AI Provider` carries
+    // `feature: 'ai'`, and an omitted map fails closed.
+    const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false, '', { ai: true });
 
     expect(titlesOf(result).sort()).toEqual(
       titlesOf(USER_SETTINGS_SECTIONS)
-        .filter((title) => title !== 'Knowledge graph')
+        .filter((title) => title !== 'Knowledge graph' && title !== 'AI Provider')
         .sort(),
     );
     // Its one-card `Knowledge` group collapses with it.
     expect(result.map((section) => section.label)).not.toContain('Knowledge');
 
-    const withGraph = visibleSettingsSections(
+    const withGates = visibleSettingsSections(
       USER_SETTINGS_SECTIONS,
-      (permission) => permission === 'graph:write',
+      (permission) => permission === 'graph:write' || permission === 'ai:use',
+      '',
+      { ai: true },
     );
-    expect(titlesOf(withGraph).sort()).toEqual(titlesOf(USER_SETTINGS_SECTIONS).sort());
+    expect(titlesOf(withGates).sort()).toEqual(titlesOf(USER_SETTINGS_SECTIONS).sort());
   });
 
   it('still matches by title only for the user registry', () => {
@@ -709,11 +713,8 @@ describe('the Operations group (#266)', () => {
         // `system_settings:read` its controller enforces, so it appears for
         // exactly the admin this assertion describes.
         'Transcription',
-        // #55, epic #45 — likewise, and for the same reason: the AI POLICY
-        // lives in the `ai` namespace of the same system_settings row. (There
-        // is no key on that page; the per-user key is `/settings/ai`, in the
-        // other registry entirely.)
-        'AI',
+        // #477 — the `AI` card is NOT here any more: the AI policy has its own
+        // permission pair (`ai_config:read`), which this admin does not hold.
         'Maintenance',
         // #126, epic #118 — likewise, and for the same reason: the About
         // controller enforces `system_settings:read` and nothing of its own,
@@ -884,171 +885,272 @@ describe('the Transcription card (#23)', () => {
 });
 
 /**
- * The two AI cards (#55, epic #45) — one per registry, and the pair is worth
- * testing TOGETHER because the interesting property is the SPLIT between them:
+ * The four AI cards (#55, epic #45; the platform's since #477, epic #472).
  *
- *   `/settings/ai`        the user's own key. No permission, because
- *                         `ai-credentials.controller.ts` enforces none.
- *   `/admin/settings/ai`  the deployment's policy, and NO key at all. Gated on
- *                         `system_settings:read`, the string
- *                         `ai-settings.controller.ts` enforces on its GET.
+ * The pages are the platform AI slice's (`@marinoscar/platform-web/ai/ui`), so
+ * the strings the cards gate on are read off the installed
+ * `@marinoscar/platform-api` package (the controllers and the slice's
+ * permission declarations) rather than off any app controller (Settings UI
+ * Pattern rule 3):
  *
- * Getting either gate wrong has a concrete, opposite failure: a permission on
- * the user card would lock a Viewer out of managing a credential billed to
- * their own account, and a missing (or invented) permission on the admin card
- * would either publish the deployment's policy to everyone or hide it from the
- * administrators who hold the real permission.
+ *   `/settings/ai`              AI Provider: `ai:use` + `feature: 'ai'`
+ *   `/admin/settings/ai`        AI: `ai_config:read`, NO feature (it is the switch)
+ *   `/admin/settings/ai/models` AI models: `ai_config:read` + `feature: 'ai'`
+ *   `/admin/settings/ai/usage`  AI usage: `ai_config:read` + `feature: 'ai'`
+ *
+ * Getting a gate wrong has a concrete, opposite failure: `ai:use` on an admin
+ * card would show the deployment's policy to every user, `ai_config:read` on
+ * the user card would hide key management from the Viewer it is for, a
+ * `feature` on the admin AI card would make AI impossible to switch back on, and
+ * a missing one on the other three would show pages of refused requests while
+ * AI is off.
  */
-describe('the AI cards (#55, epic #45)', () => {
+describe('the AI cards (#477)', () => {
+  const API_SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../api/src');
+  const PLATFORM_AI_DIST = resolve(API_SRC, '../../../node_modules/@marinoscar/platform-api/dist/ai');
+  const read = (relative: string) => readFileSync(resolve(PLATFORM_AI_DIST, relative), 'utf8');
+
+  const aiAdminController = read('config/ai-admin.controller.js');
+  const aiUsageController = read('usage/ai-usage-admin.controller.js');
+  const userKeysController = read('keys/user-ai-keys.controller.js');
+  const aiPermissions = read('ai.permissions.js');
+
+  const adminCards = ADMIN_SECTIONS.flatMap((section) => section.cards);
   const userCard = USER_SETTINGS_SECTIONS.flatMap((section) => section.cards).find(
     (entry) => entry.path === '/settings/ai',
   );
-  const adminCard = ADMIN_SECTIONS.flatMap((section) => section.cards).find(
-    (entry) => entry.path === '/admin/settings/ai',
+  const adminCard = adminCards.find((entry) => entry.path === '/admin/settings/ai');
+  const modelsCard = adminCards.find((entry) => entry.path === '/admin/settings/ai/models');
+  const usageCard = adminCards.find((entry) => entry.path === '/admin/settings/ai/usage');
+
+  /** Every admin card on the AI surface, discovered the way the packaged suite does. */
+  const aiAdminCards = adminCards.filter(
+    (card) => card.feature === 'ai' || /(^|\/)ai(\/|$)/.test(card.path ?? ''),
   );
 
   describe('/settings/ai — the user’s own key', () => {
-    it('is declared in USER_SETTINGS_SECTIONS as "AI Provider"', () => {
-      expect(userCard).toBeDefined();
+    it('is declared in USER_SETTINGS_SECTIONS as "AI Provider", under Account', () => {
       expect(userCard?.title).toBe('AI Provider');
-    });
-
-    it('declares NO permission — the API enforces none on this resource', () => {
-      // `ai-credentials.controller.ts` is `@Auth()` with no permission on all
-      // four of its routes, because the resource is the CALLER'S OWN
-      // credential, scoped by `userId` in the query itself. A gate here would
-      // be an authorization rule the API does not have — and would leave a
-      // user unable to REMOVE their own key from a deployment that had since
-      // revoked their access to the feature it was for.
-      expect(userCard?.permission).toBeUndefined();
-      expect('permission' in (userCard as object)).toBe(false);
-    });
-
-    it('lives under Account, not Security', () => {
-      // `Security` is for credentials THIS application issues and can revoke
-      // (a personal access token). This is a third party's credential, billed
-      // to the user's own provider account.
       const owner = USER_SETTINGS_SECTIONS.find((section) =>
         section.cards.some((entry) => entry.path === '/settings/ai'),
       );
-
       expect(owner?.label).toBe('Account');
+    });
+
+    it('declares ai:use, the string the platform per-user key routes enforce', () => {
+      expect(userCard?.permission).toBe('ai:use');
+      expect(aiPermissions).toContain("id: 'ai:use'");
+      expect(userKeysController).toContain('PERMISSIONS.AI_USE');
+    });
+
+    it('is never confused with a deployment-wide permission', () => {
+      expect(String(userCard?.permission)).not.toMatch(/ai_config|system_settings/);
+    });
+
+    it('declares feature "ai" and is not an alwaysShow escape hatch', () => {
+      expect(userCard?.feature).toBe('ai');
+      expect(userCard?.alwaysShow).toBeUndefined();
     });
 
     it('is routed, not inert', () => {
       expect(userCard?.disabled).toBeFalsy();
-      expect(userCard?.path).toBe('/settings/ai');
     });
 
-    it('is visible to a user holding no permissions whatsoever', () => {
-      // The strongest form of "there is no gate to satisfy".
-      const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false);
+    it('shows to a holder of ai:use while AI is on, and to nobody else', () => {
+      const holder = visibleSettingsSections(
+        USER_SETTINGS_SECTIONS,
+        (permission) => permission === 'ai:use',
+        '',
+        { ai: true },
+      );
+      expect(titlesOf(holder)).toContain('AI Provider');
 
-      expect(titlesOf(result)).toContain('AI Provider');
+      const without = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false, '', {
+        ai: true,
+      });
+      expect(titlesOf(without)).not.toContain('AI Provider');
     });
 
-    it('resolves its route to its own title, not the hub title', () => {
+    it('is hidden while AI is off, for a holder of ai:use, and when the feature map is omitted', () => {
+      const off = visibleSettingsSections(
+        USER_SETTINGS_SECTIONS,
+        (permission) => permission === 'ai:use',
+        '',
+        { ai: false },
+      );
+      expect(titlesOf(off)).not.toContain('AI Provider');
+
+      const omitted = visibleSettingsSections(
+        USER_SETTINGS_SECTIONS,
+        (permission) => permission === 'ai:use',
+      );
+      expect(titlesOf(omitted)).not.toContain('AI Provider');
+    });
+
+    it('resolves its route to its own title, not the hub title, and is findable by title', () => {
       expect(
         settingsPageTitle(
           USER_SETTINGS_SECTIONS,
           USER_HUB_PATH,
           USER_HUB_TITLE,
           '/settings/ai',
+          { ai: true },
         ),
       ).toBe('AI Provider');
-    });
 
-    it('is findable by hub search on its title', () => {
-      const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false, 'ai prov');
-
-      expect(titlesOf(result)).toContain('AI Provider');
+      const found = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => true, 'ai prov', {
+        ai: true,
+      });
+      expect(titlesOf(found)).toContain('AI Provider');
     });
   });
 
-  describe('/admin/settings/ai — the deployment’s policy', () => {
-    it('is declared in ADMIN_SECTIONS as "AI"', () => {
-      expect(adminCard).toBeDefined();
+  describe('/admin/settings/ai — the switch', () => {
+    it('is declared in ADMIN_SECTIONS as "AI", under General', () => {
       expect(adminCard?.title).toBe('AI');
-    });
-
-    it('declares the exact permission the API enforces on GET /api/ai-settings', () => {
-      expect(adminCard?.permission).toBe('system_settings:read');
-    });
-
-    it('is the string `ai-settings.controller.ts` actually enforces', () => {
-      // Read off the API workspace rather than restated, so a rename on either
-      // side fails here instead of in production — the mechanical half of
-      // CLAUDE.md Settings UI Pattern rule 3, same technique as the Operations
-      // group above.
-      const API_SRC = resolve(
-        dirname(fileURLToPath(import.meta.url)),
-        '../../../../api/src',
-      );
-      const controller = readFileSync(resolve(API_SRC, 'ai/ai-settings.controller.ts'), 'utf8');
-      // Issue #465: the permission ids are no longer literals in
-  // `roles.constants.ts` (derived from the platform registries); the committed
-  // catalog `apps/api/prisma/catalog/permissions.json` is the file that lists
-  // every permission the API seeds and enforces, and CI keeps it in sync.
-  const permissionCatalog = readFileSync(
-        resolve(API_SRC, '../prisma/catalog/permissions.json'),
-        'utf8',
-      );
-
-      expect(controller).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
-      expect(permissionCatalog).toContain('"system_settings:read"');
-    });
-
-    it('lives under General, not Operations', () => {
-      // General is configuration an administrator SETS. This is a model
-      // allow-list and a set of ceilings, not a view onto the running system.
       const owner = ADMIN_SECTIONS.find((section) =>
         section.cards.some((entry) => entry.path === '/admin/settings/ai'),
       );
-
       expect(owner?.label).toBe('General');
+    });
+
+    it('declares ai_config:read, which the platform admin controller enforces — never system_settings:read', () => {
+      expect(adminCard?.permission).toBe('ai_config:read');
+      expect(adminCard?.permission).not.toBe('system_settings:read');
+      expect(aiPermissions).toContain("id: 'ai_config:read'");
+      expect(aiPermissions).toContain("id: 'ai_config:write'");
+      expect(aiAdminController).toContain('PERMISSIONS.AI_CONFIG_READ');
+      expect(aiAdminController).toContain('PERMISSIONS.AI_CONFIG_WRITE');
+    });
+
+    it('carries NO feature: it is where AI is switched on, so it stays reachable while AI is off (AI rule 5)', () => {
+      expect(adminCard?.feature).toBeUndefined();
+      expect('feature' in (adminCard as object)).toBe(false);
+
+      const holder = (permission: string) => permission === 'ai_config:read';
+      expect(titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holder, '', { ai: false }))).toContain(
+        'AI',
+      );
+      expect(titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holder))).toContain('AI');
     });
 
     it('is not an alwaysShow escape hatch — the gate must be able to deny it', () => {
       expect(adminCard?.alwaysShow).toBeUndefined();
     });
 
-    it('appears for an admin holding system_settings:read', () => {
-      const result = visibleSettingsSections(
+    it('is hidden from a system_settings admin who lacks ai_config:read, and from a viewer', () => {
+      const settingsAdmin = visibleSettingsSections(
         ADMIN_SECTIONS,
-        (permission) => permission === 'system_settings:read',
+        (permission) => permission.startsWith('system_settings:'),
+        '',
+        { ai: true },
       );
+      expect(titlesOf(settingsAdmin)).not.toContain('AI');
 
-      expect(titlesOf(result)).toContain('AI');
-    });
-
-    it('appears in none of the three surfaces for a viewer', () => {
-      // One assertion covers the hub, the Console rail and the AppBar title
-      // resolver, because all three run this same function.
-      const viewerPermissions = ['user_settings:read', 'user_settings:write'];
-      const result = visibleSettingsSections(ADMIN_SECTIONS, (permission) =>
-        viewerPermissions.includes(permission),
+      const viewer = visibleSettingsSections(
+        ADMIN_SECTIONS,
+        (permission) => ['user_settings:read', 'user_settings:write'].includes(permission),
+        '',
+        { ai: true },
       );
-
-      expect(titlesOf(result)).not.toContain('AI');
+      expect(titlesOf(viewer)).not.toContain('AI');
     });
 
     it('resolves its route to its own title, not the hub title', () => {
       expect(
-        settingsPageTitle(
-          ADMIN_SECTIONS,
-          ADMIN_HUB_PATH,
-          ADMIN_HUB_TITLE,
-          '/admin/settings/ai',
-        ),
+        settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/ai'),
       ).toBe('AI');
     });
   });
 
+  describe('/admin/settings/ai/models and /usage — the platform pages', () => {
+    it('are appended last in General, as AI models then AI usage', () => {
+      const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+      expect(general?.cards.slice(-2).map((card) => card.title)).toEqual(['AI models', 'AI usage']);
+    });
+
+    it.each([
+      ['AI models', modelsCard, '/admin/settings/ai/models'],
+      ['AI usage', usageCard, '/admin/settings/ai/usage'],
+    ] as const)('%s is routed at its path, gated on ai_config:read and feature "ai"', (_title, card, path) => {
+      expect(card?.path).toBe(path);
+      expect(card?.permission).toBe('ai_config:read');
+      expect(card?.feature).toBe('ai');
+      expect(card?.alwaysShow).toBeUndefined();
+      expect(card?.disabled).toBeUndefined();
+    });
+
+    it('read ai_config:read off the controllers they front', () => {
+      // Models and the catalogue are the admin controller's; usage is its own.
+      expect(aiAdminController).toContain('/api/admin/ai/models');
+      expect(aiUsageController).toContain('/api/admin/ai/usage');
+      expect(aiUsageController).toContain('PERMISSIONS.AI_CONFIG_READ');
+    });
+
+    it('show to an ai_config:read holder while AI is on, and hide while it is off or unknown', () => {
+      const holder = (permission: string) => permission === 'ai_config:read';
+
+      const on = titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holder, '', { ai: true }));
+      expect(on).toEqual(expect.arrayContaining(['AI', 'AI models', 'AI usage']));
+
+      const off = titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holder, '', { ai: false }));
+      expect(off).toContain('AI');
+      expect(off).not.toContain('AI models');
+      expect(off).not.toContain('AI usage');
+
+      const unknown = titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holder));
+      expect(unknown).not.toContain('AI models');
+      expect(unknown).not.toContain('AI usage');
+    });
+
+    it('title their nested routes by longest prefix, not as "AI"', () => {
+      const titleOf = (path: string) =>
+        settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, path, { ai: true });
+      expect(titleOf('/admin/settings/ai/models')).toBe('AI models');
+      expect(titleOf('/admin/settings/ai/usage')).toBe('AI usage');
+    });
+  });
+
+  describe('across the whole AI surface (the packaged settings-ai-cards rules)', () => {
+    it('discovers the three admin cards and the one user card', () => {
+      expect(aiAdminCards.map((card) => card.title)).toEqual(['AI', 'AI models', 'AI usage']);
+      expect(userCard).toBeDefined();
+    });
+
+    it('every admin AI card declares exactly one ai_config:* permission, never ai:use', () => {
+      for (const card of aiAdminCards) {
+        expect(['ai_config:read', 'ai_config:write'], card.title).toContain(card.permission);
+      }
+    });
+
+    it('every AI card declares feature "ai" except the admin AI card itself', () => {
+      const missing = [...aiAdminCards, userCard]
+        .filter((card) => card?.path !== '/admin/settings/ai')
+        .filter((card) => card?.feature !== 'ai');
+      expect(missing).toEqual([]);
+    });
+
+    it('an admin holding every OTHER permission still sees no AI card, with the feature on', () => {
+      const result = visibleSettingsSections(
+        ADMIN_SECTIONS,
+        (permission) => !['ai:use', 'ai_config:read', 'ai_config:write'].includes(permission),
+        '',
+        { ai: true },
+      );
+      const shown = titlesOf(result);
+      expect(aiAdminCards.filter((card) => shown.includes(card.title))).toEqual([]);
+    });
+
+    it('registers the "ai" feature key the three gated cards resolve through', () => {
+      expect(registeredSettingsFeatures()).toContain('ai');
+    });
+  });
+
   it('keeps the two destinations distinct — neither shadows the other’s title', () => {
-    // Both hubs are titled 'Settings' and both resolve by longest prefix, so a
-    // path collision here would silently hand one page the other's name.
     expect(
-      settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, '/settings/ai'),
+      settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, '/settings/ai', {
+        ai: true,
+      }),
     ).toBe('AI Provider');
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/ai'),
@@ -1102,10 +1204,11 @@ describe('the About card (#126)', () => {
     // Appended, not inserted: the hub, the rail and the drill-down list all
     // render this array in declaration order, and an insertion would move
     // cards a reader has learnt the position of. Storage (#469) is appended
-    // after About for the same reason.
+    // after About for the same reason, and AI models / AI usage (#477) after
+    // Storage.
     const titles = general?.cards.map((card) => card.title) ?? [];
     expect(titles.indexOf('About')).toBe(titles.indexOf('Maintenance') + 1);
-    expect(titles.at(-1)).toBe('Storage');
+    expect(titles.at(-3)).toBe('Storage');
   });
 
   it('is routed to /admin/settings/about, and is not inert', () => {
@@ -1225,8 +1328,9 @@ describe('the Storage card (#469)', () => {
     'utf8',
   );
 
-  it('is the last General card, in General and not Operations', () => {
-    expect(general?.cards.at(-1)?.title).toBe('Storage');
+  it('is the last General card but the two AI cards #477 appended, in General and not Operations', () => {
+    expect(general?.cards.at(-3)?.title).toBe('Storage');
+    expect(general?.cards.slice(-2).map((card) => card.title)).toEqual(['AI models', 'AI usage']);
   });
 
   it('is routed to /admin/settings/storage, and is not inert', () => {

@@ -6,7 +6,7 @@
  * =============================================================================
  *
  * `/notes/new` and the regenerate dialog ask the identical question over the
- * identical list (`GET /api/ai/config`'s `models`, already narrowed by
+ * identical list (`GET /api/ai-tasks/config`'s `models`, already narrowed by
  * deployment policy), and the one thing that is easy to get wrong is the same
  * in both: rendering `model.id` where `model.label` belongs. The id is a vendor
  * string — `gpt-4o-mini-2024-07-18` — and the label is what #97's resolution
@@ -27,12 +27,12 @@ import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import { useId } from 'react';
 
-import type { AiConfigModel } from '../../services/ai';
+import type { AiTasksConfigModel } from '../../services/aiTasks';
 
 export interface ModelSelectProps {
   value: string;
   onChange: (value: string) => void;
-  models: AiConfigModel[];
+  models: AiTasksConfigModel[];
   /** Defaults to "Model". Named when a surface needs to disambiguate it. */
   label?: string;
   helperText?: string;

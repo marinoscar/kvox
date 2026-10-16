@@ -57,7 +57,7 @@
 // invert the dependency: the domain module registers what the base module needs
 // (the settings namespace registry, `kvox.manifest.ts`, is the worked example),
 // or the shared piece moves down into base code (the token budget moved from
-// `notes/generation/` to `ai/` for this reason). If the piece is a spec that
+// `notes/generation/` to `ai-port/` for this reason). If the piece is a spec that
 // needs domain code to run, the spec belongs in the domain folder (see
 // `notes/generation/note-generation-request.task-model.spec.ts`), or under
 // `test/` if it is genuinely about the composition.
@@ -321,7 +321,7 @@ describe('base code does not import domain code (issue #459)', () => {
     const base = deriveBaseDirs();
 
     // The directories the rule exists for are covered...
-    expect(base).toEqual(expect.arrayContaining(['ai', 'common', 'settings', 'onboarding', 'user-data']));
+    expect(base).toEqual(expect.arrayContaining(['ai-port', 'common', 'settings', 'onboarding', 'user-data']));
     // ...none of the product directories is mistaken for base...
     for (const domain of DOMAIN_DIRS) expect(base).not.toContain(domain);
     // ...and a renamed or deleted domain directory fails here instead of
@@ -472,7 +472,7 @@ describe('domain registrations are imported by the composition roots only (issue
 // -----------------------------------------------------------------------------
 
 describe('the import scanner', () => {
-  const FILE = join(SRC, 'ai', 'example.ts');
+  const FILE = join(SRC, 'ai-port', 'example.ts');
   const specifiers = (text: string) => findSpecifiers(FILE, text).map((found) => found.specifier);
 
   it.each([
@@ -521,7 +521,7 @@ describe('the import scanner', () => {
       "import { a } from './ai-token-budget';",
       "import { b } from '../common/registry';",
       "import { c } from '../notes/notes.service';",
-      "import { d } from '../../test/helpers/ai-task-model.fixtures';",
+      "import { d } from '../../test/helpers/membership-user.helper';",
       "import { e } from '../graph';",
     ].join('\n');
 

@@ -488,7 +488,7 @@ describe('HomePage — the New note hero action', () => {
   });
 
   it('fires NO additional network request of its own', async () => {
-    // The action costs nothing: there is no `GET /api/ai/config` probe behind
+    // The action costs nothing: there is no `GET /api/ai-tasks/config` probe behind
     // it and no fourth call on the landing screen. The page's rule stays "one
     // summary request per content type, plus the one capability probe".
     renderHome();
@@ -1687,7 +1687,7 @@ describe('HomePage — waiting for review (issue #368)', () => {
   beforeEach(() => {
     respondWith(summary({ recent: [transcript()] }));
     server.use(
-      http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
+      http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
       http.get(`${API_BASE}/graph/proposals`, () =>
         HttpResponse.json({
           data: { items: [proposalSummaryRow('p-1', { noteTitle: 'Weekly sync — minutes' })], nextCursor: null },
@@ -1710,7 +1710,7 @@ describe('HomePage — waiting for review (issue #368)', () => {
     await waitForLoaded();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByRole('region', { name: 'Waiting for review' })).not.toBeInTheDocument();
-    expect(observedRequests).not.toContain('/api/ai/config');
+    expect(observedRequests).not.toContain('/api/ai-tasks/config');
     expect(observedRequests).not.toContain('/api/graph/proposals');
   });
 });

@@ -14,13 +14,13 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { askSendErrorCopy } from './askErrorCopy';
-import type { AiConfig } from '../../services/ai';
+import type { AiTasksConfig } from '../../services/aiTasks';
 
 export interface AskComposerAlertInput {
   /** The last send's failure, or `null`. */
   sendError: unknown;
   onDismiss: () => void;
-  config: AiConfig | null | undefined;
+  config: AiTasksConfig | null | undefined;
 }
 
 export function askComposerAlert({ sendError, onDismiss, config }: AskComposerAlertInput): ReactNode {

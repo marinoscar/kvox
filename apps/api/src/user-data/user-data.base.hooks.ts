@@ -175,16 +175,12 @@ export class CredentialsUserDataHooks {
 
   /** `credentials` in `GET /api/user-data/summary`. */
   async summarize(userId: string): Promise<{ aiKeys: number; accessTokens: number }> {
-    // PLATFORM-ADOPTION-SHIM(#477): `legacyKeys` counts the retired
-    // `user_ai_credentials` table, which #477 drops with the old AI module.
-    const [platformKeys, legacyKeys, accessTokens] = await Promise.all([
+    const [aiKeys, accessTokens] = await Promise.all([
       this.aiKeys.count(userId),
-      // Until #477 drops the table: a key saved before the AI slice moved.
-      this.prisma.userAiCredential.count({ where: { userId } }),
       this.prisma.personalAccessToken.count({ where: { userId, revokedAt: null } }),
     ]);
 
-    return { aiKeys: platformKeys + legacyKeys, accessTokens };
+    return { aiKeys, accessTokens };
   }
 
   // ===========================================================================
@@ -197,16 +193,10 @@ export class CredentialsUserDataHooks {
    * The platform keys go through the service that owns them (`UserAiKeysService`
    * via `AiUserKeysPurger`: it deletes the row and audits it, one call per
    * provider), and the tokens through `PatRevoker` because revoking (not
-   * deleting) is that decision's one home. The old `user_ai_credentials` rows
-   * are deleted here, with the user as the only filter, until #477 drops the
-   * table.
+   * deleting) is that decision's one home.
    */
   async purge(userId: string): Promise<void> {
-    const platformKeys = await this.aiKeys.removeAll(userId);
-    // PLATFORM-ADOPTION-SHIM(#477): the retired `user_ai_credentials` rows go too,
-    // until #477 drops the table.
-    const { count: legacyKeys } = await this.prisma.userAiCredential.deleteMany({ where: { userId } });
-    const aiKeys = platformKeys + legacyKeys;
+    const aiKeys = await this.aiKeys.removeAll(userId);
     const tokens = await this.pat.revokeAllForUser(userId);
 
     await auditUserData(this.prisma, userId, 'user_data:credentials_destroyed', {

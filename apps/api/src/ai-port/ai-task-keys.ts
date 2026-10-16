@@ -6,9 +6,8 @@ import { z } from 'zod';
 //
 // The vocabulary of `ai.taskModels`: which connected-knowledge tasks an
 // administrator can pick a model for, and the reasoning efforts the product has
-// always offered. Copied from `ai/ai-settings.schema.ts` so the port does not
-// import the module #477 deletes; the values are the stored ones and are
-// byte-for-byte the same.
+// always offered. Copied from the retired `ai/ai-settings.schema.ts` (deleted in
+// #477); the values are the stored ones and are byte-for-byte the same.
 //
 // ⚠ A TASK KEY IS PERMANENT ONCE AN ADMINISTRATOR HAS SAVED A MODEL FOR IT: it is
 // a key of the stored `ai.taskModels` map, and renaming one silently drops that

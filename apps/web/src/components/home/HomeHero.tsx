@@ -65,7 +65,7 @@
  * is disabled by `GET /api/transcription/config` because a deployment with no
  * provider answers 409 to `POST /api/transcripts`, and walking a user through
  * picking a file before refusing is worse than a disabled button. The note
- * equivalent would be `GET /api/ai/config` — but that is a THIRD request on the
+ * equivalent would be `GET /api/ai-tasks/config` — but that is a THIRD request on the
  * landing screen, and the answer it returns is about the USER's own AI key,
  * which `/notes/new` asks for and explains in place far better than a greyed-out
  * button on the home page can. This action therefore costs no network request

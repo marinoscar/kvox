@@ -23,7 +23,7 @@ import { UserDataService } from './user-data.service';
 // WHY NO PERMISSION STRING GATES THESE TWO
 // -----------------------------------------------------------------------------
 //
-// The same answer `ai-credentials.controller.ts` gives, and it is worth
+// The same answer the platform's `/api/ai/keys` gives, and it is worth
 // restating because the obvious alternative looks defensible right up until you
 // name the user it fails.
 //
@@ -39,7 +39,7 @@ import { UserDataService } from './user-data.service';
 // in the query itself. An RBAC permission decides what a ROLE may do to the
 // application's resources; nothing about a role should decide whether a person
 // may ask for their own recordings to be forgotten. The nearest precedents in
-// this repository are `/api/user-settings`, `/api/pat` and `/api/ai-credentials`,
+// this repository are `/api/user-settings`, `/api/pat` and `/api/ai/keys`,
 // all ownership-scoped rather than permission-scoped.
 //
 // ⚠ REJECTED: gating on `transcripts:write` + `notes:write`. It reads as the
@@ -47,7 +47,7 @@ import { UserDataService } from './user-data.service';
 // that has revoked a user's `transcripts:write` — offboarding, a downgraded
 // role, a misconfigured seed — has revoked their ability to REMOVE the
 // recordings it is still holding for them, while leaving the recordings there.
-// That is the identical failure `ai-credentials.controller.ts` describes for a
+// That is the identical failure the old per-user key routes had for a
 // key the user can no longer erase, with a larger blast radius: a person's
 // right to delete their own data cannot be contingent on a permission somebody
 // else administers. The composite `everything` scope makes it worse still,

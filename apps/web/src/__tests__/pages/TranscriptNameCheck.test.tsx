@@ -224,7 +224,7 @@ beforeEach(() => {
   });
   mockGetWords.mockResolvedValue({ currentVersion: 4, fromMs: 0, toMs: 300_000, segments: [] });
   server.use(
-    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig() })),
+    http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig() })),
   );
 });
 
@@ -296,7 +296,7 @@ describe('TranscriptPage — the post-rename name-check nudge', () => {
 
   it('does not offer it when the caller has no AI key', async () => {
     server.use(
-      http.get(`${API_BASE}/ai/config`, () =>
+      http.get(`${API_BASE}/ai-tasks/config`, () =>
         HttpResponse.json({ data: aiConfig({ keyConfigured: false }) }),
       ),
     );

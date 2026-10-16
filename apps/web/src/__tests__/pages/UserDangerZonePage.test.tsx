@@ -2,7 +2,7 @@
  * `/settings/danger-zone` (issue #80).
  *
  * THE SERVICE MODULE IS MOCKED, NOT THE HOOK — the house pattern
- * `UserAiPage.test.tsx`'s header explains: `useUserData`'s own polling
+ * the other user-settings page tests explain: `useUserData`'s own polling
  * contract (started by STATE rather than by the click, silent on a poll tick,
  * cleaned up on unmount) is exactly what this page's acceptance criteria are
  * about, so the real hook has to sit between the mocked transport and the

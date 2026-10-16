@@ -52,7 +52,7 @@ beforeEach(() => {
   resolution.proposal = { ...resolution.proposal, id: RESOLUTION_ID, kind: 'resolution', noteId: null };
   proposalMock.reset(resolution);
   server.use(
-    http.get(`${API}/ai/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
+    http.get(`${API}/ai-tasks/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
     http.get(`${API}/graph/proposals`, ({ request }) => {
       listRequests.push(new URL(request.url).search);
       return HttpResponse.json({ data: { items: drafts, nextCursor: null } });
@@ -109,7 +109,7 @@ describe('GraphReviewCard', () => {
   });
 
   it('renders nothing and asks for nothing while the graph is off', async () => {
-    server.use(http.get(`${API}/ai/config`, () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })));
+    server.use(http.get(`${API}/ai-tasks/config`, () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })));
     const { container } = renderCard();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(container).toBeEmptyDOMElement();

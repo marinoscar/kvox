@@ -191,7 +191,6 @@ describe('Domain registrations characterization', () => {
       context.prismaMock.note.count.mockResolvedValue(0);
       context.prismaMock.user.count.mockResolvedValue(1);
       context.prismaMock.allowedEmail.count.mockResolvedValue(1);
-      context.prismaMock.userAiCredential.findUnique.mockResolvedValue(null);
     });
 
     afterEach(() => {
@@ -264,7 +263,7 @@ describe('Domain registrations characterization', () => {
       });
       context.prismaMock.note.findMany.mockResolvedValue([]);
       context.prismaMock.noteTemplate.count.mockResolvedValue(0);
-      context.prismaMock.userAiCredential.count.mockResolvedValue(0);
+      context.prismaMock.userAiKey.count.mockResolvedValue(0);
       context.prismaMock.personalAccessToken.count.mockResolvedValue(0);
       context.prismaMock.kgEntity.count.mockResolvedValue(0);
       context.prismaMock.kgItem.count.mockResolvedValue(0);
@@ -293,7 +292,7 @@ describe('Domain registrations characterization', () => {
         _sum: { size: BigInt(2048) },
       });
       context.prismaMock.noteTemplate.count.mockResolvedValue(4);
-      context.prismaMock.userAiCredential.count.mockResolvedValue(1);
+      context.prismaMock.userAiKey.count.mockResolvedValue(1);
       context.prismaMock.personalAccessToken.count.mockResolvedValue(2);
       context.prismaMock.kgEntity.count.mockResolvedValue(7);
       context.prismaMock.kgItem.count.mockResolvedValue(9);

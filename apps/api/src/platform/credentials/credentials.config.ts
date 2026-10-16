@@ -10,7 +10,7 @@
 //
 // `UserCredentialsModule` and `OrgCredentialsModule` are mounted but unused:
 // this app keeps no per-user or per-organization credential in these tables
-// (every AI key lives in `user_ai_credentials`).
+// (every AI key lives in the platform's `user_ai_keys`).
 //
 // The purposes are registered at import time, before the registries freeze at
 // bootstrap: the platform's (`smtp`, `email_ses`, `push_vapid`) by

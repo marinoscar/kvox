@@ -9,7 +9,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Rules
 
-- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`, `/api/ai-credentials`, `/api/user-data`, `/api/onboarding`). Add routes to RBAC coverage in `test/rbac/`.
+- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`, `/api/user-data`, `/api/onboarding`). Add routes to RBAC coverage in `test/rbac/`.
 - **Validate input with Zod** DTOs; annotate OpenAPI; run `npm run openapi:dump && npm run openapi:lint` from the repo root after route changes.
 - **Adding an endpoint**: controller method (auth/RBAC decorators), service method (all business logic), OpenAPI annotations, unit + integration tests, update `docs/API.md`.
 - **Adding a setting**: a `system_settings` or `user_settings` namespace is one declaration (with its `merge`) appended to `src/app-registrations/settings.ts`; the platform settings slice composes schemas and OpenAPI from the registries (`src/settings/registry/`). No local settings services or DTOs. See [DEVELOPMENT.md](../../docs/DEVELOPMENT.md#settings-namespace-registry).

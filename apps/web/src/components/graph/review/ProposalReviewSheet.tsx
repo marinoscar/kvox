@@ -50,7 +50,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
 import { CopyButton } from '../../common/CopyButton';
-import { useAiConfig } from '../../../hooks/useAiConfig';
+import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
 import { useGraphOntology } from '../../../hooks/useGraphOntology';
 import { useGraphProposal } from '../../../hooks/useGraphProposal';
 import type { GraphProposalSource, UseGraphProposalReturn } from '../../../hooks/useGraphProposal';
@@ -197,7 +197,7 @@ export function ProposalReviewSheet({
   const own = useGraphProposal(source as GraphProposalSource, { enabled: open && !external });
   const ctl = external ?? own;
   const { ontology } = useGraphOntology({ enabled: open });
-  const { config: aiConfig } = useAiConfig();
+  const { config: aiConfig } = useAiTasksConfig();
   const audio = useSourceAudio(originTranscriptId ?? '');
 
   const [suspended, setSuspended] = useState(false);

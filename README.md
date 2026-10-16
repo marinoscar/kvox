@@ -53,9 +53,9 @@ hits a disabled button.
 ### Bring your own key
 
 There is no deployment-wide AI key and no shared spend. Each user saves
-their own provider key (`user_ai_credentials`, encrypted, never returned by
-any endpoint). An administrator configures *policy* only: the active
-provider, which models are permitted, and token/timeout/document ceilings.
+their own provider key (the platform's `user_ai_keys`, encrypted, never returned by
+any endpoint). An administrator configures *policy* only: whether AI is on,
+which models are enabled, and token/timeout/document ceilings.
 
 ### Privacy, stated plainly
 

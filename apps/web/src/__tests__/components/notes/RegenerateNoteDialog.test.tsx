@@ -6,7 +6,7 @@ import 'vitest-axe/extend-expect';
 
 import { render } from '../../utils/test-utils';
 import { RegenerateNoteDialog } from '../../../components/notes/RegenerateNoteDialog';
-import type { AiConfigModel } from '../../../services/ai';
+import type { AiTasksConfigModel } from '../../../services/aiTasks';
 import type { Note } from '../../../services/notes';
 import type { NoteTemplate } from '../../../services/noteTemplates';
 
@@ -69,7 +69,7 @@ function template(id: string, name: string, overrides: Partial<NoteTemplate> = {
   };
 }
 
-const MODELS: AiConfigModel[] = [
+const MODELS: AiTasksConfigModel[] = [
   {
     id: 'gpt-4o-mini',
     label: 'GPT-4o mini',
@@ -307,7 +307,7 @@ describe('RegenerateNoteDialog — a model the deployment no longer permits', ()
   });
 
   it('says nothing of the kind while the model list is merely still loading', () => {
-    // The same note, with an unanswered `GET /api/ai/config`: claiming the
+    // The same note, with an unanswered `GET /api/ai-tasks/config`: claiming the
     // model was withdrawn would be inventing a policy change out of latency.
     renderDialog({ note: note({ model: 'gpt-3.5-turbo' }), models: [] });
 

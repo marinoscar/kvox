@@ -119,10 +119,10 @@ function templateRow(overrides: Record<string, unknown> = {}) {
 let regenerateBodies: Record<string, unknown>[];
 
 /**
- * What `GET /api/ai/config` answers with.
+ * What `GET /api/ai-tasks/config` answers with.
  *
  * ⚠ IT HAS TO BE MOCKED AT ALL because the note page asks before deciding
- * whether to offer Regenerate — and `useAiConfig` treats an unanswered question
+ * whether to offer Regenerate — and `useAiTasksConfig` treats an unanswered question
  * as `keyConfigured: false`, which is the safe direction and would silently
  * turn every regeneration test into a test of `AiKeyRequired`.
  */
@@ -200,7 +200,7 @@ beforeEach(() => {
     available: true,
     provider: 'openai',
     providerLabel: 'OpenAI',
-    // #97: `source`/`derivedFrom` complete the `AiConfigModel` shape — absent,
+    // #97: `source`/`derivedFrom` complete the `AiTasksConfigModel` shape — absent,
     // a provenance assertion elsewhere would silently pass against a fallback
     // chip instead of the real one.
     models: [
@@ -228,7 +228,7 @@ beforeEach(() => {
     // are matched in order, and `/notes/:id` would happily swallow
     // `/notes/exporters` — which is the same collision the API's own
     // controller has to declare its literal routes first to avoid.
-    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig })),
+    http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig })),
     http.get(`${API_BASE}/notes/exporters`, () =>
       HttpResponse.json({ data: { exporters: EXPORTERS } }),
     ),

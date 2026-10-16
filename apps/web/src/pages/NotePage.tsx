@@ -141,7 +141,7 @@ import { NoteStatusChip } from '../components/notes/NoteStatusChip';
 import { RegenerateMenuButton } from '../components/notes/RegenerateMenuButton';
 import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
 import { RegenerateSameConfirmDialog } from '../components/notes/RegenerateSameConfirmDialog';
-import { useAiConfig } from '../hooks/useAiConfig';
+import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useGraphProposal } from '../hooks/useGraphProposal';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../hooks/useNotes';
@@ -250,7 +250,7 @@ export function NotePage() {
     id,
     retitleWatch !== null ? NOTE_ACTIVE_POLL_MS : undefined,
   );
-  const { config: aiConfig, keyConfigured, isLoading: isAiLoading } = useAiConfig();
+  const { config: aiConfig, keyConfigured, isLoading: isAiLoading } = useAiTasksConfig();
   // Straight off the note since #192 — the API denormalises the source's name
   // onto the detail shape, so the page no longer resolves it with a second
   // request. `null` covers both "gone" and "no longer readable by you", which

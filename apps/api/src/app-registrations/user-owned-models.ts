@@ -8,8 +8,8 @@
 // list and `prisma/schema/` disagree).
 //
 // PURGE FOLLOWS `onDelete`: `Cascade` is `delete`, `SetNull` is `detach`.
-// EXPORT is `include`, except `UserAiCredential` (`exclude`: an encrypted
-// provider secret never leaves the server).
+// EXPORT is `include` for every model here. The user's AI provider keys are the
+// platform's (`user_ai_keys`), classified by the platform AI slice, not here.
 //
 // OWNER vs ACTOR. A row with an `ownerField` belongs to the user. A row with
 // only `actorFields` merely records who acted (an editor, an author, a
@@ -126,17 +126,6 @@ export const KVOX_USER_OWNED_MODELS: readonly Def[] = [
     purge: 'delete',
     export: 'include',
     rationale: 'A rendered export the user requested; transient, deleted with the requester.',
-  },
-
-  // -------------------------------------------------------------------------
-  // AI credentials
-  // -------------------------------------------------------------------------
-  {
-    model: 'UserAiCredential',
-    ownerField: 'userId',
-    purge: 'delete',
-    export: 'exclude',
-    rationale: 'The user’s own encrypted AI provider key. A secret: it never leaves the server, so it is not exported.',
   },
 
   // -------------------------------------------------------------------------

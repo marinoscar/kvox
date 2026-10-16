@@ -1,7 +1,7 @@
 /**
  * "Fix names with AI" — the start dialog and the review panel (#329, #330).
  *
- * The dialog runs over the real `useAiConfig` and the real service layer, with
+ * The dialog runs over the real `useAiTasksConfig` and the real service layer, with
  * MSW answering — so what is asserted is the request body the API receives,
  * not a callback's arguments the component could satisfy without ever
  * producing that body.
@@ -112,7 +112,7 @@ describe('NameCheckDialog', () => {
     createBodies = [];
     estimateModes = [];
     server.use(
-      http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig() })),
+      http.get(`${API_BASE}/ai-tasks/config`, () => HttpResponse.json({ data: aiConfig() })),
       http.get(`${API_BASE}/transcripts/:id/name-checks/estimate`, ({ request }) => {
         const mode = new URL(request.url).searchParams.get('mode') ?? '';
         estimateModes.push(mode);
@@ -206,7 +206,7 @@ describe('NameCheckDialog', () => {
 
   it('renders AiKeyRequired when the caller has no key', async () => {
     server.use(
-      http.get(`${API_BASE}/ai/config`, () =>
+      http.get(`${API_BASE}/ai-tasks/config`, () =>
         HttpResponse.json({ data: aiConfig({ keyConfigured: false }) }),
       ),
     );

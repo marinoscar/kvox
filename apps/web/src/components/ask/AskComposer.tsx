@@ -12,7 +12,7 @@
  * typed, with the owner's `alert` above it.
  *
  * THE MODEL. A "Model" button opens a picker over the deployment's
- * tool-capable models (`GET /api/ai/config` → `models` where `toolCalling`),
+ * tool-capable models (`GET /api/ai-tasks/config` → `models` where `toolCalling`),
  * defaulting to the administrator's `graph.agent` model. `onSend` receives a
  * `model` ONLY when the user chose a different one — the server resolves the
  * default itself, and sending it explicitly would turn "use the deployment's
@@ -36,7 +36,7 @@ import type { KeyboardEvent, ReactNode } from 'react';
 
 import { ModelSelect } from '../notes/ModelSelect';
 import { ASK_CONTENT_MAX_CHARS } from '../../services/ask';
-import type { AiConfig, AiConfigModel } from '../../services/ai';
+import type { AiTasksConfig, AiTasksConfigModel } from '../../services/aiTasks';
 
 /** The counter appears from here. */
 export const ASK_COUNTER_FROM = 3500;
@@ -65,12 +65,12 @@ export function rememberAskModel(conversationId: string, model: string | null): 
 }
 
 /** The models Ask may use: tool-capable ones (#360's `toolCalling`). */
-export function askModelOptions(config: AiConfig | null | undefined): AiConfigModel[] {
+export function askModelOptions(config: AiTasksConfig | null | undefined): AiTasksConfigModel[] {
   return (config?.models ?? []).filter((model) => model.toolCalling !== false);
 }
 
 /** The administrator's `graph.agent` model, else the deployment default. */
-export function askDefaultModel(config: AiConfig | null | undefined): string | null {
+export function askDefaultModel(config: AiTasksConfig | null | undefined): string | null {
   return config?.taskModels?.['graph.agent']?.model ?? config?.defaultModel ?? null;
 }
 
@@ -81,7 +81,7 @@ export interface AskComposerProps {
   running?: boolean;
   /** Disable everything (no key, Ask off). */
   disabled?: boolean;
-  models: readonly AiConfigModel[];
+  models: readonly AiTasksConfigModel[];
   defaultModel: string | null;
   /** Keys the remembered model choice; `null` before the conversation exists. */
   conversationId: string | null;

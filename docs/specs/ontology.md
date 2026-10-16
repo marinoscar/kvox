@@ -832,29 +832,25 @@ about that specific pattern does not apply to this job type at all).
   something it does not, rather than inventing a fresh entity for every
   mention regardless of whether one already exists.
 
-> **Call path since issue #475.** The provider call below is `KvoxAi.generateStructured` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph are the retired path (#477 deletes them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
+> **Call path since issue #475.** The provider call below is `KvoxAi.generateStructured` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph were the original design and no longer exist (#477 deleted them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
 
 **One provider call, structured output.** A single request per extraction
 run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
 `commitment | decision | claim | person_fact`), each carrying an
-`evidence[]` array of segment ids and character ranges — using a new
-`AiProvider.generateStructured()` method (§20). This codebase's `AiProvider`
-interface has neither a structured-output mode nor tool calling today
-(verified above: the only provider, OpenAI, is called through Chat
-Completions with `response_format: {type: 'json_object'}`, a bare JSON mode
-with no schema enforcement) — adding `generateStructured` (OpenAI's
-`response_format: {type: 'json_schema', json_schema: {name, strict: true,
-schema}}`) is itself foundation work this epic ships before `kg.extract` can
-exist at all, gated behind a `structuredOutput` capability flag on the
+`evidence[]` array of segment ids and character ranges — using the
+structured-output call (`KvoxAi.generateStructured`, §20; originally a new
+`AiProvider.generateStructured()` method, because the provider layer then had
+only a bare JSON mode with no schema enforcement). The call is held to a strict
+JSON Schema and gated behind a `structuredOutput` capability flag on the
 resolved model (§20.2) so a model that cannot honour a JSON Schema is never
 offered for this task in the first place. Zod-validated regardless of the
 provider's own enforcement: a malformed answer is a **failed proposal**,
 never a partial commit, the identical posture `docs/specs/notes.md` §2.2's
 error taxonomy takes for every provider-calling job in this codebase. The
-model that runs this call is `AiTaskModelResolver.resolve(userId,
+model that runs this call is chosen by `GraphAiRunResolver.resolve(userId,
 'graph.extract', requestedModel?)` (§20.3) — the administrator's configured
 default for this task unless the calling user has overridden it with another
-model their own allow-list permits — and is recorded on the resulting
+enabled model — and is recorded on the resulting
 `kg_proposals.model`/`.provider` (§10) exactly as `NoteGeneration` already
 records its own (verified above). Every temporal relation and every `kg_items` row also carries
 `valid_from`/`valid_to`/`precision` in the extractor's structured output
@@ -1864,8 +1860,10 @@ second surface with its own authority.
 **Task-model configuration reuses the existing AI settings routes rather
 than adding new ones (§20).** `ai.taskModels` and `ai.graphEnabled` are two
 more fields on the `ai` system-settings namespace, read and written through
-the existing `GET`/`PUT /api/ai-settings` (`system_settings:read`/`:write`)
-exactly as every other `ai` field already is — and `GET /api/ai/config`
+the application's `GET`/`PUT /api/ai-tasks/settings` (`ai_config:read`/`:write`,
+extending the platform `ai` namespace; originally `/api/ai-settings` on
+`system_settings:*`) — and `GET /api/ai-tasks/config` (originally
+`GET /api/ai/config`, a path the platform now owns)
 gains the caller's own resolved `taskModels` (which model each graph task
 will actually run with, after applying any override the caller is permitted)
 and `graphEnabled`, the identical "what does this deployment permit and does
@@ -1983,8 +1981,7 @@ a deployment-wide policy. This is not the same claim as "no admin surface at
 all": the two knobs that genuinely are deployment policy —
 `ai.graphEnabled` and the per-task model defaults (§20) — get **no new card
 either**, registry or otherwise; they land as two new sections on the
-*existing* `/admin/settings/ai` page (`AiSettingsPage.tsx`, already
-registered on `system_settings:read`/`:write`, verified above), because they
+*existing* `/admin/settings/ai` page (`AiSettingsPage.tsx`, since #477 a binding over the platform `AiConfigPage` with the application's sections in its `Sections` slot, registered on `ai_config:read`), because they
 are two more fields on a policy that page already owns, not a graph-specific
 surface Settings UI Pattern rule 1 would require its own card for.
 
@@ -2085,7 +2082,7 @@ no extraction pipeline behind it yet — proving the measurement tooling
 exists before the thing it measures does.
 
 **P2 — Extraction, proposal, "Send to graph."** The `generateStructured`/
-`chat` `AiProvider` capabilities and task-model resolution (§20 — foundation
+`chat` `KvoxAi` capabilities and task-model resolution (§20 — foundation
 work `kg.extract` cannot run without), `kg.extract` (§6), the proposal API
 and review panel including guide-the-graph, row-level overrides, "Add to
 graph" from a selection, and revert-commit (§8, §19), the commit transaction
@@ -3091,21 +3088,17 @@ brief's prose is `kg.entity_digest`'s own output, shown as-is (§9.1). A
 
 ### 20.2 Capability flags
 
-> Since issue #476 the Ask loop's `chat()` is `KvoxAi.chat()`, a platform `stream()` call (`apps/api/src/ai-port/platform-kvox-ai.ts`, `chat-mapping.ts`), not `AiProvider.chat`; see §21.3 "Provider call". The text below is the original design.
+> Since issue #476 the Ask loop's `chat()` is `KvoxAi.chat()`, a platform `stream()` call (`apps/api/src/ai-port/platform-kvox-ai.ts`, `chat-mapping.ts`), and since #477 the `AiProvider` interface and its registry no longer exist; see §21.3 "Provider call" and [`notes.md`](notes.md) §2.6 and §2.7. The text below keeps the original design where it explains the capability flags.
 
 `generateStructured` (§6) and the tool-calling loop `ask.respond` needs
-(§21) are both new `AiProvider` capabilities this epic adds to
-`apps/api/src/ai/providers/ai-provider.interface.ts` — OpenAI's Chat
-Completions path this codebase uses today (verified above: no tool calling,
-no `json_schema` mode) gains `generateStructured(ctx, req)` using
-`response_format: {type: 'json_schema', json_schema: {name, strict: true,
-schema}}`, and `chat(ctx, req)` returning an `AsyncIterable` of
-delta/tool-call/done events for the agent loop. Every model descriptor a
-provider reports (`AiProvider.listModels`/`deriveModelDescriptor`, verified
-above) carries two new boolean flags, `structuredOutput` and `toolCalling`,
-alongside its existing context-window/output-ceiling numbers
-(`ai-model-resolution.ts`'s five-rank chain, the `ai` namespace
-entry in [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) — a model with `structuredOutput: false` is not offered for
+(§21) are both capabilities of the AI call layer, now the `KvoxAi` methods
+`generateStructured(req)` (a strict JSON Schema) and `chat(req)` (an
+`AsyncIterable` of delta/tool-call/done events for the agent loop; see
+[`notes.md`](notes.md) §2.6 and §2.7). Every enabled model (an `ai_models` row,
+[`notes.md`](notes.md) §2.5) carries two boolean capability flags,
+`structuredOutput` and `toolCalling`, alongside its context-window and
+output-ceiling numbers, and the `ai` namespace entry in
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) — a model with `structuredOutput: false` is not offered for
 `graph.extract`/`graph.adjudicate`/`graph.digest`, and one with
 `toolCalling: false` is not offered for `graph.agent`, at both save time
 (§20.4) and resolution time (§20.3), so an unusable pairing is
@@ -3113,7 +3106,7 @@ unrepresentable rather than merely discouraged.
 
 ### 20.3 Resolution and the user override
 
-> Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes `AiTaskModelResolver`, which it replaces.
+> Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes the original `AiTaskModelResolver`, which it replaced (deleted by #477).
 >
 > **Graph call path since issue #475.** Every graph model call goes through `KvoxAi` and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
 >
@@ -3121,8 +3114,8 @@ unrepresentable rather than merely discouraged.
 >
 > Calls: `kg.extract`, adjudication and the entity digest call `KvoxAi.generateStructured` with `maxAttempts: 1` and `assertWithinBudget` unchanged; the extraction truncation re-ask relies on `AiStructuredOutputError('truncated')` (see notes.md for how it is derived). `GraphEmbedder` (`graph/resolution/graph-embedder.service.ts`) calls `KvoxAi.embed` with `graph_embed` and gates on `searchReasonFor(readiness)`, the same gate as search ([search.md](search.md) §11), in batches of at most `embeddingCapability().maxBatchSize` (128). Throttle keys (`aiProviderThrottleKey(userId)`) are still registered by the handler immediately before each call.
 
-`AiTaskModelResolver.resolve(userId, task, requested?)` (planned:
-`apps/api/src/ai/ai-task-model-resolver.service.ts`) is the one function
+The original design (issue #360) was a single `AiTaskModelResolver.resolve(userId, task, requested?)` (planned:
+`apps/api/src/ai/ai-task-model-resolver.service.ts`, deleted by #477); the behaviour below is what `GraphAiRunResolver` and `KvoxAiTargetResolver` keep. It is the one function
 every AI-calling call site in this feature calls, extracted from
 `NoteGenerationRequestService.resolveModel()`'s own shape (verified above)
 rather than reimplemented per call site: it resolves `ai.taskModels[task]`
@@ -3154,7 +3147,7 @@ Per §13's own correction, above: two new sections — **Connected knowledge**
 (the `graphEnabled` toggle) and **Task models** (one model picker per
 `TaskKey`, each showing only models the active provider reports with the
 capability that task requires) — are added to the *existing*
-`AiSettingsPage.tsx` (`/admin/settings/ai`, verified above), never a new
+`AiSettingsPage.tsx` (`/admin/settings/ai`; since #477 mounted in the `Sections` slot of the platform `AiConfigPage`), never a new
 registry card. Save-time validation runs the identical capability check
 §20.3 gives at resolution time, so a deployment can never save a
 `graph.agent` entry pointing at a model with no `toolCalling` — the error
@@ -3267,9 +3260,9 @@ of a proposal.
 **As built (issue #378)** — `AskMessagesController`/`AskMessagesService` and
 `AskRespondHandler` in `apps/api/src/ask/`, with the caps in `ask-limits.ts`.
 
-- *The POST* checks the conversation (404), then `AiTaskModelResolver
-  .resolve(user, 'graph.agent', model)` (its 409s and 400 passed through
-  unchanged — `graph_disabled` first), then writes the user message, the
+- *The POST* checks the conversation (404), then `KvoxAi
+  .readiness(user, 'graph_agent', model)` (originally `AiTaskModelResolver
+  .resolve`; the same 409s and 400 as before — `graph_disabled` first), then writes the user message, the
   `pending` assistant message (model + provider), the `ask.respond` job
   (`enqueueWithin`, priority −10, subject `ask_message`) and its `job_id`,
   the derived title (first 80 characters, whitespace collapsed, only while
@@ -3436,7 +3429,7 @@ landing. What it does, and the decisions a neighbouring change could undo:
   conversation's up arrow goes to `/ask`, `/ask`'s to Home). One
   optional-segment route
   rather than two so that `/ask` → `/ask/:id` after the first question keeps
-  the page mounted. The page is behind `GET /api/ai/config`'s `graphEnabled`:
+  the page mounted. The page is behind `GET /api/ai-tasks/config`'s `graphEnabled` (`useAiTasksConfig`):
   an explicit `false` shows "Ask is turned off for this deployment" and no
   composer (`undefined`, from an older server, is not read as off). Home's
   Knowledge section carries an "Ask" button while `graphEnabled === true`.
@@ -3487,7 +3480,7 @@ decisions a neighbouring change could undo:
 
 - **The action.** `EntityHeader`'s `actions` slot carries "Ask about
   {label}" (`ChatBubbleOutline`; icon-only with the same accessible name on
-  a phone) — only while `GET /api/ai/config`'s `graphEnabled === true`. An
+  a phone) — only while `GET /api/ai-tasks/config`'s `graphEnabled === true`. An
   absent flag or a failed read hides it: a page-level action is not
   advertised on an unanswered question, unlike `/ask`, which a user reached
   deliberately.
@@ -3931,12 +3924,12 @@ printed in a brief).
 - **Storing anything user-owned in the existing `credentials` table.**
   Not directly applicable to this graph's own data, but named here because
   the same reasoning `docs/specs/notes.md`'s "Rejected alternatives" gives
-  for `user_ai_credentials` (`docs/specs/notes.md` §4.2, the cascade argument) generalizes to
+  for per-user AI keys (`user_ai_keys`, formerly `user_ai_credentials`; `docs/specs/notes.md` §4.2, the cascade argument) generalizes to
   every table this document defines: `credentials` has no foreign key to
   `users` and cannot grow one without complicating a table that exists to
   hold infrastructure secrets outliving whichever administrator configured
   them. Every `kg_*` table's `owner_id` **Cascade**s for the identical
-  reason `user_ai_credentials.userId` does.
+  reason `user_ai_keys.user_id` does.
 - **A `Concept`/topic layer in v1.** Deferred, not permanently rejected
   (§5.7) — today's `Meeting.topics[]` free-text property answers "what came
   up" without committing to a taxonomy this document has no evidence users
@@ -4111,7 +4104,7 @@ serve for their own epics.
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
-| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai/ai-task-model-resolver.service.spec.ts` and a `PUT /api/ai-settings` integration test asserting the save is rejected, not merely warned about |
+| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai-port/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
 | Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/citations.spec.ts` and `apps/api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 

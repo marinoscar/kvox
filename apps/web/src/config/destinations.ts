@@ -89,7 +89,7 @@
  *
  * Knowledge is also the first destination gated on a RUNTIME FEATURE as well as
  * a permission (`requiresFeature`): a deployment with connected knowledge
- * switched off (`ai.graphEnabled`, read from `GET /api/ai/config`) has no tab
+ * switched off (`ai.graphEnabled`, read from `GET /api/ai-tasks/config`) has no tab
  * for it, and the bar falls back to three. The routes stay reachable and stay
  * owned by `knowledge` either way — ownership answers "what lights up", not
  * "what is drawn".
