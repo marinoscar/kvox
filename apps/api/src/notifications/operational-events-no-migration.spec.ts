@@ -162,6 +162,7 @@ const MIGRATIONS_AT_288 = [
   // drops the `admin` grants (admins reach them through `org_admin`). RBAC
   // data, not notifications.
   '20261015125334_kvox_scope_domain_permissions',
+  '20261015222003_kvox_object_ownership',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

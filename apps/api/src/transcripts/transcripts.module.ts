@@ -5,7 +5,7 @@ import { ObjectProcessingModule } from '@marinoscar/platform-api/storage';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
-import { TranscriptUploadProcessor } from '../kvox-objects/transcript-upload.processor';
+import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { TranscriptionModule } from '../transcription/transcription.module';

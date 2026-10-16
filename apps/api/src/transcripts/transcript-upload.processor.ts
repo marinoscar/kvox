@@ -60,11 +60,11 @@ import {
 } from '@marinoscar/platform-api/storage';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { TRANSCRIPTS_MANAGED_BY } from '../transcripts/job-types';
-import { TranscriptPipelineService } from '../transcripts/transcript-pipeline.service';
-import { selectTranscriptionInput } from '../transcripts/transcription-input';
-import { TranscriptionRuntimeService } from '../transcripts/transcription-runtime.service';
-import { KvoxManagedObjectsService } from './kvox-managed-objects.service';
+import { TRANSCRIPTS_MANAGED_BY } from './job-types';
+import { TranscriptPipelineService } from './transcript-pipeline.service';
+import { selectTranscriptionInput } from './transcription-input';
+import { TranscriptionRuntimeService } from './transcription-runtime.service';
+import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
 
 /** The registered processor name; it is recorded in the object's metadata. */
 export const TRANSCRIPT_UPLOAD_PROCESSOR_NAME = 'kvox.transcripts.source';

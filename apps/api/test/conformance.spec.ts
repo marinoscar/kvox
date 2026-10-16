@@ -104,7 +104,7 @@ runPlatformConformance({
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
     // provider). Seven files hold a listener, one body each, every one a dispatch or one bounded
     // write. The two transcript upload listeners and storage/processing/object-processing.service.ts
-    // are gone (#469): the pipeline starts from kvox-objects/transcript-upload.processor.ts, a
+    // are gone (#469): the pipeline starts from transcripts/transcript-upload.processor.ts, a
     // platform ObjectProcessor that runs in the storage.object.process job.
     onEventNoIo: {
       minListenerFiles: 7,

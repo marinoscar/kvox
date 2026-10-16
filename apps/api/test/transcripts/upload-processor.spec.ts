@@ -5,7 +5,7 @@ import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-o
 import {
   TRANSCRIPT_UPLOAD_PROCESSOR_NAME,
   TranscriptUploadProcessor,
-} from '../../src/kvox-objects/transcript-upload.processor';
+} from '../../src/transcripts/transcript-upload.processor';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { createFakeProvider, type FakeProvider } from '../../src/transcripts/handlers/__fixtures__/fake-provider';
 import { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';

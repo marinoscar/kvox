@@ -30,7 +30,7 @@ import { JobSettledEvent } from '@marinoscar/platform-api/jobs';
 // test is already committed — see its own header for the full rationale —
 // so this suite only proves the behaviour, against hand-built `Job` rows and
 // a mocked `PrismaService`/`TranscriptPipelineService`, the same convention
-// `test/kvox-objects/upload-processor.spec.ts` uses.
+// `test/transcripts/upload-processor.spec.ts` uses.
 // =============================================================================
 
 const TRANSCRIPT_ID = 'transcript-1';
