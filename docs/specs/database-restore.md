@@ -14,7 +14,7 @@
 > The app's own copy, `apps/api/src/db-backup/`, was deleted. The rules in this
 > document did not change; file names it cites keep their names inside the
 > package. This app mounts the slice in `apps/api/src/platform/db-backup/` and
-> registers one restore gate (id: the app slug plus `.extensions`) in
+> registers one restore gate (id: the app slug plus `-extensions`; a gate id allows only lowercase letters, digits, `_` and `-`) in
 > `apps/api/src/app-registrations/db-backup.ts` (§2.8). The operator side is the
 > package's `DbBackupPage` and restore dialog from
 > `@marinoscar/platform-web/db-backup/ui`, wrapped in
@@ -344,12 +344,12 @@ This app registers one, in `apps/api/src/app-registrations/db-backup.ts`:
 
 | Gate | Passes when | On failure |
 |---|---|---|
-| `<app slug>.extensions` — "pgvector and pg_trgm are available on the target cluster" | `pg_available_extensions` on the cluster admin connection lists both `vector` and `pg_trgm` | `fail` with a remedy naming the missing extension (pending agent B report: exact wording) |
+| `<app slug>-extensions` — "pgvector and pg_trgm are available on the target cluster" | `pg_available_extensions` on the cluster admin connection lists both `vector` and `pg_trgm` | `fail` with a remedy naming the missing extension |
 
 It differs from the built-in `extensions` gate (§2.3), which asks whether the
 extensions the *live* database has are available. This one asks whether the
 two extensions this app's schema **requires** are available on the target cluster,
-even when the live database has lost one. It **only reads**: a pre-flight that
+even when the live database has lost one. It **only reads** (one `SELECT` on `pg_available_extensions` over a short-lived `pg` connection): a pre-flight that
 created an extension would break the rule in §5. Nothing in this app's restore path
 creates, installs or alters an extension.
 

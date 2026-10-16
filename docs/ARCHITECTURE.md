@@ -1503,7 +1503,7 @@ is deleted. `apps/api/src/platform/db-backup/` (`db-backup.config.ts`,
 `db-backup-host.module.ts`) mounts it with `DbBackupModule.forRoot({ appName:
 APP_NAME, imports: [DbBackupHostModule] })` and binds the notifier, maintenance
 mode, metrics and deployment-mode ports; `apps/api/src/app-registrations/db-backup.ts`
-registers the restore gate `kvox.extensions` and records the carry-over decision
+registers the restore gate `kvox-extensions` and records the carry-over decision
 (none). Every dump and restore carries `--enable-row-security` **and**
 `PGOPTIONS=-c app.rls_bypass=on`. Design: [`specs/database-backup.md`](specs/database-backup.md)
 (§17, §18) and [`specs/database-restore.md`](specs/database-restore.md) (§2.8, §8.7.1).
@@ -1522,8 +1522,7 @@ checks and the `telemetry.*` jobs, behind `/api/admin/telemetry/*` and
 `telemetry` system-settings namespace and the GreptimeDB credential purpose are
 registered by KVox; the GreptimeDB passwords live in the credential store at
 runtime and the `GREPTIME_*` environment variables are only the deployment
-default. The AI adapter answers "unavailable" until #472. Pending agent report:
-logger decision (`common/logger/`).
+default. The AI adapter (`TelemetryAiAdapter`) is a shim: `POST /api/admin/telemetry/assistant/stream` answers `403 AI_DISABLED` until #472. The Pino logger in `common/logger/` stays (the platform has no Pino setup; `initializeOtel` only forwards Pino records to OTLP). The telemetry routes are `/api/admin/telemetry/{config,status,query,schema,export,assistant/stream,connection,connection/test,stack,stack/deploy,dashboard/*,store}` and `GET /api/telemetry/config`, tag `Telemetry`.
 
 **The application database role.** The API connects as `kvox_app`
 (`APP_DB_USER`), an ordinary role created `NOSUPERUSER NOBYPASSRLS CREATEDB

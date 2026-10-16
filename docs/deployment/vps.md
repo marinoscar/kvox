@@ -552,7 +552,7 @@ carries the row-level-security flag **and** option pair, so a backup from the
 application role contains every organization's rows. After the switch, take one
 backup from `/admin/settings/db-backup`, check it completes and verifies, and
 confirm the Doctor's `backup.rls-bypass` check passes. A restore now also checks
-that the target cluster offers `vector` and `pg_trgm` (the `kvox.extensions`
+that the target cluster offers `vector` and `pg_trgm` (the `kvox-extensions`
 gate). A worker node running backups already carries the same pair in its own
 `pg_dump` wrapper (since #463), so no node change is needed
 (`docs/deployment/worker-nodes.md`).

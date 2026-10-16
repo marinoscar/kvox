@@ -1124,7 +1124,7 @@ nothing about the wire. See §13.6.
 > two KVox specs that prove what only this app can: `test/db-backup/kvox-dump-rls.db.spec.ts`
 > (a dump taken through the platform runner as the application role contains
 > `storage_objects` and `kvox_object_ownership` rows) and the restore-gate unit
-> test for `kvox.extensions`. The "Covered by" column is kept as the record of
+> test for the app's extensions gate. The "Covered by" column is kept as the record of
 > what each claim was proved by when it was written.
 
 ### 15.1 #281: the model, the guard and the engine
@@ -1411,14 +1411,14 @@ mounts:
 | `DB_BACKUP_MAINTENANCE` | `MaintenanceModeService` |
 | `DB_BACKUP_METRICS` | `AppMetricsService` (the `app.backup.*` instruments) |
 | `DB_BACKUP_DEPLOYMENT_MODE` | `DeploymentModeService` (`self-hosted`; `saas` would turn in-app restore off and leave backups working) |
-| `DB_BACKUP_SYSTEM_DATA` | the system data client the `backup.rls-bypass` Doctor check counts with (pending agent B report: confirm the bound service) |
+| `DB_BACKUP_SYSTEM_DATA` | an adapter over `PrismaSystemService` that uses core `runAsSystem`, which the platform's `backup.rls-bypass` Doctor check counts with |
 
 Other facts that carry over unchanged: the archive key is
 `database-backups/<slug>/YYYY/MM/<slug>-<ts>-<runId>.dump` (the slug comes from
 `APP_NAME`; existing runs keep the key they recorded); `DB_BACKUP_SCHEDULE_ENABLED`
 keeps its meaning (§10.6); the `databaseBackup` settings namespace and the
 `database-backups/` key prefix were registered in #466 and #469. The node
-credential broker is the package's: `nodes.jobSecretBrokerEnabled` and
+credential broker is the package's `PgJobRoleBroker`, which replaces the app's (same `appjob_` role prefix, `NOINHERIT CREATEROLE` minter, handle-only `job_node_secrets` design): `nodes.jobSecretBrokerEnabled` and
 `databaseBackup.nodeOffloadEnabled` keep their stored values, and where
 `CREATEROLE` is denied (managed PostgreSQL) the broker answers `guided`, as
 before (`docs/runbooks/node-job-secrets.md`).

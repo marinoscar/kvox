@@ -16,7 +16,7 @@
 // someone bumps only the CI image and forgets the compose files, so CI is
 // green but a local `devdb` run is not testing what CI tests).
 //
-// It also pins the two files that were deliberately left UNCHANGED, so a
+// It also pins the file that was deliberately left UNCHANGED, so a
 // well-meaning "let's just move everything to pgvector for consistency" edit
 // gets caught here instead of silently reintroducing an unnecessary pull.
 //
@@ -43,9 +43,8 @@ function readRepoFile(relativePath: string): string {
  * inside that block (i.e. before a line at or above `expectedIndent`).
  *
  * `expectedIndent` disambiguates a service header from an unrelated key of
- * the same name elsewhere in the file at a different nesting depth — e.g.
- * `otel.compose.yml` has both a top-level `uptrace-pg:` service (indent 2)
- * and a `depends_on: uptrace-pg:` reference to it (indent 6).
+ * the same name elsewhere in the file at a different nesting depth — e.g. a
+ * service and a `depends_on:` reference to it (indent 2 versus indent 6).
  *
  * Deliberately hand-rolled rather than a YAML parser: this repo's testing
  * conventions ask for plain regex/string reads here, not a new dependency.
@@ -159,15 +158,5 @@ describe('pgvector Postgres image pin (issue #178, epic #165)', () => {
     const match = /const PSQL_IMAGE = '([^']+)';/.exec(source);
     expect(match).not.toBeNull();
     expect(match![1]).toBe(PLAIN_POSTGRES_IMAGE);
-  });
-
-  it('leaves infra/compose/otel.compose.yml\'s uptrace-pg on plain postgres:16-alpine', () => {
-    // Deliberately NOT moved: uptrace-pg is Uptrace's own metadata store and
-    // never sees this application's schema, so giving it an extension it
-    // will never load would be a larger pull for nothing.
-    const yaml = readRepoFile('infra/compose/otel.compose.yml');
-    expect(extractServiceImage(yaml, 'uptrace-pg', 2)).toBe(
-      PLAIN_POSTGRES_IMAGE,
-    );
   });
 });

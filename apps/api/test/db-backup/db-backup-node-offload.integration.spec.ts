@@ -29,8 +29,8 @@
 
 import request from 'supertest';
 
-import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
-import { BACKUP_JOB_TYPE } from '../../src/db-backup/db-backup-runner.service';
+import { BACKUP_JOB_TYPE } from '@marinoscar/platform-api/db-backup';
+import { PgJobRoleBroker } from '@marinoscar/platform-api/db-backup/testing';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { ConfigService } from '@nestjs/config';
 

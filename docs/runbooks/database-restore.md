@@ -18,7 +18,7 @@ Source of truth for every claim below:
   pair are load-bearing) and `db-backup-admin.service` (the backup list and the
   five-minute signed download URL).
 - `apps/api/src/app-registrations/db-backup.ts` — the one KVox gate,
-  `kvox.extensions`.
+  `kvox-extensions`.
 - `docs/specs/database-restore.md` — the design, and the rejected alternatives.
 - `docs/specs/database-backup.md` — where the archives come from.
 
@@ -69,7 +69,7 @@ do, an action:
 | `CREATE DATABASE` privilege | The application's role may not create databases. **Normal on managed PostgreSQL.** You still can, with a superuser. |
 | Row-level security bypass | The restore session cannot lift row-level security: the role is neither a superuser nor `BYPASSRLS`, and the startup option did not reach the server (a transaction-mode pooler drops it). A restore would write the org tables **without their rows**. Connect directly to PostgreSQL. See section 4.3. |
 | Required extensions | The server does not offer an extension the database uses. `pg_restore` would stop on that line. Install the package on the server. |
-| `kvox.extensions` — pgvector and pg_trgm are available on the target cluster | The cluster you restore onto cannot offer `vector` or `pg_trgm`, which this schema requires. **Blocks**, and cannot be overridden: the archive would stop on the first `CREATE EXTENSION`. Install the pgvector package on the server, or restore onto the image the deployment ships. The gate only reads `pg_available_extensions`; it creates nothing. |
+| `kvox-extensions` — pgvector and pg_trgm are available on the target cluster | The cluster you restore onto cannot offer `vector` or `pg_trgm`, which this schema requires. **Blocks**, and cannot be overridden: the archive would stop on the first `CREATE EXTENSION`. Install the pgvector package on the server, or restore onto the image the deployment ships. The gate only reads `pg_available_extensions`; it creates nothing. |
 | Free disk space | There is not room for a full copy (twice over, if the displaced database is being kept). **Never a refusal** — see section 3. |
 | Connected clients | More than one client address is attached. Usually a second API replica, sometimes just a `psql` window. **A hint, not a verdict.** |
 | Schema compatibility | The archive's migration and the live one differ, in either direction. **Blocks** until you accept it — see section 6. |
