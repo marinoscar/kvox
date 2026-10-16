@@ -35,6 +35,7 @@
     "migrations",
     "raw-sql-indexes.json",
     "extensions.json",
+    "schema-objects.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -48,6 +49,9 @@
     "docs": "typedoc --options typedoc.json",
     "test": "vitest",
     "test:run": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^14.0.2"
   },
   "peerDependencies": {
     "prisma": "^7.8.0"

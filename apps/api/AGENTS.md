@@ -5,7 +5,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 ## Layout
 
 - `src/<module>/` per feature (`transcripts`, `notes`, `graph`, `ask`, `onboarding`, ...). Job handlers live in the owning module's `handlers/`.
-- `prisma/schema.prisma` is one hand-edited file; `prisma/migrations/` holds the SQL. `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
+- `prisma/schema/` is generated (`db:compose`); `prisma/migrations/` holds the SQL (hashed by `prisma/*.lock`). `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
 
 ## Rules
 
@@ -29,7 +29,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 - **AI**: `KvoxAi` (`src/ai-port/`) is the only way to reach a model; the platform resolves the per-user key (`user_ai_keys`, never `credentials`).
 - **User data** ([spec](../../docs/specs/user-data-deletion.md)): the platform slice owns `/api/user-data` and `user.data.purge`; this app registers categories, scopes and hints in `src/platform/user-data/user-data.manifest.ts`, before `registerPlatformUserData()`. `transcript.purge`/`note.purge` take `{ mode: 'owner', userId }` and clear `Restrict` FKs first (never catch an FK violation); `files.purge_unmanaged` never touches a `kvox_object_ownership` object.
 - **Onboarding** ([spec](../../docs/specs/onboarding.md)): the platform slice, steps and facts in `src/platform/onboarding/` plus the `*.onboarding.ts` of each domain. Completion is derived on every read; a step reads facts only, never queries. Keep exactly one `admin.ai` (pinned in `test/onboarding/onboarding-steps.spec.ts`).
-- **Graph** ([spec](../../docs/specs/ontology.md)): every write through `GraphWriteService` (`src/graph/write/`), only `kg.migrate` excepted; evidence on every accepted/edited row (`kg_assert_has_evidence`, write subject and evidence in one transaction); `kg.purge` is re-entrant and `maxAttempts: 1`; speaker naming writes the graph only via `kg.speaker_link`; `kg.graph_layout` coalesces 120 s; RDF libs (`n3`, `jsonld`, `rdf-validate-shacl`) only in their allowed files. Ontology and wire schemas live in `@marinoscar/kvox-contract` (DTO files keep only `createZodDto` classes); rebuild it with `npm run build -w @marinoscar/kvox-contract`.
+- **Graph** ([spec](../../docs/specs/ontology.md)): every write through `GraphWriteService` (`src/graph/write/`), only `kg.migrate` excepted; evidence on every accepted/edited row (`kg_assert_has_evidence`, write subject and evidence in one transaction); `kg.purge` is re-entrant and `maxAttempts: 1`; speaker naming writes the graph only via `kg.speaker_link`; `kg.graph_layout` coalesces 120 s; RDF libs (`n3`, `jsonld`, `rdf-validate-shacl`) only in their allowed files. Ontology and wire schemas are in `@marinoscar/kvox-contract` (DTO files keep only `createZodDto` classes); rebuild: `npm run build -w @marinoscar/kvox-contract`.
 - **Ask** (`src/ask/`): `ask.respond` is `maxAttempts: 1`; text before a tool call is held and discarded (`answer-hold.ts`); every write is `WHERE status = 'streaming'`; the handler imports no write service.
 
 Run: `npm test`, `npm run test:db`, `npm run typecheck` (`--workspace=api`).

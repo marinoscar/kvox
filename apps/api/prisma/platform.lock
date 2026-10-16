@@ -512,8 +512,28 @@
       "name": "ask_messages_one_running_turn_uniq_idx"
     },
     {
+      "definition": "CREATE INDEX kg_entities_embedding_hnsw_idx ON public.kg_entities USING hnsw (embedding vector_cosine_ops)",
+      "name": "kg_entities_embedding_hnsw_idx"
+    },
+    {
+      "definition": "CREATE INDEX kg_entities_label_trgm_idx ON public.kg_entities USING gin (label gin_trgm_ops)",
+      "name": "kg_entities_label_trgm_idx"
+    },
+    {
+      "definition": "CREATE INDEX kg_entity_aliases_normalized_trgm_idx ON public.kg_entity_aliases USING gin (normalized gin_trgm_ops)",
+      "name": "kg_entity_aliases_normalized_trgm_idx"
+    },
+    {
+      "definition": "CREATE INDEX kg_items_embedding_hnsw_idx ON public.kg_items USING hnsw (embedding vector_cosine_ops)",
+      "name": "kg_items_embedding_hnsw_idx"
+    },
+    {
       "definition": "CREATE UNIQUE INDEX kg_items_live_statement_uniq_idx ON public.kg_items USING btree (owner_id, kind, subject_id, statement_hash) WHERE ((review_status = ANY (ARRAY['accepted'::kg_review_status, 'edited'::kg_review_status])) AND (subject_id IS NOT NULL))",
       "name": "kg_items_live_statement_uniq_idx"
+    },
+    {
+      "definition": "CREATE INDEX kg_items_valid_gist_idx ON public.kg_items USING gist (valid)",
+      "name": "kg_items_valid_gist_idx"
     },
     {
       "definition": "CREATE UNIQUE INDEX kg_proposals_note_draft_uniq_idx ON public.kg_proposals USING btree (note_id) WHERE (status = 'draft'::kg_proposal_status)",
@@ -532,8 +552,28 @@
       "name": "kg_relations_speaker_link_uniq_idx"
     },
     {
+      "definition": "CREATE INDEX kg_relations_valid_gist_idx ON public.kg_relations USING gist (valid)",
+      "name": "kg_relations_valid_gist_idx"
+    },
+    {
+      "definition": "CREATE INDEX notes_search_vector_idx ON public.notes USING gin (search_vector)",
+      "name": "notes_search_vector_idx"
+    },
+    {
+      "definition": "CREATE INDEX search_embeddings_embedding_hnsw_idx ON public.search_embeddings USING hnsw (embedding vector_cosine_ops)",
+      "name": "search_embeddings_embedding_hnsw_idx"
+    },
+    {
+      "definition": "CREATE INDEX transcript_segments_search_vector_idx ON public.transcript_segments USING gin (search_vector)",
+      "name": "transcript_segments_search_vector_idx"
+    },
+    {
       "definition": "CREATE UNIQUE INDEX transcript_speakers_transcript_id_label_key ON public.transcript_speakers USING btree (transcript_id, label) WHERE (label IS NOT NULL)",
       "name": "transcript_speakers_transcript_id_label_key"
+    },
+    {
+      "definition": "CREATE INDEX transcripts_title_search_vector_idx ON public.transcripts USING gin (title_search_vector)",
+      "name": "transcripts_title_search_vector_idx"
     }
   ]
 }

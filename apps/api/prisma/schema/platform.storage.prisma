@@ -43,7 +43,7 @@ model StorageObject {
   // reference between two org-owned tables is composite, because a foreign-key
   // check bypasses row-level security (ADR 0002 D5).
 
-  // composed from app:graph.prisma
+  // composed from app:kvox.graph.prisma
   // Back-relations onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
   // Connected Knowledge (epic #344, issue #351). SetNull — an import's
   // evidence row is a citation into the imported file, and survives losing
@@ -56,7 +56,7 @@ model StorageObject {
   // the `kg_exports` reference first, may remove the file.
   kgExportFiles     KgExport[]
 
-  // composed from app:notes.prisma
+  // composed from app:kvox.notes.prisma
   // Back-relations onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
   // Two back-relations from notes (issue #48, epic #45), the identical
   // Restrict-FK reasoning as the five transcript ones above: only
@@ -65,11 +65,7 @@ model StorageObject {
   notesAsSourceObject Note[]       @relation("NoteSourceObject")
   noteExportFiles     NoteExport[] @relation("NoteExportObject")
 
-  // composed from app:object-ownership.prisma
-  // Back-relation onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
-  kvoxOwnership KvoxObjectOwnership?
-
-  // composed from app:transcripts.prisma
+  // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
   // Five back-relations from transcripts (issue #24, epic #19), one per
   // `storage_objects` FK the transcript tables hold. Every one of those FKs
@@ -85,6 +81,10 @@ model StorageObject {
   transcriptsAsRawResult     Transcript[]        @relation("TranscriptRawResultObject")
   transcriptVersionSnapshots TranscriptVersion[] @relation("TranscriptVersionSnapshotObject")
   transcriptExportFiles      TranscriptExport[]  @relation("TranscriptExportObject")
+
+  // composed from app:object-ownership.prisma
+  // Back-relation onto the platform's StorageObject (an `extend model` block holds back-relation fields only).
+  kvoxOwnership KvoxObjectOwnership?
 
   @@unique([id, orgId])
   @@index([uploadedById])

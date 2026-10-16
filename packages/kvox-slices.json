@@ -12,5 +12,13 @@
     "graph": ["errors", "ontology", "notes"],
     "ask": ["errors", "graph"]
   },
-  "kvox-db": { "bin": [] }
+  "kvox-db": {
+    "bin": ["check", "lock", "promote", "sync"],
+    "check": ["lock", "manifest", "sql", "sync"],
+    "lock": [],
+    "manifest": ["lock"],
+    "promote": ["lock", "manifest", "sql", "sync"],
+    "sql": [],
+    "sync": ["lock", "manifest"]
+  }
 }

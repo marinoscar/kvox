@@ -202,6 +202,14 @@ jobs:
       - run: npm run build:packages
       - run: npm run typecheck:packages
       - run: npm run test:packages
+      # The domain fragments and migrations live in packages/kvox-db (issue
+      # #489) and reach the app as installed copies. The composed schema equals
+      # a fresh compose, and `db:check` runs `platform db check` and then
+      # `kvox-db check`: every generated fragment and installed migration is
+      # byte-identical to the package (prisma/kvox.lock), and the raw-SQL index
+      # list is merged into platform.lock. Needs the package built (above).
+      - run: npm run db:compose:check --workspace=api
+      - run: npm run db:check --workspace=api
       # A PR checkout has no local `main` branch, which `changeset status`
       # diffs against (`baseBranch` in .changeset/config.json). When `main`
       # itself is checked out (a push to main) the branch already exists.
@@ -502,3 +510,12 @@ jobs:
       - run: npm run test:db --workspace=api -- --shard=${{ matrix.shard }}/2
         env:
           NODE_ENV: test
+
+      # The kvox-db package applies the platform history and then the domain
+      # history (installed `after-host`) to a database of its own, then runs
+      # `kvox-db check --database` (issue #489). It creates and drops that
+      # database next to the one named here, so it runs on one shard only.
+      - if: matrix.shard == 1
+        run: npm run test:run --workspace=@marinoscar/kvox-db -- apply.db
+        env:
+          DATABASE_URL: ${{ format('postgres://postgres:ci-{0}-{1}-{2}@127.0.0.1:5432/postgres', github.run_id, github.run_attempt, matrix.shard) }}
