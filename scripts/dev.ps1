@@ -81,7 +81,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ComposeDir = Join-Path $RepoRoot "infra\compose"
 $BaseCompose = Join-Path $ComposeDir "base.compose.yml"
 $DevCompose = Join-Path $ComposeDir "dev.compose.yml"
-$OtelCompose = Join-Path $ComposeDir "otel.compose.yml"
+$OtelCompose = Join-Path $ComposeDir "telemetry.compose.yml"
 $TestCompose = Join-Path $ComposeDir "test.compose.yml"
 $ApiDir = Join-Path $RepoRoot "apps\api"
 $WebDir = Join-Path $RepoRoot "apps\web"
@@ -113,7 +113,7 @@ function Show-Help {
     Write-Host "  help      Show this help message"
     Write-Host ""
     Write-Host "Flags:"
-    Write-Host "  -Otel     Include OpenTelemetry observability stack (Uptrace)"
+    Write-Host "  -Otel     Include OpenTelemetry observability stack (collector + GreptimeDB)"
     Write-Host ""
     Write-Host "Services: api, web, db, nginx"
     Write-Host ""
@@ -153,7 +153,7 @@ function Show-Help {
     Write-Host "  API:            http://localhost:3535/api"
     Write-Host "  Swagger UI:     http://localhost:3535/api/docs"
     Write-Host "  API Health:     http://localhost:3535/api/health/live"
-    Write-Host "  Uptrace:        http://localhost:14318 (with -Otel flag)"
+    Write-Host "  GreptimeDB:     http://localhost:14000/dashboard (with -Otel flag)"
     Write-Host ""
 }
 
@@ -193,7 +193,7 @@ function Start-Services {
     Write-Info "Application:  http://localhost:3535"
     Write-Info "Swagger UI:   http://localhost:3535/api/docs"
     if ($Otel) {
-        Write-Info "Uptrace:      http://localhost:14318"
+        Write-Info "GreptimeDB:   http://localhost:14000/dashboard"
     }
 }
 
@@ -235,7 +235,7 @@ function Rebuild-Services {
     Write-Info "Application:  http://localhost:3535"
     Write-Info "Swagger UI:   http://localhost:3535/api/docs"
     if ($Otel) {
-        Write-Info "Uptrace:      http://localhost:14318"
+        Write-Info "GreptimeDB:   http://localhost:14000/dashboard"
     }
 }
 

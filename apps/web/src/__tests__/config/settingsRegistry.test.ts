@@ -11,6 +11,8 @@ import {
   settingsPageTitle,
 } from '../../config/adminSections';
 import type { SettingsSectionDef } from '../../config/adminSections';
+import { registeredSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
+import '../../config/settingsFeatures';
 import {
   USER_SETTINGS_SECTIONS,
   USER_HUB_PATH,
@@ -464,7 +466,9 @@ describe('the Operations group (#266)', () => {
   );
 
   it('is a third group, and the first two are untouched', () => {
-    expect(ADMIN_SECTIONS.map((section) => section.label)).toEqual([
+    // #471, epic #467 — Observability (the telemetry cards) is APPENDED as a
+    // fourth group after these three; it moves none of them.
+    expect(ADMIN_SECTIONS.map((section) => section.label).slice(0, 3)).toEqual([
       'General',
       'Access',
       'Operations',
@@ -586,8 +590,9 @@ describe('the Operations group (#266)', () => {
       resolve(PLATFORM_API_DIST, 'email/email-settings.controller.js'),
       'utf8',
     );
+    // The db-backup controller is the platform's (#471).
     const dbBackupController = readFileSync(
-      resolve(API_SRC, 'db-backup/db-backup.controller.ts'),
+      resolve(PLATFORM_API_DIST, 'db-backup/db-backup.controller.js'),
       'utf8',
     );
 
@@ -1257,5 +1262,147 @@ describe('the Storage card (#469)', () => {
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/storage'),
     ).toBe('Storage');
+  });
+});
+
+/**
+ * The Observability cards (#471, epic #467). The pages are the platform's
+ * telemetry slice (`@marinoscar/platform-web/telemetry/ui`), so the strings the
+ * cards gate on are read off the installed `@marinoscar/platform-api` package
+ * rather than off any app controller (CLAUDE.md Settings UI Pattern rule 3).
+ */
+describe('the Observability cards (#471)', () => {
+  const observability = ADMIN_SECTIONS.find((section) => section.label === 'Observability');
+  const cardsByTitle = new Map(
+    ADMIN_SECTIONS.flatMap((section) => section.cards).map((card) => [card.title, card]),
+  );
+
+  const API_SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../api/src');
+  const PLATFORM_TELEMETRY_DIST = resolve(
+    API_SRC,
+    '../../../node_modules/@marinoscar/platform-api/dist/telemetry',
+  );
+  const permissionCatalog = readFileSync(
+    resolve(API_SRC, '../prisma/catalog/permissions.json'),
+    'utf8',
+  );
+  const adminController = readFileSync(
+    resolve(PLATFORM_TELEMETRY_DIST, 'telemetry-admin.controller.js'),
+    'utf8',
+  );
+  const explorerController = readFileSync(
+    resolve(PLATFORM_TELEMETRY_DIST, 'telemetry-explorer.controller.js'),
+    'utf8',
+  );
+  const telemetryPermissions = readFileSync(
+    resolve(PLATFORM_TELEMETRY_DIST, 'telemetry.permissions.js'),
+    'utf8',
+  );
+
+  it('is APPENDED as the last group, after the three that existed', () => {
+    expect(ADMIN_SECTIONS.at(-1)?.label).toBe('Observability');
+  });
+
+  it('declares the three cards in the package’s order, none inserted into an existing group', () => {
+    expect(observability?.cards.map((card) => card.title)).toEqual([
+      'Telemetry',
+      'Telemetry Explorer',
+      'Telemetry Dashboard',
+    ]);
+    for (const section of ADMIN_SECTIONS) {
+      if (section.label === 'Observability') continue;
+      expect(
+        section.cards.some((card) => card.title.startsWith('Telemetry')),
+        `${section.label} must not carry a telemetry card`,
+      ).toBe(false);
+    }
+  });
+
+  it('routes every card, none of them inert', () => {
+    expect(cardsByTitle.get('Telemetry')?.path).toBe('/admin/settings/telemetry');
+    expect(cardsByTitle.get('Telemetry Explorer')?.path).toBe('/admin/settings/telemetry/explorer');
+    expect(cardsByTitle.get('Telemetry Dashboard')?.path).toBe(
+      '/admin/settings/telemetry/dashboard',
+    );
+    for (const card of observability?.cards ?? []) {
+      expect(card.disabled, `${card.title} must not be inert`).toBeUndefined();
+      expect(card.alwaysShow, `${card.title} must be deniable`).toBeUndefined();
+    }
+  });
+
+  it('binds Telemetry to telemetry:read, which the platform admin controller enforces', () => {
+    expect(cardsByTitle.get('Telemetry')?.permission).toBe('telemetry:read');
+    expect(cardsByTitle.get('Telemetry')?.permission).not.toBe('system_settings:read');
+    expect(permissionCatalog).toContain('"telemetry:read"');
+    expect(permissionCatalog).toContain('"telemetry:write"');
+    expect(telemetryPermissions).toContain("id: 'telemetry:read'");
+    expect(telemetryPermissions).toContain("id: 'telemetry:write'");
+    expect(adminController).toContain('TELEMETRY_PERMISSIONS.READ');
+    expect(adminController).toContain('TELEMETRY_PERMISSIONS.WRITE');
+  });
+
+  it('binds the Explorer and the Dashboard to telemetry:query, which the platform explorer controller enforces', () => {
+    for (const title of ['Telemetry Explorer', 'Telemetry Dashboard']) {
+      expect(cardsByTitle.get(title)?.permission, title).toBe('telemetry:query');
+    }
+    expect(permissionCatalog).toContain('"telemetry:query"');
+    expect(telemetryPermissions).toContain("id: 'telemetry:query'");
+    expect(explorerController).toContain('TELEMETRY_PERMISSIONS.QUERY');
+  });
+
+  it('gates only the Explorer and the Dashboard on the telemetry feature, never the settings page', () => {
+    // The settings page is where telemetry is switched on: it must be reachable
+    // while the feature is off.
+    expect(cardsByTitle.get('Telemetry')?.feature).toBeUndefined();
+    expect(cardsByTitle.get('Telemetry Explorer')?.feature).toBe('telemetry');
+    expect(cardsByTitle.get('Telemetry Dashboard')?.feature).toBe('telemetry');
+  });
+
+  it('registers a resolver for the telemetry feature, so the gated cards can open', () => {
+    expect(registeredSettingsFeatures()).toContain('telemetry');
+  });
+
+  describe('visibility', () => {
+    it('shows a telemetry:read holder the settings card alone, with the feature on or off', () => {
+      const holds = (permission: string) => permission === 'telemetry:read';
+      expect(titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holds))).toEqual(['Telemetry']);
+      expect(
+        titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holds, undefined, { telemetry: true })),
+      ).toEqual(['Telemetry']);
+    });
+
+    it('hides the Explorer and the Dashboard from a telemetry:query holder until the feature is on (fail closed)', () => {
+      const holds = (permission: string) => permission === 'telemetry:query';
+      expect(titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holds))).toEqual([]);
+      expect(
+        titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holds, undefined, { telemetry: false })),
+      ).toEqual([]);
+      expect(
+        titlesOf(visibleSettingsSections(ADMIN_SECTIONS, holds, undefined, { telemetry: true })),
+      ).toEqual(['Telemetry Explorer', 'Telemetry Dashboard']);
+    });
+
+    it('shows nothing to a system_settings admin who was never granted a telemetry permission', () => {
+      const result = visibleSettingsSections(
+        ADMIN_SECTIONS,
+        (permission) => permission === 'system_settings:read',
+        undefined,
+        { telemetry: true },
+      );
+      expect(result.find((section) => section.label === 'Observability')).toBeUndefined();
+    });
+  });
+
+  describe('the AppBar title resolver', () => {
+    const titleFor = (pathname: string) =>
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, pathname, {
+        telemetry: true,
+      });
+
+    it('titles the three routes, the nested ones by longest prefix', () => {
+      expect(titleFor('/admin/settings/telemetry')).toBe('Telemetry');
+      expect(titleFor('/admin/settings/telemetry/explorer')).toBe('Telemetry Explorer');
+      expect(titleFor('/admin/settings/telemetry/dashboard')).toBe('Telemetry Dashboard');
+    });
   });
 });

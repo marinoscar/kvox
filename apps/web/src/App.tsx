@@ -17,6 +17,20 @@ import { JobsWebAdaptersProvider } from '@marinoscar/platform-web/jobs/headless'
 import { NodesWebAdaptersProvider } from '@marinoscar/platform-web/nodes/headless';
 import { appJobsAdapters } from './platform/jobsAdapters';
 import { appNodesAdapters } from './platform/nodesAdapters';
+// Issue #471, epic #467. The packaged Database Backup page takes this app's
+// DataTable and transport through its adapters provider; the packaged Telemetry
+// pages take their two assistant hooks and a spinner, and read the one
+// `GET /api/telemetry/config` answer from `AppTelemetryConfigProvider`
+// (`platform/TelemetryConfigBinding.tsx`), mounted ABOVE the platform host
+// because the host reads the `telemetry` settings feature that answer drives.
+import { DbBackupWebAdaptersProvider } from '@marinoscar/platform-web/db-backup/headless';
+import {
+  RequireTelemetryEnabled,
+  TelemetryWebAdaptersProvider,
+} from '@marinoscar/platform-web/telemetry/headless';
+import { appDbBackupAdapters } from './platform/dbBackupAdapters';
+import { appTelemetryAdapters } from './platform/telemetryAdapters';
+import { AppTelemetryConfigProvider } from './platform/TelemetryConfigBinding';
 import './config/settingsFeatures';
 // Issue #470, epic #467. The notification centre is the platform's; the slice is
 // configured once at module scope in `platform/notifications.ts` (imported by
@@ -198,10 +212,25 @@ const StorageConfigPage = lazy(() =>
     default: m.StorageConfigPage,
   })),
 );
-// Issue #287, epic #254 — the backup policy, the run history and the restore
-// dialog. Lazy for the same reason: a DataTable, a policy form and the restore
-// dialog that nobody who never opens the Console will ever mount.
-const DbBackupPage = lazy(() => import('./pages/Admin/DbBackupPage'));
+// Issue #287, epic #254; the platform's since #471 (epic #467) — the backup
+// policy, the run history and the restore dialog
+// (`@marinoscar/platform-web/db-backup/ui`). Lazy for the same reason: a
+// DataTable, a policy form and the restore dialog that nobody who never opens
+// the Console will ever mount.
+const DbBackupPage = lazy(() => import('@marinoscar/platform-web/db-backup/ui'));
+// Issue #471, epic #467 — the platform telemetry slice's three pages. Lazy, and
+// through the package's per-page entries rather than its `telemetry/ui` barrel:
+// `config/adminSections.tsx` imports the cards from the barrel, and a lazy
+// import of the same module would be pulled into the main chunk with them.
+const TelemetrySettingsPage = lazy(
+  () => import('@marinoscar/platform-web/telemetry/ui/settings-page'),
+);
+const TelemetryExplorerPage = lazy(
+  () => import('@marinoscar/platform-web/telemetry/ui/explorer-page'),
+);
+const TelemetryDashboardPage = lazy(
+  () => import('@marinoscar/platform-web/telemetry/ui/dashboard-page'),
+);
 // Issue #325, epic #319; the platform's since #470 — the admin broadcast list
 // and its composer. Lazy for the same reason: a table, a composer dialog and a
 // detail dialog that nobody who never opens the Console will ever mount.
@@ -1007,8 +1036,8 @@ function AppRoutes() {
                   />
                   {/* Issue #287, epic #254. Guarded EXACTLY as the Jobs and
                       Workers routes above are, and on `db_backup:read` — the
-                      literal string `db-backup/db-backup.controller.ts`
-                      enforces on its config read, its run list and its run
+                      literal string the platform's `db-backup.controller`
+                      (`@marinoscar/platform-api/db-backup`) enforces on its config read, its run list and its run
                       detail (`PERMISSIONS.DB_BACKUP_READ`), and the same one
                       the `Database Backup` card declares (the invariant
                       `destinations.test.ts` asserts for every card).
@@ -1081,6 +1110,67 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
+                  {/* Issue #471, epic #467. The platform telemetry slice's three
+                      pages, APPENDED after the existing admin routes. Each route
+                      is guarded on the exact string the platform's telemetry
+                      controllers enforce, the same one its card declares:
+                      `telemetry:read` for the settings page (`GET
+                      /api/admin/telemetry/config`; saving needs
+                      `telemetry:write`, which the PAGE gates by disabling its
+                      controls), `telemetry:query` for the Explorer and the
+                      Dashboard.
+
+                      The settings page is NOT behind `RequireTelemetryEnabled`:
+                      it is where telemetry is switched on. The Explorer and the
+                      Dashboard are, exactly as their cards carry `feature:
+                      'telemetry'`: with no store deployed, or collection off,
+                      there is nothing to query, so a deep link replaces to `/`
+                      instead of showing a page of failed requests. The guard
+                      reads the shell's one copy of `GET /api/telemetry/config`
+                      (`AppTelemetryConfigProvider`) and shows the app spinner
+                      while the first answer is in flight.
+
+                      TWO ROUTES NESTED UNDER THE SETTINGS PATH, not tabs:
+                      `settingsPageTitle`'s longest-prefix rule titles
+                      `/admin/settings/telemetry/explorer` "Telemetry
+                      Explorer", not "Telemetry". */}
+                  <Route
+                    path="/admin/settings/telemetry"
+                    element={
+                      <RequirePermission
+                        permission="telemetry:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <TelemetrySettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/telemetry/explorer"
+                    element={
+                      <RequirePermission
+                        permission="telemetry:query"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <RequireTelemetryEnabled>
+                          <TelemetryExplorerPage />
+                        </RequireTelemetryEnabled>
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/telemetry/dashboard"
+                    element={
+                      <RequirePermission
+                        permission="telemetry:query"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <RequireTelemetryEnabled>
+                          <TelemetryDashboardPage />
+                        </RequireTelemetryEnabled>
+                      </RequirePermission>
+                    }
+                  />
                 </Route>
               </Route>
 
@@ -1120,13 +1210,19 @@ export default function App() {
   return (
     <ThemeContextProvider>
       <IdentityProviders>
-        <AppPlatformHostProvider>
-          <JobsWebAdaptersProvider adapters={appJobsAdapters}>
-            <NodesWebAdaptersProvider adapters={appNodesAdapters}>
-              <AppRoutes />
-            </NodesWebAdaptersProvider>
-          </JobsWebAdaptersProvider>
-        </AppPlatformHostProvider>
+        <AppTelemetryConfigProvider>
+          <AppPlatformHostProvider>
+            <JobsWebAdaptersProvider adapters={appJobsAdapters}>
+              <NodesWebAdaptersProvider adapters={appNodesAdapters}>
+                <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
+                  <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
+                    <AppRoutes />
+                  </TelemetryWebAdaptersProvider>
+                </DbBackupWebAdaptersProvider>
+              </NodesWebAdaptersProvider>
+            </JobsWebAdaptersProvider>
+          </AppPlatformHostProvider>
+        </AppTelemetryConfigProvider>
       </IdentityProviders>
     </ThemeContextProvider>
   );

@@ -28,7 +28,8 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Add or change an endpoint | [API.md](API.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md), then `/api/docs` (OpenAPI) |
 | Run the dev loop, change the database | [DEVELOPMENT.md](DEVELOPMENT.md), [../apps/api/AGENTS.md](../apps/api/AGENTS.md) |
 | Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)) |
-| Baseline a database onto the platform history | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
+| Baseline a database onto the platform history | [runbooks/application-role.md](runbooks/application-role.md) | You move an existing database to the ordinary application role the API connects as (row-level security), or roll back |
+| [runbooks/database-baseline.md](runbooks/database-baseline.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
 | Add a job type or any long-running work | the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)), [specs/job-queue.md](specs/job-queue.md); the queue itself is `@marinoscar/platform-api/jobs` (contract in the package README and the `JobHandler` TSDoc) |
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |

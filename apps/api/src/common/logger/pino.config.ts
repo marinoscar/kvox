@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { resolveServiceName } from '../otel/service-name';
+import { resolveServiceName } from '../otel/telemetry-identity';
 
 export const pinoConfig: pino.LoggerOptions = {
   level: process.env.LOG_LEVEL || 'info',

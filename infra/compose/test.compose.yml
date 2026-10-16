@@ -14,9 +14,14 @@
 # existing `test-db-data` volume keeps working. The base OS moves Alpine →
 # Debian, which is a property of the image and not of the data directory.
 #
-# `otel.compose.yml`'s `uptrace-pg` is deliberately NOT moved: it is Uptrace's
-# own metadata store, it never sees this application's schema, and giving it an
-# extension it will never load would be a larger pull for nothing.
+# TWO LOGINS. POSTGRES_USER is the image's bootstrap superuser (`postgres`,
+# administration only: the scripts in postgres-init/ connect as it). The
+# application role `kvox_app` is created on the first start of an empty volume
+# by 10-application-role.sh (NOSUPERUSER NOBYPASSRLS, owner of the database),
+# and the extensions script creates `vector` and `pg_trgm` as the superuser.
+# Tests that must exercise row-level security connect as kvox_app; an existing
+# `test-db-data` volume predates the role, so recreate it
+# (`docker compose -f test.compose.yml down -v`) to get it.
 # =============================================================================
 
 services:
@@ -27,10 +32,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: kvox_test
+      APP_DB_USER: kvox_app
+      APP_DB_PASSWORD: postgres
     ports:
       - "5433:5432"
     volumes:
       - test-db-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

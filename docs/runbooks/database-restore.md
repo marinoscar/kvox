@@ -7,16 +7,18 @@ and the PostgreSQL client tools.
 
 Source of truth for every claim below:
 
-- `apps/api/src/db-backup/restore-preflight.service.ts` — the seven gates, the
-  three outcomes, and the command block the `guided` outcome produces.
-- `apps/api/src/db-backup/database-restore.service.ts` — the automated restore:
-  the scratch-database replay, the swap, the catalog carry-over and rollback.
-- `apps/api/src/db-backup/admin-connection.util.ts` — the maintenance
-  connection, the identifier rules and the scratch/old name builders.
-- `apps/api/src/db-backup/pg-restore.util.ts` — the `pg_restore` flags, and why
-  `--exit-on-error` is load-bearing.
-- `apps/api/src/db-backup/db-backup-admin.service.ts` — the backup list and the
-  five-minute signed download URL.
+- `@marinoscar/platform-api/db-backup` (since #471; KVox's own
+  `apps/api/src/db-backup/` is gone) — `restore-preflight.service` and
+  `restore-gates.builtin` (the eight built-in gates, the three outcomes and the
+  command block the `guided` outcome produces), `database-restore.service` (the
+  automated restore: the scratch-database replay, the swap, the catalog
+  carry-over and rollback), `admin-connection.util` (the maintenance connection,
+  the identifier rules and the scratch/old name builders), `pg-restore.util`
+  (the `pg_restore` flags, and why `--exit-on-error` and the row-level-security
+  pair are load-bearing) and `db-backup-admin.service` (the backup list and the
+  five-minute signed download URL).
+- `apps/api/src/app-registrations/db-backup.ts` — the one KVox gate,
+  `kvox-extensions`.
 - `docs/specs/database-restore.md` — the design, and the rejected alternatives.
 - `docs/specs/database-backup.md` — where the archives come from.
 
@@ -26,7 +28,7 @@ Source of truth for every claim below:
   roll it back. That is **section 8**, and it is the path to prefer: it takes
   the safety backup, verifies the archive, replays into a scratch database while
   the application stays up, and swaps in seconds. #286 adds the endpoints that
-  start it and #287 the dialog; until they land it is reachable only from code.
+  start it and #287 the dialog (now the packaged restore dialog).
 - **The API is not serving, or the pre-flight came back `guided`.** Section 4 is
   the procedure, by hand, from a shell. It is the same sequence, with you
   issuing the statements.
@@ -57,7 +59,7 @@ and a *successful* restore leaves the application down.
 The pre-flight is side-effect free: it creates nothing, drops nothing, renames
 nothing. Run it as often as you like.
 
-It reports **seven gates**, each with a verdict and, when there is something to
+It reports **nine gates** (eight built in, one KVox adds), each with a verdict and, when there is something to
 do, an action:
 
 | Gate | What it means when it is unhappy |
@@ -65,7 +67,9 @@ do, an action:
 | PostgreSQL client version | The `pg_restore` in the API image is older than the server. **Nothing can restore until the image is rebuilt** — see `postgres-client-version.md`. |
 | Cluster admin connection | The API cannot open a session on the `postgres` maintenance database. It cannot automate a restore; you still can. |
 | `CREATE DATABASE` privilege | The application's role may not create databases. **Normal on managed PostgreSQL.** You still can, with a superuser. |
+| Row-level security bypass | The restore session cannot lift row-level security: the role is neither a superuser nor `BYPASSRLS`, and the startup option did not reach the server (a transaction-mode pooler drops it). A restore would write the org tables **without their rows**. Connect directly to PostgreSQL. See section 4.3. |
 | Required extensions | The server does not offer an extension the database uses. `pg_restore` would stop on that line. Install the package on the server. |
+| `kvox-extensions` — pgvector and pg_trgm are available on the target cluster | The cluster you restore onto cannot offer `vector` or `pg_trgm`, which this schema requires. **Blocks**, and cannot be overridden: the archive would stop on the first `CREATE EXTENSION`. Install the pgvector package on the server, or restore onto the image the deployment ships. The gate only reads `pg_available_extensions`; it creates nothing. |
 | Free disk space | There is not room for a full copy (twice over, if the displaced database is being kept). **Never a refusal** — see section 3. |
 | Connected clients | More than one client address is attached. Usually a second API replica, sometimes just a `psql` window. **A hint, not a verdict.** |
 | Schema compatibility | The archive's migration and the live one differ, in either direction. **Blocks** until you accept it — see section 6. |
@@ -81,7 +85,7 @@ And **one of three outcomes**:
 
 ### 2.1 Running it without the UI
 
-Once #286 lands, the pre-flight is an endpoint on the admin API and the CLI
+The pre-flight is an endpoint on the admin API and the CLI
 reaches it with:
 
 ```bash
@@ -202,11 +206,21 @@ Nothing here touches the live database.
 ```bash
 createdb --host=<db host> --port=<db port> --username=<admin role> <scratch>
 
+PGOPTIONS='-c app.rls_bypass=on' \
 pg_restore --host=<db host> --port=<db port> --username=<admin role> \
   --dbname=<scratch> \
-  --no-owner --no-acl --exit-on-error --jobs=4 \
+  --no-owner --no-acl --exit-on-error --enable-row-security --jobs=4 \
   /tmp/<archive>.dump
 ```
+
+**`--enable-row-security` and `PGOPTIONS='-c app.rls_bypass=on'` go together.**
+The org tables (`storage_objects`, `storage_object_chunks`, `ai_runs`,
+`ai_usage_events` and the group, grant and organization-settings tables) force
+row-level security. With only the flag, `pg_restore` exits 0 and the tables come
+back empty; with only the option, it refuses the table. A superuser or
+`BYPASSRLS` admin role ignores the policies, so the pair is harmless there and
+required for any other role. Connect to PostgreSQL directly, not through a
+pooler. This is what the platform does on every automated restore.
 
 **`--exit-on-error` is load-bearing.** Without it `pg_restore` logs each
 failure, carries on, and **exits 0** — so a database missing half its tables is
@@ -254,6 +268,27 @@ thought was stopped.
 
 Each rename is a catalog update — it either happens or it does not. If the
 second one fails, you are in the state described in section 5.2.
+
+### 4.5.1 Hand the restored database to the application role
+
+`--no-owner` makes the connecting role the owner of everything it restores. When
+you restored as `postgres` (the usual `guided` case) the tables belong to
+`postgres`, and the API, which connects as the ordinary application role
+(`APP_DB_USER`, default `kvox_app`), cannot migrate or write them. Run the
+ownership script as the superuser, against `<live>`, before you migrate or start the API:
+
+```bash
+psql -v ON_ERROR_STOP=1 -v app=<APP_DB_USER> \
+  --host=<db host> --port=<db port> --username=<admin role> --dbname=<live> \
+  -f apps/api/scripts/transfer-ownership.sql
+```
+
+The script is idempotent, runs in one transaction, refuses a role that is a
+superuser or has `BYPASSRLS`, and leaves the `vector`, `pg_trgm` and
+`uuid-ossp` extensions owned by the bootstrap superuser. Details and the
+rehearsal: `docs/runbooks/application-role.md` section 4. A deployment that has
+not switched to the application role yet (it still connects as `postgres`)
+skips this step.
 
 ### 4.6 Migrate, if the schemas differed
 
@@ -568,6 +603,8 @@ never touched — which also means it is never cleaned up. Drop it yourself.
   Prisma pool, why `guided` is a normal outcome, and what was rejected.
 - `docs/specs/database-backup.md` — where archives come from, and the retention
   rules that decide how long they last.
+- `docs/runbooks/application-role.md` — the ordinary database role the API
+  connects as, and the ownership transfer a restore as a superuser may need.
 - `docs/runbooks/postgres-client-version.md` — fixing a client/server major
   mismatch.
 - `docs/runbooks/maintenance-mode.md` — opening and closing a window by hand,

@@ -8,7 +8,7 @@
 // lists with the platform's own declarations (`assembleSystemSettingsNamespaces`,
 // `assembleUserSettingsNamespaces`) and registers the result.
 //
-//   system (app list): transcription, ai
+//   system (app list): transcription, ai, telemetry
 //   user   (app list): onboarding, graph
 //
 // The PLATFORM list (notifications, jobs, nodes, databaseBackup, maintenance /
@@ -39,6 +39,7 @@ import type { GraphPreferencesValue } from '../graph/preferences/graph-preferenc
 import type { OnboardingValue } from '../common/schemas/user-settings-namespaces.schema';
 import { ONBOARDING_USER_SETTINGS } from '../onboarding/onboarding.user-settings';
 import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
+import { TELEMETRY_SYSTEM_SETTINGS } from '../platform/telemetry/telemetry.system-settings';
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../transcription/transcription.system-settings';
 
 /** this app's system namespaces, in stored key order (after the platform's five). */
@@ -46,6 +47,10 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
   TRANSCRIPTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // PLATFORM-ADOPTION-SHIM(3.1): this app's own `ai` declaration until #473.
   KVOX_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The platform telemetry slice's policy (#471). The package ships the schema, the
+  // defaults and the merge; the declaration is this app's (see the file). Appended
+  // last: the stored key order never changes for an existing deployment.
+  TELEMETRY_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** this app's user namespaces, in stored key order (after the platform's three). */

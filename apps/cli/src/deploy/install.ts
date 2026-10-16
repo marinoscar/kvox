@@ -16,6 +16,7 @@ import {
 import { isLoopbackPortFree } from './checks/types.js';
 import { ensureDeployInfoDir, writeDeployInfo } from './deploy-info.js';
 import { dockerPortClaims, type DockerPortClaim } from './docker-ports.js';
+import { composeFilesFor } from './compose-files.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -97,8 +98,6 @@ import type { PromptContext } from '../prompt.js';
 //      certificate that does not exist fails nginx -t and takes the shared
 //      proxy's reload down for every site on the host.
 // =============================================================================
-
-const COMPOSE_FILES = ['base.compose.yml', 'prod.compose.yml', 'vps.compose.yml'] as const;
 
 export interface InstallOptions {
   /**
@@ -255,7 +254,11 @@ export function composeCwd(deployRoot: string): string {
   return join(deployRoot, 'repo', 'infra', 'compose');
 }
 
-export function composeArgv(name: string, extra: readonly string[]): string[] {
+export function composeArgv(
+  name: string,
+  extra: readonly string[],
+  env?: ReadonlyMap<string, string> | undefined,
+): string[] {
   // `-p <name>` pins the compose PROJECT (#119). Without it the project is
   // named after the compose directory, which is `compose` for every app built
   // from this template, so a second app's `up -d` replaces the first's
@@ -266,7 +269,9 @@ export function composeArgv(name: string, extra: readonly string[]): string[] {
     'compose',
     '-p',
     name,
-    ...COMPOSE_FILES.flatMap((file) => ['-f', file]),
+    // The platform's order, telemetry files included when the .env opted in
+    // (compose-files.ts): the same list for every command of the deployment.
+    ...composeFilesFor(env).flatMap((file) => ['-f', file]),
     ...extra,
   ];
 }
@@ -301,7 +306,7 @@ async function compose(
   extra: readonly string[],
   options?: { timeoutMs?: number },
 ): Promise<void> {
-  const result = await context.runCommand(composeArgv(context.options.name, extra), {
+  const result = await context.runCommand(composeArgv(context.options.name, extra, readEnvFile(context.options.deployRoot)), {
     cwd: composeCwd(context.options.deployRoot),
     timeoutMs: options?.timeoutMs ?? 30 * 60_000,
     redact: context.journal.redact,

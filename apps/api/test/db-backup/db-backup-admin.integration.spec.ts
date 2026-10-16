@@ -2,7 +2,7 @@
 // Integration tests for the admin database-backup API (issue #283, epic #254)
 // =============================================================================
 //
-// `src/db-backup/db-backup-admin.service.spec.ts` proves what the service
+// the platform package's `db-backup/db-backup-admin.service.spec.ts` proves what the service
 // DECIDES. This suite proves the things only the real Nest router, the real
 // guards, the real global pipe and — above all — THE REAL EXCEPTION FILTER can
 // answer. Every case here fails for a reason a direct call to the service could
@@ -47,7 +47,7 @@
 //
 // `DatabaseBackupRunnerService` SPAWNS `pg_dump` and streams its output into a
 // bucket. Its behaviour is proven against a seam in
-// `src/db-backup/db-backup-runner.service.spec.ts` with no PostgreSQL binaries
+// the platform package's `db-backup/db-backup-runner.service.spec.ts` with no PostgreSQL binaries
 // installed and no bucket, which is the whole reason that seam exists — and a
 // suite that needed either on the runner is a suite CI skips. So the two
 // collaborators that reach outside this process are the two that are
@@ -64,11 +64,8 @@ import request from 'supertest';
 
 import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
 import { ROLES_KEY } from '@marinoscar/platform-api/identity';
-import { DatabaseBackupController } from '../../src/db-backup/db-backup.controller';
-import { BACKUP_DOWNLOAD_URL_EXPIRY_SECONDS } from '../../src/db-backup/db-backup-admin.service';
-import { DatabaseBackupRunnerService } from '../../src/db-backup/db-backup-runner.service';
-import { PgJobRoleBroker } from '../../src/db-backup/pg-job-role.broker';
-import { DatabaseBackupAlreadyRunningError } from '../../src/db-backup/db-backup.errors';
+import { DatabaseBackupController, BACKUP_DOWNLOAD_URL_EXPIRY_SECONDS, PgJobRoleBroker } from '@marinoscar/platform-api/db-backup/testing';
+import { DatabaseBackupAlreadyRunningError, DatabaseBackupRunnerService } from '@marinoscar/platform-api/db-backup';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import {
   TestContext,
@@ -188,7 +185,7 @@ describe('Admin database-backup API (Integration)', () => {
    * The #350 job-role broker, substituted for the same reason the runner and
    * the storage provider are: it opens a real `pg.Client` to a real cluster,
    * and a suite that needed one is a suite CI skips.
-   * `src/db-backup/pg-job-role.broker.db.spec.ts` owns the cluster behaviour.
+   * the platform package's `db-backup/pg-job-role.broker.db.spec.ts` owns the cluster behaviour.
    */
   const jobRoles = {
     preflight: jest.fn(),
@@ -233,7 +230,7 @@ describe('Admin database-backup API (Integration)', () => {
     runner.assertStorageProviderUsable.mockReset();
     // The REAL rule, reached the way the service is supposed to reach it. The
     // pure helper it forwards to has its own tests in
-    // `src/db-backup/db-backup-storage.spec.ts`.
+    // the platform package's `db-backup/db-backup-storage.spec.ts`.
     runner.assertStorageProviderUsable.mockImplementation(() => undefined);
     runner.queueBackup.mockReset();
     runner.queueBackup.mockResolvedValue({
@@ -481,7 +478,7 @@ describe('Admin database-backup API (Integration)', () => {
     it('reports a storage provider this deployment lacks as a 400, not a 500', async () => {
       const admin = await createMockAdminUser(context);
       const { DatabaseBackupStorageProviderError } = await import(
-        '../../src/db-backup/db-backup.errors'
+        '@marinoscar/platform-api/db-backup'
       );
       runner.queueBackup.mockRejectedValue(
         new DatabaseBackupStorageProviderError('gcs', 's3')
@@ -593,7 +590,7 @@ describe('Admin database-backup API (Integration)', () => {
     it('refuses a storageProvider that is not the active one with a clean 400', async () => {
       const admin = await createMockAdminUser(context);
       const { DatabaseBackupStorageProviderError } = await import(
-        '../../src/db-backup/db-backup.errors'
+        '@marinoscar/platform-api/db-backup'
       );
       runner.assertStorageProviderUsable.mockImplementation(() => {
         throw new DatabaseBackupStorageProviderError('gcs', 's3');

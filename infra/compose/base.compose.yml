@@ -4,8 +4,8 @@
 # Usage (run from infra/compose folder):
 #   docker compose -f base.compose.yml -f dev.compose.yml up
 #
-# With observability:
-#   docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
+# With observability (OpenTelemetry collector + GreptimeDB):
+#   docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
 #
 # Production:
 #   docker compose -f base.compose.yml -f prod.compose.yml up
@@ -118,14 +118,20 @@ services:
       # Database connection (individual variables; DATABASE_URL is derived)
       - POSTGRES_HOST=${POSTGRES_HOST:-db}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      # The API signs in as an ORDINARY role (NOSUPERUSER NOBYPASSRLS) that owns
+      # the tables, never as the bootstrap superuser: row-level security does
+      # not apply to a superuser. devdb.compose.yml and test.compose.yml
+      # create this role (postgres-init/10-application-role.sh) from
+      # APP_DB_USER / APP_DB_PASSWORD, which .env.example keeps equal to these
+      # two. docs/runbooks/application-role.md moves an existing database.
+      - POSTGRES_USER=${POSTGRES_USER:-kvox_app}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-appdb}
       - POSTGRES_SSL=${POSTGRES_SSL:-false}
       # JWT lifetimes (JWT_SECRET and COOKIE_SECRET arrive via env_file)
       - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-15}
       - JWT_REFRESH_TTL_DAYS=${JWT_REFRESH_TTL_DAYS:-14}
-      # Observability: off unless asked for, so the otel overlay is opt-in
+      # Observability: off unless asked for, so the telemetry overlay is opt-in
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-kvox-api}
       - LOG_LEVEL=${LOG_LEVEL:-info}

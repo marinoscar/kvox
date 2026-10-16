@@ -10,7 +10,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Version bump (root rule: CLI Version Bump on Improvement)
 
-- The version lives **only** in `apps/cli/package.json` (today `1.8.0`). `src/package-info.ts` reads it at runtime and exports `CLI_VERSION`; never hardcode it or import `package.json` elsewhere (see that file's header).
+- The version lives **only** in `apps/cli/package.json` (today `1.9.0`). `src/package-info.ts` reads it at runtime and exports `CLI_VERSION`; never hardcode it or import `package.json` elsewhere (see that file's header).
 - `CLI_VERSION` is recorded as `appctlVersion` in a deployment's state file, as `deployedBy.version` in `deploy-info/info.json`, and sent as the User-Agent on every API request. A stale version makes two installs indistinguishable in a deployment record.
 - PATCH for an improvement or a set shipped together; MINOR for a new command or subcommand; **one bump per PR**. Then `npm install --package-lock-only` (the lockfile's `apps/cli` entry carries the version).
 - Applies to `apps/cli`, `install.sh` and `apps/cli/bootstrap-vps.sh`. Adding only docs such as this file is not a CLI improvement.

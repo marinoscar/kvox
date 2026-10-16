@@ -5,7 +5,7 @@ Shared rules for AI assistants working on this codebase (loaded by OpenCode, and
 ## Project overview
 
 Web application foundation (KVox): React UI + Node API + PostgreSQL, with OAuth authentication, RBAC, a settings framework, a background job queue with worker nodes, transcription, AI notes and a connected-knowledge graph.
-Stack: Node.js + TypeScript; NestJS on Fastify + Prisma (API); React + MUI, sigma.js + graphology (web); Commander + ink (`kvox` CLI); PostgreSQL; Passport (Google OAuth); Jest + Supertest (API), Vitest + React Testing Library (web, CLI); OpenTelemetry + Uptrace + Pino; Docker Compose; Nginx same-origin.
+Stack: Node.js + TypeScript; NestJS on Fastify + Prisma (API); React + MUI, sigma.js + graphology (web); Commander + ink (`kvox` CLI); PostgreSQL; Passport (Google OAuth); Jest + Supertest (API), Vitest + React Testing Library (web, CLI); OpenTelemetry + GreptimeDB + Pino; Docker Compose; Nginx same-origin.
 Start at [README.md](README.md) and [docs/README.md](docs/README.md) (index with a "Doc map by task").
 
 ## Repository structure
@@ -16,8 +16,8 @@ apps/web/        React app: src/config/ (registries), pages/, components/, __tes
 apps/cli/        `kvox` CLI: src/commands/, src/tui/; README.md is the usage source of truth
 packages/shared/ Shared code; ontology sources in src/ontology/, compiled output in ontology/
 docs/            ARCHITECTURE.md, API.md, specs/, runbooks/, deployment/
-infra/compose/   {base,dev,devdb,prod,otel,test,vps,worker}.compose.yml, .env.example
-infra/nginx/, infra/otel/   Nginx routing; OTEL collector and Uptrace config
+infra/compose/   {base,dev,devdb,prod,telemetry,vps.telemetry,test,vps,worker}.compose.yml, .env.example
+infra/nginx/, infra/otel/   Nginx routing; OTEL collector config
 tests/e2e/       Optional E2E tests
 ```
 
@@ -119,6 +119,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - **Search vectors are `GENERATED ALWAYS ... STORED` columns, never triggers** (a trigger does not fire under `pg_restore`): [docs/specs/search.md](docs/specs/search.md).
 - **A backup archive is never buffered**: `pg_dump` streams into object storage; the upload and the dump's exit code are both awaited. **No restore pre-flight may create, drop or rename anything**; the cluster admin connection lives outside the Prisma pool ([database-backup](docs/specs/database-backup.md), [database-restore](docs/specs/database-restore.md)).
 - **`notify()` runs after the triggering write commits, outside any `$transaction`** ([recipe](.claude/skills/add-notification/SKILL.md)). Email, notifications, broadcasts and Web Push are platform slices; KVox registers events in `apps/api/src/notifications-registry/` (`registerNotification`) and templates in `apps/api/src/email-templates/`. Event keys, channel ids and template names are persisted: never rename one.
+- **The API connects as an ordinary `NOSUPERUSER NOBYPASSRLS` role that owns the tables** (`APP_DB_USER`, `kvox_app`); never `SUPERUSER`/`BYPASSRLS`. Every dump and restore carries `--enable-row-security` **and** `PGOPTIONS=-c app.rls_bypass=on`. `vector`/`pg_trgm` are created by the bootstrap superuser only. Existing databases: [runbook](docs/runbooks/application-role.md).
 - **A job `type` string is permanent** once jobs of that type exist.
 - **`apps/api/src/transcripts/editing/` stays pure** (no `PrismaService`, no `@Injectable`, no `randomUUID()` in a reducer), so `materialize()` replays through the same functions as live edits ([transcription §4](docs/specs/transcription.md)).
 - **Every graph write goes through `GraphWriteService`** (`apps/api/src/graph/write/`); the sole exception is `kg.migrate`. The deferred `kg_assert_has_evidence` trigger refuses an accepted/edited row with no evidence at `COMMIT` (no orphans) ([ontology](docs/specs/ontology.md)). Nothing enters the graph except through a reviewed proposal's commit (named exceptions: speaker naming, manual entity edit); retrieval never answers from the graph alone.
@@ -153,7 +154,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 ```bash
 cp infra/compose/.env.example infra/compose/.env       # once
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
-#   add -f devdb.compose.yml for a local Postgres, -f otel.compose.yml for Uptrace (:14318)
+#   add -f devdb.compose.yml for a local Postgres, -f telemetry.compose.yml for GreptimeDB (:14000)
 #   prod: -f base.compose.yml -f prod.compose.yml
 npm test --workspace=api                    # unit + mocked integration
 npm run test:db --workspace=api             # real-Postgres tier (*.db.spec.ts)
@@ -165,7 +166,7 @@ cd apps/api && npm run prisma:migrate:dev -- --name <migration_name>
 cd apps/api && npm run prisma:migrate       # apply (production)
 ```
 
-Service URLs (dev): app http://localhost:3535 (Nginx); API reference http://localhost:3535/api/docs; Uptrace http://localhost:14318.
+Service URLs (dev): app http://localhost:3535 (Nginx); API reference http://localhost:3535/api/docs.
 
 ## Testing requirements
 

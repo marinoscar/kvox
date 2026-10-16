@@ -20,6 +20,7 @@ import {
 } from '@marinoscar/platform-api/manifest';
 
 import { registerKvoxCredentialPurposes } from '../platform/credentials/credential-purposes.manifest';
+import './db-backup';
 import './jobs';
 import { KVOX_MODEL_OWNERSHIP } from './model-ownership';
 import { KVOX_PERMISSIONS } from './permissions';

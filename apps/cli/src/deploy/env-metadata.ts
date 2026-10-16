@@ -454,15 +454,52 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   OTEL_ENABLED: { group: 'observability' },
   OTEL_EXPORTER_OTLP_ENDPOINT: { group: 'observability' },
   OTEL_SERVICE_NAME: { group: 'observability' },
-  UPTRACE_PROJECT1_TOKEN: { group: 'observability', secret: true },
-  UPTRACE_SECRET_KEY: { group: 'observability', secret: true },
-  UPTRACE_ADMIN_EMAIL: { group: 'observability' },
-  UPTRACE_ADMIN_PASSWORD: { group: 'observability', secret: true },
-  UPTRACE_PGPASSWORD: { group: 'observability', secret: true },
-  UPTRACE_SITE_URL: { group: 'observability' },
-  UPTRACE_REDIS_PASSWORD: { group: 'observability', secret: true },
-  UPTRACE_CH_PASSWORD: { group: 'observability', secret: true },
-  UPTRACE_CH_USER: { group: 'observability' },
+  // The platform telemetry stack (telemetry.compose.yml): the collector writes
+  // into GreptimeDB and the API reads it back for the explorer. The three
+  // passwords are secrets with the template's placeholders rejected, so they
+  // are asked (a secret nobody has set is always asked) and an unattended run
+  // fails unless they are supplied: telemetry.compose.yml refuses to start
+  // without them, and a well-known password on a telemetry store is not a
+  // default worth shipping.
+  // No `generate`: GreptimeDB reads the accounts from one comma-separated
+  // command-line value, which a generated value could break.
+  GREPTIME_HOST: { group: 'observability' },
+  GREPTIME_HTTP_PORT: { group: 'observability', validate: validatePort },
+  GREPTIME_PG_PORT: { group: 'observability', validate: validatePort },
+  GREPTIME_BIND_PG_PORT: { group: 'observability', validate: validatePort },
+  GREPTIME_DB: { group: 'observability' },
+  GREPTIME_WRITER_USER: { group: 'observability' },
+  GREPTIME_WRITER_PASSWORD: {
+    group: 'observability',
+    secret: true,
+    validate: rejectPlaceholder,
+  },
+  GREPTIME_READER_USER: { group: 'observability' },
+  GREPTIME_READER_PASSWORD: {
+    group: 'observability',
+    secret: true,
+    validate: rejectPlaceholder,
+  },
+  GREPTIME_ADMIN_USER: { group: 'observability' },
+  GREPTIME_ADMIN_PASSWORD: {
+    group: 'observability',
+    secret: true,
+    validate: rejectPlaceholder,
+  },
+  // Optional least-privilege login for the collector's PostgreSQL metrics;
+  // blank reuses the API's own login (telemetry.compose.yml).
+  POSTGRES_MONITOR_USER: { group: 'observability', allowBlank: true },
+  POSTGRES_MONITOR_PASSWORD: { group: 'observability', allowBlank: true, secret: true },
+
+  // --- Application database role ------------------------------------------
+  // NEVER written. These two only tell devdb.compose.yml and test.compose.yml
+  // which ordinary role to create on a fresh volume; a deployment's database
+  // already exists, and the API signs in with POSTGRES_USER and
+  // POSTGRES_PASSWORD. Leaving them out of a generated .env also keeps the
+  // compose default (APP_DB_USER follows POSTGRES_USER) from being overridden
+  // by a template value the operator never saw.
+  APP_DB_USER: { never: true },
+  APP_DB_PASSWORD: { never: true, secret: true },
 
   // --- Storage -------------------------------------------------------------
   // The bucket, region, endpoint and keys are no longer environment variables:

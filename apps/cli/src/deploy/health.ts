@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 
+import { composeFilesFor } from './compose-files.js';
+import { readEnvFile } from './env-file.js';
 import type { runCommand } from './executor.js';
 import type { DeployHooks } from './hooks.js';
 import type { DeployState } from './state.js';
@@ -19,12 +21,6 @@ import type { DeployState } from './state.js';
 // migration state separately, and a green probe alone is never treated as
 // proof that the schema is there.
 // =============================================================================
-
-const COMPOSE_FILES = [
-  'base.compose.yml',
-  'prod.compose.yml',
-  'vps.compose.yml',
-] as const;
 
 export interface ProbeResult {
   ok: boolean;
@@ -95,7 +91,9 @@ export function composeArgs(deployRoot: string, name: string): string[] {
   return [
     '-p',
     name,
-    ...COMPOSE_FILES.flatMap((file) => ['-f', file]),
+    // The same list install and update use, telemetry files included when the
+    // deployment's .env opted in (compose-files.ts).
+    ...composeFilesFor(readEnvFile(deployRoot)).flatMap((file) => ['-f', file]),
     '--project-directory',
     join(deployRoot, 'repo', 'infra', 'compose'),
   ];

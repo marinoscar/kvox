@@ -102,7 +102,7 @@ import {
   type RequestUser,
 } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { resolveServiceName } from '../../common/otel/service-name';
+import { resolveServiceName } from '../../common/otel/telemetry-identity';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
 import { StreamFlusher } from '../../notes/generation/stream-flusher';
 import { budgetRefusalMessage, computeTokenBudget } from '../../ai/ai-token-budget';

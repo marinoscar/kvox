@@ -110,7 +110,7 @@ const TEMPLATE = [
   'JOBS_WORKER_CONCURRENCY=2',
   'API_MEM_LIMIT=512M',
   'WEB_MEM_LIMIT=128M',
-  'UPTRACE_SITE_URL=http://localhost:14318',
+  'GREPTIME_HOST=greptimedb',
   '',
   '# ------------------------------------------------------------',
   '# Database',
@@ -365,7 +365,7 @@ describe('formFieldsFor', () => {
     );
     const admin = formFieldsFor(stepById('admin'), { specs: SPECS, answers: {} });
 
-    const siteUrl = catchAll.find((field) => field.key === 'UPTRACE_SITE_URL');
+    const siteUrl = catchAll.find((field) => field.key === 'GREPTIME_HOST');
     expect(siteUrl?.kind === 'text' ? siteUrl.validate?.('') : 'missing').toBeUndefined();
 
     const email = admin.find((field) => field.key === 'INITIAL_ADMIN_EMAIL');

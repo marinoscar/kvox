@@ -1,7 +1,7 @@
 import { identityConfiguration } from '@marinoscar/platform-api/identity';
 
 import { buildDatabaseUrl } from '../common/database-url';
-import { resolveServiceName } from '../common/otel/service-name';
+import { resolveServiceName } from '../common/otel/telemetry-identity';
 
 export default () => {
   const host = process.env.POSTGRES_HOST || 'localhost';
@@ -229,7 +229,7 @@ export default () => {
   // whose backups silently stopped because of a typo in an env file is
   // indistinguishable from one that is being backed up, right up until
   // somebody needs a restore — which makes fail-open the only defensible
-  // direction here. See `db-backup/tasks/db-backup-schedule.task.ts`.
+  // direction here. See the platform db-backup slice (`@marinoscar/platform-api/db-backup`, `DbBackupScheduleTask`).
   dbBackup: {
     scheduleEnabled: process.env.DB_BACKUP_SCHEDULE_ENABLED !== 'false',
   },

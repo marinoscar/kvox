@@ -111,6 +111,12 @@ export const mockAdminUser: MockUser = {
     // note row's source name and an uploaded document's extraction progress.
     'storage:read',
     'storage:write',
+    // Present because the seeded `admin` role grants the platform telemetry
+    // set (#471, epic #467): an admin fixture without them would render a
+    // Console with no `Observability` group, a user that cannot exist.
+    'telemetry:read',
+    'telemetry:write',
+    'telemetry:query',
   ],
   isActive: true,
   createdAt: new Date().toISOString(),

@@ -404,6 +404,18 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Read-only, and never makes a network call: "is an update available" is whatever the ' +
           'CLI last recorded.',
       },
+      {
+        name: 'Telemetry',
+        description:
+          'Observability for this deployment (the platform telemetry slice): the telemetry policy ' +
+          'and the runtime export switch, the GreptimeDB connection and the managed stack, the SQL ' +
+          'explorer (query, schema, export), the dashboard with its metric groups and health ' +
+          'verdict, and the AI assistant over the data (unavailable until the AI slice is adopted). ' +
+          'Gated on `telemetry:read` (settings and status), `telemetry:write` (change them) and ' +
+          '`telemetry:query` (SQL, export, dashboard, assistant); the stack routes also need ' +
+          '`system_settings:read|write`. `GET /api/telemetry/config` is the signed-in, non-admin ' +
+          'probe the client uses to show or hide the telemetry pages.',
+      },
     ],
   },
 ];

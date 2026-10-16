@@ -74,6 +74,18 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
    ```
 
+   > **Two database logins.** On the first start of an empty volume the overlay
+   > runs `infra/compose/postgres-init/` as the bootstrap superuser `postgres`:
+   > `10-application-role.sh` creates the ordinary role the API signs in as
+   > (`APP_DB_USER`, default `kvox_app`, owner of the database) and
+   > `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp`. The API
+   > and `npm run prisma:migrate` use `POSTGRES_USER` / `POSTGRES_PASSWORD`, which
+   > `.env.example` sets to that role, so no superuser is in the API's environment.
+   > Volumes created before #471 predate the init scripts: run `docker compose ... down -v`
+   > to recreate them, set `APP_DB_USER=postgres` to opt out of the role (row-level
+   > security is then inert and the Doctor says so), or follow
+   > `docs/runbooks/application-role.md`.
+
    > **First run on a new machine:** `base.compose.yml` attaches the API to an
    > external Docker network named `devnet`, so the very first `docker compose
    > up` on a host fails with *network devnet declared as external, but could
@@ -161,8 +173,10 @@ Key variables (see `infra/compose/.env.example` for the full list). This section
 **Database (individual connection parameters):**
 - `POSTGRES_HOST` - Database hostname (default: localhost)
 - `POSTGRES_PORT` - Database port (default: 5432)
-- `POSTGRES_USER` - Database user (default: postgres)
-- `POSTGRES_PASSWORD` - Database password (default: postgres)
+- `POSTGRES_USER` - The API's database login (default: `kvox_app`). It must be an **ordinary** role (`NOSUPERUSER NOBYPASSRLS`) that owns the tables: a superuser skips row-level security and the Doctor check `db.rls_role` fails. The bootstrap superuser `postgres` is for administration only
+- `POSTGRES_PASSWORD` - That role's password (default: postgres)
+- `APP_DB_USER` / `APP_DB_PASSWORD` - Which ordinary role `devdb.compose.yml` and `test.compose.yml` create on the first start of an **empty** volume (`infra/compose/postgres-init/10-application-role.sh`, then `20-kvox-extensions.sh` creates `vector`, `pg_trgm` and `uuid-ossp` as the superuser). Keep them equal to `POSTGRES_USER` / `POSTGRES_PASSWORD`. Not read by a deployment whose database already exists, and never written by `kvox deploy`. An existing local volume predates the role: recreate it (`docker compose ... down -v`) or follow `docs/runbooks/application-role.md`
+- `POSTGRES_MONITOR_USER` / `POSTGRES_MONITOR_PASSWORD` - Optional login for the telemetry collector's PostgreSQL metrics; blank reuses `POSTGRES_USER` / `POSTGRES_PASSWORD`
 - `POSTGRES_DB` - Database name (default: appdb)
 - `POSTGRES_SSL` - Enable SSL connection (default: false)
 
@@ -214,9 +228,15 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 **Knowledge graph:**
 - `KG_MIGRATE_SCHEDULE_ENABLED` - Whether this process runs the hourly (minute 17) tick that enqueues `kg.migrate` for owners whose graph rows a declared ontology migration still has to reshape (#384). The tick only enqueues, and returns at once while `ONTOLOGY_MIGRATIONS` is empty. Only the literal `false` turns it off (default: on), the `DB_BACKUP_SCHEDULE_ENABLED` convention; an admin can still re-run one owner's migration with Retry in the job list. See `docs/runbooks/ontology-migration.md`
 
-**Observability:**
-- `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
-- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTEL Collector endpoint
+**Observability** (OpenTelemetry through `@marinoscar/platform-api/otel-core`, stored in GreptimeDB by the platform telemetry slice; full design in `docs/ARCHITECTURE.md` section 11):
+- `OTEL_ENABLED` - Turn the SDK on. `base.compose.yml` defaults it to `false`; `telemetry.compose.yml` sets it to `true` and points the API at the collector
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint (`http://otel-collector:4318` with the overlay)
+- `OTEL_SERVICE_NAME` - Service name in every span and metric (default: `kvox-api`)
+- `GREPTIME_HOST` / `GREPTIME_HTTP_PORT` / `GREPTIME_PG_PORT` / `GREPTIME_DB` - Where the API reads telemetry back from (the telemetry explorer, dashboard and AI assistant)
+- `GREPTIME_WRITER_USER` / `GREPTIME_READER_USER` / `GREPTIME_ADMIN_USER` and the three `*_PASSWORD` values - The three GreptimeDB accounts. The writer is the collector's ingest login only. The reader and admin are the **deployment default**: an administrator can save a connection at `/admin/settings/telemetry` (stored encrypted in the credential store) and it then replaces both with no restart. `telemetry.compose.yml` refuses to start without the passwords
+- `GREPTIME_BIND_PG_PORT` - Host port for GreptimeDB's PostgreSQL wire protocol on a VPS (bound to `127.0.0.1` only)
+
+Local telemetry: `docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml up` starts the collector and GreptimeDB. Traces and metrics appear in the app's telemetry explorer and dashboard (Admin Console, Operations) and in GreptimeDB's own SQL dashboard at http://localhost:14000/dashboard; `psql -h localhost -p 14003 -U <GREPTIME_READER_USER>` reads them directly. The collector's OTLP ports are remapped to 4327 (gRPC) and 4328 (HTTP) on the host. The GreptimeDB container is capped at 1 GB. `scripts/dev.ps1 -Otel` uses the same overlay. Telemetry is optional: with `OTEL_ENABLED=false` or GreptimeDB unreachable the API reports telemetry as unavailable and carries on. The Pino logger in `common/logger/` is kept; `initializeOtel` forwards its records to OTLP.
 
 ---
 

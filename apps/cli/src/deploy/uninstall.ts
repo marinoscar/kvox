@@ -518,7 +518,8 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
       },
       async run(context) {
         // `down -v --remove-orphans` through the SAME `-p <name> -f base -f
-        // prod -f vps` invocation install.ts uses, derived from `composeArgv`
+        // prod -f vps` invocation install.ts uses (plus the telemetry files when
+        // the deployment has them), derived from `composeArgv`
         // rather than restated - two copies of that list is exactly how an app
         // ends up with an orphaned volume nobody can name.
         //
@@ -526,7 +527,14 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
         // a "start over" that keeps the volumes is the failure this command
         // exists to stop improvised. It cannot touch a volume declared
         // `external:`, and there are none in these three files.
-        const argv = composeArgv(context.options.name, ['down', '-v', '--remove-orphans']);
+        // The telemetry files are part of the list when the .env opted in: the
+        // GreptimeDB data volume is declared in telemetry.compose.yml, and
+        // `down -v` removes only the volumes of the files it is given.
+        const argv = composeArgv(
+          context.options.name,
+          ['down', '-v', '--remove-orphans'],
+          readEnvQuietly(context.options.deployRoot),
+        );
 
         if (context.options.dryRun === true) {
           record(context, { kind: 'compose-project', target: argv.join(' '), existed: true });

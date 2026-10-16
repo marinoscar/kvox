@@ -8088,7 +8088,7 @@ Packaged by the platform (its `doctor` slice), mounted by `apps/api/src/doctor/d
 | `<APP_SLUG>.db.extensions` | `core` | `fail` when `vector` or `pg_trgm` is not installed (remedy: create the extension as a superuser before migrating); `data` holds extension names only. Provider: `apps/api/src/doctor/checks/db-extensions.doctor-check.ts`. |
 | `<APP_SLUG>.transcription.configured` | `ai` | `warn` when no transcription provider is selected or the selected provider has no stored key; a credential presence check only. Provider: `apps/api/src/transcription/transcription-configured.doctor-check.ts` (under `transcription` because base code must not import domain code). |
 
-⚠ **`db.rls_role` reports `fail` and that is expected.** The platform check wants a `NOSUPERUSER NOBYPASSRLS` database role, and this app still connects as `postgres`. The failure stays until #471 switches the role; it is recorded in [`platform-adoption/local-exceptions.md`](platform-adoption/local-exceptions.md) and the overall `verdict` is `fail` until then.
+**`db.rls_role` passes when the API connects as the ordinary application role** (`NOSUPERUSER NOBYPASSRLS`, since #471; runbook: [`runbooks/application-role.md`](runbooks/application-role.md)). A deployment that still connects as `postgres` reports `fail`, and the overall `verdict` is `fail` with it. Do not loosen the check.
 
 **Requires:** `system_settings:read` permission
 
