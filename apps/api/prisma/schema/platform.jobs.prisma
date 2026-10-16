@@ -334,7 +334,7 @@ model Job {
   // just the required other half of that one-to-one relation.
   backupRun DatabaseBackupRun?
 
-  // composed from app:ask.prisma
+  // composed from app:kvox.ask.prisma
   // Back-relations onto the platform's Job (an `extend model` block holds back-relation fields only).
   // The `ask_messages` assistant turn this job is producing (or produced),
   // when `type` is `'ask.respond'` (epic #348, issues #376/#378). Same
@@ -343,7 +343,7 @@ model Job {
   // conversation outlives `job.history.purge`'s schedule for this row.
   askMessage AskMessage?
 
-  // composed from app:graph.prisma
+  // composed from app:kvox.graph.prisma
   // Back-relations onto the platform's Job (an `extend model` block holds back-relation fields only).
   // The `kg_proposals` row this job is extracting (or extracted) into, when
   // `type` is `'kg.extract'` (epic #344, issue #351). Same one-to-one shape
@@ -359,7 +359,7 @@ model Job {
   // independent of `job.history.purge`'s schedule for this row.
   kgExport   KgExport?
 
-  // composed from app:notes.prisma
+  // composed from app:kvox.notes.prisma
   // Back-relations onto the platform's Job (an `extend model` block holds back-relation fields only).
   // The `note_exports` row this job rendered, when `type` is `'note.export'`
   // (issue #48, epic #45). Identical one-to-one shape as `transcriptExport`
@@ -378,7 +378,7 @@ model Job {
   // this row.
   noteGeneration NoteGeneration?
 
-  // composed from app:transcripts.prisma
+  // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's Job (an `extend model` block holds back-relation fields only).
   // The `transcript_exports` row this job rendered, when `type` is
   // `'transcript.export'` (issue #24, epic #19). Same one-to-one shape as
