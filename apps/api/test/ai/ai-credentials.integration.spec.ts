@@ -65,7 +65,7 @@ afterAll(() => {
 });
 
 const CREDENTIALS = '/api/ai-credentials';
-const CONFIG = '/api/ai/config';
+const CONFIG = '/api/ai-tasks/config'; // moved from /api/ai/config by #473
 
 /** A key with an obvious, greppable shape. Never a real one. */
 const RAW_KEY = 'sk-proj-INTEGRATION-TEST-SECRET-abcd1234';
@@ -423,9 +423,9 @@ describe('AI credentials integration', () => {
         .set(authHeader(bob.accessToken))
         .expect(200);
 
+      // Since #473 the probe reads the platform's `user_ai_keys` (existence only).
       expect(
-        prismaMock.userAiCredential.findUnique.mock.calls[0][0].where.userId_provider
-          .userId,
+        prismaMock.userAiKey.findUnique.mock.calls[0][0]!.where.userId_provider!.userId,
       ).toBe(bob.id);
     });
   });

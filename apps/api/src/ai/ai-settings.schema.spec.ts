@@ -9,7 +9,7 @@ import {
   systemAiSchema,
   type AiTaskModelCarriesNoSecret,
 } from './ai-settings.schema';
-import { DEFAULT_SYSTEM_SETTINGS } from '../settings/registry/default-system-settings';
+import { LEGACY_AI_DEFAULTS } from './ai-legacy-policy.service';
 import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { OpenAiProvider } from './providers/openai.provider';
 
@@ -250,7 +250,7 @@ describe('aiTaskModelsSchema — a PARTIAL record over the task keys (#360)', ()
 
 describe('systemAiSchema / systemAiPatchSchema carry both #360 fields', () => {
   it('the defaults parse through the value schema', () => {
-    const parsed = systemAiSchema.parse(DEFAULT_SYSTEM_SETTINGS.ai);
+    const parsed = systemAiSchema.parse(LEGACY_AI_DEFAULTS);
     expect(parsed.taskModels).toEqual({});
     expect(parsed.graphEnabled).toBe(false);
   });
@@ -281,14 +281,14 @@ describe('systemAiSchema / systemAiPatchSchema carry both #360 fields', () => {
 // =============================================================================
 
 describe('systemAiSchema — maxInputTokens/maxOutputTokens are nullable (#436)', () => {
-  it('DEFAULT_SYSTEM_SETTINGS.ai defaults both to null', () => {
-    expect(DEFAULT_SYSTEM_SETTINGS.ai.maxInputTokens).toBeNull();
-    expect(DEFAULT_SYSTEM_SETTINGS.ai.maxOutputTokens).toBeNull();
+  it('LEGACY_AI_DEFAULTS defaults both to null', () => {
+    expect(LEGACY_AI_DEFAULTS.maxInputTokens).toBeNull();
+    expect(LEGACY_AI_DEFAULTS.maxOutputTokens).toBeNull();
   });
 
   it('the value schema parses null for both fields', () => {
     const parsed = systemAiSchema.parse({
-      ...DEFAULT_SYSTEM_SETTINGS.ai,
+      ...LEGACY_AI_DEFAULTS,
       maxInputTokens: null,
       maxOutputTokens: null,
     });
@@ -298,7 +298,7 @@ describe('systemAiSchema — maxInputTokens/maxOutputTokens are nullable (#436)'
 
   it('the value schema still parses a legacy stored NUMBER for both fields', () => {
     const parsed = systemAiSchema.parse({
-      ...DEFAULT_SYSTEM_SETTINGS.ai,
+      ...LEGACY_AI_DEFAULTS,
       maxInputTokens: 100_000,
       maxOutputTokens: 16_384,
     });
@@ -307,7 +307,7 @@ describe('systemAiSchema — maxInputTokens/maxOutputTokens are nullable (#436)'
   });
 
   it('the value schema rejects undefined — a value row must state one or the other explicitly', () => {
-    const { maxInputTokens: _in, ...withoutInput } = DEFAULT_SYSTEM_SETTINGS.ai;
+    const { maxInputTokens: _in, ...withoutInput } = LEGACY_AI_DEFAULTS;
     expect(systemAiSchema.safeParse(withoutInput).success).toBe(false);
   });
 

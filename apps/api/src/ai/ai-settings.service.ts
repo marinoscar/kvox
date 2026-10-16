@@ -8,8 +8,7 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
-import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { AiLegacyPolicyService } from './ai-legacy-policy.service';
 import {
   missingModelNumbers,
   modelKnowledgeOf,
@@ -179,7 +178,8 @@ export class AiSettingsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly systemSettings: SystemSettingsService,
+    // PLATFORM-ADOPTION-SHIM(#477): the old-shape policy store (see its header).
+    private readonly systemSettings: AiLegacyPolicyService,
     private readonly registry: AiProviderRegistry,
     /**
      * The same `fetch` seam the provider uses, injected for the same reason.
@@ -346,11 +346,7 @@ export class AiSettingsService {
       this.assertTaskModelsValid(patch, stored, providerId);
     }
 
-    await this.systemSettings.patchSettings(
-      { ai: patch } as PatchSystemSettingsDto,
-      userId,
-      expectedVersion,
-    );
+    await this.systemSettings.patchSettings({ ai: patch }, userId, expectedVersion);
 
     await this.audit(userId, 'ai_settings:update', {
       // SAFE TO RECORD IN FULL: `patch` is a subset of `SystemAiValue`, and

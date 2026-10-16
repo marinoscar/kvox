@@ -117,6 +117,18 @@ const LEGACY_GLOBAL_VALUE = {
   },
 } as const;
 
+/** The `ai` fields the app extension keeps under their old names (#473): they read back as stored. */
+const AI_KEPT_FIELDS = {
+  enabled: true,
+  maxInputTokens: 100000,
+  maxOutputTokens: 8000,
+  requestTimeoutMs: 300000,
+  reasoningEffort: 'low',
+  maxDocumentBytes: 10485760,
+  taskModels: {},
+  graphEnabled: true,
+} as const;
+
 const LEGACY_NAMESPACES = Object.keys(LEGACY_GLOBAL_VALUE) as Array<keyof typeof LEGACY_GLOBAL_VALUE>;
 
 const GRAPH_PREFERENCES = {
@@ -207,9 +219,12 @@ describeWithDb('stored settings shape through the platform services (db)', () =>
     it('reads every one of the seven KVox namespaces exactly as stored', async () => {
       const settings = await system.getSettings();
 
-      for (const key of LEGACY_NAMESPACES) {
+      for (const key of LEGACY_NAMESPACES.filter((k) => k !== 'ai')) {
         expect((settings as unknown as Record<string, unknown>)[key]).toEqual(LEGACY_GLOBAL_VALUE[key]);
       }
+      // `ai` is the platform's namespace since #473: the fields this app kept read back unchanged,
+      // the old provider block is the platform's slot shape (see the pre-upgrade test below).
+      expect(settings.ai).toMatchObject(AI_KEPT_FIELDS);
     });
 
     it('a PATCH to transcription changes those fields and keeps every other transcription field', async () => {
@@ -235,9 +250,20 @@ describeWithDb('stored settings shape through the platform services (db)', () =>
       await system.patchSettings({ transcription: { enabled: false } } as never, actorId);
 
       const stored = await storedGlobal();
-      for (const key of LEGACY_NAMESPACES.filter((k) => k !== 'transcription')) {
+      for (const key of LEGACY_NAMESPACES.filter((k) => k !== 'transcription' && k !== 'ai')) {
         expect(stored[key]).toEqual(LEGACY_GLOBAL_VALUE[key]);
       }
+      // `ai` (#473): the kept fields and the not-yet-migrated old keys survive a write to another namespace.
+      expect(stored.ai).toMatchObject({ ...AI_KEPT_FIELDS, provider: 'openai' });
+      expect((stored.ai as { providers: { openai: Record<string, unknown> } }).providers.openai).toMatchObject({
+        baseUrl: 'https://api.openai.com/v1',
+      });
+      // ⚠ KNOWN, UNTIL #474 MOVES THE DATA: the platform re-serializes every provider slot on ANY
+      // system-settings write, and its openai slot has no `allowedModels` / `defaultModel`. A write
+      // before the #474 migration therefore drops the old model list. The migration must run first.
+      expect(
+        (stored.ai as { providers: { openai: Record<string, unknown> } }).providers.openai.allowedModels,
+      ).toBeUndefined();
       // Platform slices declare namespaces of their own (storage #469, telemetry #471); a PATCH writes
       // the composed row, so their defaults are added next to the seven stored namespaces.
       expect(Object.keys(stored).sort()).toEqual([...LEGACY_NAMESPACES, 'storage', 'telemetry'].sort());
@@ -265,7 +291,7 @@ describeWithDb('stored settings shape through the platform services (db)', () =>
 
     it('the namespace getters KVox services call read the stored values', async () => {
       await expect(system.getNamespace('transcription')).resolves.toEqual(LEGACY_GLOBAL_VALUE.transcription);
-      await expect(system.getNamespace('ai')).resolves.toEqual(LEGACY_GLOBAL_VALUE.ai);
+      await expect(system.getNamespace('ai')).resolves.toMatchObject(AI_KEPT_FIELDS);
       await expect(system.getNamespace('maintenance')).resolves.toEqual(LEGACY_GLOBAL_VALUE.maintenance);
     });
   });

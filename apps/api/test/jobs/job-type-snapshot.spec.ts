@@ -94,6 +94,16 @@ const KVOX_JOB_TYPES = [
   // platform identity (#465): registered through IDENTITY_JOBS, strings unchanged
   'auth.token.cleanup',
   'device-auth.code.cleanup',
+  // platform AI slice (#473): registered by `AiModule.forRoot`, strings are the platform's.
+  // Added deliberately by #473; the snapshot is a superset check, so this is a pin, not a gate.
+  'ai.catalog.refresh',
+  'ai.keys.recheck',
+  'ai.response.run',
+  'ai.image.generate',
+  'ai.audio.transcribe',
+  'ai.audio.speech',
+  'ai.runs.purge',
+  'ai.usage.purge',
   // retired by #468 step 6: handlers deleted, labels kept
   'example.echo',
   'example.checksum',
