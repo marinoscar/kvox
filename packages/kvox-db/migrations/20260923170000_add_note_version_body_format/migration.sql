@@ -1,0 +1,23 @@
+-- =============================================================================
+-- `body_format` on `note_versions` (issue #337)
+-- =============================================================================
+-- Per-version tracking of the same markdown-vs-plain-text syntax axis
+-- `note_templates.body_format`/`notes.body_format` (#334) already carry —
+-- but snapshotted onto each individual version rather than only the note's
+-- current one, so `GET /api/notes/:id/versions/:version` and a restore can
+-- each answer "what syntax was THIS version written in" without consulting
+-- the note's live (and possibly since-changed) format. Plain TEXT column,
+-- not an enum: validated by Zod in the API ('markdown' | 'plain_text'), same
+-- reasoning as every other body-format column in this schema.
+--
+-- Defaulted to 'markdown' for both existing rows and new ones. This is a
+-- correct backfill, not merely a convenient one: a version written before
+-- per-version tracking existed has no better answer available — the
+-- generating template/note's format at the time was never recorded per
+-- version — and 'plain_text' only existed as an option for a few hours
+-- before this issue landed, so no pre-existing version could actually be
+-- plain text in practice.
+-- =============================================================================
+
+-- AlterTable
+ALTER TABLE "note_versions" ADD COLUMN "body_format" TEXT NOT NULL DEFAULT 'markdown';

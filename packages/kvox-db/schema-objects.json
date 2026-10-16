@@ -1,0 +1,94 @@
+{
+  "checkConstraints": [
+    {
+      "name": "kg_distinct_pairs_order_chk",
+      "table": "kg_distinct_pairs"
+    },
+    {
+      "name": "kg_evidence_char_range_chk",
+      "table": "kg_evidence"
+    },
+    {
+      "name": "kg_evidence_ms_range_chk",
+      "table": "kg_evidence"
+    },
+    {
+      "name": "kg_items_sensitivity_chk",
+      "table": "kg_items"
+    },
+    {
+      "name": "kg_items_subject_required_chk",
+      "table": "kg_items"
+    },
+    {
+      "name": "kg_mentions_one_source_chk",
+      "table": "kg_mentions"
+    },
+    {
+      "name": "kg_proposal_items_kind_payload_chk",
+      "table": "kg_proposal_items"
+    },
+    {
+      "name": "kg_proposal_items_merge_into_chk",
+      "table": "kg_proposal_items"
+    },
+    {
+      "name": "kg_proposals_note_source_chk",
+      "table": "kg_proposals"
+    },
+    {
+      "name": "kg_relations_one_source_chk",
+      "table": "kg_relations"
+    },
+    {
+      "name": "kg_relations_speaker_type_chk",
+      "table": "kg_relations"
+    },
+    {
+      "name": "kg_relations_valid_precision_chk",
+      "table": "kg_relations"
+    }
+  ],
+  "functions": [
+    {
+      "definedIn": "20260926030200_kg_evidence_invariant",
+      "name": "kg_assert_has_evidence"
+    }
+  ],
+  "generatedColumns": [
+    {
+      "column": "title_search_vector",
+      "table": "transcripts"
+    },
+    {
+      "column": "search_vector",
+      "table": "transcript_segments"
+    },
+    {
+      "column": "search_vector",
+      "table": "notes"
+    }
+  ],
+  "triggers": [
+    {
+      "function": "kg_assert_has_evidence",
+      "name": "kg_entities_evidence_trg",
+      "table": "kg_entities"
+    },
+    {
+      "function": "kg_assert_has_evidence",
+      "name": "kg_evidence_delete_trg",
+      "table": "kg_evidence"
+    },
+    {
+      "function": "kg_assert_has_evidence",
+      "name": "kg_items_evidence_trg",
+      "table": "kg_items"
+    },
+    {
+      "function": "kg_assert_has_evidence",
+      "name": "kg_relations_evidence_trg",
+      "table": "kg_relations"
+    }
+  ]
+}

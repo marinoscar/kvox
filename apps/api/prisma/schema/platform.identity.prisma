@@ -111,7 +111,7 @@ model User {
   // composed from package:storage.prisma
   storageObjects         StorageObject[]         @relation("UserStorageObjects")
 
-  // composed from app:ask.prisma
+  // composed from app:kvox.ask.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Ask conversations (issue #376, epic #348). CASCADES — a saved question
   // and its answers are the user's own content, derived from their private
@@ -120,7 +120,7 @@ model User {
   // `AskConversation`.
   askConversations AskConversation[]
 
-  // composed from app:graph.prisma
+  // composed from app:kvox.graph.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Connected Knowledge (epic #344, issue #351). Every `kg_*` table carries
   // its own `owner_id` and CASCADES — an entity, relation, item, piece of
@@ -151,7 +151,7 @@ model User {
   // reproducible artefact with its own 7-day expiry, like `note_exports`.
   kgExports       KgExport[]
 
-  // composed from app:notes.prisma
+  // composed from app:kvox.notes.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Notes (issue #48, epic #45). Four relations to the note tables, split by
   // role for the identical reason the six transcript relations above are:
@@ -169,7 +169,7 @@ model User {
   // join table rather than a `user_settings` namespace.
   hiddenNoteTemplates  UserHiddenNoteTemplate[]
 
-  // composed from app:search.prisma
+  // composed from app:kvox.search.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Semantic search index state (issue #181, epic #165). ONE relation, and
   // it CASCADES — an index-state row for a document owned by nobody means
@@ -177,7 +177,7 @@ model User {
   // their own `ownerId`. See the block comment above `SearchIndexState`.
   searchIndexStates SearchIndexState[] @relation("SearchIndexStateOwner")
 
-  // composed from app:transcripts.prisma
+  // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
   // Transcripts (issue #24, epic #19). Four relations to the transcript
   // tables, split by role for the same reason `databaseBackupRuns` /
@@ -574,7 +574,7 @@ model Organization {
   storageObjects      StorageObject[]
   storageObjectChunks StorageObjectChunk[]
 
-  // composed from app:transcripts.prisma
+  // composed from app:kvox.transcripts.prisma
   // Back-relations onto the platform's Organization (an `extend model` block holds back-relation fields only).
   // `transcripts.org_id` (issue #485): the organization the sharing slice decides a transcript's access in.
   transcripts Transcript[]

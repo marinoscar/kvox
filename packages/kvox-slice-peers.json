@@ -59,6 +59,12 @@
     "ontology": { "peers": ["zod"] }
   },
   "kvox-db": {
-    "bin": { "peers": ["prisma"] }
+    "bin": { "peers": ["prisma"] },
+    "check": { "peers": [] },
+    "lock": { "peers": [] },
+    "manifest": { "peers": [] },
+    "promote": { "peers": [] },
+    "sql": { "peers": [] },
+    "sync": { "peers": [] }
   }
 }

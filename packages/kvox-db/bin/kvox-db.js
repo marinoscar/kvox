@@ -5,7 +5,19 @@
 // it is typed and unit-tested; this file only wires it to the process.
 const { runKvoxDb } = require('../dist/bin/index.js');
 
-process.exitCode = runKvoxDb(process.argv.slice(2), {
-  out: (text) => process.stdout.write(text),
-  err: (text) => process.stderr.write(text),
-});
+runKvoxDb(
+  process.argv.slice(2),
+  {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  },
+  { env: process.env, cwd: process.cwd() },
+).then(
+  (code) => {
+    process.exitCode = code;
+  },
+  (error) => {
+    process.stderr.write(`kvox-db: ${error && error.stack ? error.stack : error}\n`);
+    process.exitCode = 1;
+  },
+);
