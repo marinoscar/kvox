@@ -7,7 +7,7 @@
  * ported from the deleted `UserSettingsPages.test.tsx` and `useUserSettings`
  * suites:
  *
- *   - the host's `applyTheme` is this app's `ThemeContext` setter, so the stored
+ *   - the host's `applyTheme` is the shell's theme setter (`useShellTheme`), so the stored
  *     preference reaches the live theme when the page loads and when it is saved
  *     (acceptance criterion: "theme switching still applies live"), and a theme
  *     id this app has no theme for is ignored;
@@ -26,10 +26,10 @@ import { http, HttpResponse } from 'msw';
 import { UserAppearancePage, UserProfilePage } from '@marinoscar/platform-web/settings/ui';
 import { render } from '../utils/test-utils';
 import { server } from '../mocks/server';
-import { useThemeContext } from '../../contexts/ThemeContext';
+import { useShellTheme } from '@marinoscar/platform-web/shell/headless';
 
 function ThemeProbe() {
-  return <div data-testid="mode">{useThemeContext().mode}</div>;
+  return <div data-testid="mode">{useShellTheme().mode}</div>;
 }
 
 interface Patch {

@@ -66,7 +66,17 @@ export interface UseAiTasksConfigReturn {
   refresh: () => Promise<void>;
 }
 
-export function useAiTasksConfig(): UseAiTasksConfigReturn {
+export interface UseAiTasksConfigOptions {
+  /**
+   * Do not read (and drop any answer already held). For a mount that exists
+   * before anybody is signed in: `GET /api/ai-tasks/config` is authenticated, so
+   * reading it on the login page buys a guaranteed 401.
+   */
+  skip?: boolean;
+}
+
+export function useAiTasksConfig(options: UseAiTasksConfigOptions = {}): UseAiTasksConfigReturn {
+  const skip = options.skip === true;
   const [config, setConfig] = useState<AiTasksConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,8 +103,14 @@ export function useAiTasksConfig(): UseAiTasksConfigReturn {
   }, [isMounted]);
 
   useEffect(() => {
+    if (skip) {
+      setConfig(null);
+      setLoadError(null);
+      setIsLoading(false);
+      return;
+    }
     void fetchConfig();
-  }, [fetchConfig]);
+  }, [skip, fetchConfig]);
 
   return {
     config,

@@ -20,8 +20,8 @@ import { AI_CONFIG_DISABLED, AiConfigContext } from '@marinoscar/platform-web/ai
 import '../../config/settingsFeatures';
 
 const navigationFeatures = vi.hoisted(() => ({ graph: false }));
-vi.mock('../../contexts/NavigationFeaturesContext', () => ({
-  useNavigationFeatures: () => ({ features: navigationFeatures, refresh: async () => {} }),
+vi.mock('../../platform/GraphFeatureBinding', () => ({
+  useGraphFeature: () => ({ graph: navigationFeatures.graph, refresh: async () => {} }),
 }));
 
 describe('settingsFeatures', () => {
