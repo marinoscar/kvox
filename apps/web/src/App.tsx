@@ -1,5 +1,3 @@
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { Routes, Route, Navigate } from 'react-router-dom';
 // Issue #465, epic #462. Identity is the platform's: the session provider, the
 // route guards and the identity pages come from `@marinoscar/platform-web`.
@@ -46,7 +44,15 @@ import './config/settingsFeatures';
 // configured once at module scope in `platform/notifications.ts` (imported by
 // `main.tsx`).
 import { NotificationProvider } from '@marinoscar/platform-web/notifications/headless';
-import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
+// Issue #484, epic #478. The shell is the platform's (`@marinoscar/platform-web/shell`):
+// `ShellRoot` holds the viewer's light/dark/system choice (under the `theme_mode`
+// key this app has always used) and mounts MUI's `ThemeProvider` and `CssBaseline`;
+// `Layout` binds `ShellLayout`. `AppGraphFeatureProvider` is the one read of the
+// connected-knowledge switch the `knowledge` destination and the hub cards gate on;
+// it sits above the platform host, like the AI and telemetry config providers.
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { AppGraphFeatureProvider } from './platform/GraphFeatureBinding';
+import { darkTheme, lightTheme } from './theme';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
@@ -275,12 +281,15 @@ const TestLoginPage = import.meta.env.PROD
   ? null
   : lazy(() => import('./pages/TestLoginPage'));
 
-function AppRoutes() {
-  const { theme } = useThemeContext();
+/** The two themes, as the shell's root takes them: module constants. */
+const APP_THEMES = { light: lightTheme, dark: darkTheme };
 
+/** Where the viewer's theme choice is kept in `localStorage`; unchanged by #484. */
+const THEME_STORAGE_KEY = 'theme_mode';
+
+function AppRoutes() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <ErrorBoundary>
         {/* THE CLIENT GATE (#258, epic #254), around the whole route tree and
             inside `AuthProvider`.
@@ -1264,32 +1273,34 @@ function AppRoutes() {
           one before this change. */}
       <UpdatePrompt useRegisterSW={useRegisterSW} />
       <InstallPrompt appName={APP_NAME} />
-    </ThemeProvider>
+    </>
   );
 }
 
 export default function App() {
   return (
-    <ThemeContextProvider>
+    <ShellRoot themes={APP_THEMES} storageKey={THEME_STORAGE_KEY}>
       <IdentityProviders>
         <AppTelemetryConfigProvider>
           <AppAiConfigProvider>
-            <AppPlatformHostProvider>
-              <JobsWebAdaptersProvider adapters={appJobsAdapters}>
-                <NodesWebAdaptersProvider adapters={appNodesAdapters}>
-                  <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
-                    <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
-                      <AiWebAdaptersProvider adapters={appAiAdapters}>
-                        <AppRoutes />
-                      </AiWebAdaptersProvider>
-                    </TelemetryWebAdaptersProvider>
-                  </DbBackupWebAdaptersProvider>
-                </NodesWebAdaptersProvider>
-              </JobsWebAdaptersProvider>
-            </AppPlatformHostProvider>
+            <AppGraphFeatureProvider>
+              <AppPlatformHostProvider>
+                <JobsWebAdaptersProvider adapters={appJobsAdapters}>
+                  <NodesWebAdaptersProvider adapters={appNodesAdapters}>
+                    <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
+                      <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
+                        <AiWebAdaptersProvider adapters={appAiAdapters}>
+                          <AppRoutes />
+                        </AiWebAdaptersProvider>
+                      </TelemetryWebAdaptersProvider>
+                    </DbBackupWebAdaptersProvider>
+                  </NodesWebAdaptersProvider>
+                </JobsWebAdaptersProvider>
+              </AppPlatformHostProvider>
+            </AppGraphFeatureProvider>
           </AppAiConfigProvider>
         </AppTelemetryConfigProvider>
       </IdentityProviders>
-    </ThemeContextProvider>
+    </ShellRoot>
   );
 }

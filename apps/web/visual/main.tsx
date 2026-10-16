@@ -1,9 +1,9 @@
 /**
  * Visual regression harness — issue #107.
  *
- * NOT part of the shipped app. This mounts the REAL `Layout`, `NavigationRail`,
- * `AppBar` and `SettingsHub` (via both `SettingsHubPage` and
- * `UserSettingsHubPage`) behind a fake, synchronous auth context so Playwright
+ * NOT part of the shipped app. This mounts the REAL `Layout` (the packaged shell's
+ * `ShellLayout`, rail, AppBar and bottom bar since #484) and `SettingsHub` (via
+ * both `SettingsHubPage` and `UserSettingsHubPage`) behind a fake, synchronous auth context so Playwright
  * can screenshot the actual pixel layout — something jsdom cannot do at all
  * (no layout engine, no `offsetWidth`, no wrapping, no font metrics). Bug #105
  * (Console rendered inline instead of pinned at the rail's foot; collapsed-rail
@@ -24,11 +24,10 @@
  *                              (see `DEFAULT_PERMISSIONS`), so every card and
  *                              rail row is visible unless a spec narrows it.
  *   ?theme=light|dark          Written to `localStorage.theme_mode` BEFORE
- *                              `createRoot(...).render(...)`, because
- *                              `ThemeContextProvider` reads that key
+ *                              `createRoot(...).render(...)`, because the
+ *                              shell's `ShellRoot` reads that key
  *                              synchronously on mount to seed its initial
- *                              state (see `contexts/ThemeContext.tsx`). Default
- *                              `dark`.
+ *                              state. Default `dark`.
  *   ?roles=admin,viewer        Comma-separated role names that become
  *                              `user.roles`. Default `admin`. Read for
  *                              completeness — `usePermissions().isAdmin` is
@@ -41,7 +40,7 @@
  *
  * WHY THE `/api` FETCHES BELOW ARE SAFE TO IGNORE
  * -------------------------------------------------------------------------
- * `NavigationRail` → `useNavigationPrefs` → `useUserSettings({ syncTheme: false })`
+ * The rail's `useShellRailPreference` → `useUserSettings({ syncTheme: false })`
  * fires `GET /api/user-settings` on mount (`services/api.ts`,
  * `API_BASE_URL` defaults to `/api`). This harness's Vite config
  * (`visual/vite.config.ts`) deliberately configures NO proxy for `/api` — so
@@ -49,7 +48,7 @@
  * it and answers (or the fetch fails to parse) quickly rather than hanging or
  * slow-retrying against a `localhost:3000` nothing is listening on.
  * `fetchSettings` catches the failure, sets `isLoading` false and leaves
- * `settings` as `null`. `useNavigationPrefs` then reports
+ * `settings` as `null`. The preference hook then reports
  * `stored.railCollapsed = settings?.navigation?.railCollapsed === true`, which
  * is `false` (rail expanded, subject to the width gates) whether `settings` is
  * `null` from the very first render or after the fetch has failed — so the
@@ -68,8 +67,7 @@
 import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
 
 // Issue #465: the auth context and the route guards are the identity slice's.
 import {
@@ -80,11 +78,14 @@ import {
 } from '@marinoscar/platform-web/identity/headless';
 import type { AuthContextValue } from '@marinoscar/platform-web/identity/headless';
 import { appIdentityAdapters } from '../src/identity/identityAdapters';
-import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeContext';
+import { darkTheme, lightTheme } from '../src/theme';
 // Issue #466, epic #462. The packaged Profile and Appearance pages and the
 // headless settings hooks read the platform host; the hubs read the registered
 // feature keys. Both are the app's own wiring, mounted exactly as `App.tsx` does.
 import { AppPlatformHostProvider } from '../src/platform/platformHost';
+// Issue #484: the one read of the connected-knowledge switch the `knowledge`
+// destination gates on, mounted exactly as `App.tsx` does (above the host).
+import { AppGraphFeatureProvider } from '../src/platform/GraphFeatureBinding';
 import '../src/config/settingsFeatures';
 import { Layout } from '../src/components/common/Layout';
 // Issue #30, epic #19. The New-transcript screen reads the app-wide upload
@@ -105,7 +106,7 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 // onboarding chrome (`OnboardingBanner`, `FirstRunWelcomeDialog`,
 // `ReturnToSetupBar`) on every page, including these two checklist pages
 // themselves.
-const GettingStartedPage = lazy(() => import('../src/pages/GettingStartedPage'));
+const GettingStartedPage = lazy(() => import('../src/components/onboarding/GettingStartedRoute'));
 const UserProfilePage = lazy(() =>
   import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserProfilePage })),
 );
@@ -148,9 +149,9 @@ const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'))
 const AdminUsersPage = lazy(() => import('../src/identity/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
 // import above for why this is registered at all.
-const SetupPage = lazy(() => import('../src/pages/Admin/SetupPage'));
+const SetupPage = lazy(() => import('../src/components/onboarding/SetupGuideRoute'));
 
-/** Byte-identical to `contexts/ThemeContext.tsx`'s private constant. */
+/** The shell root's default key, and the one `App.tsx` passes explicitly. */
 const THEME_STORAGE_KEY = 'theme_mode';
 
 /**
@@ -251,13 +252,13 @@ function parseHarnessParams(): HarnessParams {
 
 const { route, permissions, theme, roles } = parseHarnessParams();
 
-// MUST happen before `createRoot(...).render(...)` — `ThemeContextProvider`
+// MUST happen before `createRoot(...).render(...)` — the shell's theme provider
 // reads this key synchronously in its `useState` initializer.
 localStorage.setItem(THEME_STORAGE_KEY, theme);
 
 // No profile image URL: a real one would be an external network fetch the
 // harness has no business making, and a missing/broken image would render
-// nondeterministically (broken-image icon vs. blank) across runs. `UserMenu`
+// nondeterministically (broken-image icon vs. blank) across runs. The user menu
 // falls back to initials when `profileImageUrl` is null, which is fully
 // deterministic and is what every spec here actually screenshots.
 const harnessUser: User = {
@@ -514,21 +515,14 @@ function HarnessRoutes() {
   );
 }
 
-/**
- * Reads the real `ThemeContext` and wraps in MUI's `ThemeProvider` +
- * `CssBaseline` — the exact composition `App.tsx`'s `AppRoutes` uses.
- */
+/** The error boundary and the route tree, as `App.tsx`'s `AppRoutes` composes them. */
 function Inner() {
-  const { theme: muiTheme } = useThemeContext();
   return (
-    <ThemeProvider theme={muiTheme}>
-      <CssBaseline />
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner fullScreen />}>
-          <HarnessRoutes />
-        </Suspense>
-      </ErrorBoundary>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingSpinner fullScreen />}>
+        <HarnessRoutes />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -539,11 +533,13 @@ createRoot(document.getElementById('root')!).render(
         {/* The packaged Access Tokens page (`/settings/tokens`) reads its
             identity client from the adapters, exactly as `App.tsx` provides. */}
         <IdentityWebAdaptersProvider adapters={appIdentityAdapters}>
-          <ThemeContextProvider>
-            <AppPlatformHostProvider>
-              <Inner />
-            </AppPlatformHostProvider>
-          </ThemeContextProvider>
+          <ShellRoot themes={{ light: lightTheme, dark: darkTheme }} storageKey={THEME_STORAGE_KEY}>
+            <AppGraphFeatureProvider>
+              <AppPlatformHostProvider>
+                <Inner />
+              </AppPlatformHostProvider>
+            </AppGraphFeatureProvider>
+          </ShellRoot>
         </IdentityWebAdaptersProvider>
       </AuthContext.Provider>
     </MemoryRouter>

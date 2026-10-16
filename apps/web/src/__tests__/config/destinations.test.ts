@@ -4,17 +4,31 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
+  isDestinationVisible,
+  owns,
+  resolveActiveDestination as resolveOwner,
+} from '@marinoscar/platform-web/shell/headless';
+import {
   BOTTOM_BAR_DESTINATIONS,
   DESTINATIONS,
   DESTINATION_ROUTES,
   UNOWNED_ROUTES,
-  NO_DESTINATION_FEATURES,
-  isDestinationVisible,
-  owns,
-  resolveActiveDestination,
 } from '../../config/destinations';
 import type { Destination, DestinationKey } from '../../config/destinations';
 import { ADMIN_SECTIONS } from '../../config/adminSections';
+
+/**
+ * Visibility, route matching and ownership are the packaged shell's since #484
+ * (`@marinoscar/platform-web/shell/headless`); this suite pins THIS APP's table
+ * against them. `resolveActiveDestination` binds the package's resolver to this
+ * app's ownership table, the same one `KVOX_NAVIGATION` hands the shell.
+ */
+function resolveActiveDestination(pathname: string): DestinationKey | null {
+  return resolveOwner(DESTINATION_ROUTES, pathname);
+}
+
+/** The package's feature map with every feature off (fail closed). */
+const NO_DESTINATION_FEATURES = {};
 
 /**
  * The route-ownership table is the one piece of this navigation that manual

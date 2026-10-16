@@ -49,7 +49,7 @@ import Typography from '@mui/material/Typography';
 import { useAiFeatures } from '@marinoscar/platform-web/ai/headless';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
-import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
+import { useGraphFeature } from '../../platform/GraphFeatureBinding';
 import { useAiTasksSettings } from '../../hooks/useAiTasksSettings';
 import { AI_TASK_KEYS } from '../../services/aiTasks';
 import type { AiTaskKey } from '../../services/aiTasks';
@@ -62,7 +62,7 @@ import type { ModelCapabilityFlags, TaskModelsDraft } from './AiTaskModels';
 export function AiTasksSettingsSections() {
   const { hasPermission } = usePermissions();
   const { ai: aiEnabled } = useAiFeatures();
-  const { refresh: refreshNavigationFeatures } = useNavigationFeatures();
+  const { refresh: refreshNavigationFeatures } = useGraphFeature();
   const { data, isLoading, loadError, isSaving, saveError, saveErrorDetails, save, clearSaveError } =
     useAiTasksSettings();
 
