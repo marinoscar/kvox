@@ -48,10 +48,32 @@ name: Deploy E2E
 # credential probe use the identical value the containers will.
 #
 # NOT DONE HERE, DELIBERATELY: the proxy and certificate half. A runner has no
-# public DNS, so `--skip-proxy` is passed throughout; the vhost rendering has a
+# public DNS, so `install` and `update` pass `--skip-proxy` and no `--domain`
+# (the platform's install derives APP_URL from `localhost` in that case, and
+# every DNS and certificate check stands down); the vhost rendering has a
 # snapshot test of its own. And this is not folded into ci.yml's `smoke` job,
 # which boots the compiled API directly on purpose — this job is about the
 # compose/CLI path instead.
+#
+# THE PLATFORM CLI'S SHAPE (issue #482, epic #478)
+# -----------------------------------------------------------------------------
+# The CLI is `@marinoscar/platform-cli`'s engine, and this file was written for
+# the one it replaced. Four consequences, each of which failed this job:
+#
+#   - `deploy doctor` has no `--skip-proxy`: it always checks the proxy. The
+#     doctor steps below point `--proxy-root` at a stand-in directory layout
+#     (`PROXY_ROOT`) and name `--proxy-mode container`, so those checks pass on
+#     the runner instead of being skipped and the rest of doctor is unchanged.
+#   - The API must not run as a superuser (row-level security is inert for one),
+#     and an unattended install whose login is `postgres` is refused unless it
+#     consents. `--provision-app-role` is that consent: the CLI creates
+#     `e2e_app` with the bootstrap login used once, which is the production
+#     path. The extensions an ordinary role cannot create are installed first,
+#     by the repository's own `postgres-init/20-kvox-extensions.sh`.
+#   - The OAuth credentials are verified before the build; this job's are
+#     placeholders on a reserved name, which is what `--skip-oauth-check` is for.
+#   - `deploy about --json` prints `{ status, path, document }`, the record
+#     itself under `document`, and never asks the API.
 # =============================================================================
 
 on:
@@ -99,10 +121,10 @@ env:
   APPS_ROOT: /tmp/apps
   APP_DIR: /tmp/apps/e2e
   BIND_PORT: '3535'
-  # RFC 2606 reserved. Never resolves, and `--skip-proxy` means nothing ever
-  # tries: it exists so the state file, APP_URL and the derived OAuth callback
-  # are populated the way a real install populates them.
-  APP_DOMAIN: e2e.invalid
+  # Stands in for the shared proxy's directory layout, for `deploy doctor`
+  # only (it cannot skip the proxy checks). Install and update pass
+  # `--skip-proxy` and never read it.
+  PROXY_ROOT: /tmp/e2e-proxy
   # The built entry point, invoked by PATH-free path on purpose: nothing in
   # this file needs the binary's name, and not spelling it keeps the file out
   # of `apps/cli/src/template-identity.test.ts`'s allowlist.
@@ -259,11 +281,12 @@ jobs:
       # -----------------------------------------------------------------------
       - name: doctor warns about the missing devnet network and still passes
         run: |
-          mkdir -p "$DIAG_DIR"
+          mkdir -p "$DIAG_DIR" "$PROXY_ROOT/nginx/conf.d" "$PROXY_ROOT/webroot"
           set +e
           $CLI deploy doctor \
             --apps-root "$APPS_ROOT" \
-            --skip-proxy \
+            --proxy-root "$PROXY_ROOT" \
+            --proxy-mode container \
             --skip-github \
             --json > "$DIAG_DIR/doctor-before.json"
           status=$?
@@ -285,7 +308,8 @@ jobs:
         run: |
           $CLI deploy doctor \
             --apps-root "$APPS_ROOT" \
-            --skip-proxy \
+            --proxy-root "$PROXY_ROOT" \
+            --proxy-mode container \
             --skip-github \
             --json > "$DIAG_DIR/doctor-after.json"
           jq -e '.ok == true' "$DIAG_DIR/doctor-after.json"
@@ -306,7 +330,32 @@ jobs:
       #    No `--json`: the human hooks stream every step and every command's
       #    output to stderr, which is the difference between a debuggable
       #    failure and a red square.
+      #
+      #    The API runs as an ordinary role the CLI creates (`--provision-app-role`
+      #    consents to it, the login in answers.env being a superuser), and an
+      #    ordinary role cannot create `vector`: the bootstrap login installs the
+      #    extensions first, with the script a fresh compose volume runs. It reads
+      #    PGHOST and PGPASSWORD from the environment and the database name from
+      #    POSTGRES_DB; the password is the service's, written in three places
+      #    (the service, answers.env and here), all of which must agree. The
+      #    client image is the one the CLI's own database probes use: only `psql`
+      #    runs in it, the server is the service container.
+      #
+      #    `--skip-oauth-check`: the Google credentials are placeholders on a
+      #    reserved name, and the check would otherwise reject their shape.
+      #    There is no `--domain`: with `--skip-proxy` the platform derives APP_URL
+      #    from `localhost`, and a domain would put the DNS checks in the
+      #    preflight, where `.invalid` can never resolve.
       # -----------------------------------------------------------------------
+      - name: Install the database extensions as the bootstrap superuser
+        run: |
+          docker run --rm --network host \
+            -e PGHOST=172.17.0.1 \
+            -e PGPASSWORD=e2e-placeholder-postgres-password \
+            -e POSTGRES_DB=appdb \
+            -v "$GITHUB_WORKSPACE/infra/compose/postgres-init:/init:ro" \
+            postgres:16-alpine sh /init/20-kvox-extensions.sh
+
       - name: install
         run: |
           $CLI deploy install \
@@ -314,10 +363,11 @@ jobs:
             --name "$APP_NAME" \
             --repo "file://$GITHUB_WORKSPACE" \
             --ref "$APP_NAME" \
-            --domain "$APP_DOMAIN" \
             --port "$BIND_PORT" \
             --skip-proxy \
             --skip-github \
+            --skip-oauth-check \
+            --provision-app-role \
             --non-interactive \
             --answers-file .github/e2e/answers.env
 
@@ -457,6 +507,7 @@ jobs:
             --apps-root "$APPS_ROOT" \
             --skip-proxy \
             --skip-github \
+            --skip-oauth-check \
             --non-interactive 2>&1 | tee "$DIAG_DIR/update-noop.txt"
 
           # The pipeline's own words for it: every step after `fetch` reports
@@ -508,6 +559,7 @@ jobs:
             --apps-root "$APPS_ROOT" \
             --skip-proxy \
             --skip-github \
+            --skip-oauth-check \
             --non-interactive 2>&1 | tee "$DIAG_DIR/update-applied.txt"
 
           info="$APP_DIR/deploy-info/info.json"
@@ -534,14 +586,15 @@ jobs:
         run: |
           $CLI deploy about --apps-root "$APPS_ROOT" --json > "$DIAG_DIR/about.json"
           jq . "$DIAG_DIR/about.json"
+          # The platform's `about` prints `{ status, path, document }`: the
+          # record itself, read off the disk, under `document`. It never asks
+          # the API (that is the Console's About page), so there is no API
+          # block to assert on.
+          jq -e '.status == "ok"' "$DIAG_DIR/about.json"
           expected=$(jq -r '.updatedAt' "$APP_DIR/deploy-info/info.json")
-          jq -e --arg at "$expected" '.deployment.updatedAt == $at' "$DIAG_DIR/about.json"
-          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.deployment.commitSha == $sha' \
+          jq -e --arg at "$expected" '.document.updatedAt == $at' "$DIAG_DIR/about.json"
+          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.document.app.commitSha == $sha' \
             "$DIAG_DIR/about.json"
-          # Informational, never a health verdict: no login exists on this
-          # runner, so the API block reads unavailable and the exit code is
-          # still 0.
-          jq -e '.api == null and (.apiReason | type) == "string"' "$DIAG_DIR/about.json"
 
       # -----------------------------------------------------------------------
       # 7. The journal is safe to attach to an issue. Two claims:

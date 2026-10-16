@@ -121,6 +121,15 @@ describe('the command surface', () => {
   });
 });
 
+describe('the deploy checks this app adds', () => {
+  it('registers the two the deploy end-to-end workflow and the port guard rely on', () => {
+    expect((APP_CLI_OPTIONS.deployChecks ?? []).map((check) => check.id)).toEqual([
+      'bind-port-not-promised',
+      'docker-network-devnet',
+    ]);
+  });
+});
+
 describe('the dependency on the platform engine', () => {
   it('pins @marinoscar/platform-cli to one exact version', () => {
     const range = readPackageJson().dependencies?.['@marinoscar/platform-cli'];
