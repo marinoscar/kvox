@@ -35,6 +35,13 @@ COPY apps/web/package.json ./apps/web/
 # inherits it through `COPY --from=deps /app ./` — Vite inlines the constant
 # into the bundle, so nginx's production stage needs nothing further.
 COPY packages/shared ./packages/shared/
+# The four `@marinoscar/kvox-*` packages are workspace members too (apps/api and
+# apps/web depend on them), so `npm ci` needs each one on disk: the whole
+# directory, not just the manifest, for the same reason as @app/shared above.
+COPY packages/kvox-contract ./packages/kvox-contract/
+COPY packages/kvox-db ./packages/kvox-db/
+COPY packages/kvox-api ./packages/kvox-api/
+COPY packages/kvox-web ./packages/kvox-web/
 # The root postinstall (patch-react-transition-group.js) runs during npm ci
 COPY scripts ./scripts
 RUN npm ci --workspace=web --include-workspace-root

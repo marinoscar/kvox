@@ -95,6 +95,13 @@ COPY apps/web/package.json ./apps/web/
 # holds one string that changes only when the product is renamed, so that is a
 # trade worth making to remove the failure mode entirely.
 COPY packages/shared ./packages/shared/
+# The four `@marinoscar/kvox-*` packages are workspace members too (apps/api and
+# apps/web depend on them), so `npm ci` needs each one on disk: the whole
+# directory, not just the manifest, for the same reason as @app/shared above.
+COPY packages/kvox-contract ./packages/kvox-contract/
+COPY packages/kvox-db ./packages/kvox-db/
+COPY packages/kvox-api ./packages/kvox-api/
+COPY packages/kvox-web ./packages/kvox-web/
 # Prisma schema and config are needed by `prisma generate` below
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
