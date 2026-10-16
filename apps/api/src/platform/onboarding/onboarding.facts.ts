@@ -11,7 +11,7 @@ import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 // `evaluate` receives plain values. A fact that rejects omits the steps that name it
 // (one logged warning); it never fails the response.
 //
-// Ids are `kvox.<name>` and are not persisted anywhere (only STEP ids are), but a
+// Ids are `app.<name>` and are not persisted anywhere (only STEP ids are), but a
 // step's `facts` array names them, so a rename is a two-file change that
 // `assertOnboardingRegistries` checks at boot.
 //
@@ -24,27 +24,27 @@ import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 // beside their domain and registered by `kvox.manifest.ts`, because base code may not import
 // domain code (`test/architecture/base-domain-boundary.spec.ts`):
 //
-//   kvox.transcriptionAvailable        transcription/transcription.onboarding.ts
-//   kvox.ownTranscriptCount            transcripts/transcripts.onboarding.ts
-//   kvox.ownReadyTranscriptCount       transcripts/transcripts.onboarding.ts
-//   kvox.ownNoteCount                  notes/notes.onboarding.ts
+//   app.transcriptionAvailable        transcription/transcription.onboarding.ts
+//   app.ownTranscriptCount            transcripts/transcripts.onboarding.ts
+//   app.ownReadyTranscriptCount       transcripts/transcripts.onboarding.ts
+//   app.ownNoteCount                  notes/notes.onboarding.ts
 // =============================================================================
 
 /** The fact ids, spelled once. */
 export const KVOX_ONBOARDING_FACTS = {
   /** `boolean`: this deployment can transcribe at all. */
-  TRANSCRIPTION_AVAILABLE: 'kvox.transcriptionAvailable',
+  TRANSCRIPTION_AVAILABLE: 'app.transcriptionAvailable',
   /** `number`: transcripts the caller owns that are not soft-deleted. */
-  OWN_TRANSCRIPT_COUNT: 'kvox.ownTranscriptCount',
+  OWN_TRANSCRIPT_COUNT: 'app.ownTranscriptCount',
   /** `number`: transcripts the caller owns that reached `ready` (not soft-deleted). */
-  OWN_READY_TRANSCRIPT_COUNT: 'kvox.ownReadyTranscriptCount',
+  OWN_READY_TRANSCRIPT_COUNT: 'app.ownReadyTranscriptCount',
   /** `number`: notes the caller owns that are not soft-deleted. */
-  OWN_NOTE_COUNT: 'kvox.ownNoteCount',
+  OWN_NOTE_COUNT: 'app.ownNoteCount',
   /** {@link KvoxAiOnboardingReadiness}: the AI readiness of the caller. */
-  AI_READINESS: 'kvox.aiReadiness',
+  AI_READINESS: 'app.aiReadiness',
 } as const;
 
-/** What `kvox.aiReadiness` resolves to. */
+/** What `app.aiReadiness` resolves to. */
 export interface KvoxAiOnboardingReadiness {
   /**
    * Usable by this caller, or usable once they add a key: the deployment has AI on, the

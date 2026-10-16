@@ -142,7 +142,7 @@ describe('registry', () => {
       href: '/admin/settings/ai',
       doctorChecks: ['ai.enabled', 'ai.providers'],
     });
-    expect(matches[0]!.facts).toContain('kvox.aiReadiness');
+    expect(matches[0]!.facts).toContain('app.aiReadiness');
   });
 
   it('registers the five domain steps with their tier, skippable flag and permission', () => {
@@ -181,11 +181,11 @@ describe('registry', () => {
   it('names only registered facts', () => {
     expect(() => assertOnboardingRegistries()).not.toThrow();
     for (const id of [
-      'kvox.transcriptionAvailable',
-      'kvox.ownTranscriptCount',
-      'kvox.ownReadyTranscriptCount',
-      'kvox.ownNoteCount',
-      'kvox.aiReadiness',
+      'app.transcriptionAvailable',
+      'app.ownTranscriptCount',
+      'app.ownReadyTranscriptCount',
+      'app.ownNoteCount',
+      'app.aiReadiness',
     ]) {
       expect(onboardingFactRegistry.has(id)).toBe(true);
     }

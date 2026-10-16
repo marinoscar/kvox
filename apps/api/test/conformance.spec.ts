@@ -322,11 +322,11 @@ runPlatformConformance({
     onboarding: {
       permissions: permissionRegistry.list(),
       factSamples: {
-        'kvox.ownTranscriptCount': 0,
-        'kvox.ownReadyTranscriptCount': 0,
-        'kvox.ownNoteCount': 0,
-        'kvox.transcriptionAvailable': false,
-        'kvox.aiReadiness': { available: false, hasKey: false, providerSet: false },
+        'app.ownTranscriptCount': 0,
+        'app.ownReadyTranscriptCount': 0,
+        'app.ownNoteCount': 0,
+        'app.transcriptionAvailable': false,
+        'app.aiReadiness': { available: false, hasKey: false, providerSet: false },
       },
       minSteps: 5,
     },

@@ -89,7 +89,7 @@ const PLATFORM_ADMIN_AI = PLATFORM_ONBOARDING_STEPS.find((step) => step.id === A
  * need no deployment key, so they agree with this app's posture. They do NOT ask whether a
  * model is enabled in the catalogue, and this app's step always did: a deployment with OpenAI
  * on and an empty `ai_models` list cannot generate a note, and the built-in would call it done.
- * So the step is `done` only when the Doctor passes AND `kvox.aiReadiness.available` holds (AI
+ * So the step is `done` only when the Doctor passes AND `app.aiReadiness.available` holds (AI
  * on, slot on, at least one model enabled, i.e. the old step's own test).
  *
  * Everything else is the platform's, copied from the built-in at load time: title, description,
