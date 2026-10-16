@@ -9,8 +9,9 @@ import type { KvoxAiReason } from './kvox-ai-errors';
 //
 // Every feature that calls a model (notes, transcripts, search, the graph, Ask)
 // goes through this interface. It is implemented over the platform
-// `AiService.forUser(...)` by `PlatformKvoxAi`, and it is the shape the later
-// domain-package phase publishes as the `KVOX_AI` port.
+// `AiService.forUser(...)` by `PlatformKvoxAi`. The domain packages' own model port,
+// `KVOX_AI` of `@marinoscar/kvox-api/ports` (a different token and a narrower interface),
+// is bound to this facade by `platform-kvox/ai/platform-kvox-ai.adapter.ts` (#490).
 //
 // ⚠ NO PLATFORM TYPE APPEARS HERE. This file imports only Zod and the app's own
 // ai-port types, so the port can be lifted into its own package unchanged.

@@ -29,7 +29,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
-import { aiProviderThrottleKey } from '../../notes/job-types';
+import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { extractionBudget } from '../extraction/graph-extraction.service';
 import { GraphAiRunResolver } from '../graph-ai-run.service';

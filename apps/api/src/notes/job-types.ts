@@ -91,27 +91,7 @@ export const NOTE_SUBJECT_TYPE = 'note';
  */
 export const NOTES_MANAGED_BY = 'notes';
 
-/** Prefix of every per-user AI throttle key. See {@link aiProviderThrottleKey}. */
-export const AI_PROVIDER_THROTTLE_PREFIX = 'ai-provider';
-
-/**
- * The provider-throttle bucket one user's generations draw on.
- *
- * ⚠ ONE BUCKET PER USER — THE EXACT INVERSE OF `TRANSCRIPTION_THROTTLE_KEY`,
- * and the inversion is the whole point (docs/specs/notes.md §2.3). There, every
- * user's transcription authenticates as the SAME deployment-owned AssemblyAI
- * account against ONE vendor rate limit, so one shared key correctly protects
- * it and a 429 discovered by any handler is evidence about all three. Here,
- * every user brings THEIR OWN vendor account with THEIR OWN limit: a 429
- * against user A's key is evidence about user A and about nobody else, so
- * deferring on one shared key would let a single busy user throttle every other
- * user's notes — a relationship between the accounts that does not exist.
- *
- * `ProviderThrottleService` maps `Job.type` → key, so `note.generate` registers
- * this key per job, immediately before the provider call, rather than once at
- * `onModuleInit` the way a shared-bucket handler does. See the handler's own
- * note on what that does and does not buy.
- */
-export function aiProviderThrottleKey(userId: string): string {
-  return `${AI_PROVIDER_THROTTLE_PREFIX}:${userId}`;
-}
+// The per-user AI throttle key moved to `@marinoscar/kvox-api/core` (issue #490) so the
+// transcripts, search, graph and Ask slices stop importing the notes slice for it. Re-exported
+// here, unchanged, so every existing importer keeps compiling.
+export { AI_PROVIDER_THROTTLE_PREFIX, aiProviderThrottleKey } from '@marinoscar/kvox-api/core';

@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // ONE TYPE, and the strings below are what both sides of it import. Everything
-// `notes/job-types.ts` and `transcripts/job-types.ts` say about why the strings
+// the notes and transcripts job-type modules say about why the strings
 // live in their own module applies word for word: the ENQUEUEING side (the
 // transcript ingest handler, the note generation commit, two correction paths)
 // and the EXECUTING side (`search-index.handler.ts`) are different files in

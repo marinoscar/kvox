@@ -1,12 +1,20 @@
 # core
 
-The helpers the domain slices of `@marinoscar/kvox-api` share.
+The helpers the domain slices of `@marinoscar/kvox-api` share, and the module that binds the host ports.
 
 ## Purpose and scope
 
-Code that two or more slices need and that belongs to none of them: the AI provider throttle key, the token-budget helpers, the ETag helpers and the other pieces that today create cross-slice import cycles in the API. Moving them here is what lets Epic 6 split the slices.
+Code that two or more slices need and that belongs to none of them. Moving it here is what cuts the import cycles between slices that the API had before (transcripts, search, graph and Ask all imported the notes slice, and notes imported a controller of transcripts).
 
-Status: scaffold. The slice exports one marker, `KVOX_API_CORE`; the helpers arrive with issue 5.4.
+Status: experimental.
+
+- **Binding the ports**: `KvoxPortsModule.forRoot({ ports })` is global and binds each bound port to its token (`useClass`, `useExisting`, `useValue` or `useFactory`). It throws at start-up naming every required port left unbound. `events` and `audit` are optional; the defaults are `KvoxEventEmitterEvents` (over Nest's `EventEmitter2` when `@nestjs/event-emitter` is installed, otherwise a private emitter) and a no-op audit.
+- **Authentication**: `KvoxAuth(...permissions)` guards a route or controller (and adds the bearer-auth OpenAPI marker when `@nestjs/swagger` is installed); `KvoxAuthGuard` answers 401 when the identity port returns no principal and 403 when a listed permission is missing; `CurrentKvoxPrincipal()` hands the handler the principal. Permissions come only from the normalised principal.
+- **AI helpers**: `aiProviderThrottleKey(userId)` (one bucket per user, never a shared one), `TRANSCRIPTION_THROTTLE_KEY`, and the token budget (`computeTokenBudget`, `outputTokensForPrompt`, `budgetRefusalMessage`, `assertWithinBudget`, which refuses with numbers and throws `KvoxAiBudgetError`, and never truncates).
+- **Streaming**: `StreamFlusher` (about 250 ms or N characters, whichever first) and the offset-resumable SSE helpers (`KvoxStreamCursor`, `resolveStreamOffset`, `parseLastEventId`, the frame builders).
+- **HTTP**: `versionETag` and `matchesETag`.
+- **Events**: `KvoxEventEmitterEvents`.
+- **Database**: `Prisma.sql`, `Prisma.raw`, `Prisma.join` from `@prisma/client-runtime-utils`, loaded on first use.
 
 ## Entry point
 
@@ -14,12 +22,12 @@ Status: scaffold. The slice exports one marker, `KVOX_API_CORE`; the helpers arr
 
 ## Peer dependencies
 
-`@marinoscar/kvox-contract`, `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs` and `zod` (the slice's own and `ports`'), all required.
+`@marinoscar/kvox-contract`, `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs` and `zod` (the slice's own and `ports`'), all required. Three peers are optional and loaded lazily, so importing the slice never needs them: `@nestjs/event-emitter` (the shared emitter), `@nestjs/swagger` (the bearer-auth marker) and `@prisma/client-runtime-utils` (the `Prisma` helper).
 
 ## Configuration
 
-None.
+None. `KvoxPortsModule.forRoot` takes the port bindings and, optionally, the modules the bound classes need.
 
 ## Extension-point catalog
 
-None.
+`KvoxPortsModule` and `KvoxPortBindings` are the extension points of this slice: a host calls `forRoot` with a binding per port. See the [ports catalog](../ports/README.md#extension-point-catalog) for the tokens.
