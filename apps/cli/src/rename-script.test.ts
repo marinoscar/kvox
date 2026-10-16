@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 // -----------------------------------------------------------------------------
 // Same reasoning as `template-identity.test.ts` beside this file: this
 // workspace already runs ESM tests that spawn real subprocesses
-// (`apps/cli/src/deploy/repo.test.ts` spawns real `git`), and CI already runs
+// (`apps/cli/src/extensions/update-check.test.ts` spawns real `git`), and CI already runs
 // `npm run test:run --workspace=cli`. There is no separate "repo tooling"
 // test workspace to put this in instead.
 //

@@ -27,10 +27,11 @@
 # NO PRODUCT, APP OR REPOSITORY NAME APPEARS IN THIS FILE
 # -----------------------------------------------------------------------------
 # A Dockerfile cannot call TypeScript, so the environment-variable names below
-# are the one unavoidable second copy of what `apps/cli/src/node/worker-env.ts`
-# declares. `worker-env.test.ts` guards that duplication in BOTH directions:
-# a variable renamed in the map but not here fails, and a variable added here
-# that no code reads fails too.
+# are the one unavoidable second copy of what the worker engine reads (the
+# platform CLI's `workerEnv()`, in `@marinoscar/platform-cli`).
+# `apps/cli/src/worker-image.test.ts` guards that duplication in BOTH
+# directions: a variable the engine renames but not here fails, and a variable
+# added here that no code reads fails too.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -43,16 +44,18 @@ WORKDIR /app
 #
 # IN THE BASE STAGE, matching `apps/api/Dockerfile`, so `production` inherits
 # it. It has to be present in the RUNTIME image specifically: the node's
-# startup self-test (`src/node/capabilities.ts`) probes for both binaries and
-# refuses to declare this job type without them, so an image that built the
-# worker without ffmpeg would start, look healthy, and quietly never claim a
-# transcode.
+# startup self-test (the platform CLI's capability probe, fed by the
+# requirement `src/executors/media-audio-transcode.executor.ts` registers)
+# looks for both binaries and refuses to claim this job type without them, so
+# an image that built the worker without ffmpeg would start, look healthy, and
+# quietly never claim a transcode.
 #
-# A node running OUTSIDE a container gets the same two binaries from the
-# CLI's `node install-deps` command, which has a matching step. (The command
-# is deliberately not spelled with its binary name here: this file is held
-# product-neutral by the branding guard in node/worker-env.test.ts, and in
-# this fork the binary name is also the repository name.)
+# A node running OUTSIDE a container has to install the same two binaries by
+# hand: the platform's `node install-deps` has no ffmpeg step (see the README's
+# "Flags and commands that changed" table), and `node doctor` names what is
+# missing. (The command is deliberately not spelled with its binary name here:
+# this file is held product-neutral by the identity guard, and in this fork the
+# binary name is also the repository name.)
 RUN apk add --no-cache ffmpeg
 
 # -----------------------------------------------------------------------------

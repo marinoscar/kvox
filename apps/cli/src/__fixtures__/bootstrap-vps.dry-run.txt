@@ -60,6 +60,6 @@ dry run: every command is printed, none is run, nothing on this host is probed.
     running from /opt/infra/cli/r so 'kvox deploy' picks up o/r from its git remote
   + cd /opt/infra/cli/r
     a first read-only look (exit 6 means a required check failed — fix those before 'deploy install'; it does not stop this script)
-  + /usr/local/bin/kvox deploy doctor --skip-proxy
+  + /usr/local/bin/kvox deploy doctor
     opening the interactive menu (pass --no-tui to print the next command instead)
   + /usr/local/bin/kvox

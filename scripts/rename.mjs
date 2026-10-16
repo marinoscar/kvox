@@ -60,8 +60,9 @@ const MANIFEST = join(REPO_ROOT, 'packages', 'shared', 'identity.json');
 const DO_NOT_RENAME = [
   ['apps/api/src/common/crypto/secret-cipher.ts', "the HKDF label 'enterpriseappbase:secret-cipher:v1:' — changing it makes every stored credential permanently undecryptable"],
   ['apps/api/src/common/exceptions/verbatim-error-body.exception.ts', 'a cross-realm Symbol.for() registry key'],
-  ['apps/cli/src/deploy/proxy.ts', "the '# Managed by appctl deploy' sentinel, which is written AND parsed on live servers"],
-  ['apps/cli/src/deploy/state.ts', "the '.appctl-deploy.json' filename, read from live servers, AND the appctlVersion field inside it — renaming a field is an unversioned wire break"],
+  // The deploy engine is the platform's (`@marinoscar/platform-cli`, since the CLI moved onto
+  // `createCli`); these two literals live in its dist and are not derived from the CLI name.
+  ['node_modules/@marinoscar/platform-cli', "the '# Managed by appctl deploy' proxy sentinel and the '.appctl-deploy.json' state filename (with the appctlVersion field inside it): written AND parsed on live servers, deliberately not derived from the CLI name"],
 ];
 
 // =============================================================================
@@ -121,7 +122,7 @@ function die(message) {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const REPO_SLUG = /^[\w.-]+\/[\w.-]+$/;
-// The constraint documented in apps/cli/src/branding.ts: the CLI name seeds a
+// The constraint documented on `CLI_NAME` in packages/shared/index.js: the CLI name seeds a
 // config directory name and an environment-variable prefix, so it must survive
 // both `.${name}` and `${NAME.toUpperCase()}_` intact.
 const CLI_NAME = /^[a-z][a-z0-9-]*$/;
@@ -252,10 +253,9 @@ function buildPlan(old, next) {
 
   // --- The CLI binary, only when explicitly asked for --------------------
   if (next.cliName !== old.cliName) {
-    add('apps/cli/src/branding.ts', `export const CLI_NAME = '${old.cliName}';`, `export const CLI_NAME = '${next.cliName}';`, 1,
-        'the CLI identity seed');
+    // The CLI identity seed is `cliName` in identity.json (written by writeManifest below).
     add('apps/cli/package.json', `"${old.cliName}": "./dist/cli.js"`, `"${next.cliName}": "./dist/cli.js"`, 1,
-        'the bin key — branding.test.ts asserts this equals CLI_NAME');
+        'the bin key — app.test.ts asserts this equals CLI_NAME');
   }
 
   return edits;
@@ -313,6 +313,7 @@ function writeManifest(next, { dryRun }) {
     repoSlug: next.repoSlug,
     themeColor: next.themeColor,
     backgroundColor: next.backgroundColor,
+    cliName: next.cliName,
   };
   if (!dryRun) writeFileSync(MANIFEST, `${JSON.stringify(out, null, 2)}\n`);
   return out;
@@ -471,10 +472,9 @@ function main() {
 }
 
 function readCliName() {
-  const path = join(REPO_ROOT, 'apps', 'cli', 'src', 'branding.ts');
-  if (!existsSync(path)) return null;
-  const match = readFileSync(path, 'utf8').match(/^export const CLI_NAME = '([^']+)';/m);
-  return match ? match[1] : null;
+  if (!existsSync(MANIFEST)) return null;
+  const { cliName } = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  return typeof cliName === 'string' && cliName.length > 0 ? cliName : null;
 }
 
 function warnAboutCliRename(from, to) {
@@ -488,9 +488,10 @@ function warnAboutCliRename(from, to) {
 
   It will leave work behind that this script does not do:
 
-    - ~6 CLI test files assert literal ${from.toUpperCase()}_ environment names
-      (apps/cli/src/tui/tty.test.ts among them). They are MEANT to break on a
-      rename; fix them by hand.
+    - The CLI's own sources and tests derive the name and the ${from.toUpperCase()}_
+      prefix from identity.json, so they follow. The engine is the platform
+      CLI package, which derives them too; its two fixed literals (the deploy
+      state file and the proxy sentinel) must NOT change.
     - apps/cli/Dockerfile declares 14 ENV ${from.toUpperCase()}_* variables.
     - infra/compose/worker.compose.yml carries the same prefix.
     - Machines already running this CLI have ~/.${from}/ and a systemd unit

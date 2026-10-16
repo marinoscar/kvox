@@ -150,11 +150,16 @@ describe('pgvector Postgres image pin (issue #178, epic #165)', () => {
     expect(image).toMatch(/^pgvector\/pgvector:pg\d+$/);
   });
 
-  it('leaves apps/cli/src/deploy/checks/database.ts\'s PSQL_IMAGE on plain postgres:16-alpine', () => {
+  it('leaves the platform CLI\'s database check PSQL_IMAGE on plain postgres:16-alpine', () => {
     // Deliberately NOT moved: PSQL_IMAGE only runs the `psql` CLIENT binary
     // against a remote server during `kvox deploy doctor` — it never hosts a
     // database of its own, so it has no need for the vector control file.
-    const source = readRepoFile('apps/cli/src/deploy/checks/database.ts');
+    // The deploy engine is `@marinoscar/platform-cli` since #482 (it used to be
+    // apps/cli/src/deploy/checks/database.ts), so the constant is read from the
+    // installed package's build.
+    const source = readRepoFile(
+      'node_modules/@marinoscar/platform-cli/dist/engine/deploy/checks/database.js',
+    );
     const match = /const PSQL_IMAGE = '([^']+)';/.exec(source);
     expect(match).not.toBeNull();
     expect(match![1]).toBe(PLAIN_POSTGRES_IMAGE);

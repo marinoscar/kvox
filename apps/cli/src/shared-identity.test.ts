@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { APP_NAME, APP_SLUG, REPO_SLUG, REPO_URL, THEME_COLOR, BACKGROUND_COLOR } from '@app/shared';
+import { APP_NAME, APP_SLUG, BACKGROUND_COLOR, CLI_NAME, REPO_SLUG, REPO_URL, THEME_COLOR } from '@app/shared';
 
 // =============================================================================
 // packages/shared: APP_SLUG, REPO_SLUG, REPO_URL (issue #343, epic #341)
@@ -14,8 +14,8 @@ import { APP_NAME, APP_SLUG, REPO_SLUG, REPO_URL, THEME_COLOR, BACKGROUND_COLOR 
 // package deliberately has no test runner of its own (see the "WHY THIS
 // PACKAGE IS PLAIN JAVASCRIPT" note at the top of index.js) — apps/cli's
 // vitest is the natural home for a repo-wide check that reaches outside the
-// CLI, the same precedent as src/node/worker-env.test.ts (the branding guard)
-// and src/deploy/repo.test.ts (the template-name guard).
+// CLI, the same precedent as src/worker-image.test.ts (the worker container
+// guard) and template-identity.test.ts (the template-name guard).
 //
 // `packages/shared/index.d.ts` types every export as `string`, never as a
 // string literal, specifically so nothing here — or anywhere else — can pin
@@ -23,7 +23,7 @@ import { APP_NAME, APP_SLUG, REPO_SLUG, REPO_URL, THEME_COLOR, BACKGROUND_COLOR 
 // the runtime level: every assertion below is a DERIVATION (a rule applied to
 // whatever APP_NAME/REPO_SLUG happen to be), never a comparison against the
 // literal currently sitting in identity.json. That is the house style set by
-// apps/cli/src/branding.test.ts, which this file mirrors.
+// apps/cli/src/app.test.ts, which this file mirrors.
 // =============================================================================
 
 describe('APP_SLUG', () => {
@@ -98,8 +98,10 @@ describe('identity.json parity', () => {
       themeColor: string;
       backgroundColor: string;
       repoSlug: string;
+      cliName: string;
     };
 
+    expect(identity.cliName).toBe(CLI_NAME);
     expect(identity.productName).toBe(APP_NAME);
     expect(identity.themeColor).toBe(THEME_COLOR);
     expect(identity.backgroundColor).toBe(BACKGROUND_COLOR);

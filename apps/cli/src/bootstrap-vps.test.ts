@@ -153,7 +153,7 @@ describe('bootstrap-vps.sh --dry-run (issue #130)', () => {
       '+ env KVOX_SRC=/opt/infra/cli/r KVOX_BIN_DIR=/usr/local/bin bash /opt/infra/cli/r/install.sh --no-color\n',
     );
     expect(out).toContain('+ mkdir -p /opt/infra/apps\n');
-    expect(out).toContain('+ /usr/local/bin/kvox deploy doctor --skip-proxy\n');
+    expect(out).toContain('+ /usr/local/bin/kvox deploy doctor\n');
   });
 
   it('--ref clones that branch and --no-tui prints the next command instead of the menu', () => {

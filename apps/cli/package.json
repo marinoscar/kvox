@@ -1,22 +1,14 @@
 {
   "name": "cli",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
-  "description": "First-party command-line client for the API (epic #110).",
+  "description": "First-party command-line client for the API (epic #110), built on @marinoscar/platform-cli (epic #478).",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "bin": {
     "kvox": "./dist/cli.js"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
   },
   "files": [
     "dist"
@@ -27,9 +19,6 @@
     "postbuild": "node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
-    "docs:worker-env": "tsx scripts/generate-worker-env-table.ts",
-    "docs:worker-env:check": "tsx scripts/generate-worker-env-table.ts --check",
-    "docs:worker-env:typecheck": "tsc -p scripts/tsconfig.json",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'No linter configured'",
     "test": "vitest",
@@ -39,11 +28,7 @@
   },
   "dependencies": {
     "@app/shared": "*",
-    "commander": "^14.0.2",
-    "ink": "^7.1.1",
-    "ink-select-input": "^6.2.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
+    "@marinoscar/platform-cli": "0.1.0-next.5",
     "react": "^19.2.8"
   },
   "devDependencies": {

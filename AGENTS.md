@@ -13,7 +13,7 @@ Start at [README.md](README.md) and [docs/README.md](docs/README.md) (index with
 ```
 apps/api/        NestJS API: src/<module>/, test/, prisma/ (schema.prisma, migrations/, seed)
 apps/web/        React app: src/config/ (registries), pages/, components/, __tests__/
-apps/cli/        `kvox` CLI: src/commands/, src/tui/; README.md is the usage source of truth
+apps/cli/        `kvox` CLI on `@marinoscar/platform-cli`: src/app.ts, src/executors/, src/extensions/; README.md is the usage source of truth
 packages/shared/ Shared code; ontology sources in src/ontology/, compiled output in ontology/
 docs/            ARCHITECTURE.md, API.md, specs/, runbooks/, deployment/
 infra/compose/   {base,dev,devdb,prod,telemetry,vps.telemetry,test,vps,worker}.compose.yml, .env.example

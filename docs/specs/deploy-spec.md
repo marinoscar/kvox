@@ -2,7 +2,7 @@
 
 **Status:** Reference implementation shipped and running in production.
 **Purpose:** Enable a faithful re-implementation in another repository.
-**Reference implementation:** `apps/cli/src/deploy/` in this repository, CLI 1.8.0.
+**Reference implementation:** `apps/cli/src/deploy/` in this repository, CLI 1.8.0 (since CLI 1.10 that engine is `@marinoscar/platform-cli`; the directory no longer exists here).
 
 ---
 

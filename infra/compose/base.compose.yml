@@ -26,29 +26,24 @@ services:
       - "${NGINX_PORT:-3535}:80"
     volumes:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # ⚠ MOUNTED AS A TEMPLATE, NOT AS THE FINAL FILE (issue #21).
-      #
-      # The Content Security Policy has to name the object store's origin — a
-      # resumable upload PUTs its parts straight to the bucket and `<audio>`
-      # plays them back from there, so `connect-src`/`media-src` must list a
-      # host that is different in every deployment. nginx has no way to read an
-      # environment variable at request time, and a wildcard is exactly what
-      # CSP exists to avoid.
-      #
-      # The nginx image's OWN entrypoint already solves this: it renders every
-      # /etc/nginx/templates/*.template through envsubst before starting nginx.
-      # Pointing its output at /etc/nginx turns csp.conf.template into the
-      # /etc/nginx/csp.conf that nginx.conf already includes — no new tooling,
-      # no wrapper script, no second copy of the policy.
-      - ../nginx/csp.conf:/etc/nginx/templates/csp.conf.template:ro
+      # The policy is mounted as it is, so the deploy CLI's stale-mount check
+      # (a byte comparison of this file with the running container's copy)
+      # holds. The Content Security Policy has to name the object store's
+      # origin — a resumable upload PUTs its parts straight to the bucket and
+      # `<audio>` plays them back from there — and nginx cannot read an
+      # environment variable at request time. The nginx image's own entrypoint
+      # renders every /etc/nginx/templates/*.template through envsubst, so only
+      # the one-line file holding that value is a template (issue #21).
+      - ../nginx/csp.conf:/etc/nginx/csp.conf:ro
+      - ../nginx/storage-origin.conf:/etc/nginx/templates/storage-origin.conf.template:ro
     environment:
       # Where the rendered templates land. /etc/nginx, not the default
-      # /etc/nginx/conf.d, because nginx.conf includes /etc/nginx/csp.conf and
-      # a `map` is only valid at http scope (conf.d is included inside it).
+      # /etc/nginx/conf.d, because csp.conf includes /etc/nginx/storage-origin.conf
+      # and a `map` is only valid at http scope (conf.d is included inside it).
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
       # ⚠ SUBSTITUTE THIS NAME AND NOTHING ELSE. Without the filter, envsubst
-      # is handed every variable in the environment, and csp.conf is full of
-      # nginx's own `$uri` / `$csp_policy` — any of which an unrelated
+      # is handed every variable in the environment, and the template holds
+      # nginx's own `$uri` / `$csp_storage_origin` — any of which an unrelated
       # environment variable of the same name would silently blank out.
       NGINX_ENVSUBST_FILTER: STORAGE_CSP_ORIGIN
       # Browser-visible origin of the object store (scheme://host[:port]), e.g.
@@ -70,7 +65,7 @@ services:
       # against the names actually present in the environment; if this name is
       # absent entirely the list comes out empty and envsubst falls back to
       # substituting EVERYTHING, which would blank nginx's own $uri and
-      # $csp_policy and leave the policy map broken. Always define it, even
+      # $csp_storage_origin and leave the policy map broken. Always define it, even
       # when it is empty.
       STORAGE_CSP_ORIGIN: ${STORAGE_CSP_ORIGIN:-}
     depends_on:

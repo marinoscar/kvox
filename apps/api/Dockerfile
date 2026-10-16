@@ -98,6 +98,11 @@ COPY packages/shared ./packages/shared/
 # Prisma schema and config are needed by `prisma generate` below
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
+# prisma.config.ts requires this file (it derives DATABASE_URL from POSTGRES_*
+# when none is set), so every Prisma command that loads the config needs it
+# beside the config, `prisma generate` below included. Just this file: the
+# rest of scripts/ reaches the production stage by its own COPY further down.
+COPY apps/api/scripts/prisma-env.js ./apps/api/scripts/
 RUN npm ci --workspace=api --include-workspace-root --ignore-scripts
 # --ignore-scripts skips Prisma's postinstall, so generate the client
 # explicitly. DATABASE_URL is a build-time placeholder; `generate` reads the

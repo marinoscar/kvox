@@ -33,7 +33,8 @@ Source of truth for every claim below:
   `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES`, `SIGNED_URL_EXPIRY` and
   `STORAGE_PART_SIZE`.
 - `infra/nginx/csp.conf` and `infra/nginx/csp.dev.conf` — `connect-src` and
-  `media-src`.
+  `media-src`; `infra/nginx/storage-origin.conf` — the one template that carries
+  `STORAGE_CSP_ORIGIN` into them.
 - `infra/compose/base.compose.yml` — how `STORAGE_CSP_ORIGIN` reaches nginx.
 
 ---
@@ -245,7 +246,7 @@ compute it from. Always set it explicitly in `infra/compose/.env`:
 
 See the comment above `STORAGE_CSP_ORIGIN=` in `infra/compose/.env.example`.
 
-**Applying the fix.** Nginx renders `csp.conf`'s template with `envsubst`
+**Applying the fix.** Nginx renders `storage-origin.conf`'s template (the file `csp.conf` includes) with `envsubst`
 **only once, at container start** — editing `.env` and sending nginx a reload
 does nothing, because the rendered file on disk does not change. Recreate the
 container instead:

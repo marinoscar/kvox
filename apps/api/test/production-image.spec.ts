@@ -78,6 +78,17 @@ describe('the api production image', () => {
     expect(stage).toContain('COPY apps/api/prisma.config.ts');
   });
 
+  it('has the helper prisma.config.ts requires beside it in the deps stage, where `prisma generate` runs', () => {
+    // prisma.config.ts derives DATABASE_URL through scripts/prisma-env.js, so
+    // every Prisma command that loads the config needs the file next to it.
+    // The deps stage copies only the config, then runs `prisma generate`: a
+    // config that cannot load its helper fails the whole image build.
+    const deps = dockerfile.slice(dockerfile.indexOf('AS deps'), dockerfile.indexOf('AS development'));
+    expect(deps).toContain('COPY apps/api/prisma.config.ts');
+    expect(deps).toContain('COPY apps/api/scripts/prisma-env.js ./apps/api/scripts/');
+    expect(deps.indexOf('prisma-env.js')).toBeLessThan(deps.indexOf('npx prisma generate'));
+  });
+
   it('resolves the migration script relative to the image WORKDIR', () => {
     // package.json says `node scripts/...`, and the WORKDIR is /app/apps/api,
     // so the copy has to land at apps/api/scripts - not at the root.
