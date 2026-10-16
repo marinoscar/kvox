@@ -24,6 +24,7 @@
 // declaration is a superset of this app's stored schema), so it is empty.
 // =============================================================================
 
+import { AI_SYSTEM_SETTINGS } from '@marinoscar/platform-api/ai';
 import type {
   SettingsDefaultsOverride,
   SystemSettingsNamespace,
@@ -32,21 +33,22 @@ import type {
   UserSettingsNamespaceExtension,
 } from '@marinoscar/platform-api/settings';
 
-import type { SystemAiValue } from '../ai/ai-settings.schema';
-import { KVOX_AI_SYSTEM_SETTINGS } from '../ai/ai.system-settings';
 import { GRAPH_USER_SETTINGS } from '../graph/preferences/graph.user-settings';
 import type { GraphPreferencesValue } from '../graph/preferences/graph-preferences.schema';
 import type { OnboardingValue } from '../common/schemas/user-settings-namespaces.schema';
 import { ONBOARDING_USER_SETTINGS } from '../onboarding/onboarding.user-settings';
 import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
+import { KVOX_AI_SETTINGS_EXTENSION } from '../platform/ai/ai-settings.extension';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../platform/telemetry/telemetry.system-settings';
 import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../transcription/transcription.system-settings';
 
 /** this app's system namespaces, in stored key order (after the platform's five). */
 export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
   TRANSCRIPTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
-  // PLATFORM-ADOPTION-SHIM(3.1): this app's own `ai` declaration until #473.
-  KVOX_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The platform AI slice's policy (#473), listed here and not in the platform list so the
+  // stored key order of the `global` row stays transcription, ai, telemetry. This app's
+  // task models, switch and limits are folded in by `KVOX_AI_SETTINGS_EXTENSION` below.
+  AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The platform telemetry slice's policy (#471). The package ships the schema, the
   // defaults and the merge; the declaration is this app's (see the file). Appended
   // last: the stored key order never changes for an existing deployment.
@@ -59,8 +61,16 @@ export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   GRAPH_USER_SETTINGS as UserSettingsNamespace,
 ];
 
-/** Fields this app stores in a platform-declared system namespace that the platform lacks. */
-export const APP_SYSTEM_SETTINGS_EXTENSIONS: readonly SystemSettingsNamespaceExtension[] = [];
+/**
+ * Fields this app stores in a platform-declared system namespace that the platform lacks.
+ *
+ * `ai` (#473): task models, the connected-knowledge switch, the default model and the
+ * request limits are added to the platform's `ai` namespace; the stored names are the
+ * ones this app has always used, so the `ai` key of the `global` row is the same row.
+ */
+export const APP_SYSTEM_SETTINGS_EXTENSIONS: readonly SystemSettingsNamespaceExtension[] = [
+  KVOX_AI_SETTINGS_EXTENSION,
+];
 
 /** Fields this app stores in a platform-declared user namespace that the platform lacks. */
 export const APP_USER_SETTINGS_EXTENSIONS: readonly UserSettingsNamespaceExtension[] = [];
@@ -80,14 +90,12 @@ export const APP_SYSTEM_SETTINGS_DEFAULTS: readonly SettingsDefaultsOverride[] =
 declare module '@marinoscar/platform-api/settings' {
   interface SystemSettingsNamespaces {
     transcription: SystemTranscriptionValue;
-    ai: SystemAiValue;
   }
 
   // The precise static types of the composed request bodies (a PATCH naming
   // `onboarding` or `transcription` type-checks).
   interface SystemSettingsNamespaceDeclarations {
     transcription: typeof TRANSCRIPTION_SYSTEM_SETTINGS;
-    ai: typeof KVOX_AI_SYSTEM_SETTINGS;
   }
 
   interface UserSettingsNamespaces {

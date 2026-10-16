@@ -86,21 +86,48 @@
   },
   "ai": {
     "enabled": false,
-    "provider": "openai",
+    "keyPolicy": "byok",
     "providers": {
       "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "allowedModels": [],
-        "defaultModel": "gpt-5.4-mini"
+        "enabled": false
+      },
+      "anthropic": {
+        "enabled": false
+      },
+      "gemini": {
+        "enabled": false
+      },
+      "azure-openai": {
+        "enabled": false
+      },
+      "openai-compatible": {
+        "enabled": false
       }
     },
+    "defaults": {
+      "allowBackgroundRuns": true,
+      "allowRealtime": false
+    },
+    "logPromptContent": false,
+    "usageRetentionDays": 180,
+    "hostedTools": {
+      "web_search": false,
+      "file_search": false,
+      "code_interpreter": false,
+      "image_generation": false,
+      "mcp": false,
+      "mcpAllowedHosts": []
+    },
+    "limits": {},
+    "deploymentKeyServesOrgs": true,
+    "taskModels": {},
+    "graphEnabled": false,
+    "defaultModel": null,
     "maxInputTokens": null,
     "maxOutputTokens": null,
     "requestTimeoutMs": 600000,
     "reasoningEffort": "none",
-    "maxDocumentBytes": 26214400,
-    "taskModels": {},
-    "graphEnabled": false
+    "maxDocumentBytes": 26214400
   },
   "telemetry": {
     "enabled": false,

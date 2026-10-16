@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
-import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
+import { AiLegacyPolicyService } from './ai-legacy-policy.service';
 import { AiCredentialsController } from './ai-credentials.controller';
 import { AiModelDiscoveryService } from './ai-model-discovery.service';
 import { AiProviderRegistry } from './ai-provider.registry';
@@ -61,10 +61,11 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
   controllers: [
     AiSettingsController,
     AiCredentialsController,
-    AiConfigController,
   ],
   providers: [
     AiProviderRegistry,
+    // PLATFORM-ADOPTION-SHIM(#477): reads and writes the old-shape `ai` policy (see its header).
+    AiLegacyPolicyService,
     AiSettingsService,
     UserAiCredentialsService,
     AiConfigService,
@@ -106,6 +107,7 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
   // for one endpoint in this module.
   exports: [
     AiProviderRegistry,
+    AiLegacyPolicyService,
     AiSettingsService,
     UserAiCredentialsService,
     // ⚠ ADDED BY #50, AND FOR THE NARROW REASON THAT EXPORTS IN THIS REPOSITORY

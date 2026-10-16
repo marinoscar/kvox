@@ -177,19 +177,36 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
       {
         name: 'AI',
         description:
-          'The AI provider framework behind notes: which provider and models this deployment ' +
-          'permits, the token and timeout ceilings on one request, and each user\'s OWN ' +
-          'provider API key. The admin half (`/api/ai-settings`) is gated on ' +
-          '`system_settings:read`/`:write`, because this configuration IS a namespace of the ' +
-          'system settings row; `GET /api/ai/config` alongside it is a narrow capability ' +
-          'probe gated on `notes:read`, which is seeded to every role, and its ' +
-          '`keyConfigured` field is what every AI surface in the web app gates on.\n\n' +
-          '⚠ **Keys here are per-user, and there is deliberately no deployment key.** Each ' +
-          'user saves their own through `PUT /api/ai-credentials`; it is encrypted at rest, ' +
-          'is never returned by any endpoint to anyone including an administrator, and a ' +
-          'user with no key simply has no AI features — there is no organisation-wide ' +
-          'credential to fall back on, so no user\'s content ever reaches an account they ' +
-          'did not choose.',
+          'The platform AI slice (epic #472): the capability probe (`GET /api/ai/config`), a ' +
+          'user\'s OWN provider keys (`/api/ai/keys`), the responses, embeddings, images, audio, ' +
+          'realtime and runs routes, the registered features (`GET /api/ai/features`) and the ' +
+          'caller\'s usage. Every route is gated on `ai:use` and the deployment kill switch.\n\n' +
+          'The older routes this application kept until the migration completes ' +
+          '(`/api/ai-settings`, gated on `system_settings:read`/`:write`, and ' +
+          '`/api/ai-credentials`, the per-user key store) share this section.\n\n' +
+          '⚠ **Keys are per-user, and there is deliberately no deployment fallback key by ' +
+          'default.** A key is encrypted at rest, is never returned by any endpoint to anyone ' +
+          'including an administrator, and a user with no key simply has no AI features.',
+      },
+      {
+        name: 'AI Tasks',
+        description:
+          'How this application routes AI by connected-knowledge task. `GET /api/ai-tasks/config` ' +
+          'is the capability probe every account can read (`notes:read`): the enabled models, ' +
+          'whether **you** have saved a key (`keyConfigured`, the field every AI surface gates on) ' +
+          'and the model each task would run on. It replaced `GET /api/ai/config`, which is the ' +
+          'platform\'s now. `GET`/`PUT /api/ai-tasks/settings` (`ai_config:read`/`:write`) edit the ' +
+          'fields this application adds to the platform `ai` settings namespace: task models, the ' +
+          'connected-knowledge switch, the default model and the request limits.',
+      },
+      {
+        name: 'AI Administration',
+        description:
+          'The deployment-wide AI policy and catalogue (`/api/admin/ai/*`): the kill switch, key ' +
+          'policy and provider slots, the model catalogue and which models are enabled, ' +
+          'deployment and organization provider keys, and the deployment-wide usage report. Gated ' +
+          'on `ai_config:read`/`:write` (system) and `org_ai_config:read`/`:write` (organization), ' +
+          'separately from `system_settings:*`. Provider keys are write-only.',
       },
       {
         name: 'Push Configuration',

@@ -411,6 +411,8 @@ shipping).
 
 ### 2.5 The active-provider axis, live model discovery, and the widened `allowedModels` entry (#78; the five-rank resolution chain and derived defaults are #97)
 
+> **Platform adoption (issue #473, epic #472).** The `ai` namespace is now the platform AI slice's (`@marinoscar/platform-api/ai`); the application extends it (§2.8) instead of declaring its own. The enabled-model list is the platform's `ai_models` table, so the `allowedModels` entry form, the five-rank chain and `providers.openai.allowedModels` described below are the previous stack, kept for history until the data move (#474) and the caller rewiring (#475). In this spec `GET /api/ai/config` means the application's probe, now `GET /api/ai-tasks/config`; `GET /api/ai/config` is the platform's. See §2.8 "Platform AI slice".
+
 Three changes shipped together because they answer one question — *"how does
 a deployment adopt a model this application does not already know about,
 without waiting for a release?"* — from three different angles.
@@ -971,6 +973,8 @@ A model missing a required capability the chosen rank landed on is
 `allowedModels` narrows any further) and a 409 at run time (the resolver
 below), never a silent substitution.
 
+> Since issue #473 the run-time resolver is `KvoxAiTargetResolver` (see "Platform AI slice" at the end of this section); `AiTaskModelResolver` below is the previous implementation, replaced when callers are rewired (#475) and deleted in #477.
+
 **`AiTaskModelResolver` (`apps/api/src/ai/ai-task-model-resolver.service.ts`,
 provided and exported by `AiModule`) is the one place a run decides which
 provider, model and reasoning effort it uses.** `resolve(userId, task,
@@ -996,6 +1000,59 @@ capability requirement, and takes the caller's own refusal sentences instead
 of a task's. This is the shared core §2.5's opening paragraph anticipated:
 one resolver, so #363/#364/#372/#378 never each reimplement the ranking
 `chooseTaskModel` already states once.
+
+#### Platform AI slice (issue #473)
+
+The application's task routing rides on the platform AI slice. Nothing in this section changes a caller; callers are rewired in #475.
+
+**The extension.** `KVOX_AI_SETTINGS_EXTENSION` (`apps/api/src/platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS`) is an `extendSystemSettingsNamespace` extension of the platform `ai` namespace, key `ai`, no `path`. It adds `taskModels`, `graphEnabled`, `defaultModel` (`string | null`, the former `providers.openai.defaultModel`, which has no platform home), `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort` (`none | low | medium | high | xhigh`) and `maxDocumentBytes`, with the bounds and defaults of §2.5 and §2.8 above. Stored names are unchanged, so the `ai` value of the `global` row is the same row before and after and a saved `taskModels` needs no rewrite. `taskModels` still replaces wholesale on merge. No added field can hold a key (a test asserts no stored key matches `/key|secret|token/i`). Until #474 runs, the stored value still holds the previous `provider` and `providers.openai.allowedModels`; the platform `read` salvages them field by field.
+
+**`chooseTaskModel` is ported, not changed.** `apps/api/src/ai-port/task-models.ts` copies `AI_TASK_DEFINITIONS`, `missingCapabilities` and `chooseTaskModel` and changes only the inputs: `models` are the enabled `ai_models` rows of the active provider mapped to `{ id, structuredOutput, toolCalling }` (from `capabilities.structured_output` and `capabilities.tools`), `defaultModel` is the extension's field, and `policy.provider` is the single enabled provider slot. The rank order above is unchanged.
+
+**`KvoxAiTargetResolver`** (`apps/api/src/ai-port/kvox-ai-target-resolver.ts`) implements the platform `AiTargetResolver`, is bound to `AI_TARGET_RESOLVER` in `AiHostModule` (global), and reads the extended `ai` value plus the enabled `ai_models` rows (one query, cached 5 s). It maps `ctx.feature` through `KVOX_FEATURE_TASK`:
+
+- A feature with a task: `chooseTaskModel({ policy, models, task, requested })`. A `problem` throws `KvoxAiConflict` with the reason; the resolver never returns `null` for an application feature, because `null` would let the platform pick a model this application did not choose.
+- A feature with no task (`note_*`, `transcript_name_check`): `requested.model` when it is an enabled model, else the extension's `defaultModel`, else `ai_not_configured`.
+- An embedding feature: the catalog model (`text-embedding-3-small`) and the provider.
+- An unknown feature (a platform page such as the Playground): delegated to the platform `DefaultAiTargetResolver`.
+- A configured task model that is no longer enabled logs `warn` once per process (`staleTaskModel`) and falls through, as in rank 3 above.
+
+`explain(userId, task, requested?)` returns the same `TaskModelChoice` without throwing, for the admin view and `GET /api/ai-tasks/config`.
+
+**Feature ids to task keys.** Every call site is a registered AI feature (`apps/api/src/app-registrations/ai.ts`, group `kvox`, imported once from `platform/ai/ai.config.ts` so registration runs before bootstrap). `KVOX_FEATURE_TASK` (`ai-port/features.ts`) maps them. Feature ids are permanent (usage rows carry them) and cannot contain dots, which is why they differ from task keys; task keys stay permanent too.
+
+| Feature id | Call site | `needs` | Task key |
+|---|---|---|---|
+| `note_generate` | `note.generate`, template preview | `responses`, `streaming` | none (default model) |
+| `note_retitle` | `note.retitle` | `responses`, `streaming` | none |
+| `transcript_name_check` | `transcript.name_check` | `responses`, `streaming` | none |
+| `graph_extract` | `kg.extract` | `responses`, `structured_output` | `graph.extract` |
+| `graph_adjudicate` | `kg.resolve`, dedup, `kg.import` | `responses`, `structured_output` | `graph.adjudicate` |
+| `graph_digest` | `kg.entity_digest` | `responses`, `structured_output` | `graph.digest` |
+| `graph_agent` | `ask.respond` | `responses`, `tools`, `streaming` | `graph.agent` |
+| `graph_embed` | `kg.embed`, resolution | `embeddings` | none (catalog) |
+| `search_embed` | `search.index`, query embed | `embeddings` | none (catalog) |
+
+**Wire code mapping.** `mapAiError(err, { feature, inJob })` (`ai-port/kvox-ai-errors.ts`) turns a platform `AiError` into the application's existing wire reason or, in a job, its job error class (`ai-port/ai-errors.ts`, re-exported from `ai/ai-errors.ts` until #477). `KvoxAiConflict` (409, `details.reason`) and `KvoxAiBadRequest` (400, `model_not_permitted`) keep the previous response bodies.
+
+| Platform `AiError.code` | HTTP route | Job |
+|---|---|---|
+| `AI_DISABLED`, `AI_PROVIDER_DISABLED` | 409 `ai_not_configured` | `AiInputError` (terminal) |
+| `AI_KEY_REQUIRED` | 409 `ai_key_missing` | `AiAuthError` |
+| `AI_KEY_INVALID` | 409 `ai_key_missing` (search keeps `ai_key_invalid`) | `AiAuthError` |
+| `AI_MODEL_NOT_ENABLED`, `AI_MODEL_NOT_REACHABLE` | 400 `model_not_permitted` | `AiInputError` |
+| `AI_CAPABILITY_UNSUPPORTED` | 409 `model_lacks_capability` | `AiInputError` |
+| `AI_RATE_LIMITED` | 429 | `RateLimitError` with `retryAfterMs` |
+| `AI_CONTENT_FILTERED` | 422 | `AiRefusedError` |
+| `AI_INVALID_REQUEST`, `AI_TOOL_DISABLED` | 400 | `AiInputError` |
+| `AI_STRUCTURED_OUTPUT_INVALID` | 502 | `AiStructuredOutputError('invalid_json')` |
+| `AI_PROVIDER_UNAVAILABLE`, `AI_STORAGE_UNAVAILABLE`, other | 503 | plain `Error` (retried) |
+
+`graph_disabled` is not a platform code: the resolver raises it from `ai.graphEnabled` before any call.
+
+**Reasoning effort clamp.** The application's `reasoningEffort` has five values; the platform accepts `minimal | low | medium | high`. `none` omits `reasoning`; `xhigh` is sent as `high`, silently. The admin form help text says so (#477).
+
+**Routes and permissions.** The platform serves `GET /api/ai/config` and `/api/ai/keys`; the application's probe moved to `GET /api/ai-tasks/config` (`notes:read`, same shape), and `GET`/`PUT /api/ai-tasks/settings` (`ai_config:read`/`ai_config:write`) edit the added fields, validating each task model against the enabled `ai_models` rows. `perUserDefaultModel` is `false` on `AiModule.forRoot` because the model is chosen per task; a per-run `requested` model is unaffected. See [`docs/API.md`](../API.md) "AI Tasks".
 
 ## 3. Prompt assembly and the token budget
 
