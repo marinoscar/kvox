@@ -23,7 +23,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { AiSettingsService } from '../../ai/ai-settings.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
 import { KG_ENTITY_DIGEST_JOB_TYPE, KG_SUBJECT_ENTITY } from '../job-types';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
 
@@ -39,7 +39,7 @@ export class EntityDigestEnqueuer {
   constructor(
     private readonly jobs: JobsService,
     private readonly registry: JobHandlerRegistry,
-    private readonly aiSettings: AiSettingsService,
+    private readonly aiRuns: GraphAiRunResolver,
   ) {}
 
   /** Enqueue (deduplicated per entity). `null` when no handler is registered. */
@@ -60,8 +60,7 @@ export class EntityDigestEnqueuer {
   async enqueueIfEnabled(ownerId: string, entityIds: readonly string[]): Promise<void> {
     if (entityIds.length === 0 || !this.registry.get(KG_ENTITY_DIGEST_JOB_TYPE)) return;
     try {
-      const policy = (await this.aiSettings.get()) as { graphEnabled?: unknown };
-      if (policy.graphEnabled !== true) return;
+      if (!(await this.aiRuns.graphEnabled())) return;
       for (const entityId of new Set(entityIds)) {
         await this.enqueue(ownerId, entityId);
       }

@@ -59,7 +59,7 @@ import { Prisma, type KgProposal } from '@prisma/client';
 import type { EffectiveSchema } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import { AiSettingsService } from '../../ai/ai-settings.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
@@ -320,7 +320,7 @@ export class ProposalCommitService {
     private readonly merges: MergeService,
     private readonly jobs: JobsService,
     private readonly registry: JobHandlerRegistry,
-    private readonly aiSettings: AiSettingsService,
+    private readonly aiRuns: GraphAiRunResolver,
     private readonly proposals: ProposalsService,
   ) {}
 
@@ -449,8 +449,7 @@ export class ProposalCommitService {
   /** `kg.entity_digest` per entity — only while registered AND `ai.graphEnabled` (#372's shape). */
   async enqueueDigests(ownerId: string, entityIds: readonly string[]): Promise<void> {
     if (entityIds.length === 0 || !this.registry.get(KG_ENTITY_DIGEST_JOB_TYPE)) return;
-    const policy = (await this.aiSettings.get()) as { graphEnabled?: unknown };
-    if (policy.graphEnabled !== true) return;
+    if (!(await this.aiRuns.graphEnabled())) return;
     for (const entityId of entityIds) {
       await this.jobs.enqueue({
         type: KG_ENTITY_DIGEST_JOB_TYPE,

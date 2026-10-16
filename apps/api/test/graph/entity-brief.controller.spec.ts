@@ -4,7 +4,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
+import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
 import { entityBriefResponseSchema } from '../../src/graph/brief/dto/entity-brief.dto';
 
 // =============================================================================
@@ -63,20 +63,30 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
     prismaMock.kgEntityView.findUnique.mockResolvedValue(null as never);
     prismaMock.job.findFirst.mockResolvedValue(null as never);
 
-    // Every method of every registered AI provider throws if touched.
+    // Every generative or embedding method of the port throws if touched; only
+    // `readiness` (a configuration read, no model call) answers, as "not set up".
     providerSpies.forEach((s) => s.mockRestore());
     providerSpies = [];
-    const registry = context.app.get(AiProviderRegistry);
-    for (const provider of registry.all()) {
-      for (const method of ['generate', 'generateStructured', 'chat', 'embed', 'listModels', 'testCredential'] as const) {
-        if (typeof (provider as unknown as Record<string, unknown>)[method] === 'function') {
-          providerSpies.push(
-            jest.spyOn(provider as never, method as never).mockImplementation((() => {
-              throw new Error(`AI provider ${method} called by the brief`);
-            }) as never),
-          );
-        }
-      }
+    const ai = context.app.get<KvoxAi>(KVOX_AI);
+    providerSpies.push(
+      jest.spyOn(ai, 'readiness').mockResolvedValue({
+        ok: false,
+        reason: 'ai_not_configured',
+        provider: null,
+        model: null,
+        source: 'none',
+        contextWindowTokens: null,
+        maxOutputTokens: null,
+        reasoningEffort: 'none',
+        hasKey: false,
+      }),
+    );
+    for (const method of ['streamText', 'generateStructured', 'embed', 'chat'] as const) {
+      providerSpies.push(
+        jest.spyOn(ai, method as never).mockImplementation((() => {
+          throw new Error(`KvoxAi.${method} called by the brief`);
+        }) as never),
+      );
     }
   });
 
@@ -151,7 +161,8 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
       digest: null,
       digestPending: false,
     });
-    for (const spy of providerSpies) expect(spy).not.toHaveBeenCalled();
+    // Nothing but the configuration read reached the port.
+    for (const spy of providerSpies.slice(1)) expect(spy).not.toHaveBeenCalled();
     // The view is recorded for this visit.
     expect(prismaMock.kgEntityView.upsert).toHaveBeenCalledTimes(1);
   });

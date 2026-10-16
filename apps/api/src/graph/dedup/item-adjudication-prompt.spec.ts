@@ -1,4 +1,4 @@
-import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
+import { assertStrictJsonSchema } from '../../ai-port/strict-json-schema';
 import {
   ITEM_ADJUDICATION_HEADINGS,
   buildItemAdjudicationOutputSchema,

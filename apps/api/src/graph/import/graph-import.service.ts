@@ -38,7 +38,7 @@ import {
 import type { AttributeKind, AttributeOptions } from '@app/shared/ontology';
 import { Prisma } from '@prisma/client';
 
-import { AiSettingsService } from '../../ai/ai-settings.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
 import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphAccessService } from '../access/graph-access.service';
@@ -116,7 +116,7 @@ export class GraphImportService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiSettings: AiSettingsService,
+    private readonly aiRuns: GraphAiRunResolver,
     private readonly objects: GraphObjectsService,
     private readonly jobs: JobsService,
     private readonly access: GraphAccessService,
@@ -140,8 +140,7 @@ export class GraphImportService {
     }
     if (file.body.byteLength === 0) throw new BadRequestException('The file is empty.');
 
-    const policy = await this.aiSettings.get();
-    if (!policy.graphEnabled) {
+    if (!(await this.aiRuns.graphEnabled())) {
       throw new ConflictException({
         message: 'Connected knowledge is switched off on this deployment, so nothing can be imported into it.',
         details: { reason: GRAPH_CONFLICT_REASONS.GRAPH_DISABLED },

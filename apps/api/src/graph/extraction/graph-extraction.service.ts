@@ -27,9 +27,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, type Note } from '@prisma/client';
 
-import type { AiModelResolution } from '../../ai/ai-task-model-resolver.service';
-import { AiTaskModelResolver } from '../../ai/ai-task-model-resolver.service';
-import { AiSettingsService } from '../../ai/ai-settings.service';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
+import type { GraphAiRun } from '../graph-ai-run';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { activeUserHoldsPermission } from '../../common/auth/principal-permissions';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
@@ -39,7 +38,7 @@ import {
   computeTokenBudget,
   outputTokensForPrompt,
   type TokenBudget,
-} from '../../ai/ai-token-budget';
+} from '../../ai-port/ai-token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
 import { KG_EXTRACT_JOB_TYPE, KG_SUBJECT_NOTE } from '../job-types';
@@ -93,7 +92,7 @@ export function initialExtractionStats(): ExtractionStats {
  * schema (sent with the request) — the same count the handler budgets with.
  */
 export function measurePrompt(
-  resolution: Pick<AiModelResolution, 'countTokens'>,
+  resolution: Pick<GraphAiRun, 'countTokens'>,
   prompt: { systemPrompt: string; userContent: string },
   schema: Record<string, unknown>,
 ): number {
@@ -102,21 +101,19 @@ export function measurePrompt(
 
 /**
  * The budget for one resolution (#436): the model's OWN limits
- * (`modelLimits`, falling back to the published descriptor), the deployment's
+ * (`modelLimits`), the deployment's
  * optional spend caps, an optional per-task answer clamp, and the reasoning
  * effort this resolution will actually send. A call whose prompt can be large
  * requests `outputTokensForPrompt(budget, promptTokens)`, not
  * `budget.maxOutputTokens`.
  */
 export function extractionBudget(
-  resolution: Pick<AiModelResolution, 'descriptor' | 'policy'> &
-    Partial<Pick<AiModelResolution, 'modelLimits' | 'reasoningEffort'>>,
+  resolution: Pick<GraphAiRun, 'modelLimits' | 'policy'> & Partial<Pick<GraphAiRun, 'reasoningEffort'>>,
   taskMaxOutputTokens?: number,
 ): TokenBudget {
-  const limits = resolution.modelLimits ?? resolution.descriptor;
   return computeTokenBudget({
-    contextWindowTokens: limits.contextWindowTokens,
-    modelMaxOutputTokens: limits.maxOutputTokens,
+    contextWindowTokens: resolution.modelLimits.contextWindowTokens,
+    modelMaxOutputTokens: resolution.modelLimits.maxOutputTokens,
     policyMaxOutputTokens: resolution.policy.maxOutputTokens,
     policyMaxInputTokens: resolution.policy.maxInputTokens,
     taskMaxOutputTokens,
@@ -145,8 +142,8 @@ export interface ExtractionPlan {
  * halved caps.
  */
 export function planExtraction(
-  resolution: Pick<AiModelResolution, 'descriptor' | 'policy' | 'countTokens'> &
-    Partial<Pick<AiModelResolution, 'modelLimits' | 'reasoningEffort'>>,
+  resolution: Pick<GraphAiRun, 'modelLimits' | 'policy' | 'countTokens'> &
+    Partial<Pick<GraphAiRun, 'reasoningEffort'>>,
   ctx: ExtractionContext,
   capsOverride?: ExtractionRowCaps,
 ): ExtractionPlan {
@@ -181,8 +178,7 @@ export class GraphExtractionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notes: NoteAccessService,
-    private readonly resolver: AiTaskModelResolver,
-    private readonly aiSettings: AiSettingsService,
+    private readonly resolver: GraphAiRunResolver,
     private readonly preferences: GraphPreferencesService,
     private readonly ontology: GraphOntologyService,
     private readonly loader: ExtractionInputLoader,
@@ -268,8 +264,7 @@ export class GraphExtractionService {
    * this note is already running. Returns the proposal id, or null.
    */
   async enqueueForReadyNote(noteId: string, ownerId: string): Promise<string | null> {
-    const policy = await this.aiSettings.get();
-    if (!policy.graphEnabled) return null;
+    if (!(await this.resolver.graphEnabled())) return null;
 
     // The owner's EFFECTIVE permissions (system grants plus their membership's
     // org role), through the platform principal: a Contributor or Viewer holds
@@ -284,7 +279,7 @@ export class GraphExtractionService {
     const prefs = await this.preferences.get(ownerId);
     if (!prefs.extraction.autoExtract) return null;
 
-    let resolution: AiModelResolution;
+    let resolution: GraphAiRun;
     try {
       resolution = await this.resolver.resolve(ownerId, 'graph.extract');
     } catch (error) {
@@ -355,7 +350,7 @@ export class GraphExtractionService {
   }
 
   private async estimateFor(
-    resolution: AiModelResolution,
+    resolution: GraphAiRun,
     userId: string,
     note: Note,
     guidance: UserGuidance | null,
@@ -380,7 +375,7 @@ export class GraphExtractionService {
   private async createProposal(args: {
     userId: string;
     note: Note;
-    resolution: AiModelResolution;
+    resolution: GraphAiRun;
     guidance: UserGuidance | null;
     reason: ExtractionReason;
   }) {

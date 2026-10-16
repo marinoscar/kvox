@@ -26,7 +26,7 @@
 // and runs via `npm run test:db` against a real Postgres with pgvector, using
 // the shared reachability probe in `../jobs/db-test-support.ts`.
 //
-// THE PROVIDER IS STUBBED AND NOTHING ELSE IS. No network call is made and no
+// THE AI PORT IS STUBBED AND NOTHING ELSE IS. No network call is made and no
 // key is needed; the chunker, the reconciliation, the raw writes, the relation
 // filter and the cascade are all the real ones.
 // =============================================================================
@@ -34,7 +34,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-import { EMBEDDING_DIMENSIONS } from '../../src/ai/providers/ai-provider.interface';
+import { EMBEDDING_DIMENSIONS } from '../../src/ai-port/embedding-catalog';
 import {
   SEARCH_DOC_TRANSCRIPT,
   SEARCH_INDEX_JOB_TYPE,
@@ -157,14 +157,14 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
   }
 
   /**
-   * The handler, with the PROVIDER stubbed and everything else real.
+   * The handler, with the `KvoxAi` port stubbed and everything else real.
    *
    * The vectors are deterministic and distinct per input, so a wrong-chunk
    * pairing would be visible rather than hidden behind identical numbers.
    */
   function buildHandler() {
-    const embed = jest.fn(async (_ctx: unknown, request: { inputs: string[] }) => ({
-      vectors: request.inputs.map((_input, position) => {
+    const embed = jest.fn(async (request: { texts: string[] }) => ({
+      vectors: request.texts.map((_input, position) => {
         const vector = new Array(EMBEDDING_DIMENSIONS).fill(0);
         vector[position % EMBEDDING_DIMENSIONS] = 1;
 
@@ -174,16 +174,24 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
       model: MODEL,
     }));
 
-    const provider = {
-      id: 'openai',
-      label: 'OpenAI',
-      settingsSchema: { safeParse: () => ({ success: true as const, data: {} }) },
-      embedding: {
+    const ai = {
+      readiness: async () => ({
+        ok: true,
+        reason: null,
+        provider: 'openai',
+        model: MODEL,
+        source: 'default',
+        contextWindowTokens: null,
+        maxOutputTokens: null,
+        reasoningEffort: 'none',
+        hasKey: true,
+      }),
+      embeddingCapability: () => ({
         model: MODEL,
         dimensions: EMBEDDING_DIMENSIONS,
         maxInputTokens: 8191,
         maxBatchSize: 2,
-      },
+      }),
       embed,
     };
 
@@ -193,12 +201,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     const handler = new SearchIndexHandler(
       new JobHandlerRegistry(),
       prisma as never,
-      { get: (id: string) => (id === 'openai' ? provider : undefined) } as never,
-      { get: async () => ({ enabled: true, provider: 'openai', providers: { openai: {} } }) } as never,
-      {
-        getSecret: async () => 'sk-test-not-used',
-        markUsed: async () => undefined,
-      } as never,
+      ai as never,
       { registerProviderKey: jest.fn() } as never,
       index as never,
     );
@@ -246,7 +249,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     expect(vectors.every((row) => row.model === MODEL)).toBe(true);
 
     // `maxBatchSize: 2` above, so the batching is real rather than incidental.
-    expect(embed.mock.calls.every((call) => call[1].inputs.length <= 2)).toBe(true);
+    expect(embed.mock.calls.every((call) => call[0].texts.length <= 2)).toBe(true);
 
     const state = await prisma.searchIndexState.findUnique({
       where: {
@@ -339,7 +342,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     expect(moved.length).toBeLessThan(after.length);
 
     const embeddedInputs = embed.mock.calls.reduce(
-      (total, call) => total + call[1].inputs.length,
+      (total, call) => total + call[0].texts.length,
       0,
     );
 

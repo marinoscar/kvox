@@ -158,7 +158,12 @@ export class WorkItemDedupStage implements ProposalStage, OnModuleInit {
         subjectLabel: item.subjectId ? (labels.get(item.subjectId)?.label ?? null) : null,
       });
     }
-    const embedded = await this.resolution.embedMentions(userId, pending.map((i) => i.text), KG_EXTRACT_JOB_TYPE);
+    const embedded = await this.resolution.embedMentions(
+      userId,
+      pending.map((i) => i.text),
+      KG_EXTRACT_JOB_TYPE,
+      ctx.jobId,
+    );
     if (pending.length > 0 && embedded.vectorArm !== 'ok') {
       stats.fallback = 'lexical';
       stats.embedding = embedded.vectorArm;
@@ -183,7 +188,10 @@ export class WorkItemDedupStage implements ProposalStage, OnModuleInit {
     if (withCandidates.length > 0 && ctx.preferences.resolution.adjudication === 'llm') {
       const pairs = await this.buildPairs(userId, withCandidates, labels, pairIndex);
       try {
-        verdicts = await this.adjudication.adjudicateItems(userId, pairs, { jobType: KG_EXTRACT_JOB_TYPE });
+        verdicts = await this.adjudication.adjudicateItems(userId, pairs, {
+          jobType: KG_EXTRACT_JOB_TYPE,
+          jobId: ctx.jobId,
+        });
         stats.adjudicated = pairs.length;
       } catch (error) {
         if (error instanceof RateLimitError) throw error;

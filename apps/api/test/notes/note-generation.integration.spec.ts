@@ -22,14 +22,8 @@
 //      away" is not a UI feature, it is this property.
 // =============================================================================
 
-import { z } from 'zod';
-
-import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
-import type {
-  AiDelta,
-  AiGenerateRequest,
-  AiProvider,
-} from '../../src/ai/providers/ai-provider.interface';
+import type { KvoxTextEvent } from '../../src/ai-port/kvox-ai';
+import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { NoteGenerationService } from '../../src/notes/generation/note-generation.service';
 import { NoteGenerateHandler } from '../../src/notes/handlers/note-generate.handler';
 import { JobHandlerRegistry, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
@@ -160,50 +154,37 @@ const observations: string[] = [];
 /** `notes.status` at the moment the provider was actually called. */
 let statusAtProviderCall: string | null = null;
 
-class StreamingProvider implements AiProvider<unknown> {
-  readonly id = 'openai';
-  readonly label = 'OpenAI';
-  readonly capabilities = {
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
-    ],
-    streaming: true as const,
-    // #78: this fake implements no `listModels`, so it must not claim to — the
-    // registry refuses that combination at boot.
-    modelDiscovery: false,
-  };
-  readonly settingsSchema = z.unknown();
-  readonly fieldDescriptors = [];
-
-  constructor(private readonly db: Db) {}
-
-  async testConnection(): Promise<never> {
-    throw new Error('not used');
+class StreamingAi extends FakeKvoxAi {
+  constructor(private readonly db: Db) {
+    super();
   }
 
-  countTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
+  streamText(req: Parameters<FakeKvoxAi['streamText']>[0]): AsyncIterable<KvoxTextEvent> {
+    // Record the call exactly as the fake does, then stream the scripted chunks.
+    void super.streamText(req);
+    const db = this.db;
 
-  async *generate(_ctx: unknown, _request: AiGenerateRequest): AsyncIterable<AiDelta> {
-    // Spec §1.1: the job flips the note to `generating` BEFORE the first
-    // provider call and not at enqueue time.
-    statusAtProviderCall = this.db.note.status as string;
+    return (async function* (): AsyncGenerator<KvoxTextEvent> {
+      // Spec §1.1: the job flips the note to `generating` BEFORE the first
+      // provider call and not at enqueue time.
+      statusAtProviderCall = db.note.status as string;
 
-    for (const chunk of CHUNKS) {
-      yield { kind: 'delta', text: chunk };
+      for (const chunk of CHUNKS) {
+        yield { type: 'delta', text: chunk };
 
-      // ⚠ READ FROM INSIDE THE STREAM. The `for await` body — flush included —
-      // has already run for this chunk by the time the generator is resumed, so
-      // this is what the database held mid-generation.
-      observations.push(this.db.generation.content as string);
-    }
+        // ⚠ READ FROM INSIDE THE STREAM. The `for await` body — flush included —
+        // has already run for this chunk by the time the generator is resumed, so
+        // this is what the database held mid-generation.
+        observations.push(db.generation.content as string);
+      }
 
-    yield {
-      kind: 'done',
-      finishReason: 'stop',
-      usage: { promptTokens: 1_200, completionTokens: 340 },
-    };
+      yield {
+        type: 'done',
+        finishReason: 'stop',
+        model: 'gpt-4o',
+        usage: { inputTokens: 1_200, outputTokens: 340 },
+      };
+    })();
   }
 }
 
@@ -230,9 +211,6 @@ function harness(db: Db) {
     { enqueueForReadyNote: jest.fn().mockResolvedValue(null) } as never,
   );
 
-  const providers = new AiProviderRegistry();
-  providers.register(new StreamingProvider(db));
-
   const sources = {
     resolve: jest.fn().mockResolvedValue({
       text: '**Ana** · 00:00\n\nWe should ship on Friday.',
@@ -240,32 +218,20 @@ function harness(db: Db) {
     }),
   };
 
+  const ai = new StreamingAi(db);
+
   const handler = new NoteGenerateHandler(
     new JobHandlerRegistry(),
     prisma as never,
-    providers,
-    {
-      get: jest.fn().mockResolvedValue({
-        enabled: true,
-        providers: {
-          openai: {
-            baseUrl: 'https://api.openai.com/v1',
-            allowedModels: ['gpt-4o'],
-            defaultModel: 'gpt-4o',
-          },
-        },
-        maxInputTokens: 100_000,
-        maxOutputTokens: 4_000,
-        requestTimeoutMs: 60_000,
-      }),
-    } as never,
-    { getSecret: jest.fn().mockResolvedValue('sk-test') } as never,
+    ai,
+    // The deployment's two spend caps (`ai.maxInputTokens`, `ai.maxOutputTokens`).
+    { get: jest.fn().mockResolvedValue({ maxInputTokens: 100_000, maxOutputTokens: 4_000 }) } as never,
     generations,
     sources as never,
     new ProviderThrottleService({ get: () => undefined } as never),
   );
 
-  return { handler, prisma, notifications };
+  return { handler, prisma, notifications, ai };
 }
 
 const job = () => ({ id: 'job-1', payload: { generationId: GENERATION_ID } }) as never;
@@ -368,13 +334,11 @@ describe('note.generate — a full generation with nobody watching', () => {
 describe('note.generate — a terminal failure, with nobody watching', () => {
   it('fails the note, records the class, and tells the owner', async () => {
     const db = freshDb();
-    const { handler, notifications, prisma } = harness(db);
+    const { handler, notifications, prisma, ai } = harness(db);
 
     // No key saved for this user: an `AiAuthError`, the most ordinary failure
     // in this epic and entirely the user's own to fix.
-    (handler as unknown as { credentials: { getSecret: jest.Mock } }).credentials = {
-      getSecret: jest.fn().mockResolvedValue(null),
-    };
+    ai.setNotReady('ai_key_missing');
 
     await expect(handler.process(job())).resolves.toBeUndefined();
 

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 import * as queries from './brief-queries';
 import { DIGEST_FAILURE_BACKOFF_MS, EntityBriefService, type EntityBriefOptions } from './entity-brief.service';
@@ -25,22 +25,28 @@ const EV = U(3);
 const DOC = U(4);
 const USER = { id: OWNER, permissions: ['graph:read', 'transcripts:read', 'notes:read'] } as never;
 
-/** A provider whose every property access throws — the brief must never touch it. */
-const explodingProvider = new Proxy(
-  {},
-  {
-    get() {
-      throw new Error('the brief called an AI provider');
+/**
+ * A `KvoxAi` whose only usable method is `readiness` (a configuration read): the
+ * brief must never reach a generative or embedding method.
+ */
+function readinessOnly(readiness: jest.Mock) {
+  return new Proxy(
+    { readiness },
+    {
+      get(target, prop) {
+        if (prop === 'readiness') return target.readiness;
+        throw new Error(`the brief called KvoxAi.${String(prop)}`);
+      },
     },
-  },
-);
+  );
+}
 
 interface Setup {
   digest?: unknown;
   lastViewedAt?: Date | null;
   activeJob?: boolean;
   latestJob?: unknown;
-  resolve?: jest.Mock;
+  readiness?: jest.Mock;
   search?: jest.Mock;
   entity?: unknown;
 }
@@ -75,9 +81,8 @@ function setup(over: Setup = {}) {
         results: [{ type: 'transcript', id: DOC, title: 'Call', score: 0.03, snippets: [{ html: '<mark>Acme</mark>', startMs: 10, field: 'segment' }] }],
       }),
   };
-  const resolver = {
-    resolve: over.resolve ?? jest.fn().mockResolvedValue({ provider: explodingProvider, model: 'model-x' }),
-  };
+  const readiness = over.readiness ?? jest.fn().mockResolvedValue({ ok: true, reason: null, model: 'model-x' });
+  const ai = readinessOnly(readiness);
   const enqueuer = { enqueue: jest.fn().mockResolvedValue({ id: 'job-new', status: 'pending' }) };
   const service = new EntityBriefService(
     prisma as never,
@@ -85,10 +90,10 @@ function setup(over: Setup = {}) {
     ontology as never,
     views as never,
     search as never,
-    resolver as never,
+    ai as never,
     enqueuer as never,
   );
-  return { service, prisma, access, views, search, resolver, enqueuer };
+  return { service, prisma, access, views, search, readiness, enqueuer };
 }
 
 const opts = (over: Partial<EntityBriefOptions> = {}): EntityBriefOptions => ({
@@ -124,9 +129,9 @@ const DIGEST = {
 
 describe('EntityBriefService.getBrief — digest staleness and the enqueue gate', () => {
   it('stale + usable model → exactly one enqueue and digestPending, never a provider call', async () => {
-    const { service, enqueuer, resolver } = setup();
+    const { service, enqueuer, readiness } = setup();
     const res = await service.getBrief(USER, ENTITY, opts());
-    expect(resolver.resolve).toHaveBeenCalledWith(OWNER, 'graph.digest');
+    expect(readiness).toHaveBeenCalledWith(OWNER, 'graph_digest');
     expect(enqueuer.enqueue).toHaveBeenCalledTimes(1);
     expect(enqueuer.enqueue).toHaveBeenCalledWith(OWNER, ENTITY);
     expect(res).toMatchObject({ digest: null, digestStale: true, digestPending: true, digestUnavailable: null });
@@ -134,10 +139,10 @@ describe('EntityBriefService.getBrief — digest staleness and the enqueue gate'
 
   it('an up-to-date digest is shown, not stale, and nothing is resolved or enqueued', async () => {
     q.newestChange.mockResolvedValue({ at: new Date('2026-08-01T00:00:00Z'), writtenAt: new Date('2026-08-01T00:00:00Z') });
-    const { service, enqueuer, resolver } = setup({ digest: DIGEST });
+    const { service, enqueuer, readiness } = setup({ digest: DIGEST });
     const res = await service.getBrief(USER, ENTITY, opts());
     expect(res.digestStale).toBe(false);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(readiness).not.toHaveBeenCalled();
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
     // Only evidence the caller still owns survives.
     expect(res.digest).toEqual({
@@ -156,53 +161,60 @@ describe('EntityBriefService.getBrief — digest staleness and the enqueue gate'
 
   it('nothing to summarize and no digest → not stale', async () => {
     q.newestChange.mockResolvedValue({ at: null, writtenAt: null });
-    const { service, resolver } = setup();
+    const { service, readiness } = setup();
     expect((await service.getBrief(USER, ENTITY, opts())).digestStale).toBe(false);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(readiness).not.toHaveBeenCalled();
   });
 
   it('with as_of: no digest, not stale, not pending, nothing enqueued, view untouched', async () => {
-    const { service, enqueuer, resolver, views } = setup({ digest: DIGEST });
+    const { service, enqueuer, readiness, views } = setup({ digest: DIGEST });
     const res = await service.getBrief(USER, ENTITY, opts({ asOf: '2024-01-15' }));
     expect(res).toMatchObject({ digest: null, digestStale: false, digestPending: false, digestUnavailable: null });
     expect(res.window.asOf).toBe('2024-01-15T00:00:00.000Z');
     expect(q.newestChange).not.toHaveBeenCalled();
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(readiness).not.toHaveBeenCalled();
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
     expect(views.markViewed).not.toHaveBeenCalled();
   });
 
   it('enqueueStaleDigest: false (the Ask tool) reports staleness but never resolves or enqueues', async () => {
-    const { service, enqueuer, resolver } = setup();
+    const { service, enqueuer, readiness } = setup();
     const res = await service.getBrief(USER, ENTITY, opts({ enqueueStaleDigest: false, markViewed: false }));
     expect(res).toMatchObject({ digestStale: true, digestPending: false });
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(readiness).not.toHaveBeenCalled();
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
   });
 
   it.each(['graph_disabled', 'ai_not_configured', 'ai_key_missing', 'model_lacks_capability'] as const)(
-    'a resolver 409 (%s) is reported and nothing is enqueued',
+    'a readiness refusal (%s) is reported and nothing is enqueued',
     async (reason) => {
-      const resolve = jest.fn().mockRejectedValue(new ConflictException({ message: 'no', details: { reason } }));
-      const { service, enqueuer } = setup({ resolve });
+      const readiness = jest.fn().mockResolvedValue({ ok: false, reason });
+      const { service, enqueuer } = setup({ readiness });
       const res = await service.getBrief(USER, ENTITY, opts());
       expect(res).toMatchObject({ digestStale: true, digestPending: false, digestUnavailable: reason });
       expect(enqueuer.enqueue).not.toHaveBeenCalled();
     },
   );
 
-  it('an unexpected resolver failure never breaks the brief', async () => {
-    const { service, enqueuer } = setup({ resolve: jest.fn().mockRejectedValue(new BadRequestException('x')) });
+  it('a refusal the brief does not report (a model the deployment does not permit) is not surfaced and enqueues nothing', async () => {
+    const { service, enqueuer } = setup({ readiness: jest.fn().mockResolvedValue({ ok: false, reason: 'model_not_permitted' }) });
+    const res = await service.getBrief(USER, ENTITY, opts());
+    expect(res).toMatchObject({ digestPending: false, digestUnavailable: null });
+    expect(enqueuer.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected readiness failure never breaks the brief', async () => {
+    const { service, enqueuer } = setup({ readiness: jest.fn().mockRejectedValue(new Error('x')) });
     const res = await service.getBrief(USER, ENTITY, opts());
     expect(res).toMatchObject({ digestPending: false, digestUnavailable: null });
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
   });
 
   it('a pending job → digestPending without resolving or enqueueing again', async () => {
-    const { service, enqueuer, resolver } = setup({ activeJob: true });
+    const { service, enqueuer, readiness } = setup({ activeJob: true });
     const res = await service.getBrief(USER, ENTITY, opts());
     expect(res.digestPending).toBe(true);
-    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(readiness).not.toHaveBeenCalled();
     expect(enqueuer.enqueue).not.toHaveBeenCalled();
   });
 

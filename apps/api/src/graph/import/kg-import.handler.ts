@@ -197,7 +197,7 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
     });
     const started = Date.now();
     try {
-      await this.run(payload, stats);
+      await this.run(payload, stats, job.id);
       this.logger.log(
         `${KG_IMPORT_JOB_TYPE} proposal=${payload.proposalId} format=${payload.format} triples=${stats.triples} ` +
           `entities=${stats.counts.entities} relations=${stats.counts.relations} items=${stats.counts.items} ` +
@@ -222,7 +222,7 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
   // The pipeline
   // ===========================================================================
 
-  private async run(payload: KgImportJobPayload, stats: WorkingStats): Promise<void> {
+  private async run(payload: KgImportJobPayload, stats: WorkingStats, jobId: string): Promise<void> {
     const { ownerId, proposalId, objectId, format } = payload;
 
     // 1. Parse.
@@ -317,7 +317,7 @@ export class KgImportHandler implements JobHandler, OnModuleInit {
     const stageStats: Record<string, unknown> = {};
     for (const stage of this.stages.ordered()) {
       const own: Record<string, unknown> = {};
-      await stage.run({ proposalId, userId: ownerId, noteId: null, preferences, ai: null, prisma: this.prisma, stats: own });
+      await stage.run({ proposalId, userId: ownerId, noteId: null, jobId, preferences, ai: null, prisma: this.prisma, stats: own });
       stageStats[stage.name] = own;
     }
 

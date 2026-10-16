@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
+import { AiUserKeysPurger } from '../platform/ai/ai-user-keys.purger';
 import { PrismaModule } from '../prisma/prisma.module';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
@@ -35,15 +35,17 @@ import { UserDataService } from './user-data.service';
 //     per user" (see `UserDataService`'s header).
 //   • `KvoxObjectsModule` — `ObjectsService.delete` (the platform's) and the
 //     ownership-aware object reads for the caller's plain uploads.
-//   • `AiModule` — `UserAiCredentialsService.removeAll`. Deliberately NOT
-//     `@Global()`, so it has to be imported by name, which is the point: a
-//     module that can erase a user's encrypted keys should say so in its own
-//     import list.
+//   • `AiUserKeysPurger` (provided below, not imported) — erases the user's AI
+//     keys through the platform's `UserAiKeysService`, which deletes the row and
+//     audits it. It resolves that service by `ModuleRef`, so this module names
+//     the dependency in its provider list and imports nothing from the AI slice
+//     (issue #475). The legacy `user_ai_credentials` rows are deleted by the
+//     credentials hook itself until #477 drops the table.
 //   • `SettingsModule` — `UserSettingsService.patchSettings`, for the one
 //     `user_settings` namespace `everything` clears: `onboarding`. The handler
 //     hand-writes no JSONB edit; `{ onboarding: null }` is already the tested
 //     operation that collapses that namespace back to ABSENT, which is how
-//     "never onboarded" is spelled (epic #271). Same argument as `AiModule`
+//     "never onboarded" is spelled (epic #271). Same argument as the AI keys
 //     above for naming it here rather than reaching for `prisma` directly —
 //     except that this one is also the reason the import list is worth reading:
 //     a module that can touch a user's settings row should say so.
@@ -76,7 +78,6 @@ import { UserDataService } from './user-data.service';
   imports: [
     PrismaModule,
     KvoxObjectsModule,
-    AiModule,
     // Epic #271 — `UserSettingsService.patchSettings`, so the `everything`
     // scope can clear the `onboarding` namespace through the path that already
     // knows how an emptied namespace collapses back to absent.
@@ -89,6 +90,7 @@ import { UserDataService } from './user-data.service';
     // hooks are provided by their own modules.
     { provide: FILES_USER_DATA_HOOKS, useClass: FilesUserDataHooks },
     PatRevoker,
+    AiUserKeysPurger,
     { provide: CREDENTIALS_USER_DATA_HOOKS, useClass: CredentialsUserDataHooks },
     { provide: ONBOARDING_USER_DATA_HOOKS, useClass: OnboardingUserDataHooks },
   ],

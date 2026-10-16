@@ -18,37 +18,29 @@
 // `TranscriptsService.scopeWhere` as the definition they must agree with.
 //
 // -----------------------------------------------------------------------------
-// ⚠ `AiModule` IS NOW IMPORTED, AND THE HEADER USED TO SAY IT WOULD NOT BE
+// THE AI PORT IS GLOBAL, SO THERE IS NO AI IMPORT HERE
 // -----------------------------------------------------------------------------
 //
-// The paragraph above once listed "the AI provider registry, the credential
-// store" among the things a read-only search endpoint had no business pulling
-// in. Issue #189 changes that fact, not merely that sentence: the semantic arm
-// EMBEDS THE QUERY WITH THE SEARCHER'S OWN API KEY, so this module genuinely
-// needs `AiSettingsService` (is a provider configured), `AiProviderRegistry`
-// (does this build implement it, and does it embed) and
-// `UserAiCredentialsService` (does THIS caller have a key). There is no version
-// of query-time semantic search that does not need all three.
+// The semantic arm EMBEDS THE QUERY WITH THE SEARCHER'S OWN API KEY, so this
+// module needs the `KVOX_AI` port (is embedding ready for this caller, and the
+// embed call itself). `KvoxAiModule` is `@Global()`, so `SearchQueryEmbedder`
+// injects the token without this module importing anything AI-shaped.
 //
-// What the original argument still buys is the SHAPE of the dependency.
-// `SearchQueryEmbedder` is a LEAF - the same shape `AiConfigService` and
-// `AiModelDiscoveryService` already take - so those three services are reached
-// through one small class that this module owns, rather than by
-// `SearchService` growing four constructor parameters and a second opinion
-// about what "AI is available" means. And the import is of `AiModule`, which
-// carries no job handlers and no pipeline, not of `NotesModule`, which does.
+// What the original argument above still buys is the SHAPE of the dependency.
+// `SearchQueryEmbedder` is a LEAF, so the port is reached through one small
+// class that this module owns, rather than by `SearchService` growing a second
+// opinion about what "AI is available" means.
 // =============================================================================
 
 import { Module } from '@nestjs/common';
 
-import { AiModule } from '../ai/ai.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchController } from './search.controller';
 import { SearchQueryEmbedder } from './search-query-embedder.service';
 import { SearchService } from './search.service';
 
 @Module({
-  imports: [PrismaModule, AiModule],
+  imports: [PrismaModule],
   controllers: [SearchController],
   providers: [SearchService, SearchQueryEmbedder],
   // SearchQueryEmbedder: the graph's embedder (#364) reuses its gate, rather

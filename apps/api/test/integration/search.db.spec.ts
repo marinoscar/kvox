@@ -59,7 +59,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-import { EMBEDDING_DIMENSIONS } from '../../src/ai/providers/ai-provider.interface';
+import { EMBEDDING_DIMENSIONS } from '../../src/ai-port/embedding-catalog';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { PrismaService } from '../../src/prisma/prisma.service';

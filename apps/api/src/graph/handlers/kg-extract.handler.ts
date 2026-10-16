@@ -36,7 +36,7 @@
 // names or prompts.
 // =============================================================================
 
-import { HttpException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
@@ -46,13 +46,13 @@ import {
   AiInputError,
   AiRefusedError,
   AiStructuredOutputError,
-} from '../../ai/ai-errors';
-import { AiTaskModelResolver, type AiModelResolution } from '../../ai/ai-task-model-resolver.service';
-import { createProviderContext } from '../../ai/providers/ai-provider.interface';
-import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+} from '../../ai-port/ai-errors';
+import { assertWithinBudget } from '../../ai-port/ai-token-budget';
+import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import { aiProviderThrottleKey } from '../../notes/job-types';
-import { assertWithinBudget } from '../../ai/ai-token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { GraphAiRun } from '../graph-ai-run';
+import { GraphAiRunResolver } from '../graph-ai-run.service';
 import { buildExtractionContext } from '../extraction/extraction-context';
 import { ExtractionInputLoader } from '../extraction/extraction-input.loader';
 import {
@@ -155,8 +155,8 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     private readonly loader: ExtractionInputLoader,
-    private readonly resolver: AiTaskModelResolver,
-    private readonly credentials: UserAiCredentialsService,
+    private readonly resolver: GraphAiRunResolver,
+    @Inject(KVOX_AI) private readonly ai: KvoxAi,
     private readonly throttle: ProviderThrottleService,
     private readonly writer: ProposalWriter,
     private readonly stages: ProposalStageRegistry,
@@ -184,7 +184,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
 
     const stats: ExtractionStats = { ...initialExtractionStats() };
     try {
-      await this.extract(payload, stats);
+      await this.extract(payload, stats, job.id);
     } catch (error) {
       if (error instanceof RateLimitError) throw error;
 
@@ -206,7 +206,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     }
   }
 
-  private async extract(payload: KgExtractJobPayload, stats: ExtractionStats): Promise<void> {
+  private async extract(payload: KgExtractJobPayload, stats: ExtractionStats, jobId: string): Promise<void> {
     const started = Date.now();
     const { userId, noteId, proposalId } = payload;
 
@@ -234,7 +234,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     let plan = planExtraction(resolution, ctx);
     let result;
     try {
-      result = await this.callPlanned(resolution, userId, proposalId, plan, stats);
+      result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
     } catch (error) {
       if (!isTruncation(error)) throw error;
       // #435: ONE re-ask in the same job, every row cap halved and the prompt
@@ -242,7 +242,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
       stats.truncationRetry = true;
       plan = planExtraction(resolution, ctx, halveRowCaps(plan.caps));
       try {
-        result = await this.callPlanned(resolution, userId, proposalId, plan, stats);
+        result = await this.callPlanned(resolution, userId, proposalId, jobId, plan, stats);
       } catch (retryError) {
         if (isTruncation(retryError)) {
           throw new TerminalExtractionError('truncated', truncatedMessage(plan.maxOutputTokens));
@@ -265,7 +265,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     for (const stage of this.stages.ordered()) {
       const stageStats: Record<string, unknown> = {};
       try {
-        await stage.run({ proposalId, userId, noteId, preferences, ai: null, prisma: this.prisma, stats: stageStats });
+        await stage.run({ proposalId, userId, noteId, jobId, preferences, ai: null, prisma: this.prisma, stats: stageStats });
       } catch (error) {
         if (error instanceof RateLimitError) throw error;
         throw new StageError(stage.name, error);
@@ -314,9 +314,10 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
    * on success and on a structured-output failure alike (#435).
    */
   private async callPlanned(
-    resolution: AiModelResolution,
+    resolution: GraphAiRun,
     userId: string,
     proposalId: string,
+    jobId: string,
     plan: ExtractionPlan,
     stats: ExtractionStats,
   ) {
@@ -335,7 +336,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     });
 
     try {
-      const result = await this.callProvider(resolution, userId, {
+      const result = await this.callProvider(resolution, userId, jobId, {
         systemPrompt: plan.prompt.systemPrompt,
         userContent: plan.prompt.userContent,
         schema: plan.schema,
@@ -344,53 +345,36 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
       addUsage(stats, result.usage);
       return result;
     } catch (error) {
-      if (error instanceof AiStructuredOutputError && error.usage) addUsage(stats, error.usage);
+      if (error instanceof AiStructuredOutputError && error.usage) {
+        addUsage(stats, { inputTokens: error.usage.promptTokens, outputTokens: error.usage.completionTokens });
+      }
       throw error;
     }
   }
 
   private async callProvider(
-    resolution: AiModelResolution,
+    resolution: GraphAiRun,
     userId: string,
+    jobId: string,
     request: { systemPrompt: string; userContent: string; schema: Record<string, unknown>; maxOutputTokens: number },
   ) {
-    const provider = resolution.provider;
-    if (typeof provider.generateStructured !== 'function') {
-      throw new AiInputError(
-        `The "${provider.id}" provider cannot return structured output, which graph extraction needs.`,
-        undefined,
-        provider.id,
-      );
-    }
-    const settings = provider.settingsSchema.safeParse(
-      (resolution.policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AiInputError(
-        `This deployment's configuration for provider "${provider.id}" is invalid. An administrator must correct it.`,
-        undefined,
-        provider.id,
-      );
-    }
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) {
-      throw new AiAuthError(
-        `No ${provider.label} API key is saved for your account. Add one in your settings and extract again.`,
-        provider.id,
-      );
-    }
-
+    // The per-user bucket, immediately before the call: a 429 defers THIS user's work only.
     this.throttle.registerProviderKey(this.type, aiProviderThrottleKey(userId));
 
-    return provider.generateStructured(createProviderContext(apiKey, settings.data as never), {
+    // `schema` is the pass-through validator on purpose: `validateExtraction` is
+    // this feature's own validation (its own failure class and sentence) and runs
+    // on the value unchanged. `jsonSchema` is what the vendor is held to.
+    return this.ai.generateStructured({
+      userId,
+      feature: 'graph_extract',
+      jobId,
       model: resolution.model,
-      systemPrompt: request.systemPrompt,
-      userContent: request.userContent,
-      schema: request.schema,
+      system: request.systemPrompt,
+      user: request.userContent,
       schemaName: EXTRACTION_SCHEMA_NAME,
+      schema: z.unknown(),
+      jsonSchema: request.schema,
       maxOutputTokens: request.maxOutputTokens,
-      timeoutMs: resolution.policy.requestTimeoutMs,
-      reasoningEffort: resolution.reasoningEffort,
     });
   }
 }
@@ -401,10 +385,14 @@ function isTruncation(error: unknown): error is AiStructuredOutputError {
   return error instanceof AiStructuredOutputError && error.reason === 'truncated';
 }
 
-function addUsage(stats: ExtractionStats, usage: { promptTokens: number; completionTokens: number }): void {
+/** Adds one call's usage; a count the provider did not report adds nothing. */
+function addUsage(
+  stats: ExtractionStats,
+  usage: { inputTokens: number | null; outputTokens: number | null },
+): void {
   stats.usage = {
-    inputTokens: stats.usage.inputTokens + usage.promptTokens,
-    outputTokens: stats.usage.outputTokens + usage.completionTokens,
+    inputTokens: stats.usage.inputTokens + (usage.inputTokens ?? 0),
+    outputTokens: stats.usage.outputTokens + (usage.outputTokens ?? 0),
   };
 }
 

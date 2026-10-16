@@ -243,7 +243,7 @@ describe('work-item-dedup stage', () => {
     await stage.run(db.ctx());
     expect(db.byRef('p1').payload.dedup).toMatchObject({ verdict: 'new' });
     expect(graph.itemCandidates).not.toHaveBeenCalled();
-    expect(resolution.embedMentions).toHaveBeenCalledWith(OWNER, [], 'kg.extract');
+    expect(resolution.embedMentions).toHaveBeenCalledWith(OWNER, [], 'kg.extract', undefined);
   });
 
   describe('relations', () => {

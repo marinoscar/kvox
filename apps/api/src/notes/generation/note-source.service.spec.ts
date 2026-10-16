@@ -12,7 +12,7 @@ import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-obj
 // notes containing names the user already fixed.
 // =============================================================================
 
-import { AiInputError } from '../../ai/ai-errors';
+import { AiInputError } from '../../ai-port/ai-errors';
 import { MarkdownTranscriptExporter } from '../../transcripts/export/markdown.exporter';
 import { TranscriptExporterRegistry } from '../../transcripts/export/transcript-exporter.interface';
 import { NoteSourceService, readExtractedObjectId } from './note-source.service';

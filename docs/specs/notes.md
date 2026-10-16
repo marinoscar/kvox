@@ -261,6 +261,8 @@ not the anti-pattern §11 exists to name.
 
 ## 2. The AI provider contract
 
+> **Since issue #475 (epic #472) `KvoxAi` is the only call path.** Code under `apps/api/src` outside `ai-port/` and `platform/ai/` reaches a model through `KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`) and imports no platform AI type. `KvoxAi` is implemented over the platform `AiService.forUser`, which resolves the user's key from the platform `user_ai_keys`; a caller never sees a key. Sections 2.1 to 2.5 describe the previous `AiProvider` stack in `apps/api/src/ai/`, kept only until #477 deletes it; the contract callers use today is "`KvoxAi` call path (issue #475)" under §2.8.
+
 ### 2.1 `AiProvider`
 
 `apps/api/src/ai/providers/ai-provider.interface.ts`, the same shape
@@ -682,6 +684,8 @@ rejects, hidden two levels deeper in a settings blob every
 
 ### 2.6 `generateStructured` and the `structuredOutput` capability flag (issue #358)
 
+> **Call path since #475.** A structured call is `KvoxAi.generateStructured({ userId, feature, jobId, system, user, schemaName, schema, jsonSchema?, maxOutputTokens? })` (§2.8 "`KvoxAi` call path"). `schema` is the caller's Zod validator and is always applied to the parsed value; `jsonSchema`, when given, is the strict schema the vendor is held to (the per-run schema of `graph/extraction/output-schema.ts`, the adjudication and digest schemas). The `AiProvider.generateStructured` method, `AiStructuredRequest` and the OpenAI streaming core below are the retired path (removed by #477); the strict-subset rules and the `AiStructuredOutputError` taxonomy still hold. A truncated answer is `AiStructuredOutputError('truncated')`, a schema mismatch `'invalid_json'`, a refusal `AiRefusedError`; all are produced by `PlatformKvoxAi` and `mapAiError`, not by a provider. The `structuredOutput` capability is read from the enabled `ai_models` row (`capabilities.structured_output`) by `KvoxAi.readiness`, not from `AiModelDescriptor`.
+
 Connected-knowledge extraction (`docs/specs/ontology.md` §6), resolution
 adjudication (§7) and the entity digest (§9.2) all need one
 provider call that returns a **validated, schema-shaped** answer, not free
@@ -773,6 +777,8 @@ flag in v1. `GET /api/ai/config` and the admin catalogue in `GET
 and `GET /ai/config` sections of [`docs/API.md`](../API.md).
 
 ### 2.7 `chat` and the `toolCalling` capability flag (issue #359)
+
+> **Call path since #475.** `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` is declared on the port (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. `PlatformKvoxAi.chat` is not implemented yet: it throws until the Ask tool loop is ported by #476, and `ask.respond` stays on the retired provider path until then. The `AiProvider.chat` contract below is that retired path. The `toolCalling` capability is read from `ai_models` (`capabilities.tools`) by `readiness`.
 
 The connected-knowledge Ask agent (`docs/specs/ontology.md` §21) needs a
 **conversation**, not a prompt: it sends a growing message list, lets the
@@ -1003,7 +1009,7 @@ one resolver, so #363/#364/#372/#378 never each reimplement the ranking
 
 #### Platform AI slice (issue #473)
 
-The application's task routing rides on the platform AI slice. Nothing in this section changes a caller; callers are rewired in #475.
+The application's task routing rides on the platform AI slice. Callers were rewired onto it by #475 through `KvoxAi` (next subsection).
 
 **The extension.** `KVOX_AI_SETTINGS_EXTENSION` (`apps/api/src/platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS`) is an `extendSystemSettingsNamespace` extension of the platform `ai` namespace, key `ai`, no `path`. It adds `taskModels`, `graphEnabled`, `defaultModel` (`string | null`, the former `providers.openai.defaultModel`, which has no platform home), `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort` (`none | low | medium | high | xhigh`) and `maxDocumentBytes`, with the bounds and defaults of §2.5 and §2.8 above. Stored names are unchanged, so the `ai` value of the `global` row is the same row before and after and a saved `taskModels` needs no rewrite. `taskModels` still replaces wholesale on merge. No added field can hold a key (a test asserts no stored key matches `/key|secret|token/i`). Until #474 runs, the stored value still holds the previous `provider` and `providers.openai.allowedModels`; the platform `read` salvages them field by field.
 
@@ -1053,6 +1059,34 @@ The application's task routing rides on the platform AI slice. Nothing in this s
 **Reasoning effort clamp.** The application's `reasoningEffort` has five values; the platform accepts `minimal | low | medium | high`. `none` omits `reasoning`; `xhigh` is sent as `high`, silently. The admin form help text says so (#477).
 
 **Routes and permissions.** The platform serves `GET /api/ai/config` and `/api/ai/keys`; the application's probe moved to `GET /api/ai-tasks/config` (`notes:read`, same shape), and `GET`/`PUT /api/ai-tasks/settings` (`ai_config:read`/`ai_config:write`) edit the added fields, validating each task model against the enabled `ai_models` rows. `perUserDefaultModel` is `false` on `AiModule.forRoot` because the model is chosen per task; a per-run `requested` model is unaffected. See [`docs/API.md`](../API.md) "AI Tasks".
+
+#### `KvoxAi` call path (issue #475)
+
+`KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`, provided globally by `KvoxAiModule`) is the **only** way KVox code reaches a model. `PlatformKvoxAi` (`platform-kvox-ai.ts`) implements it over `AiService.forUser(userId, { orgId, jobId, feature })`. `kvox-ai.ts` imports only Zod and `ai-port` types, so the port can be published later as `KVOX_AI` without leaking a platform type. A caller injects `@Inject(KVOX_AI) ai: KvoxAi`, passes a `feature` id from the table above and, inside a handler, `jobId: job.id` so the platform span and the `ai_usage_events` row link to the job. One usage row is written per provider round trip, carrying the feature id.
+
+| Method | Contract |
+|---|---|
+| `readiness(userId, feature, requested?)` | Never throws. Returns `{ ok, reason, provider, model, source, contextWindowTokens, maxOutputTokens, reasoningEffort, hasKey }`. `reason` is one of `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`, `graph_disabled`. It reads the target-resolver state, the enabled `ai_models` row (a row with no numbers floors to 128,000 context and 16,384 output) and the existence of the user's `user_ai_keys` row (`secret` is never selected). It replaces every `AiConfigService` probe (onboarding, name-check estimate, search status). |
+| `streamText(req)` | `AsyncIterable` of `{ type: 'delta', text }` then one `{ type: 'done', finishReason: 'stop' \| 'length', model, usage }`. Over `AiUserClient.stream`. A `content_filter` finish throws a refusal, an `error` event throws, and a stream that ends without `response.completed` throws a plain retryable `Error` (a dead socket is never a finished answer). |
+| `generateStructured(req)` | `{ value, model, usage }`. Over `respondStructured` with `strict: true`. `jsonSchema` is converted with `z.fromJSONSchema` and checked to round-trip through `z.toJSONSchema`; a schema that does not round-trip falls back to the caller's Zod `schema` with `strict` kept. The parsed value is validated again with the caller's `schema`, so KVox's own validation is unchanged. |
+| `embed(req)` | `{ vectors, promptTokens, model }`. Refuses locally an empty batch or one above 128 texts (`AiInputError`). Asserts one vector per text, in order, each exactly 1536 finite numbers (`EmbeddingShapeError` otherwise). See [search.md](search.md) §11. |
+| `embeddingCapability()` | The static catalog entry: `text-embedding-3-small`, 1536 dimensions, 8191 input tokens, batch 128. |
+| `countTokens(text, model)` | A local estimator (`ai-port/count-tokens.ts`): the larger of `ceil(chars / 4)` and the whitespace word count, rounded up on purpose. No network call and no model lookup; `model` is accepted for the contract and unused. Budgets are checked against it because the platform does not count tokens. |
+| `chat(req)` | Declared; implemented by the Ask tool loop (#476). |
+
+**What stays the caller's.** `assertWithinBudget` and the token budget (§3.3) run before the call, fed `contextWindowTokens` and `maxOutputTokens` from `readiness()` and `countTokens`; over-budget stays a 400 with the required and available numbers. The per-user throttle key (`aiProviderThrottleKey(userId)`) is still registered by the handler immediately before the call. Job types, `maxAttempts: 1` profiles and the node-ineligible posture of AI jobs are unchanged. No ported file holds an `apiKey`.
+
+**What `PlatformKvoxAi` owns.** The model (the per-run `model` pick, else the resolver, §2.8 above), the reasoning effort, the timeout and the failure translation:
+
+- **Reasoning clamp.** The effort is the policy's, or the task's own when the chosen model is that task's configured model (`chooseTaskModel`). `streamText` and `generateStructured` also take an optional per-call `reasoningEffort` that wins over both (for a short call such as a title that must not spend its ceiling thinking). `none` omits `reasoning`; `xhigh` is sent as `high` (`toPlatformReasoningEffort`). Embedding features send none.
+- **Timeout.** Every call carries `AbortSignal.timeout(ai.requestTimeoutMs)` combined with the caller's `signal`. When the caller's signal aborts, its own abort reason is rethrown (handlers check for it); a backstop expiry is a plain `Error` naming the limit.
+- **Errors.** Every method rethrows through `mapAiError(err, { feature, inJob })` (table above), with `inJob = jobId !== undefined`. Its own errors (`AiInputError`, `AiRefusedError`, `AiStructuredOutputError`, `EmbeddingShapeError`) pass through unchanged. A 429 becomes `RateLimitError` with the provider's retry-after, so the queue defers without charging an attempt.
+- **Usage.** An absent usage field is `null`, never `0` (0 means free).
+- **Truncation of a structured answer.** The platform's `AI_STRUCTURED_OUTPUT_INVALID` carries no finish reason. When the response reports `finishReason: 'length'`, that is honoured first (`'truncated'`). Otherwise a not-valid-JSON failure of a call that set `maxOutputTokens` is read as truncation (a strict schema guarantees well-formed JSON unless the answer was cut off), which is what the extraction retry needs; a well-formed answer that fails the schema is `'invalid_json'`. This inference is a marked shim, `PLATFORM-ADOPTION-SHIM(#475)` in `platform-kvox-ai.ts`, listed in [`local-exceptions.md`](../platform-adoption/local-exceptions.md).
+
+**Settings and graph reads.** `KvoxAiSettings` (`ai-port/kvox-ai-settings.ts`) is the typed reader of the extended `ai` namespace (`graphEnabled`, `requestTimeoutMs`, limits) and replaces every read of the retired `AiSettingsService`. It reads only; writes go through `AiTasksService`. The graph's resolver is `GraphAiRunResolver` (`graph/graph-ai-run.service.ts`), see [ontology.md](ontology.md) §20.3.
+
+**Tests and guards.** `ai-port/testing/fake-kvox-ai.ts` is the test double handler specs inject in place of the old registry. `platform-kvox-ai.spec.ts` drives `PlatformKvoxAi` over a fake `AiUserClient`. `test/ai/ai-port-boundary.spec.ts` fails when a file outside `ai-port/` and `platform/ai/` imports `@marinoscar/platform-api/ai`, or when a file outside `ai/` imports from `apps/api/src/ai/`.
 
 ## 3. Prompt assembly and the token budget
 
@@ -1146,15 +1180,12 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/ai/ai-token-budget.ts`. `computeTokenBudget` is pure
-and takes the model's own `contextWindowTokens`/`maxOutputTokens`
-(`resolveAllowedModel`'s output, §2.5 — since #78 a permitted model may carry
-its own numbers on its `allowedModels` entry, and every caller resolves
-through that one function so none of them can disagree about a given model's
-window) plus the deployment's policy (`ai.maxInputTokens`/`maxOutputTokens`),
+`apps/api/src/ai-port/ai-token-budget.ts` (a copy of the previous `apps/api/src/ai/ai-token-budget.ts`, which #477 deletes; see [`local-exceptions.md`](../platform-adoption/local-exceptions.md)). `computeTokenBudget` is pure
+and takes the model's own `contextWindowTokens`/`maxOutputTokens` plus the deployment's policy (`ai.maxInputTokens`/`maxOutputTokens`),
 an optional per-task clamp, and the reasoning effort the call will actually
-send. `countTokens` (§2.1) measures the assembled `systemPrompt +
-userContent`.
+send. Since #475 the two model numbers come from `KvoxAi.readiness()` (the enabled `ai_models` row, floored to 128,000 and 16,384 when the row carries none), not from `resolveAllowedModel` and the `allowedModels` entries of §2.5. Every caller reads them from that one function so none of them can disagree about a given model's
+window. `KvoxAi.countTokens` (the local estimator, §2.8 "`KvoxAi` call path") measures the assembled `system +
+user` text; `assertWithinBudget` stays in each caller, immediately before the `KvoxAi` call.
 
 **Decided in #436 — nullable policy caps, a demand-driven split, and
 reasoning headroom added on top:**

@@ -1,6 +1,6 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 
-import type { AiSettingsService } from '../ai/ai-settings.service';
+import type { GraphAiRunResolver } from './graph-ai-run.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { GraphAccessService } from './access/graph-access.service';
 import { FORGET_CONFIRMATION_MESSAGE, FORGET_NOT_PERSON_MESSAGE } from './dto/graph-forget.dto';
@@ -41,7 +41,7 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
   const registered = new Set(opts.registered ?? []);
   const registry = { get: jest.fn((type: string) => (registered.has(type) ? { type } : undefined)) };
   const jobs = { enqueue: jest.fn(async (): Promise<{ id: string; status?: string }> => ({ id: 'job', status: 'pending' })) };
-  const aiSettings = { get: jest.fn(async () => (opts.graphEnabled === undefined ? {} : { graphEnabled: opts.graphEnabled })) };
+  const aiRuns = { graphEnabled: jest.fn(async () => opts.graphEnabled === true) };
   const tx = { kgEntityAlias: { findMany: jest.fn(async () => []) } };
   const prisma = {
     $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
@@ -68,10 +68,10 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
     write as unknown as GraphWriteService,
     jobs as unknown as JobsService,
     registry as unknown as JobHandlerRegistry,
-    aiSettings as unknown as AiSettingsService,
+    aiRuns as unknown as GraphAiRunResolver,
     events as unknown as EventEmitter2,
   );
-  return { service, registry, jobs, aiSettings, prisma, access, write, events };
+  return { service, registry, jobs, aiRuns, prisma, access, write, events };
 }
 
 const user = { id: OWNER, permissions: ['graph:write'] } as never;
@@ -98,10 +98,10 @@ describe('GraphEntitiesService', () => {
   });
 
   it('enqueues nothing while neither handler is registered', async () => {
-    const { service, jobs, aiSettings } = setup({ registered: [], graphEnabled: true });
+    const { service, jobs, aiRuns } = setup({ registered: [], graphEnabled: true });
     await service.patch(ENTITY, { label: 'Sarah' }, user);
     expect(jobs.enqueue).not.toHaveBeenCalled();
-    expect(aiSettings.get).not.toHaveBeenCalled();
+    expect(aiRuns.graphEnabled).not.toHaveBeenCalled();
   });
 
   it('enqueues exactly one kg.embed once its handler is registered, in the #364 shape', async () => {

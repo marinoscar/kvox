@@ -1,10 +1,10 @@
 import request from 'supertest';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../../src/transcripts/job-types';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { invalidateAiResolverCache, primeAiReadiness } from '../helpers/ai-readiness.fixtures';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
@@ -28,23 +28,6 @@ import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 const TRANSCRIPTS = '/api/transcripts';
 const TRANSCRIPT_ID = '11111111-2222-4333-8444-555555555555';
 const SPEAKER_A = '44444444-5555-4666-8777-888888888888';
-
-/** `ai` policy with the feature actually switched on, mirroring notes.integration.spec.ts. */
-const ENABLED_AI_SETTINGS = {
-  ...DEFAULT_SYSTEM_SETTINGS,
-  ai: {
-    ...DEFAULT_SYSTEM_SETTINGS.ai,
-    enabled: true,
-    provider: 'openai',
-    providers: {
-      openai: {
-        ...DEFAULT_SYSTEM_SETTINGS.ai.providers.openai,
-        allowedModels: ['gpt-4o'],
-        defaultModel: 'gpt-4o',
-      },
-    },
-  },
-};
 
 const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   id: TRANSCRIPT_ID,
@@ -119,15 +102,10 @@ describe('AI name correction Integration', () => {
     setupBaseMocks();
     jest.clearAllMocks();
 
-    prismaMock.systemSettings.findUnique.mockResolvedValue({
-      key: 'global',
-      value: ENABLED_AI_SETTINGS,
-      version: 1,
-      updatedAt: new Date(),
-      updatedByUser: null,
-    });
-    // A saved key, so create() gets past the ai_key_missing 409.
-    prismaMock.userAiCredential.findUnique.mockResolvedValue({ id: 'cred-1' });
+    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, and a saved key, so
+    // create() gets past the ai_key_missing 409.
+    invalidateAiResolverCache(context);
+    primeAiReadiness();
 
     prismaMock.transcriptSpeaker.findMany.mockResolvedValue(speakerRows as never);
     prismaMock.transcriptSegment.findMany.mockResolvedValue(segmentRows as never);
@@ -255,7 +233,7 @@ describe('AI name correction Integration', () => {
 
     it('409s with ai_key_missing when the caller has no saved key', async () => {
       const user = await owner();
-      prismaMock.userAiCredential.findUnique.mockResolvedValue(null as never);
+      primeAiReadiness({ hasKey: false });
 
       const response = await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/name-checks`)
