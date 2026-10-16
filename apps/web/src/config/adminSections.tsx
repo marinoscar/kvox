@@ -129,7 +129,7 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       },
       {
         // Issue #124, epic #109. `system_settings:read` is the string
-        // `email-settings.controller.ts` enforces on its GET, exactly as the
+        // the platform's `email-settings.controller` enforces on its GET (#470), exactly as the
         // `Notifications` card below mirrors `system-settings.controller.ts` —
         // the registry never invents a permission. Saving and test-sending need
         // `system_settings:write`, which the PAGE gates internally: the card
@@ -165,7 +165,7 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         // along with routine settings edits, mirroring why `broadcasts:*` and
         // `nodes:*` were split out rather than folded into
         // `system_settings:*`/`jobs:*`. `push:read` is the string
-        // `push-config.controller.ts` enforces on its GET — the registry
+        // the platform's `push-config.controller` (#470) enforces on its GET — the registry
         // never invents a permission, it mirrors one. Generating, rotating,
         // enabling/disabling and removing all need `push:write`, which the
         // PAGE gates internally: the card gate is about REACHABILITY, and "is
@@ -503,8 +503,8 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       },
       {
         // Issue #325, epic #319. `broadcasts:read` is the literal string
-        // `notifications/broadcasts/broadcasts.controller.ts` enforces on its
-        // audience count, its list and its detail read
+        // the platform's `notifications/broadcasts/broadcasts.controller` (#470)
+        // enforces on its audience count, its list and its detail read
         // (`PERMISSIONS.BROADCASTS_READ`) — the registry never invents a
         // permission, it mirrors one. Composing, scheduling, cancelling,
         // deleting and test-sending need `broadcasts:write`, which the PAGE

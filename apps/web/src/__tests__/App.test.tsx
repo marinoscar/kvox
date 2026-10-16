@@ -5,6 +5,9 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from './mocks/server';
 import App from '../App';
+// Issue #470: `main.tsx` configures the packaged notifications slice; a test that
+// mounts the real tree does the same.
+import '../platform/notifications';
 
 /**
  * Every admin page is replaced with an UNGUARDED stand-in.
