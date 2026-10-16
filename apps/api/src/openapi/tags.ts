@@ -314,6 +314,12 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'File objects: simple upload, resumable multipart upload, signed download URLs, metadata, ' +
           'and deletion. A caller sees only the objects they uploaded.',
       },
+      {
+        name: 'Storage Configuration',
+        description:
+          'The runtime storage provider (driver, bucket, region, endpoint, credentials) an administrator ' +
+          'edits in the console, and the connection test that proves a configuration before it is saved.',
+      },
     ],
   },
   {
