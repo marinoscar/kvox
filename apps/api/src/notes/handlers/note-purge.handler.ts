@@ -63,11 +63,36 @@
 // `JobHandlerRegistry.serverOnlyTypes()` reports it and no node can claim it:
 // rule 2's "deletes rows across several tables as it goes", the same reasoning
 // `transcript.purge` states.
+//
+// -----------------------------------------------------------------------------
+// TWO PAYLOADS, ONE TYPE (issue #480)
+// -----------------------------------------------------------------------------
+//
+//   { noteId }                  the per-item purge described above (unchanged)
+//   { mode: 'owner', userId }   the owner-level variant, ADDITIVE
+//
+// The owner-level variant is the delegate the platform's `user.data.purge` runs
+// for the `Note` model (`platform/user-data/user-data.manifest.ts`): clear
+// `notes.source_note_id` on every note that points at one of the user's notes,
+// soft-delete every live note the user owns, and queue the per-item purge for
+// each. It never catches a foreign-key violation to make a delete go through
+// (the blocking column is `Restrict`, so the reference is cleared first) and it
+// deletes no bytes itself. The per-item refusals (`NotesService.remove`'s 409
+// while a note is `generating` or has a derived note) do NOT apply to a bulk
+// deletion: the user was shown an inventory and typed the scope's name, and the
+// blocking note is itself in the set being deleted. Re-entrant: each pass asks
+// the database for the live notes that remain.
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 
+import {
+  OWNER_PURGE_BATCH,
+  OWNER_PURGE_MAX_BATCHES,
+  ownerPurgeDidNotConverge,
+  readOwnerPurgePayload,
+} from '../../common/owner-purge';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
@@ -75,6 +100,7 @@ import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { runInJobOrg } from '../../common/job-org-scope';
 import { NoteObjectsService } from '../note-objects.service';
+import { NotesService } from '../notes.service';
 import { readExtractedObjectId } from '../source-metadata';
 import { type JobHandler, JobHandlerRegistry, JobScope } from '@marinoscar/platform-api/jobs';
 
@@ -93,6 +119,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     private readonly searchIndex: SearchIndexService,
     private readonly jobScope: JobScope,
     private readonly managedObjects: KvoxManagedObjectsService,
+    private readonly notes: NotesService,
   ) {}
 
   onModuleInit(): void {
@@ -100,6 +127,14 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
   }
 
   async process(job: Job): Promise<void> {
+    const owner = readOwnerPurgePayload(job.payload);
+
+    if (owner) {
+      await this.purgeOwner(owner.userId);
+
+      return;
+    }
+
     const noteId = readNoteId(job.payload);
 
     if (!noteId) {
@@ -180,6 +215,88 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     this.logger.log(
       `Purged note ${note.id}: ${removed} storage object(s) and every row.${untouched}`,
     );
+  }
+
+  /**
+   * The owner-level variant: soft-delete every live note `userId` owns and queue
+   * the per-item purge for each. See the header's "TWO PAYLOADS" section.
+   */
+  private async purgeOwner(userId: string): Promise<void> {
+    let deleted = 0;
+
+    for (let batch = 0; batch < OWNER_PURGE_MAX_BATCHES; batch += 1) {
+      const rows = await this.prisma.note.findMany({
+        where: { ownerId: userId, deletedAt: null },
+        select: { id: true },
+        take: OWNER_PURGE_BATCH,
+      });
+
+      if (rows.length === 0) {
+        if (deleted > 0) {
+          await this.prisma.auditEvent.create({
+            data: {
+              actorUserId: userId,
+              action: 'user_data:notes_deleted',
+              targetType: 'user',
+              targetId: userId,
+              meta: { count: deleted },
+            },
+          });
+        }
+
+        await this.forgetOwnerDocuments(userId);
+
+        this.logger.log(`User ${userId}: ${deleted} note(s) soft-deleted and queued for purge`);
+
+        return;
+      }
+
+      const ids = rows.map((row) => row.id);
+
+      // Clear the Restrict reference first, on EVERY note that derives from one
+      // of the batch.
+      await this.prisma.note.updateMany({
+        where: { sourceNoteId: { in: ids } },
+        data: { sourceNoteId: null },
+      });
+
+      await this.prisma.note.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'deleting', deletedAt: new Date() },
+      });
+
+      // The queue's active dedup makes a purge already pending for one of these
+      // a no-op, so a retried owner job never doubles the per-item work.
+      for (const id of ids) {
+        await this.notes.enqueuePurge(id);
+      }
+
+      deleted += ids.length;
+    }
+
+    throw ownerPurgeDidNotConverge('note', userId);
+  }
+
+  /**
+   * Forget the owner's notes in the semantic index. A failure is logged and
+   * swallowed: the rows are already gone, and each per-item purge sweeps its own
+   * document again.
+   */
+  private async forgetOwnerDocuments(userId: string): Promise<void> {
+    try {
+      const forgotten = await this.searchIndex.forgetOwnerDocuments(userId, SEARCH_DOC_NOTE);
+
+      if (forgotten > 0) {
+        this.logger.log(
+          `User ${userId}: ${forgotten} ${SEARCH_DOC_NOTE}(s) removed from the semantic index`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `User ${userId}: could not clear the semantic index for ${SEARCH_DOC_NOTE}s: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**

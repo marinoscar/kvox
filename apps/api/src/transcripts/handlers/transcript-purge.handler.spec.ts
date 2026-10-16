@@ -4,6 +4,7 @@ import type { Job } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
+import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
 import { TranscriptPurgeHandler } from './transcript-purge.handler';
@@ -41,10 +42,14 @@ describe('TranscriptPurgeHandler', () => {
   let handler: TranscriptPurgeHandler;
   let provider: FakeProvider;
   let prisma: {
-    transcript: { findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock; delete: jest.Mock };
+    transcript: { findMany: jest.Mock; findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock; delete: jest.Mock };
     transcriptVersion: { updateMany: jest.Mock };
-    transcriptExport: { updateMany: jest.Mock };
+    transcriptExport: { updateMany: jest.Mock; };
+    note: { updateMany: jest.Mock };
+    auditEvent: { create: jest.Mock };
   };
+  let pipeline: { enqueuePurge: jest.Mock };
+  let searchIndex: { forget: jest.Mock; forgetOwnerDocuments: jest.Mock };
   let objects: { deleteIfPresent: jest.Mock };
   let runtime: { resolve: jest.Mock };
 
@@ -53,6 +58,7 @@ describe('TranscriptPurgeHandler', () => {
 
     prisma = {
       transcript: {
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(transcriptRow()),
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -60,6 +66,13 @@ describe('TranscriptPurgeHandler', () => {
       },
       transcriptVersion: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       transcriptExport: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      note: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    pipeline = { enqueuePurge: jest.fn().mockResolvedValue(undefined) };
+    searchIndex = {
+      forget: jest.fn(),
+      forgetOwnerDocuments: jest.fn().mockResolvedValue(0),
     };
 
     objects = { deleteIfPresent: jest.fn().mockResolvedValue(true) };
@@ -77,7 +90,8 @@ describe('TranscriptPurgeHandler', () => {
         // #188: the purge is one of the three owners of the semantic index
         // sweep — `search_chunks.document_id` has no foreign key, so no
         // cascade and no housekeeping cron is ever coming for those rows.
-        { provide: SearchIndexService, useValue: { forget: jest.fn() } },
+        { provide: SearchIndexService, useValue: searchIndex },
+        { provide: TranscriptPipelineService, useValue: pipeline },
       ],
     }).compile();
 
@@ -176,5 +190,95 @@ describe('TranscriptPurgeHandler', () => {
     expect(prisma.transcript.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: TRANSCRIPT_ID } }),
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // The owner-level payload (issue #480): the delegate of `user.data.purge`
+  // ---------------------------------------------------------------------------
+
+  describe('{ mode: "owner", userId } (the platform user-data delegate)', () => {
+    const USER_ID = '22222222-2222-4222-8222-222222222222';
+    const owner = () => job({ mode: 'owner', userId: USER_ID });
+
+    it('pins the payload shape: only a uuid userId with mode "owner" is an owner payload', async () => {
+      for (const payload of [
+        { mode: 'owner' },
+        { mode: 'owner', userId: 'not-a-uuid' },
+        { mode: 'other', userId: USER_ID },
+        { userId: USER_ID },
+      ]) {
+        await handler.process(job(payload));
+      }
+
+      expect(prisma.transcript.findMany).not.toHaveBeenCalled();
+      expect(prisma.transcript.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('clears notes.source_transcript_id BEFORE soft-deleting, then queues the per-item purge', async () => {
+      const order: string[] = [];
+
+      prisma.transcript.findMany
+        .mockResolvedValueOnce([{ id: 't-1' }, { id: 't-2' }])
+        .mockResolvedValueOnce([]);
+      prisma.note.updateMany.mockImplementation(async () => {
+        order.push('clear-note-fk');
+        return { count: 3 };
+      });
+      prisma.transcript.updateMany.mockImplementation(async () => {
+        order.push('soft-delete');
+        return { count: 2 };
+      });
+      pipeline.enqueuePurge.mockImplementation(async (id: string) => {
+        order.push(`enqueue:${id}`);
+      });
+
+      await handler.process(owner());
+
+      expect(prisma.transcript.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { ownerId: USER_ID, deletedAt: null } }),
+      );
+      // Every note citing one of the batch, whoever owns it: no ownerId filter.
+      expect(prisma.note.updateMany).toHaveBeenCalledWith({
+        where: { sourceTranscriptId: { in: ['t-1', 't-2'] } },
+        data: { sourceTranscriptId: null },
+      });
+      expect(prisma.transcript.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['t-1', 't-2'] } },
+        data: { status: 'deleting', deletedAt: expect.any(Date) },
+      });
+      expect(order).toEqual(['clear-note-fk', 'soft-delete', 'enqueue:t-1', 'enqueue:t-2']);
+      expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: USER_ID,
+          action: 'user_data:transcripts_deleted',
+          meta: { count: 2 },
+        }),
+      });
+    });
+
+    it('forgets the owner’s transcripts in the semantic index, and survives that failing', async () => {
+      searchIndex.forgetOwnerDocuments.mockRejectedValue(new Error('index down'));
+
+      await expect(handler.process(owner())).resolves.toBeUndefined();
+
+      expect(searchIndex.forgetOwnerDocuments).toHaveBeenCalledWith(USER_ID, 'transcript');
+    });
+
+    it('is re-entrant: with nothing live left it deletes nothing and writes no audit row', async () => {
+      await handler.process(owner());
+
+      expect(prisma.transcript.updateMany).not.toHaveBeenCalled();
+      expect(pipeline.enqueuePurge).not.toHaveBeenCalled();
+      expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('never touches a storage object itself: the per-item purge owns the bytes', async () => {
+      prisma.transcript.findMany.mockResolvedValueOnce([{ id: 't-1' }]).mockResolvedValueOnce([]);
+
+      await handler.process(owner());
+
+      expect(objects.deleteIfPresent).not.toHaveBeenCalled();
+      expect(prisma.transcript.delete).not.toHaveBeenCalled();
+    });
   });
 });

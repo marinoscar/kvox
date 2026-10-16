@@ -36,8 +36,9 @@ import { SearchIndexService } from './search-index.service';
 // This module imports `PrismaModule` (the jobs and AI modules are global), and NEITHER
 // `TranscriptsModule` NOR `NotesModule` — it reads both documents' rows through
 // Prisma directly rather than through their services, precisely so those two
-// can import this one. `TranscriptsModule`, `NotesModule` and `UserDataModule`
-// each import it to reach `SearchIndexService`; nothing here reaches back, so
+// can import this one. `TranscriptsModule` and `NotesModule` each import it
+// to reach `SearchIndexService` (the user-data purge reaches it through their
+// owner-level purge handlers, #480); nothing here reaches back, so
 // there is no `forwardRef` anywhere in this epic and there should not be one.
 //
 // The handler needs one thing from the AI side, the global `KVOX_AI` port: the

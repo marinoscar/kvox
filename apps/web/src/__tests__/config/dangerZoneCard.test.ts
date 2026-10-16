@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
+
 import {
   USER_SETTINGS_SECTIONS,
   USER_HUB_PATH,
@@ -17,7 +19,8 @@ import {
 } from '../../config/adminSections';
 
 /**
- * Issue #80 — the `Delete My Data` card, in its own `Danger Zone` group.
+ * Issue #80 — the `Delete my data` card, in its own `Danger Zone` group; the
+ * platform's card and page since #480.
  *
  * CLAUDE.md's "MANDATORY: Settings UI Pattern" rule 1: a settings page must be
  * DECLARED in a section registry, not merely routed — a route with no card is
@@ -42,11 +45,11 @@ function findSection() {
   );
 }
 
-describe('USER_SETTINGS_SECTIONS — Delete My Data card (issue #80)', () => {
+describe('USER_SETTINGS_SECTIONS — Delete my data card (issues #80, #480)', () => {
   it('is declared in the registry, not merely routed', () => {
     const card = findCard();
     expect(card).toBeDefined();
-    expect(card?.title).toBe('Delete My Data');
+    expect(card?.title).toBe('Delete my data');
   });
 
   it('sits alone in its own last group, "Danger Zone" — not a fourth card under Account or a second under Security', () => {
@@ -59,6 +62,10 @@ describe('USER_SETTINGS_SECTIONS — Delete My Data card (issue #80)', () => {
     expect(USER_SETTINGS_SECTIONS[USER_SETTINGS_SECTIONS.length - 1]).toBe(section);
   });
 
+  it('conforms to the platform’s Danger-Zone-last rule, keeping the card’s path', () => {
+    expect(dangerZoneLastViolations(USER_SETTINGS_SECTIONS, PATH)).toEqual([]);
+  });
+
   it('declares no permission — the API gates both routes on @Auth() with no permission string', () => {
     const card = findCard();
     expect('permission' in (card as object)).toBe(false);
@@ -69,12 +76,12 @@ describe('USER_SETTINGS_SECTIONS — Delete My Data card (issue #80)', () => {
     const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false);
     const titles = result.flatMap((section) => section.cards.map((card) => card.title));
 
-    expect(titles).toContain('Delete My Data');
+    expect(titles).toContain('Delete my data');
   });
 
   it('resolves its route to its own title rather than the hub title, and the admin registry knows nothing about it', () => {
     expect(settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, PATH)).toBe(
-      'Delete My Data',
+      'Delete my data',
     );
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, PATH),

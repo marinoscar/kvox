@@ -147,6 +147,8 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       // `storage_objects` reads run in the job's organization.
       new JobScope(prisma as never),
       createDbManagedObjects(prisma, UNUSED_STORAGE),
+      // #480: the owner-level payload fans out through the service's own enqueue.
+      notes,
     );
   });
 

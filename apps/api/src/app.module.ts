@@ -57,7 +57,7 @@ import { GraphProposalsModule } from './graph/proposals/proposals.module';
 import { GraphImportModule } from './graph/import/graph-import.module';
 import { AskModule } from './ask/ask.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
-import { UserDataModule } from './user-data/user-data.module';
+import { userDataModule } from './platform/user-data/user-data.config';
 import { SearchModule } from './search/search.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 
@@ -305,7 +305,7 @@ import configuration from './config/configuration';
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even
-    // though TranscriptsModule, NotesModule and UserDataModule each import it —
+    // though TranscriptsModule and NotesModule each import it —
     // a module reached only transitively is one whose handler registration
     // depends on somebody else's import list, which is exactly the kind of
     // action-at-a-distance this file exists to make visible.
@@ -315,13 +315,15 @@ import configuration from './config/configuration';
     // the dependency edge runs one way and no `forwardRef` is needed anywhere.
     SearchIndexingModule,
 
-    // The Danger Zone (#80): a user deleting their own data in bulk. LAST of
-    // the feature modules because it imports several of them and is imported by
-    // none — it reuses `NotesService`, `TranscriptPipelineService`,
-    // `ObjectsService`, `NoteTemplatesService` and
-    // `PatService` rather than reimplementing any of the per-item
-    // deletion machinery those already own.
-    UserDataModule,
+    // The platform's user-data slice (#480, epic #478): the Danger Zone. `GET
+    // /api/user-data/summary`, `POST /api/user-data/deletions`, the `user.data.purge`
+    // job (and the admin factory reset and organization offboarding routes), over the
+    // categories, scopes and model hints `platform/user-data/user-data.manifest.ts`
+    // registers. Replaces this app's own `user-data/` module. After the feature
+    // modules because its delegates (`transcript.purge`, `note.purge`, `kg.purge`,
+    // `files.purge_unmanaged`) are their handlers: it enqueues them by type string and
+    // imports none of them.
+    userDataModule,
 
     // Cross-module search (#175, epic #164): `GET /api/search`, ranked
     // full-text over transcript and note content. Registered AFTER both

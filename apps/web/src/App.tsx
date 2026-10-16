@@ -139,10 +139,12 @@ const UserNotificationsPage = lazy(() =>
 const UserTokensPage = lazy(() =>
   import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
 );
-// Issue #80. The one `/settings/*` destination whose every action is
-// permanent — its own `Danger Zone` group in `userSettingsSections.tsx`, and
-// ungated here like every sibling below.
-const UserDangerZonePage = lazy(() => import('./pages/UserDangerZonePage'));
+// Issue #80; the platform's since #480 (epic #478). The one `/settings/*`
+// destination whose every action is permanent — its own `Danger Zone` group in
+// `userSettingsSections.tsx`, and ungated here like every sibling below.
+const UserDangerZonePage = lazy(() =>
+  import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.UserDangerZonePage })),
+);
 // Issue #55, epic #45; the platform's since #477 (epic #472) — the user's OWN
 // AI provider key (`UserAiKeysPage`). Every AI surface in that epic is
 // unreachable until this page has been used once.
@@ -710,12 +712,11 @@ function AppRoutes() {
                   />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Issue #80. Ungated like every `/settings/*` sibling, and
-                      with the same reason `/settings/ai` carries:
-                      `apps/api/src/user-data/`'s controller gates both of its
-                      routes on `@Auth()` and NO permission, because the
-                      resource is the caller's own data, scoped by `userId` in
-                      the query itself. A `RequirePermission` here would be a
-                      gate the API does not have, and it would fail in the worst
+                      with the same reason `/settings/ai` carries: the platform
+                      user-data controller (#480) gates its routes on `@Auth()`
+                      and NO permission, because the resource is the caller's
+                      own data, scoped by `userId` in the query itself. A
+                      `RequirePermission` here would be a gate the API does not have, and it would fail in the worst
                       direction — a user unable to delete data this deployment
                       holds about them because of a role somebody else assigned.
                       The real gate is the typed confirmation in the page's

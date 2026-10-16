@@ -38,17 +38,46 @@
 //
 // SERVER-ONLY under rule 3 (`deleteRemote` needs the account API key) and rule
 // 2 (it deletes across several tables as it goes).
+//
+// -----------------------------------------------------------------------------
+// TWO PAYLOADS, ONE TYPE (issue #480)
+// -----------------------------------------------------------------------------
+//
+//   { transcriptId }            the per-item purge described above (unchanged)
+//   { mode: 'owner', userId }   the owner-level variant, ADDITIVE
+//
+// The owner-level variant is the delegate the platform's `user.data.purge` runs
+// for the `Transcript` model (`platform/user-data/user-data.manifest.ts`). It
+// does what the Danger Zone's transcripts step has always done, and nothing
+// more: clear `notes.source_transcript_id` on every note that cites one of the
+// user's transcripts (ANOTHER USER'S NOTE INCLUDED: a note generated from a
+// transcript shared with them is their content, so it keeps its text and loses
+// only the provenance link, which is the smallest of the three losses on offer),
+// soft-delete every live transcript the user owns, and queue the per-item purge
+// for each. It never catches a foreign-key violation to make a delete go
+// through: every blocking column is `Restrict`, so the reference is cleared
+// first and the delete after it is an ordinary one. It deletes no bytes itself.
+//
+// Re-entrant by construction: each pass asks the database for the live
+// transcripts that remain, so a retry finishes the remainder and a run with
+// nothing to do succeeds having done nothing.
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
+import {
+  OWNER_PURGE_BATCH,
+  OWNER_PURGE_MAX_BATCHES,
+  ownerPurgeDidNotConverge,
+  readOwnerPurgePayload,
+} from '../../common/owner-purge';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TRANSCRIPT_PURGE_JOB_TYPE } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
-import { readTranscriptId } from '../transcript-pipeline.service';
+import { readTranscriptId, TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
@@ -66,6 +95,7 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     private readonly objects: TranscriptObjectsService,
     private readonly runtime: TranscriptionRuntimeService,
     private readonly searchIndex: SearchIndexService,
+    private readonly pipeline: TranscriptPipelineService,
   ) {}
 
   onModuleInit(): void {
@@ -73,6 +103,14 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
   }
 
   async process(job: Job): Promise<void> {
+    const owner = readOwnerPurgePayload(job.payload);
+
+    if (owner) {
+      await this.purgeOwner(owner.userId);
+
+      return;
+    }
+
     const transcriptId = readTranscriptId(job.payload);
 
     if (!transcriptId) {
@@ -204,6 +242,90 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     this.logger.log(
       `Purged transcript ${transcript.id}: ${removed} storage object(s) and every row`,
     );
+  }
+
+  /**
+   * The owner-level variant: soft-delete every live transcript `userId` owns and
+   * queue the per-item purge for each. See the header's "TWO PAYLOADS" section.
+   */
+  private async purgeOwner(userId: string): Promise<void> {
+    let deleted = 0;
+
+    for (let batch = 0; batch < OWNER_PURGE_MAX_BATCHES; batch += 1) {
+      const rows = await this.prisma.transcript.findMany({
+        where: { ownerId: userId, deletedAt: null },
+        select: { id: true },
+        take: OWNER_PURGE_BATCH,
+      });
+
+      if (rows.length === 0) {
+        if (deleted > 0) {
+          await this.prisma.auditEvent.create({
+            data: {
+              actorUserId: userId,
+              action: 'user_data:transcripts_deleted',
+              targetType: 'user',
+              targetId: userId,
+              meta: { count: deleted },
+            },
+          });
+        }
+
+        await this.forgetOwnerDocuments(userId);
+
+        this.logger.log(
+          `User ${userId}: ${deleted} transcript(s) soft-deleted and queued for purge`,
+        );
+
+        return;
+      }
+
+      const ids = rows.map((row) => row.id);
+
+      // Clear the Restrict reference first, on EVERY note that cites one of the
+      // batch, whoever owns the note.
+      await this.prisma.note.updateMany({
+        where: { sourceTranscriptId: { in: ids } },
+        data: { sourceTranscriptId: null },
+      });
+
+      await this.prisma.transcript.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'deleting', deletedAt: new Date() },
+      });
+
+      // The queue's active dedup makes a purge already pending for one of these
+      // a no-op, so a retried owner job never doubles the per-item work.
+      for (const id of ids) {
+        await this.pipeline.enqueuePurge(id);
+      }
+
+      deleted += ids.length;
+    }
+
+    throw ownerPurgeDidNotConverge('transcript', userId);
+  }
+
+  /**
+   * Forget the owner's transcripts in the semantic index. A failure is logged and
+   * swallowed: the rows are already gone, and each per-item purge sweeps its own
+   * document again.
+   */
+  private async forgetOwnerDocuments(userId: string): Promise<void> {
+    try {
+      const forgotten = await this.searchIndex.forgetOwnerDocuments(userId, SEARCH_DOC_TRANSCRIPT);
+
+      if (forgotten > 0) {
+        this.logger.log(
+          `User ${userId}: ${forgotten} ${SEARCH_DOC_TRANSCRIPT}(s) removed from the semantic index`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `User ${userId}: could not clear the semantic index for ${SEARCH_DOC_TRANSCRIPT}s: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**

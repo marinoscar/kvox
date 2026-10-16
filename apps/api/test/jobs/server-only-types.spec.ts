@@ -47,6 +47,11 @@ const MUST_BE_SERVER_ONLY = [
   // renderers and database work live in the API
   'transcript.export',
   'note.export',
+  // deletes a user's objects as it goes (#480); also the user-data purge it is a delegate of
+  'files.purge_unmanaged',
+  'transcript.purge',
+  'note.purge',
+  'user.data.purge',
 ] as const;
 
 const NODE_ELIGIBLE = ['media.audio.transcode', 'note.source.extract'] as const;
