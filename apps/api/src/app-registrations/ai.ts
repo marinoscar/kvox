@@ -30,9 +30,11 @@
 
 import { registerAiFeature, type AiFeatureDefinition } from '@marinoscar/platform-api/ai';
 
+import { APP_SLUG } from '@app/shared';
+
 import type { KvoxAiFeatureId } from '../ai-port/features';
 
-const GROUP = 'kvox';
+const GROUP = APP_SLUG;
 
 /** Every feature, in registration order. The id type pins the list to `KVOX_AI_FEATURES`. */
 export const KVOX_AI_FEATURE_DEFINITIONS: ReadonlyArray<

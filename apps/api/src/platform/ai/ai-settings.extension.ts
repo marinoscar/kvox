@@ -54,7 +54,7 @@ export const kvoxAiStoredSchema = z.object({
 
 export type KvoxAiExtensionValue = z.infer<typeof kvoxAiStoredSchema>;
 
-/** The added fields' defaults: kvox's defaults before the move to the platform namespace. */
+/** The added fields' defaults: this app's defaults before the move to the platform namespace. */
 export const KVOX_AI_EXTENSION_DEFAULTS: KvoxAiExtensionValue = {
   // EMPTY: every task uses `defaultModel` until an administrator picks one.
   taskModels: {},

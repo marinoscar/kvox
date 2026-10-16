@@ -16,7 +16,7 @@ import {
 import type { KvoxAiFeatureId } from './features';
 
 // =============================================================================
-// Platform AiError -> kvox wire codes and job error classes (issue #473)
+// Platform AiError -> this app's wire codes and job error classes (issue #473)
 // =============================================================================
 //
 // The platform's AI slice throws `AiError` with a platform code

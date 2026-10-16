@@ -50,7 +50,7 @@ export type AiModelCapability = 'structuredOutput' | 'toolCalling';
 
 /**
  * One enabled model the chooser may pick: the `ai_models` row's `modelId` and
- * the two capability flags kvox gates on (`structured_output` and `tools` in the
+ * the two capability flags this app gates on (`structured_output` and `tools` in the
  * row's `capabilities` JSON).
  */
 export interface TaskModelCandidate {
@@ -256,7 +256,7 @@ export function chooseTaskModel(input: {
 export type PlatformReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
 
 /**
- * kvox's effort as the platform request carries it. `none` means "do not send
+ * the app's effort as the platform request carries it. `none` means "do not send
  * the parameter" (returns `undefined`); `xhigh` is clamped to `high`, the
  * strongest value the platform accepts (record this in the admin form help text,
  * #477).

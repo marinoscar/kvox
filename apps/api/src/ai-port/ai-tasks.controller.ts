@@ -17,7 +17,7 @@ import { AiTasksService } from './ai-tasks.service';
 //
 //   GET /api/ai-tasks/config    the capability probe the web reads, `notes:read`
 //                               (seeded to every role, so the users the capability
-//                               governs can read it). It replaced kvox's
+//                               governs can read it). It replaced this app's
 //                               `GET /api/ai/config`, whose path the platform owns.
 //   GET /api/ai-tasks/settings  the admin view of the fields this app adds to the
 //                               `ai` namespace, `ai_config:read`.
