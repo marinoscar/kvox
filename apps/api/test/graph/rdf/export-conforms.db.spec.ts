@@ -47,11 +47,11 @@ import { GraphPreferencesService } from '../../../src/graph/preferences/graph-pr
 import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
 import { NoteAccessService } from '../../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
-import { TranscriptAccessService } from '../../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { validateShacl } from './rdf-fixtures';
 import { defaultOrgId } from '../../helpers/storage-object.helper';
+import { createTranscriptAccess } from '../../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('export-conforms.db.spec');
 
@@ -117,7 +117,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
     ontology = new GraphOntologyService(p, new GraphPreferencesService(p));
-    source = new GraphExportSource(p, ontology, new TranscriptAccessService(p), new NoteAccessService(p));
+    source = new GraphExportSource(p, ontology, createTranscriptAccess(p), new NoteAccessService(p));
   });
 
   afterAll(async () => {

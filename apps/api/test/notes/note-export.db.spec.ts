@@ -62,6 +62,7 @@ import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
 import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('note-export.db.spec');
 
@@ -225,7 +226,7 @@ describeWithDb('Note exports (real Postgres)', () => {
 
     transcriptObjectId = source.id;
 
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `${TITLE_PREFIX}Weekly Sync`,

@@ -47,6 +47,8 @@ import { TranscriptMaterializeService } from '../../src/transcripts/transcript-m
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-speaker-link.db.spec');
 
@@ -65,7 +67,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
     reconciler = new SpeakerLinkReconciler(
-      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE))),
+      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
       new GraphOntologyService(prisma as never, new GraphPreferencesService(prisma as never)),
     );
     // Upsert by name, exactly as the seed does, so running the seed later is unaffected.
@@ -111,7 +113,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     await prisma.kgRelation.deleteMany({ where: owner });
     await prisma.kgEntity.deleteMany({ where: owner });
     await prisma.kgEvidence.deleteMany({ where: owner });
-    await prisma.transcriptShare.deleteMany({ where: { user: { email: { startsWith: EMAIL_PREFIX } } } });
+    await prisma.grant.deleteMany({ where: { resourceType: 'transcript', granteeUser: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.transcriptSegment.deleteMany({ where: { transcript: owner } });
     await prisma.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
     await prisma.transcript.deleteMany({ where: owner });
@@ -146,7 +148,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
         uploadedById: ownerId,
       },
     });
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: { ownerId, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
     });
     const speakers: Record<string, string> = {};
@@ -386,9 +388,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const owner = await createUser('share-owner');
     const editor = await createUser('share-editor');
     const t = await createTranscript(owner.id, ['A']);
-    await prisma.transcriptShare.create({
-      data: { transcriptId: t.transcriptId, userId: editor.id, role: 'editor', grantedById: owner.id },
-    });
+    await shareTranscript(prisma, { transcriptId: t.transcriptId, userId: editor.id, role: 'editor', grantedById: owner.id });
     await setIdentities(t.transcriptId, { [t.speakers.A]: 'Sarah Chen' });
 
     await expect(run(t.transcriptId, editor.id)).resolves.toMatchObject({ skipped: 'not_owner' });

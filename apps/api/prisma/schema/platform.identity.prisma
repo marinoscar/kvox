@@ -179,19 +179,17 @@ model User {
 
   // composed from app:transcripts.prisma
   // Back-relations onto the platform's User (an `extend model` block holds back-relation fields only).
-  // Transcripts (issue #24, epic #19). Six relations to the transcript
+  // Transcripts (issue #24, epic #19). Four relations to the transcript
   // tables, split by role for the same reason `databaseBackupRuns` /
   // `databaseRestores` are two relations to one table above: "owns this
-  // transcript", "wrote this version", "last edited this segment", "was
-  // granted a share", "granted a share", and "asked for this export" are six
-  // different acts, not one. See the block comment above the `Transcript`
+  // transcript", "wrote this version", "last edited this segment" and "asked
+  // for this export" are four different acts, not one (a share is a platform
+  // `grants` row since issue #485). See the block comment above the `Transcript`
   // model for the full reasoning behind every one of these relations'
   // `onDelete` behaviour.
   transcripts                      Transcript[]               @relation("TranscriptOwner")
   transcriptVersionsAuthored       TranscriptVersion[]        @relation("TranscriptVersionAuthor")
   transcriptSegmentEdits           TranscriptSegment[]        @relation("TranscriptSegmentEditor")
-  transcriptSharesReceived         TranscriptShare[]          @relation("TranscriptShareUser")
-  transcriptSharesGranted          TranscriptShare[]          @relation("TranscriptShareGrantedBy")
   transcriptExportsRequested       TranscriptExport[]         @relation("TranscriptExportRequestedBy")
 
   // AI name checks (issue #328, epic #326). Two relations, split by role for
@@ -575,6 +573,11 @@ model Organization {
   // composed from package:storage.prisma
   storageObjects      StorageObject[]
   storageObjectChunks StorageObjectChunk[]
+
+  // composed from app:transcripts.prisma
+  // Back-relations onto the platform's Organization (an `extend model` block holds back-relation fields only).
+  // `transcripts.org_id` (issue #485): the organization the sharing slice decides a transcript's access in.
+  transcripts Transcript[]
 
   @@map("organizations")
 }

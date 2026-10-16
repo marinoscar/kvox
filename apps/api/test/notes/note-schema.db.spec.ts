@@ -38,6 +38,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { NOTE_TEMPLATES } from '../../prisma/seed-app';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim
@@ -141,7 +142,7 @@ describeWithDb('Notes schema (real Postgres)', () => {
   }
 
   async function createTranscript(ownerId: string, sourceObjectId: string, suffix: string) {
-    return prisma.transcript.create({
+    return createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `test-note-schema-${suffix}`,

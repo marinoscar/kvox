@@ -21,7 +21,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { identitiesFingerprint } from './editing/speaker-identity';
 import type { TranscriptEditingService } from './transcript-editing.service';
-import type { TranscriptSharingService } from './transcript-sharing.service';
+import type { TranscriptSharesAdapter } from './transcript-shares.adapter';
 import {
   TranscriptsController,
   matchesETag,
@@ -94,7 +94,7 @@ describe('TranscriptsController — GET :id / :id/segments', () => {
     controller = new TranscriptsController(
       transcripts as unknown as TranscriptsService,
       {} as TranscriptEditingService,
-      {} as TranscriptSharingService,
+      {} as TranscriptSharesAdapter,
       {} as TranscriptExportService,
     );
   });

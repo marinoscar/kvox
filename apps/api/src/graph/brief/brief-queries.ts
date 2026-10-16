@@ -28,6 +28,12 @@ import type { ValidRange } from '../temporal';
 import type { BriefEntityRef } from './dto/entity-brief.dto';
 import type { BriefItemKind, BriefItemRow, BriefRelationRow } from './brief-sections';
 import type { RelatedKind } from './brief-related';
+import {
+  inViewerScope,
+  transcriptViewer,
+  transcriptVisibleSql,
+  type ViewerDb,
+} from '../../app-sharing/transcript-visibility';
 
 /** Anything that can run `$queryRaw` — the Prisma client or a transaction. */
 export type BriefDb = Pick<Prisma.TransactionClient, '$queryRaw'>;
@@ -496,23 +502,24 @@ export interface VisibleDoc {
 
 /**
  * The documents among `transcriptIds`/`noteIds` the caller may still VIEW —
- * a live transcript they own or hold a share on, a live note they own (the
+ * a live transcript they own or hold a share on (a platform grant since #485), a live note they own (the
  * same predicates `GraphReadService.mentions` uses) — with the meeting date:
  * a transcript's `recorded_at`, a note's `created_at`.
  */
 export async function visibleDocs(
-  db: BriefDb,
+  db: ViewerDb,
   userId: string,
   transcriptIds: readonly string[],
   noteIds: readonly string[],
 ): Promise<VisibleDoc[]> {
+  // The caller in their organization: a shared transcript's grant is only visible in
+  // that scope (#485, `app-sharing/transcript-visibility.ts`).
+  const viewer = await transcriptViewer(db, userId);
   const branches: Prisma.Sql[] = [];
   if (transcriptIds.length > 0) {
     branches.push(Prisma.sql`
       SELECT 'transcript' AS kind, t.id::text AS id, t.title, t.recorded_at AS at FROM transcripts t
-      WHERE t.id = ANY(${uuidArray(transcriptIds)}) AND t.deleted_at IS NULL
-        AND (t.owner_id = ${owner(userId)} OR EXISTS (
-          SELECT 1 FROM transcript_shares s WHERE s.transcript_id = t.id AND s.user_id = ${owner(userId)}))`);
+      WHERE t.id = ANY(${uuidArray(transcriptIds)}) AND ${transcriptVisibleSql(viewer, 't')}`);
   }
   if (noteIds.length > 0) {
     branches.push(Prisma.sql`
@@ -520,7 +527,9 @@ export async function visibleDocs(
       WHERE n.id = ANY(${uuidArray(noteIds)}) AND n.deleted_at IS NULL AND n.owner_id = ${owner(userId)}`);
   }
   if (branches.length === 0) return [];
-  const rows = await db.$queryRaw<{ kind: RelatedKind; id: string; title: string; at: Date | null }[]>`
-    ${Prisma.join(branches, ' UNION ALL ')}`;
+  const rows = await inViewerScope(db, viewer, (tx) =>
+    tx.$queryRaw<{ kind: RelatedKind; id: string; title: string; at: Date | null }[]>`
+    ${Prisma.join(branches, ' UNION ALL ')}`,
+  );
   return rows.map((r) => ({ kind: r.kind, id: r.id, title: r.title, occurredAt: r.at }));
 }

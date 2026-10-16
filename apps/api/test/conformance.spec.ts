@@ -18,6 +18,7 @@ import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/notifications/testing';
 import '@marinoscar/platform-api/settings/testing';
+import '@marinoscar/platform-api/sharing/testing';
 import '@marinoscar/platform-api/storage/testing';
 import '@marinoscar/platform-api/telemetry/testing';
 import '@marinoscar/platform-api/user-data/testing';
@@ -30,6 +31,7 @@ import { AppModule } from '../src/app.module';
 import '../src/platform/notifications/notification.manifest';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { composedSchemaDatamodel } from '@marinoscar/platform-api/user-data';
+import { IS_PUBLIC_KEY } from '@marinoscar/platform-api/identity';
 // The user-data registries (this app's categories, scopes and hints, then the platform's); also
 // reached through AppModule, named here because the `userData` suite reads them.
 import '../src/platform/user-data/user-data.manifest';
@@ -136,6 +138,7 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'graph/resolution/merge.service.ts', why: 'Entity merge with row locks across several tables; scoped by owner_id.' },
   { file: 'graph/speaker-link/speaker-link.reconciler.ts', why: 'Takes a per-transcript advisory lock (`pg_advisory_xact_lock`); touches no rows.' },
   { file: 'graph/write/graph-write.service.ts', why: 'GraphWriteService is the single graph write path; its raw statements use the live-statement and speaker-link partial unique indexes and are scoped by owner_id.' },
+  { file: 'app-sharing/transcript-visibility.ts', why: 'Reads the ids of the transcripts shared with the caller through the platform\'s accessibleWhere EXISTS form, past 1,000 shares (issue #485); the statement is built by the platform and bound to the caller and their organization.' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
   { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
   { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
@@ -173,12 +176,15 @@ const EMAIL_TEMPLATE_SAMPLES: Record<string, unknown> = {
     retryable: true,
     appUrl: 'https://app.example.test',
   },
-  'transcript-shared': {
-    transcriptId: 'transcript-1',
-    title: HOSTILE,
+  'shared-with-you': {
+    resourceType: 'transcript',
+    resourceId: 'transcript-1',
     role: 'editor',
-    ownerName: HOSTILE,
-    appUrl: 'https://app.example.test',
+    title: HOSTILE,
+    path: '/transcripts/transcript-1',
+    sharedBy: HOSTILE,
+    openUrl: 'https://app.example.test/transcripts/transcript-1',
+    signInUrl: 'https://app.example.test',
   },
   'note-ready': {
     noteId: 'note-1',
@@ -325,5 +331,17 @@ runPlatformConformance({
     // names a model, column and category that exist, and a delete order exists. The datamodel is the
     // composed schema folder the module itself plans from (the generated client's DMMF lacks `onDelete`).
     userData: { datamodel: composedSchemaDatamodel(__dirname)() },
+    // The sharing slice (#485): nothing in this app reads or writes the sharing tables directly (every
+    // grant goes through `GrantsService`, `AccessPolicy` and the platform's `accessibleSql`), no model
+    // with an `owner_group_id` column is left unregistered (this app has none), the link routes are
+    // guarded, the slice's partial unique indexes exist in the migrations, and the registered resource
+    // type ids equal the committed snapshot: a type id is PERMANENT once grants of it exist.
+    sharing: {
+      schemaPath: join(API_DIR, 'prisma', 'schema'),
+      migrationsDir: join(API_DIR, 'prisma', 'migrations'),
+      rootModule: AppModule,
+      isPublic: (target) => Reflect.getMetadata(IS_PUBLIC_KEY, target) === true,
+      resourceTypeIds: ['transcript'],
+    },
   },
 });

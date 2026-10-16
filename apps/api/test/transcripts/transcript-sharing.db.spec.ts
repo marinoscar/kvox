@@ -1,6 +1,6 @@
 // =============================================================================
 // Real-Postgres test: the sharing RBAC matrix and immediate revocation
-// (issue #29, epic #19, spec §6)
+// (issue #29, epic #19, spec §6; over the platform's grants since #485)
 // =============================================================================
 //
 // Three of issue #29's acceptance criteria are claims about ROWS, not about a
@@ -8,22 +8,28 @@
 //
 //   1. **The RBAC matrix.** Owner, editor, viewer and stranger across read,
 //      play, export, edit, restore, share, delete and leave — and a stranger
-//      always gets 404. Asserted over a mocked `transcriptShare.findUnique`
-//      this would be asserting the arrangement the test itself just made; here
-//      each actor's access is decided by a real `transcript_shares` row and a
-//      real `transcripts.owner_id`.
+//      always gets 404. Asserted over a mocked policy this would be asserting the
+//      arrangement the test itself just made; here each actor's access is decided
+//      by the platform's REAL `AccessPolicy` over a real `grants` row and a real
+//      `transcripts.owner_id`.
 //
 //   2. **Revocation takes effect on the NEXT REQUEST.** The whole claim is that
 //      there is no cached grant to invalidate — which is a statement about what
-//      the second query sees after the first one's row is gone. A mock returns
+//      the second query sees after the first one's row is revoked. A mock returns
 //      whatever it was last told to, so it would "prove" this for an
 //      implementation that cached aggressively.
 //
 //   3. **A role change takes effect immediately**, for the same reason.
 //
-// Plus the two facts the unique index enforces rather than the service:
-// re-sharing updates one row instead of creating a second, and `@@unique` on
-// `(transcript_id, user_id)` makes a competing pair unrepresentable.
+// Plus what #485 adds: a share is ONE active `grants` row (re-sharing updates it,
+// the partial unique index refuses a competing second), the transcript's grants
+// go with it, the list scopes (`owned`, `shared`, `all`) agree past the
+// platform's 1,000-id inline threshold, and the deprecated `:id/shares`
+// adapters answer the old shapes and the old messages.
+//
+// The services under test are the REAL ones: `TranscriptAccessService` and
+// `TranscriptSharesAdapter` over `AccessPolicy` and `GrantsService`
+// (`../helpers/sharing-kit.helper.ts`). Only the notifier is a double.
 //
 // This is a `*.db.spec.ts` file, excluded from `npm test`/`test:unit`/
 // `test:cov`/`test:ci` and run by `npm run test:db` (CI's `Smoke` job). See
@@ -34,16 +40,19 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import type { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
-import { ShareLookupThrottleService } from '../../src/transcripts/share-lookup-throttle.service';
 import {
   TRANSCRIPT_NOT_FOUND_MESSAGE,
   TranscriptAccessService,
@@ -52,13 +61,17 @@ import { TranscriptEditingService } from '../../src/transcripts/transcript-editi
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
 import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
 import {
+  SHARE_NOT_FOUND_MESSAGE,
   SHARE_RECIPIENT_NOT_FOUND_MESSAGE,
-  TranscriptSharingService,
-} from '../../src/transcripts/transcript-sharing.service';
+  SHARE_WITH_SELF_MESSAGE,
+  TranscriptSharesAdapter,
+} from '../../src/transcripts/transcript-shares.adapter';
 import { TranscriptsService } from '../../src/transcripts/transcripts.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
-import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
+import { asPrismaService, createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createSharingKit, type SharingKit } from '../helpers/sharing-kit.helper';
+import { createTranscript as createTranscriptRow, deleteTranscriptGrants, shareTranscript } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-sharing.db.spec');
 
@@ -76,8 +89,8 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
   let access: TranscriptAccessService;
   let transcripts: TranscriptsService;
   let editing: TranscriptEditingService;
-  let sharing: TranscriptSharingService;
-  let notify: jest.Mock;
+  let sharing: TranscriptSharesAdapter;
+  let kit: SharingKit;
 
   let owner: RequestUser;
   let editor: RequestUser;
@@ -94,7 +107,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     prisma = createDbClient();
     await prisma.$connect();
 
-    const service = prisma as unknown as PrismaService;
+    const service = asPrismaService(prisma);
 
     // A SIGNING STUB, not `TmpDirStorageProvider`: that double deliberately
     // throws for `getSignedDownloadUrl`, and nothing in this suite moves bytes
@@ -105,7 +118,8 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       getBucket: jest.fn().mockReturnValue('test-bucket'),
     } as unknown as StorageProvider;
 
-    access = new TranscriptAccessService(service);
+    kit = createSharingKit(prisma);
+    access = new TranscriptAccessService(service, kit.policy);
 
     const managed = createDbManagedObjects(prisma, storage);
     const objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
@@ -138,15 +152,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       new EventEmitter2(),
     );
 
-    notify = jest.fn().mockResolvedValue(undefined);
-
-    sharing = new TranscriptSharingService(
-      service,
-      access,
-      new ShareLookupThrottleService(),
-      { notify } as unknown as NotificationsService,
-      new ConfigService({ appUrl: 'https://app.example.test' }),
-    );
+    sharing = new TranscriptSharesAdapter(access, kit.grants);
 
     const accounts = await Promise.all(
       ['owner', 'editor', 'viewer', 'stranger'].map((name) =>
@@ -172,6 +178,16 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     });
 
     inactive = actor(disabled.id, disabled.email);
+
+    // A share is granted to a MEMBER of the organization: every account (the
+    // deactivated one included, so that it is refused for being inactive and not
+    // for lacking a membership) holds one in the default organization.
+    const orgId = await defaultOrgId(prisma);
+    const orgRole = await prisma.role.findFirstOrThrow({ where: { name: 'viewer' }, select: { id: true } });
+
+    await prisma.membership.createMany({
+      data: [...accounts, disabled].map((account) => ({ orgId, userId: account.id, roleId: orgRole.id })),
+    });
 
     const source = await createStorageObject(prisma, {
       data: {
@@ -200,17 +216,17 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
 
   afterEach(async () => {
     await cleanup();
-    notify.mockClear();
+    kit.notified.length = 0;
   });
 
   async function cleanup(): Promise<void> {
     const where = { transcript: { title: { startsWith: TITLE_PREFIX } } };
 
-    await prisma.transcriptShare.deleteMany({ where });
+    await deleteTranscriptGrants(prisma, { title: { startsWith: TITLE_PREFIX } });
     await prisma.transcriptVersion.deleteMany({ where });
     await prisma.transcriptSegment.deleteMany({ where });
     await prisma.transcriptSpeaker.deleteMany({ where });
-    await prisma.auditEvent.deleteMany({ where: { targetType: 'transcript' } });
+    await prisma.auditEvent.deleteMany({ where: { OR: [{ targetType: 'transcript' }, { targetType: 'grant' }] } });
     await prisma.transcript.deleteMany({ where: { title: { startsWith: TITLE_PREFIX } } });
   }
 
@@ -225,7 +241,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
   }
 
   async function seed(options: { shares?: boolean } = {}): Promise<Seed> {
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId: owner.id,
         title: `${TITLE_PREFIX}${randomUUID()}`,
@@ -278,12 +294,8 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     });
 
     if (options.shares !== false) {
-      await prisma.transcriptShare.createMany({
-        data: [
-          { transcriptId: transcript.id, userId: editor.id, role: 'editor', grantedById: owner.id },
-          { transcriptId: transcript.id, userId: viewer.id, role: 'viewer', grantedById: owner.id },
-        ],
-      });
+      await shareTranscript(prisma, { transcriptId: transcript.id, userId: editor.id, role: 'editor', grantedById: owner.id });
+      await shareTranscript(prisma, { transcriptId: transcript.id, userId: viewer.id, role: 'viewer', grantedById: owner.id });
     }
 
     return { transcriptId: transcript.id, speakerId: speaker.id, segmentId: segment.id };
@@ -483,9 +495,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       await sharing.remove(seeded.transcriptId, viewer.id, viewer);
 
       // The viewer is gone; the editor is untouched.
-      expect(
-        await prisma.transcriptShare.findMany({ where: { transcriptId: seeded.transcriptId } }),
-      ).toHaveLength(1);
+      expect(await activeGrants(seeded.transcriptId)).toHaveLength(1);
 
       // And a viewer cannot remove the editor on their way out.
       expect(
@@ -556,8 +566,21 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
   });
 
   // ===========================================================================
-  // THE ROW ITSELF
+  // THE ROW ITSELF — a share is one ACTIVE grants row
   // ===========================================================================
+
+  /** The active (not revoked) user grants on a transcript, through the platform's own table. */
+  async function activeGrants(transcriptId: string, userId?: string) {
+    return prisma.grant.findMany({
+      where: {
+        resourceType: 'transcript',
+        resourceId: transcriptId,
+        revokedAt: null,
+        ...(userId ? { granteeUserId: userId } : {}),
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 
   describe('the share row', () => {
     it('re-shares by UPDATING one row rather than creating a competing second', async () => {
@@ -566,29 +589,46 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'viewer' }, owner);
       await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'editor' }, owner);
 
-      const rows = await prisma.transcriptShare.findMany({
-        where: { transcriptId: seeded.transcriptId, userId: viewer.id },
-      });
+      const rows = await activeGrants(seeded.transcriptId, viewer.id);
 
-      // `@@unique([transcriptId, userId])` makes two competing rows
-      // unrepresentable; the upsert is what turns that into an update.
+      // The platform upserts on the partial unique index
+      // `grants_active_user_uniq_idx`: one ACTIVE grant per (record, user).
       expect(rows).toHaveLength(1);
       expect(rows[0].role).toBe('editor');
     });
 
-    it('refuses a second row for the same pair at the DATABASE level', async () => {
+    it('refuses a second ACTIVE row for the same pair at the DATABASE level', async () => {
       const seeded = await seed();
 
       await expect(
-        prisma.transcriptShare.create({
-          data: {
-            transcriptId: seeded.transcriptId,
-            userId: editor.id,
-            role: 'viewer',
-            grantedById: owner.id,
-          },
+        shareTranscript(prisma, {
+          transcriptId: seeded.transcriptId,
+          userId: editor.id,
+          role: 'viewer',
+          grantedById: owner.id,
         }),
       ).rejects.toMatchObject({ code: 'P2002' });
+    });
+
+    it('answers the share in the OLD shape: the recipient\'s user id, address, role and grantor', async () => {
+      const seeded = await seed({ shares: false });
+
+      const share = await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'viewer' }, owner);
+
+      expect(share).toMatchObject({
+        userId: viewer.id,
+        email: viewer.email,
+        displayName: 'The viewer',
+        role: 'viewer',
+        grantedById: owner.id,
+      });
+      expect(Date.parse(share.createdAt)).not.toBeNaN();
+
+      const listed = await sharing.list(seeded.transcriptId, owner);
+
+      expect(listed.items.map((item) => item.userId)).toEqual([viewer.id]);
+      // The `:userId` of the other routes is the RECIPIENT's, and the share id is the grant's.
+      expect(listed.items[0].id).toBe(share.id);
     });
 
     it('finds a recipient by a DIFFERENTLY-CASED address', async () => {
@@ -615,21 +655,52 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
 
       expect(forInactive).toBe(SHARE_RECIPIENT_NOT_FOUND_MESSAGE);
       expect(forAbsent).toBe(SHARE_RECIPIENT_NOT_FOUND_MESSAGE);
-      expect(
-        await prisma.transcriptShare.count({ where: { transcriptId: seeded.transcriptId } }),
-      ).toBe(0);
+      expect(await activeGrants(seeded.transcriptId)).toHaveLength(0);
     });
 
-    it('cascades away with the transcript, leaving no orphan grants', async () => {
-      const seeded = await seed();
+    it('answers sharing with YOURSELF with the old 400 message, not the generic 404', async () => {
+      const seeded = await seed({ shares: false });
 
-      await prisma.transcriptVersion.deleteMany({ where: { transcriptId: seeded.transcriptId } });
-      await prisma.transcriptSegment.deleteMany({ where: { transcriptId: seeded.transcriptId } });
-      await prisma.transcriptSpeaker.deleteMany({ where: { transcriptId: seeded.transcriptId } });
-      await prisma.transcript.delete({ where: { id: seeded.transcriptId } });
+      const error = await sharing
+        .add(seeded.transcriptId, { email: owner.email, role: 'viewer' }, owner)
+        .catch((e: Error) => e);
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as Error).message).toBe(SHARE_WITH_SELF_MESSAGE);
+    });
+
+    it('answers a share that is not there with the old 404, on update and on remove', async () => {
+      const seeded = await seed({ shares: false });
+
+      for (const attempt of [
+        () => sharing.update(seeded.transcriptId, viewer.id, { role: 'editor' }, owner),
+        () => sharing.remove(seeded.transcriptId, viewer.id, owner),
+      ]) {
+        const error = await attempt().catch((e: Error) => e);
+
+        expect(error).toBeInstanceOf(NotFoundException);
+        expect((error as Error).message).toBe(SHARE_NOT_FOUND_MESSAGE);
+      }
+    });
+
+    it('deletes the transcript\'s grants in the same transaction as the transcript (the old cascade)', async () => {
+      const seeded = await seed();
+      const orgId = await defaultOrgId(prisma);
+
+      expect(await activeGrants(seeded.transcriptId)).toHaveLength(2);
+
+      await kit.data.runInOrg({ orgId }, async (tx) => {
+        const client = tx as PrismaClient;
+
+        await kit.grants.deleteForResources(client, 'transcript', [seeded.transcriptId]);
+        await client.transcriptVersion.deleteMany({ where: { transcriptId: seeded.transcriptId } });
+        await client.transcriptSegment.deleteMany({ where: { transcriptId: seeded.transcriptId } });
+        await client.transcriptSpeaker.deleteMany({ where: { transcriptId: seeded.transcriptId } });
+        await client.transcript.delete({ where: { id: seeded.transcriptId } });
+      });
 
       expect(
-        await prisma.transcriptShare.count({ where: { transcriptId: seeded.transcriptId } }),
+        await prisma.grant.count({ where: { resourceType: 'transcript', resourceId: seeded.transcriptId } }),
       ).toBe(0);
     });
   });
@@ -639,41 +710,49 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
   // ===========================================================================
 
   describe('notifications and audit', () => {
-    it('notifies the RECIPIENT and nobody else', async () => {
+    it('notifies the RECIPIENT and nobody else, through the platform\'s event', async () => {
       const seeded = await seed({ shares: false });
 
       await sharing.add(seeded.transcriptId, { email: editor.email, role: 'editor' }, owner);
 
-      expect(notify).toHaveBeenCalledTimes(1);
+      expect(kit.notified).toHaveLength(1);
 
-      const [eventKey, addressedTo, payload] = notify.mock.calls[0];
+      const [eventKey, addressedTo, payload] = kit.notified[0];
 
-      expect(eventKey).toBe('transcripts.transcript_shared');
+      expect(eventKey).toBe('sharing.shared_with_you');
       expect(addressedTo).toBe(editor.id);
       expect(payload).toMatchObject({
-        transcriptId: seeded.transcriptId,
+        resourceType: 'transcript',
+        resourceId: seeded.transcriptId,
         role: 'editor',
+        // The transcript's own title and path, from the type's `describe()`.
+        title: expect.stringContaining(TITLE_PREFIX),
+        path: `/transcripts/${seeded.transcriptId}`,
         // The OWNER's display name, read from the real row.
-        ownerName: 'The owner',
+        sharedBy: 'The owner',
       });
 
       // Not the owner, not the viewer, not anybody else.
-      const addressees = notify.mock.calls.map((call) => call[1]);
+      const addressees = kit.notified.map((call) => call[1]);
 
       expect(addressees).toEqual([editor.id]);
       expect(addressees).not.toContain(owner.id);
       expect(addressees).not.toContain(viewer.id);
     });
 
-    it('says nothing at all on a revoke', async () => {
-      const seeded = await seed();
+    it('says nothing when the same share is submitted again, and nothing at all on a revoke', async () => {
+      const seeded = await seed({ shares: false });
 
+      await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'viewer' }, owner);
+      kit.notified.length = 0;
+
+      await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'viewer' }, owner);
       await sharing.remove(seeded.transcriptId, viewer.id, owner);
 
-      expect(notify).not.toHaveBeenCalled();
+      expect(kit.notified).toHaveLength(0);
     });
 
-    it('writes one audit row per grant, update and revoke', async () => {
+    it('writes one audit row per grant, update and revoke (the platform\'s grant:* actions)', async () => {
       const seeded = await seed({ shares: false });
 
       await sharing.add(seeded.transcriptId, { email: viewer.email, role: 'viewer' }, owner);
@@ -681,16 +760,15 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       await sharing.remove(seeded.transcriptId, viewer.id, owner);
 
       const rows = await prisma.auditEvent.findMany({
-        where: { targetType: 'transcript', targetId: seeded.transcriptId },
+        where: { targetType: 'grant', action: { startsWith: 'grant:' } },
         orderBy: { createdAt: 'asc' },
       });
+      const mine = rows.filter((row) => (row.meta as { resourceId?: string } | null)?.resourceId === seeded.transcriptId);
 
-      expect(rows.map((row) => row.action)).toEqual([
-        'transcript:share:grant',
-        'transcript:share:update',
-        'transcript:share:revoke',
-      ]);
-      expect(rows.every((row) => row.actorUserId === owner.id)).toBe(true);
+      expect(mine.map((row) => row.action)).toEqual(['grant:create', 'grant:update', 'grant:revoke']);
+      expect(mine.every((row) => row.actorUserId === owner.id)).toBe(true);
+      // The grantor and the role are recorded, never the grantee's address.
+      expect(JSON.stringify(mine.map((row) => row.meta))).not.toContain(viewer.email);
     });
 
     it('records a LEAVE as a revoke performed by the person leaving', async () => {
@@ -699,13 +777,11 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       await sharing.remove(seeded.transcriptId, viewer.id, viewer);
 
       const row = await prisma.auditEvent.findFirst({
-        where: { targetType: 'transcript', targetId: seeded.transcriptId },
+        where: { targetType: 'grant', action: 'grant:revoke', actorUserId: viewer.id },
         orderBy: { createdAt: 'desc' },
       });
 
-      expect(row?.action).toBe('transcript:share:revoke');
-      expect(row?.actorUserId).toBe(viewer.id);
-      expect(row?.meta).toMatchObject({ left: true });
+      expect(row?.meta).toMatchObject({ resourceId: seeded.transcriptId, granteeId: viewer.id });
     });
   });
 
@@ -772,6 +848,59 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       // And it IS in the owner's own list, newest first.
       expect(forOwner.failed.map((item) => item.id)).toContain(seeded.transcriptId);
       expect(forOwner.counts.failed).toBeGreaterThan(0);
+    });
+
+    // The platform's `accessibleWhere` inlines the shared ids up to 1,000 and switches
+    // to its EXISTS form above it (`SHARED_IDS_INLINE_LIMIT`). The old code loaded every id
+    // on every list; the three scopes must answer the same either way.
+    it('answers the owned, shared and all scopes the same past the 1,000-id inline threshold', async () => {
+      const orgId = await defaultOrgId(prisma);
+      const SHARED = 1_201;
+      const OWN = 3;
+
+      // 1,201 transcripts of the owner shared with the viewer, and 3 of the viewer's own.
+      const rows = Array.from({ length: SHARED + OWN }, (_, index) => ({
+        id: randomUUID(),
+        ownerId: index < SHARED ? owner.id : viewer.id,
+        orgId,
+        title: `${TITLE_PREFIX}bulk-${index}`,
+        sourceObjectId,
+        provider: 'assemblyai',
+        status: 'ready' as const,
+      }));
+
+      await prisma.transcript.createMany({ data: rows });
+      await prisma.grant.createMany({
+        data: rows.slice(0, SHARED).map((row) => ({
+          orgId,
+          resourceType: 'transcript',
+          resourceId: row.id,
+          granteeKind: 'user',
+          granteeUserId: viewer.id,
+          role: 'viewer',
+          grantedById: owner.id,
+        })),
+      });
+
+      const [owned, shared, all] = await Promise.all(
+        (['owned', 'shared', 'all'] as const).map((scope) =>
+          transcripts.list({ scope, limit: 100 } as never, viewer.id),
+        ),
+      );
+
+      expect(owned.total).toBe(OWN);
+      expect(shared.total).toBe(SHARED);
+      expect(all.total).toBe(SHARED + OWN);
+
+      // Every row on a page is the caller's own or shared with them, and says which.
+      expect(owned.items.every((item) => item.access === 'owner')).toBe(true);
+      expect(shared.items.every((item) => item.access === 'viewer')).toBe(true);
+      expect(new Set(all.items.map((item) => item.access))).toEqual(new Set(['owner', 'viewer']));
+
+      // The shared ids are exactly the owner's: a stranger sees none of them.
+      const strangerView = await transcripts.list({ scope: 'all', limit: 100 } as never, stranger.id);
+
+      expect(strangerView.total).toBe(0);
     });
 
     it('drops a shared row from the list the moment the share is revoked', async () => {

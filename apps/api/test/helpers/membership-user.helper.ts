@@ -19,7 +19,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JwtService } from '@nestjs/jwt';
 
-import { VIEWER_AI_GRANTS } from '../../prisma/seed-app';
+import { VIEWER_AI_GRANTS, VIEWER_SHARING_GRANTS } from '../../prisma/seed-app';
 import { registerMockUserRecord } from '../fixtures/mock-setup.helper';
 import { createMockUserWithRelations } from '../fixtures/test-data.factory';
 import type { TestUser } from './auth-mock.helper';
@@ -57,12 +57,14 @@ export function catalogPermissionsOf(roleName: string): string[] {
 
 /**
  * What a seeded deployment holds for `roleName`: the catalog plus the grants `prisma/seed-app.ts` adds
- * (the platform's registry refuses an app grant on a platform role, so `viewer -> ai:use` is a seed row,
+ * (the platform's registry refuses an app grant on a platform role, so `viewer -> ai:use` and `viewer -> sharing:write` are seed rows,
  * not a catalog entry). The user a spec mints must carry the seeded set, or a Viewer would lack the
  * permission production gives it.
  */
 export function seededPermissionsOf(roleName: string): string[] {
-  const seeded = VIEWER_AI_GRANTS.filter((grant) => grant.role === roleName).map((grant) => grant.permission);
+  const seeded = [...VIEWER_AI_GRANTS, ...VIEWER_SHARING_GRANTS]
+    .filter((grant) => grant.role === roleName)
+    .map((grant) => grant.permission);
 
   return [...new Set([...catalogPermissionsOf(roleName), ...seeded])];
 }

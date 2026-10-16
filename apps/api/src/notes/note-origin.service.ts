@@ -37,6 +37,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Note, PlaybackStatus, TranscriptStatus } from '@prisma/client';
 
+import { sharedTranscriptsWhere } from '../app-sharing/transcript-visibility';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** The furthest a note chain is followed before giving up. */
@@ -133,8 +134,9 @@ export class NoteOriginService {
         status: { not: 'deleting' },
         // OWNED OR SHARED — the reach `TranscriptAccessService` grants for
         // `view`, expressed as a predicate exactly as `NoteSourceNameService`
-        // does, so an unshared transcript falls out here.
-        OR: [{ ownerId: userId }, { shares: { some: { userId } } }],
+        // does, so an unshared transcript falls out here. The shared half is the
+        // platform's `accessibleWhere` (a `grants` row since #485).
+        OR: [{ ownerId: userId }, await sharedTranscriptsWhere(this.prisma, userId)],
       },
       select: { id: true, title: true, durationMs: true, status: true, playbackStatus: true },
     });

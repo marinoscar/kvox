@@ -41,6 +41,7 @@ import { SNIPPET_START, SNIPPET_STOP } from './search-snippet';
 import { SearchService } from './search.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
+const ORG_ID = '22222222-2222-4222-8222-222222222222';
 
 /** A plausible query vector: right width, every component finite. */
 const QUERY_VECTOR = Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i % 7) / 10);
@@ -157,7 +158,14 @@ function makeHarness(
     return options.candidates ?? [];
   });
 
-  const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+  // `runInOrg` hands the same `$queryRaw` to the callback: the statements that
+  // consult a shared transcript's grant run in the caller's organization scope
+  // (#485), and `resolveOrgId` reads the default organization.
+  const prisma = {
+    $queryRaw: queryRaw,
+    organization: { findFirst: jest.fn().mockResolvedValue({ id: ORG_ID }) },
+    runInOrg: jest.fn(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn({ $queryRaw: queryRaw })),
+  } as unknown as PrismaService;
   const embedder = options.embedder ?? stubEmbedder();
 
   return { service: new SearchService(prisma, embedder), queryRaw, rawCalls, embedder };
@@ -265,8 +273,8 @@ describe('SearchService', () => {
       const limitAt = text.lastIndexOf('LIMIT');
 
       expect(limitAt).toBeGreaterThan(-1);
-      expect(text.indexOf('transcript_shares')).toBeGreaterThan(-1);
-      expect(text.indexOf('transcript_shares')).toBeLessThan(limitAt);
+      expect(text.indexOf('FROM grants g')).toBeGreaterThan(-1);
+      expect(text.indexOf('FROM grants g')).toBeLessThan(limitAt);
       expect(text.indexOf('deleted_at IS NULL')).toBeLessThan(limitAt);
       expect(text.indexOf('owner_id')).toBeLessThan(limitAt);
     });
@@ -279,8 +287,9 @@ describe('SearchService', () => {
       const text = rawCalls[1].sql.replace(/\s+/g, ' ');
 
       // `?` is Prisma's placeholder in `Prisma.Sql`; the driver renumbers it.
-      expect(text).toMatch(/owner_id = \?::uuid OR EXISTS/);
-      expect(text).toContain('FROM transcript_shares sh');
+      expect(text).toMatch(/"owner_id" = \?::uuid OR EXISTS/);
+      expect(text).toContain('FROM grants g');
+      expect(text).not.toContain('transcript_shares');
     });
 
     it('scopes notes to the owner and joins NO share table', async () => {
@@ -609,7 +618,7 @@ describe('SearchService', () => {
 
       await service.search(query(), user());
 
-      expect(rawCalls[2].sql).toContain('transcript_shares');
+      expect(rawCalls[2].sql).toContain('FROM grants g');
       expect(rawCalls[2].sql).toContain('deleted_at IS NULL');
     });
 
@@ -705,7 +714,7 @@ describe('SearchService', () => {
 
       const text = presenceSql(rawCalls)!.sql;
 
-      expect(text).toContain('transcript_shares');
+      expect(text).toContain('FROM grants g');
       expect(text).toContain('deleted_at IS NULL');
       expect(presenceSql(rawCalls)!.values).toContain(USER_ID);
     });
@@ -800,8 +809,8 @@ describe('SearchService', () => {
       const limitAt = text.lastIndexOf('LIMIT');
 
       expect(limitAt).toBeGreaterThan(-1);
-      expect(text.indexOf('transcript_shares')).toBeGreaterThan(-1);
-      expect(text.indexOf('transcript_shares')).toBeLessThan(limitAt);
+      expect(text.indexOf('FROM grants g')).toBeGreaterThan(-1);
+      expect(text.indexOf('FROM grants g')).toBeLessThan(limitAt);
       expect(text.indexOf('deleted_at IS NULL')).toBeLessThan(limitAt);
       expect(text.indexOf('owner_id')).toBeLessThan(limitAt);
       // And the ANN-shaped mistake is absent: the only LIMIT is the outer one.
@@ -1010,7 +1019,7 @@ describe('SearchService', () => {
       // Own, not visible-to-you: a shared transcript is indexed on its OWNER's
       // key, so counting it would report a number the reader cannot move.
       expect(text).toContain('owner_id = ?::uuid');
-      expect(text).not.toContain('transcript_shares');
+      expect(text).not.toContain('grants');
       // "No row at all" and "a row that is not indexed" are one predicate.
       expect(text).toContain('NOT EXISTS');
       expect(text).toContain("s.status = 'indexed'");

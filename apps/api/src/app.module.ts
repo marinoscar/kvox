@@ -58,6 +58,7 @@ import { GraphImportModule } from './graph/import/graph-import.module';
 import { AskModule } from './ask/ask.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { userDataModule } from './platform/user-data/user-data.config';
+import { sharingModule } from './platform/sharing/sharing.config';
 import { SearchModule } from './search/search.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 
@@ -245,6 +246,14 @@ import configuration from './config/configuration';
     // calls `KvoxManagedObjects.initManagedUpload` with a module only a module
     // may claim.
     TranscriptsModule,
+
+    // The platform's sharing slice (#485, epic #478): `/api/grants` (share a record,
+    // change or revoke a share, "shared with me"), `/api/grants/links`, `/api/groups`,
+    // `AccessPolicy`, the user purge and the `sharing.grants.prune` job, over one
+    // registered resource type, `transcript` (`app-registrations/sharing.ts`; users
+    // only: no group or link shares). Before TranscriptsModule, which imports the
+    // same module object for `AccessPolicy` and `GrantsService`.
+    sharingModule,
 
     // The platform's AI slice (#473, epic #472): `GET /api/ai/config`, `/api/ai/keys`
     // (a user's own provider keys), the responses / embeddings / images / audio /

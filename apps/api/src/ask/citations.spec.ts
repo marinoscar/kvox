@@ -15,6 +15,7 @@ const ITM = '33333333-3333-4333-8333-333333333333';
 const REL = '44444444-4444-4444-8444-444444444444';
 const DOC = '55555555-5555-4555-8555-555555555555';
 const EV_OF_ITEM = '66666666-6666-4666-8666-666666666666';
+const ORG = '77777777-7777-4777-8777-777777777777';
 
 function registry() {
   const r = new HandleRegistry();
@@ -125,17 +126,29 @@ describe('mapCitations', () => {
   });
 });
 
+/** A fake client: the default organization, and `runInOrg` handing the same fake to `fn`. */
+function fakeDb(queryRaw: jest.Mock) {
+  const db: { $queryRaw: jest.Mock; organization: { findFirst: jest.Mock }; runInOrg: jest.Mock } = {
+    $queryRaw: queryRaw,
+    organization: { findFirst: jest.fn().mockResolvedValue({ id: ORG }) },
+    runInOrg: jest.fn(),
+  };
+  db.runInOrg.mockImplementation((_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(db));
+
+  return db;
+}
+
 describe('loadCitationSources', () => {
   it('reads nothing when nothing needs reading', async () => {
-    const prisma = { $queryRaw: jest.fn() };
+    const prisma = fakeDb(jest.fn());
     const out = await loadCitationSources(prisma, ENT, { evidenceIds: [], itemIds: [], relationIds: [] });
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
     expect(out.evidence.size + out.firstEvidence.size).toBe(0);
   });
 
   it('splits rows by key into evidence and first-evidence maps, owner-scoped in the statement', async () => {
-    const prisma = {
-      $queryRaw: jest.fn().mockResolvedValue([
+    const prisma = fakeDb(
+      jest.fn().mockResolvedValue([
         { key: EV, evidenceId: EV, transcriptId: DOC, noteId: null, startMs: 5, transcriptTitle: 'Sync', noteTitle: null },
         {
           key: `relation:${REL}`,
@@ -147,7 +160,7 @@ describe('loadCitationSources', () => {
           noteTitle: 'Notes',
         },
       ]),
-    };
+    );
     const out = await loadCitationSources(prisma, ENT, { evidenceIds: [EV], itemIds: [], relationIds: [REL] });
     expect(out.evidence.get(EV)).toEqual({ evidenceId: EV, label: 'Sync', documentKind: 'transcript', startMs: 5 });
     expect(out.firstEvidence.get(`relation:${REL}`)).toEqual({
@@ -159,5 +172,10 @@ describe('loadCitationSources', () => {
     const sql = prisma.$queryRaw.mock.calls[0][0] as { sql: string; values: unknown[] };
     expect(sql.sql).toContain('ev.owner_id =');
     expect(sql.values).toContain(ENT);
+    // The transcript title is shown only for a transcript the owner may see: the
+    // platform's grant check runs in the owner's organization scope (#485).
+    expect(sql.sql).toContain('FROM grants g');
+    expect(sql.sql).not.toContain('transcript_shares');
+    expect(prisma.runInOrg).toHaveBeenCalledWith({ orgId: ORG, userId: ENT }, expect.any(Function));
   });
 });

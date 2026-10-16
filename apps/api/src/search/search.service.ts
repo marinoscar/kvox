@@ -131,6 +131,12 @@ import {
 } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  inViewerScope,
+  transcriptViewer,
+  transcriptVisibleSql as sharedTranscriptVisibleSql,
+  type TranscriptViewer,
+} from '../app-sharing/transcript-visibility';
+import {
   MAX_CANDIDATE_DOCUMENTS,
   type SearchQueryDto,
   type SearchResponse,
@@ -225,24 +231,18 @@ function tsQuery(q: string): Prisma.Sql {
  * 200 OF WHAT THIS CALLER CAN SEE.
  *
  * The predicate itself is `TranscriptsService.scopeWhere`'s, in SQL: not
- * soft-deleted, and either owned by the caller or shared with them. It is
+ * soft-deleted, and either owned by the caller or shared with them (a platform
+ * `grants` row since #485, through `accessibleSql`). It is
  * duplicated here rather than reused because that one is a
  * `Prisma.TranscriptWhereInput` and this is a raw statement; if the two ever
  * disagree, THIS ONE IS THE BUG - `scopeWhere` is the definition.
  */
-function transcriptVisibleSql(alias: TranscriptAlias, userId: string): Prisma.Sql {
-  const a = Prisma.raw(alias);
-
-  return Prisma.sql`
-    ${a}.deleted_at IS NULL
-    AND (
-      ${a}.owner_id = ${userId}::uuid
-      OR EXISTS (
-        SELECT 1 FROM transcript_shares sh
-        WHERE sh.transcript_id = ${a}.id AND sh.user_id = ${userId}::uuid
-      )
-    )
-  `;
+function transcriptVisibleSql(alias: TranscriptAlias, viewer: TranscriptViewer): Prisma.Sql {
+  // Since #485 a share is a platform grant, and the condition is the platform's
+  // (`app-sharing/transcript-visibility.ts`): not soft-deleted, and owned by the
+  // caller or shared with them. Every statement that carries it runs through
+  // `inViewerScope`, because `grants` is under forced row-level security.
+  return sharedTranscriptVisibleSql(viewer, alias);
 }
 
 /**
@@ -298,7 +298,7 @@ function noteVisibleSql(alias: NoteAlias, userId: string): Prisma.Sql {
  * matching segments are found by the index and the parent rows are fetched for
  * the handful of transcripts that survived.
  */
-function transcriptCandidatesSql(q: string, userId: string): Prisma.Sql {
+function transcriptCandidatesSql(q: string, viewer: TranscriptViewer): Prisma.Sql {
   return Prisma.sql`
     SELECT
       'transcript'::text AS type,
@@ -311,13 +311,13 @@ function transcriptCandidatesSql(q: string, userId: string): Prisma.Sql {
       SELECT tt.id AS doc_id, ts_rank_cd(tt.title_search_vector, ${tsQuery(q)}) AS score
       FROM transcripts tt
       WHERE tt.title_search_vector @@ ${tsQuery(q)}
-        AND ${transcriptVisibleSql('tt', userId)}
+        AND ${transcriptVisibleSql('tt', viewer)}
       UNION ALL
       SELECT s.transcript_id AS doc_id, ts_rank_cd(s.search_vector, ${tsQuery(q)}) AS score
       FROM transcript_segments s
       JOIN transcripts st ON st.id = s.transcript_id
       WHERE s.search_vector @@ ${tsQuery(q)}
-        AND ${transcriptVisibleSql('st', userId)}
+        AND ${transcriptVisibleSql('st', viewer)}
     ) u
     JOIN transcripts t ON t.id = u.doc_id
     GROUP BY t.id, t.title, t.status, t.updated_at
@@ -440,7 +440,7 @@ export const MIN_SEMANTIC_SIMILARITY = 0.25;
  * `1 - distance` rather than `min(distance)` so both arms rank by a score where
  * bigger is better and the outer query is one shared `ORDER BY ... DESC`.
  */
-function transcriptVectorCandidatesSql(vector: string, userId: string): Prisma.Sql {
+function transcriptVectorCandidatesSql(vector: string, viewer: TranscriptViewer): Prisma.Sql {
   return Prisma.sql`
     SELECT
       'transcript'::text AS type,
@@ -453,7 +453,7 @@ function transcriptVectorCandidatesSql(vector: string, userId: string): Prisma.S
     JOIN search_chunks c ON c.id = e.chunk_id
     JOIN transcripts t ON t.id = c.document_id
     WHERE c.document_type = 'transcript'
-      AND ${transcriptVisibleSql('t', userId)}
+      AND ${transcriptVisibleSql('t', viewer)}
     GROUP BY t.id, t.title, t.status, t.updated_at
     HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${MIN_SEMANTIC_SIMILARITY}
   `;
@@ -463,7 +463,7 @@ function transcriptVectorCandidatesSql(vector: string, userId: string): Prisma.S
  * Note candidates by meaning.
  *
  * Owner-scoped only, with NO share join - see {@link noteVisibleSql}. A
- * semantic arm that joined `transcript_shares` here "because the transcript arm
+ * semantic arm that joined the transcript shares here "because the transcript arm
  * does" would be this application's first path to reading somebody else's note,
  * built by a query that does not even mention notes' own access service.
  */
@@ -503,7 +503,7 @@ function noteVectorCandidatesSql(vector: string, userId: string): Prisma.Sql {
  * probe about a different question. `LIMIT 1` inside each arm plus `EXISTS`
  * around the union means Postgres stops at the first hit rather than counting.
  */
-function anyVisibleEmbeddingsSql(userId: string, types: readonly SearchType[]): Prisma.Sql {
+function anyVisibleEmbeddingsSql(viewer: TranscriptViewer, types: readonly SearchType[]): Prisma.Sql {
   const arms: Prisma.Sql[] = [];
 
   // ⚠ EACH ARM IS PARENTHESISED. A bare `... LIMIT 1 UNION ALL SELECT ...` is a
@@ -517,7 +517,7 @@ function anyVisibleEmbeddingsSql(userId: string, types: readonly SearchType[]): 
        JOIN search_chunks c ON c.id = e.chunk_id
        JOIN transcripts t ON t.id = c.document_id
        WHERE c.document_type = 'transcript'
-         AND ${transcriptVisibleSql('t', userId)}
+         AND ${transcriptVisibleSql('t', viewer)}
        LIMIT 1)
     `);
   }
@@ -529,7 +529,7 @@ function anyVisibleEmbeddingsSql(userId: string, types: readonly SearchType[]): 
        JOIN search_chunks c ON c.id = e.chunk_id
        JOIN notes n ON n.id = c.document_id
        WHERE c.document_type = 'note'
-         AND ${noteVisibleSql('n', userId)}
+         AND ${noteVisibleSql('n', viewer.userId)}
        LIMIT 1)
     `);
   }
@@ -580,7 +580,7 @@ function noteUnindexedSql(userId: string): Prisma.Sql {
 }
 
 /** Degraded (`ILIKE`) transcript candidates. See {@link SearchService.search}. */
-function transcriptTitleLikeSql(pattern: string, userId: string): Prisma.Sql {
+function transcriptTitleLikeSql(pattern: string, viewer: TranscriptViewer): Prisma.Sql {
   return Prisma.sql`
     SELECT
       'transcript'::text AS type,
@@ -591,7 +591,7 @@ function transcriptTitleLikeSql(pattern: string, userId: string): Prisma.Sql {
       0::double precision AS score
     FROM transcripts t
     WHERE t.title ILIKE ${pattern}
-      AND ${transcriptVisibleSql('t', userId)}
+      AND ${transcriptVisibleSql('t', viewer)}
   `;
 }
 
@@ -694,7 +694,11 @@ export class SearchService {
     // precisely the silent renumbering the whole cursor design exists to
     // prevent. A stale cursor is already an error path; paying one vendor call
     // on it is the cheap side of this trade.
-    const plan = await this.planSemantic(q, user.id, searchedTypes);
+    // The caller in their organization: the scope the grants behind a shared
+    // transcript are visible in (#485).
+    const viewer = await transcriptViewer(this.prisma, user.id);
+
+    const plan = await this.planSemantic(q, viewer, searchedTypes);
 
     const scope: SearchCursorScope = {
       q,
@@ -737,10 +741,10 @@ export class SearchService {
     // service emits stays stable for the tests that read it positionally.
     const [lexical, vector] = await Promise.all([
       degraded
-        ? this.degradedCandidates(q, user.id, searchedTypes)
-        : this.rankedCandidates(q, user.id, searchedTypes),
+        ? this.degradedCandidates(q, viewer, searchedTypes)
+        : this.rankedCandidates(q, viewer, searchedTypes),
       plan.ok
-        ? this.vectorCandidates(vectorLiteral(plan.vector), user.id, searchedTypes)
+        ? this.vectorCandidates(vectorLiteral(plan.vector), viewer, searchedTypes)
         : Promise.resolve<CandidateRow[]>([]),
     ]);
 
@@ -757,7 +761,7 @@ export class SearchService {
     const [snippets, unindexedCount] = await Promise.all([
       degraded
         ? Promise.resolve(degradedSnippets(page, q))
-        : this.rankedSnippets(q, user.id, page),
+        : this.rankedSnippets(q, viewer, page),
       this.countUnindexed(user.id, searchedTypes),
     ]);
 
@@ -801,15 +805,15 @@ export class SearchService {
    */
   private async planSemantic(
     q: string,
-    userId: string,
+    viewer: TranscriptViewer,
     types: readonly SearchType[],
   ): Promise<SemanticQueryPlan> {
-    const resolution = await this.embedder.resolve(userId);
+    const resolution = await this.embedder.resolve(viewer.userId);
 
     if (!resolution.ok) return resolution;
 
-    const [row] = await this.prisma.$queryRaw<Array<{ present: boolean }>>(
-      anyVisibleEmbeddingsSql(userId, types),
+    const [row] = await inViewerScope(this.prisma, viewer, (tx) =>
+      tx.$queryRaw<Array<{ present: boolean }>>(anyVisibleEmbeddingsSql(viewer, types)),
     );
 
     if (!row?.present) return { ok: false, reason: 'no_indexed_content' };
@@ -845,20 +849,20 @@ export class SearchService {
   /** The bounded candidate window, full-text path. */
   private rankedCandidates(
     q: string,
-    userId: string,
+    viewer: TranscriptViewer,
     types: readonly SearchType[],
   ): Promise<CandidateRow[]> {
     const arms: Prisma.Sql[] = [];
 
-    if (types.includes('transcript')) arms.push(transcriptCandidatesSql(q, userId));
-    if (types.includes('note')) arms.push(noteCandidatesSql(q, userId));
+    if (types.includes('transcript')) arms.push(transcriptCandidatesSql(q, viewer));
+    if (types.includes('note')) arms.push(noteCandidatesSql(q, viewer.userId));
 
-    return this.prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
+    return inViewerScope(this.prisma, viewer, (tx) => tx.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT d.type, d.id, d.title, d.status, d.updated_at, d.score
       FROM (${Prisma.join(arms, ' UNION ALL ')}) d
       ORDER BY d.score DESC, d.updated_at DESC, d.id ASC
       LIMIT ${MAX_CANDIDATE_DOCUMENTS + 1}
-    `);
+    `));
   }
 
   /**
@@ -873,20 +877,20 @@ export class SearchService {
    */
   private vectorCandidates(
     vector: string,
-    userId: string,
+    viewer: TranscriptViewer,
     types: readonly SearchType[],
   ): Promise<CandidateRow[]> {
     const arms: Prisma.Sql[] = [];
 
-    if (types.includes('transcript')) arms.push(transcriptVectorCandidatesSql(vector, userId));
-    if (types.includes('note')) arms.push(noteVectorCandidatesSql(vector, userId));
+    if (types.includes('transcript')) arms.push(transcriptVectorCandidatesSql(vector, viewer));
+    if (types.includes('note')) arms.push(noteVectorCandidatesSql(vector, viewer.userId));
 
-    return this.prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
+    return inViewerScope(this.prisma, viewer, (tx) => tx.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT d.type, d.id, d.title, d.status, d.updated_at, d.score
       FROM (${Prisma.join(arms, ' UNION ALL ')}) d
       ORDER BY d.score DESC, d.updated_at DESC, d.id ASC
       LIMIT ${MAX_CANDIDATE_DOCUMENTS + 1}
-    `);
+    `));
   }
 
   /**
@@ -929,21 +933,21 @@ export class SearchService {
    */
   private degradedCandidates(
     q: string,
-    userId: string,
+    viewer: TranscriptViewer,
     types: readonly SearchType[],
   ): Promise<CandidateRow[]> {
     const pattern = titleLikePattern(q);
     const arms: Prisma.Sql[] = [];
 
-    if (types.includes('transcript')) arms.push(transcriptTitleLikeSql(pattern, userId));
-    if (types.includes('note')) arms.push(noteTitleLikeSql(pattern, userId));
+    if (types.includes('transcript')) arms.push(transcriptTitleLikeSql(pattern, viewer));
+    if (types.includes('note')) arms.push(noteTitleLikeSql(pattern, viewer.userId));
 
-    return this.prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
+    return inViewerScope(this.prisma, viewer, (tx) => tx.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT d.type, d.id, d.title, d.status, d.updated_at, d.score
       FROM (${Prisma.join(arms, ' UNION ALL ')}) d
       ORDER BY d.updated_at DESC, d.id ASC
       LIMIT ${MAX_CANDIDATE_DOCUMENTS + 1}
-    `);
+    `));
   }
 
   /**
@@ -964,7 +968,7 @@ export class SearchService {
    */
   private async rankedSnippets(
     q: string,
-    userId: string,
+    viewer: TranscriptViewer,
     page: readonly CandidateRow[],
   ): Promise<Map<string, Array<{ html: string; startMs: number | null; field: SnippetRow['field'] }>>> {
     const transcriptIds = page.filter((row) => row.type === 'transcript').map((row) => row.id);
@@ -985,7 +989,7 @@ export class SearchService {
         FROM transcripts t
         WHERE t.id = ANY(${transcriptIds}::uuid[])
           AND t.title_search_vector @@ ${tsQuery(q)}
-          AND ${transcriptVisibleSql('t', userId)}
+          AND ${transcriptVisibleSql('t', viewer)}
       `);
 
       arms.push(Prisma.sql`
@@ -1011,7 +1015,7 @@ export class SearchService {
           JOIN transcripts st ON st.id = s.transcript_id
           WHERE s.transcript_id = ANY(${transcriptIds}::uuid[])
             AND s.search_vector @@ ${tsQuery(q)}
-            AND ${transcriptVisibleSql('st', userId)}
+            AND ${transcriptVisibleSql('st', viewer)}
         ) best
         WHERE best.srn <= ${MAX_SNIPPETS_PER_RESULT}
       `);
@@ -1038,7 +1042,7 @@ export class SearchService {
         FROM notes n
         WHERE n.id = ANY(${noteIds}::uuid[])
           AND to_tsvector('english'::regconfig, coalesce(n.title, '')) @@ ${tsQuery(q)}
-          AND ${noteVisibleSql('n', userId)}
+          AND ${noteVisibleSql('n', viewer.userId)}
       `);
 
       arms.push(Prisma.sql`
@@ -1056,13 +1060,13 @@ export class SearchService {
         FROM notes n
         WHERE n.id = ANY(${noteIds}::uuid[])
           AND to_tsvector('english'::regconfig, coalesce(n.body, '')) @@ ${tsQuery(q)}
-          AND ${noteVisibleSql('n', userId)}
+          AND ${noteVisibleSql('n', viewer.userId)}
       `);
     }
 
     if (arms.length === 0) return new Map();
 
-    const rows = await this.prisma.$queryRaw<SnippetRow[]>(Prisma.sql`
+    const rows = await inViewerScope(this.prisma, viewer, (tx) => tx.$queryRaw<SnippetRow[]>(Prisma.sql`
       SELECT y.type, y.doc_id, y.field, y.start_ms, y.raw
       FROM (
         SELECT
@@ -1075,7 +1079,7 @@ export class SearchService {
       ) y
       WHERE y.rn <= ${MAX_SNIPPETS_PER_RESULT}
       ORDER BY y.type, y.doc_id, y.rn
-    `);
+    `));
 
     const byDocument = new Map<
       string,

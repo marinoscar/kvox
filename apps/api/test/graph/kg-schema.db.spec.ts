@@ -39,6 +39,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 // All ELEVEN hand-written, Prisma-inexpressible indexes this migration adds
 // (see migration.sql's "HAND-WRITTEN, PRISMA-INEXPRESSIBLE SQL" header).
@@ -302,7 +303,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
           uploadedById: owner.id,
         },
       });
-      const transcript = await prisma.transcript.create({
+      const transcript = await createTranscriptRow(prisma, {
         data: { ownerId: owner.id, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
       });
       const speaker = await prisma.transcriptSpeaker.create({
@@ -340,7 +341,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
           uploadedById: owner.id,
         },
       });
-      const transcript = await prisma.transcript.create({
+      const transcript = await createTranscriptRow(prisma, {
         data: { ownerId: owner.id, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
       });
       const speaker = await prisma.transcriptSpeaker.create({
@@ -377,7 +378,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
           uploadedById: owner.id,
         },
       });
-      const transcript = await prisma.transcript.create({
+      const transcript = await createTranscriptRow(prisma, {
         data: { ownerId: owner.id, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
       });
       const speaker = await prisma.transcriptSpeaker.create({
@@ -630,7 +631,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
           uploadedById: owner.id,
         },
       });
-      const transcript = await prisma.transcript.create({
+      const transcript = await createTranscriptRow(prisma, {
         data: { ownerId: owner.id, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
       });
 
@@ -984,7 +985,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
           uploadedById: owner.id,
         },
       });
-      const transcript = await prisma.transcript.create({
+      const transcript = await createTranscriptRow(prisma, {
         data: { ownerId: owner.id, title: 'T', sourceObjectId: source.id, provider: 'assemblyai' },
       });
       const speaker = await prisma.transcriptSpeaker.create({

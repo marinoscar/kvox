@@ -14,7 +14,7 @@ import {
 } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { invalidateAiResolverCache, primeAiReadiness, storedSystemSettings } from '../helpers/ai-readiness.fixtures';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 
 // =============================================================================
@@ -643,6 +643,7 @@ describe('Note templates (#50)', () => {
       primeAiReadiness({ hasKey: true });
       prismaMock.transcript.findUnique.mockResolvedValue({
         id: TRANSCRIPT_ID,
+        orgId: TEST_DEFAULT_ORG_ID,
         ownerId: userId,
         deletedAt: null,
         currentVersion: 3,
@@ -795,11 +796,12 @@ describe('Note templates (#50)', () => {
       readyToPreview(user.id);
       prismaMock.transcript.findUnique.mockResolvedValue({
         id: TRANSCRIPT_ID,
+        orgId: TEST_DEFAULT_ORG_ID,
         ownerId: 'somebody-else',
         deletedAt: null,
         currentVersion: 3,
       });
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       await request(context.app.getHttpServer())
         .post(`${TEMPLATES}/preview`)

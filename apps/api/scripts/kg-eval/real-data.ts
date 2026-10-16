@@ -161,7 +161,15 @@ export async function exportNoteSkeleton(args: ExportNoteArgs): Promise<string> 
   // booted — the resolver is a plain class over the client it is handed.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { NoteOriginService } = require('../../src/notes/note-origin.service') as typeof import('../../src/notes/note-origin.service');
-  const origin = await new NoteOriginService(prisma as unknown as PrismaService).resolve(note, user.id);
+  // The resolver reads a shared transcript's grant in the owner's organization scope (#485),
+  // so it needs `runInOrg` on the client: the platform's own, bound the way `PrismaService` does.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { runInOrg } = require('@marinoscar/platform-api/core') as typeof import('@marinoscar/platform-api/core');
+  const scoped = Object.assign(prisma, {
+    runInOrg: (scope: Parameters<typeof runInOrg>[1], fn: Parameters<typeof runInOrg>[2], options?: Parameters<typeof runInOrg>[3]) =>
+      runInOrg(prisma as never, scope, fn as never, options),
+  });
+  const origin = await new NoteOriginService(scoped as unknown as PrismaService).resolve(note, user.id);
 
   let recordedAt = note.createdAt;
   let speakers: GoldenFixtureInput['speakers'] = [];

@@ -112,7 +112,7 @@ active dedup makes every hint that names one job type a single job.
 | `StorageObject` | `files` | delegate `files.purge_unmanaged { userId }`, **not** `storageObjects: true` |
 | `SearchIndexState` | none | kept: the transcript and note purges forget it |
 
-Models with only an *actor* column (`TranscriptShare`, `TranscriptVersion`,
+Models with only an *actor* column (`TranscriptVersion`,
 `TranscriptExport`, `TranscriptNameCheck`, `NoteVersion`, `NoteExport`, ...) are
 not owner models and need no hint: they go with their transcript or note when the
 per-item purge deletes it, and another user's history on a transcript keeps its

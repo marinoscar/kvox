@@ -54,7 +54,8 @@ import { NoteSourceNameService } from '../../src/notes/note-source-name.service'
 import type { NotesService } from '../../src/notes/notes.service';
 import { buildNotesService } from './notes-service-test-factory';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbManagedObjects, UNUSED_STORAGE, asPrismaService } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim from
@@ -133,7 +134,7 @@ describeWithDb('Note list paging (real Postgres)', () => {
     notes = buildNotesService({
       prisma: prisma as never,
       access: null as never, // `list` never reaches it
-      sourceNames: new NoteSourceNameService(prisma as never, createDbManagedObjects(prisma, UNUSED_STORAGE)), // `list` calls `.resolve()` per page
+      sourceNames: new NoteSourceNameService(asPrismaService(prisma), createDbManagedObjects(prisma, UNUSED_STORAGE)), // `list` calls `.resolve()` per page
       templates: null as never, // `list` never reaches it
       requests: null as never, // `list` never reaches it
       sources: null as never, // `list` never reaches it
@@ -365,7 +366,7 @@ describeWithDb('Note list paging (real Postgres)', () => {
       },
     });
 
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId: owner.id,
         title: `${TITLE_PREFIX}transcript`,

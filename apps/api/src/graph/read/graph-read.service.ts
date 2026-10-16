@@ -18,6 +18,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { inViewerScope, transcriptViewer, transcriptVisibleSql } from '../../app-sharing/transcript-visibility';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
@@ -298,7 +299,11 @@ export class GraphReadService {
       );
     }
 
-    const rows = await this.prisma.$queryRaw<
+    // The caller in their organization: a shared transcript's grant is only visible
+    // in that scope (#485, `app-sharing/transcript-visibility.ts`).
+    const viewer = await transcriptViewer(this.prisma, ownerId);
+
+    const rows = await inViewerScope(this.prisma, viewer, (tx) => tx.$queryRaw<
       { kind: 'note' | 'transcript'; doc_id: string; title: string | null; at: Date | null; at_key: string | null; available: boolean }[]
     >`
       SELECT d.kind, d.doc_id::text AS doc_id, d.title, d.at, ${isoMicrosSql(Prisma.sql`d.at`)} AS at_key, d.available
@@ -313,15 +318,14 @@ export class GraphReadService {
         UNION ALL
         SELECT 'transcript', t.id, t.recorded_at, v.ok, CASE WHEN v.ok THEN t.title END
         FROM transcripts t
-        CROSS JOIN LATERAL (SELECT (t.deleted_at IS NULL AND (t.owner_id = ${ownerId}::uuid OR EXISTS (
-                   SELECT 1 FROM transcript_shares s WHERE s.transcript_id = t.id AND s.user_id = ${ownerId}::uuid))) AS ok) v
+        CROSS JOIN LATERAL (SELECT ${transcriptVisibleSql(viewer, 't')} AS ok) v
         WHERE t.id IN (SELECT m.transcript_id FROM kg_mentions m
                        WHERE m.owner_id = ${ownerId}::uuid AND m.entity_id = ${id}::uuid
                          AND m.transcript_id IS NOT NULL AND ${readableMentionSql('m')})
       ) d
       ${keyset.length ? Prisma.sql`WHERE ${keyset[0]}` : Prisma.empty}
       ORDER BY d.at DESC NULLS LAST, d.doc_id DESC
-      LIMIT ${query.limit + 1}`;
+      LIMIT ${query.limit + 1}`);
 
     let nextCursor: string | null = null;
     if (rows.length > query.limit) {

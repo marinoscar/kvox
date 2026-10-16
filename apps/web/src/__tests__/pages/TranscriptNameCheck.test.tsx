@@ -25,7 +25,6 @@ vi.mock('../../services/transcripts', () => ({
   getTranscriptWords: vi.fn(),
   retryTranscript: vi.fn(),
   deleteTranscript: vi.fn(),
-  removeShare: vi.fn(),
 }));
 
 vi.mock('../../services/transcriptEditing', async () => {

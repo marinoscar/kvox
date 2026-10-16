@@ -3,7 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
+import { GrantsService } from '@marinoscar/platform-api/sharing';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
@@ -23,7 +24,7 @@ import { TranscriptAccessService } from '../../src/transcripts/transcript-access
 // in-memory stores for transcripts, shares and the graph rows. Each case
 // first shows the share is real — B genuinely has T — and then that every
 // graph surface still answers B with the byte-identical 404 a stranger gets,
-// and that the graph routes never even look a share up.
+// and that the graph routes never even look a grant up.
 // =============================================================================
 
 const TRANSCRIPT_ID = '10101010-1010-4010-8010-101010101010';
@@ -40,8 +41,23 @@ describe('Graph share non-propagation (integration)', () => {
   let entities: Row[];
   let evidence: Row[];
 
+  // The platform's grants service, over the in-memory share store: the revoke route
+  // lists the owner's shares and revokes one by its grant id (the user id here).
+  const grantsFake = {
+    list: jest.fn(async () => {
+      const items = shares.map((s) => ({ id: s.userId, grantee: { kind: 'user', userId: s.userId, email: `${s.userId}@example.test`, displayName: null }, role: s.role, grantedById: null, createdAt: '2026-01-01T00:00:00.000Z' }));
+      return { items, total: items.length, page: 1, pageSize: 100, totalPages: 1 };
+    }),
+    revoke: jest.fn(async (_principal: unknown, grantId: string) => {
+      shares = shares.filter((s) => s.userId !== grantId);
+    }),
+  };
+
   beforeAll(async () => {
-    context = await createTestApp({ useMockDatabase: true });
+    context = await createTestApp({
+      useMockDatabase: true,
+      overrideProviders: [{ provide: GrantsService, useValue: grantsFake }],
+    });
   });
 
   afterAll(async () => {
@@ -50,7 +66,7 @@ describe('Graph share non-propagation (integration)', () => {
 
   function seed(ownerId: string) {
     const now = new Date('2026-09-01T00:00:00.000Z');
-    transcripts = [{ id: TRANSCRIPT_ID, ownerId, title: 'Call', deletedAt: null, createdAt: now, updatedAt: now }];
+    transcripts = [{ id: TRANSCRIPT_ID, ownerId, orgId: TEST_DEFAULT_ORG_ID, title: 'Call', deletedAt: null, createdAt: now, updatedAt: now }];
     entities = [
       {
         id: ENTITY_ID,
@@ -92,14 +108,20 @@ describe('Graph share non-propagation (integration)', () => {
     prismaMock.transcript.findUnique.mockImplementation(async ({ where }: { where: Row }) =>
       transcripts.find((t) => t.id === where.id) ?? null,
     );
-    prismaMock.transcriptShare.findUnique.mockImplementation(async ({ where }: { where: Row }) => {
-      const key = where.transcriptId_userId;
-      return shares.find((s) => s.transcriptId === key.transcriptId && s.userId === key.userId) ?? null;
-    });
-    prismaMock.transcriptShare.deleteMany.mockImplementation(async ({ where }: { where: Row }) => {
-      const before = shares.length;
-      shares = shares.filter((s) => !(s.transcriptId === where.transcriptId && s.userId === where.userId));
-      return { count: before - shares.length };
+    // The grant read of an access decision: the shares of the CALLER (`granteeUserId` in the query).
+    prismaMock.grant.findMany.mockImplementation(async (args: Row) => {
+      const userId = /"granteeUserId":"([^"]+)"/.exec(JSON.stringify(args?.where ?? {}))?.[1];
+      return shares
+        .filter((share) => share.userId === userId)
+        .map((share) => ({
+          resourceType: 'transcript',
+          resourceId: share.transcriptId,
+          granteeKind: 'user',
+          granteeUserId: share.userId,
+          granteeGroupId: null,
+          granteeRef: null,
+          role: share.role,
+        }));
     });
     prismaMock.kgEntity.findUnique.mockImplementation(async ({ where }: { where: Row }) =>
       entities.find((e) => e.id === where.id) ?? null,
@@ -135,7 +157,7 @@ describe('Graph share non-propagation (integration)', () => {
         ).resolves.toMatchObject({ role: 'editor' });
       }
 
-      const shareLookupsBefore = prismaMock.transcriptShare.findUnique.mock.calls.length;
+      const shareLookupsBefore = prismaMock.grant.findMany.mock.calls.length;
       const server = context.app.getHttpServer();
 
       // PATCH the entity whose evidence cites B's shared transcript: 404.
@@ -167,8 +189,8 @@ describe('Graph share non-propagation (integration)', () => {
       await expect(graphAccess.require(b.id, 'entity', ENTITY_ID, 'view')).rejects.toThrow('Entity not found');
       await expect(graphAccess.require(b.id, 'evidence', EVIDENCE_ID, 'view')).rejects.toThrow('Evidence not found');
 
-      // No graph path even LOOKED at the share table: there is no sharing path to fall back to.
-      expect(prismaMock.transcriptShare.findUnique.mock.calls.length).toBe(shareLookupsBefore);
+      // No graph path even LOOKED at a grant: there is no sharing path to fall back to.
+      expect(prismaMock.grant.findMany.mock.calls.length).toBe(shareLookupsBefore);
 
       // A still owns E (sanity: the 404 is about B, not a broken fixture).
       await expect(graphAccess.require(a.id, 'entity', ENTITY_ID, 'view')).resolves.toMatchObject({ id: ENTITY_ID });
