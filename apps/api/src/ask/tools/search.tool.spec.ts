@@ -12,6 +12,7 @@ const ACME = uid(1);
 const SARAH = uid(2);
 const T1 = uid(3);
 const N1 = uid(4);
+const ORG = uid(9);
 
 function build(opts: { entities?: object[]; results?: object[]; searchError?: Error } = {}) {
   const graphRead = {
@@ -26,6 +27,12 @@ function build(opts: { entities?: object[]; results?: object[]; searchError?: Er
   const prisma = {
     transcript: { findMany: jest.fn(async () => [{ id: T1, recordedAt: new Date('2026-03-04T10:00:00Z') }]) },
     note: { findMany: jest.fn(async () => [{ id: N1, createdAt: new Date('2026-05-06T10:00:00Z') }]) },
+    // The shared half of "owned or shared" is the platform's `accessibleWhere`, read in the
+    // caller's organization scope (#485): the default organization, and the grants shared with them.
+    organization: { findFirst: jest.fn(async () => ({ id: ORG })) },
+    runInOrg: jest.fn(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ grant: { groupBy: jest.fn(async () => [{ resourceId: T1 }]) } }),
+    ),
   };
   return { tool: new SearchTool(graphRead as never, search as never, prisma as never), graphRead, search, prisma };
 }
@@ -132,7 +139,10 @@ describe('SearchTool', () => {
     await tool.run(ctx, tool.input.parse({ query: 'Acme' }));
     expect(prisma.transcript.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ deletedAt: null, OR: [{ ownerId: ctx.user.id }, { shares: { some: { userId: ctx.user.id } } }] }),
+        where: expect.objectContaining({
+          deletedAt: null,
+          OR: [{ ownerId: ctx.user.id }, { AND: [{ orgId: ORG }, { id: { in: [T1] } }] }],
+        }),
       }),
     );
     expect(prisma.note.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ ownerId: ctx.user.id, deletedAt: null }) }));

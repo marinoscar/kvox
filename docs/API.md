@@ -4040,6 +4040,43 @@ Two notifications reach the **owner alone**, never a permission fan-out:
 action. Neither is `mandatory` — being told your own upload finished is a
 courtesy a user who transcribes twenty files a day may reasonably mute.
 
+#### Sharing: platform grants, and four deprecated adapters (issue #485)
+
+A transcript share is a row of the platform sharing slice's `grants` table
+(`resourceType: "transcript"`, a user grantee, role `viewer` or `editor`).
+Clients use the platform's routes, which are documented in the generated
+OpenAPI reference under the `Sharing` tags and gated on `sharing:read` /
+`sharing:write`:
+
+| Route | Use |
+|---|---|
+| `GET /api/grants?resourceType=transcript&resourceId=…` | who a transcript is shared with (the owner only; a `share`-action holder) |
+| `POST /api/grants` | share: `{ resourceType: "transcript", resourceId, grantee: { kind: "user", email }, role }`; sharing again changes the role |
+| `PATCH /api/grants/{id}` | change the role |
+| `DELETE /api/grants/{id}` | revoke; a grantee may always revoke their own grant ("leave") |
+| `GET /api/grants/shared-with-me?resourceType=transcript` | the transcripts shared with the caller |
+
+Only user grants of the roles `viewer` and `editor` are accepted for this
+type: a group or link grant is a `422 ROLE_NOT_GRANTABLE`. A caller with no
+access to a transcript gets the same `404` as for a missing one, and `write`
+(`editor`) also needs `transcripts:write`.
+
+The four routes below keep working for **one release** and are marked
+`deprecated` in OpenAPI. They are thin adapters over the same grants with the
+request and response shapes, status codes and 404 bodies they always had
+(`:userId` is the *recipient's* user id; a share's `id` is now the grant's id).
+
+| Route | Behaviour |
+|---|---|
+| `GET /api/transcripts/{id}/shares` | owner only; `{ items: [{ id, userId, email, displayName, role, grantedById, createdAt }] }`, oldest first. `404` for a non-owner (body `Transcript not found`) |
+| `POST /api/transcripts/{id}/shares` | owner only, `transcripts:write`; body `{ email, role }`; `201` with the share. An unknown, deactivated or foreign address is `404` "No user with that email"; your own address is `400`; a run of misses is `429` |
+| `PATCH /api/transcripts/{id}/shares/{userId}` | owner only, `transcripts:write`; body `{ role }`; `404` if that user holds no share |
+| `DELETE /api/transcripts/{id}/shares/{userId}` | `204`. The owner revokes anybody; a recipient passes their own id to leave (`transcripts:read` is enough) |
+
+The recipient of a new share or a promotion gets the platform's
+`sharing.shared_with_you` notification (this replaces
+`transcripts.transcript_shared`); a demotion and a revocation are silent.
+
 ---
 
 ### Transcription

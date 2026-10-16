@@ -5,6 +5,7 @@ import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
+import { sharingModule } from '../platform/sharing/sharing.config';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
 import { MediaAudioTranscodeHandler } from './handlers/media-audio-transcode.handler';
@@ -31,8 +32,7 @@ import { TranscriptNameCheckService } from './transcript-name-check.service';
 import { TranscriptNameChecksController } from './transcript-name-checks.controller';
 import { TranscriptObjectsService } from './transcript-objects.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
-import { TranscriptSharingService } from './transcript-sharing.service';
-import { ShareLookupThrottleService } from './share-lookup-throttle.service';
+import { TranscriptSharesAdapter } from './transcript-shares.adapter';
 import { TranscriptionRuntimeService } from './transcription-runtime.service';
 import { TranscriptsController } from './transcripts.controller';
 import { TranscriptsService } from './transcripts.service';
@@ -102,6 +102,10 @@ import { TranscriptsService } from './transcripts.service';
 @Module({
   imports: [
     PrismaModule,
+    // The platform sharing slice (#485): `AccessPolicy` decides who may reach a
+    // transcript and `GrantsService` stores a share. The module is not global,
+    // so every feature module that injects either imports the SAME object.
+    sharingModule,
     TranscriptionModule,
     CredentialsModule,
     // #469: the ownership gateway the upload processor asks, and the registry it registers into.
@@ -124,12 +128,10 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptExportService,
     TranscriptExporterRegistry,
     TranscriptMaterializeService,
-    // Sharing (#29). `ShareLookupThrottleService` holds its window in THIS
-    // PROCESS's memory, so it is a plain singleton of this module — see its own
-    // file for why that limit is acceptable and where the seam is if a shared
-    // limiter is ever wanted.
-    TranscriptSharingService,
-    ShareLookupThrottleService,
+    // The four deprecated `:id/shares` routes (#29, #485): thin adapters over the
+    // platform's `GrantsService`. The per-account member-lookup throttle is the
+    // sharing slice's now.
+    TranscriptSharesAdapter,
     TranscriptObjectsService,
     TranscriptPipelineService,
     TranscriptionRuntimeService,

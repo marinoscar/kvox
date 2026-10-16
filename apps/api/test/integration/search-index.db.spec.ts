@@ -44,6 +44,7 @@ import { SearchIndexService } from '../../src/search/indexing/search-index.servi
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('search-index.db.spec');
 
@@ -118,7 +119,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     });
     createdObjectIds.push(object.id);
 
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId: user.id,
         title: 'Weekly sync',

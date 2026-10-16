@@ -65,12 +65,15 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 import { ExportDialog } from '../transcripts/ExportDialog';
-import { ShareDialog } from '../transcripts/ShareDialog';
-import { useAuth } from '@marinoscar/platform-web/identity/headless';
+import { ShareDialog } from '@marinoscar/platform-web/sharing/ui';
 import { ApiError } from '../../services/api';
 import { deleteTranscript } from '../../services/transcripts';
 import type { TranscriptListItem } from '../../services/transcripts';
-import { removeShare } from '../../services/transcriptShares';
+import {
+  TRANSCRIPT_SHARE_ROLES,
+  leaveTranscript,
+  transcriptResource,
+} from '../../services/transcriptSharing';
 import { hasPlayableAudio } from '../../utils/transcriptDisplay';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 
@@ -108,8 +111,6 @@ export function TranscriptRowActions({
   onOpen,
   onChanged,
 }: TranscriptRowActionsProps) {
-  const { user } = useAuth();
-
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -132,7 +133,7 @@ export function TranscriptRowActions({
     setConfirmError(null);
     try {
       if (confirm === 'delete') await deleteTranscript(transcript.id);
-      else if (user?.id) await removeShare(transcript.id, user.id);
+      else await leaveTranscript(transcript.id);
       setConfirm(null);
       // The list re-reads itself rather than this component removing the row:
       // a deleted transcript goes to `deleting` and is purged asynchronously,
@@ -145,7 +146,7 @@ export function TranscriptRowActions({
     } finally {
       setConfirmBusy(false);
     }
-  }, [confirm, onChanged, transcript.id, user?.id]);
+  }, [confirm, onChanged, transcript.id]);
 
   const buttonSx = dense ? undefined : TOUCH_TARGET_SX;
   const buttonSize = dense ? 'small' : 'medium';
@@ -276,8 +277,11 @@ export function TranscriptRowActions({
         <ShareDialog
           open={shareOpen}
           onClose={() => setShareOpen(false)}
-          transcriptId={transcript.id}
-          transcriptTitle={transcript.title}
+          resource={transcriptResource(transcript.id)}
+          resourceTitle={transcript.title}
+          roles={TRANSCRIPT_SHARE_ROLES}
+          allowGroups={false}
+          allowLinks={false}
         />
       )}
       <Dialog open={confirm !== null} onClose={() => setConfirm(null)}>

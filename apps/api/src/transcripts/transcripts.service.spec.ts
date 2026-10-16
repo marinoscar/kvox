@@ -31,6 +31,8 @@ import {
 // second bill) for one recording.
 // =============================================================================
 
+const ORG_ID = '00000000-0000-4000-8000-0000000000a1';
+
 const USER: RequestUser = {
   id: 'user-1',
   email: 'owner@example.com',
@@ -71,11 +73,14 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
 describe('TranscriptsService', () => {
   let service: TranscriptsService;
   let provider: FakeProvider;
-  let prisma: Record<string, Record<string, jest.Mock>>;
+  let prisma: Record<string, Record<string, jest.Mock>> & { runInOrg: jest.Mock };
+  // What the platform's `accessibleWhere` reads inside `runInOrg` (#485): the grants shared with the caller.
+  let grantGroupBy: jest.Mock;
+  let txQueryRaw: jest.Mock;
   // The object gateway (`KvoxManagedObjects`, #469): the upload is initialised
   // through it, and the source row is read through it.
   let objects: ReturnType<typeof createFakeManagedObjects>;
-  let access: { require: jest.Mock };
+  let access: { require: jest.Mock; rolesFor: jest.Mock };
   let pipeline: {
     enqueuePurge: jest.Mock;
     enqueueSubmit: jest.Mock;
@@ -100,7 +105,8 @@ describe('TranscriptsService', () => {
       note: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptSpeaker: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptSegment: { findMany: jest.fn().mockResolvedValue([]) },
-      transcriptShare: { findMany: jest.fn().mockResolvedValue([]) },
+      // The default organization (`resolveOrgId`), single-organization mode.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: ORG_ID }) },
       // #29: every list and detail row carries the owner's display name, so
       // both shapes read `users` — the batch path once per page, the detail
       // path once per row.
@@ -128,7 +134,18 @@ describe('TranscriptsService', () => {
         }),
       },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
-    };
+      runInOrg: jest.fn(),
+      // The list reads its page and its count in one transaction.
+      $transaction: jest.fn((operations: Array<Promise<unknown>>) => Promise.all(operations)),
+    } as unknown as typeof prisma;
+
+    // `runInOrg` hands the callback a transaction whose `grant.groupBy` answers the
+    // shared-with-me query and whose `$queryRaw` serves the EXISTS form.
+    grantGroupBy = jest.fn().mockResolvedValue([]);
+    txQueryRaw = jest.fn().mockResolvedValue([]);
+    prisma.runInOrg.mockImplementation((_scope: unknown, fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ grant: { groupBy: grantGroupBy }, $queryRaw: txQueryRaw }),
+    );
 
     objects = createFakeManagedObjects(prisma);
     objects.initManagedUpload.mockResolvedValue({
@@ -141,6 +158,7 @@ describe('TranscriptsService', () => {
 
     access = {
       require: jest.fn().mockResolvedValue({ transcript: transcriptRow(), role: 'owner' }),
+      rolesFor: jest.fn().mockResolvedValue(new Map()),
     };
 
     pipeline = {
@@ -238,6 +256,18 @@ describe('TranscriptsService', () => {
 
       expect(result.transcript.id).toBe(TRANSCRIPT_ID);
       expect(result.upload.objectId).toBe('obj-1');
+    });
+
+    it('stamps the transcript with its organization — the caller\'s active one, else the default (#485)', async () => {
+      await service.create(dto, USER);
+      expect(prisma.transcript.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ ownerId: USER.id, orgId: ORG_ID }) }),
+      );
+
+      await service.create(dto, { ...USER, activeOrgId: 'org-active' });
+      expect(prisma.transcript.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ orgId: 'org-active' }) }),
+      );
     });
 
     it('titles the transcript after the filename, without its extension', async () => {
@@ -629,6 +659,59 @@ describe('TranscriptsService', () => {
   // QUERY the method issues — its scope, its order and its cap — plus the one
   // thing no query shape can show: that the count and the list are two
   // separate numbers and the cap never leaks into the count.
+  // ===========================================================================
+  // list — the owned / shared / all scopes over the platform's `accessibleWhere` (#485)
+  // ===========================================================================
+
+  describe('list', () => {
+    const query = (scope: 'owned' | 'shared' | 'all') =>
+      ({ scope, limit: 20 }) as unknown as Parameters<TranscriptsService['list']>[0];
+
+    const listedWhere = () =>
+      (prisma.transcript.findMany.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+
+    it('`owned` is the caller\'s own rows and never reads a grant', async () => {
+      await service.list(query('owned'), USER.id);
+
+      expect(listedWhere()).toEqual({ deletedAt: null, ownerId: USER.id });
+      expect(prisma.runInOrg).not.toHaveBeenCalled();
+    });
+
+    it('`shared` is the transcripts an active grant names, in the caller\'s organization', async () => {
+      grantGroupBy.mockResolvedValue([{ resourceId: 'shared-1' }, { resourceId: 'shared-2' }]);
+
+      await service.list(query('shared'), USER.id);
+
+      expect(prisma.runInOrg).toHaveBeenCalledWith({ orgId: ORG_ID, userId: USER.id }, expect.any(Function));
+      expect(listedWhere()).toEqual({
+        deletedAt: null,
+        OR: [{ AND: [{ orgId: ORG_ID }, { id: { in: ['shared-1', 'shared-2'] } }] }],
+      });
+    });
+
+    it('`all` is the caller\'s own rows OR the shared ones', async () => {
+      grantGroupBy.mockResolvedValue([{ resourceId: 'shared-1' }]);
+
+      await service.list(query('all'), USER.id);
+
+      expect(listedWhere().OR).toEqual([
+        { ownerId: USER.id },
+        { AND: [{ orgId: ORG_ID }, { id: { in: ['shared-1'] } }] },
+      ]);
+    });
+
+    it('past 1,000 shared transcripts switches to the EXISTS form and reads the ids with one statement', async () => {
+      // The platform\'s threshold (`SHARED_IDS_INLINE_LIMIT`): one more than the limit.
+      grantGroupBy.mockResolvedValue(Array.from({ length: 1001 }, (_, i) => ({ resourceId: `t-${i}` })));
+      txQueryRaw.mockResolvedValue([{ id: 'big-1' }, { id: 'big-2' }]);
+
+      await service.list(query('shared'), USER.id);
+
+      expect(txQueryRaw).toHaveBeenCalledTimes(1);
+      expect(listedWhere()).toEqual({ deletedAt: null, OR: [{ id: { in: ['big-1', 'big-2'] } }] });
+    });
+  });
+
   describe('summary', () => {
     /** The eight rows the failed query answers with, newest first. */
     const failedRows = Array.from({ length: 8 }, (_, index) =>
@@ -656,15 +739,15 @@ describe('TranscriptsService', () => {
 
     beforeEach(() => {
       // The caller holds one share, and the transcript behind it has failed.
-      prisma.transcriptShare.findMany.mockResolvedValue([
-        { transcriptId: sharedFailedRow.id, role: 'viewer' },
-      ]);
+      grantGroupBy.mockResolvedValue([{ resourceId: sharedFailedRow.id }]);
+      access.rolesFor.mockResolvedValue(new Map([[sharedFailedRow.id, 'viewer']]));
 
       prisma.transcript.findMany.mockImplementation((args: Record<string, never>) => {
         const where = args.where as Record<string, unknown>;
 
         if (where.status === 'failed') return Promise.resolve(failedRows);
-        if (where.id) return Promise.resolve([sharedFailedRow]);
+        // The `sharedWithMe` list: `{ deletedAt: null, AND: [sharedWhere] }`.
+        if (where.AND) return Promise.resolve([sharedFailedRow]);
         if (where.status) return Promise.resolve([]);
 
         return Promise.resolve([]);
@@ -734,7 +817,7 @@ describe('TranscriptsService', () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(prisma.transcript.findMany).toHaveBeenCalledTimes(4);
-      expect(prisma.transcript.count).toHaveBeenCalledTimes(2);
+      expect(prisma.transcript.count).toHaveBeenCalledTimes(3);
     });
   });
 

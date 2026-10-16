@@ -29,6 +29,7 @@ import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias } from '../../src/graph/write/normalize';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-resolution.db.spec');
 const EMAIL_PREFIX = 'kg-resolution-test';
@@ -73,7 +74,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
     );
     merges = new MergeService(
       db,
-      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE))),
+      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
       { enqueue: jest.fn() } as never,
       { get: () => undefined } as never,
       followUps as never,

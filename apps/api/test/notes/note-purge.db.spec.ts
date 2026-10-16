@@ -40,6 +40,7 @@ import { buildNotesService } from './notes-service-test-factory';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { JobScope } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
 function isPostgresReachable(host: string, port: number, timeoutMs = 2000): boolean {
@@ -215,7 +216,7 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       },
     });
 
-    return prisma.transcript.create({
+    return createTranscriptRow(prisma, {
       data: {
         ownerId,
         title: `${TITLE_PREFIX}transcript`,

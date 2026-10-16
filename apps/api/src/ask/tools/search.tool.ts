@@ -16,6 +16,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { GraphReadService } from '../../graph/read/graph-read.service';
+import { sharedTranscriptsWhere } from '../../app-sharing/transcript-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import {
@@ -159,7 +160,7 @@ export class SearchTool implements AskTool<SearchToolInput> {
             where: {
               id: { in: ids('transcript') },
               deletedAt: null,
-              OR: [{ ownerId: userId }, { shares: { some: { userId } } }],
+              OR: [{ ownerId: userId }, await sharedTranscriptsWhere(this.prisma, userId)],
             },
             select: { id: true, recordedAt: true },
           })

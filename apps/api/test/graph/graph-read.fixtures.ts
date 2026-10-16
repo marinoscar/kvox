@@ -16,6 +16,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow, deleteTranscriptGrants } from '../helpers/transcript.helper';
 
 type ReviewStatus = 'accepted' | 'edited' | 'unreviewed' | 'rejected' | 'merged' | 'superseded';
 const CURATED: ReadonlySet<string> = new Set(['accepted', 'edited']);
@@ -62,7 +63,7 @@ export async function cleanupGraphFixtures(prisma: PrismaClient, prefix: string)
       await tx.kgItem.deleteMany({ where: owner });
       await tx.kgEntityAlias.deleteMany({ where: owner });
       await tx.kgEntity.deleteMany({ where: owner });
-      await tx.transcriptShare.deleteMany({ where: { transcript: owner } });
+      await deleteTranscriptGrants(tx, owner);
       await tx.transcriptSegment.deleteMany({ where: { transcript: owner } });
       await tx.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
       await tx.transcript.deleteMany({ where: owner });
@@ -233,7 +234,7 @@ export class GraphFixture {
         uploadedById: this.ownerId,
       },
     });
-    const transcript = await this.prisma.transcript.create({
+    const transcript = await createTranscriptRow(this.prisma, {
       data: {
         ownerId: this.ownerId,
         title: opts.title ?? 'Weekly sync',

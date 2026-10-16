@@ -155,7 +155,7 @@ import {
   TranscriptPlayer,
 } from '../components/transcripts/TranscriptPlayer';
 import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatusChip';
-import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useGraphTranscriptPeople } from '../hooks/useGraphTranscriptPeople';
 import { usePlaybackEngine, SKIP_MS } from '../hooks/usePlaybackEngine';
 import { useNameCheck } from '../hooks/useNameCheck';
@@ -169,9 +169,9 @@ import { parseOperationsConflict } from '../services/transcriptEditing';
 import { isGenericSpeakerName } from '../services/transcriptNameChecks';
 import type { NameSuggestion } from '../services/transcriptNameChecks';
 import { deleteTranscript, retryTranscript } from '../services/transcripts';
-import { removeShare } from '../services/transcriptShares';
+import { TRANSCRIPT_SHARE_ROLES, leaveTranscript, transcriptResource } from '../services/transcriptSharing';
 import { ExportDialog } from '../components/transcripts/ExportDialog';
-import { ShareDialog } from '../components/transcripts/ShareDialog';
+import { ShareDialog } from '@marinoscar/platform-web/sharing/ui';
 import { RecordedAtDialog } from '../components/transcripts/RecordedAtDialog';
 import { formatDuration, formatTimestamp } from '../utils/playbackIntervals';
 import { hasPlaybackRendition } from '../utils/transcriptDisplay';
@@ -222,7 +222,6 @@ export function TranscriptPage() {
   const { id } = useParams<{ id: string }>();
   const theme = useTheme();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const isWide = useMediaQuery(theme.breakpoints.up('md'));
 
@@ -692,7 +691,7 @@ export function TranscriptPage() {
     setConfirmError(null);
     try {
       if (confirm === 'delete') await deleteTranscript(id);
-      else if (user?.id) await removeShare(id, user.id);
+      else await leaveTranscript(id);
       navigate('/transcripts');
     } catch (err) {
       setConfirmError(
@@ -701,7 +700,7 @@ export function TranscriptPage() {
     } finally {
       setConfirmBusy(false);
     }
-  }, [confirm, id, navigate, user?.id]);
+  }, [confirm, id, navigate]);
 
   if (isLoading && !transcript) {
     return (
@@ -964,8 +963,11 @@ export function TranscriptPage() {
         <ShareDialog
           open={shareOpen}
           onClose={() => setShareOpen(false)}
-          transcriptId={transcript.id}
-          transcriptTitle={transcript.title}
+          resource={transcriptResource(transcript.id)}
+          resourceTitle={transcript.title}
+          roles={TRANSCRIPT_SHARE_ROLES}
+          allowGroups={false}
+          allowLinks={false}
         />
       ) : null}
       {canEdit ? (

@@ -97,7 +97,11 @@ function fakeTx(): FakeTx {
 }
 
 function setup() {
-  const validator = { assertReadable: jest.fn(async (_o: string, ev: EvidenceInput[]) => ev) };
+  const validator = {
+    assertReadable: jest.fn(async (_o: string, ev: EvidenceInput[]) => ev),
+    // The speaker rule asks the validator which transcripts the owner may view (owned or shared, #485).
+    viewableTranscriptIds: jest.fn(async (_o: string, ids: readonly string[]) => new Set(ids)),
+  };
   const service = new GraphWriteService(validator as unknown as EvidenceValidator);
   const tx = fakeTx() as FakeTx & { calls: string[] };
   const asTx = tx as unknown as Prisma.TransactionClient;

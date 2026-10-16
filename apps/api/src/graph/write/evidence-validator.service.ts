@@ -11,9 +11,9 @@
 //   - an IMPORT OBJECT the owner uploaded.
 //
 // The transcript rule mirrors `TranscriptAccessService` exactly (owner, or a
-// `transcript_shares` row for the owner; `deleted_at IS NULL`), but as ONE
-// `findMany` over the whole batch rather than N `require` calls: a proposal
-// commit can carry hundreds of citations.
+// platform grant to the owner; `deleted_at IS NULL`), but as ONE `findMany` and ONE
+// batched decision (`rolesFor`) over the whole batch rather than N `require`
+// calls: a proposal commit can carry hundreds of citations.
 //
 // BOUNDED QUERIES: at most one query per source table (notes, note_versions,
 // transcripts, transcript_segments, storage_objects), whatever the batch size,
@@ -32,6 +32,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
+import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
 import { evidenceInputSchema, type EvidenceInput } from '../dto/graph-evidence.dto';
 
 export const INVALID_EVIDENCE_MESSAGE =
@@ -39,7 +40,31 @@ export const INVALID_EVIDENCE_MESSAGE =
 
 @Injectable()
 export class EvidenceValidator {
-  constructor(private readonly managedObjects: KvoxManagedObjectsService) {}
+  constructor(
+    private readonly managedObjects: KvoxManagedObjectsService,
+    private readonly transcriptAccess: TranscriptAccessService,
+  ) {}
+
+  /**
+   * The ids among `transcriptIds` that `ownerId` may VIEW: live (not soft-deleted),
+   * and owned by them or shared with them at either role. One query for the rows,
+   * one batched decision for the shares.
+   */
+  async viewableTranscriptIds(
+    ownerId: string,
+    transcriptIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (transcriptIds.length === 0) return new Set();
+
+    const rows = await tx.transcript.findMany({
+      where: { id: { in: [...transcriptIds] }, deletedAt: null },
+      select: { id: true, ownerId: true, orgId: true },
+    });
+    const roles = await this.transcriptAccess.rolesFor(ownerId, rows);
+
+    return new Set(rows.filter((row) => roles.has(row.id)).map((row) => row.id));
+  }
 
   /**
    * Parse every row (applying the DTO's defaults) and prove each anchor is
@@ -103,16 +128,7 @@ export class EvidenceValidator {
             },
             select: { noteId: true, version: true },
           }),
-      transcriptIds.length === 0
-        ? Promise.resolve([] as { id: string }[])
-        : tx.transcript.findMany({
-            where: {
-              id: { in: transcriptIds },
-              deletedAt: null,
-              OR: [{ ownerId }, { shares: { some: { userId: ownerId } } }],
-            },
-            select: { id: true },
-          }),
+      this.viewableTranscriptIds(ownerId, transcriptIds, tx),
       segmentIds.length === 0
         ? Promise.resolve([] as { id: string; transcriptId: string }[])
         : tx.transcriptSegment.findMany({
@@ -132,7 +148,7 @@ export class EvidenceValidator {
 
     const readableNotes = new Set(notes.map((n) => n.id));
     const existingVersions = new Set(versions.map((v) => `${v.noteId}:${v.version}`));
-    const viewableTranscripts = new Set(transcripts.map((t) => t.id));
+    const viewableTranscripts = transcripts;
     const segmentTranscript = new Map(segments.map((s) => [s.id, s.transcriptId]));
     const ownedObjects = new Set(objects.map((o) => o.id));
 

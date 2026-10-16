@@ -32,6 +32,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-purge.db.spec');
 
@@ -100,7 +101,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
         uploadedById: ownerId,
       },
     });
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: { ownerId, title: 'Call', sourceObjectId: source.id, provider: 'assemblyai' },
     });
     const speaker = await prisma.transcriptSpeaker.create({

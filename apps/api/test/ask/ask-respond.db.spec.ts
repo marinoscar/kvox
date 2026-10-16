@@ -46,13 +46,13 @@ import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhoo
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { JobsService, RateLimitError } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createFakeAskPort, done, failure, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
 import { ASK_MAX_TOOL_STEPS } from '../../src/ask/ask-limits';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-respond.db.spec');
 
@@ -75,7 +75,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
-    const transcriptAccess = new TranscriptAccessService(p);
+    const transcriptAccess = createTranscriptAccess(p);
     const preferences = new GraphPreferencesService(p);
     const ontology = new GraphOntologyService(p, preferences);
     const reads = new GraphReadService(p, access, ontology, transcriptAccess);

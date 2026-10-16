@@ -45,7 +45,6 @@ import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.servic
 import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { loadGoldenSet } from '../../scripts/kg-eval/load';
@@ -54,6 +53,7 @@ import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eva
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 
@@ -89,7 +89,7 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
     await prisma.userRole.create({ data: { userId: seeded.userId, roleId } });
 
     const access = new GraphAccessService(p);
-    const transcriptAccess = new TranscriptAccessService(p);
+    const transcriptAccess = createTranscriptAccess(p);
     const preferences = new GraphPreferencesService(p);
     const ontology = new GraphOntologyService(p, preferences);
     const reads = new GraphReadService(p, access, ontology, transcriptAccess);

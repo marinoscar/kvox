@@ -40,6 +40,7 @@ import { PrismaClient } from '@prisma/client';
 
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const SEARCH_VECTOR_INDEX_NAMES = [
   'transcript_segments_search_vector_idx',
@@ -109,7 +110,7 @@ describeWithDb('Full-text search vectors (real Postgres)', () => {
     suffix: string,
     title = `test-transcript-${suffix}`,
   ) {
-    return prisma.transcript.create({
+    return createTranscriptRow(prisma, {
       data: {
         ownerId,
         title,

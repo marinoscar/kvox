@@ -23,6 +23,13 @@
 
 import { Prisma } from '@prisma/client';
 
+import {
+  inViewerScope,
+  transcriptViewer,
+  transcriptVisibleSql,
+  type ViewerDb,
+} from '../app-sharing/transcript-visibility';
+
 import type { AskCitation } from './dto/ask.dto';
 import type { HandleRegistry } from './tools/handle-registry';
 
@@ -154,10 +161,11 @@ function fromEvidence(marker: string, source: EvidenceSource, via: AskCitation['
   };
 }
 
-/** The Prisma surface `loadCitationSources` needs. */
-export interface CitationQueryClient {
-  $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>;
-}
+/**
+ * The Prisma surface `loadCitationSources` needs: the default-organization read and
+ * `runInOrg` (a shared transcript's grant is only visible in the organization's scope).
+ */
+export type CitationQueryClient = ViewerDb;
 
 interface SourceRow {
   key: string;
@@ -188,17 +196,18 @@ export async function loadCitationSources(
   }
   const uuids = (ids: string[]) => Prisma.sql`ARRAY[${Prisma.join(ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])}]::uuid[]`;
 
-  const rows = await prisma.$queryRaw<SourceRow[]>(Prisma.sql`
+  // The caller in their organization: the grants behind a shared transcript are
+  // only visible in that scope (#485).
+  const viewer = await transcriptViewer(prisma, ownerId);
+
+  const rows = await inViewerScope(prisma, viewer, (tx) => tx.$queryRaw<SourceRow[]>(Prisma.sql`
     SELECT DISTINCT ON (c.key)
            c.key,
            c.id::text          AS "evidenceId",
            c.transcript_id::text AS "transcriptId",
            c.note_id::text     AS "noteId",
            c.start_ms          AS "startMs",
-           CASE WHEN t.id IS NOT NULL AND t.deleted_at IS NULL
-                 AND (t.owner_id = ${ownerId}::uuid OR EXISTS (
-                      SELECT 1 FROM transcript_shares s
-                       WHERE s.transcript_id = t.id AND s.user_id = ${ownerId}::uuid))
+           CASE WHEN t.id IS NOT NULL AND ${transcriptVisibleSql(viewer, 't')}
                 THEN t.title END AS "transcriptTitle",
            CASE WHEN n.id IS NOT NULL AND n.deleted_at IS NULL AND n.owner_id = ${ownerId}::uuid
                 THEN n.title END AS "noteTitle"
@@ -216,7 +225,7 @@ export async function loadCitationSources(
       ) c
       LEFT JOIN transcripts t ON t.id = c.transcript_id
       LEFT JOIN notes n ON n.id = c.note_id
-     ORDER BY c.key, coalesce(t.recorded_at, n.created_at) DESC NULLS LAST, c.created_at DESC, c.id DESC`);
+     ORDER BY c.key, coalesce(t.recorded_at, n.created_at) DESC NULLS LAST, c.created_at DESC, c.id DESC`));
 
   for (const row of rows) {
     const source: EvidenceSource = {

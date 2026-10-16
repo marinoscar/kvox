@@ -47,11 +47,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, Transcript, TranscriptSegment } from '@prisma/client';
+import { Prisma, type Transcript, type TranscriptSegment } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { KvoxManagedObjectsService } from '../kvox-objects/kvox-managed-objects.service';
-import type { RequestUser } from '@marinoscar/platform-api/identity';
+import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import {
   DEFAULT_WORDS_WINDOW_MS,
   MAX_WORDS_WINDOW_MS,
@@ -62,6 +62,7 @@ import {
 } from './dto/transcript.dto';
 import { parseSpeakerIdentities } from './editing/speaker-identity';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
+import { sharedTranscriptsWhere } from '../app-sharing/transcript-visibility';
 import {
   TranscriptAccessService,
   type TranscriptAccessRole,
@@ -209,6 +210,9 @@ export class TranscriptsService {
     const transcript = await this.prisma.transcript.create({
       data: {
         ownerId: user.id,
+        // The organization the sharing slice decides this transcript's access in
+        // (#485): the caller's active one, else the default (single-organization mode).
+        orgId: await resolveOrgId(this.prisma, user.activeOrgId ?? null, `transcript create for ${user.id}`),
         createdAt: now,
         recordedAt: now,
         title: dto.title?.trim() || defaultTitle(dto.source.name),
@@ -357,14 +361,14 @@ export class TranscriptsService {
    * in your "needs attention" list would be an item you cannot act on.
    */
   async summary(userId: string) {
-    const shareIds = await this.sharedTranscriptIds(userId);
+    const sharedWhere = await this.sharedWhere(userId);
 
-    const [inProgress, recent, shared, failed, owned, failedCount] = await Promise.all([
+    const [inProgress, recent, shared, failed, owned, failedCount, sharedCount] = await Promise.all([
       this.prisma.transcript.findMany({
         where: {
           deletedAt: null,
           status: { in: ['uploading', 'processing'] },
-          OR: [{ ownerId: userId }, { id: { in: shareIds } }],
+          OR: [{ ownerId: userId }, sharedWhere],
         },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: 20,
@@ -375,7 +379,7 @@ export class TranscriptsService {
         take: SUMMARY_LIST_SIZE,
       }),
       this.prisma.transcript.findMany({
-        where: { deletedAt: null, id: { in: shareIds } },
+        where: { deletedAt: null, AND: [sharedWhere] },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: SUMMARY_LIST_SIZE,
       }),
@@ -391,6 +395,9 @@ export class TranscriptsService {
       this.prisma.transcript.count({
         where: { deletedAt: null, ownerId: userId, status: 'failed' },
       }),
+      // Live transcripts shared with the caller: the same predicate as the
+      // `sharedWithMe` list above (a share on a deleted transcript is not counted).
+      this.prisma.transcript.count({ where: { deletedAt: null, AND: [sharedWhere] } }),
     ]);
 
     const [inProgressItems, recentItems, sharedItems, failedItems] = await Promise.all([
@@ -407,7 +414,7 @@ export class TranscriptsService {
       failed: failedItems,
       counts: {
         owned,
-        shared: shareIds.length,
+        shared: sharedCount,
         inProgress: inProgressItems.length,
         // ⚠ THE `count()`, NEVER `failedItems.length`. The list is capped at
         // eight; the count is the truth, and a user with thirty failures must
@@ -958,39 +965,32 @@ export class TranscriptsService {
     };
   }
 
-  /** Attach each row's access role, with one query for the caller's shares. */
+  /** Attach each row's access role, with one batched decision for the caller's shares. */
   private async withAccess(
     rows: Transcript[],
     userId: string,
   ): Promise<TranscriptListItem[]> {
     if (rows.length === 0) return [];
 
-    // TWO QUERIES FOR THE WHOLE PAGE, not two per row: the caller's shares
-    // across these ids, and every distinct owner behind them. A per-row lookup
-    // here would be the N+1 that makes a twenty-row list twenty-one round
-    // trips, and the "Shared with me" list is by definition all other people.
-    const [shares, owners] = await Promise.all([
-      this.prisma.transcriptShare.findMany({
-        where: { userId, transcriptId: { in: rows.map((row) => row.id) } },
-        select: { transcriptId: true, role: true },
-      }),
+    // TWO ROUND TRIPS FOR THE WHOLE PAGE, not two per row: the caller's role on
+    // these ids (`AccessPolicy.decideMany`: one owner query and one grant query
+    // for the batch) and every distinct owner behind them. A per-row lookup here
+    // would be the N+1 that makes a twenty-row list twenty-one round trips, and
+    // the "Shared with me" list is by definition all other people.
+    const [roles, owners] = await Promise.all([
+      this.access.rolesFor(userId, rows),
       this.prisma.user.findMany({
         where: { id: { in: [...new Set(rows.map((row) => row.ownerId))] } },
         select: { id: true, displayName: true, providerDisplayName: true, email: true },
       }),
     ]);
 
-    const byId = new Map(shares.map((share) => [share.transcriptId, share.role]));
     const nameById = new Map(owners.map((owner) => [owner.id, ownerNameOf(owner)]));
 
     return rows.map((row) =>
       this.listShape(
         row,
-        row.ownerId === userId
-          ? 'owner'
-          : byId.get(row.id) === 'editor'
-            ? 'editor'
-            : 'viewer',
+        row.ownerId === userId ? 'owner' : (roles.get(row.id) ?? 'viewer'),
         // `?? ''` is unreachable in practice — `transcripts.owner_id` is a
         // non-null FK — but a name is a string on the wire, not a maybe-string,
         // and a row whose owner vanished mid-query must not become a 500.
@@ -999,14 +999,9 @@ export class TranscriptsService {
     );
   }
 
-  /** Transcript ids shared with this user. */
-  private async sharedTranscriptIds(userId: string): Promise<string[]> {
-    const shares = await this.prisma.transcriptShare.findMany({
-      where: { userId },
-      select: { transcriptId: true },
-    });
-
-    return shares.map((share) => share.transcriptId);
+  /** The transcripts shared WITH this user, as a `where` fragment (`app-sharing/transcript-visibility.ts`). */
+  private sharedWhere(userId: string): Promise<Prisma.TranscriptWhereInput> {
+    return sharedTranscriptsWhere(this.prisma, userId);
   }
 
   /** The `where` clause for one list request, scope and filters included. */
@@ -1019,12 +1014,9 @@ export class TranscriptsService {
     if (query.scope === 'owned') {
       where.ownerId = userId;
     } else {
-      const shareIds = await this.sharedTranscriptIds(userId);
+      const shared = await this.sharedWhere(userId);
 
-      where.OR =
-        query.scope === 'shared'
-          ? [{ id: { in: shareIds } }]
-          : [{ ownerId: userId }, { id: { in: shareIds } }];
+      where.OR = query.scope === 'shared' ? [shared] : [{ ownerId: userId }, shared];
     }
 
     if (query.status) where.status = query.status;

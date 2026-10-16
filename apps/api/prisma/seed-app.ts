@@ -194,6 +194,7 @@ export const NOTE_TEMPLATES = [
 export async function seedApp(prisma: PrismaClient): Promise<void> {
   await seedNoteTemplates(prisma);
   await seedViewerAiUse(prisma);
+  await seedViewerSharing(prisma);
 }
 
 /**
@@ -206,6 +207,21 @@ export async function seedApp(prisma: PrismaClient): Promise<void> {
  * role of a new account. A Viewer with no key still cannot call a model.
  */
 export const VIEWER_AI_GRANTS = [{ role: 'viewer', permission: 'ai:use' }] as const;
+
+/**
+ * The org roles that hold `sharing:write` on top of the platform's own default grants
+ * (`org_admin`, `contributor`): the `viewer` role (issue #485).
+ *
+ * Sharing a transcript used to need only `transcripts:write`, which every role holds
+ * (a Viewer is the default role of a new account and records its own conversations).
+ * A share is a platform grant now, and the grants routes (`POST /api/grants`, which the
+ * share dialog calls) need `sharing:write`, so without this row a new account could no
+ * longer share its own recording. What a Viewer may share is still bounded by the
+ * resource type: only the owner of a transcript holds the `share` action on it. Same
+ * mechanism as `ai:use` above: the platform's registry refuses an app grant on a
+ * platform role, so it is a seed row.
+ */
+export const VIEWER_SHARING_GRANTS = [{ role: 'viewer', permission: 'sharing:write' }] as const;
 
 async function seedViewerAiUse(prisma: PrismaClient): Promise<void> {
   console.log('Seeding AI grants...');
@@ -231,6 +247,30 @@ async function seedViewerAiUse(prisma: PrismaClient): Promise<void> {
   }
 
   console.log(`✓ Seeded ${VIEWER_AI_GRANTS.length} AI grant(s)`);
+}
+
+async function seedViewerSharing(prisma: PrismaClient): Promise<void> {
+  console.log('Seeding sharing grants...');
+
+  for (const grant of VIEWER_SHARING_GRANTS) {
+    const [role, permission] = await Promise.all([
+      prisma.role.findUnique({ where: { name: grant.role } }),
+      prisma.permission.findUnique({ where: { name: grant.permission } }),
+    ]);
+
+    if (!role || !permission) {
+      console.log(`  skipped ${grant.role} -> ${grant.permission} (role or permission not seeded)`);
+      continue;
+    }
+
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+      update: {},
+      create: { roleId: role.id, permissionId: permission.id },
+    });
+  }
+
+  console.log(`✓ Seeded ${VIEWER_SHARING_GRANTS.length} sharing grant(s)`);
 }
 
 async function seedNoteTemplates(prisma: PrismaClient): Promise<void> {

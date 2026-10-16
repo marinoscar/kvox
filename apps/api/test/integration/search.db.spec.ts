@@ -73,6 +73,8 @@ import type {
 import { MIN_SEMANTIC_SIMILARITY, SearchService } from '../../src/search/search.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
+import { createTranscript as createTranscriptRow, shareTranscript, deleteTranscriptGrants } from '../helpers/transcript.helper';
+import { asPrismaService } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb } = resolveDbSuite('search.db.spec');
 
@@ -209,7 +211,7 @@ describeWithDb('GET /api/search (real Postgres)', () => {
       },
     });
 
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: {
         ownerId,
         title,
@@ -328,7 +330,7 @@ describeWithDb('GET /api/search (real Postgres)', () => {
   beforeAll(async () => {
     prisma = createDbClient();
     await prisma.$connect();
-    service = new SearchService(prisma as unknown as PrismaService, embedder);
+    service = new SearchService(asPrismaService(prisma), embedder);
 
     alice = await createUser('alice');
     bob = await createUser('bob');
@@ -414,13 +416,11 @@ describeWithDb('GET /api/search (real Postgres)', () => {
       await addSegments(shared.transcript.id, shared.speakerId, [
         'Here is the grimwald walkthrough I promised you.',
       ]);
-      await prisma.transcriptShare.create({
-        data: {
-          transcriptId: shared.transcript.id,
-          userId: alice.id,
-          role: 'viewer',
-          grantedById: bob.id,
-        },
+      await shareTranscript(prisma, {
+        transcriptId: shared.transcript.id,
+        userId: alice.id,
+        role: 'viewer',
+        grantedById: bob.id,
       });
 
       ids.bobNote = (
@@ -591,9 +591,7 @@ describeWithDb('GET /api/search (real Postgres)', () => {
     await prisma.transcriptSegment.deleteMany({
       where: { transcript: { title: { startsWith: TITLE_PREFIX } } },
     });
-    await prisma.transcriptShare.deleteMany({
-      where: { transcript: { title: { startsWith: TITLE_PREFIX } } },
-    });
+    await deleteTranscriptGrants(prisma, { title: { startsWith: TITLE_PREFIX } });
     await prisma.transcriptSpeaker.deleteMany({
       where: { transcript: { title: { startsWith: TITLE_PREFIX } } },
     });

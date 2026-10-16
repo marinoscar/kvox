@@ -59,12 +59,20 @@ describe('NoteOriginService', () => {
   let prisma: {
     note: { findUnique: jest.Mock };
     transcript: { findFirst: jest.Mock };
+    organization: { findFirst: jest.Mock };
+    runInOrg: jest.Mock;
   };
 
   beforeEach(async () => {
     prisma = {
       note: { findUnique: jest.fn() },
       transcript: { findFirst: jest.fn() },
+      // The shared half of "owned or shared" is the platform's `accessibleWhere`, read in
+      // the caller's organization scope (#485): the default organization, no shares.
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-1' }) },
+      runInOrg: jest.fn(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ grant: { groupBy: jest.fn().mockResolvedValue([{ resourceId: 'shared-1' }]) } }),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -322,7 +330,7 @@ describe('NoteOriginService', () => {
     expect(args.where.OR).toEqual(
       expect.arrayContaining([
         { ownerId: USER_ID },
-        { shares: { some: { userId: USER_ID } } },
+        { AND: [{ orgId: 'org-1' }, { id: { in: ['shared-1'] } }] },
       ]),
     );
   });

@@ -251,6 +251,24 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'no administrator read-any: configuring which provider a deployment uses is not the ' +
           'authority to read what flows through it.',
       },
+      {
+        name: 'Grants',
+        description:
+          'Sharing, the platform sharing slice (issue #485): share a record with a user ' +
+          '(`POST /api/grants`, `resourceType: "transcript"`), list who it is shared with, change ' +
+          'or revoke a share, and list what is shared with the caller. Gated on `sharing:read` / ' +
+          '`sharing:write`; whether a caller may share a given record is the resource type\'s ' +
+          'rule (a transcript: only its owner), and no access is a 404. Only user grants of the ' +
+          'roles `viewer` and `editor` are accepted for a transcript. The `/api/transcripts/{id}/shares` ' +
+          'routes are deprecated adapters over the same grants.',
+      },
+      {
+        name: 'Groups',
+        description:
+          'Groups of users and their invitations (the platform sharing slice). Mounted by the ' +
+          'slice; this application offers no group UI and no resource type accepts a group grant, ' +
+          'so nothing is shared with a group today.',
+      },
     ],
   },
   {

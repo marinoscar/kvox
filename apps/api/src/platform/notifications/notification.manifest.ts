@@ -42,6 +42,7 @@ import { ALLOWLIST_REMINDER_NOTIFICATIONS } from '../../notifications-registry/a
 import { DB_BACKUP_NOTIFICATIONS } from '../../notifications-registry/db-backup.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../../notifications-registry/identity.notifications';
 import { NOTES_NOTIFICATIONS } from '../../notifications-registry/notes.notifications';
+import { SHARING_NOTIFICATIONS } from '../../notifications-registry/sharing.notifications';
 import { TRANSCRIPTS_NOTIFICATIONS } from '../../notifications-registry/transcripts.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../email/email.options';
 
@@ -65,6 +66,7 @@ if (!registered) {
     ...NODES_NOTIFICATIONS,
     ...DB_BACKUP_NOTIFICATIONS,
     ...TRANSCRIPTS_NOTIFICATIONS,
+    ...SHARING_NOTIFICATIONS,
     ...NOTES_NOTIFICATIONS,
   ]);
 }

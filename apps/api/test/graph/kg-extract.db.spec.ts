@@ -30,6 +30,8 @@ import { NoteOriginService } from '../../src/notes/note-origin.service';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { JobsService } from '@marinoscar/platform-api/jobs';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
+import { asPrismaService } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-extract.db.spec');
 
@@ -90,7 +92,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const resolver = { resolve: jest.fn(async () => resolution), graphEnabled: jest.fn(async () => true) };
     const preferences = new GraphPreferencesService(prisma as never);
     const ontology = new GraphOntologyService(prisma as never, preferences);
-    const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(prisma as never), ontology);
+    const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(asPrismaService(prisma)), ontology);
     const writer = new ProposalWriter(prisma as never);
 
     service = new GraphExtractionService(
@@ -144,7 +146,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const source = await createStorageObject(prisma, {
       data: { name: 'r.m4a', size: BigInt(1), mimeType: 'audio/mp4', storageKey: `${EMAIL_PREFIX}/${randomUUID()}`, managedBy: 'transcripts', uploadedById: user.id },
     });
-    const transcript = await prisma.transcript.create({
+    const transcript = await createTranscriptRow(prisma, {
       data: { ownerId: user.id, title: 'Kickoff call', sourceObjectId: source.id, provider: 'assemblyai' },
     });
     const speakerA = await prisma.transcriptSpeaker.create({

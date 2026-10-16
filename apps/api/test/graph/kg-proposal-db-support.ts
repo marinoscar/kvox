@@ -35,6 +35,8 @@ import { GraphWriteService } from '../../src/graph/write/graph-write.service';
 import { normalizeAlias, statementHash } from '../../src/graph/write/normalize';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
+import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 export const V = 'test';
 
@@ -45,7 +47,7 @@ export const NOTE_BODY =
 
 export function buildServices(prisma: PrismaClient) {
   const db = prisma as unknown as PrismaService;
-  const write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE)));
+  const write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
   const access = new GraphAccessService(db);
   const ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
   const spans = new SpanValidator(new NoteOriginService(db));
@@ -109,7 +111,7 @@ export async function seedFixture(prisma: PrismaClient, prefix: string) {
   const source = await createStorageObject(prisma, {
     data: { name: 'r.m4a', size: BigInt(1), mimeType: 'audio/mp4', storageKey: `${prefix}/${randomUUID()}`, managedBy: 'transcripts', uploadedById: ownerId },
   });
-  const transcript = await prisma.transcript.create({
+  const transcript = await createTranscriptRow(prisma, {
     data: { ownerId, title: 'Kickoff call', sourceObjectId: source.id, provider: 'assemblyai' },
   });
   const speaker = await prisma.transcriptSpeaker.create({

@@ -56,7 +56,7 @@ const EXPECTED: ExpectedEvent[] = [
   { key: 'db_backup.restore_completed', channels: ['email', 'browser'], mandatory: true, defaultEnabled: true, emailTemplate: 'restore-completed' },
   { key: 'transcripts.transcript_ready', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-ready' },
   { key: 'transcripts.transcript_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-failed' },
-  { key: 'transcripts.transcript_shared', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'transcript-shared' },
+  { key: 'sharing.shared_with_you', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'shared-with-you' },
   { key: 'notes.note_ready', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-ready' },
   { key: 'notes.note_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-failed' },
 ];
@@ -124,7 +124,7 @@ describe('every channel an event declares can render it', () => {
       'allowlist-invitation-reminder',
       'transcript-ready',
       'transcript-failed',
-      'transcript-shared',
+      'shared-with-you',
       'note-ready',
       'note-failed',
     ]) {
@@ -193,11 +193,15 @@ describe('the transcript events', () => {
       stage: 'submit',
       retryable: true,
     });
-    const shared = browserRender('transcripts.transcript_shared')!({
-      transcriptId: 'tr-1',
+    // The share message is the platform slice's (#485); its link is the path the
+    // resource type\'s `describe()` gives (`app-registrations/sharing.ts`).
+    const shared = browserRender('sharing.shared_with_you')!({
+      resourceType: 'transcript',
+      resourceId: 'tr-1',
       title: 'Board meeting',
       role: 'viewer',
-      ownerName: 'Ana Rivera',
+      sharedBy: 'Ana Rivera',
+      path: '/transcripts/tr-1',
     });
 
     for (const row of [ready, failed, shared]) {

@@ -13,7 +13,7 @@ import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { invalidateAiResolverCache, primeAiReadiness, storedSystemSettings } from '../helpers/ai-readiness.fixtures';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 
 // =============================================================================
@@ -159,6 +159,7 @@ describe('Notes API (#53)', () => {
   function ownedTranscript(userId: string): void {
     prismaMock.transcript.findUnique.mockResolvedValue({
       id: TRANSCRIPT_ID,
+      orgId: TEST_DEFAULT_ORG_ID,
       ownerId: userId,
       deletedAt: null,
       currentVersion: 3,
@@ -332,10 +333,11 @@ describe('Notes API (#53)', () => {
 
       prismaMock.transcript.findUnique.mockResolvedValue({
         id: TRANSCRIPT_ID,
+        orgId: TEST_DEFAULT_ORG_ID,
         ownerId: 'somebody-else',
         deletedAt: null,
       });
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       await request(context.app.getHttpServer())
         .post(NOTES)
@@ -1116,10 +1118,11 @@ describe('Notes API (#53)', () => {
       ownedNote(user.id);
       prismaMock.transcript.findUnique.mockResolvedValue({
         id: TRANSCRIPT_ID,
+        orgId: TEST_DEFAULT_ORG_ID,
         ownerId: 'somebody-else',
         deletedAt: null,
       });
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       // A share revoked between the note's creation and this request.
       await request(context.app.getHttpServer())

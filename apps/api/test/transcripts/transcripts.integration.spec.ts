@@ -6,7 +6,7 @@ import {
   closeTestApp,
 } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
-import { setupBaseMocks } from '../fixtures/mock-setup.helper';
+import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import {
   authHeader,
   createMockTestUser,
@@ -59,6 +59,7 @@ const configuredSettings = {
 const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   id: TRANSCRIPT_ID,
   ownerId: OWNER_ID,
+  orgId: TEST_DEFAULT_ORG_ID,
   title: 'A recording',
   status: 'ready',
   transcriptionStatus: 'completed',
@@ -300,8 +301,6 @@ describe('Transcripts Integration', () => {
   describe('GET /api/transcripts', () => {
     it('answers `total` alongside the page', async () => {
       const user = await createMockTestUser(context);
-
-      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
       // `withAccess` resolves owner display names for the whole page in one
       // query; without it the shape step has nothing to map.
       prismaMock.user.findMany.mockResolvedValue([
@@ -326,8 +325,6 @@ describe('Transcripts Integration', () => {
       // predicate would shrink as the client pages, so a feed showing
       // "42 transcripts" would watch the number fall for pressing Load more.
       const user = await createMockTestUser(context);
-
-      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
       prismaMock.user.findMany.mockResolvedValue([
         { id: user.id, displayName: 'Owner', providerDisplayName: null, email: user.email },
       ]);
@@ -355,8 +352,6 @@ describe('Transcripts Integration', () => {
 
     it('counts under the SAME filters the page is read with', async () => {
       const user = await createMockTestUser(context);
-
-      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
       prismaMock.transcript.findMany.mockResolvedValue([]);
       prismaMock.transcript.count.mockResolvedValue(0);
 
@@ -373,8 +368,6 @@ describe('Transcripts Integration', () => {
       // table — "20 of 19", which is nonsense on screen and unreproducible in a
       // bug report.
       const user = await createMockTestUser(context);
-
-      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
       prismaMock.transcript.findMany.mockResolvedValue([]);
       prismaMock.transcript.count.mockResolvedValue(0);
 
@@ -392,7 +385,7 @@ describe('Transcripts Integration', () => {
       const stranger = await createMockTestUser(context, { email: 'stranger@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       const response = await request(context.app.getHttpServer())
         .get(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
@@ -420,7 +413,7 @@ describe('Transcripts Integration', () => {
       const sharee = await createMockTestUser(context, { email: 'sharee@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue({ role: 'viewer' });
+      mockTranscriptShare('viewer');
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
       prismaMock.storageObject.findUnique.mockResolvedValue({
         name: 'meeting.mp3',
@@ -549,7 +542,7 @@ describe('Transcripts Integration', () => {
       const stranger = await createMockTestUser(context, { email: 'stranger@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
 
       const response = await request(context.app.getHttpServer())
         .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
@@ -565,7 +558,7 @@ describe('Transcripts Integration', () => {
       const sharee = await createMockTestUser(context, { email: 'viewer-share@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue({ role: 'viewer' } as never);
+      mockTranscriptShare('viewer');
 
       await request(context.app.getHttpServer())
         .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
@@ -827,7 +820,7 @@ describe('Transcripts Integration', () => {
       const stranger = await createMockTestUser(context, { email: 'nosy@example.com' });
 
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
-      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      mockTranscriptShare(null);
       prismaMock.note.findMany.mockResolvedValue([
         { id: NOTE_A, title: 'Action items', deletedAt: null },
       ]);
