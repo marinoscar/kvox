@@ -39,7 +39,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Change navigation, the bottom bar or the rail | [specs/ux-refresh.md](specs/ux-refresh.md), [../apps/web/AGENTS.md](../apps/web/AGENTS.md) |
 | Touch the transcript editor or correction model | [specs/transcription.md](specs/transcription.md) (§4), [specs/transcript-name-correction.md](specs/transcript-name-correction.md) |
 | Add a transcript or note export format | [specs/transcription.md](specs/transcription.md), [specs/notes.md](specs/notes.md), [specs/transcript-export.v1.schema.json](specs/transcript-export.v1.schema.json) |
-| Touch notes, templates or the AI layer | [specs/notes.md](specs/notes.md), [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) |
+| Touch notes, templates or the AI layer | [specs/notes.md](specs/notes.md), [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md), [runbooks/ai-platform-migration.md](runbooks/ai-platform-migration.md) |
 | Touch the knowledge graph or the Ask agent | [specs/ontology.md](specs/ontology.md), [runbooks/ontology-migration.md](runbooks/ontology-migration.md) |
 | Change search | [specs/search.md](specs/search.md) |
 | Change onboarding | [specs/onboarding.md](specs/onboarding.md) |
@@ -106,6 +106,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 
 | Runbook | Use it when |
 |---|---|
+| [runbooks/ai-platform-migration.md](runbooks/ai-platform-migration.md) | You move user AI keys and AI settings from the app's own AI layer to the platform AI slice (`npm run ai:migrate-legacy`), or roll that back |
 | [runbooks/ai-provider-keys.md](runbooks/ai-provider-keys.md) | AI provider keys and note generation need setup or diagnosis |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) | You baseline a database onto the platform migration history (`platform db baseline --through 14`), or review the rehearsal record |
 | [runbooks/database-restore.md](runbooks/database-restore.md) | You restore the database from a backup |
