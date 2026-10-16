@@ -41,8 +41,12 @@ function scriptDirectories(packageJson: string): string[] {
     for (const match of command.matchAll(/\bnode\s+([\w./-]+)\//g)) {
       const directory = match[1];
       // `node dist/main` is the built output, copied from the build stage by a
-      // different line; only source-tree directories are in question here.
-      if (directory !== undefined && directory !== 'dist') directories.add(directory);
+      // different line (so is `node dist/<folder>/<file>`, the compiled operator
+      // commands such as `ai:migrate-legacy`); only source-tree directories are in
+      // question here.
+      if (directory !== undefined && directory !== 'dist' && !directory.startsWith('dist/')) {
+        directories.add(directory);
+      }
     }
   }
 

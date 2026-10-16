@@ -101,6 +101,7 @@ function readCatalog(): string | undefined {
  * principal or from a row the caller was already authorised to read, never from a raw request id.
  */
 const RAW_SQL_ALLOWLIST = [
+  { file: 'ai-port/migrate/ai-legacy-migrate.ts', why: 'One-off operator command (issue #474): reads the database clock and counts platform key-import audit rows; no user-owned rows, no request input, and it runs from the command line only.' },
   { file: 'allowlist-reminders/allowlist-reminders.service.ts', why: 'The kvox_allowlist_reminders side table: atomic INSERT .. ON CONFLICT counter, a join to allowed_emails and a bounded orphan DELETE. Allowlist bookkeeping, no user-owned rows; ids are bound uuid parameters.' },
   { file: 'ask/ask-conversations.service.ts', why: 'Conversation summaries and the running-turn partial-unique-index paths Prisma cannot express; every statement filters on the authenticated owner_id.' },
   { file: 'ask/citations.ts', why: 'Resolves citation sources across transcripts and notes with a join Prisma cannot express; bound by the owner id of the conversation.' },

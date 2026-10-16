@@ -29,6 +29,7 @@ that describes the cipher still holds. What changed is where the code lives.
 |---|---|---|
 | `credentials` | the row's own `purpose` column (`smtp`, `push_vapid`, `transcription`, `storage`, ...) | `CredentialsService.setSecret` |
 | `user_ai_credentials` | the constant `'ai-key'` for every row | `UserAiCredentialsService` |
+| `user_ai_keys` | the constant `'ai_user_key'` for every row (the platform AI slice; filled by `npm run ai:migrate-legacy`, see [ai-platform-migration.md](ai-platform-migration.md)) | the platform `UserAiKeysService` |
 | `user_credentials`, `org_credentials` | `user:<userId>:<purpose>` and `org:<orgId>:<purpose>` | the platform's per-user and per-organization stores. Mounted but unused: this deployment writes no row, so both are empty. If one ever is not, rotate it too |
 
 A rotation that rewrites only `credentials` leaves every user's AI key undecryptable
