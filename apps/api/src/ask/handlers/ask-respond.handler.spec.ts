@@ -119,6 +119,7 @@ function setup(opts: SetupOptions = {}) {
 
   const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
   const conversationWrites: unknown[] = [];
+  const txRef: { current: unknown } = { current: undefined };
   const prisma = {
     askMessage: {
       findFirst: jest.fn().mockResolvedValue(
@@ -166,11 +167,15 @@ function setup(opts: SetupOptions = {}) {
       }),
     },
     kgEntity: { findFirst: jest.fn().mockResolvedValue(opts.scopeEntity ?? null) },
+    // The citation lookup runs inside the caller's organization scope (#485).
+    organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-default' }) },
+    runInOrg: jest.fn(async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(txRef.current)),
     $queryRaw: jest.fn().mockResolvedValue([
       { key: EVIDENCE, evidenceId: EVIDENCE, transcriptId: 't', noteId: null, startMs: 4000, transcriptTitle: 'Sync', noteTitle: null },
     ]),
     $transaction: jest.fn(async (ops: Array<Promise<unknown>>) => Promise.all(ops)),
   };
+  txRef.current = prisma;
 
   const handles = new HandleRegistry();
   const toolCtx = { user: { id: USER }, handles, personalFactsAllowed: false, scopeEntityId: null, now: new Date() };
