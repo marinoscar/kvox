@@ -1,0 +1,141 @@
+{
+  "manifestVersion": 1,
+  "migrations": [
+    {
+      "id": "20260914130000_add_transcripts",
+      "requiresHostTables": [
+        "users",
+        "storage_objects",
+        "jobs"
+      ],
+      "sha256": "0a78eea893b5e0e67e6b6b80c4c2656f9c4c461ae0759438eef9cbd733f08223",
+      "slice": "transcripts"
+    },
+    {
+      "id": "20260914140000_add_notes",
+      "requiresHostTables": [
+        "users",
+        "storage_objects",
+        "jobs"
+      ],
+      "sha256": "eeb5fe7c56ebfe5e3d8aea76af7afae2eaf7d7c02eacf2f9caf11e26527bd3d5",
+      "slice": "notes"
+    },
+    {
+      "id": "20260915120000_add_search_vectors",
+      "requiresHostTables": [],
+      "sha256": "066c2b681e09084c886b2b72607598cadf2c914010cd7fc582fe4b2ddfb39391",
+      "slice": "search"
+    },
+    {
+      "id": "20260915130000_add_search_embeddings",
+      "requiresHostTables": [
+        "users"
+      ],
+      "sha256": "3f85c4cfd5c7de202379536034b071822964c44b98518dadda4435de1ed4240c",
+      "slice": "search"
+    },
+    {
+      "id": "20260915210000_add_note_title_source",
+      "requiresHostTables": [],
+      "sha256": "1c79cfd8b1f273c4f953915aaab7040d8a915e34305b0f99d7e6bc4dcabf37b8",
+      "slice": "notes"
+    },
+    {
+      "id": "20260923120000_add_note_generation_context_snapshot",
+      "requiresHostTables": [],
+      "sha256": "3a6ab3da5bc4050ba09690f715448a942405289d8c034f3764821ff485068db2",
+      "slice": "notes"
+    },
+    {
+      "id": "20260923130000_add_user_hidden_note_templates",
+      "requiresHostTables": [
+        "users"
+      ],
+      "sha256": "359dcd952a92974e06aab5cdc92818911794fbe607ff6a3ec23382e98a0f786a",
+      "slice": "notes"
+    },
+    {
+      "id": "20260923140000_add_transcript_speaker_identities",
+      "requiresHostTables": [],
+      "sha256": "a253abb8a9fb1e7f34dcde273be49013b626176699ebbe4214de0c533e258d97",
+      "slice": "transcripts"
+    },
+    {
+      "id": "20260923150000_transcript_name_checks",
+      "requiresHostTables": [
+        "users",
+        "jobs"
+      ],
+      "sha256": "0f1b5560c1b8fe09b06dd2329203561a1778a7425522ad6a56bd7a330844b6d0",
+      "slice": "transcripts"
+    },
+    {
+      "id": "20260923160000_add_note_body_format",
+      "requiresHostTables": [],
+      "sha256": "a5571257b9735f1b2c1f5c36774f1e9594a159aed005276ce9db82f9bc5d3aff",
+      "slice": "notes"
+    },
+    {
+      "id": "20260923170000_add_note_version_body_format",
+      "requiresHostTables": [],
+      "sha256": "a5e51e5531b8ad77c64973f09f0b6bb10e72e361c7f6d5d9d50d84fdb984600f",
+      "slice": "notes"
+    },
+    {
+      "id": "20260926012548_add_knowledge_graph",
+      "requiresHostTables": [
+        "users",
+        "storage_objects",
+        "jobs"
+      ],
+      "sha256": "06bc1ed4c520f562d9de450d1b5df70d023f5ecc2e242da8c1db812628dff5d6",
+      "slice": "graph"
+    },
+    {
+      "id": "20260926030000_fix_kg_relations_valid_precision_chk",
+      "requiresHostTables": [],
+      "sha256": "6dad1f229c4e73e7f415f15432f3da6bb1d5ce8364087605a2aa35800f23897f",
+      "slice": "graph"
+    },
+    {
+      "id": "20260926030100_add_transcript_recorded_at",
+      "requiresHostTables": [],
+      "sha256": "bbf280a0e3ed811e36ca1085341343fd6703c632bde2843c5c8b87b41a5f43a1",
+      "slice": "transcripts"
+    },
+    {
+      "id": "20260926030200_kg_evidence_invariant",
+      "requiresHostTables": [],
+      "sha256": "13513f640879f8db8a4f2fe277f82042c8780e0ac652d33c6d5a004d644087bc",
+      "slice": "graph"
+    },
+    {
+      "id": "20260926040000_add_kg_graph_layouts",
+      "requiresHostTables": [
+        "users"
+      ],
+      "sha256": "259ade60065eb83603cf840fd4b6fc1bb3d6b190185784bbfbc2ac3bd886525a",
+      "slice": "graph"
+    },
+    {
+      "id": "20260926050000_add_ask_conversations",
+      "requiresHostTables": [
+        "users",
+        "jobs"
+      ],
+      "sha256": "d3c81231df44c4b421eb936771a6361194ff5b66102c42b00ce5860867d90262",
+      "slice": "ask"
+    },
+    {
+      "id": "20260926231512_add_kg_exports",
+      "requiresHostTables": [
+        "users",
+        "storage_objects",
+        "jobs"
+      ],
+      "sha256": "cede3d7d9db346d38e82f9b070953093c0c5a22253a4a81a04ca884add4238bf",
+      "slice": "graph"
+    }
+  ]
+}

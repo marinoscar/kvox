@@ -3,5 +3,13 @@
   "kvox-api": { "ports": [], "core": ["ports"], "testing": ["ports", "core"] },
   "kvox-web": { "core": [] },
   "kvox-contract": { "errors": [], "ontology": [] },
-  "kvox-db": { "bin": [] }
+  "kvox-db": {
+    "bin": ["check", "lock", "promote", "sync"],
+    "check": ["lock", "manifest", "sql", "sync"],
+    "lock": [],
+    "manifest": ["lock"],
+    "promote": ["lock", "manifest", "sql", "sync"],
+    "sql": [],
+    "sync": ["lock", "manifest"]
+  }
 }
