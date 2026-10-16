@@ -1,5 +1,5 @@
 // =============================================================================
-// Platform conformance (issues #465, #464, #468, #469, #470 and #471, epics #462 and #467)
+// Platform conformance (issues #465, #464, #468, #469, #470, #471 and #480, epics #462, #467 and #478)
 // =============================================================================
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
@@ -20,6 +20,7 @@ import '@marinoscar/platform-api/notifications/testing';
 import '@marinoscar/platform-api/settings/testing';
 import '@marinoscar/platform-api/storage/testing';
 import '@marinoscar/platform-api/telemetry/testing';
+import '@marinoscar/platform-api/user-data/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
@@ -28,6 +29,10 @@ import { AppModule } from '../src/app.module';
 // AppModule); the suites below read them, so name the dependency.
 import '../src/platform/notifications/notification.manifest';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
+import { composedSchemaDatamodel } from '@marinoscar/platform-api/user-data';
+// The user-data registries (this app's categories, scopes and hints, then the platform's); also
+// reached through AppModule, named here because the `userData` suite reads them.
+import '../src/platform/user-data/user-data.manifest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaSystemService } from '../src/prisma/prisma-system.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
@@ -315,5 +320,10 @@ runPlatformConformance({
     },
     // Owners besides the platform's: `transcription` is KVox's own purpose (the speech-to-text provider key).
     credentials: { appOwners: ['app', 'transcription'] },
+    // The user-data slice (#480): every owner model has a keep-or-delete decision (deleted in a
+    // registered category that `everything` reaches, or kept with a reason), every hint and scope
+    // names a model, column and category that exist, and a delete order exists. The datamodel is the
+    // composed schema folder the module itself plans from (the generated client's DMMF lacks `onDelete`).
+    userData: { datamodel: composedSchemaDatamodel(__dirname)() },
   },
 });

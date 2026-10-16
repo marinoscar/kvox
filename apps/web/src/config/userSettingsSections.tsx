@@ -27,7 +27,7 @@ import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
-import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 // Getting Started (#279, epic #271) — the same icon the admin `Setup` card
 // carries, on purpose: the two are the same idea on two axes (this deployment
 // vs. this account), and a user who has seen one recognises the other.
@@ -253,26 +253,23 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // — things that can be issued again after being destroyed. Nothing reached
     // from here can be: there is no undo, and no restore a user can trigger.
     //
+    // The card, its icon and its page are the PLATFORM's since #480
+    // (`dangerZoneSettingsPage` of `@marinoscar/platform-web/user-data/ui`; the
+    // route is `card.path`, `/settings/danger-zone`). Which scopes it offers, and
+    // what each deletes, come from the API's user-data registries
+    // (`apps/api/src/platform/user-data/user-data.manifest.ts`), not from this file.
+    //
     // NO `permission`, like every card in this registry, and here the API's own
-    // shape is the argument rather than a convention this file follows:
-    // `apps/api/src/user-data/`'s controller gates `GET /api/user-data/summary`
-    // and `POST /api/user-data/deletions` on `@Auth()` with NO permission
-    // string, because the resource is the caller's OWN data, scoped by `userId`
-    // in the query itself — the identical posture `ai-credentials.controller.ts`
-    // and `/api/user-settings` take. Declaring a gate here would invent an
-    // authorization rule the API does not enforce, and it would fail in the
-    // worst available direction: a user unable to delete data this deployment
-    // is holding about them, because of a role somebody else assigned.
+    // shape is the argument rather than a convention this file follows: the
+    // platform user-data controller gates `GET /api/user-data/summary` and
+    // `POST /api/user-data/deletions` on `@Auth()` with NO permission string,
+    // because the resource is the caller's OWN data, scoped by `userId` in the
+    // query itself. Declaring a gate here would invent an authorization rule the
+    // API does not enforce, and it would fail in the worst available direction: a
+    // user unable to delete data this deployment is holding about them, because
+    // of a role somebody else assigned. Kept LAST (`dangerZoneLastViolations`).
     label: 'Danger Zone',
-    cards: [
-      {
-        title: 'Delete My Data',
-        description:
-          'Permanently delete your recordings, notes and files, or everything stored for your account.',
-        Icon: DeleteForeverIcon,
-        path: '/settings/danger-zone',
-      },
-    ],
+    cards: [{ ...dangerZoneSettingsPage.card, Icon: dangerZoneSettingsPage.Icon }],
   },
 ];
 

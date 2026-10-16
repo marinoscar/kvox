@@ -20,10 +20,6 @@ import { listNotificationEvents } from '@marinoscar/platform-api/notifications';
 // Fills the notification and email registries (the platform's, then this app's), so the two
 // pure-value cases below read them without booting AppModule.
 import '../../src/platform/notifications/notification.manifest';
-import {
-  USER_DATA_SCOPES,
-  scopeIncludes,
-} from '../../src/user-data/job-types';
 import { JobHandlerRegistry, JobsService, jobTypeLabels } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
@@ -81,18 +77,6 @@ function stableBody(body: {
   return JSON.stringify(copy, null, 2);
 }
 
-/** The categories `scopeIncludes` can be asked about, in declaration order. */
-const SCOPE_CATEGORIES = [
-  'transcripts',
-  'notes',
-  'noteTemplates',
-  'files',
-  'credentials',
-  'onboarding',
-  'graph',
-  'ask',
-] as const;
-
 describe('Domain registrations characterization', () => {
   // ---------------------------------------------------------------------------
   // Pure values
@@ -146,21 +130,6 @@ describe('Domain registrations characterization', () => {
 
     it('Object.keys(EMAIL_TEMPLATES), in registration order', () => {
       expect(emailTemplateRegistry.ids()).toMatchSnapshot();
-    });
-
-    it('USER_DATA_SCOPES, in declared order', () => {
-      expect([...USER_DATA_SCOPES]).toMatchSnapshot();
-    });
-
-    it('the full scopeIncludes(scope, category) matrix', () => {
-      const matrix: Record<string, Record<string, boolean>> = {};
-      for (const scope of USER_DATA_SCOPES) {
-        matrix[scope] = {};
-        for (const category of SCOPE_CATEGORIES) {
-          matrix[scope][category] = scopeIncludes(scope, category);
-        }
-      }
-      expect(matrix).toMatchSnapshot();
     });
   });
 
@@ -248,65 +217,6 @@ describe('Domain registrations characterization', () => {
 
       const response = await request(server())
         .get('/api/notifications/config')
-        .set(authHeader(viewer.accessToken))
-        .expect(200);
-
-      expect(stableBody(response.body)).toMatchSnapshot();
-    });
-
-    it('GET /api/user-data/summary (nothing held, no deletion in flight)', async () => {
-      const viewer = await createMockViewerUser(context);
-
-      context.prismaMock.storageObject.aggregate.mockResolvedValue({
-        _count: { _all: 0 },
-        _sum: { size: null },
-      });
-      context.prismaMock.note.findMany.mockResolvedValue([]);
-      context.prismaMock.noteTemplate.count.mockResolvedValue(0);
-      context.prismaMock.userAiKey.count.mockResolvedValue(0);
-      context.prismaMock.personalAccessToken.count.mockResolvedValue(0);
-      context.prismaMock.kgEntity.count.mockResolvedValue(0);
-      context.prismaMock.kgItem.count.mockResolvedValue(0);
-      context.prismaMock.askConversation.count.mockResolvedValue(0);
-      context.prismaMock.job.findFirst.mockResolvedValue(null);
-
-      const response = await request(server())
-        .get('/api/user-data/summary')
-        .set(authHeader(viewer.accessToken))
-        .expect(200);
-
-      expect(stableBody(response.body)).toMatchSnapshot();
-      // The wire-visible key order of the Danger Zone summary, called out on
-      // its own so a reorder is unmistakable in a failing diff.
-      expect(Object.keys(response.body.data)).toMatchSnapshot();
-    });
-
-    it('GET /api/user-data/summary (populated, deletion in flight)', async () => {
-      const viewer = await createMockViewerUser(context);
-
-      context.prismaMock.transcript.count.mockResolvedValue(3);
-      context.prismaMock.note.count.mockResolvedValue(5);
-      context.prismaMock.note.findMany.mockResolvedValue([]);
-      context.prismaMock.storageObject.aggregate.mockResolvedValue({
-        _count: { _all: 2 },
-        _sum: { size: BigInt(2048) },
-      });
-      context.prismaMock.noteTemplate.count.mockResolvedValue(4);
-      context.prismaMock.userAiKey.count.mockResolvedValue(1);
-      context.prismaMock.personalAccessToken.count.mockResolvedValue(2);
-      context.prismaMock.kgEntity.count.mockResolvedValue(7);
-      context.prismaMock.kgItem.count.mockResolvedValue(9);
-      context.prismaMock.askConversation.count.mockResolvedValue(6);
-      context.prismaMock.job.findFirst.mockResolvedValue({
-        id: '22222222-2222-4222-8222-222222222222',
-        type: 'user.data.purge',
-        status: 'pending',
-        createdAt: FIXED_DATE,
-        payload: { userId: viewer.id, scope: 'notes', requestId: 'req' },
-      });
-
-      const response = await request(server())
-        .get('/api/user-data/summary')
         .set(authHeader(viewer.accessToken))
         .expect(200);
 
