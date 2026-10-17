@@ -165,7 +165,6 @@ The bare host now mounts all four over the shared transcripts, notes and search 
 
 Known package gaps (not host duties, open):
 
-- A proposal commit does not publish `graph.changed` (only `kg.purge` and manual entity edits do), so the material-change re-layout never fires after a commit.
 - `@fastify/multipart` is missing from the slice peers data (duty 3).
 
 ## 7. Out of scope
