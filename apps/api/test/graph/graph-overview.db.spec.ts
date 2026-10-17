@@ -24,17 +24,13 @@
 
 import type { PrismaClient } from '@prisma/client';
 
-import { KG_GRAPH_LAYOUT_JOB_TYPE } from '../../src/graph/job-types';
-import { GraphLayoutEnqueuer } from '../../src/graph/layout/graph-layout.enqueuer';
-import { KgGraphLayoutHandler } from '../../src/graph/layout/graph-layout.handler';
-import { GraphLayoutListener } from '../../src/graph/layout/graph-layout.listener';
-import { GraphOverviewService } from '../../src/graph/layout/graph-overview.service';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { KG_GRAPH_LAYOUT_JOB_TYPE, GraphLayoutEnqueuer } from '@marinoscar/kvox-api/graph';
+import { KgGraphLayoutHandler, GraphLayoutListener, GraphOverviewService, KgPurgeService } from './package-internals';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { GraphFixture, NO_EXPORT_FILES, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
-import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbGraphObjects, createDbJobs, createDbEvents } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-overview.db.spec');
 
@@ -54,11 +50,12 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     prisma = connectTestPrisma();
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
-    handler = new KgGraphLayoutHandler(new JobHandlerRegistry(), p);
-    enqueuer = new GraphLayoutEnqueuer(new JobsService(p), p);
+    const { port } = createDbJobs(prisma);
+    handler = new KgGraphLayoutHandler(port, p);
+    enqueuer = new GraphLayoutEnqueuer(port);
     overview = new GraphOverviewService(p, enqueuer);
-    listener = new GraphLayoutListener(p, enqueuer);
-    purge = new KgPurgeService(p, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE));
+    listener = new GraphLayoutListener(p, enqueuer, createDbEvents());
+    purge = new KgPurgeService(p, createDbGraphObjects(prisma));
   });
 
   afterAll(async () => {

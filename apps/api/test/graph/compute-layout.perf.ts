@@ -11,8 +11,7 @@
 // Prints one JSON line: { ms, nodes, positions, clusters, modularity }.
 // =============================================================================
 
-import { computeLayout, type LayoutInput } from '../../src/graph/layout/compute-layout';
-import { mulberry32 } from '../../src/graph/layout/seeded-rng';
+import { computeLayout, type LayoutInput, mulberry32 } from './package-internals';
 
 const N = 10_000;
 const E = 40_000;

@@ -1,14 +1,12 @@
 // FIRST: sets how the routes are documented before `forRoot` documents them.
 import '../auth-documenter';
 
-import { Module } from '@nestjs/common';
 import { TranscriptsModule } from '@marinoscar/kvox-api/transcripts';
 
 import { sharingModule } from '../../platform/sharing/sharing.config';
 import { SearchIndexingConfig } from '../search/search.config';
 import { TranscriptionConfig } from '../transcription/transcription.config';
 import { PlatformTranscriptSharing } from './platform-transcript-sharing';
-import { TranscriptEventsBridge } from './transcript-events.bridge';
 
 // =============================================================================
 // The web edition's configuration of the transcripts slice (issue #493, epic #491)
@@ -35,14 +33,13 @@ import { TranscriptEventsBridge } from './transcript-events.bridge';
 //
 // What stays out of the slice and lives beside this file, because it uses the platform:
 // the onboarding step and facts (`transcripts.onboarding.ts`), the notification
-// registrations (`notification-templates.ts`), the sharing implementation, and the
-// bridge from the slice's event port to the application's `@OnEvent` listeners
-// (`transcript-events.bridge.ts`). The permissions the slice exports as data are
+// registrations (`notification-templates.ts`) and the sharing implementation. (The bridge from the
+// slice's event port to the application's `@OnEvent` listeners is gone: the graph subscribes to the
+// event port itself since #496.) The permissions the slice exports as data are
 // registered in `app-registrations/kvox-permissions.ts`; the email templates stay in
 // `email-templates/`.
 //
-// Exported as a constant because other modules (notes, graph, Ask, until they move into
-// the package) import it: a dynamic module built twice with the same options is one
+// Exported as a constant because other modules (notes, graph, Ask) import it: a dynamic module built twice with the same options is one
 // module, but one constant is the unmistakable way to say so.
 // =============================================================================
 
@@ -54,10 +51,3 @@ export const TranscriptsConfig = TranscriptsModule.forRoot({
   peers: { transcription: TranscriptionConfig, searchIndexing: SearchIndexingConfig },
   appUrl: () => process.env.APP_URL || DEFAULT_APP_URL,
 });
-
-/** The parts of the transcripts configuration that use the platform and so stay in the application. */
-@Module({
-  imports: [TranscriptsConfig],
-  providers: [TranscriptEventsBridge],
-})
-export class TranscriptsBindingModule {}

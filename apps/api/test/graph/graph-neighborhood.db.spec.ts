@@ -27,13 +27,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { itemValidAt, itemValidAtSql, relationValidAtSql } from '../../src/graph/read/as-of';
-import type { GraphSlice } from '../../src/graph/read/dto/graph-read.dto';
-import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
-import { fromPgRange, isValidAt } from '../../src/graph/temporal';
+import { GraphAccessService, GraphOntologyService, GraphPreferencesService, GraphNeighborhoodService, fromPgRange } from '@marinoscar/kvox-api/graph';
+import { itemValidAt, itemValidAtSql, relationValidAtSql, isValidAt } from './package-internals';
+import type { GraphSlice } from '@marinoscar/kvox-contract/graph';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import {
@@ -44,6 +40,7 @@ import {
   connectTestPrisma,
   createUser,
 } from './graph-read.fixtures';
+import { createDbSettings } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-neighborhood.db.spec');
 
@@ -61,7 +58,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     prisma = connectTestPrisma();
     await prisma.$connect();
     const asService = prisma as unknown as PrismaService;
-    svc = new GraphNeighborhoodService(asService, new GraphAccessService(asService), new GraphOntologyService(asService, new GraphPreferencesService(asService)));
+    svc = new GraphNeighborhoodService(asService, new GraphAccessService(asService), new GraphOntologyService(asService, new GraphPreferencesService(createDbSettings(prisma))));
   });
 
   afterAll(async () => {

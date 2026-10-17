@@ -7,7 +7,10 @@
     "transcription": ["ports", "core"],
     "search": ["ports", "core"],
     "transcripts": ["ports", "core", "testing", "transcription", "search"],
-    "notes": ["ports", "core", "testing", "transcripts", "search"]
+    "notes": ["ports", "core", "testing", "transcripts", "search"],
+    "graph": ["ports", "core", "testing", "transcripts", "notes", "search"],
+    "graph-extraction": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"],
+    "graph-rdf": ["ports", "core", "testing", "graph", "graph-extraction", "transcripts", "notes"]
   },
   "kvox-web": { "core": [] },
   "kvox-contract": {

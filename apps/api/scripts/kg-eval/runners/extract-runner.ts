@@ -25,19 +25,10 @@
 import { computeEffectiveSchema } from '@app/shared/ontology';
 import { z } from 'zod';
 
-import {
-  buildExtractionContext,
-  normalizeForMatch,
-  type ExtractionInput,
-  type KnownEntityRow,
-} from '../../../src/graph/extraction/extraction-context';
-import { EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema } from '../../../src/graph/extraction/output-schema';
-import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../../../src/graph/extraction/precheck';
-import { assembleExtractionPrompt } from '../../../src/graph/extraction/prompt';
-import { extractionRowCaps } from '../../../src/graph/extraction/row-caps';
-import { addDeterministicRows, validateExtraction, type EvidenceDraft, type ProposedRow } from '../../../src/graph/extraction/validate';
-import { GRAPH_PREFERENCE_DEFAULTS } from '../../../src/graph/preferences/graph-preferences.defaults';
-import type { EndpointRef } from '../../../src/graph/proposals/proposal-payload.schema';
+import { buildExtractionContext, normalizeForMatch, type ExtractionInput, type KnownEntityRow, EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema, assembleExtractionPrompt, extractionRowCaps, addDeterministicRows, validateExtraction, type EvidenceDraft, type ProposedRow } from '../../../test/graph/package-internals';
+import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '@marinoscar/kvox-api/graph-extraction';
+import { GRAPH_PREFERENCE_DEFAULTS } from '@marinoscar/kvox-api/graph';
+import type { EndpointRef } from '@marinoscar/kvox-contract/graph';
 import { directStructuredClient, type KgEvalAi } from '../direct-structured';
 import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';

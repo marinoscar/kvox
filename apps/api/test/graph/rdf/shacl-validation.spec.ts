@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { ONTOLOGY } from '@app/shared/ontology';
 
-import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
+import { generateShacl } from '../package-internals';
 import { FIXTURE_NS as NS, PROV, SH, parseTurtle, userDef, validateShacl, type ShaclReport } from './rdf-fixtures';
 
 // =============================================================================

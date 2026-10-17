@@ -36,14 +36,8 @@ import { ListCommitmentsTool } from '../../src/ask/tools/list-commitments.tool';
 import { NeighborsTool } from '../../src/ask/tools/neighbors.tool';
 import { SearchTool } from '../../src/ask/tools/search.tool';
 import { TimelineTool } from '../../src/ask/tools/timeline.tool';
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { EntityBriefService } from '../../src/graph/brief/entity-brief.service';
-import { EntityViewService } from '../../src/graph/brief/entity-view.service';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
-import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
-import { GraphReadService } from '../../src/graph/read/graph-read.service';
+import { GraphAccessService, EntityBriefService, GraphOntologyService, GraphPreferencesService, GraphEvidenceService, GraphNeighborhoodService, GraphReadService } from '@marinoscar/kvox-api/graph';
+import { EntityViewService } from '../graph/package-internals';
 import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
@@ -52,8 +46,10 @@ import { createFakeAskPort, done, FakeAskStream, text, toolCall } from '../../sc
 import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
 import { JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
+import { createDbSettings } from '../helpers/graph-ports.helper';
+import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 
@@ -90,11 +86,11 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
 
     const access = new GraphAccessService(p);
     const transcriptAccess = createTranscriptAccess(p);
-    const preferences = new GraphPreferencesService(p);
+    const preferences = new GraphPreferencesService(createDbSettings(prisma));
     const ontology = new GraphOntologyService(p, preferences);
-    const reads = new GraphReadService(p, access, ontology, transcriptAccess);
+    const reads = new GraphReadService(p, access, ontology, transcriptAccess, new SharedTranscriptVisibility(p));
     const neighborhood = new GraphNeighborhoodService(p, access, ontology);
-    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
+    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbObjectStore(prisma, UNUSED_STORAGE));
     const search = { search: async () => ({ results: [], nextCursor: null }) };
     const brief = new EntityBriefService(
       p,
@@ -102,7 +98,9 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
       ontology,
       new EntityViewService(p),
       search as never,
+      new SharedTranscriptVisibility(p),
       { resolve: async () => { throw new Error('never'); } } as never,
+      { isRegistered: () => { throw new Error('never'); } } as never,
       { enqueue: async () => { throw new Error('never'); } } as never,
     );
     const toolset = new AskToolset(

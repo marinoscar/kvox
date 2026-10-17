@@ -16,7 +16,7 @@
 //
 // TRANSCRIPTION NEEDS NO PRISMA. It reads and writes through the settings,
 // secrets and audit ports only, so it adds no line here. The first line is search's
-// (#494), the second the transcripts slice's (#493), the third the notes slice's (#495).
+// (#494), the second the transcripts slice's (#493), the third the notes slice's (#495), the last the graph's (#496).
 //
 // Keep one line per slice, named `_<slice>`.
 // =============================================================================
@@ -58,3 +58,14 @@ import type { NoteTemplateSeedDb } from '@marinoscar/kvox-api/notes/templates';
 
 /** The built-in note template seed (#495): the application's seed script passes its own client. */
 export const _noteSeed: NoteTemplateSeedDb = null as unknown as KvoxHostPrisma;
+
+import type { KvoxGraphDb } from '@marinoscar/kvox-api/graph';
+
+/**
+ * Graph (#496): the fifteen `kg_*` tables with the columns the three graph slices read and write
+ * (the `valid` and `embedding` columns are `Unsupported` in the schema and reached with raw SQL, so
+ * they are not part of the shape), the read-only `transcript`, `transcriptSegment`,
+ * `transcriptSpeaker`, `note` and `noteVersion` delegates, and `$transaction` in both its callback
+ * and array forms. `GraphExtractionModule` and `GraphRdfModule` use the same client type.
+ */
+export const _graph: KvoxGraphDb = null as unknown as KvoxHostPrisma;

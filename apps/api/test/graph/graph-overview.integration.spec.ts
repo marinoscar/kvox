@@ -5,10 +5,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import {
-  graphOverviewRefreshResponseSchema,
-  graphOverviewResponseSchema,
-} from '../../src/graph/layout/dto/graph-overview.dto';
+import { graphOverviewRefreshResponseSchema, graphOverviewResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // /api/graph/overview over the wire (#371, epic #347)

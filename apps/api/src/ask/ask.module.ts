@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { GraphModule } from '../graph/graph.module';
+import { GraphConfig } from '../kvox/graph/graph.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AskAccessService } from './ask-access.service';
 import { AskConversationsController } from './ask-conversations.controller';
@@ -18,8 +18,8 @@ import { AskToolsModule } from './tools/ask-tools.module';
 //
 // Saved conversations with the read-only graph agent. This issue lands the
 // storage, `AskAccessService` and the CRUD routes; #378 adds posting a message
-// and the `ask.respond` job, #379 the stream — both HERE. `GraphModule`
-// supplies `GraphAccessService` (scope validation); the edge runs one way.
+// and the `ask.respond` job, #379 the stream — both HERE. `GraphConfig`
+// (`@marinoscar/kvox-api/graph`) supplies `GraphAccessService` (scope validation); the edge runs one way.
 // `AskToolsModule` (#377) supplies the read-only `AskToolset` #378's job runs.
 // #378: `JobsModule` (enqueue + the handler registry) for posting and answering.
 // The model, the asker's own key and the streamed tool loop come from `KVOX_AI`
@@ -31,7 +31,7 @@ import { AskToolsModule } from './tools/ask-tools.module';
 @Module({
   imports: [
     PrismaModule,
-    GraphModule,
+    GraphConfig,
     AskToolsModule,
   ],
   providers: [

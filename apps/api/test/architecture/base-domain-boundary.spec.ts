@@ -88,7 +88,6 @@ const SRC = resolve(__dirname, '..', '..', 'src');
  * it, so it is argued in a pull request, not done to silence a failure.
  */
 const DOMAIN_DIRS: readonly string[] = [
-  'graph',
   'ask',
 ];
 
@@ -428,10 +427,16 @@ describe('domain registrations are imported by the composition roots only (issue
   });
 
   it('actually finds the registrations it guards (a path mistake must not make this vacuous)', () => {
+    // Since #496 the last registrations live in the application's `kvox/` binding folder (the graph's
+    // user-settings namespace beside its configuration), no longer in a domain directory, so the scan
+    // looks at every import of a registration file, wherever it lives.
     const importers = new Set(
-      allSrcEdges()
-        .filter((edge) => isRegistrationFile(edge.to))
-        .map((edge) => edge.from),
+      walkTypeScript(SRC).flatMap((file) =>
+        findSpecifiers(file, readFileSync(file, 'utf8'))
+          .filter(({ specifier }) => specifier.startsWith('.'))
+          .filter(({ specifier }) => isRegistrationFile(posix(relative(SRC, resolve(dirname(file), specifier))).replace(/\.(ts|tsx|js)$/, '')))
+          .map(() => posix(relative(SRC, file))),
+      ),
     );
 
     // Since #495 every registration `kvox.manifest.ts` imports is an app binding under `kvox/` (the
@@ -445,7 +450,7 @@ describe('domain registrations are imported by the composition roots only (issue
     ['notes/notifications/notes.notifications', true],
     ['kvox/transcripts/transcripts.onboarding', true],
     ['kvox/transcription/transcription.system-settings', true],
-    ['graph/preferences/graph.user-settings', true],
+    ['kvox/graph/graph.user-settings', true],
     ['notes/job-type-labels', true],
     ['notes/notes.service', false],
   ])('classifies %s as a registration file: %s', (to, expected) => {
@@ -508,12 +513,10 @@ describe('the import scanner', () => {
       "import { b } from '../common/registry';",
       "import { c } from '../ask/ask.service';",
       "import { d } from '../../test/helpers/membership-user.helper';",
-      "import { e } from '../graph';",
     ].join('\n');
 
     expect(edgesIn(FILE, text).map((edge) => [edge.line, edge.domain, edge.to])).toEqual([
       [4, 'ask', 'ask/ask.service'],
-      [6, 'graph', 'graph'],
     ]);
   });
 });

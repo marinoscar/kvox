@@ -4,7 +4,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { graphAttributeDefSchema } from '../../src/graph/dto/graph-attribute-def.dto';
+import { graphAttributeDefSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // /api/graph/attribute-defs over the wire (#355, epic #344; ontology.md §17.3)

@@ -47,12 +47,6 @@ import { LoggerModule } from './common/logger/logger.module';
 import { KvoxModule } from './kvox/kvox.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
-import { GraphModule } from './graph/graph.module';
-import { GraphExtractionModule } from './graph/extraction/extraction.module';
-import { GraphResolutionModule } from './graph/resolution/resolution.module';
-import { GraphDedupModule } from './graph/dedup/dedup.module';
-import { GraphProposalsModule } from './graph/proposals/proposals.module';
-import { GraphImportModule } from './graph/import/graph-import.module';
 import { AskModule } from './ask/ask.module';
 import { userDataModule } from './platform/user-data/user-data.config';
 import { sharingModule } from './platform/sharing/sharing.config';
@@ -271,36 +265,10 @@ import configuration from './config/configuration';
     // note is generated from the transcript AS THE USER CORRECTED IT, never from the AI's original
     // result.
 
-    // Connected knowledge (#354, epic #344): the graph scaffold — the
-    // `graph:*` access service, the effective-ontology service and
-    // `GET /api/graph/ontology`. After NotesModule and the transcripts configuration
-    // (imported for #355's evidence validation); imported by nothing, so the
-    // dependency edge runs one way.
-    GraphModule,
-
-    // Graph extraction (#363): `kg.extract`, its two routes and the proposal
-    // stage registry. The notes configuration's temporary listener (#495) calls it
-    // when a note is ready; listed here explicitly for the reason SearchIndexingModule
-    // is below.
-    GraphExtractionModule,
-
-    // Entity resolution (#364): the `resolution` proposal stage, merges and
-    // their reversal, distinct pairs, and the `kg.resolve` / `kg.embed` jobs.
-    // Imports GraphExtractionModule (the stage registry) and SearchModule (the
-    // embedder contract); imported by nothing here, one-way.
-    GraphResolutionModule,
-    // Work-item dedup, temporal closing and rejection memory (#365): three
-    // proposal stages after resolution. Imports GraphResolutionModule; one-way.
-    GraphDedupModule,
-
-    // Graph proposal review (#366): list/get/decide/add-from-span, the commit
-    // (the one general write path into the graph) and its revert. Imports
-    // GraphResolutionModule for merges, distinct pairs and alias learning.
-    GraphProposalsModule,
-    // Graph import (#387): `POST /api/graph/imports`, the attribute-offer
-    // routes and `kg.import`, which runs every proposal stage over an import.
-    // Imports GraphExtractionModule and GraphResolutionModule; one-way.
-    GraphImportModule,
+    // Connected knowledge (#354, epic #344) is `@marinoscar/kvox-api/graph`, `/graph-extraction` and
+    // `/graph-rdf`, configured in `kvox/graph/graph.config.ts` and imported by `KvoxModule` above (#496,
+    // epic #491), after the transcripts, notes and search configurations they read through. A ready note
+    // reaches the extraction as the notes slice's ready event (`NOTE_READY_EVENT`) on the event port.
 
     // Ask (#376, epic #348): saved conversations with the read-only graph
     // agent. Imports GraphModule for `GraphAccessService` (scope validation);

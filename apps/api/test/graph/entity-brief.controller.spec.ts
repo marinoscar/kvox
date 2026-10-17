@@ -5,7 +5,7 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
-import { entityBriefResponseSchema } from '../../src/graph/brief/dto/entity-brief.dto';
+import { entityBriefResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // GET /api/graph/entities/:id/brief over the wire (#372, epic #347)

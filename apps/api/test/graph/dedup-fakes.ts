@@ -10,8 +10,8 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { ProposalStageContext } from '../../src/graph/extraction/proposal-stage';
-import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../../src/graph/preferences/graph-preferences.defaults';
+import type { ProposalStageContext } from '@marinoscar/kvox-api/graph-extraction';
+import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '@marinoscar/kvox-api/graph';
 
 export const OWNER = '11111111-1111-4111-8111-111111111111';
 export const PROPOSAL = '22222222-2222-4222-8222-222222222222';

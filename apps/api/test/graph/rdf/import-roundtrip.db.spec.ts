@@ -30,23 +30,12 @@ import type { KgExport, PrismaClient } from '@prisma/client';
 import { ONTOLOGY } from '@app/shared/ontology';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { GraphAccessService } from '../../../src/graph/access/graph-access.service';
-import { GraphAttributeDefsService } from '../../../src/graph/attribute-defs/graph-attribute-defs.service';
-import { GraphExportSource } from '../../../src/graph/export/graph-export.source';
-import { KgExportHandler } from '../../../src/graph/export/kg-export.handler';
-import { ProposalStageRegistry } from '../../../src/graph/extraction/proposal-stage';
-import type { GraphObjectsService } from '../../../src/graph/graph-objects.service';
-import type { GraphImportOffer, GraphImportStats } from '../../../src/graph/import/dto/graph-import.dto';
-import { GraphImportService } from '../../../src/graph/import/graph-import.service';
-import { KgImportHandler } from '../../../src/graph/import/kg-import.handler';
-import { KgMigrateRepository } from '../../../src/graph/migrate/kg-migrate.repository';
-import { KgPurgeService } from '../../../src/graph/purge/kg-purge.service';
-import { GraphOntologyService } from '../../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../../src/graph/preferences/graph-preferences.service';
-import { CandidateService } from '../../../src/graph/resolution/candidate.service';
-import { ContextFeatureService } from '../../../src/graph/resolution/context-features.service';
-import { ResolutionService } from '../../../src/graph/resolution/resolution.service';
-import { ResolutionStage } from '../../../src/graph/resolution/resolution.stage';
+import { GraphAccessService, GraphAttributeDefsService, KgMigrateRepository, GraphOntologyService, GraphPreferencesService } from '@marinoscar/kvox-api/graph';
+import { GraphExportSource, KgExportHandler, GraphImportService, KgImportHandler, resolveGraphRdfOptions } from '@marinoscar/kvox-api/graph-rdf';
+import { ProposalStageRegistry, ResolutionService } from '@marinoscar/kvox-api/graph-extraction';
+import type { GraphObjectsService } from '@marinoscar/kvox-api/graph';
+import type { GraphImportOffer, GraphImportStats } from '@marinoscar/kvox-contract/graph';
+import { KgPurgeService, CandidateService, ContextFeatureService, ResolutionStage } from '../package-internals';
 import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
@@ -54,8 +43,10 @@ import { buildServices } from '../kg-proposal-db-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
 import { importFixture, type ImportFixture } from './import-fixtures';
 import { createStorageObject } from '../../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../../helpers/db-managed-objects.helper';
 import { createTranscriptAccess } from '../../helpers/sharing-kit.helper';
+import { createDbAudit, createDbSettings } from '../../helpers/graph-ports.helper';
+import { DEFAULT_KVOX_BRAND } from '@marinoscar/kvox-api/core';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('import-roundtrip.db.spec');
 
@@ -66,6 +57,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
   let prisma: PrismaClient;
   let db: PrismaService;
   let ontology: GraphOntologyService;
+  let settings: ReturnType<typeof createDbSettings>;
   let source: GraphExportSource;
   let services: ReturnType<typeof buildServices>;
   const files = new Map<string, string>();
@@ -103,9 +95,19 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
       const object = await prisma.storageObject.findUnique({ where: { id: objectId } });
       const text = files.get(objectId);
       if (!object || text === undefined) return null;
-      return { stream: Readable.from([Buffer.from(text)]), object };
+      return { stream: Readable.from([Buffer.from(text)]), object: { ownerId: object.uploadedById } };
     },
     signedUrlFor: async () => null,
+    // The owner's uploaded import files under a prefix, for the purge's sweep.
+    listImports: async (ownerId: string, keyPrefix: string, limit: number) =>
+      (
+        await prisma.storageObject.findMany({
+          where: { uploadedById: ownerId, storageKey: { startsWith: keyPrefix } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: limit,
+        })
+      ).map((row) => row.id),
     // What the real one does to the row: `kg.purge` sweeps import files through it.
     deleteIfPresent: async (id: string | null | undefined) => {
       if (!id) return false;
@@ -119,7 +121,8 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     prisma = connectTestPrisma();
     await prisma.$connect();
     db = prisma as unknown as PrismaService;
-    ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
+    settings = createDbSettings(prisma);
+    ontology = new GraphOntologyService(db, new GraphPreferencesService(settings));
     source = new GraphExportSource(db, ontology, createTranscriptAccess(db), new NoteAccessService(db));
     services = buildServices(prisma);
   });
@@ -133,7 +136,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const users = await prisma.user.findMany({ where: { email: { startsWith: EMAIL_PREFIX } }, select: { id: true } });
     for (const { id } of users) {
       await prisma.kgExport.deleteMany({ where: { ownerId: id } });
-      await new KgPurgeService(db, objects, createDbManagedObjects(prisma, UNUSED_STORAGE)).purgeAll(id);
+      await new KgPurgeService(db, objects).purgeAll(id);
       await prisma.auditEvent.deleteMany({ where: { actorUserId: id } });
     }
     await prisma.kgAttributeDef.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
@@ -165,19 +168,18 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
       new ContextFeatureService(db),
       { resolve: async () => ({ ok: false, reason: 'ai_key_missing' }) } as never,
       adjudication as never,
-      { registerProviderKey: jest.fn() } as never,
     );
     new ResolutionStage(stages, resolution).onModuleInit();
     return new KgImportHandler(
-      { register: () => undefined } as never,
+      { registerHandler: () => undefined, isRegistered: () => true, enqueue: jest.fn() } as never,
       db,
       objects,
       ontology,
-      new GraphPreferencesService(db),
+      new GraphPreferencesService(settings),
       stages,
-      { registerProviderKey: jest.fn() } as never,
-      { enqueue: jest.fn() } as never,
       new KgMigrateRepository(db),
+      DEFAULT_KVOX_BRAND,
+      resolveGraphRdfOptions({}),
     );
   }
 
@@ -185,12 +187,14 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const access = new GraphAccessService(db);
     return new GraphImportService(
       db,
-      { get: async () => ({ graphEnabled: true }) } as never,
+      { graphEnabled: async () => true } as never,
       objects,
       { enqueueWithin: jest.fn() } as never,
       access,
       ontology,
-      new GraphAttributeDefsService(db, access, ontology),
+      new GraphAttributeDefsService(db, access, ontology, createDbAudit(prisma)),
+      createDbAudit(prisma),
+      resolveGraphRdfOptions({}),
     );
   }
 
@@ -316,7 +320,7 @@ describeWithDb('kg.import — validation, proposal and round trip (real Postgres
     const row: KgExport = await prisma.kgExport.create({
       data: { ownerId, format: 'turtle', graphFingerprint: 'pending', ontologyVersion: ONTOLOGY.version, expiresAt: new Date(Date.now() + 86_400_000) },
     });
-    await new KgExportHandler({ register: () => undefined } as never, db, source, exportObjects).process({ id: randomUUID(), payload: { mode: 'render', exportId: row.id } } as never);
+    await new KgExportHandler({ registerHandler: () => undefined } as never, db, source, exportObjects, createDbAudit(prisma), DEFAULT_KVOX_BRAND).process({ id: randomUUID(), payload: { mode: 'render', exportId: row.id } } as never);
     return [...uploads.values()][0];
   }
 

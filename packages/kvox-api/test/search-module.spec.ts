@@ -78,8 +78,8 @@ describe('SearchModule.forRoot and SearchIndexingModule.forRoot', () => {
     expect(SearchIndexingModule.forRoot().global).toBe(false);
   });
 
-  it('exports the query services and ONLY the index service from the indexing side', () => {
-    expect(SearchModule.forRoot().exports).toEqual([SearchService, SearchQueryEmbedder]);
+  it('exports the query services (and the transcript-visibility rule the graph reuses) and ONLY the index service from the indexing side', () => {
+    expect(SearchModule.forRoot().exports).toEqual([SearchService, SearchQueryEmbedder, SEARCH_TRANSCRIPT_VISIBILITY]);
     expect(SearchIndexingModule.forRoot().exports).toEqual([SearchIndexService]);
   });
 

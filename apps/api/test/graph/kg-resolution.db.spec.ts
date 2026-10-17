@@ -16,19 +16,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
-import { NO_EXPORT_FILES } from './graph-read.fixtures';
-import { GRAPH_PREFERENCE_DEFAULTS } from '../../src/graph/preferences/graph-preferences.defaults';
-import { CandidateService } from '../../src/graph/resolution/candidate.service';
-import { ContextFeatureService, emptyContext } from '../../src/graph/resolution/context-features.service';
-import { DistinctPairService } from '../../src/graph/resolution/distinct-pair.service';
-import { MergeService } from '../../src/graph/resolution/merge.service';
-import { ResolutionService } from '../../src/graph/resolution/resolution.service';
-import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
-import { GraphWriteService } from '../../src/graph/write/graph-write.service';
-import { normalizeAlias } from '../../src/graph/write/normalize';
+import { KgPurgeService, CandidateService, ContextFeatureService, emptyContext, EvidenceValidator } from './package-internals';
+import { GRAPH_PREFERENCE_DEFAULTS, GraphWriteService, normalizeAlias } from '@marinoscar/kvox-api/graph';
+import { DistinctPairService, MergeService, ResolutionService } from '@marinoscar/kvox-api/graph-extraction';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbGraphObjects, createDbAudit } from '../helpers/graph-ports.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-resolution.db.spec');
@@ -70,17 +63,16 @@ describeWithDb('entity resolution (real Postgres)', () => {
       new ContextFeatureService(db),
       noEmbedder as never,
       { adjudicate: jest.fn(), buildCandidateDossiers: jest.fn() } as never,
-      { registerProviderKey: jest.fn() } as never,
     );
     merges = new MergeService(
       db,
-      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
-      { enqueue: jest.fn() } as never,
-      { get: () => undefined } as never,
+      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
+      { enqueue: jest.fn(), isRegistered: () => false } as never,
       followUps as never,
+      createDbAudit(prisma),
     );
     distinct = new DistinctPairService();
-    purge = new KgPurgeService(db, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE));
+    purge = new KgPurgeService(db, createDbGraphObjects(prisma));
   });
 
   afterAll(async () => {

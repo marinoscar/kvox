@@ -34,8 +34,8 @@ import type {
   UserSettingsNamespaceExtension,
 } from '@marinoscar/platform-api/settings';
 
-import { GRAPH_USER_SETTINGS } from '../graph/preferences/graph.user-settings';
-import type { GraphPreferencesValue } from '../graph/preferences/graph-preferences.schema';
+import type { GraphPreferencesValue } from '@marinoscar/kvox-api/graph';
+import { GRAPH_USER_SETTINGS } from '../kvox/graph/graph.user-settings';
 import type { SystemTranscriptionValue } from '@marinoscar/kvox-api/transcription';
 import { KVOX_AI_SETTINGS_EXTENSION } from '../platform/ai/ai-settings.extension';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../platform/telemetry/telemetry.system-settings';

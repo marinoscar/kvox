@@ -25,7 +25,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { AskAccessService } from '../../src/ask/ask-access.service';
 import { AskConversationsService } from '../../src/ask/ask-conversations.service';
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
+import { GraphAccessService } from '@marinoscar/kvox-api/graph';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';

@@ -25,17 +25,11 @@
 
 import type { PrismaClient } from '@prisma/client';
 
-import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { EntityBriefService } from '../../src/graph/brief/entity-brief.service';
-import { EntityDigestEnqueuer } from '../../src/graph/brief/entity-digest.enqueuer';
-import { EntityViewService } from '../../src/graph/brief/entity-view.service';
-import type { EntityBriefResponse } from '../../src/graph/brief/dto/entity-brief.dto';
-import { entityBriefResponseSchema } from '../../src/graph/brief/dto/entity-brief.dto';
-import { KG_ENTITY_DIGEST_JOB_TYPE } from '../../src/graph/job-types';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
+import { createFakeKvoxAi } from '@marinoscar/kvox-api/testing';
+import { GraphAccessService, EntityBriefService, EntityDigestEnqueuer, KG_ENTITY_DIGEST_JOB_TYPE, GraphOntologyService, GraphPreferencesService, GraphEvidenceService, GraphAiRunResolver } from '@marinoscar/kvox-api/graph';
+import { EntityViewService } from './package-internals';
+import type { EntityBriefResponse } from '@marinoscar/kvox-contract/graph';
+import { entityBriefResponseSchema } from '@marinoscar/kvox-contract/graph';
 import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -46,9 +40,9 @@ import {
 import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
-import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
+import { createDbJobs, createDbSettings } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('entity-brief.db.spec');
 
@@ -61,7 +55,8 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   let briefs: EntityBriefService;
   let evidence: GraphEvidenceService;
   // The AI port: ready by default; a test flips it to "no key".
-  const ai = new FakeKvoxAi();
+  const ai = createFakeKvoxAi();
+  const resolveTaskCalls = () => ai.calls.filter((c) => c.method === 'resolveTask');
 
   beforeAll(async () => {
     if (!dbReachable) return;
@@ -70,12 +65,14 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
     const transcriptAccess = createTranscriptAccess(p);
-    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbManagedObjects(prisma, UNUSED_STORAGE));
+    evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbObjectStore(prisma, UNUSED_STORAGE));
 
-    const registry = new JobHandlerRegistry();
+    const { port: jobsPort, registry } = createDbJobs(prisma);
     // A stand-in handler: the brief only needs the type to be registered.
     registry.register({ type: KG_ENTITY_DIGEST_JOB_TYPE, process: async () => undefined } as never);
-    const enqueuer = new EntityDigestEnqueuer(new JobsService(p), registry, { graphEnabled: async () => true } as never);
+    const settings = createDbSettings(prisma);
+    const aiRuns = new GraphAiRunResolver(ai, settings);
+    const enqueuer = new EntityDigestEnqueuer(jobsPort, aiRuns);
     // The semantic arm is off (no key); the full-text arm runs for real.
     const search = new SearchService(
       p,
@@ -87,10 +84,12 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     briefs = new EntityBriefService(
       p,
       access,
-      new GraphOntologyService(p, new GraphPreferencesService(p)),
+      new GraphOntologyService(p, new GraphPreferencesService(settings)),
       new EntityViewService(p),
       search,
-      ai,
+      new SharedTranscriptVisibility(p),
+      aiRuns,
+      jobsPort,
       enqueuer,
     );
   });
@@ -101,6 +100,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
   beforeEach(() => {
     ai.reset();
+    ai.script.failWith = undefined;
   });
 
   afterEach(async () => {
@@ -226,7 +226,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     expect(brief.digest?.statements).toEqual([{ text: 'Sarah leads the migration', evidenceIds: [ownEv.id] }]);
     expect(brief.digest?.model).toBe('model-x');
     expect(brief.digestStale).toBe(false);
-    expect(ai.callsOf('readiness')).toHaveLength(0);
+    expect(resolveTaskCalls()).toHaveLength(0);
     const cited = [...new Set(allEvidenceIds(brief))];
     expect((await evidence.getMany(user.id, cited)).length).toBe(cited.length);
   });
@@ -288,7 +288,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
 
     expect(await prisma.kgEntityView.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
-    expect(ai.callsOf('readiness')).toHaveLength(0);
+    expect(resolveTaskCalls()).toHaveLength(0);
   });
 
   it('fuses a text-only transcript (inGraph: false) with the documents the graph cites', async () => {
@@ -323,7 +323,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
   it('reports a missing key and enqueues nothing', async () => {
     const { reader, g } = await owner();
     const s = await seedSarah(g);
-    ai.setNotReady('ai_key_missing');
+    ai.script.failWith = 'key_missing';
     const brief = await get(reader, s.sarah);
     expect(brief).toMatchObject({ digestStale: true, digestPending: false, digestUnavailable: 'ai_key_missing' });
     expect(await prisma.job.count({ where: { type: KG_ENTITY_DIGEST_JOB_TYPE, subjectId: s.sarah } })).toBe(0);
