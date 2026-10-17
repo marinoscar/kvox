@@ -1497,7 +1497,7 @@ Email, notifications, broadcasts and Web Push are the platform's slices (`@marin
 | `jobs.job_failed`, `nodes.node_offline` | platform `OPS_NOTIFICATIONS`, `NODES_NOTIFICATIONS` | registered in the manifest |
 | `/api/email-settings`, the SMTP and SES transports, the nine platform templates (`test-email`, `broadcast`, `job-failed`, `node-offline`, `backup-failed`, `restore-completed`, `user-welcome`, `role-changed`, `allowlist-invitation`) | platform email slice | `platform/email/email.config.ts` (`EmailModule.forRoot(EMAIL_MODULE_OPTIONS)`), `platform/email/email.options.ts` (layout theme from `packages/shared/identity.json`, brand mark from `email-templates/brand-logo.ts`) |
 | Email templates of the application | KVox | `apps/api/src/email-templates/` (`KVOX_EMAIL_TEMPLATES`, the `EmailTemplateDataMap` augmentation) |
-| Event declarations: `user.welcome`, `allowlist.invitation`, `security.role_changed`, `allowlist.invitation_reminder`, `db_backup.backup_failed`, `db_backup.restore_completed`, `transcripts.*`, `notes.*` | KVox | `apps/api/src/notifications-registry/*.notifications.ts`, each entry a `registerNotification` registration copied verbatim (key, label, description, channels, `defaultEnabled`, `mandatory`) |
+| Event declarations: `user.welcome`, `allowlist.invitation`, `security.role_changed`, `allowlist.invitation_reminder`, `db_backup.backup_failed`, `db_backup.restore_completed`, `transcripts.*`, `notes.*`, `export.ready`, `export.failed` (bell and Web Push, no email; #532) | KVox | `apps/api/src/notifications-registry/*.notifications.ts`, each entry a `registerNotification` registration copied verbatim (key, label, description, channels, `defaultEnabled`, `mandatory`) |
 | The registration order | KVox | `platform/notifications/notification.manifest.ts`: platform channels, `configureEmailRendering`, platform email templates, `registerEmailTemplates(KVOX_EMAIL_TEMPLATES)`, then `registerNotifications([...])` |
 
 A module that sends a notification injects the platform `NotificationsService` and imports nothing (the mount is global); every call stays after the triggering write commits, outside `$transaction`, which the `after-commit` conformance suite scans for (this application's allowlist is empty). The recipe for a new event is the [`add-notification` skill](../.claude/skills/add-notification/SKILL.md); the design is in [`specs/browser-notifications.md`](specs/browser-notifications.md) and [`specs/notification-broadcasts.md`](specs/notification-broadcasts.md).
@@ -1576,6 +1576,20 @@ AI is the platform's slice (`@marinoscar/platform-api/ai`), mounted in `apps/api
 **AI settings pages (#477).** The web side is the platform's too (`@marinoscar/platform-web/ai/ui`): the admin `AI` card (`/admin/settings/ai`, `ai_config:read`, no `feature` because it is the switch) renders `AiConfigPage` with KVox's task-model, graph and ceiling sections in its `Sections` slot; `AI models` and `AI usage` (`ai_config:read`, `feature: 'ai'`) are the platform's `AiModelsPage` and `AiUsagePage`; the per-user `AI Provider` card (`/settings/ai`, `ai:use`, `feature: 'ai'`) is `UserAiKeysPage`. The web client reads `GET /api/ai-tasks/config` through `useAiTasksConfig` (`keyConfigured`, `available`, `graphEnabled`, the model list), which also gates the `knowledge` destination. Registry rationale: [`specs/settings-ui.md`](specs/settings-ui.md) §8.
 
 Design, the feature table, the mapping table and the `KvoxAi` contract: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice" and "`KvoxAi` call path". Embeddings: [`specs/search.md`](specs/search.md) §11.
+
+### 7.12 Platform exports slice ("Download your data")
+
+A user's copy of their own data is the platform's exports slice (`@marinoscar/platform-api/exports`, `@marinoscar/platform-web/exports/ui`), mounted in `apps/api/src/platform/exports/` (issue #532, Part B of #479). It adds `GET /api/exports/sources`, `POST|GET /api/exports`, `GET /api/exports/:id`, the server-only job types `export.run` and `export.purge` (the daily expiry cron only enqueues) and the object-key prefixes `exports/users/` and `exports/orgs/`; the web page is `/settings/data-export`.
+
+| Concern | Owner | Where in KVox |
+|---------|-------|---------------|
+| Routes, jobs, writers (`json`, `csv`, `xlsx`), the `user-data` and `org-data` sources, redaction | platform exports slice | `platform/exports/exports.config.ts` (`ExportsModule.forRoot`, `datamodel: Prisma.dmmf.datamodel`, `appSlug: APP_SLUG`) |
+| The bypass client and the notifier | KVox, as the slice's ports | `platform/exports/exports-host.module.ts` (`EXPORTS_SYSTEM_DATA` over `PrismaSystemService.forSystem`, `EXPORTS_NOTIFIER` over `NotificationsService`); not global |
+| What `user-data` writes | the user-owned registry | `export: 'include'` entries of `app-registrations/user-owned-models.ts` |
+| What the app adds | KVox | `platform/exports/kvox-content.source.ts` (`kvox-content`: transcript speakers and segments, note versions, Ask messages, non-sensitive attribute definitions, each tied to the user through its parent row) |
+| `export.ready`, `export.failed` | platform events, KVox registration | `notifications-registry/exports.notifications.ts` |
+
+The policy (which model is included, excluded, omitted, and why; a `sensitive` PersonFact never leaves the deployment) is [`specs/data-export.md`](specs/data-export.md). Endpoints: [`API.md`](API.md#exports).
 
 ---
 
@@ -1757,6 +1771,7 @@ for genuinely parallel content only.
 | — Profile | `/settings/profile` | Required | Any (authenticated) | Display name, avatar, email |
 | — Appearance | `/settings/appearance` | Required | Any (authenticated) | Personal theme preference |
 | — Access Tokens | `/settings/tokens` | Required | Any (authenticated) | Personal access token management (packaged `UserTokensPage`) |
+| — Download your data | `/settings/data-export` | Required | Any (authenticated) | Request and download a copy of one's own data as JSON, CSV or XLSX (packaged `DataExportPage`, own `Your data` group above `Danger Zone`) |
 | Console / Settings hub | `/admin/settings` | Required | `system_settings:read` OR `users:read` | Searchable hub over admin settings |
 | — Email | `/admin/settings/email` | Required | `system_settings:read` | Outbound email configuration |
 | — Notifications | `/admin/settings/notifications` | Required | `system_settings:read` | Turn browser notifications on/off deployment-wide and suppress individual events |

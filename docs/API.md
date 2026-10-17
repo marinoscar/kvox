@@ -7458,6 +7458,78 @@ the web app has a page for the factory reset (`/admin/settings/factory-reset`, #
 
 ---
 
+### Exports
+
+"Download your data" — a user asking this deployment for a copy of what it stores about them (issue #532, Part B of #479). The routes are the **platform exports slice**'s (`@marinoscar/platform-api/exports`, mounted in `apps/api/src/platform/exports/`); what is in the file is [`docs/specs/data-export.md`](specs/data-export.md). The web page is `/settings/data-export`.
+
+Every route is `@Auth()`; the **permission is the source's**, checked when an export is requested. Both sources every role sees (`user-data`, `kvox-content`) require **`user_settings:read`**. A third source, `org-data` (an organization's rows and member list), appears only for a holder of `org_members:read` and carries no kvox content. An export is a **job** (`export.run`, server-only): the request returns **202**, the file is written to object storage under `exports/users/<userId>/` and deleted by `export.purge` after the retention period (7 days). The requester is notified (`export.ready`, `export.failed`: in-app bell and Web Push, linking to `/settings/data-export`).
+
+**Statuses** (derived from the job): `pending`, `running`, `ready`, `expired`, `failed`. A `failed` export carries a fixed message, never the job's error.
+
+#### GET /exports/sources
+The sources and formats the caller may use, with the request fields each draws (none for the two user sources).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "items": [
+      { "id": "user-data", "scope": "user", "label": "Your data", "formats": [{ "id": "json", "label": "JSON", "extension": "json", "mimeType": "application/json" }, { "id": "csv" }, { "id": "xlsx" }], "fields": [], "crossOrg": false },
+      { "id": "kvox-content", "scope": "user", "label": "Transcript, note and Ask content", "formats": ["json", "csv", "xlsx"], "fields": [], "crossOrg": false }
+    ]
+  }
+}
+```
+(`formats` entries are abbreviated above; each carries `id`, `label`, `extension` and `mimeType`.)
+
+---
+
+#### POST /exports
+Queues an `export.run` job for the caller's own data (`user` scope) and answers **202** with the export, status `pending`. The export id is the job id.
+
+**Request:** `{ "source": "user-data", "format": "json", "request": {} }`. `request` is validated by the source's own schema (`{}` for both user sources; anything else is a 400). `orgId` is for `org` sources only.
+
+At most **3** exports per account may be `pending` or `running`; the next is a 429.
+
+**Response:** `202` — the export object (see `GET /exports/{id}`), `download: null`.
+
+**Error Cases:**
+- `400` - unknown source, a format the source does not offer, or a `request` the source refuses
+- `403` - the caller lacks the source's permission (`org-data` without `org_members:read`)
+- `429` - three exports already in progress for this account
+
+---
+
+#### GET /exports
+The caller's 20 most recent exports, newest first, with the derived status and `download: null`.
+
+**Response:** `200` — `{ "data": { "items": [ …export… ] } }`
+
+---
+
+#### GET /exports/{id}
+One export. While `ready`, `download` is a short-lived (5 minutes) signed GET with `Content-Disposition: attachment`, minted on each read.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "id": "…", "source": "user-data", "format": "json", "scope": "user", "orgId": "…",
+    "status": "ready", "createdAt": "…", "completedAt": "…", "expiresAt": "…",
+    "fileName": "kvox-user-data-2026-10-17.json", "mimeType": "application/json", "sizeBytes": 18234,
+    "rowCounts": { "account": 1, "transcript": 12, "note": 31 },
+    "error": null,
+    "download": { "url": "https://…", "expiresAt": "…" }
+  }
+}
+```
+`csv` is a zip of one CSV file per dataset; `xlsx` is one workbook with a sheet per dataset. In CSV a text value a spreadsheet would read as a formula (it begins with `=`, `+`, `-` or `@`) is prefixed with `'`; an XLSX string cell is never a formula. A column the default redaction rule names (`secret`, `password`, `hint`, `*Hash`, `*Secret`, `*Ciphertext`, `*Salt`) is never written.
+
+**Error Cases:**
+- `404` - not the caller's export
+
+---
+
 ### Onboarding
 
 A persistent, resumable, **live-derived** first-run checklist for a fresh

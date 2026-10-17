@@ -47,6 +47,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Change search | [specs/search.md](specs/search.md) |
 | Change onboarding | [specs/onboarding.md](specs/onboarding.md) |
 | Change the Danger Zone or user data deletion | [specs/user-data-deletion.md](specs/user-data-deletion.md) |
+| Change "Download your data" or what a user export contains | [specs/data-export.md](specs/data-export.md), [API.md](API.md#exports) |
 | Change broadcasts | [specs/notification-broadcasts.md](specs/notification-broadcasts.md) |
 | Change backups or restore | [specs/database-backup.md](specs/database-backup.md), [specs/database-restore.md](specs/database-restore.md) |
 | Change maintenance mode | [specs/maintenance-mode.md](specs/maintenance-mode.md), [runbooks/maintenance-mode.md](runbooks/maintenance-mode.md) |
@@ -81,6 +82,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Spec | Feature |
 |---|---|
 | [specs/browser-notifications.md](specs/browser-notifications.md) | Notification channels, service worker, Web Push |
+| [specs/data-export.md](specs/data-export.md) | "Download your data": the export policy and the `kvox-content` source |
 | [specs/database-backup.md](specs/database-backup.md) | Scheduled and on-demand `pg_dump` backups, node offload |
 | [specs/database-restore.md](specs/database-restore.md) | Restore and rollback from a backup |
 | [specs/deploy-spec.md](specs/deploy-spec.md) | Portable implementation specification of the deploy CLI |
