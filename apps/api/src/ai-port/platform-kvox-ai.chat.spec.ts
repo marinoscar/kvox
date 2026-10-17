@@ -1,8 +1,7 @@
 import { AI_PROVIDER_STATE, AiError, type AiErrorCode, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
 
 import { AiAuthError, AiRefusedError, RateLimitError } from './ai-errors';
-import { clearToolCache } from './chat-mapping';
-import type { KvoxChatEvent, KvoxChatRequest, KvoxToolDefinition } from './kvox-ai';
+import { clearToolCache, type KvoxChatEvent, type KvoxChatRequest, type KvoxToolDefinition } from '@marinoscar/kvox-ai';
 import { PlatformKvoxAi } from './platform-kvox-ai';
 
 // =============================================================================

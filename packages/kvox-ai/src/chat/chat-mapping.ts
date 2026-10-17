@@ -18,7 +18,7 @@ import type {
   KvoxToolChoice,
   KvoxToolDefinition,
   KvoxUsage,
-} from './kvox-ai';
+} from '../types/index.js';
 
 // =============================================================================
 // Chat mapping: a KvoxAi chat turn <-> one platform `stream()` call (issue #476)
@@ -26,7 +26,8 @@ import type {
 //
 // PURE. Nothing here touches the network, a key, a clock the caller cannot inject
 // or a logger, so every rule of the mapping is a unit test (`chat-mapping.spec.ts`)
-// and `PlatformKvoxAi.chat()` stays a thin loop over `fromPlatformEvent`.
+// and `PlatformKvoxAi.chat()` (`apps/api/src/ai-port/platform-kvox-ai.ts`) stays a
+// thin loop over `fromPlatformEvent`.
 //
 // WHY FULL HISTORY, EVERY CALL. The Ask loop owns its transcript (`messages`, its
 // token accounting, its forced-answer line), so each call sends the whole of it
@@ -55,7 +56,11 @@ interface CachedTool {
 /** One conversion per process per tool name (the toolset is fixed at boot). */
 const TOOL_CACHE = new Map<string, CachedTool>();
 
-/** Test seam: forget every cached conversion. */
+/**
+ * Test seam: forget every cached conversion.
+ *
+ * @stability experimental
+ */
 export function clearToolCache(): void {
   TOOL_CACHE.clear();
 }
@@ -65,7 +70,7 @@ export function clearToolCache(): void {
  * wire and validates the call's arguments with.
  *
  * The tool's own Zod `input` is deliberately NOT used: it carries `.transform`
- * (null -> undefined), which JSON Schema cannot express. The JSON Schema is the
+ * (null to undefined), which JSON Schema cannot express. The JSON Schema is the
  * hint the model sees; the toolset still validates every call with the real
  * `input` before running it.
  */
@@ -92,6 +97,12 @@ function parametersOf(def: KvoxToolDefinition): z.ZodType {
   return parameters;
 }
 
+/**
+ * The port's tool definitions as platform function tools, strict, each with the
+ * Zod form of its JSON Schema (converted once per process per tool name).
+ *
+ * @stability experimental
+ */
 export function toPlatformTools(defs: readonly KvoxToolDefinition[]): AiFunctionTool[] {
   return defs.map((def) => ({
     type: 'function' as const,
@@ -102,14 +113,27 @@ export function toPlatformTools(defs: readonly KvoxToolDefinition[]): AiFunction
   }));
 }
 
+/**
+ * The port's tool choice as the platform's: a mode passes through, a named tool
+ * becomes a function choice.
+ *
+ * @stability experimental
+ */
 export function toPlatformToolChoice(choice: KvoxToolChoice): AiToolChoice {
   return typeof choice === 'string' ? choice : { type: 'function', name: choice.name };
 }
 
 // -- Messages -> input items --------------------------------------------------
 
+/**
+ * A chat transcript as one platform request carries it.
+ *
+ * @stability experimental
+ */
 export interface PlatformChatInput {
+  /** The leading `system` messages, joined by a blank line; `undefined` when there are none. */
   instructions: string | undefined;
+  /** Every other message, in order, as platform input items. */
   input: AiInputItem[];
 }
 
@@ -120,6 +144,8 @@ export interface PlatformChatInput {
  *
  * `reasoning` maps a tool-call id to the reasoning items captured with the step
  * that made it; they are replayed immediately before that call's `function_call`.
+  *
+  * @stability experimental
  */
 export function toPlatformInput(
   messages: readonly KvoxChatMessage[],
@@ -161,7 +187,11 @@ export function toPlatformInput(
   return { instructions, input };
 }
 
-/** Every tool-call id the messages replay, so the reasoning cache is read once per request. */
+/**
+ * Every tool-call id the messages replay, so the reasoning cache is read once per request.
+ *
+ * @stability experimental
+ */
 export function toolCallIdsOf(messages: readonly KvoxChatMessage[]): string[] {
   const ids: string[] = [];
   for (const message of messages) {
@@ -172,7 +202,11 @@ export function toolCallIdsOf(messages: readonly KvoxChatMessage[]): string[] {
 
 // -- Events back --------------------------------------------------------------
 
-/** What one platform stream needs to remember between events. */
+/**
+ * What one platform stream needs to remember between events.
+ *
+ * @stability experimental
+ */
 export interface ChatMappingState {
   /** Argument deltas per call id, the fallback when the finished item carries none. */
   argumentBuffers: Map<string, string>;
@@ -186,6 +220,11 @@ export interface ChatMappingState {
   completed: boolean;
 }
 
+/**
+ * A fresh mapping state for one platform stream.
+ *
+ * @stability experimental
+ */
 export function createChatMappingState(): ChatMappingState {
   return {
     argumentBuffers: new Map(),
@@ -243,6 +282,8 @@ function emitCall(
 /**
  * One platform event as the port event it becomes, or `null` when it only updates
  * the state. Throws for `error` and for a response that ended with `error`.
+  *
+  * @stability experimental
  */
 export function fromPlatformEvent(event: AiStreamEvent, state: ChatMappingState): KvoxChatEvent | null {
   switch (event.type) {
@@ -284,6 +325,8 @@ export function fromPlatformEvent(event: AiStreamEvent, state: ChatMappingState)
  * The tool calls a completed response carries that no `output_item.done` announced
  * (an adapter that reports items only in the final response). Call before mapping
  * `response.completed`, so a call is never lost and never emitted twice.
+  *
+  * @stability experimental
  */
 export function missingToolCalls(response: AiResponse, state: ChatMappingState): KvoxChatEvent[] {
   const events: KvoxChatEvent[] = [];
@@ -306,6 +349,8 @@ interface ReplayEntry {
  * Where a turn's reasoning waits between two `chat()` calls. Keyed by (user, job,
  * call id), so one user's items can never be replayed into another's request; bounded
  * in size and in age, so an abandoned turn leaks nothing for long.
+  *
+  * @stability experimental
  */
 export class ReasoningReplayCache {
   private readonly entries = new Map<string, ReplayEntry>();
@@ -324,6 +369,12 @@ export class ReasoningReplayCache {
     return `${scope}\u0000${callId}`;
   }
 
+  /**
+   * Keeps the reasoning items of each tool call of one step, for the TTL.
+   *
+   * @param scope - the request's scope ({@link replayScope}).
+   * @param byCall - the reasoning items per tool-call id (kept as the same objects).
+   */
   remember(scope: string, byCall: ReadonlyMap<string, unknown[]>): void {
     if (byCall.size === 0) return;
     const expiresAt = this.now() + this.ttlMs;
@@ -335,6 +386,13 @@ export class ReasoningReplayCache {
     this.evict();
   }
 
+  /**
+   * The unexpired reasoning items of the given tool calls.
+   *
+   * @param scope - the request's scope ({@link replayScope}).
+   * @param callIds - the tool-call ids the next request replays.
+   * @returns the items per call id; a call with none is absent.
+   */
   recall(scope: string, callIds: Iterable<string>): Map<string, unknown[]> {
     const found = new Map<string, unknown[]>();
     const now = this.now();
@@ -345,6 +403,7 @@ export class ReasoningReplayCache {
     return found;
   }
 
+  /** How many tool calls the cache holds (expired ones included until evicted). */
   get size(): number {
     return this.entries.size;
   }
@@ -364,7 +423,11 @@ export class ReasoningReplayCache {
   }
 }
 
-/** The cache scope of a request: one user's one job. */
+/**
+ * The cache scope of a request: one user's one job.
+ *
+ * @stability experimental
+ */
 export function replayScope(req: { userId: string; jobId?: string }): string {
   return `${req.userId}\u0000${req.jobId ?? ''}`;
 }

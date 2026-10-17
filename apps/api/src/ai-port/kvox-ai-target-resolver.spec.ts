@@ -2,14 +2,20 @@ import { HttpException, Logger } from '@nestjs/common';
 
 import type { AiTargetContext, DefaultAiTargetResolver } from '@marinoscar/platform-api/ai';
 
-import { KVOX_AI_FEATURES, KVOX_FEATURE_TASK, type KvoxAiFeatureId } from './features';
+import {
+  AI_TASK_KEYS,
+  KVOX_AI_FEATURES,
+  KVOX_FEATURE_TASK,
+  chooseTaskModel,
+  type AiTaskKey,
+  type KvoxAiFeatureId,
+  type TaskModelPolicy,
+} from '@marinoscar/kvox-ai';
 import {
   KVOX_AI_RESOLVER_CACHE_MS,
   KVOX_EMBEDDING_MODEL,
   KvoxAiTargetResolver,
 } from './kvox-ai-target-resolver';
-import { AI_TASK_KEYS, type AiTaskKey } from './ai-task-keys';
-import { chooseTaskModel, type TaskModelPolicy } from './task-models';
 
 // =============================================================================
 // KvoxAiTargetResolver (issue #473)

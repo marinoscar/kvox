@@ -3,35 +3,40 @@ import { z } from 'zod';
 
 import { AiError, AiService, type AiUserClient } from '@marinoscar/platform-api/ai';
 
-import { PrismaService } from '../prisma/prisma.service';
-import { AiInputError, AiRefusedError, AiStructuredOutputError } from './ai-errors';
 import {
+  EmbeddingShapeError,
+  KVOX_EMBEDDING,
+  KVOX_EMBEDDING_FEATURES,
+  KVOX_FEATURE_TASK,
   ReasoningReplayCache,
+  chooseTaskModel,
+  countTokens,
   createChatMappingState,
   fromPlatformEvent,
   missingToolCalls,
   replayScope,
   toPlatformInput,
+  toPlatformReasoningEffort,
   toPlatformToolChoice,
   toPlatformTools,
   toolCallIdsOf,
-} from './chat-mapping';
-import { countTokens } from './count-tokens';
-import { EmbeddingShapeError, KVOX_EMBEDDING } from './embedding-catalog';
-import { KVOX_EMBEDDING_FEATURES, KVOX_FEATURE_TASK, type KvoxAiFeatureId } from './features';
-import type {
-  JsonSchema,
-  KvoxAi,
-  KvoxAiCallBase,
-  KvoxAiReadiness,
-  KvoxChatEvent,
-  KvoxChatRequest,
-  KvoxEmbeddingCapability,
-  KvoxReasoningEffort,
-  KvoxTextEvent,
-  KvoxUsage,
-} from './kvox-ai';
-import { mapAiError, type KvoxAiReason } from './kvox-ai-errors';
+  type JsonSchema,
+  type KvoxAiCallBase,
+  type KvoxAiFeatureId,
+  type KvoxAiReadiness,
+  type KvoxAiReason,
+  type KvoxChatEvent,
+  type KvoxChatRequest,
+  type KvoxEmbeddingCapability,
+  type KvoxReasoningEffort,
+  type KvoxTextEvent,
+  type KvoxUsage,
+} from '@marinoscar/kvox-ai';
+
+import { PrismaService } from '../prisma/prisma.service';
+import { AiInputError, AiRefusedError, AiStructuredOutputError } from './ai-errors';
+import type { KvoxAi } from './kvox-ai';
+import { mapAiError } from './kvox-ai-errors';
 import { KVOX_AI_EXTENSION_DEFAULTS } from '../platform/ai/ai-settings.extension';
 import { KvoxAiSettings } from './kvox-ai-settings';
 import {
@@ -39,7 +44,6 @@ import {
   KvoxAiTargetResolver,
   type KvoxAiResolverState,
 } from './kvox-ai-target-resolver';
-import { chooseTaskModel, toPlatformReasoningEffort } from './task-models';
 
 // =============================================================================
 // PlatformKvoxAi: `KvoxAi` over the platform `AiService.forUser` (issue #475)
@@ -439,7 +443,7 @@ export class PlatformKvoxAi implements KvoxAi {
 
   /**
    * One Ask-loop model call: the whole history, streamed, possibly calling tools
-   * (issue #476). The mapping lives in `chat-mapping.ts`; this method owns the
+   * (issue #476). The mapping lives in `chat-mapping.ts` (`@marinoscar/kvox-ai`); this method owns the
    * guard (timeout, abort), the effort and the failure translation, as every call does.
    * A request timeout is a `TimeoutError`, which the Ask handler files as `timeout`.
    */

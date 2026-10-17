@@ -6,7 +6,7 @@ import { GraphModule } from '@marinoscar/kvox-api/graph';
 import { GraphExtractionModule } from '@marinoscar/kvox-api/graph-extraction';
 import { GraphRdfModule } from '@marinoscar/kvox-api/graph-rdf';
 
-import { KVOX_EMBEDDING } from '../../ai-port/embedding-catalog';
+import { KVOX_EMBEDDING } from '@marinoscar/kvox-ai';
 import { GraphPreferencesChangeForwarder } from './graph-preferences-change.forwarder';
 import { NotesConfig } from '../notes/notes.config';
 import { SearchConfig } from '../search/search.config';
@@ -27,7 +27,7 @@ import { TranscriptsConfig } from '../transcripts/transcripts.config';
 //                `GraphExtractionModule` as the notes slice's ready event (`NOTE_READY_EVENT`) on the event port.
 //   migrate      the `kg.migrate` hourly tick is on unless `KG_MIGRATE_SCHEDULE_ENABLED` is the literal
 //                `false`, read at every tick (a deployment runs the tick on one process only).
-//   embedding    the embeddings provider's batch ceiling, 128 (`ai-port/embedding-catalog.ts`).
+//   embedding    the embeddings provider's batch ceiling, 128 (`embedding-catalog.ts`, `@marinoscar/kvox-ai`).
 //   RDF          export and import are on, the upload ceiling and the schedules are the slice's defaults.
 //
 // What stays out of the slices and lives beside this file, because it uses the platform: the `graph`

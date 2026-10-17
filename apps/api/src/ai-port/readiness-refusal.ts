@@ -1,4 +1,5 @@
-import type { KvoxAiReadiness } from './kvox-ai';
+import { taskDefinition, type AiTaskKey, type KvoxAiReadiness } from '@marinoscar/kvox-ai';
+
 import {
   graphDisabledConflict,
   keyMissingConflict,
@@ -6,7 +7,6 @@ import {
   notConfiguredConflict,
   notPermittedBadRequest,
 } from './kvox-ai-errors';
-import { taskDefinition, type AiTaskKey } from './task-models';
 
 // =============================================================================
 // readinessRefusal: a not-ready `KvoxAi.readiness()` as the product's 409 / 400

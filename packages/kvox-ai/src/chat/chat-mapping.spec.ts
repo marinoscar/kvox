@@ -13,8 +13,8 @@ import {
   toPlatformToolChoice,
   toPlatformTools,
   toolCallIdsOf,
-} from './chat-mapping';
-import type { KvoxChatMessage, KvoxToolDefinition } from './kvox-ai';
+} from './chat-mapping.js';
+import type { KvoxChatMessage, KvoxToolDefinition } from '../types/index.js';
 
 // =============================================================================
 // chat-mapping (issue #476): the pure request/event mapping of KvoxAi.chat

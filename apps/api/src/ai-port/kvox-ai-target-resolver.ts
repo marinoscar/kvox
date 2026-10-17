@@ -7,13 +7,19 @@ import {
   type AiTargetResolver,
 } from '@marinoscar/platform-api/ai';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
-
-import { PrismaService } from '../prisma/prisma.service';
 import {
   KVOX_EMBEDDING_FEATURES,
   KVOX_FEATURE_TASK,
+  chooseTaskModel,
   isKvoxAiFeature,
-} from './features';
+  taskDefinition,
+  type AiTaskKey,
+  type TaskModelCandidate,
+  type TaskModelChoice,
+  type TaskModelPolicy,
+} from '@marinoscar/kvox-ai';
+
+import { PrismaService } from '../prisma/prisma.service';
 import {
   graphDisabledConflict,
   lacksCapabilityConflict,
@@ -21,14 +27,6 @@ import {
   notPermittedBadRequest,
 } from './kvox-ai-errors';
 import { KVOX_AI_POLICY } from './ai-policy';
-import {
-  chooseTaskModel,
-  taskDefinition,
-  type AiTaskKey,
-  type TaskModelCandidate,
-  type TaskModelChoice,
-  type TaskModelPolicy,
-} from './task-models';
 
 // =============================================================================
 // KvoxAiTargetResolver (issue #473, epic #472)

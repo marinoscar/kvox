@@ -2,6 +2,15 @@ import { Injectable } from '@nestjs/common';
 
 import type { PatchSystemSettingsDto } from '@marinoscar/platform-api/settings';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import {
+  AI_MODEL_LACKS_CAPABILITY,
+  AI_TASK_DEFINITIONS,
+  AI_TASK_KEYS,
+  chooseTaskModel,
+  missingCapabilities,
+  taskDefinition,
+  type AiTaskKey,
+} from '@marinoscar/kvox-ai';
 
 import { computeTokenBudget } from './ai-token-budget';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,7 +21,6 @@ import type {
   AiTasksSettingsView,
   UpdateAiTasksSettings,
 } from './dto/ai-tasks.dto';
-import { AI_TASK_KEYS, type AiTaskKey } from './ai-task-keys';
 import {
   KvoxAiBadRequest,
   notPermittedBadRequest,
@@ -23,13 +31,6 @@ import {
   KvoxAiTargetResolver,
   type KvoxAiResolverState,
 } from './kvox-ai-target-resolver';
-import {
-  AI_MODEL_LACKS_CAPABILITY,
-  AI_TASK_DEFINITIONS,
-  chooseTaskModel,
-  missingCapabilities,
-  taskDefinition,
-} from './task-models';
 
 // =============================================================================
 // AiTasksService (issue #473, epic #472)

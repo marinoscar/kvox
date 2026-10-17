@@ -1,4 +1,4 @@
-import { AI_TASK_KEYS } from './ai-task-keys';
+import { AI_TASK_KEYS } from './ai-task-keys.js';
 import {
   AI_TASK_DEFINITIONS,
   chooseTaskModel,
@@ -7,7 +7,7 @@ import {
   toPlatformReasoningEffort,
   type TaskModelCandidate,
   type TaskModelPolicy,
-} from './task-models';
+} from './task-models.js';
 
 // =============================================================================
 // chooseTaskModel (issue #360, ported by #473) — every branch, as a table

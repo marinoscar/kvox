@@ -1,4 +1,4 @@
-import { EMBEDDING_DIMENSIONS, EmbeddingShapeError, KVOX_EMBEDDING } from './embedding-catalog';
+import { EMBEDDING_DIMENSIONS, EmbeddingShapeError, KVOX_EMBEDDING } from './embedding-catalog.js';
 
 describe('the embedding catalog', () => {
   it('pins the stored contract: model, width, input ceiling and batch size', () => {

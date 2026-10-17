@@ -1,4 +1,4 @@
-import { CHARS_PER_TOKEN, countTokens } from './count-tokens';
+import { CHARS_PER_TOKEN, countTokens } from './count-tokens.js';
 
 // The estimate every note budget is checked against (docs/specs/notes.md §3.3). It was
 // moved unchanged from the retired provider, so these cases pin the numbers a budget

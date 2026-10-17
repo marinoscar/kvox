@@ -4,12 +4,12 @@ Use this to publish `@marinoscar/kvox-contract`, `-db`, `-api` and `-web` to pub
 
 ## How a release works
 
-The four packages are one Changesets `fixed` group in **pre mode** on the `next` tag, so they always share one version and every release is `0.1.0-next.N` on the `next` dist-tag.
+The five packages are one Changesets `fixed` group in **pre mode** on the `next` tag, so they always share one version and every release is `0.1.0-next.N` on the `next` dist-tag.
 
 1. A pull request that changes a package carries a changeset (`npx changeset`). `kvox-packages.yml` and the `tooling` job of `ci.yml` fail it otherwise.
-2. After the change merges to `main`, the **version** job opens (or updates) the pull request `kvox-release/version`: `changeset version` bumps the four versions, writes the changelogs and refreshes `package-lock.json`.
-3. Merging that pull request pushes to `main` with no pending changeset. The **gate** job reads the version and asks the public registry whether the four names exist and whether that version is already published. It uses no credentials, and any registry error makes it answer "not ready".
-4. If the repository variable `NPM_PUBLISH_ENABLED` is `true` and the gate is ready, **publish** runs in the protected environment `npm-publish`: build, `check:kvox-slice-peers`, `check:kvox-pack`, then `npm publish` of each package with provenance, then the git tag `kvox-packages-v<version>`. Otherwise **publish-dry-run** builds, packs and uploads the four tarballs (`marinoscar-kvox-contract-<version>.tgz` and so on) as the `kvox-tarballs` artifact.
+2. After the change merges to `main`, the **version** job opens (or updates) the pull request `kvox-release/version`: `changeset version` bumps the five versions, writes the changelogs and refreshes `package-lock.json`.
+3. Merging that pull request pushes to `main` with no pending changeset. The **gate** job reads the version and asks the public registry whether the five names exist and whether that version is already published. It uses no credentials, and any registry error makes it answer "not ready".
+4. If the repository variable `NPM_PUBLISH_ENABLED` is `true` and the gate is ready, **publish** runs in the protected environment `npm-publish`: build, `check:kvox-slice-peers`, `check:kvox-pack`, then `npm publish` of each package with provenance, then the git tag `kvox-packages-v<version>`. Otherwise **publish-dry-run** builds, packs and uploads the five tarballs (`marinoscar-kvox-contract-<version>.tgz` and so on) as the `kvox-tarballs` artifact.
 
 No npm token exists anywhere: `publish` authenticates with OIDC trusted publishing (`id-token: write`) and `NPM_CONFIG_PROVENANCE=true` signs the packages so consumers can run `npm audit signatures`. The workflow installs npm 11.5.1 or later, which trusted publishing needs. It never passes `--tag latest`: the dist-tag comes from `.changeset/pre.json`, and the job refuses a missing or `latest` tag.
 
@@ -17,7 +17,7 @@ No npm token exists anywhere: `publish` authenticates with OIDC trusted publishi
 
 Publishing stays off until the owner does these steps. Until then every release is a dry run.
 
-1. **Bootstrap the four names on npm.** A trusted publisher can only be attached to a package that exists. From a laptop logged in to npm as the owner of the `@marinoscar` scope, publish a placeholder of each package once (do this from a scratch copy of the package, with `"version": "0.0.0-bootstrap"`; never from a build you intend to release):
+1. **Bootstrap the five names on npm.** A trusted publisher can only be attached to a package that exists. From a laptop logged in to npm as the owner of the `@marinoscar` scope, publish a placeholder of each package once (do this from a scratch copy of the package, with `"version": "0.0.0-bootstrap"`; never from a build you intend to release):
 
    ```bash
    cd "$(mktemp -d)"
@@ -38,7 +38,7 @@ Publishing stays off until the owner does these steps. Until then every release 
 ## Releasing
 
 1. Merge the pull request that carries the changeset. Wait for **KVox release / Version pull request** to open `kvox-release/version`.
-2. Review the version pull request: four `package.json` versions equal, `CHANGELOG.md` per package, the lockfile diff limited to the workspace entries, `.changeset/pre.json` listing the consumed changeset.
+2. Review the version pull request: five `package.json` versions equal, `CHANGELOG.md` per package, the lockfile diff limited to the workspace entries, `.changeset/pre.json` listing the consumed changeset.
 3. Merge it. Watch **Release gate** (its summary shows the version, the variable and the registry state), then **Publish to npm** (approve the environment when asked) or **Publish dry run**.
 4. Verify:
 
@@ -47,7 +47,7 @@ Publishing stays off until the owner does these steps. Until then every release 
    npm audit signatures        # in a project that installed them
    ```
 
-   All four report the same version. The git tag `kvox-packages-v<version>` exists.
+   All five report the same version. The git tag `kvox-packages-v<version>` exists.
 
 To inspect a dry run, download the `kvox-tarballs` artifact and `tar -tzf` each tarball: only `dist/`, `README.md`, `CHANGELOG.md`, `LICENSE` and `package.json` (plus `bin/` and the schema folders for `kvox-db`).
 
@@ -59,9 +59,9 @@ To release after fixing the prerequisites without a new change, run **KVox relea
 |---|---|
 | The release always dry-runs | `NPM_PUBLISH_ENABLED` is not `true`, or the gate summary says a name does not exist (bootstrap missing) or the registry answered an error. Fix the cause and re-run the workflow. |
 | Gate warns "N of 4 packages are already published" | A previous publish stopped half way. Re-run **KVox release** from the Actions tab: the publish job skips the packages already at that version and publishes the rest. |
-| Gate fails: "fixed group is out of step" | The four `package.json` versions differ. Revert the offending commit; never edit a version by hand. |
+| Gate fails: "fixed group is out of step" | The five `package.json` versions differ. Revert the offending commit; never edit a version by hand. |
 | `npm publish` fails with `ENEEDAUTH` or an OIDC error | The trusted publisher is missing or mismatched (workflow filename, environment, repository), or npm is older than 11.5.1. Check step 2 above. |
-| `changeset version` fails on a package that does not exist | `.changeset/config.json` `fixed` names a package whose folder was removed. Keep all four. |
+| `changeset version` fails on a package that does not exist | `.changeset/config.json` `fixed` names a package whose folder was removed. Keep all five. |
 | The version pull request has no CI | Expected with the default token; see prerequisite 5. |
 
 ## Rolling back

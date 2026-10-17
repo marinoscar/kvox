@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { JsonSchema } from './kvox-ai';
+import type { JsonSchema } from '../types/index.js';
 
 // =============================================================================
 // OpenAI's strict JSON-schema subset, checked locally (issue #358, epic #345)
@@ -13,7 +13,7 @@ import type { JsonSchema } from './kvox-ai';
 // BEFORE anything is sent, and names the JSON path of the first violation so
 // the fix is obvious. A violation is a PROGRAMMING ERROR in the caller's schema,
 // never user data, which is why it is a plain `Error` subclass and not one of
-// the domain classes in `../ai-errors.ts`.
+// the domain classes in `apps/api/src/ai-port/ai-errors.ts`.
 //
 // THE RULES (identical to #350's list, and deliberately stricter than the
 // vendor in two places so a schema that passes here is portable to a future
@@ -45,10 +45,18 @@ import type { JsonSchema } from './kvox-ai';
 // let a schema through that the vendor then refuses.
 // =============================================================================
 
-/** OpenAI's documented nesting limit for strict schemas (as of 2026-09). */
+/**
+ * OpenAI's documented nesting limit for strict schemas (as of 2026-09).
+ *
+ * @stability experimental
+ */
 export const MAX_NESTING_DEPTH = 10;
 
-/** OpenAI's documented total-object-properties limit (as of 2026-09). */
+/**
+ * OpenAI's documented total-object-properties limit (as of 2026-09).
+ *
+ * @stability experimental
+ */
 export const MAX_TOTAL_PROPERTIES = 5000;
 
 const ALLOWED_KEYWORDS = new Set([
@@ -83,6 +91,8 @@ const INTERNAL_REF = /^#\/\$defs\/([^/]+)$/;
  * A PLAIN `Error` SUBCLASS, deliberately not a domain error: it is thrown by a
  * pre-flight on a schema a developer wrote, and "retryable" is irrelevant — it
  * fails identically on every attempt and the fix is in code.
+  *
+  * @stability experimental
  */
 export class StrictSchemaError extends Error {
   constructor(
@@ -111,6 +121,8 @@ interface WalkState {
  * subset, or return normally. See the file header for the rules.
  *
  * `path` is the label the root is reported under (default `$`).
+  *
+  * @stability experimental
  */
 export function assertStrictJsonSchema(schema: JsonSchema, path = '$'): void {
   if (!isPlainObject(schema)) {
@@ -389,6 +401,8 @@ function checkObject(
  * {@link assertStrictJsonSchema}. A schema using `.optional()`, `.int()`,
  * `z.literal()` or a string format throws here — see the file header for the
  * strict-friendly spelling of each.
+  *
+  * @stability experimental
  */
 export function zodToStrictJsonSchema(schema: z.ZodType): JsonSchema {
   const converted = z.toJSONSchema(schema, {

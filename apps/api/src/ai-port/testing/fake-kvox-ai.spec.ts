@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { AiInputError, AiStructuredOutputError } from '../ai-errors';
-import { EMBEDDING_DIMENSIONS } from '../embedding-catalog';
+import { EMBEDDING_DIMENSIONS } from '@marinoscar/kvox-ai';
 import { FakeKvoxAi, fakeVector, notReadyReadiness } from './fake-kvox-ai';
 
 // The test double other specs build on. It must behave like the real adapter wherever a

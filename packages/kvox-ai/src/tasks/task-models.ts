@@ -3,7 +3,7 @@ import {
   type AiReasoningEffort,
   type AiTaskKey,
   type AiTaskModels,
-} from './ai-task-keys';
+} from './ai-task-keys.js';
 
 // =============================================================================
 // AI task models — definitions and the pure chooser (issue #360, ported by #473)
@@ -30,11 +30,13 @@ import {
 // enabled provider slot.
 // =============================================================================
 
-export type { AiReasoningEffort, AiTaskKey } from './ai-task-keys';
+export type { AiReasoningEffort, AiTaskKey } from './ai-task-keys.js';
 
 /**
  * The 400 `details.reason` for a model outside the permitted list — shared by
  * the run-time resolver and save-time validation, so a client maps one value.
+  *
+  * @stability experimental
  */
 export const AI_MODEL_NOT_PERMITTED = 'model_not_permitted' as const;
 
@@ -42,24 +44,39 @@ export const AI_MODEL_NOT_PERMITTED = 'model_not_permitted' as const;
  * The 400 `details.reason` save-time validation answers for a task model that
  * lacks a capability the task requires. The same string is the run-time 409
  * reason.
+  *
+  * @stability experimental
  */
 export const AI_MODEL_LACKS_CAPABILITY = 'model_lacks_capability' as const;
 
-/** A model capability a task may require. Flags on {@link TaskModelCandidate}. */
+/**
+ * A model capability a task may require. Flags on {@link TaskModelCandidate}.
+ *
+ * @stability experimental
+ */
 export type AiModelCapability = 'structuredOutput' | 'toolCalling';
 
 /**
  * One enabled model the chooser may pick: the `ai_models` row's `modelId` and
  * the two capability flags this app gates on (`structured_output` and `tools` in the
  * row's `capabilities` JSON).
+  *
+  * @stability experimental
  */
 export interface TaskModelCandidate {
+  /** The provider's model id. */
   id: string;
+  /** Whether the model honours strict structured output. */
   structuredOutput: boolean;
+  /** Whether the model can call tools. */
   toolCalling: boolean;
 }
 
-/** The slice of the `ai` namespace the chooser reads. */
+/**
+ * The slice of the `ai` namespace the chooser reads.
+ *
+ * @stability experimental
+ */
 export interface TaskModelPolicy {
   /** The single enabled provider slot (`'openai'`), or null when none is. */
   provider: string | null;
@@ -73,10 +90,17 @@ export interface TaskModelPolicy {
   reasoningEffort: AiReasoningEffort;
 }
 
-/** One connected-knowledge task, as the admin form and user pickers show it. */
+/**
+ * One connected-knowledge task, as the admin form and user pickers show it.
+ *
+ * @stability experimental
+ */
 export interface AiTaskDefinition {
+  /** The task key (permanent once a model is saved for it). */
   key: AiTaskKey;
+  /** The label a form shows. */
   label: string;
+  /** What the task does, as a form explains it. */
   description: string;
   /** Capabilities the task's model MUST have. Checked on save and on run. */
   requires: AiModelCapability[];
@@ -88,6 +112,8 @@ export interface AiTaskDefinition {
  *
  * There is no `graph.brief`: the entity brief never calls a model in a request
  * (#372); its prose is `graph.digest`'s output.
+  *
+  * @stability experimental
  */
 export const AI_TASK_DEFINITIONS: readonly AiTaskDefinition[] = [
   {
@@ -120,7 +146,11 @@ export const AI_TASK_DEFINITIONS: readonly AiTaskDefinition[] = [
   },
 ];
 
-/** The definition for one task. Total over {@link AiTaskKey}. */
+/**
+ * The definition for one task. Total over {@link AiTaskKey}.
+ *
+ * @stability experimental
+ */
 export function taskDefinition(task: AiTaskKey): AiTaskDefinition {
   const definition = AI_TASK_DEFINITIONS.find((d) => d.key === task);
   if (!definition) {
@@ -131,7 +161,11 @@ export function taskDefinition(task: AiTaskKey): AiTaskDefinition {
   return definition;
 }
 
-/** The capabilities `model` lacks out of `requires`, in `requires` order. */
+/**
+ * The capabilities `model` lacks out of `requires`, in `requires` order.
+ *
+ * @stability experimental
+ */
 export function missingCapabilities(
   model: Pick<TaskModelCandidate, AiModelCapability>,
   requires: readonly AiModelCapability[],
@@ -139,8 +173,13 @@ export function missingCapabilities(
   return requires.filter((capability) => !model[capability]);
 }
 
-/** What {@link chooseTaskModel} decided, and whether it can run. */
+/**
+ * What {@link chooseTaskModel} decided, and whether it can run.
+ *
+ * @stability experimental
+ */
 export interface TaskModelChoice {
+  /** The task the choice is for. */
   task: AiTaskKey;
   /** The chosen model id; null only when nothing could be chosen. */
   model: string | null;
@@ -149,6 +188,7 @@ export interface TaskModelChoice {
    * model, the deployment default, or nothing at all.
    */
   source: 'requested' | 'task' | 'default' | 'none';
+  /** The task's own effort when the chosen model IS its configured model, else the policy's. */
   reasoningEffort: AiReasoningEffort;
   /** Required capabilities the chosen model lacks. */
   missing: AiModelCapability[];
@@ -187,6 +227,8 @@ export interface TaskModelChoice {
  *      `lacks_capability`;
  *   6. the task's own `reasoningEffort` applies only when the chosen model IS
  *      the configured task model; otherwise the deployment's.
+  *
+  * @stability experimental
  */
 export function chooseTaskModel(input: {
   policy: TaskModelPolicy;
@@ -252,7 +294,11 @@ export function chooseTaskModel(input: {
   };
 }
 
-/** The reasoning efforts the platform accepts on a request. */
+/**
+ * The reasoning efforts the platform accepts on a request.
+ *
+ * @stability experimental
+ */
 export type PlatformReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
 
 /**
@@ -260,6 +306,8 @@ export type PlatformReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
  * the parameter" (returns `undefined`); `xhigh` is clamped to `high`, the
  * strongest value the platform accepts (the admin form's help
  * text says so).
+  *
+  * @stability experimental
  */
 export function toPlatformReasoningEffort(
   effort: AiReasoningEffort,

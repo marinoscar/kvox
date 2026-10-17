@@ -91,7 +91,7 @@ import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/t
 import { AppModule } from '../src/app.module';
 import { SharedTranscriptVisibility } from '../src/kvox/search/shared-transcript-visibility';
 import { TranscriptionConfig } from '../src/kvox/transcription/transcription.config';
-import { KVOX_EMBEDDING } from '../src/ai-port/embedding-catalog';
+import { KVOX_EMBEDDING } from '@marinoscar/kvox-ai';
 import { PERMISSIONS } from '../src/common/constants/roles.constants';
 // The notification and email registries are filled by this import (it is also reached through
 // AppModule); the suites below read them, so name the dependency.

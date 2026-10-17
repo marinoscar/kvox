@@ -46,7 +46,7 @@ Status note (issue #466, roadmap 1.4): this page is the classification as writte
 | abort reconcile | KVox listener on `ObjectUploadAborted` that reconciles the owning transcript | storage (2.2) |
 | `files` category override | Override of the package user-data `files` category so managed objects are purged through `transcript.purge`/`note.purge` | user-data (4.2) |
 | embedding catalog | KVox-owned embedding model catalog and `search_embeddings` writer, kept outside the package AI platform | search, ai (Epic 3) |
-| streaming tool loop | Was KVox's `AiProvider.chat` tool-calling loop used by Ask. Since #476 it is one platform `stream()` call per turn behind `KvoxAi.chat` (`ai-port/chat-mapping.ts`); the `AiProvider` stack is deleted (#477). | ask, ai (Epic 3, done) |
+| streaming tool loop | Was KVox's `AiProvider.chat` tool-calling loop used by Ask. Since #476 it is one platform `stream()` call per turn behind `KvoxAi.chat` (`packages/kvox-ai/src/chat/chat-mapping.ts`); the `AiProvider` stack is deleted (#477). | ask, ai (Epic 3, done) |
 | `ai` namespace extension | KVox fields (`provider`, `allowedModels`, `taskModels`, `graphEnabled`, token limits) added to the package `ai` system-settings namespace (issue 3.1) | settings, ai (Epic 3) |
 | generic user-settings change event | EAB's `UserSettingsNamespace` has no change hook. KVox adds a KVox-only `onChanged`/generic event that issue 1.4 must carry; it replaces the direct `GRAPH_PREFERENCES_CHANGED_EVENT` emit in `user-settings.service.ts` | settings (1.4) |
 | job contract and label registration | KVox job contracts (`jobs/contracts/*.contract.ts`) and `job-type-labels.ts` registered on the package job registry | jobs (2.1) |

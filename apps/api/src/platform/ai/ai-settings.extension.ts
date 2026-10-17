@@ -5,7 +5,7 @@ import type { SystemSettingsNamespaceExtension } from '@marinoscar/platform-api/
 import {
   AI_REASONING_EFFORTS,
   aiTaskModelsSchema,
-} from '../../ai-port/ai-task-keys';
+} from '@marinoscar/kvox-ai';
 
 // =============================================================================
 // The `ai` namespace extension (issue #473, epic #472)

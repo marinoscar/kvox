@@ -21,7 +21,7 @@
 
 import { toJsonSchema } from '@marinoscar/platform-api/ai';
 
-import { clearToolCache, toPlatformTools } from '../../src/ai-port/chat-mapping';
+import { clearToolCache, toPlatformTools } from '@marinoscar/kvox-ai';
 import { internals } from '@marinoscar/kvox-api/ask/testing';
 
 type Node = Record<string, unknown>;

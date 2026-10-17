@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
-import type { KvoxAiReason } from './kvox-ai-errors';
+import type { KvoxAiReason } from '@marinoscar/kvox-ai';
 import { readinessRefusal } from './readiness-refusal';
 
 const body = (error: Error): { message: string; details: Record<string, unknown> } =>
