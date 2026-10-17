@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import type { ProposalEvidence } from '../../../services/graph';
-import { formatTimestamp } from '../../../utils/playbackIntervals';
+import { formatTimestamp } from '@marinoscar/kvox-web/transcripts/headless';
 
 /** Quotes longer than this start clamped to three lines with a "Show more". */
 const LONG_QUOTE = 180;

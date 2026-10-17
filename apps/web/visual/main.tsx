@@ -93,7 +93,13 @@ import { Layout } from '../src/components/common/Layout';
 // that an upload affordance rendered outside the authenticated shell is a loud
 // routing mistake rather than a dead button. The harness therefore mounts the
 // real provider, exactly as `App.tsx` does around `Layout`.
-import { UploadManagerProvider } from '../src/contexts/UploadManagerContext';
+import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/headless';
+// Issue #500, epic #498. The transcripts pages are the slice's, reached through
+// its routes as data; the pages read the domain web host, bound exactly as
+// `App.tsx` binds it.
+import { AppKvoxHostProvider } from '../src/platform-kvox/KvoxHostBinding';
+import { renderKvoxRoutes } from '../src/platform-kvox/renderKvoxRoutes';
+import { appTranscriptsRoutes } from '../src/kvox/transcriptsRoutes';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
@@ -121,11 +127,7 @@ const UserTokensPage = lazy(() =>
 const UserKnowledgeGraphPage = lazy(() => import('../src/pages/UserKnowledgeGraphPage'));
 // Two pages since #106, where one served both routes — the harness mirrors
 // `App.tsx`'s lazy imports exactly, so a page split there is a page split here.
-const TranscriptsPage = lazy(() => import('../src/pages/TranscriptsPage'));
 const NotesPage = lazy(() => import('../src/pages/NotesPage'));
-const NewTranscriptPage = lazy(() => import('../src/pages/NewTranscriptPage'));
-const TranscriptPage = lazy(() => import('../src/pages/TranscriptPage'));
-const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryPage'));
 // Notes (#57, epic #45). Registered for the same reason every route in this
 // file is: a route the harness cannot reach is a route this suite silently
 // stops asserting pixels for.
@@ -301,66 +303,21 @@ function HarnessRoutes() {
       <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
         <Route
           element={
-            <UploadManagerProvider>
+            <KvoxUploadManagerProvider>
               <Layout />
-            </UploadManagerProvider>
+            </KvoxUploadManagerProvider>
           }
         >
           <Route path="/" element={<HomePage />} />
 
-          {/* Transcripts (#30, epic #19). Gates copied verbatim from
-              `App.tsx`, like every other guarded route in this file. A spec
-              that visits one of these MOCKS THE API with `page.route` — the
-              pages genuinely render their own data, unlike the nav-only specs
-              that scope their screenshot to the rail. */}
-          <Route
-            path="/transcripts"
-            element={
-              <RequirePermission
-                permission="transcripts:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <TranscriptsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/transcripts/new"
-            element={
-              <RequirePermission
-                permission="transcripts:write"
-                fallback={<Navigate to="/transcripts" replace />}
-              >
-                <NewTranscriptPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/transcripts/:id"
-            element={
-              <RequirePermission
-                permission="transcripts:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <TranscriptPage />
-              </RequirePermission>
-            }
-          />
-          {/* The version-history drill-down (#31). Registered here for the
-              same reason as its three siblings: a route the harness cannot
-              reach is a route this suite silently stops asserting pixels
-              for. Gate copied verbatim from `App.tsx`. */}
-          <Route
-            path="/transcripts/:id/history"
-            element={
-              <RequirePermission
-                permission="transcripts:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <TranscriptHistoryPage />
-              </RequirePermission>
-            }
-          />
+          {/* Transcripts (#30, epic #19; the slice's since #500, epic #498). The
+              four routes, their gates and their redirects are the slice's
+              data, rendered by the same `renderKvoxRoutes` `App.tsx` uses, so
+              this harness cannot drift from what the real app enforces. A
+              spec that visits one of these MOCKS THE API with `page.route` —
+              the pages genuinely render their own data, unlike the nav-only
+              specs that scope their screenshot to the rail. */}
+          {renderKvoxRoutes(appTranscriptsRoutes)}
 
           {/* Notes (#57, epic #45). Its OWN page since #106 — a sibling
               destination rather than the other tab of one `library` row, with
@@ -536,7 +493,9 @@ createRoot(document.getElementById('root')!).render(
           <ShellRoot themes={{ light: lightTheme, dark: darkTheme }} storageKey={THEME_STORAGE_KEY}>
             <AppGraphFeatureProvider>
               <AppPlatformHostProvider>
-                <Inner />
+                <AppKvoxHostProvider>
+                  <Inner />
+                </AppKvoxHostProvider>
               </AppPlatformHostProvider>
             </AppGraphFeatureProvider>
           </ShellRoot>

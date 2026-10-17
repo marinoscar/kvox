@@ -14,7 +14,7 @@ import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 
 import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
-import type { TranscriptSegment } from '../../../services/transcripts';
+import type { TranscriptSegment } from '@marinoscar/kvox-web/transcripts/headless';
 import { ProposalReviewSheet } from '../review/ProposalReviewSheet';
 import { GraphSelectionAdd } from './GraphSelectionAdd';
 import { resolveSegmentSelection } from './resolvers';

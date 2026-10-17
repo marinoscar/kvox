@@ -27,12 +27,12 @@ const audio = vi.hoisted(() => ({
 }));
 const audioCalls = vi.hoisted(() => [] as string[]);
 
-vi.mock('../../../hooks/useSourceAudio', () => ({
+vi.mock('@marinoscar/kvox-web/transcripts/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/kvox-web/transcripts/headless')>()),
   useSourceAudio: (transcriptId: string) => {
     audioCalls.push(transcriptId);
     return audio;
   },
-  default: () => audio,
 }));
 
 const highlight = vi.hoisted(() => vi.fn(() => true));

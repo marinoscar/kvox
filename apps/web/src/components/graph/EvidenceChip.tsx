@@ -33,7 +33,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useGraphEvidence } from '../../hooks/useGraphEvidence';
 import type { EvidenceLink } from '../../services/graph';
-import { formatTimestamp } from '../../utils/playbackIntervals';
+import { formatTimestamp } from '@marinoscar/kvox-web/transcripts/headless';
 
 export interface EvidenceChipProps {
   evidenceId: string;

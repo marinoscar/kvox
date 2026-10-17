@@ -16,10 +16,14 @@ import { vi } from 'vitest';
 
 import { mockUser, type MockUser } from '../../utils/test-utils';
 
-import type { UploadManagerContextValue, ManagedUpload } from '../../../contexts/UploadManagerContext';
 import type { NoteListItem, NoteSummary } from '../../../services/notes';
-import type { TranscriptListItem, TranscriptSummary } from '../../../services/transcripts';
-import type { UploadSessionRecord } from '../../../services/uploadSessions';
+import type {
+  ManagedUpload,
+  TranscriptListItem,
+  TranscriptSummary,
+  UploadManagerContextValue,
+  UploadSessionRecord,
+} from '@marinoscar/kvox-web/transcripts/headless';
 import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 
 /**

@@ -27,9 +27,8 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { useSourceAudio } from '../../hooks/useSourceAudio';
+import { formatDuration, formatTimestamp, useSourceAudio } from '@marinoscar/kvox-web/transcripts/headless';
 import type { NoteOriginTranscript } from '../../services/notes';
-import { formatDuration, formatTimestamp } from '../../utils/playbackIntervals';
 
 export interface NoteSourceMediaProps {
   origin: NoteOriginTranscript;

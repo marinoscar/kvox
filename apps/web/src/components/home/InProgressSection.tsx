@@ -78,23 +78,19 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useUploadManager } from '../../hooks/useUploadManager';
-import { liveUploadTranscriptIds } from '../../hooks/useLiveUploadTranscriptIds';
-import type { ManagedUpload } from '../../hooks/useUploadManager';
 import {
-  UploadSessionGoneError,
-  UploadSessionMismatchError,
-} from '../../services/uploadSessions';
-import type { UploadSessionRecord } from '../../services/uploadSessions';
-import type { NoteListItem } from '../../services/notes';
-import type { TranscriptListItem } from '../../services/transcripts';
-import {
-  UPLOAD_INTERRUPTED_LABEL,
   formatBytes,
   isUploadInterrupted,
+  liveUploadTranscriptIds,
   processingStageLabel,
   transcriptStatusDescriptor,
-} from '../../utils/transcriptDisplay';
+  UPLOAD_INTERRUPTED_LABEL,
+  UploadSessionGoneError,
+  UploadSessionMismatchError,
+  useUploadManager,
+} from '@marinoscar/kvox-web/transcripts/headless';
+import type { ManagedUpload, TranscriptListItem, UploadSessionRecord } from '@marinoscar/kvox-web/transcripts/headless';
+import type { NoteListItem } from '../../services/notes';
 
 export interface InProgressSectionProps {
   /** The summary's `inProgress` list — server-side work, never local uploads. */

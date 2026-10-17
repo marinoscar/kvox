@@ -55,11 +55,12 @@ import { AppGraphFeatureProvider } from './platform/GraphFeatureBinding';
 import { darkTheme, lightTheme } from './theme';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
-import { UploadManagerProvider } from './contexts/UploadManagerContext';
+import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/headless';
 // Issue #499, epic #498. The domain web host binding, and the transcription slice's
 // routes (data, spread where the literal route used to be).
 import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
+import { appTranscriptsRoutes } from './kvox/transcriptsRoutes';
 import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
@@ -105,11 +106,7 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // viewer, and #31's history page. Lazy like every other page here, and with
 // more reason than most: the viewer alone pulls in the virtualizer and the
 // playback engine, neither of which a user who never opens a transcript needs.
-const TranscriptsPage = lazy(() => import('./pages/TranscriptsPage'));
 const NotesPage = lazy(() => import('./pages/NotesPage'));
-const NewTranscriptPage = lazy(() => import('./pages/NewTranscriptPage'));
-const TranscriptPage = lazy(() => import('./pages/TranscriptPage'));
-const TranscriptHistoryPage = lazy(() => import('./pages/TranscriptHistoryPage'));
 // Notes (#57, epic #45) — the new-note flow, the generation view and the
 // version history. Lazy for the same reason and one of its own: the note
 // surfaces pull in `react-markdown` and `remark-gfm`, which nobody who never
@@ -365,101 +362,31 @@ function AppRoutes() {
                           Inside `NotificationProvider` rather than outside is
                           not significant — neither reads the other — but the
                           order is fixed so the tree is stable to read. */}
-                      <UploadManagerProvider>
+                      <KvoxUploadManagerProvider>
                         <Layout />
-                      </UploadManagerProvider>
+                      </KvoxUploadManagerProvider>
                     </NotificationProvider>
                   }
                 >
                   <Route path="/" element={<HomePage />} />
 
-                  {/* Transcripts (#30, epic #19).
+                  {/* Transcripts (#30, epic #19; the slice's since #500, epic #498).
 
-                      GATED ON THE SAME STRINGS `transcripts.controller.ts`
-                      ENFORCES, which is the invariant every other route here
-                      keeps: `transcripts:read` for the three read surfaces,
-                      `transcripts:write` for the one that creates. Both are
-                      seeded to all three roles — including Viewer, because
-                      recording a conversation is the action epic #19 exists to
-                      enable and a new account's default role is Viewer — so in
-                      practice nobody is refused. The gate is here anyway,
-                      because a deployment that revokes the permission must see
-                      the route close, not merely the nav row disappear.
+                      The four routes (`/transcripts`, `/transcripts/new`,
+                      `/transcripts/:id`, `/transcripts/:id/history`) are DATA
+                      exported by `@marinoscar/kvox-web/transcripts/ui`: their
+                      paths, their lazy pages and the permissions they are
+                      gated on (`transcripts:read` for the three read surfaces,
+                      `transcripts:write` for the one that creates, which sends
+                      a reader without it back to the list). `appTranscriptsRoutes`
+                      is that data with the two pages that take slots swapped for
+                      this app's wrappers (`kvox/transcriptsRoutes.ts`). This app
+                      supplies the guard (`renderKvoxRoutes`).
 
-                      `/transcripts/new` carries `:write` while its siblings
-                      carry `:read`, and the split is the reachability-vs-content
-                      distinction the settings pages make: a user who may read
-                      transcripts but not create one reaches the list and the
-                      viewer, and is redirected away from the only route that
-                      would 403 on submit.
-
-                      ORDER IS NOT SIGNIFICANT — React Router v6 ranks by
-                      specificity, so `/transcripts/new` beats `/transcripts/:id`
-                      wherever each is written. They are grouped for reading. */}
-                  {/* ⚠ THE FALLBACK IS `/` AGAIN SINCE #106, NOT `/notes`.
-                      Between #57 and #106 it pointed sideways at the other
-                      subtree, and it had to: ONE `library` destination fronted
-                      both, reachable on EITHER permission (`anyPermission`) but
-                      with `/transcripts` as its `path` — so a user holding only
-                      `notes:read` clicked a row they were legitimately shown
-                      and landed on a route they could not read. Sending them to
-                      `/` would have been the #92 bug in a new place, a nav row
-                      promising a surface the router refuses.
-
-                      That row no longer exists. `transcripts` and `notes` are
-                      two destinations gated on one permission each
-                      (`config/destinations.ts`), so a notes-only user is never
-                      shown a Transcripts row at all and can only arrive here by
-                      an old bookmark or a hand-typed URL. For that user `/` is
-                      the right answer and `/notes` would be a guess about what
-                      they meant. */}
-                  <Route
-                    path="/transcripts"
-                    element={
-                      <RequirePermission
-                        permission="transcripts:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <TranscriptsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/transcripts/new"
-                    element={
-                      <RequirePermission
-                        permission="transcripts:write"
-                        fallback={<Navigate to="/transcripts" replace />}
-                      >
-                        <NewTranscriptPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/transcripts/:id"
-                    element={
-                      <RequirePermission
-                        permission="transcripts:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <TranscriptPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Issue #31 replaces the PAGE; this route, its gate and its
-                      AppBar drill-down entry are #30's and are meant to
-                      survive that. See the page's own header. */}
-                  <Route
-                    path="/transcripts/:id/history"
-                    element={
-                      <RequirePermission
-                        permission="transcripts:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <TranscriptHistoryPage />
-                      </RequirePermission>
-                    }
-                  />
+                      ORDER IS NOT SIGNIFICANT — React Router ranks by
+                      specificity, so `/transcripts/new` beats
+                      `/transcripts/:id` wherever each is written. */}
+                  {renderKvoxRoutes(appTranscriptsRoutes)}
                   {/* Notes (#57, epic #45) — a DESTINATION OF ITS OWN since
                       #106, where it used to be the other half of the `library`
                       destination. See `config/destinations.ts`: four NON-PINNED

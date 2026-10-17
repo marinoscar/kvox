@@ -76,6 +76,7 @@ import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { ModelSelect } from '../components/notes/ModelSelect';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useIsMounted } from '../hooks/useIsMounted';
+import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
 import { ApiError } from '../services/api';
 import {
@@ -91,8 +92,8 @@ import {
 import type { NoteDocumentExtraction, NoteListItem } from '../services/notes';
 import { getNoteTemplate } from '../services/noteTemplates';
 import type { NoteTemplate } from '../services/noteTemplates';
-import { getTranscripts } from '../services/transcripts';
-import type { TranscriptListItem } from '../services/transcripts';
+import { getTranscripts } from '@marinoscar/kvox-web/transcripts/headless';
+import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   NOTE_SOURCE_KINDS,
   buildNoteSource,
@@ -122,6 +123,7 @@ export function NewNotePage() {
   const theme = useTheme();
   const navigate = useNavigate();
   const isMounted = useIsMounted();
+  const host = useKvoxHost();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchParams] = useSearchParams();
 
@@ -196,7 +198,7 @@ export function NewNotePage() {
     let cancelled = false;
     // `scope: 'all'`, so a transcript shared WITH this user is offerable: the
     // API's own rule is "a source you can read", and a share is read access.
-    void getTranscripts({ scope: 'all', limit: PICKER_LIMIT })
+    void getTranscripts(host, { scope: 'all', limit: PICKER_LIMIT })
       .then((response) => {
         if (!cancelled && isMounted()) setTranscripts(response.items);
       })
@@ -209,7 +211,7 @@ export function NewNotePage() {
     return () => {
       cancelled = true;
     };
-  }, [isMounted]);
+  }, [host, isMounted]);
 
   useEffect(() => {
     let cancelled = false;

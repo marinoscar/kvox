@@ -9,7 +9,7 @@ import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import Chip from '@mui/material/Chip';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { formatTimestamp } from '../../utils/playbackIntervals';
+import { formatTimestamp } from '@marinoscar/kvox-web/transcripts/headless';
 
 export interface DocumentCitationChipProps {
   documentId: string;

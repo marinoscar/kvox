@@ -9,7 +9,9 @@
     "./src/transcription/headless/index.ts",
     "./src/transcription/ui/index.ts",
     "./src/search/headless/index.ts",
-    "./src/search/ui/index.ts"
+    "./src/search/ui/index.ts",
+    "./src/transcripts/headless/index.ts",
+    "./src/transcripts/ui/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

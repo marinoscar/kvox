@@ -6,6 +6,12 @@ import { dirname, resolve } from 'node:path';
 import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import {
+  kvoxTranscriptsDestinationRoutes,
+  kvoxTranscriptsDestinations,
+  kvoxTranscriptsRoutes,
+} from '@marinoscar/kvox-web/transcripts/ui';
+import { appTranscriptsRoutes } from '../../kvox/transcriptsRoutes';
+import {
   isDestinationVisible,
   owns,
   resolveActiveDestination as resolveOwner,
@@ -48,6 +54,11 @@ const APP_TSX = resolve(dirname(fileURLToPath(import.meta.url)), '../../App.tsx'
 function declaredRoutePaths(): string[] {
   const source = readFileSync(APP_TSX, 'utf8');
   const paths = [...source.matchAll(/path="([^"]+)"/g)].map((match) => match[1]);
+  // Routes a slice exports as data are rendered by `renderKvoxRoutes(...)` (#499,
+  // #500, epic #498), so their paths are read from the slice's list.
+  if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
+    paths.push(...kvoxTranscriptsRoutes.map((route) => route.path));
+  }
   // `*` is the catch-all, which redirects to `/` rather than rendering a page.
   return [...new Set(paths)].filter((path) => path !== '*');
 }
@@ -543,6 +554,13 @@ describe('admin sections — registry against the live routes', () => {
     if (/renderKvoxRoutes\(kvoxTranscriptionRoutes\)/.test(source)) {
       for (const route of kvoxTranscriptionRoutes) gates.set(route.path, route.permission ?? null);
     }
+    // The transcripts routes are rendered from the app's composition of the
+    // slice's list (`appTranscriptsRoutes`: the same paths and permissions, two
+    // pages swapped for the slot wrappers); its path-and-gate half is the
+    // slice's `kvoxTranscriptsRoutes`.
+    if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
+      for (const route of kvoxTranscriptsRoutes) gates.set(route.path, route.permission ?? null);
+    }
     if (/renderKvoxRoutes\(kvoxSearchRoutes\)/.test(source)) {
       for (const route of kvoxSearchRoutes) gates.set(route.path, route.permission ?? null);
     }
@@ -637,6 +655,12 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
       const singleMatch = /(?<!s)permission="([^"]+)"/.exec(chunk);
       return singleMatch ? [singleMatch[1]] : [];
     }
+    // A route the transcripts slice exports as data (#500, epic #498) has no
+    // `<Route>` element in `App.tsx`; its gate is the slice list's `permission`.
+    if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
+      const route = kvoxTranscriptsRoutes.find((candidate) => candidate.path === targetPath);
+      if (route) return route.permission ? [route.permission] : [];
+    }
     // Not found is a real failure, not "no gate" — surfaced as an empty array
     // that the assertion below rejects via the length check.
     return [];
@@ -690,5 +714,57 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
       [...routePermissions].sort(),
       'the /admin/settings route permissions and the console destination anyPermission set must be identical',
     ).toEqual([...destinationPermissions].sort());
+  });
+});
+
+/**
+ * The transcripts destination and routes are the slice's DATA
+ * (`@marinoscar/kvox-web/transcripts/ui`, #500, epic #498), spread into this
+ * app's registries at the position the literal entries held. Pin that the spread
+ * changed nothing a user can see.
+ */
+describe('destinations — the transcripts slice data (#500)', () => {
+  it('spreads the slice destination between Home and Notes, once', () => {
+    const keys = DESTINATIONS.map((d) => d.key);
+    expect(keys.filter((key) => key === 'transcripts')).toHaveLength(1);
+    expect(keys.indexOf('transcripts')).toBe(keys.indexOf('home') + 1);
+    expect(keys.indexOf('notes')).toBe(keys.indexOf('transcripts') + 1);
+    for (const record of kvoxTranscriptsDestinations) {
+      const spread = DESTINATIONS.find((d) => d.key === record.key);
+      expect(spread).toMatchObject({
+        key: 'transcripts',
+        label: 'Transcripts',
+        compactLabel: 'Transcripts',
+        path: '/transcripts',
+        permission: 'transcripts:read',
+      });
+      expect(spread?.pinned).toBeFalsy();
+      expect(spread?.anyPermission).toBeUndefined();
+    }
+  });
+
+  it('keeps the transcripts row out of the pinned bottom-bar membership rules', () => {
+    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.key)).toContain('transcripts');
+  });
+
+  it('spreads the slice prefix into DESTINATION_ROUTES at the same key', () => {
+    expect(kvoxTranscriptsDestinationRoutes).toEqual({ transcripts: ['/transcripts'] });
+    expect(DESTINATION_ROUTES.transcripts).toEqual(['/transcripts']);
+  });
+
+  it('declares the four routes with the exact gates, and the app swaps only components', () => {
+    expect(
+      kvoxTranscriptsRoutes.map(({ path, permission, redirectTo }) => ({ path, permission, redirectTo })),
+    ).toEqual([
+      { path: '/transcripts', permission: 'transcripts:read', redirectTo: undefined },
+      { path: '/transcripts/new', permission: 'transcripts:write', redirectTo: '/transcripts' },
+      { path: '/transcripts/:id', permission: 'transcripts:read', redirectTo: undefined },
+      { path: '/transcripts/:id/history', permission: 'transcripts:read', redirectTo: undefined },
+    ]);
+    expect(
+      appTranscriptsRoutes.map(({ path, permission, redirectTo }) => ({ path, permission, redirectTo })),
+    ).toEqual(
+      kvoxTranscriptsRoutes.map(({ path, permission, redirectTo }) => ({ path, permission, redirectTo })),
+    );
   });
 });

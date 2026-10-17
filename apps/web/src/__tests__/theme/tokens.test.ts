@@ -52,7 +52,7 @@ import { describe, it, expect } from 'vitest';
 import { THEME_COLOR } from '@app/shared';
 import { BRAND_TOKENS } from '../../theme/tokens';
 import { lightPalette } from '../../theme/light';
-import { SPEAKER_PALETTES } from '../../utils/transcriptDisplay';
+import { SPEAKER_PALETTES } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   contrastRatio,
   flattenOver,

@@ -8,21 +8,24 @@ import type { KvoxRouteDef } from '@marinoscar/kvox-web/core/ui';
  *
  * The slice declares the path, the lazy page and the permission the route is
  * gated on; this app supplies the guard. A route with a `permission` is wrapped
- * in the packaged `RequirePermission` and a user without it is sent home, exactly
- * what the literal routes in `App.tsx` did. Call it where the literal `<Route>`
+ * in the packaged `RequirePermission` and a user without it is sent home (or to
+ * the route's `redirectTo`), exactly what the literal routes in `App.tsx` did. Call it where the literal `<Route>`
  * used to be: the order of routes is the order of the spread.
  *
  * The page is rendered inside the `Suspense` boundary `AppRoutes` already
  * provides around every lazy page.
  */
 export function renderKvoxRoutes(routes: readonly KvoxRouteDef[]) {
-  return routes.map(({ path, permission, Component }) => (
+  return routes.map(({ path, permission, redirectTo, Component }) => (
     <Route
       key={path}
       path={path}
       element={
         permission ? (
-          <RequirePermission permission={permission} fallback={<Navigate to="/" replace />}>
+          <RequirePermission
+            permission={permission}
+            fallback={<Navigate to={redirectTo ?? '/'} replace />}
+          >
             <Component />
           </RequirePermission>
         ) : (

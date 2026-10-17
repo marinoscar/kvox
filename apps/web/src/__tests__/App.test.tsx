@@ -3,6 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { render } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
+import type { ReactElement } from 'react';
 import { server } from './mocks/server';
 import App from '../App';
 // Issue #470: `main.tsx` configures the packaged notifications slice; a test that
@@ -128,8 +129,13 @@ vi.mock('../pages/UserKnowledgeGraphPage', () => ({
  * They are two pages now, so each gets its own heading and a route wired to the
  * wrong page fails on the heading rather than being invisible.
  */
-vi.mock('../pages/TranscriptsPage', () => ({
-  default: () => <h1>Transcripts Page</h1>,
+// Issue #500, epic #498. The transcripts routes are the slice's data
+// (`kvoxTranscriptsRoutes`), and two of its pages are rendered through this
+// app's slot wrappers. The wrappers are replaced by name; the other two pages
+// are replaced inside the slice's route list, keeping each route's path,
+// permission and `redirectTo`, so the guards below are the real ones.
+vi.mock('../kvox/TranscriptsPageWithSlots', () => ({
+  TranscriptsPageWithSlots: () => <h1>Transcripts Page</h1>,
 }));
 
 vi.mock('../pages/NotesPage', () => ({
@@ -148,17 +154,24 @@ vi.mock('../pages/NoteHistoryPage', () => ({
   default: () => <h1>Note History Page</h1>,
 }));
 
-vi.mock('../pages/NewTranscriptPage', () => ({
-  default: () => <h1>New Transcript Page</h1>,
+vi.mock('../kvox/TranscriptPageWithSlots', () => ({
+  TranscriptPageWithSlots: () => <h1>Transcript Viewer Page</h1>,
 }));
 
-vi.mock('../pages/TranscriptPage', () => ({
-  default: () => <h1>Transcript Viewer Page</h1>,
-}));
-
-vi.mock('../pages/TranscriptHistoryPage', () => ({
-  default: () => <h1>Transcript History Page</h1>,
-}));
+vi.mock('@marinoscar/kvox-web/transcripts/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/transcripts/ui')>();
+  const standIns: Record<string, () => ReactElement> = {
+    '/transcripts/new': () => <h1>New Transcript Page</h1>,
+    '/transcripts/:id/history': () => <h1>Transcript History Page</h1>,
+  };
+  return {
+    ...actual,
+    kvoxTranscriptsRoutes: actual.kvoxTranscriptsRoutes.map((route) => {
+      const standIn = standIns[route.path];
+      return standIn ? { ...route, Component: standIn } : route;
+    }),
+  };
+});
 
 // Issue #477, epic #472. The AI pages are the platform's
 // (`@marinoscar/platform-web/ai/ui`) and the admin AI page is this app's binding
