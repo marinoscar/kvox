@@ -7,7 +7,9 @@
     "./src/core/ui/index.ts",
     "./src/core/testing/index.ts",
     "./src/transcription/headless/index.ts",
-    "./src/transcription/ui/index.ts"
+    "./src/transcription/ui/index.ts",
+    "./src/search/headless/index.ts",
+    "./src/search/ui/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

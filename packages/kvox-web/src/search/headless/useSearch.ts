@@ -26,7 +26,7 @@
  *
  *   • **The `AbortSignal`.** The token alone would leave the old request open,
  *     still costing a ranked query on the database and a response body on the
- *     wire, for as long as it takes to arrive. `services/api.ts` passes a
+ *     wire, for as long as it takes to arrive. The host's HTTP transport passes a
  *     `signal` straight through to `fetch`, so the keystroke that supersedes a
  *     request genuinely cancels it.
  *
@@ -39,7 +39,7 @@
  * =============================================================================
  *
  * `nextCursor` is passed back verbatim and is never constructed, parsed or
- * compared here — see `services/search.ts`. The server ties a cursor to the
+ * compared here — see `search-client.ts`. The server ties a cursor to the
  * exact search that produced it and answers **400** when it is presented
  * against a different one, rather than silently serving page one again. That
  * refusal is a feature, and this hook has to cooperate with it rather than
@@ -61,15 +61,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ApiError } from '../services/api';
-import { isStaleCursorError, search } from '../services/search';
+import { KvoxApiError, useIsMounted, useKvoxHost } from '../../core/headless/index.js';
+import { isStaleCursorError, search } from './search-client.js';
 import type {
   SearchResult,
   SearchResponse,
   SearchType,
   SemanticReason,
-} from '../services/search';
-import { useIsMounted } from './useIsMounted';
+} from './search-client.js';
 
 /**
  * Idle time before a keystroke becomes a ranked full-text query.
@@ -77,10 +76,16 @@ import { useIsMounted } from './useIsMounted';
  * The same 300 ms the two library views already wait before filtering their
  * lists — one box, one pause, one number, so the two sources this box switches
  * between respond on the same beat rather than one feeling laggier.
+ *
+ * @stability experimental
  */
 export const SEARCH_DEBOUNCE_MS = 300;
 
-/** Results per page. The endpoint's own default. */
+/**
+ * Results per page. The endpoint's own default.
+ *
+ * @stability experimental
+ */
 export const SEARCH_PAGE_SIZE = 20;
 
 /**
@@ -93,7 +98,7 @@ export const SEARCH_PAGE_SIZE = 20;
  * reports for itself.
  */
 function messageFor(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
+  if (err instanceof KvoxApiError) {
     if (err.status === 403) return 'You do not have permission to search';
     return err.message || fallback;
   }
@@ -106,10 +111,14 @@ function isAbort(err: unknown): boolean {
 }
 
 interface SearchState {
+  /** The ranked rows so far. */
   results: SearchResult[];
+  /** The opaque cursor of the next page, or `null`. */
   nextCursor: string | null;
   matchedDocuments: number;
+  /** Whether the candidate window filled up. */
   truncated: boolean;
+  /** `stopwords` when the query was reduced to stop words, else `null`. */
   degraded: 'stopwords' | null;
   /**
    * `null` until a response has landed — NOT `[]`.
@@ -159,32 +168,49 @@ function adopt(response: SearchResponse): SearchState {
   };
 }
 
+/**
+ * What {@link useSearch} takes.
+ *
+ * @stability experimental
+ */
 export interface UseSearchOptions {
   /** The raw box contents. Trimmed here; an all-whitespace box is no search. */
   q: string;
   /** The types this view cares about. One value, for both current callers. */
   types: SearchType[];
+  /** The page size. */
   limit?: number;
   /** `0` runs the query immediately — what a test passes. */
   debounceMs?: number;
 }
 
+/**
+ * What {@link useSearch} returns.
+ *
+ * @stability experimental
+ */
 export interface UseSearchResult {
+  /** The ranked rows so far. */
   results: SearchResult[];
   /** True from the keystroke until this query's first page settles. */
   isLoading: boolean;
+  /** True while a later page is loading. */
   isLoadingMore: boolean;
+  /** The sentence to render, or `null`. */
   error: string | null;
+  /** The opaque cursor of the next page, or `null`. */
   nextCursor: string | null;
   /**
    * Documents in the server's candidate window.
    *
-   * ⚠ NOT A TOTAL when {@link truncated} is true — see `services/search.ts`.
+   * ⚠ NOT A TOTAL when {@link truncated} is true — see `search-client.ts`.
    */
   matchedDocuments: number;
+  /** Whether the candidate window filled up. */
   truncated: boolean;
+  /** `stopwords` when the query was reduced to stop words, else `null`. */
   degraded: 'stopwords' | null;
-  /** `null` until an answer lands. See {@link SearchState.searchedTypes}. */
+  /** `null` until an answer lands. See `SearchState.searchedTypes`. */
   searchedTypes: SearchType[] | null;
   /**
    * `false` when the answer was keyword-only; `null` until one lands.
@@ -199,9 +225,15 @@ export interface UseSearchResult {
   unindexedCount: number;
   /** True when the box is empty (or all whitespace): no search is running. */
   isIdle: boolean;
+  /** Loads the next page. */
   loadMore: () => Promise<void>;
 }
 
+/**
+ * Ranked full-text and semantic search over the host, with debounce, abort and cursor paging.
+ *
+ * @stability experimental
+ */
 export function useSearch(options: UseSearchOptions): UseSearchResult {
   const { q, types, limit = SEARCH_PAGE_SIZE, debounceMs = SEARCH_DEBOUNCE_MS } = options;
 
@@ -220,6 +252,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const host = useKvoxHost();
   const isMounted = useIsMounted();
 
   /** Identifies the latest first-page request. See the file header. */
@@ -236,7 +269,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
 
       setIsLoading(true);
       try {
-        const response = await search({
+        const response = await search(host, {
           q: query,
           types: typeList,
           limit,
@@ -256,7 +289,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
         if (isMounted() && mine === token.current) setIsLoading(false);
       }
     },
-    [isMounted, limit],
+    [host, isMounted, limit],
   );
 
   // THE QUESTION-CHANGED EFFECT, and the debounce. It runs on mount and
@@ -309,7 +342,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
 
     setIsLoadingMore(true);
     try {
-      const response = await search({
+      const response = await search(host, {
         q: query,
         types: typeList,
         limit,
@@ -355,7 +388,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
     } finally {
       if (isMounted()) setIsLoadingMore(false);
     }
-  }, [isLoadingMore, isMounted, limit, loadFirstPage, nextCursor, q, typesKey]);
+  }, [host, isLoadingMore, isMounted, limit, loadFirstPage, nextCursor, q, typesKey]);
 
   return {
     results: state.results,

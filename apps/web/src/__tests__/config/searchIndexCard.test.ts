@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import {
   USER_SETTINGS_SECTIONS,
   USER_HUB_PATH,
@@ -78,10 +79,20 @@ describe('USER_SETTINGS_SECTIONS — Search Indexing card (issue #191)', () => {
   });
 
   it('has a route in App.tsx, read from the live file rather than a copy', () => {
+    // The route is DATA exported by the search slice (#501, epic #498) and
+    // rendered by `renderKvoxRoutes(kvoxSearchRoutes)`, so the live file is read
+    // for that call and the slice's own list for the path.
     const source = readFileSync(APP_TSX, 'utf8');
-    const paths = [...source.matchAll(/path="([^"]+)"/g)].map((match) => match[1]);
 
-    expect(paths).toContain(PATH);
+    expect(source).toMatch(/renderKvoxRoutes\(kvoxSearchRoutes\)/);
+    expect(kvoxSearchRoutes.map((route) => route.path)).toContain(PATH);
+  });
+
+  it('routes the page ungated, like the card: the API enforces no permission', () => {
+    const route = kvoxSearchRoutes.find((entry) => entry.path === PATH);
+
+    expect(route).toBeDefined();
+    expect(route?.permission).toBeUndefined();
   });
 
   it('is a PER-USER card and exists nowhere in the admin registry', () => {

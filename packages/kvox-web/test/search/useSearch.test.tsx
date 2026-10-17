@@ -11,24 +11,42 @@
  *      because the server refuses a stale cursor on purpose and the client is
  *      the only party that knows a human pressed a button.
  *
- * `services/search` is mocked, but only its `search` function: `isStaleCursorError`
+ * `search-client` is mocked, but only its `search` function: `isStaleCursorError`
  * is the real one, because test 3 is precisely an assertion about what that
  * predicate lets through.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as renderHookBare, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 
-vi.mock('../../services/search', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../services/search')>('../../services/search');
+vi.mock('../../src/search/headless/search-client.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/search/headless/search-client.js')>(
+    '../../src/search/headless/search-client.js',
+  );
   return { ...actual, search: vi.fn() };
 });
 
-import { ApiError } from '../../services/api';
-import { search } from '../../services/search';
-import type { SearchResponse, SearchResult, SearchType } from '../../services/search';
-import { SEARCH_DEBOUNCE_MS, useSearch } from '../../hooks/useSearch';
+import { KvoxApiError, KvoxWebHostProvider } from '../../src/core/headless/index.js';
+import { createFakeKvoxWebHost } from '../../src/core/testing/index.js';
+import { search } from '../../src/search/headless/search-client.js';
+import type {
+  SearchResponse,
+  SearchResult,
+  SearchType,
+} from '../../src/search/headless/search-client.js';
+import { SEARCH_DEBOUNCE_MS, useSearch } from '../../src/search/headless/useSearch.js';
+
+/** The hook reads its host from context; `search` itself is mocked, so the host is a bare fake. */
+const host = createFakeKvoxWebHost();
+
+const renderHook: typeof renderHookBare = (callback, options) =>
+  renderHookBare(callback, {
+    ...options,
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <KvoxWebHostProvider host={host}>{children}</KvoxWebHostProvider>
+    ),
+  });
 
 const mockSearch = vi.mocked(search);
 
@@ -115,7 +133,7 @@ describe('useSearch — the debounce', () => {
     });
 
     expect(mockSearch).toHaveBeenCalledTimes(1);
-    expect(mockSearch.mock.calls[0][0]).toMatchObject({ q: 'budget', types: TYPES });
+    expect(mockSearch.mock.calls[0][1]).toMatchObject({ q: 'budget', types: TYPES });
   });
 
   it('raises isLoading immediately, before the timer fires', () => {
@@ -150,7 +168,7 @@ describe('useSearch — a superseded request is aborted', () => {
     });
 
     await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(1));
-    const first = mockSearch.mock.calls[0][0];
+    const first = mockSearch.mock.calls[0][1];
     expect(first.signal?.aborted).toBe(false);
 
     rerender({ q: 'budget' });
@@ -225,7 +243,7 @@ describe('useSearch — paging, and the opaque cursor', () => {
       await hook.current.loadMore();
     });
 
-    expect(mockSearch.mock.calls[1][0].cursor).toBe('OPAQUE::1');
+    expect(mockSearch.mock.calls[1][1].cursor).toBe('OPAQUE::1');
     expect(hook.current.results.map((item) => item.id)).toEqual(['t1', 't2']);
     expect(hook.current.nextCursor).toBeNull();
   });
@@ -233,7 +251,7 @@ describe('useSearch — paging, and the opaque cursor', () => {
   it('⚠ resets to page one on a 400 from a stale cursor, WITHOUT an error', async () => {
     mockSearch
       .mockResolvedValueOnce(response({ results: [result('t1')], nextCursor: 'OPAQUE::1' }))
-      .mockRejectedValueOnce(new ApiError('Invalid cursor', 400))
+      .mockRejectedValueOnce(new KvoxApiError('Invalid cursor', 400))
       .mockResolvedValueOnce(response({ results: [result('t1')], nextCursor: 'OPAQUE::2' }));
 
     const { result: hook } = renderHook(() =>
@@ -247,7 +265,7 @@ describe('useSearch — paging, and the opaque cursor', () => {
 
     await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(3));
     // The recovery is page ONE: no cursor at all.
-    expect(mockSearch.mock.calls[2][0].cursor).toBeUndefined();
+    expect(mockSearch.mock.calls[2][1].cursor).toBeUndefined();
     // Silently. The user pressed a button and got a list; a banner about a
     // cursor would describe a protocol detail they cannot act on.
     expect(hook.current.error).toBeNull();
@@ -257,7 +275,7 @@ describe('useSearch — paging, and the opaque cursor', () => {
   it('still SURFACES a 400 that did not involve a cursor', async () => {
     // The narrowness of `isStaleCursorError` is the point: a 400 about `q`,
     // `types` or `limit` is the caller's bug and must stay visible.
-    mockSearch.mockRejectedValueOnce(new ApiError('q must be at most 256 characters', 400));
+    mockSearch.mockRejectedValueOnce(new KvoxApiError('q must be at most 256 characters', 400));
 
     const { result: hook } = renderHook(() =>
       useSearch({ q: 'budget', types: TYPES, debounceMs: 0 }),
@@ -335,7 +353,7 @@ describe('useSearch — what the answer says about itself', () => {
   it('shows no rows under an error, rather than the previous query\'s rows', async () => {
     mockSearch
       .mockResolvedValueOnce(response({ results: [result('t1')] }))
-      .mockRejectedValueOnce(new ApiError('Boom', 500));
+      .mockRejectedValueOnce(new KvoxApiError('Boom', 500));
 
     const { result: hook, rerender } = renderHook(
       ({ q }) => useSearch({ q, types: TYPES, debounceMs: 0 }),

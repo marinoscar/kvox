@@ -52,12 +52,35 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Fragment } from 'react';
 
-import type { SearchSnippet as SearchSnippetData } from '../../services/search';
-import { formatTimestamp } from '../../utils/playbackIntervals';
+import type { SearchSnippet as SearchSnippetData } from '../headless/index.js';
 
-/** A run of snippet text, and whether it was a hit. */
+/**
+ * `h:mm:ss` past an hour, `m:ss` below it; negatives and `NaN` clamp to zero.
+ *
+ * The same clock face the transcript player uses for a position inside a
+ * recording. Kept private here because the playback utilities belong to the
+ * transcripts slice, which this slice must not import (search depends on core
+ * only); the two are tested against the same expectations.
+ */
+function formatTimestamp(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+  const total = Math.floor(ms / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
+/**
+ * A run of snippet text, and whether it was a hit.
+ *
+ * @stability experimental
+ */
 export interface SnippetPart {
+  /** The text of the run. */
   text: string;
+  /** Whether the run was a hit. */
   marked: boolean;
 }
 
@@ -87,6 +110,8 @@ const ENTITIES: Record<string, string> = {
  * literal `<`, re-manufacturing the angle bracket the escape existed to remove.
  * A single pass consumes each entity once and never revisits its output, which
  * makes the ordering question disappear rather than answering it.
+ *
+ * @stability experimental
  */
 export function unescapeSnippetText(value: string): string {
   return value.replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity] ?? entity);
@@ -97,6 +122,8 @@ export function unescapeSnippetText(value: string): string {
  *
  * Exported for its own test: this is the security-relevant half of the
  * component and it is worth asserting directly, not only through the DOM.
+ *
+ * @stability experimental
  */
 export function parseSnippetHtml(html: string): SnippetPart[] {
   const parts: SnippetPart[] = [];
@@ -120,7 +147,13 @@ export function parseSnippetHtml(html: string): SnippetPart[] {
   return parts;
 }
 
+/**
+ * What {@link SearchSnippet} takes.
+ *
+ * @stability experimental
+ */
 export interface SearchSnippetProps {
+  /** The snippet to render. */
   snippet: SearchSnippetData;
 }
 
@@ -131,6 +164,8 @@ export interface SearchSnippetProps {
  * line was said, and this app has no route that opens a transcript at a
  * position — a link that dropped the reader at 0:00 of a three-hour recording
  * would be worse than the plain number it replaced.
+ *
+ * @stability experimental
  */
 export function SearchSnippet({ snippet }: SearchSnippetProps) {
   const parts = parseSnippetHtml(snippet.html);
@@ -170,5 +205,3 @@ export function SearchSnippet({ snippet }: SearchSnippetProps) {
     </Typography>
   );
 }
-
-export default SearchSnippet;
