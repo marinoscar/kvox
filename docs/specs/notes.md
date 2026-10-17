@@ -1858,6 +1858,53 @@ does); it only removes this note's own managed storage objects (a document
 source and its extraction, if any) and export files, then the SQL rows via
 cascade.
 
+### 8.7 Import — a Markdown note export back into a note (issue #585)
+
+`POST /api/notes/import` (multipart, one `file` part, `notes:write`) is the
+inverse of the Markdown exporter (§8.3): a note exported from one deployment
+(the web edition) becomes the same note in another (KVox Desktop), editable and
+extractable to the graph.
+
+- **The format is the contract's.** `parseNoteMarkdownExport` and the format
+  identifier `NOTE_MARKDOWN_EXPORT_SCHEMA` (`kvox.note/v1`) live in
+  `@marinoscar/kvox-contract/notes`, pure, so the API slice and a host that
+  routes a dropped file ("is this a note export?", `detectKvoxImport`) share one
+  definition. The exporter's front matter now opens with `schema:
+  "kvox.note/v1"` and carries `bodyFormat`.
+- **What is read.** The title comes from the front matter's `title`, else the
+  leading `# heading`, else the file name. The exporter's title heading and its
+  provenance block (`> **Source:** …`, stripped only right after the heading)
+  are not body. The body is everything after them, trailing whitespace removed
+  (the exporter normalises it the same way), so export → import → export gives
+  the same title and body.
+- **Lenient where it is safe.** A file with no front matter (an export written
+  with `includeFrontMatter: false`, or written before `schema` existed, or any
+  Markdown or text file) imports as a plain-body note. A front matter block that
+  is opened and never closed, or holds a line that is not `key: value`, is
+  refused (`invalid_front_matter`, `details.line`): guessing where it ends would
+  import YAML as the note's first paragraph. A `schema` other than
+  `kvox.note/v1` is refused (`unsupported_note_format`, `details.schema`), as is
+  a file that is not UTF-8 text (`not_text`) or holds no text once the header
+  is read (`empty_note`). The four reasons are `NOTE_IMPORT_FAILURE_REASONS`,
+  also in `KVOX_ERROR_CODES`.
+- **What is written**, in one transaction: a `ready` note (`titleSource:
+  user`, a person supplied the title) and version 1, kind `edit`, authored by
+  the importer, summary `Imported from <file>`. That pair is the import's origin
+  record; no new version kind and no migration. The file itself is stored first
+  as the note's **source document** (`sourceType: document`, `managed_by:
+  notes`, the uploaded-source key space) and deleted again if the transaction
+  fails; the export's provenance (its note id, template name and source) is kept
+  in that object's metadata, never linked, since those ids belong to another
+  deployment.
+- **After the commit**: the audit row (`note:import`, counts and ids only), the
+  source extraction (`note.source.extract`, so a later regeneration with a
+  template reads the text like any document source's), the search index, and
+  `kvox.notes.note_ready`, so a host's graph treats the note as it treats a
+  generated one (automatic or on-demand extraction is the host's choice).
+- **Synchronous** and bounded by the slice option `maxImportBytes` (5 MiB by
+  default; over it is a 413 before the file is buffered): one parse, one object
+  put and one transaction, nothing that outlives the request.
+
 ## 9. Privacy — what leaves this deployment, to whose account
 
 VISION.md requires that users *"understand when their information is being
