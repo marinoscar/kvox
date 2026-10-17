@@ -346,6 +346,10 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // can be reworded without republishing under another name.
   // ---------------------------------------------------------------------
   '.changeset/kvox-packages-scaffold.md',
+  // `.changeset/pre.json`: Changesets' pre-mode state; `changeset version` writes the
+  // consumed changeset names (`kvox-*`, exempt above by prefix) into it. Generated, not
+  // a rebrand target.
+  '.changeset/pre.json',
   '.github/workflows/kvox-packages.yml',
   '.github/workflows/kvox-release.yml',
   '.gitignore',
