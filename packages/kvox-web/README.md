@@ -6,7 +6,7 @@ The React side of the KVox domain: pages, components and hooks built on MUI, exp
 
 The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, theme, shell or settings hub. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop).
 
-Status: in progress (Epic 7, issues 7.1 to 7.3). `core`, `transcription`, `search` and `transcripts` are filled; `notes`, `graph` and `ask` arrive in issues 7.4, 7.5 and 7.6 as `./<slice>/headless` and `./<slice>/ui`.
+Status: in progress (Epic 7, issues 7.1 to 7.4). `core`, `transcription`, `search`, `transcripts` and `notes` are filled; `graph` and `ask` arrive in issues 7.5 and 7.6 as `./<slice>/headless` and `./<slice>/ui`.
 
 - `@marinoscar/kvox-web/core/headless`: the host port and its provider, the viewer and permission hooks, the HTTP, event-stream and upload transports, `KvoxApiError`, polling and the domain-neutral helpers. No MUI. [README](src/core/README.md).
 - `@marinoscar/kvox-web/core/ui`: the library chrome and the types of the data a slice exports (`KvoxSettingsCard`, `KvoxDestination`, `KvoxRouteDef`). Needs MUI and `react-router-dom`.
@@ -17,6 +17,8 @@ Status: in progress (Epic 7, issues 7.1 to 7.3). `core`, `transcription`, `searc
 - `@marinoscar/kvox-web/search/ui`: `SearchResultsView`, `SearchSnippet`, `SemanticSearchNotice`, `UserSearchIndexPage`, `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes`.
 - `@marinoscar/kvox-web/transcripts/headless`: the clients of `/api/transcripts/**`, the transcript, playback, name-check and upload hooks, and `KvoxUploadManagerProvider`. [README](src/transcripts/README.md).
 - `@marinoscar/kvox-web/transcripts/ui`: `TranscriptsPage`, `TranscriptPage`, `TranscriptHistoryPage`, `NewTranscriptPage`, `TranscriptsLibraryView`, the page slots, `kvoxTranscriptsDestinations` and `kvoxTranscriptsRoutes`.
+- `@marinoscar/kvox-web/notes/headless`: the clients of `/api/notes/**` and `/api/note-templates/**`, the note, template and export calls, the generation stream over `host.sse`, and the note and template hooks. [README](src/notes/README.md).
+- `@marinoscar/kvox-web/notes/ui`: `NotesPage`, `NotePage`, `NoteHistoryPage`, `NewNotePage`, `UserNoteTemplatesPage`, `NotesLibraryView`, `TranscriptNotesSection`, `MarkdownView`, the page slots, `kvoxNotesDestinations`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes`.
 
 ## Install and peer dependencies
 
@@ -38,10 +40,13 @@ Optional peers, installed for the entries that need them. A host that uses only 
 
 | Package | Range | Needed by |
 |---|---|---|
-| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui` |
-| `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui`, `search/ui`, `transcripts/ui` |
-| `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui` |
+| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui` |
+| `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui` |
+| `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui` |
 | `@tanstack/react-virtual` | `^3.14.12` | `transcripts/ui` |
+| `react-markdown` | `^10.1.0` | `notes/ui` |
+| `remark-gfm` | `^4.0.1` | `notes/ui` |
+| `@tiptap/core`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/extension-table`, `@tiptap/markdown`, `@tiptap/pm` | `^3.31.3` | `notes/ui` (the visual editor, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
 | `@marinoscar/platform-web` | `0.1.0-next.5` | no entry: host wiring in the app only |
 
@@ -86,6 +91,7 @@ None at the package level. The host object is the whole configuration; the optio
 - `kvoxTranscriptionAdminSections`, `kvoxTranscriptionRoutes` and the `renderSecretField` slot of `TranscriptionSettingsPage` (`transcription/ui`).
 - `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`search/ui`): the Search Indexing card (no permission, by design) and its route.
 - `kvoxTranscriptsDestinations`, `kvoxTranscriptsDestinationRoutes` and `kvoxTranscriptsRoutes` (`transcripts/ui`), the slots of `TranscriptPage` (`TranscriptPageSlots`: `NotesSection`, `useSpeakerPeople`, `SelectionActions`, `HeaderActions`) and of the library (`TranscriptsLibrarySlots`: `SearchPrefix`), and the `sharing` (`TranscriptSharingAdapter`) and `ai` (`TranscriptAiAccess`) adapters. Each is listed in the [transcripts README](src/transcripts/README.md).
+- `kvoxNotesDestinations`, `kvoxNotesDestinationRoutes`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes` (`notes/ui`), the slots of `NotePage` (`NotePageSlots`: `Provider`, `useAsideWidth`, `HeaderActions`, `ProposalActions`, `SelectionActions`) and of the library (`NotesLibrarySlots`: `SearchPrefix`), and the `ai` (`NotesAiAccess`) adapter. Each is listed in the [notes README](src/notes/README.md).
 
 ## Data
 
@@ -93,11 +99,11 @@ None. The browser holds no data model; it reads and writes through the API. The 
 
 ## Permissions and settings
 
-Packaged pages check no permission themselves except where a slice README says so: the app's route gate does, from the `permission` the slice's route data declares. `useHasPermission(permission)` reads the host's viewer. The transcription card and route are gated on `system_settings:read`; saving, testing and removing the key need `system_settings:write`, checked inside the page. The Search Indexing card and route declare no permission: the API gates `/api/search/index-status` and `/api/search/index` on authentication alone. The transcripts destination and the list, viewer and history routes are gated on `transcripts:read`, the new-transcript route on `transcripts:write`; the pages check `transcripts:write` and `notes:*` for their own controls.
+Packaged pages check no permission themselves except where a slice README says so: the app's route gate does, from the `permission` the slice's route data declares. `useHasPermission(permission)` reads the host's viewer. The transcription card and route are gated on `system_settings:read`; saving, testing and removing the key need `system_settings:write`, checked inside the page. The Search Indexing card and route declare no permission: the API gates `/api/search/index-status` and `/api/search/index` on authentication alone. The transcripts destination and the list, viewer and history routes are gated on `transcripts:read`, the new-transcript route on `transcripts:write`; the pages check `transcripts:write` and `notes:*` for their own controls. The notes destination and the library, note and history routes are gated on `notes:read`, the new-note route on `notes:write`; the Note Templates card and route declare no permission (`note_templates:*` is seeded to every role and the page's real gate is the viewer's AI key).
 
 ## UI
 
-`core/ui` ships the library chrome (`LibraryPageFrame`, `FeedCountLine`, `FeedDateSeparator`, `ActiveStatusFilterChip`) and `KvoxLoadingSpinner`. Pages read the MUI theme of the host; the package defines none. `LibraryPageFrame` reads `down('sm')` to place its create action; that read is a page-level choice, not one of the five coupled shell breakpoint gates (`apps/web/src/__tests__/config/breakpointGates.test.ts` scans this package too).
+`core/ui` ships the library chrome (`LibraryPageFrame`, `FeedCountLine`, `FeedDateSeparator`, `ActiveStatusFilterChip`), `KvoxLoadingSpinner` and `KvoxCopyButton` (the shared copy control). Pages read the MUI theme of the host; the package defines none. `LibraryPageFrame` reads `down('sm')` to place its create action; that read is a page-level choice, not one of the five coupled shell breakpoint gates (`apps/web/src/__tests__/config/breakpointGates.test.ts` scans this package too).
 
 ## Infra
 
@@ -109,7 +115,7 @@ None. No slice logs or measures anything in the browser.
 
 ## Security notes
 
-Pages never hold an API key and never call an AI provider from the browser; they call the API through the host's transport, and authorization stays in the API. The transcription page posts a provider key once and never renders a stored one (the API returns only a masked hint). The host owns the access token; a slice never sees it.
+`MarkdownView` ignores embedded HTML (no `rehype-raw`, no rehype passthrough): the text of a note is model output and untrusted. Pages never hold an API key and never call an AI provider from the browser; they call the API through the host's transport, and authorization stays in the API. The transcription page posts a provider key once and never renders a stored one (the API returns only a masked hint). The host owns the access token; a slice never sees it.
 
 ## Conformance suite
 
@@ -128,7 +134,7 @@ None. This package has not been published yet (see the [release runbook](../../d
 - [Package documentation standard and checks](../../docs/PACKAGES.md): how this README, the TSDoc and the catalog are checked
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
-- [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md) and [transcripts README](src/transcripts/README.md): the slices
+- [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md) and [notes README](src/notes/README.md): the slices
 
 ### Desktop
 

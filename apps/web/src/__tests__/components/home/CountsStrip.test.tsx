@@ -5,7 +5,7 @@ import 'vitest-axe/extend-expect';
 
 import { render } from '../../utils/test-utils';
 import { CountsStrip, countsEntries } from '../../../components/home/CountsStrip';
-import type { NoteSummary } from '../../../services/notes';
+import type { NoteSummary } from '@marinoscar/kvox-web/notes/headless';
 import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 import { AXE_OPTIONS, noteSummary, summary } from './homeFixtures';
 

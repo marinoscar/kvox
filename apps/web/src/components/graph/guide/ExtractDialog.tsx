@@ -45,7 +45,7 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { AI_KEY_SETTINGS_PATH } from '../../ai/AiKeyRequired';
-import { ModelSelect } from '../../notes/ModelSelect';
+import { ModelSelect } from '@marinoscar/kvox-web/notes/ui';
 import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
 import { useGraphExtractEstimate } from '../../../hooks/useGraphExtractEstimate';
 import { useGraphOntology } from '../../../hooks/useGraphOntology';

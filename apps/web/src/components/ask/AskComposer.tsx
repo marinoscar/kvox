@@ -34,7 +34,7 @@ import Typography from '@mui/material/Typography';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
-import { ModelSelect } from '../notes/ModelSelect';
+import { ModelSelect } from '@marinoscar/kvox-web/notes/ui';
 import { ASK_CONTENT_MAX_CHARS } from '../../services/ask';
 import type { AiTasksConfig, AiTasksConfigModel } from '../../services/aiTasks';
 

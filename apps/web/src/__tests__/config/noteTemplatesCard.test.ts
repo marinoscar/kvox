@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import { kvoxNotesRoutes } from '@marinoscar/kvox-web/notes/ui';
+import { appNotesRoutes } from '../../kvox/notesRoutes';
 import {
   USER_SETTINGS_SECTIONS,
   USER_HUB_PATH,
@@ -80,17 +82,28 @@ describe('USER_SETTINGS_SECTIONS — Note Templates card (issue #56)', () => {
     ).toBeNull();
   });
 
-  it('has a route in App.tsx, read from the live file rather than a copy', () => {
+  it('has a route, rendered by App.tsx from the notes slice\'s route data', () => {
+    // The route is DATA exported by `@marinoscar/kvox-web/notes/ui` (#502, epic
+    // #498): App.tsx renders `appNotesRoutes`, the slice's list with the pages
+    // that take AI access or slots swapped for this app's wrappers. Read from
+    // the live file rather than a copy, then from the data it names.
     const source = readFileSync(APP_TSX, 'utf8');
-    const paths = [...source.matchAll(/path="([^"]+)"/g)].map((match) => match[1]);
+    expect(source).toMatch(/renderKvoxRoutes\(appNotesRoutes\)/);
 
-    expect(paths).toContain(PATH);
+    const route = kvoxNotesRoutes.find((entry) => entry.path === PATH);
+    expect(route).toBeDefined();
+    // Ungated, like every `/settings/*` sibling: the card declares no permission.
+    expect(route?.permission).toBeUndefined();
+    expect(appNotesRoutes.map((entry) => entry.path)).toContain(PATH);
   });
 
   it('mirrors the card description as the page description, so the hub and the page agree', () => {
     const card = findCard();
     const page = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), '../../pages/UserNoteTemplatesPage.tsx'),
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../../../../packages/kvox-web/src/notes/ui/pages/UserNoteTemplatesPage.tsx',
+      ),
       'utf8',
     );
 

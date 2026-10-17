@@ -2,14 +2,15 @@
  * What the web edition adds to the transcripts pages (issue #500, epic #498).
  *
  * The slice imports only `core`, `transcription` and `search`. The notes under a
- * transcript, the person links on a speaker and "Add to graph" on a selection
- * belong to the notes and graph UI, which still lives in this app until issues
- * 7.4 and 7.5, so they are filled in here.
+ * transcript are the notes slice's own `TranscriptNotesSection`; the person links
+ * on a speaker and "Add to graph" on a selection belong to the graph UI, which
+ * still lives in this app until issue 7.5, so they are filled in here.
  */
 
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { TranscriptNotesSection } from '@marinoscar/kvox-web/notes/ui';
 import type {
   TranscriptPageSlots,
   TranscriptSelectionActionsProps,
@@ -19,7 +20,6 @@ import type {
 
 import { EntitySearchHits } from '../components/graph/EntitySearchHits';
 import { TranscriptGraphSelection } from '../components/graph/selection/TranscriptGraphSelection';
-import { TranscriptNotesSection } from '../components/notes/TranscriptNotesSection';
 import { useGraphTranscriptPeople } from '../hooks/useGraphTranscriptPeople';
 
 /**

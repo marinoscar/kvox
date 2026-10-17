@@ -65,13 +65,13 @@ const WHY = {
 const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx': WHY.libraryFrame,
   '@marinoscar/kvox-web:transcripts/ui/components/TranscriptsLibraryView.tsx': WHY.libraryView,
-  'components/library/NotesLibraryView.tsx': WHY.libraryView,
+  '@marinoscar/kvox-web:notes/ui/components/NotesLibraryView.tsx': WHY.libraryView,
 
   '@marinoscar/kvox-web:transcripts/ui/components/ExportDialog.tsx': WHY.dialog,
   '@marinoscar/kvox-web:transcripts/ui/components/NameCheckDialog.tsx': WHY.dialog,
-  'components/notes/NoteContextDialog.tsx': WHY.dialog,
-  'components/notes/NoteExportDialog.tsx': WHY.dialog,
-  'components/notes/NoteConflictDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:notes/ui/components/NoteContextDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:notes/ui/components/NoteExportDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:notes/ui/components/NoteConflictDialog.tsx': WHY.dialog,
   'components/graph/ImportGraphDialog.tsx': WHY.dialog,
   'components/graph/ExportGraphDialog.tsx': WHY.dialog,
   'components/graph/EntityEditDialog.tsx': WHY.dialog,
@@ -96,7 +96,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   'components/datatable/desktop/DesktopGridRenderer.tsx': WHY.datatable,
   'components/datatable/useContainerLayout.ts': WHY.datatable,
 
-  'pages/NewNotePage.tsx': WHY.page,
+  '@marinoscar/kvox-web:notes/ui/pages/NewNotePage.tsx': WHY.page,
   'pages/GraphIndexPage.tsx': WHY.page,
   'pages/GraphOverviewPage.tsx': WHY.page,
   'pages/GraphExplorerPage.tsx': WHY.page,

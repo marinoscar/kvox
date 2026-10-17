@@ -138,21 +138,34 @@ vi.mock('../kvox/TranscriptsPageWithSlots', () => ({
   TranscriptsPageWithSlots: () => <h1>Transcripts Page</h1>,
 }));
 
-vi.mock('../pages/NotesPage', () => ({
-  default: () => <h1>Notes Page</h1>,
+// Issue #502, epic #498. The notes routes are the slice's data
+// (`kvoxNotesRoutes`); three of its pages are rendered through this app's slot
+// and AI wrappers, replaced by name, and the fourth (`/notes/:id/history`) is
+// replaced inside the slice's route list, keeping each route's path, permission
+// and `redirectTo`, so the guards below are the real ones.
+vi.mock('../kvox/NotesLibraryWithSlots', () => ({
+  NotesLibraryWithSlots: () => <h1>Notes Page</h1>,
 }));
 
-vi.mock('../pages/NewNotePage', () => ({
-  default: () => <h1>New Note Page</h1>,
+vi.mock('../kvox/NewNotePageWithAi', () => ({
+  NewNotePageWithAi: () => <h1>New Note Page</h1>,
 }));
 
-vi.mock('../pages/NotePage', () => ({
-  default: () => <h1>Note Page</h1>,
+vi.mock('../kvox/NotePageWithSlots', () => ({
+  NotePageWithSlots: () => <h1>Note Page</h1>,
 }));
 
-vi.mock('../pages/NoteHistoryPage', () => ({
-  default: () => <h1>Note History Page</h1>,
-}));
+vi.mock('@marinoscar/kvox-web/notes/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/notes/ui')>();
+  return {
+    ...actual,
+    kvoxNotesRoutes: actual.kvoxNotesRoutes.map((route) =>
+      route.path === '/notes/:id/history'
+        ? { ...route, Component: () => <h1>Note History Page</h1> }
+        : route,
+    ),
+  };
+});
 
 vi.mock('../kvox/TranscriptPageWithSlots', () => ({
   TranscriptPageWithSlots: () => <h1>Transcript Viewer Page</h1>,

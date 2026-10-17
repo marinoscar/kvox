@@ -113,7 +113,7 @@ import {
   kvoxTranscriptsDestinationRoutes,
   kvoxTranscriptsDestinations,
 } from '@marinoscar/kvox-web/transcripts/ui';
-import DescriptionIcon from '@mui/icons-material/Description';
+import { kvoxNotesDestinationRoutes, kvoxNotesDestinations } from '@marinoscar/kvox-web/notes/ui';
 import HubIcon from '@mui/icons-material/Hub';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
@@ -166,7 +166,8 @@ export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string
   // for both halves of the app.
   // The transcripts slice's prefix (#500, epic #498), spread at the same key.
   ...kvoxTranscriptsDestinationRoutes,
-  notes: ['/notes'],
+  // The notes slice's prefix (#502, epic #498), spread at the same key.
+  ...kvoxNotesDestinationRoutes,
   // `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
   // `/graph/overview` and `/graph/imports/:id` (#373–#375, #387); `/ask` covers
   // `/ask` and `/ask/:conversationId` (#380). Owned here whether or not the
@@ -258,22 +259,11 @@ export const DESTINATIONS: readonly Destination[] = [
   // index: ONE permission (`transcripts:read`, what `transcripts.controller.ts`
   // enforces), not pinned, `GraphicEq` icon, "Transcripts" for both labels.
   ...kvoxTranscriptsDestinations,
-  {
-    // Issue #57 (epic #45), promoted from a tab to a destination by #106.
-    //
-    // ONE PERMISSION, for the same reason as its sibling above:
-    // `notes.controller.ts` carries `PERMISSIONS.NOTES_READ` on its reads and
-    // nothing else gates this subtree. Seeded to all three roles, same as the
-    // transcript pair.
-    key: 'notes',
-    label: 'Notes',
-    compactLabel: 'Notes',
-    // A page of prose, never a waveform: a note is generated text, and half of
-    // what this app holds is not something the user recorded.
-    Icon: DescriptionIcon,
-    path: '/notes',
-    permission: 'notes:read',
-  },
+  // Issue #57 (epic #45), promoted from a tab to a destination by #106; the
+  // record is the notes slice's since #502 (epic #498), spread at the same
+  // index: ONE permission (`notes:read`, what `notes.controller.ts` enforces),
+  // not pinned, the page icon, "Notes" for both labels.
+  ...kvoxNotesDestinations,
   {
     // Issue #438 — see the file header. ONE PERMISSION, the one every
     // `/api/graph/*` read and every `/api/ask/*` route enforces, seeded to all

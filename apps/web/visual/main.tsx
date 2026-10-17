@@ -100,6 +100,7 @@ import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/head
 import { AppKvoxHostProvider } from '../src/platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from '../src/platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from '../src/kvox/transcriptsRoutes';
+import { appNotesRoutes } from '../src/kvox/notesRoutes';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
@@ -125,15 +126,6 @@ const UserTokensPage = lazy(() =>
 // Issue #369, epic #346. Registered for the same reason every route in this
 // file is: a route the harness cannot reach is one this suite cannot capture.
 const UserKnowledgeGraphPage = lazy(() => import('../src/pages/UserKnowledgeGraphPage'));
-// Two pages since #106, where one served both routes — the harness mirrors
-// `App.tsx`'s lazy imports exactly, so a page split there is a page split here.
-const NotesPage = lazy(() => import('../src/pages/NotesPage'));
-// Notes (#57, epic #45). Registered for the same reason every route in this
-// file is: a route the harness cannot reach is a route this suite silently
-// stops asserting pixels for.
-const NewNotePage = lazy(() => import('../src/pages/NewNotePage'));
-const NotePage = lazy(() => import('../src/pages/NotePage'));
-const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 // Knowledge graph (#373, epic #347). Mirrors `App.tsx`: owned by `home`,
 // gated on `graph:read`. The default harness user DOES hold `graph:read`
 // (see `DEFAULT_PERMISSIONS`, #369), so Home's Knowledge section asks
@@ -319,51 +311,16 @@ function HarnessRoutes() {
               specs that scope their screenshot to the rail. */}
           {renderKvoxRoutes(appTranscriptsRoutes)}
 
-          {/* Notes (#57, epic #45). Its OWN page since #106 — a sibling
-              destination rather than the other tab of one `library` row, with
-              `/transcripts`' fallback restored to `/` to match. Gates copied
-              verbatim from `App.tsx`, like every other guarded route in this
-              file. */}
-          <Route
-            path="/notes"
-            element={
-              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
-                <NotesPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/notes/new"
-            element={
-              <RequirePermission
-                permission="notes:write"
-                fallback={<Navigate to="/notes" replace />}
-              >
-                <NewNotePage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/notes/:id"
-            element={
-              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
-                <NotePage />
-              </RequirePermission>
-            }
-          />
-          {/* The note version-history drill-down (#58, epic #45). Registered
-              here for the same reason `/transcripts/:id/history` is: the
-              history specs navigate straight to it, and a route the harness
-              does not know renders nothing at all — which fails as a timeout
-              waiting for a label rather than as a missing route. */}
-          <Route
-            path="/notes/:id/history"
-            element={
-              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
-                <NoteHistoryPage />
-              </RequirePermission>
-            }
-          />
+          {/* Notes (#57, epic #45; the slice's since #502, epic #498). Its OWN
+              page since #106 — a sibling destination rather than the other tab
+              of one `library` row. The four routes, their gates and their
+              redirects are the slice's data, rendered by the same
+              `renderKvoxRoutes` `App.tsx` uses (with the Note Templates route
+              that rides in the same list), so this harness cannot drift from
+              what the real app enforces. The note-version history drill-down
+              (#58) is among them: the history specs navigate straight to it,
+              and a route the harness does not know renders nothing at all. */}
+          {renderKvoxRoutes(appNotesRoutes)}
 
           <Route
             path="/graph"

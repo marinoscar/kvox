@@ -90,7 +90,7 @@ import {
   useUploadManager,
 } from '@marinoscar/kvox-web/transcripts/headless';
 import type { ManagedUpload, TranscriptListItem, UploadSessionRecord } from '@marinoscar/kvox-web/transcripts/headless';
-import type { NoteListItem } from '../../services/notes';
+import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
 
 export interface InProgressSectionProps {
   /** The summary's `inProgress` list — server-side work, never local uploads. */

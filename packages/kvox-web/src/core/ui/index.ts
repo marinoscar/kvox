@@ -15,3 +15,5 @@ export type {
   KvoxRouteDef,
   KvoxSettingsCard,
 } from './settings.js';
+export { KVOX_COPY_FAILED_MESSAGE, KvoxCopyButton } from './CopyButton.js';
+export type { KvoxCopyButtonProps } from './CopyButton.js';

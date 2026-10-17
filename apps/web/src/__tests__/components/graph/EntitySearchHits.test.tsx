@@ -10,7 +10,7 @@ import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
 import { graphReader, graphWriter, noGraphUser } from '../../utils/graphTestUsers';
 import { EntitySearchHits } from '../../../components/graph/EntitySearchHits';
-import NotesPage from '../../../pages/NotesPage';
+import { NotesLibraryWithSlots as NotesPage } from '../../../kvox/NotesLibraryWithSlots';
 
 /** Library search's "People & organizations" row (#373). */
 
