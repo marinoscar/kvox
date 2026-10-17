@@ -16,45 +16,45 @@ import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHoo
 
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * The use graph timeline options of the call.
+ * Options for {@link useGraphTimeline}.
  *
  * @stability experimental
  */
 export interface UseGraphTimelineOptions {
-  /** Whether include sensitive applies. */
+  /** Include `sensitive` person facts. Changing it resets the list, because it is a new question. */
   includeSensitive?: boolean;
-  /** The as of. */
+  /** Evaluate the timeline as of this date or ISO 8601 instant; omitted means now. */
   asOf?: string;
-  /** The kinds. */
+  /** Subset of timeline kinds to keep; omitted means all. */
   kinds?: readonly string[];
-  /** The limit. */
+  /** Page size. */
   limit?: number;
 }
 
 /**
- * What use graph timeline returns.
+ * What {@link useGraphTimeline} returns.
  *
  * @stability experimental
  */
 export interface UseGraphTimelineResult {
-  /** The data. */
+  /** The timeline events loaded so far, across all pages. */
   data: TimelineEvent[];
-  /** The next cursor. */
+  /** Cursor for the next page, or `null` on the last one. */
   nextCursor: string | null;
-  /** Whether it is loading. */
+  /** The first page is loading. */
   isLoading: boolean;
-  /** Whether it is loading more. */
+  /** A further page is loading. */
   isLoadingMore: boolean;
-  /** The error. */
+  /** A message when the last request failed, else `null`. */
   error: string | null;
-  /** The load more. */
+  /** Appends the next page; does nothing without a cursor. */
   loadMore: () => Promise<void>;
-  /** The refresh. */
+  /** Reloads the first page. */
   refresh: () => Promise<void>;
 }
 
 /**
- * Hook: reads graph timeline.
+ * Reads one entity's timeline, paged by cursor. Does nothing while `id` is undefined.
  *
  * @stability experimental
  */

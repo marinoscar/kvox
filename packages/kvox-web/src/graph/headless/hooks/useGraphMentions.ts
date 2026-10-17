@@ -11,29 +11,29 @@ import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHoo
 
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * What use graph mentions returns.
+ * What {@link useGraphMentions} returns.
  *
  * @stability experimental
  */
 export interface UseGraphMentionsResult {
-  /** The data. */
+  /** The notes and transcripts loaded so far, across all pages. */
   data: EntityMention[];
-  /** The next cursor. */
+  /** Cursor for the next page, or `null` on the last one. */
   nextCursor: string | null;
-  /** Whether it is loading. */
+  /** The first page is loading. */
   isLoading: boolean;
-  /** Whether it is loading more. */
+  /** A further page is loading. */
   isLoadingMore: boolean;
-  /** The error. */
+  /** A message when the last request failed, else `null`. */
   error: string | null;
-  /** The load more. */
+  /** Appends the next page; does nothing without a cursor. */
   loadMore: () => Promise<void>;
-  /** The refresh. */
+  /** Reloads the first page. */
   refresh: () => Promise<void>;
 }
 
 /**
- * Hook: reads graph mentions.
+ * Lists the notes and transcripts that mention one entity, paged. Does nothing while `id` is undefined.
  *
  * @stability experimental
  */

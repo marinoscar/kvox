@@ -44,47 +44,47 @@ export const GRAPH_EXPORT_POLL_MS = 2_000;
 export const GRAPH_EXPORT_POLL_TIMEOUT_MS = 10 * 60_000;
 
 /**
- * The graph export phase.
+ * Where an export is: nothing started (`idle`), being made (`working`), downloadable (`ready`), failed (`error`) or still running after the polling window (`timeout`).
  *
  * @stability experimental
  */
 export type GraphExportPhase = 'idle' | 'working' | 'ready' | 'error' | 'timeout';
 
 /**
- * The use graph export options of the call.
+ * Options for {@link useGraphExport}; mainly for tests.
  *
  * @stability experimental
  */
 export interface UseGraphExportOptions {
-  /** The poll interval ms. */
+  /** Milliseconds between reads of a pending export; defaults to {@link GRAPH_EXPORT_POLL_MS}. */
   pollIntervalMs?: number;
-  /** The timeout ms. */
+  /** Milliseconds to keep polling before the phase becomes `timeout`; defaults to {@link GRAPH_EXPORT_POLL_TIMEOUT_MS}. The job keeps running. */
   timeoutMs?: number;
 }
 
 /**
- * What use graph export returns.
+ * What {@link useGraphExport} returns.
  *
  * @stability experimental
  */
 export interface UseGraphExportResult {
-  /** The phase. */
+  /** Where the current export is. */
   phase: GraphExportPhase;
   /** The export being made (or just made). */
   current: GraphExport | null;
-  /** The error. */
+  /** A message when the export or its start failed, else `null`. */
   error: string | null;
   /** The caller's unexpired exports, newest first. */
   exports: GraphExport[];
-  /** Whether list loading applies. */
+  /** The list of recent exports is loading. */
   listLoading: boolean;
-  /** The list error. */
+  /** A message when the list failed to load, else `null`. */
   listError: string | null;
-  /** The start. */
+  /** Requests an export in the given format and follows it until it settles. Never throws; failures land in `error`. */
   start: (format: GraphExportFormat) => Promise<void>;
   /** Forget the current export (a new format was chosen) and stop polling. */
   reset: () => void;
-  /** The refresh list. */
+  /** Re-reads the list of recent exports. */
   refreshList: () => Promise<void>;
 }
 
@@ -92,7 +92,7 @@ const settled = (e: GraphExport) => e.status === 'ready' || e.status === 'failed
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Hook: reads graph export.
+ * Requests, polls and lists graph exports. Resolves rather than throws: a failure is a message in `error`.
  *
  * @stability experimental
  */
