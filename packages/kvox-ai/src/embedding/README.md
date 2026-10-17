@@ -6,7 +6,7 @@ The embedding catalog: the one model the product embeds with, and its limits.
 
 `EMBEDDING_DIMENSIONS` (1536, the other half of the `vector(1536)` columns: a contract, not a default), `KVOX_EMBEDDING` and `KVOX_EMBEDDING_PROVIDER` (model id, input ceiling, batch size of 128) and `EmbeddingShapeError` (a batch the product cannot store). Changing the width or the model id is a migration and a full re-index, never an edit.
 
-Status: moved from `apps/api/src/ai-port/embedding-catalog.ts` (issue #579, PR 1).
+Status: moved from `apps/api/src/ai-port/embedding-catalog.ts` (issue #579).
 
 ## Entry point
 

@@ -9,7 +9,8 @@
 // platform stream (`fake-provider.ts`, `FakeAskStream`): a fixed sequence of
 // tool calls per question, using handles the real tools actually returned, then a
 // canned answer that cites them — plus one answer that cites an unissued `[^ev99]`.
-// The fake sits UNDER `PlatformKvoxAi.chat()`, so the event mapping runs too (#476).
+// The fake sits UNDER the real `KVOX_AI` binding (`createKvoxAi` over `PlatformAiRuntime`, #579), so the
+// event mapping runs too (#476).
 //
 // This is the harness's own self-test, the same role `kg:eval --predictions
 // gold` plays for extraction (#362): it proves the seeder, the tools, the

@@ -4,7 +4,8 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
+import { KVOX_AI, type KvoxAiPort } from '@marinoscar/kvox-api/ports';
+import { AiReadinessService } from '../../src/ai-port/ai-readiness.service';
 import { entityBriefResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
@@ -64,12 +65,12 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
     prismaMock.job.findFirst.mockResolvedValue(null as never);
 
     // Every generative or embedding method of the port throws if touched; only
-    // `readiness` (a configuration read, no model call) answers, as "not set up".
+    // readiness (a configuration read, no model call) answers, as "not set up".
     providerSpies.forEach((s) => s.mockRestore());
     providerSpies = [];
-    const ai = context.app.get<KvoxAi>(KVOX_AI);
+    const ai = context.app.get<KvoxAiPort>(KVOX_AI);
     providerSpies.push(
-      jest.spyOn(ai, 'readiness').mockResolvedValue({
+      jest.spyOn(context.app.get(AiReadinessService), 'readiness').mockResolvedValue({
         ok: false,
         reason: 'ai_not_configured',
         provider: null,
@@ -81,10 +82,10 @@ describe('GET /api/graph/entities/:id/brief (integration)', () => {
         hasKey: false,
       }),
     );
-    for (const method of ['streamText', 'generateStructured', 'embed', 'chat'] as const) {
+    for (const method of ['generateText', 'generateStructured', 'embed', 'chat'] as const) {
       providerSpies.push(
         jest.spyOn(ai, method as never).mockImplementation((() => {
-          throw new Error(`KvoxAi.${method} called by the brief`);
+          throw new Error(`KVOX_AI.${method} called by the brief`);
         }) as never),
       );
     }

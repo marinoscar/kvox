@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["../../typedoc.base.json"],
   "tsconfig": "./tsconfig.json",
-  "entryPoints": ["./src/index.ts"],
+  "entryPoints": ["./src/index.ts", "./src/testing/index.ts"],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-ai",
   "out": "./docs-api/html",
@@ -14,15 +14,15 @@
   // every interface property included, is documented (unlike kvox-contract, the
   // package keeps "Property" in `requiredToBeDocumented`).
   "intentionallyNotDocumented": [
-    "aiTaskModelSchema.__type.reasoningEffort.__type.low",
-    "aiTaskModelSchema.__type.reasoningEffort.__type.medium",
-    "aiTaskModelSchema.__type.reasoningEffort.__type.high",
-    "aiTaskModelsSchema.__type.graph.extract",
-    "aiTaskModelsSchema.__type.graph.adjudicate",
-    "aiTaskModelsSchema.__type.graph.digest",
-    "aiTaskModelsSchema.__type.graph.agent",
-    "aiTaskModelsSchema.__type.reasoningEffort.__type.low",
-    "aiTaskModelsSchema.__type.reasoningEffort.__type.medium",
-    "aiTaskModelsSchema.__type.reasoningEffort.__type.high"
+    "index.aiTaskModelSchema.__type.reasoningEffort.__type.low",
+    "index.aiTaskModelSchema.__type.reasoningEffort.__type.medium",
+    "index.aiTaskModelSchema.__type.reasoningEffort.__type.high",
+    "index.aiTaskModelsSchema.__type.graph.extract",
+    "index.aiTaskModelsSchema.__type.graph.adjudicate",
+    "index.aiTaskModelsSchema.__type.graph.digest",
+    "index.aiTaskModelsSchema.__type.graph.agent",
+    "index.aiTaskModelsSchema.__type.reasoningEffort.__type.low",
+    "index.aiTaskModelsSchema.__type.reasoningEffort.__type.medium",
+    "index.aiTaskModelsSchema.__type.reasoningEffort.__type.high"
   ]
 }
