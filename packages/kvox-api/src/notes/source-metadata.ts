@@ -7,9 +7,14 @@
 // from), and the link between them is a key in the FIRST object's own
 // `metadata` JSONB. There is deliberately no `note_source_documents` table: the
 // raw upload, the extracted text and the relationship between them are all
-// things `storage_objects` and `PATCH /api/storage/objects/:id/metadata`
-// already model, and a table whose only columns would be two object ids and a
-// failure string earns nothing but a migration.
+// things a stored object and its `metadata` already model (written through
+// the KVOX_OBJECT_STORE port's `setMetadata`), and a table whose only columns
+// would be two object ids and a failure string earns nothing but a migration.
+//
+// The status a client sees is read back by THIS slice
+// (`readDocumentExtractionStatus`, served at
+// `GET /api/notes/sources/documents/{objectId}`, #596), not by the client
+// reading the object's metadata through a storage route.
 //
 // TWO KEYS, AND THE SPLIT IS DELIBERATE:
 //
@@ -24,10 +29,12 @@
 //     namespaces its own write for exactly this reason — so two writers that
 //     both put a bare `status` at the top level silently overwrite each other.
 //
-// ⚠ PURE. No Nest, no Prisma. Both the handler (which writes it) and
-// `NoteSourceService` (which reads it) import from here, which is what stops
+// ⚠ PURE. No Nest, no Prisma. The handler (which writes it), and
+// `NoteSourceService` and `NoteSourcesService` (which read it) import from here, which is what stops
 // the two from spelling the key differently.
 // =============================================================================
+
+import type { NoteSourceDocumentStatusResponse } from '@marinoscar/kvox-contract/notes';
 
 import type {
   ExtractionEncoding,
@@ -137,6 +144,50 @@ export function readExtractionMetadata(
   const block = asMetadataObject(object[EXTRACTION_METADATA_KEY]);
 
   return block ? (block as Partial<NoteSourceExtractionMetadata>) : null;
+}
+
+/**
+ * What `GET /api/notes/sources/documents/{objectId}` reports about one source
+ * document's extraction, before the object id is attached.
+ *
+ * @stability experimental
+ */
+export type DocumentExtractionStatus = Omit<NoteSourceDocumentStatusResponse, 'objectId'>;
+
+/**
+ * The extraction status a source document's `metadata` records (issue #596).
+ *
+ * TOTAL OVER GARBAGE, for the reason above: a missing block, a block that is
+ * not an object, and a `status` this build does not know all mean the same
+ * thing — "not extracted yet" — so they all answer `extracting` with no message
+ * and no count, never an error. For `extracted` and `unextractable` the stored
+ * `message` and `characters` are passed through when they have the right type,
+ * and are `null` otherwise.
+ *
+ * This is the logic the notes UI used to run in the browser over the generic
+ * storage read; it lives here now so a host needs no storage route for notes.
+ *
+ * @stability experimental
+ */
+export function readDocumentExtractionStatus(metadata: unknown): DocumentExtractionStatus {
+  const block = readExtractionMetadata(metadata) as Record<string, unknown> | null;
+
+  if (!block) return { status: 'extracting', message: null, characters: null };
+
+  const status = block.status;
+
+  if (status !== 'extracted' && status !== 'unextractable') {
+    return { status: 'extracting', message: null, characters: null };
+  }
+
+  return {
+    status,
+    message: typeof block.message === 'string' ? block.message : null,
+    characters:
+      typeof block.characters === 'number' && Number.isFinite(block.characters)
+        ? block.characters
+        : null,
+  };
 }
 
 /**
