@@ -142,7 +142,7 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
         description:
           'Returns the whole deployment to a fresh install, keeping configuration and backups ' +
           '(platform user-data slice). Admin only (`system:factory_reset`); refused in `saas` ' +
-          'deployment mode. This app has no page for it yet.',
+          'deployment mode. The Danger Zone card of the admin settings (`/admin/settings/factory-reset`) drives it.',
       },
       {
         name: 'Organization offboarding',
