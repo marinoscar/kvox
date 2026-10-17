@@ -26,9 +26,13 @@
 //   kvox-notes         NOTES_PERMISSIONS, NOTE_TEMPLATES_PERMISSIONS
 //                      notes:read, notes:write, note_templates:read, note_templates:write
 //                      (issue #495; same posture: all three org roles. They follow the
-//                      transcripts and precede the graph's, which are still the app's own.)
+//                      transcripts.)
+//   kvox-graph         GRAPH_PERMISSIONS   graph:read, graph:write
+//                      (issue #496; same posture. They follow the notes, which is where the
+//                      app's own `graph:*` declarations sat in the catalog.)
 // =============================================================================
 
+import { GRAPH_PERMISSIONS } from '@marinoscar/kvox-api/graph';
 import { NOTE_TEMPLATES_PERMISSIONS, NOTES_PERMISSIONS } from '@marinoscar/kvox-api/notes';
 import { TRANSCRIPTS_PERMISSIONS } from '@marinoscar/kvox-api/transcripts';
 import { registerPermissionSet, type PermissionSetRegistration } from '@marinoscar/platform-api/manifest';
@@ -47,6 +51,15 @@ export const KVOX_SLICE_PERMISSION_SETS: readonly PermissionSetRegistration[] = 
   {
     slice: 'kvox-notes',
     permissions: [...NOTES_PERMISSIONS, ...NOTE_TEMPLATES_PERMISSIONS].map((permission) => ({
+      id: permission.id,
+      description: permission.description,
+      scope: permission.scope,
+      defaultGrants: [...permission.defaultGrants],
+    })),
+  },
+  {
+    slice: 'kvox-graph',
+    permissions: GRAPH_PERMISSIONS.map((permission) => ({
       id: permission.id,
       description: permission.description,
       scope: permission.scope,

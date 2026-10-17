@@ -65,6 +65,8 @@ export interface KvoxAiContext {
   feature: KvoxAiFeature;
   /** Aborts the call. An adapter also applies its own timeout. */
   signal?: AbortSignal;
+  /** The queue job running the call, so a host's span and usage row can link to it. */
+  jobId?: string;
 }
 
 /**
@@ -333,6 +335,8 @@ export type KvoxChatEvent =
  * - `not_configured`: AI is switched off or no model is set up.
  * - `key_missing`: the user has saved no key.
  * - `capability`: the model lacks a capability the call needs.
+ * - `truncated`: a structured answer was cut off at the output ceiling.
+ * - `invalid_output`: a structured answer was not a usable value.
  * - `other`: anything else (transient; retryable).
  *
  * @stability experimental
@@ -346,6 +350,8 @@ export type KvoxAiErrorClass =
   | 'not_configured'
   | 'key_missing'
   | 'capability'
+  | 'truncated'
+  | 'invalid_output'
   | 'other';
 
 /**
@@ -362,6 +368,8 @@ export const KVOX_AI_ERROR_CLASSES: readonly KvoxAiErrorClass[] = [
   'not_configured',
   'key_missing',
   'capability',
+  'truncated',
+  'invalid_output',
   'other',
 ];
 
@@ -403,15 +411,23 @@ export class KvoxAiError extends Error {
   readonly retryAfterMs?: number;
 
   /**
+   * What the failed call consumed, when the provider (or the adapter's estimate) says. A
+   * failed structured call is still billed, so a caller records this rather than zero.
+   */
+  readonly usage?: KvoxAiUsage;
+
+  /**
    * @param errorClass - the failure's class.
    * @param message - a sentence for the log and the user. Never key material.
    * @param retryAfterMs - the provider's retry hint, in milliseconds.
+   * @param usage - what the failed call consumed.
    */
-  constructor(errorClass: KvoxAiErrorClass, message: string, retryAfterMs?: number) {
+  constructor(errorClass: KvoxAiErrorClass, message: string, retryAfterMs?: number, usage?: KvoxAiUsage) {
     super(message);
     this.name = 'KvoxAiError';
     this.errorClass = errorClass;
     this.retryAfterMs = retryAfterMs;
+    this.usage = usage;
     // Required under a downlevelled target, or `instanceof` is false.
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -504,6 +520,10 @@ export interface KvoxAiPort {
       user: string;
       schema: z.ZodType<T>;
       schemaName: string;
+      /** The JSON Schema the vendor is held to, when the caller builds its own (strict subset). */
+      jsonSchema?: Record<string, unknown>;
+      /** An output ceiling, in tokens, below the target's own. */
+      maxOutputTokens?: number;
     },
   ): Promise<KvoxStructuredResult<T>>;
 

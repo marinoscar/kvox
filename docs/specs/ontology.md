@@ -16,7 +16,7 @@
 > (`reciprocalRankFusion`, `RRF_K = 60`); `packages/kvox-api/src/notes/job-types.ts`
 > (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
-> (the four-tab ceiling). Everything under `apps/api/src/graph/`,
+> (the four-tab ceiling). Everything under `packages/kvox-api/src/graph/`,
 > `apps/web/src/pages/graph/` (or wherever §13 lands it), and every `kg_*`
 > table is *planned*.
 >
@@ -37,6 +37,20 @@
 > this shape, and not the obvious one" below states exactly what was kept,
 > what was cut, and why; nothing from that draft is assumed as background —
 > every decision this document depends on is restated here in full.
+
+
+> **Where the code lives (issue #496, epic #491).** The server side of this spec is three slices of
+> `@marinoscar/kvox-api`, written against the host ports and configured by the web edition in
+> `apps/api/src/kvox/graph/graph.config.ts`: `graph` (`packages/kvox-api/src/graph/`: the write path, the read
+> layer, access, ontology, preferences, attribute definitions, the entity brief, the overview layout, the
+> speaker link, `kg.migrate`, `kg.purge`), `graph-extraction` (`.../graph-extraction/`: extraction,
+> resolution, work-item dedup, temporal closing, rejection memory, the proposal review-and-commit routes) and
+> `graph-rdf` (`.../graph-rdf/`: the OWL and SHACL artefacts, `kg.export`, `kg.import`). A ready note reaches
+> the extraction as `kvox.notes.note_ready` on the event port (the notes slice does not know the graph
+> exists). The module names this spec uses for the pieces (`GraphResolutionModule`, `GraphDedupModule`,
+> `GraphProposalsModule`, `GraphImportModule`) are the sections of `GraphExtractionModule` and
+> `GraphRdfModule` now. `GraphWriteService` is still the only graph writer. Paths below that begin
+> `apps/api/src/graph/` in older prose mean the matching folder of those slices.
 
 ## Why this shape, and not the obvious one
 
@@ -596,7 +610,7 @@ the source text does not state one, because a guessed precision is a
 fabricated fact carrying the same authority in the UI as a real one.
 
 Three conventions follow from the half-open range and are fixed by the
-temporal engine (`apps/api/src/graph/temporal/`, issue #353). A **start-only
+temporal engine (`packages/kvox-api/src/graph/temporal/`, issue #353). A **start-only
 statement** is one of two different facts, and the extractor must say which:
 a *point* ("in March 2026") spans its one precision unit, `[2026-03-01,
 2026-04-01)`, while a *continuing state* ("has worked there since 2019") is
@@ -797,7 +811,7 @@ needed because there is no self-re-enqueue pattern here the way
 about that specific pattern does not apply to this job type at all).
 
 **Inputs, assembled by a pure `buildExtractionContext()` (planned:
-`apps/api/src/graph/extraction/extraction-context.ts`):**
+`packages/kvox-api/src/graph-extraction/extraction/extraction-context.ts`):**
 
 - The note body at the version the job was enqueued for (never a live
   re-read mid-job — the same "assemble once, act on that snapshot" posture
@@ -936,7 +950,7 @@ runs a registered `KgEvalRunner` (`extract`, issue #363, below),
 `--real-dir`/`--export-note` are the local, opt-in real-data mode, which
 refuses any path inside the git work tree.
 
-**As built (issue #363).** `apps/api/src/graph/extraction/` holds the pure
+**As built (issue #363).** `packages/kvox-api/src/graph-extraction/extraction/` holds the pure
 core — `buildExtractionContext` (short aliases: segments `s1…sN` in ordinal
 order, known entities `k1…kM`, the note `N`; the offered schema; the
 known-entities list, max 60: pinned → speakers' identified Persons → their
@@ -968,7 +982,7 @@ full. #435 fixes all three:
 
 - **Row caps sized to the output ceiling this call will actually get.**
   `extractionRowCaps(maxOutputTokens, effort)`
-  (`apps/api/src/graph/extraction/row-caps.ts`, pure) computes a usable share
+  (`packages/kvox-api/src/graph-extraction/extraction/row-caps.ts`, pure) computes a usable share
   of the ceiling — `max(0, maxOutputTokens − REASONING_HEADROOM_TOKENS[effort])
   × 0.8` — divides it by a generous per-row cost estimate
   (`EXTRACTION_TOKENS_PER_ROW = 160`), clamps the total to `[15, 400]` rows,
@@ -1129,7 +1143,7 @@ surfaced in the panel, never a rejection — §5.4's overlap tolerance is
 enforced here, at the one place a conflicting pair would otherwise commit
 unremarked.
 
-**As built (issue #365).** `apps/api/src/graph/dedup/` (`GraphDedupModule`)
+**As built (issue #365).** `packages/kvox-api/src/graph-extraction/dedup/` (`GraphDedupModule`)
 registers three proposal stages after `resolution`: **`work-item-dedup`**
 (order 200) writes an item's `payload.dedup` — `known` when a live item has the
 same kind, subject and statement hash (flag `known`, pre-accepted, collapsed);
@@ -1182,7 +1196,7 @@ where §7's resolution produced one — its matched entity.
 when: its resolution score is at or above the auto-link threshold **and**
 its kind is not `PersonFact` **and** it is not flagged as a possible
 duplicate by §7's own uncertain-adjudication path. As implemented
-(issue #363, `apps/api/src/graph/extraction/precheck.ts`, run once after
+(issue #363, `packages/kvox-api/src/graph-extraction/extraction/precheck.ts`, run once after
 every pipeline stage): nothing is pre-checked under the `review_all`
 resolution mode; an **entity** is pre-checked when it links to an existing
 entity at or above `autoLinkThreshold` with an adjudication that is not
@@ -1288,7 +1302,7 @@ merges away a speaker, and a version restore — not only after
 ### 9.1 Entity brief
 
 `GET /api/graph/entities/:id/brief?since=&as_of=&markViewed=` (§12, **built,
-issue #372**, `apps/api/src/graph/brief/`) answers "what's the latest on
+issue #372**, `packages/kvox-api/src/graph/brief/`) answers "what's the latest on
 Company A" (or a person, or a project) in one call. **This endpoint never
 calls an AI model and never answers 409** — the brief is assembled entirely
 from stored rows:
@@ -1351,7 +1365,7 @@ every `valid` range against that date instead of the present moment.
 
 ### 9.2 Entity digest (`kg.entity_digest`)
 
-**Built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`,
+**Built, issue #372** (`packages/kvox-api/src/graph/brief/entity-digest.handler.ts`,
 `entity-digest.enqueuer.ts`) — a per-entity rolling summary, so a busy
 entity's brief does not have to re-read and re-summarize its entire history
 on every view, and **the only place any AI model ever writes brief prose**.
@@ -1665,8 +1679,8 @@ query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 **Per-user preferences are not a table.** Automatic extraction, the
 resolution thresholds, mode and adjudication switch, and the enabled domains
 live in the `graph` namespace of the existing `user_settings` JSONB row
-(issue #369 — declared as a `UserSettingsNamespace` in `apps/api/src/graph/preferences/graph.user-settings.ts` and registered in `kvox.manifest.ts`), read through `GraphPreferencesService`
-(`apps/api/src/graph/preferences/`), which fills every absent field from
+(issue #369 — the schemas, the per-sub-object merge and the limit check are `@marinoscar/kvox-api/graph`'s (`packages/kvox-api/src/graph/preferences/`); the web edition binds them to a `UserSettingsNamespace` in `apps/api/src/kvox/graph/graph.user-settings.ts`, registered in `app-registrations/settings.ts`), read through `GraphPreferencesService`
+(`packages/kvox-api/src/graph/preferences/`), which fills every absent field from
 `GRAPH_PREFERENCE_DEFAULTS` at read time and never writes a default into the
 row:
 
@@ -1696,7 +1710,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 
 ## 11. Job types
 
-Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
+Eleven types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
 `ask.respond`, which lives under `apps/api/src/ask/handlers/` (built, issue #378) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
@@ -1710,12 +1724,12 @@ directory:
 |---|---|---|---|
 | `kg.extract` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
-| `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
+| `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`packages/kvox-api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Embeds through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`) on the user's own key, resolved by the platform; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical AGENTS.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
-| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY` through `enqueueHousekeepingJob` with a subject type **and** id (`kg.export`'s sweep passes a subject type alone; the helper scopes its in-flight check and dedup key to exactly what it is given), and re-run for one owner by the admin job list's Retry |
+| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`packages/kvox-api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY` through `enqueueHousekeepingJob` with a subject type **and** id (`kg.export`'s sweep passes a subject type alone; the helper scopes its in-flight check and dedup key to exactly what it is given), and re-run for one owner by the admin job list's Retry |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
@@ -1743,7 +1757,7 @@ that fan-out calls, never a second implementation of bulk deletion.
 
 ## 12. Endpoints
 
-`apps/api/src/graph/graph.controller.ts` (planned), prefix `/api/graph`,
+`packages/kvox-api/src/graph/graph.controller.ts` (planned), prefix `/api/graph`,
 gated by a **new permission pair**, `graph:read`/`graph:write`, seeded to all
 three roles (Admin, Contributor, Viewer) — the same posture
 `notes:read`/`write` and `transcripts:read`/`write` already take, and for
@@ -1793,7 +1807,7 @@ nothing was ever shared there to revoke.
 `GET /api/graph/entities/:id`, `GET /api/graph/entities/:id/neighborhood`,
 `GET /api/graph/entities/:id/timeline`, and `POST /api/graph/explore/expand`
 are the five routes this section's bullet list already named above as
-`graph:read`; `apps/api/src/graph/read/` (`GraphReadController`,
+`graph:read`; `packages/kvox-api/src/graph/read/` (`GraphReadController`,
 `GraphReadService`, `GraphNeighborhoodService`, `GraphEvidenceService`) is the
 implementation, exported from `GraphModule` for the entity brief (§9.1, **built,
 #372**) and the Ask agent's tools (§9.3, #377) to call directly rather than
@@ -1806,18 +1820,18 @@ notes and transcripts linked to an entity — this section already listed
 single-id `GET /api/graph/evidence/:id` also shipped here, for rendering a
 row of citation chips in one round trip). `READABLE_ENTITY_STATUSES`,
 `READABLE_RELATION_STATUSES`, `READABLE_ITEM_STATUSES` and
-`TIMELINE_ITEM_STATUSES` (`apps/api/src/graph/read/readable.ts`) are the one
+`TIMELINE_ITEM_STATUSES` (`packages/kvox-api/src/graph/read/readable.ts`) are the one
 definition of "readable" every one of these routes, and every later read
 surface, imports rather than re-deriving. One deliberate deviation from this
 issue's original text: evaluating a relation `as_of` reads
 `AS_OF_RELATION_STATUSES` (readable **plus** `superseded`), matching §5.4's
-own `AS_OF_STATUSES` engine (`apps/api/src/graph/temporal/`) exactly, rather
+own `AS_OF_STATUSES` engine (`packages/kvox-api/src/graph/temporal/`) exactly, rather
 than the plain readable set — an `as_of` question about January 2024 must
 still see the edge a later `as_of`-unaware read would call superseded.
 
 **The entity brief is built too (issue #372, epic #347).** `GET
 /api/graph/entities/:id/brief` (§9.1, §9.2, `graph:read`,
-`apps/api/src/graph/brief/`, `EntityBriefController`/`EntityBriefService`)
+`packages/kvox-api/src/graph/brief/`, `EntityBriefController`/`EntityBriefService`)
 sits directly on the read layer above: its deterministic sections are built
 from `GraphOntologyService.effectiveSchemaFor()`'s exclusive-relation list
 and the same `readable.ts` statuses, and its `related` sources fuse
@@ -2558,7 +2572,7 @@ attributes alike. Shipped: `Person.title` (the `work` mixin) →
 **patch** bump (§17.4): it changes no stored row and no validation.
 
 **IRI rules, as built (#385).** One pure function each in
-`apps/api/src/graph/rdf/iris.ts`; the generators and #386's data serializer
+`packages/kvox-api/src/graph-rdf/rdf/iris.ts`; the generators and #386's data serializer
 build every IRI through them, so exported data and the shapes that validate it
 agree by construction. Each function refuses input that would make an IRI name
 something else (a key outside the ontology's key patterns, a resource id that
@@ -2616,7 +2630,7 @@ schema the way three independently maintained documents could.
    `docs/specs/notes.md` §8 already establishes for a note's own exports.
 
 **As built (#385).** `generateOwl` and `generateShacl`
-(`apps/api/src/graph/rdf/`) are pure functions of
+(`packages/kvox-api/src/graph-rdf/rdf/`) are pure functions of
 `(registry, userAttributes, ns)`, deterministic to the byte, and run over
 **every** domain in the registry, not the caller's enabled ones — the artefacts
 must describe every row that can exist, including rows of a domain its owner
@@ -2687,7 +2701,7 @@ the SHACL engine (§18.4) over a fixture export on every change specifically
 to catch that one remaining failure mode: generator drift between the two
 artefacts, not a design that could disagree with itself by intent.
 
-**As built (#386) — the data export.** `apps/api/src/graph/export/`:
+**As built (#386) — the data export.** `packages/kvox-api/src/graph-rdf/export/`:
 `GraphRdfDatasetBuilder` (pure) turns rows into triples through `iris.ts`,
 `serializers.ts` writes them, and the `kg.export` job streams the result into a
 `managed_by: 'graph'` object with a 7-day signed download.
@@ -2801,7 +2815,7 @@ definition.
 **`kg.import`** in one transaction — 409 `graph_disabled` while connected
 knowledge is off, 409 `extraction_running` while another import of the owner
 is `extracting` (#351's `kg_proposals_owner_import_extracting_uniq_idx`
-decides it at insert). The handler (`apps/api/src/graph/import/`,
+decides it at insert). The handler (`packages/kvox-api/src/graph-rdf/import/`,
 server-only, `{ 30 min, 1 attempt }`):
 
 - **Parses** (`rdf-parse.ts`, the one import file that touches `n3`/`jsonld`):
@@ -2907,7 +2921,7 @@ a query language from a model or a user, and pulling a SPARQL engine into
 the request path would be the first step toward exactly that.
 
 The two ontology routes (§18.2) are not an exception to this: they write
-Turtle with the hand-written `apps/api/src/graph/rdf/turtle-writer.ts`, and in
+Turtle with the hand-written `packages/kvox-api/src/graph-rdf/rdf/turtle-writer.ts`, and in
 #385 the four libraries are test-only `devDependencies`. #386/#387 move what
 their handlers need to `dependencies`: #386 made `n3` and `jsonld` runtime
 dependencies, imported by exactly one file, `graph/export/serializers.ts`,
@@ -3111,7 +3125,7 @@ unrepresentable rather than merely discouraged.
 >
 > **Graph call path since issue #475.** Every graph model call goes through `KvoxAi` and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
 >
-> `GraphAiRunResolver.resolve(userId, task, requested?, { requireKey? })` (`apps/api/src/graph/graph-ai-run.service.ts`) replaces `AiTaskModelResolver.resolve` for those three tasks. It calls `KvoxAi.readiness(userId, feature, requested)` and either returns a `GraphAiRun` (`providerId`, `model`, `reasoningEffort`, `modelLimits`, the policy caps, a `countTokens` bound to `KvoxAi.countTokens`, `keyConfigured`, `source`) or throws the same 409 or 400 the product always answered with, built from the `ai-port/kvox-ai-errors.ts` sentences: `graph_disabled`, `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`. `requireKey: false` skips only the missing-key refusal, for an estimate that spends nothing. It also owns the one read of `ai.graphEnabled`, so no graph service reads the retired settings service. No key is read or held: `readiness` reports `hasKey`, and the platform resolves the key per call.
+> `GraphAiRunResolver.resolve(userId, task, requested?, { requireKey? })` (`packages/kvox-api/src/graph/graph-ai-run.service.ts`) replaces `AiTaskModelResolver.resolve` for those three tasks. It calls `KvoxAi.readiness(userId, feature, requested)` and either returns a `GraphAiRun` (`providerId`, `model`, `reasoningEffort`, `modelLimits`, the policy caps, a `countTokens` bound to `KvoxAi.countTokens`, `keyConfigured`, `source`) or throws the same 409 or 400 the product always answered with, built from the `ai-port/kvox-ai-errors.ts` sentences: `graph_disabled`, `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`. `requireKey: false` skips only the missing-key refusal, for an estimate that spends nothing. It also owns the one read of `ai.graphEnabled`, so no graph service reads the retired settings service. No key is read or held: `readiness` reports `hasKey`, and the platform resolves the key per call.
 >
 > Calls: `kg.extract`, adjudication and the entity digest call `KvoxAi.generateStructured` with `maxAttempts: 1` and `assertWithinBudget` unchanged; the extraction truncation re-ask relies on `AiStructuredOutputError('truncated')` (see notes.md for how it is derived). `GraphEmbedder` (`graph/resolution/graph-embedder.service.ts`) calls `KvoxAi.embed` with `graph_embed` and gates on `searchReasonFor(readiness)`, the same gate as search ([search.md](search.md) §11), in batches of at most `embeddingCapability().maxBatchSize` (128). Throttle keys (`aiProviderThrottleKey(userId)`) are still registered by the handler immediately before each call.
 
@@ -3743,7 +3757,7 @@ canvas at all.
 
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
-**Built (issue #371, epic #347).** `apps/api/src/graph/layout/` holds the
+**Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the
 whole thing: `computeLayout` (Louvain clustering + ForceAtlas2 positions,
 seeded per owner for determinism), the `kg.graph_layout` handler, the one
 `GraphLayoutEnqueuer` every trigger below goes through, `GraphLayoutListener`
@@ -3781,7 +3795,7 @@ The details a neighbouring file can break: `GraphLayoutEnqueuer` is the one
 place the job is ever enqueued, with ordinary dedup (never `skipDedup`), so at
 most one layout job is pending or running per owner. The 120-second delay is
 the constant `GRAPH_LAYOUT_COALESCE_MS`. The `graph.changed` event
-(`apps/api/src/graph/graph-events.ts`) is emitted after a graph write commits,
+(`packages/kvox-api/src/graph/graph-events.ts`) is emitted after a graph write commits,
 never inside the transaction, and `GraphLayoutListener` runs one cheap
 readable-entity count and enqueues only past the 20% threshold above — never
 on every commit, which this section forbids. `kg.graph_layout` is server-only
@@ -4087,9 +4101,9 @@ serve for their own epics.
 | An `accepted`/`edited` entity, relation, or proposal item always has ≥ 1 `kg_evidence` row after a commit — the no-orphans invariant (§3.3, §8) | A dedicated integration test committing a proposal and asserting every resulting row's evidence count, plus a negative test asserting the commit transaction refuses to write an evidence-less row |
 | The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `apps/api/scripts/kg-eval.ts` run in CI against `apps/api/test/fixtures/kg-golden/`, gating the targets stated in §6 |
 | The rate-limit throttle key for `kg.extract`/`kg.resolve`/`kg.entity_digest` is `aiProviderThrottleKey(userId)`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the run's `userId`, mirroring `note-generate.handler.spec.ts`'s existing pattern |
-| Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `apps/api/src/graph/resolution/resolution.service.spec.ts` |
+| Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `packages/kvox-api/src/graph-extraction/resolution/resolution.service.spec.ts` |
 | A merge is fully reversible: `POST .../merges/:id/reverse` restores the tombstoned entity, its reassigned relations/evidence/aliases, and re-queues the pair for review | An integration test performing a merge, reversing it, and asserting the graph state is byte-for-byte the pre-merge state |
-| A confirmed-distinct pair is never re-proposed by a later `kg.resolve` run | `apps/api/src/graph/resolution/candidates.spec.ts` |
+| A confirmed-distinct pair is never re-proposed by a later `kg.resolve` run | `packages/kvox-api/src/graph-extraction/resolution/candidates.spec.ts` |
 | An `as_of` query against the entity brief and the neighbourhood endpoint returns the edge open at that date, not the currently-open edge, for an entity with a closed and a superseding edge (§5.4's "as-of question" worked example) | An integration test seeding a person with two sequential `HAS_ROLE`/`REPORTS_TO` edges and asserting `as_of` inside the first edge's `valid` range returns it, not the second |
 | Out-of-order ingestion — a note about an earlier meeting, reviewed and committed after a later meeting's note — attaches to the existing edge its `valid` range falls inside rather than reopening or splitting it, and proposes a new edge only when its `valid` range falls outside every known interval for that person and relationship type | An integration test committing a later-meeting note first, then an earlier-meeting note whose fact falls inside the resulting edge's `valid` range, asserting one edge with two evidence rows results, not two edges |
 | A `sensitive` `PersonFact` is never pre-checked in a proposal, never appears in a note-generation prompt under any setting, and never appears in an entity brief unless directly requested | An RBAC/data-flow test sweeping every prompt-assembly and brief-composition call site for a `sensitive` fixture fact |
@@ -4098,7 +4112,7 @@ serve for their own epics.
 | A transcript share does not expose the graph rows derived from it; revoking a share affects nothing on the graph side | An integration test sharing a transcript, asserting the sharee's `graph:read` cannot see entities derived from it |
 | `GET /api/graph/entities/:id/brief` names a working citation (segment or note span) for every fact it states | An integration test against a seeded fixture entity, asserting every sentence in the composed brief carries a resolvable evidence reference |
 | `reciprocalRankFusion()` is the same function instance `docs/specs/search.md`'s own retrieval and this document's entity brief both call — never a second implementation | A test importing both call sites' compiled output and asserting they resolve to the same module export |
-| `kg.purge` scope `person` removes the entity, aliases, relations, items where subject/owner/counterparty, mentions and evidence, and leaves the source transcript/note text completely untouched | `apps/api/src/graph/handlers/kg-purge.handler.spec.ts` |
+| `kg.purge` scope `person` removes the entity, aliases, relations, items where subject/owner/counterparty, mentions and evidence, and leaves the source transcript/note text completely untouched | `packages/kvox-api/src/graph/handlers/kg-purge.handler.spec.ts` |
 | The Danger Zone's `content`/`everything` scopes include graph rows after this epic ships | `apps/api/test/user-data/user-data-deletion.e2e.spec.ts`, extended |
 | `pg_trgm` is enabled by the P1 migration and `kg_entity_aliases`'s trigram index is present and used by `EXPLAIN` for a fuzzy-alias query | A migration test plus a query-plan assertion, mirroring the existing HNSW-index verification discipline `SearchEmbedding`'s own migration takes |
 | An export round-trips through import on a fixture graph — after `kg.export` then `kg.import` into a second fixture account and accepting the resulting proposal in full, the second account holds the same entities (type, label, props, aliases) and relations (type, endpoints by label, valid range, precision); ids differ (new rows, the source IRI kept on each citation), and every committed row cites the import | `apps/api/test/graph/rdf/import-roundtrip.db.spec.ts` (#387), in CI's Smoke job |

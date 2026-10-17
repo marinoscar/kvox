@@ -18,7 +18,7 @@
 // The strings below are LITERALS on purpose. Resolving them from the handlers'
 // own constants would make the test follow a rename instead of catching it.
 // They were resolved from the real `readonly type` constants
-// (`transcripts/job-types.ts`, `notes/job-types.ts`, `graph/job-types.ts`,
+// (`transcripts/job-types.ts`, `notes/job-types.ts`, `@marinoscar/kvox-api/graph`'s `job-types.ts`,
 // `ask/job-types.ts`, `search/indexing/job-types.ts`, `kvox-objects/job-types.ts`
 // and each handler file), not typed from memory.
 // =============================================================================

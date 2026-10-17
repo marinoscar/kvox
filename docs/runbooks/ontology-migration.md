@@ -3,7 +3,7 @@
 **Audience:** whoever changes the ontology definition, and whoever operates the
 deployment that ships the change.
 **Applies to:** `src/ontology/migrations.ts` of `@marinoscar/kvox-contract` and the
-`kg.migrate` job (`apps/api/src/graph/migrate/`, issue #384). Design:
+`kg.migrate` job (`packages/kvox-api/src/graph/migrate/`, issue #384). Design:
 [`docs/specs/ontology.md`](../specs/ontology.md) §11 and §17.4.
 
 The knowledge graph tables never change shape when the ontology does — `props`

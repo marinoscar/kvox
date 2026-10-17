@@ -17,8 +17,8 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import type { BriefEntry, PeopleChange } from '../../graph/brief/dto/entity-brief.dto';
-import { EntityBriefService } from '../../graph/brief/entity-brief.service';
+import type { BriefEntry, PeopleChange } from '@marinoscar/kvox-contract/graph';
+import { EntityBriefService } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   clip,

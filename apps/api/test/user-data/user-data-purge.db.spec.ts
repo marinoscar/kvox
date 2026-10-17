@@ -38,7 +38,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JobScope } from '@marinoscar/platform-api/jobs';
 import {
   UserDataPlanService,
@@ -51,8 +50,7 @@ import '../../src/app-registrations/registrations';
 import '../../src/platform/user-data/user-data.manifest';
 
 import { FilesPurgeUnmanagedHandler } from '../../src/kvox-objects/files-purge-unmanaged.handler';
-import { KgPurgeHandler } from '../../src/graph/handlers/kg-purge.handler';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { KgPurgeHandler, KgPurgeService } from '../graph/package-internals';
 import { NoteObjectsService, NotePurgeHandler, NotesUserDataService } from '@marinoscar/kvox-api/notes';
 import { createNotesServiceTestFactory } from '@marinoscar/kvox-api/notes/testing';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -68,6 +66,8 @@ import { createStorageObject, defaultOrgId } from '../helpers/storage-object.hel
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
 import { createPlatformTranscriptSharing } from '../helpers/sharing-kit.helper';
+import { GraphObjectsService } from '@marinoscar/kvox-api/graph';
+import { createInMemoryKvoxEvents } from '@marinoscar/kvox-api/testing';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('user-data-purge.db.spec');
 
@@ -195,10 +195,11 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
     );
 
     kgPurge = new KgPurgeHandler(
-      registry,
+      { registerHandler: jest.fn() } as never,
       prisma as unknown as PrismaService,
-      new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never, managed),
-      new EventEmitter2(),
+      new KgPurgeService(prisma as unknown as PrismaService, new GraphObjectsService(createDbObjectStore(prisma, storage as never))),
+      createInMemoryKvoxEvents(),
+      createDbAudit(prisma),
     );
 
     // `ObjectsService.delete` is the platform's (bytes, then the row); this stands in for it

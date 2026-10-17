@@ -4,8 +4,8 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { GraphObjectsService } from '../../src/graph/graph-objects.service';
-import { createGraphExportResponseSchema, graphExportListSchema, kgExportSchema } from '../../src/graph/export/dto/graph-export.dto';
+import { GraphObjectsService } from '@marinoscar/kvox-api/graph';
+import { createGraphExportResponseSchema, graphExportListSchema, kgExportSchema } from '@marinoscar/kvox-contract/graph';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================
@@ -82,7 +82,7 @@ describe('/api/graph/exports (integration)', () => {
     enqueue = jest.spyOn(context.app.get(JobsService), 'enqueue').mockResolvedValue({ id: 'job-1' } as never);
     sign = jest
       .spyOn(context.app.get(GraphObjectsService), 'signedUrlFor')
-      .mockResolvedValue({ url: 'https://storage.example/signed', expiresAt: new Date(), object: {} as never });
+      .mockResolvedValue({ url: 'https://storage.example/signed', expiresAt: new Date() });
     // hasExportableRows, then the fingerprint signature.
     prismaMock.$queryRaw.mockResolvedValueOnce([{ any: true }] as never).mockResolvedValue([] as never);
   });

@@ -101,6 +101,12 @@ import '../src/platform/user-data/user-data.manifest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaSystemService } from '../src/prisma/prisma-system.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
+import { describeGraphConformance } from '@marinoscar/kvox-api/graph/testing';
+import { describeGraphExtractionConformance } from '@marinoscar/kvox-api/graph-extraction/testing';
+import { describeGraphRdfConformance } from '@marinoscar/kvox-api/graph-rdf/testing';
+import { KgExtractHandler, KgResolveHandler, KgEmbedHandler } from '@marinoscar/kvox-api/graph-extraction';
+import { KgExportHandler, KgImportHandler } from '@marinoscar/kvox-api/graph-rdf';
+import { KgSpeakerLinkHandler, KgPurgeHandler, KgGraphLayoutHandler, KgMigrateHandler, EntityDigestHandler } from './graph/package-internals';
 
 /** Nest's metadata key for the guards a controller or handler declares. */
 const GUARDS_METADATA = '__guards__';
@@ -205,30 +211,7 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'allowlist-reminders/allowlist-reminders.service.ts', why: 'The kvox_allowlist_reminders side table: atomic INSERT .. ON CONFLICT counter, a join to allowed_emails and a bounded orphan DELETE. Allowlist bookkeeping, no user-owned rows; ids are bound uuid parameters.' },
   { file: 'ask/ask-conversations.service.ts', why: 'Conversation summaries and the running-turn partial-unique-index paths Prisma cannot express; every statement filters on the authenticated owner_id.' },
   { file: 'ask/citations.ts', why: 'Resolves citation sources across transcripts and notes with a join Prisma cannot express; bound by the owner id of the conversation.' },
-  { file: 'graph/brief/brief-queries.ts', why: 'Entity brief aggregates over the graph (CTEs, tstzrange); every query is bound to the owner id.' },
-  { file: 'graph/dedup/item-candidates.service.ts', why: 'pgvector similarity for item deduplication; scoped by owner_id in every statement.' },
-  { file: 'graph/dedup/rejection-memory.stage.ts', why: 'Rejected-proposal memory lookup via array and vector operators; scoped by owner_id.' },
-  { file: 'graph/export/graph-export.source.ts', why: 'Streams the owner graph for RDF export with keyset pagination; scoped by owner_id.' },
-  { file: 'graph/extraction/proposal-writer.service.ts', why: 'Writes proposal rows through the kg_proposals partial unique indexes Prisma cannot declare; owner id bound from the job.' },
-  { file: 'graph/handlers/kg-embed.handler.ts', why: 'Reads and writes pgvector embedding columns (Unsupported type) for the owner of the job.' },
-  { file: 'graph/layout/graph-overview.service.ts', why: 'Whole-graph overview aggregate for the owner; scoped by owner_id.' },
-  { file: 'graph/layout/layout-source.ts', why: 'Reads the owner graph for layout computation; scoped by owner_id.' },
-  { file: 'graph/migrate/kg-migrate.repository.ts', why: 'kg.migrate is the one named exception allowed to bypass GraphWriteService; owner id bound from the migration plan.' },
-  { file: 'graph/proposals/proposal-commit.service.ts', why: 'Commits a reviewed proposal with row locks and tstzrange validity; filters on the proposal owner.' },
-  { file: 'graph/proposals/proposal-revert.service.ts', why: 'Reverts a committed proposal using SAVEPOINTs and tstzrange validity; filters on the proposal owner.' },
-  { file: 'graph/proposals/proposals.service.ts', why: 'Proposal queue aggregates and partial-index paths; every statement filters on the owner id.' },
-  { file: 'graph/purge/kg-purge.service.ts', why: 'Owner-wide graph purge in dependency order (Danger Zone); the owner id comes from the authenticated principal.' },
-  { file: 'graph/read/graph-evidence.service.ts', why: 'Evidence lookups joined to transcript segments; scoped by owner_id.' },
-  { file: 'graph/read/graph-neighborhood.service.ts', why: 'Recursive-CTE neighbourhood expansion over the owner graph; scoped by owner_id.' },
-  { file: 'graph/read/graph-query-timeout.ts', why: 'Issues `SET LOCAL statement_timeout` with a numeric constant; touches no table, no request input.' },
-  { file: 'graph/read/graph-read.service.ts', why: 'Graph reads using trigram and as-of (tstzrange) predicates; scoped by owner_id.' },
-  { file: 'graph/resolution/adjudication.service.ts', why: 'Entity-resolution adjudication reads; scoped by owner_id.' },
-  { file: 'graph/resolution/candidate.service.ts', why: 'Trigram and pgvector candidate retrieval for entity resolution; scoped by owner_id.' },
   { file: 'doctor/checks/db-extensions.doctor-check.ts', why: 'Doctor check: one read-only `SELECT` on the `pg_extension` catalog (are `vector` and `pg_trgm` installed); no user data, no request input.' },
-  { file: 'graph/resolution/distinct-pair.service.ts', why: 'Distinct-pair lookups with ordered-pair predicates; scoped by owner_id.' },
-  { file: 'graph/resolution/merge.service.ts', why: 'Entity merge with row locks across several tables; scoped by owner_id.' },
-  { file: 'graph/speaker-link/speaker-link.reconciler.ts', why: 'Takes a per-transcript advisory lock (`pg_advisory_xact_lock`); touches no rows.' },
-  { file: 'graph/write/graph-write.service.ts', why: 'GraphWriteService is the single graph write path; its raw statements use the live-statement and speaker-link partial unique indexes and are scoped by owner_id.' },
   { file: 'app-sharing/transcript-visibility.ts', why: 'Reads the ids of the transcripts shared with the caller through the platform\'s accessibleWhere EXISTS form, past 1,000 shares (issue #485); the statement is built by the platform and bound to the caller and their organization.' },
   { file: 'platform/onboarding/onboarding-data.adapter.ts', why: 'The onboarding activation metrics (issue #481): the platform builds one aggregate statement over the registered funnel and milestone expressions and this port runs it in a READ ONLY transaction. It returns counts only, every value is a bound parameter, and the expressions are developer-authored (refused at registration if they contain a semicolon).' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
@@ -309,29 +292,21 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Two files hold a @Cron here: kg-export-expiry, kg-migrate-scheduler
-    // (the storage cleanup cron is the platform's since #469; the backup schedule and the
-    // telemetry retention crons are the platform's since #471; the transcripts and notes
-    // housekeeping crons moved into `@marinoscar/kvox-api/transcripts` (#493) and
-    // `@marinoscar/kvox-api/notes` (#495) and are scanned by the extra runs below).
-    cronEnqueueOnly: { exempt: [], minCronFiles: 2 },
+    // This source root holds NO @Cron any more: the housekeeping crons moved into the packages
+    // (`@marinoscar/kvox-api/transcripts` #493, `/notes` #495, `/graph` and `/graph-rdf` #496), and
+    // each package folder is scanned by an extra run below. (The storage cleanup cron is the
+    // platform's since #469; the backup schedule and the telemetry retention crons since #471.)
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
-    // provider). Five files hold a listener, one body each, every one a dispatch or one bounded
-    // write. The job-failure and node-offline notifiers are the platform's since #470 (outside
-    // this source root, scanned by the package's own run). The two transcript upload listeners and storage/processing/object-processing.service.ts
-    // are gone (#469): the pipeline starts from the transcripts slice's upload hook, which the
-    // platform adapter runs as an ObjectProcessor in the storage.object.process job. The transcript
-    // job-failure listener moved into the slice with #493 (it subscribes through the job port,
-    // not `@OnEvent`), so it is no longer in this source root.
+    // provider). One file holds a listener in this source root now: the forwarder that turns the
+    // platform's settings-change announcement into the graph slice's event (one dispatch, no I/O).
+    // The graph's own subscriptions go through the event port, not `@OnEvent`, and the job-failure and
+    // node-offline notifiers are the platform's since #470 (outside this root, scanned by the package's
+    // own run). The two transcript upload listeners and storage/processing/object-processing.service.ts
+    // are gone (#469); the transcript job-failure listener moved into the slice with #493.
     onEventNoIo: {
-      minListenerFiles: 4,
-      minListenerBodies: 4,
-      mustScan: [
-        'graph/layout/graph-layout.listener.ts',
-        'graph/listeners/speaker-identified.listener.ts',
-        'graph/preferences/graph-preferences-change.forwarder.ts',
-        'graph/resolution/listeners/graph-preferences.listener.ts',
-      ],
+      minListenerFiles: 1,
+      minListenerBodies: 1,
+      mustScan: ['kvox/graph/graph-preferences-change.forwarder.ts'],
     },
     userOwnedData: {
       schemaPath: join(API_DIR, 'prisma', 'schema'),
@@ -611,6 +586,54 @@ runPlatformConformance({
   suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
 });
 
+// The graph slices' housekeeping crons (`kg.migrate`'s hourly tick and the export expiry sweep) live in the
+// packages, outside `apps/api/src`; the queue rule that a `@Cron` only enqueues (CLAUDE.md rule 1) is held
+// for them by scanning their folders with the same suite.
+runPlatformConformance({
+  sourceRoots: [join(REPO_DIR, 'packages', 'kvox-api', 'src', 'graph', 'migrate')],
+  suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
+});
+runPlatformConformance({
+  sourceRoots: [join(REPO_DIR, 'packages', 'kvox-api', 'src', 'graph-rdf', 'export')],
+  suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
+});
+
+// The graph slices' conformance suites (`@marinoscar/kvox-api/graph/testing`, `/graph-extraction/testing`
+// and `/graph-rdf/testing`, #496), over the web edition's binding: the ten `kg.*` handlers as the
+// application's modules built them (the real DI wiring over the platform adapters). The invariants (every
+// type server-only with its pinned profile, only the entity digest, extract, resolve and embed spending the
+// owner's key, only `GraphWriteService` creating a graph row, a sensitive PersonFact never reaching a model
+// or an embedder, no access answering 403) are held here exactly as the package holds them over its fakes.
+// The source scan reads the package's compiled files from `node_modules`.
+let graphContext: TestContext | undefined;
+
+afterAll(async () => {
+  if (graphContext) await closeTestApp(graphContext);
+});
+
+async function graphHandlers() {
+  graphContext ??= await createTestApp();
+  const app = graphContext.module;
+
+  return {
+    core: [KgSpeakerLinkHandler, KgPurgeHandler, KgGraphLayoutHandler, KgMigrateHandler, EntityDigestHandler].map((handler) =>
+      app.get(handler, { strict: false }),
+    ),
+    extraction: [KgExtractHandler, KgResolveHandler, KgEmbedHandler].map((handler) => app.get(handler, { strict: false })),
+    rdf: [KgExportHandler, KgImportHandler].map((handler) => app.get(handler, { strict: false })),
+  };
+}
+
+describeGraphConformance('the web edition binding', async () => ({ handlers: (await graphHandlers()).core }), { describe, it, expect }, {
+  sourceRoot: join(REPO_DIR, 'packages', 'kvox-api', 'src'),
+});
+describeGraphExtractionConformance('the web edition binding', async () => ({ handlers: (await graphHandlers()).extraction }), {
+  describe,
+  it,
+  expect,
+});
+describeGraphRdfConformance('the web edition binding', async () => ({ handlers: (await graphHandlers()).rdf }), { describe, it, expect });
+
 // kvox-guarded routes: the identity suite's two route rules, for the controllers it cannot see (see
 // `isKvoxGuarded`). Every route of a controller the `@marinoscar/kvox-api` slices guard is authenticated
 // through `KvoxAuthGuard`, and every permission it enforces (the option names resolved through the
@@ -622,8 +645,20 @@ describe('kvox-guarded routes', () => {
       .map((name) => ({ name, handler: controller.prototype[name] as Function }))
       .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
 
-  it('finds the transcription, transcripts, search and notes controllers (a path mistake must not make this vacuous)', () => {
+  it('finds the transcription, transcripts, search, notes and graph controllers (a path mistake must not make this vacuous)', () => {
     expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
+      'EntityBriefController',
+      'GraphAttributeDefsController',
+      'GraphController',
+      'GraphEntitiesController',
+      'GraphExportController',
+      'GraphExtractionController',
+      'GraphImportController',
+      'GraphOverviewController',
+      'GraphProposalsController',
+      'GraphRdfController',
+      'GraphReadController',
+      'GraphResolutionController',
       'NoteGenerationStreamController',
       'NoteSourcesController',
       'NoteTemplatesController',

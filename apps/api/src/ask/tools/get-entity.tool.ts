@@ -12,9 +12,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GraphOntologyService } from '../../graph/ontology/graph-ontology.service';
-import { GraphReadService } from '../../graph/read/graph-read.service';
-import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
+import { GraphOntologyService, GraphReadService, READABLE_ENTITY_STATUSES } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   AskToolError,

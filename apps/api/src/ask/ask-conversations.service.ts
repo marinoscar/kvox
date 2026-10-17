@@ -23,8 +23,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../graph/access/graph-access.service';
-import { readableEntitySql } from '../graph/read/read-sql';
+import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService, readableEntitySql } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../prisma/prisma.service';
 import { ASK_CONVERSATION_NOT_FOUND, AskAccessService } from './ask-access.service';
 import { AskCursorError, decodeAskCursor, encodeAskCursor, type AskCursorScope } from './ask-cursor';

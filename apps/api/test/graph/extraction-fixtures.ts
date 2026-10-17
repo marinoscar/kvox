@@ -2,12 +2,7 @@
 
 import { computeEffectiveSchema, type DomainKey, type UserAttributeDef } from '@app/shared/ontology';
 
-import {
-  buildExtractionContext,
-  type ExtractionContext,
-  type ExtractionInput,
-  type KnownEntityRow,
-} from '../../src/graph/extraction/extraction-context';
+import { buildExtractionContext, type ExtractionContext, type ExtractionInput, type KnownEntityRow } from './package-internals';
 
 export const IDS = {
   owner: '0a000000-0000-4000-8000-000000000001',

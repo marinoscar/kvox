@@ -1,5 +1,4 @@
-import { ChildProcessShaclEngine, shaclModuleUrl } from '../../../src/graph/import/shacl-engine';
-import { parseTurtleText } from '../../../src/graph/import/rdf-parse';
+import { ChildProcessShaclEngine, shaclModuleUrl, parseTurtleText } from '../package-internals';
 
 // =============================================================================
 // The production SHACL runner (#387): a real child process, under Jest

@@ -5,7 +5,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { forgetEntityResponseSchema } from '../../src/graph/dto/graph-forget.dto';
+import { forgetEntityResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // POST /api/graph/entities/:id/forget over the wire (#357, epic #344)

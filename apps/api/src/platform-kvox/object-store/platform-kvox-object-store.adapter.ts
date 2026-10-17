@@ -305,6 +305,27 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
   }
 
   @Trace()
+  async listManaged(query: {
+    ownerId: string;
+    managedBy: KvoxManagedBy;
+    keyPrefix?: string;
+    limit: number;
+  }): Promise<string[]> {
+    const rows = await this.managed.findMany({
+      where: {
+        kvoxOwnership: { managedBy: query.managedBy },
+        uploadedById: query.ownerId,
+        ...(query.keyPrefix !== undefined ? { storageKey: { startsWith: query.keyPrefix } } : {}),
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: query.limit,
+    });
+
+    return rows.map((row) => row.id);
+  }
+
+  @Trace()
   async setMetadata(objectId: string, metadata: Record<string, unknown>): Promise<void> {
     await this.managed.setMetadata(objectId, metadata);
   }

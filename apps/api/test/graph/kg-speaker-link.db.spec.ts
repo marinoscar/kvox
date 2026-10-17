@@ -28,15 +28,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import {
-  SPEAKER_LINKED_ACTION,
-  SPEAKER_UNLINKED_ACTION,
-  SpeakerLinkReconciler,
-} from '../../src/graph/speaker-link/speaker-link.reconciler';
-import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
-import { GraphWriteService } from '../../src/graph/write/graph-write.service';
+import { GraphOntologyService, GraphPreferencesService, GraphWriteService } from '@marinoscar/kvox-api/graph';
+import { SPEAKER_LINKED_ACTION, SPEAKER_UNLINKED_ACTION, SpeakerLinkReconciler, EvidenceValidator } from './package-internals';
 import {
   OP_TYPES,
   TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
@@ -46,9 +39,10 @@ import {
 } from '@marinoscar/kvox-api/transcripts';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
+import { createDbSettings, createDbAudit } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-speaker-link.db.spec');
 
@@ -57,6 +51,7 @@ const EMAIL_PREFIX = 'kg-speaker-link-test';
 describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   let prisma: PrismaClient;
   let reconciler: SpeakerLinkReconciler;
+  let audit: ReturnType<typeof createDbAudit>;
   // A role of this suite's own that carries `graph:write`. CI's smoke job runs
   // `test:db` BEFORE `prisma:seed`, so the seeded roles cannot be relied on.
   let graphWriterRoleId: string;
@@ -66,9 +61,16 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
+    audit = createDbAudit(prisma);
     reconciler = new SpeakerLinkReconciler(
-      new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
-      new GraphOntologyService(prisma as never, new GraphPreferencesService(prisma as never)),
+      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
+      new GraphOntologyService(prisma as never, new GraphPreferencesService(createDbSettings(prisma))),
+      // The platform answers "does the owner hold graph:write" from roles and memberships; this suite grants it
+      // through a role of its own, so the identity port reads that role link.
+      {
+        hasPermission: async (userId: string, permission: string) =>
+          (await prisma.userRole.count({ where: { userId, role: { rolePermissions: { some: { permission: { name: permission } } } } } })) > 0,
+      } as never,
     );
     // Upsert by name, exactly as the seed does, so running the seed later is unaffected.
     const permission = await prisma.permission.upsert({
@@ -183,7 +185,13 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   }
 
   function run(transcriptId: string, actorUserId: string) {
-    return prisma.$transaction((tx) => reconciler.reconcile(tx, { transcriptId, actorUserId }), { timeout: 30_000 });
+    return prisma
+      .$transaction((tx) => reconciler.reconcile(tx, { transcriptId, actorUserId }), { timeout: 30_000 })
+      .then(async (summary) => {
+        // The handler records the run's audit events once the transaction has committed; do the same here.
+        for (const event of summary.audit) await audit.record(event);
+        return summary;
+      });
   }
 
   const persons = (ownerId: string) =>

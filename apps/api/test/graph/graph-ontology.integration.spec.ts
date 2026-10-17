@@ -9,7 +9,7 @@ import {
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { graphOntologyResponseSchema } from '../../src/graph/dto/graph-ontology.dto';
+import { graphOntologyResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // GET /api/graph/ontology over the wire (#354, epic #344)

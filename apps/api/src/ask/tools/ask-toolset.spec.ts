@@ -3,11 +3,7 @@ import 'reflect-metadata';
 import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import { assertStrictJsonSchema } from '../../ai-port/strict-json-schema';
-import { EntityBriefService } from '../../graph/brief/entity-brief.service';
-import { EntityDigestEnqueuer } from '../../graph/brief/entity-digest.enqueuer';
-import { GraphEntitiesService } from '../../graph/graph-entities.service';
-import { GraphLayoutEnqueuer } from '../../graph/layout/graph-layout.enqueuer';
-import { GraphWriteService } from '../../graph/write/graph-write.service';
+import { EntityBriefService, EntityDigestEnqueuer, GraphEntitiesService, GraphLayoutEnqueuer, GraphWriteService } from '@marinoscar/kvox-api/graph';
 import { expectNoUuid, makeCtx, seedEntity, uid } from '../../../test/ask/ask-tool-fakes';
 import { AskToolError } from './ask-tool';
 import { ASK_TOOL_NAMES, AskToolset, formatZodError, modelReadableError } from './ask-toolset';

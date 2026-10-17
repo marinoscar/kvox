@@ -12,7 +12,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GraphNeighborhoodService } from '../../graph/read/graph-neighborhood.service';
+import { GraphNeighborhoodService } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   isoDate,

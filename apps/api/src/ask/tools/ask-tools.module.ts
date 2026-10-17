@@ -6,7 +6,7 @@
 // module (#376's `AskModule`) and the chat loop (#378) import it rather than
 // re-providing seven tools. It imports only READ surfaces:
 //
-//   - `GraphModule` for `GraphReadService`, `GraphNeighborhoodService`,
+//   - `GraphConfig` (`@marinoscar/kvox-api/graph`) for `GraphReadService`, `GraphNeighborhoodService`,
 //     `GraphEvidenceService`, `EntityBriefService` (called with
 //     `markViewed: false, enqueueStaleDigest: false`), `GraphOntologyService`
 //     and `GraphPreferencesService`;
@@ -18,7 +18,7 @@
 
 import { Module } from '@nestjs/common';
 
-import { GraphModule } from '../../graph/graph.module';
+import { GraphConfig } from '../../kvox/graph/graph.config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SearchConfig } from '../../kvox/search/search.config';
 import { AskToolset } from './ask-toolset';
@@ -42,7 +42,7 @@ export const ASK_TOOL_PROVIDERS = [
 ] as const;
 
 @Module({
-  imports: [PrismaModule, GraphModule, SearchConfig],
+  imports: [PrismaModule, GraphConfig, SearchConfig],
   providers: [...ASK_TOOL_PROVIDERS, AskToolset],
   exports: [AskToolset],
 })

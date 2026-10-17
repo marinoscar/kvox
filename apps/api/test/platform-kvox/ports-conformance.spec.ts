@@ -49,7 +49,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JOB_SETTLED_EVENT, JobSettledEvent, RateLimitError } from '@marinoscar/platform-api/jobs';
 
-import { AiAuthError, AiBudgetError, AiRefusedError } from '../../src/ai-port/ai-errors';
+import { AiAuthError, AiBudgetError, AiRefusedError, AiStructuredOutputError } from '../../src/ai-port/ai-errors';
 import { keyMissingConflict, lacksCapabilityConflict, notConfiguredConflict } from '../../src/ai-port/kvox-ai-errors';
 import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
 import { PlatformKvoxAiAdapter } from '../../src/platform-kvox/ai/platform-kvox-ai.adapter';
@@ -108,6 +108,8 @@ const FACADE_FAILURES: Record<KvoxAiErrorClass, () => unknown> = {
   not_configured: () => notConfiguredConflict(),
   key_missing: () => keyMissingConflict(),
   capability: () => lacksCapabilityConflict({ task: 'graph.extract', model: 'm', missing: ['structured output'] }),
+  truncated: () => new AiStructuredOutputError('The answer was cut off.', 'truncated'),
+  invalid_output: () => new AiStructuredOutputError('The answer was not JSON.', 'invalid_json'),
   other: () => new Error('The provider is having a bad day.'),
 };
 
@@ -226,11 +228,24 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
     async findByKey(key: string) {
       return [...rows.values()].find((row) => row.storageKey === key) ?? null;
     },
-    async findMany(args: { where: { id: { in: string[] } } }) {
-      return args.where.id.in.flatMap((id) => {
-        const row = rows.get(id);
-        return row ? [{ ...row, createdAt: new Date(), updatedAt: new Date() }] : [];
-      });
+    async findMany(args: {
+      where: { id?: { in: string[] }; kvoxOwnership?: { managedBy: string }; uploadedById?: string; storageKey?: { startsWith: string } };
+      take?: number;
+    }) {
+      // `describe`: by id. `listManaged`: one module's files of one user under a key prefix, ascending by id.
+      const { where } = args;
+      const found = where.id
+        ? where.id.in.flatMap((id) => {
+            const row = rows.get(id);
+            return row ? [{ ...row, createdAt: new Date(), updatedAt: new Date() }] : [];
+          })
+        : [...rows.values()]
+            .filter((row) => owners.get(row.id as string) === where.kvoxOwnership?.managedBy)
+            .filter((row) => row.uploadedById === where.uploadedById)
+            .filter((row) => where.storageKey === undefined || String(row.storageKey).startsWith(where.storageKey.startsWith))
+            .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+            .slice(0, args.take);
+      return found;
     },
     async managedBy(ids: readonly string[]) {
       return new Map(ids.filter((id) => owners.has(id)).map((id) => [id, owners.get(id)!] as const));
@@ -301,8 +316,25 @@ function jobsUnderTest(): KvoxPortsUnderTest['jobs'] {
   const prisma = {
     organization: { findFirst: async () => ({ id: 'org-default' }) },
     job: {
-      findFirst: async ({ where }: { where: { dedupKey: string } }) =>
-        queue.jobs().find((job) => job.dedupKey === where.dedupKey && (job.status === 'pending' || job.status === 'running')) ?? null,
+      findFirst: async ({ where }: { where: { dedupKey?: string; type?: string; subjectType?: string; subjectId?: string } }) => {
+        // `findLatest`: the newest job of a subject, whatever its status.
+        if (where.dedupKey === undefined) {
+          return (
+            queue
+              .jobs()
+              .filter((job) => job.type === where.type && job.subjectType === where.subjectType && (where.subjectId === undefined || job.subjectId === where.subjectId))
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null
+          );
+        }
+        return queue.jobs().find((job) => job.dedupKey === where.dedupKey && (job.status === 'pending' || job.status === 'running')) ?? null;
+      },
+      // `runNow`: a pending job scheduled for later is pulled forward.
+      updateMany: async ({ where, data }: { where: { id: string }; data: { scheduledFor: null } }) => {
+        const job = queue.get(where.id);
+        if (!job || job.status !== 'pending' || job.scheduledFor === null || job.scheduledFor.getTime() <= Date.now()) return { count: 0 };
+        job.scheduledFor = data.scheduledFor;
+        return { count: 1 };
+      },
       // The adapter's `findActive` query, evaluated over the fake queue's rows.
       findMany: async ({ where }: { where: JobWhere }) =>
         queue.jobs().filter((job) => {

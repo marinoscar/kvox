@@ -22,14 +22,12 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { KgMigrateHandler } from '../../src/graph/migrate/kg-migrate.handler';
-import { KgMigrateRepository } from '../../src/graph/migrate/kg-migrate.repository';
-import type { KgMigrateDefinition } from '../../src/graph/migrate/kg-migrate.plan';
-import { KgMigrateSchedulerTask } from '../../src/graph/migrate/kg-migrate-scheduler.task';
+import { KgMigrateHandler, KgMigrateSchedulerTask } from './package-internals';
+import { KgMigrateRepository, candidatePredicate } from '@marinoscar/kvox-api/graph';
+import type { KgMigrateDefinition } from '@marinoscar/kvox-api/graph';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { buildMigrationTestDefinition } from '../ontology/fixtures/migration-fixtures';
-import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-migrate.db.spec');
 
@@ -41,7 +39,8 @@ describeWithDb('kg.migrate (real Postgres)', () => {
   let repository: KgMigrateRepository;
   let handler: KgMigrateHandler;
 
-  const fakeRegistry = { register: jest.fn() } as unknown as JobHandlerRegistry;
+  // The jobs port: the handlers only register themselves with it here.
+  const fakeRegistry = { registerHandler: jest.fn(), isRegistered: jest.fn(() => true) } as never;
 
   beforeAll(async () => {
     if (!dbReachable) return;
@@ -182,7 +181,7 @@ describeWithDb('kg.migrate (real Postgres)', () => {
       a.id,
       '2.0.0',
       // The same predicate the handler builds.
-      (await import('../../src/graph/migrate/kg-migrate.plan')).candidatePredicate('entity', definition.migrations, definition.registry)!,
+      candidatePredicate('entity', definition.migrations, definition.registry)!,
       null,
       10,
     );
@@ -283,7 +282,7 @@ describeWithDb('kg.migrate (real Postgres)', () => {
     await entity(b.id, 'Project', '1.0.0', { status: 'planned' });
 
     const task = new KgMigrateSchedulerTask(
-      { get: () => true } as never,
+      { schedules: true, layoutCoalesceMs: 0, layoutMaterialChange: 0, migrateScheduleEnabled: () => true },
       prisma as unknown as PrismaService,
       { enqueue: jest.fn() } as never,
       repository,

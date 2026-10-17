@@ -29,26 +29,10 @@
 // ⚠ The key reaches the direct client only (inside `runExtraction`'s default).
 // =============================================================================
 
-import { normalizeForMatch } from '../../../src/graph/extraction/extraction-context';
-import type { ProposedRow } from '../../../src/graph/extraction/validate';
+import { normalizeForMatch, candidateEdge, entityView, existingId, isExclusiveTemporal, placeholderId, proposedRelationRange, relationKnown, resolveEndpoint, ruleForEffectiveRelation, type ProposalEntityView, decide, bandFor, rankCandidates, scoreCandidate } from '../../../test/graph/package-internals';
+import type { ProposedRow } from '../../../test/graph/package-internals';
 import { computeEffectiveSchema } from '@app/shared/ontology';
-import {
-  candidateEdge,
-  entityView,
-  existingId,
-  isExclusiveTemporal,
-  placeholderId,
-  proposedRelationRange,
-  relationKnown,
-  resolveEndpoint,
-  ruleForEffectiveRelation,
-  type ProposalEntityView,
-} from '../../../src/graph/dedup/dedup-core';
-import { planTemporalInsert, type TemporalEdge } from '../../../src/graph/temporal';
-import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../../../src/graph/preferences/graph-preferences.defaults';
-import { decide } from '../../../src/graph/resolution/resolution.service';
-import { bandFor, rankCandidates, scoreCandidate } from '../../../src/graph/resolution/score';
-import { normalizeAlias } from '../../../src/graph/write/normalize';
+import { planTemporalInsert, type TemporalEdge, GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences, normalizeAlias } from '@marinoscar/kvox-api/graph';
 import { directStructuredClient } from '../direct-structured';
 import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';

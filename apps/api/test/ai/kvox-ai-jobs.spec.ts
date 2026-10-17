@@ -9,8 +9,7 @@ import { JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
 import { KvoxAiTargetResolver } from '../../src/ai-port/kvox-ai-target-resolver';
 import { KVOX_AI_FEATURES, type KvoxAiFeatureId } from '../../src/ai-port/features';
-import { AdjudicationService } from '../../src/graph/resolution/adjudication.service';
-import { GraphEmbedder } from '../../src/graph/resolution/graph-embedder.service';
+import { AdjudicationService, GraphEmbedder } from '@marinoscar/kvox-api/graph-extraction';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { closeTestApp, createTestApp, type TestContext } from '../helpers/test-app.helper';
@@ -375,8 +374,6 @@ const AI_METHODS = new Set(['generateStructured', 'streamText', 'embed', 'chat']
  * where the order is proved instead.
  */
 const EXEMPT: Readonly<Record<string, string>> = {
-  'graph/resolution/graph-embedder.service.ts':
-    'a closure returned to the job that calls it; its callers (kg-embed.handler.ts, resolution.service.ts) register above `embedder.embed(`, which this test checks',
   'platform-kvox/ai/platform-kvox-ai.adapter.ts':
     'the `KVOX_AI` port adapter (#490) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
 };
@@ -427,10 +424,8 @@ describe('(c) the per-user throttle key is registered before the first model cal
     .filter(({ calls }) => calls.length > 0);
 
   it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
-    // The slices that call the model move to packages/kvox-api one by one (epic #491);
-    // their throttle proofs live in the package handler specs, so this scan only
-    // has to find the call sites that are still app code, and at least one.
-    expect(files.length).toBeGreaterThanOrEqual(1);
+    // The Ask handler and the `KVOX_AI` adapter: the graph's calls moved into `@marinoscar/kvox-api` (#496), scanned below.
+    expect(files.map(({ rel }) => rel).sort()).toEqual(['ask/handlers/ask-respond.handler.ts', 'platform-kvox/ai/platform-kvox-ai.adapter.ts']);
   });
 
   it('every file that calls the model registers the key above its first call (or is exempt, with a reason)', () => {
@@ -447,17 +442,74 @@ describe('(c) the per-user throttle key is registered before the first model cal
 
     expect(Object.keys(EXEMPT).filter((rel) => !calling.has(rel))).toEqual([]);
   });
+});
 
-  it('the callers of the embedder closure register above `embedder.embed(`', () => {
-    const callers = files.filter(({ rel }) => rel === 'graph/handlers/kg-embed.handler.ts' || rel === 'graph/resolution/resolution.service.ts');
+// =============================================================================
+// (c) for the graph slices, which moved into the package (#496)
+// =============================================================================
+//
+// `@marinoscar/kvox-api/graph*` has no throttle registry: a provider rate limit leaves a handler as a
+// `KvoxRateLimitError` on the caller's own bucket (`rethrowRateLimit(error, userId)` builds it from
+// `aiProviderThrottleKey(userId)`), and `PlatformKvoxJobsAdapter` registers that bucket from the error
+// (proved in test/platform-kvox/platform-kvox-adapters.spec.ts). So the executable form of "the per-user key
+// is registered before the model call" for these files is: every file that calls the model also routes
+// the failure through `rethrowRateLimit`, so one busy account's quota never parks another's jobs.
+// =============================================================================
 
-    expect(callers.map(({ rel }) => rel).sort()).toEqual([
-      'graph/handlers/kg-embed.handler.ts',
-      'graph/resolution/resolution.service.ts',
+const PACKAGE_SRC = resolve(__dirname, '../../../../packages/kvox-api/src');
+const GRAPH_SLICES = ['graph', 'graph-extraction', 'graph-rdf'];
+
+/** Files of the graph slices that are not tests, fixtures or testing entries. */
+function graphSliceFiles(): string[] {
+  return GRAPH_SLICES.flatMap((slice) => {
+    const walkSlice = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) return entry === 'testing' || entry === '__fixtures__' ? [] : walkSlice(full);
+        return entry.endsWith('.ts') && !entry.endsWith('.spec.ts') ? [full] : [];
+      });
+    return walkSlice(join(PACKAGE_SRC, slice));
+  });
+}
+
+describe('(c) the graph slices route a rate limit onto the caller\'s own bucket (#477, #496)', () => {
+  /** A closure the calling job wraps: the callers are checked instead. */
+  const CLOSURES: Readonly<Record<string, string>> = {
+    'graph-extraction/resolution/graph-embedder.service.ts':
+      'the closure `GraphEmbedder.resolve` returns to the job that calls it; its callers (kg-embed.handler.ts, resolution.service.ts) call `rethrowRateLimit`',
+  };
+
+  const files = graphSliceFiles()
+    .map((full) => ({ rel: relative(PACKAGE_SRC, full).split(sep).join('/'), full }))
+    .map((file) => ({ ...file, ...positionsIn(file.full), text: readFileSync(file.full, 'utf8') }))
+    .filter(({ calls }) => calls.length > 0);
+
+  it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
+    expect(files.map(({ rel }) => rel).sort()).toEqual([
+      'graph-extraction/handlers/kg-embed.handler.ts',
+      'graph-extraction/handlers/kg-extract.handler.ts',
+      'graph-extraction/resolution/adjudication.service.ts',
+      'graph-extraction/resolution/graph-embedder.service.ts',
+      'graph-extraction/resolution/resolution.service.ts',
+      'graph/brief/entity-digest.handler.ts',
     ]);
-    for (const { registrations, calls } of callers) {
-      expect(registrations.length).toBeGreaterThan(0);
-      expect(Math.min(...registrations)).toBeLessThan(Math.min(...calls));
-    }
+  });
+
+  it('every file that calls the model also calls `rethrowRateLimit` (or is a closure its callers wrap)', () => {
+    const offenders = files.filter(({ rel }) => !(rel in CLOSURES)).filter(({ text }) => !text.includes('rethrowRateLimit(')).map(({ rel }) => rel);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('every closure exemption is still needed', () => {
+    const calling = new Set(files.map(({ rel }) => rel));
+
+    expect(Object.keys(CLOSURES).filter((rel) => !calling.has(rel))).toEqual([]);
+  });
+
+  it('rethrowRateLimit builds the bucket from aiProviderThrottleKey', () => {
+    const support = readFileSync(join(PACKAGE_SRC, 'graph', 'graph-ai-support.ts'), 'utf8');
+
+    expect(support).toMatch(/new KvoxRateLimitError\(aiProviderThrottleKey\(/);
   });
 });

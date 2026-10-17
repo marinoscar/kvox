@@ -17,21 +17,16 @@ import { randomUUID } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
 import type { PrismaClient, Job } from '@prisma/client';
 
-import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
-import { GraphExtractionService } from '../../src/graph/extraction/graph-extraction.service';
-import { ExtractionInputLoader } from '../../src/graph/extraction/extraction-input.loader';
-import { ProposalStageRegistry } from '../../src/graph/extraction/proposal-stage';
-import { ProposalWriter } from '../../src/graph/extraction/proposal-writer.service';
-import { KgExtractHandler } from '../../src/graph/handlers/kg-extract.handler';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
+import { GraphExtractionService, ProposalStageRegistry, KgExtractHandler } from '@marinoscar/kvox-api/graph-extraction';
+import { ExtractionInputLoader, ProposalWriter } from './package-internals';
+import { GraphOntologyService, GraphPreferencesService } from '@marinoscar/kvox-api/graph';
 import { NoteAccessService, NoteOriginService } from '@marinoscar/kvox-api/notes';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { JobsService } from '@marinoscar/platform-api/jobs';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 import { asPrismaService } from '../helpers/db-managed-objects.helper';
 import { createPlatformTranscriptSharing } from '../helpers/sharing-kit.helper';
+import { createAllowAllIdentity, createDbAudit, createDbJobs, createDbSettings } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-extract.db.spec');
 
@@ -72,7 +67,24 @@ describeWithDb('kg.extract (real Postgres)', () => {
   let prisma: PrismaClient;
   let service: GraphExtractionService;
   let handler: KgExtractHandler;
-  const ai = new FakeKvoxAi();
+  // A scripted `KVOX_AI.generateStructured`: queued answers first, then the handler (if any).
+  const queued: Array<{ value: unknown; usage: { inputTokens: number; outputTokens: number } }> = [];
+  let structuredHandler: (() => { value: unknown; usage: { inputTokens: number; outputTokens: number } }) | null = null;
+  const ai = {
+    queueStructured: (value: unknown, options: { usage: { inputTokens: number; outputTokens: number } }) => void queued.push({ value, usage: options.usage }),
+    setStructuredHandler: (handler: () => { value: unknown; usage: { inputTokens: number; outputTokens: number } }) => void (structuredHandler = handler),
+    reset: () => {
+      queued.length = 0;
+      structuredHandler = null;
+    },
+    port: {
+      generateStructured: async () => {
+        const next = queued.shift() ?? structuredHandler?.();
+        if (!next) throw new Error('kg-extract.db.spec: no scripted structured answer');
+        return next;
+      },
+    },
+  };
 
   beforeAll(async () => {
     if (!dbReachable) return;
@@ -80,6 +92,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     await prisma.$connect();
 
     const resolution = {
+      target: { provider: 'openai', model: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, source: 'requested' },
       providerId: 'openai',
       model: 'gpt-4o',
       reasoningEffort: 'medium',
@@ -90,10 +103,12 @@ describeWithDb('kg.extract (real Postgres)', () => {
       keyConfigured: true,
     };
     const resolver = { resolve: jest.fn(async () => resolution), graphEnabled: jest.fn(async () => true) };
-    const preferences = new GraphPreferencesService(prisma as never);
+    const settings = createDbSettings(prisma);
+    const preferences = new GraphPreferencesService(settings);
     const ontology = new GraphOntologyService(prisma as never, preferences);
     const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(asPrismaService(prisma) as never, createPlatformTranscriptSharing(prisma)), ontology);
     const writer = new ProposalWriter(prisma as never);
+    const jobs = createDbJobs(prisma);
 
     service = new GraphExtractionService(
       prisma as never,
@@ -102,15 +117,16 @@ describeWithDb('kg.extract (real Postgres)', () => {
       preferences,
       ontology,
       loader,
-      new JobsService(prisma as never),
+      jobs.port,
+      createDbAudit(prisma),
+      createAllowAllIdentity(),
     );
     handler = new KgExtractHandler(
-      { register: jest.fn() } as never,
+      jobs.port,
       prisma as never,
       loader,
       resolver as never,
-      ai,
-      { registerProviderKey: jest.fn() } as never,
+      ai.port as never,
       writer,
       new ProposalStageRegistry(),
       preferences,

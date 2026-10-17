@@ -6415,7 +6415,7 @@ second call returns the same definition with the same `deprecatedAt`.
 
 The read layer (issue #370, epic #347): the entity index and an entity's
 page, its bounded neighbourhood and timeline, its mentions, citation links,
-and the explorer's one-hop expand. `apps/api/src/graph/read/` is the whole
+and the explorer's one-hop expand. `packages/kvox-api/src/graph/read/` is the whole
 surface, exported as `GraphReadService`, `GraphNeighborhoodService` and
 `GraphEvidenceService` for the entity brief and the Ask agent to reuse
 (later issues) rather than re-querying these tables themselves.

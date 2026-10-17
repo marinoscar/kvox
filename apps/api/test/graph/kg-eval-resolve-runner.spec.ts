@@ -8,7 +8,7 @@ import { loadGoldenSet, selectFixtures } from '../../scripts/kg-eval/load';
 import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
 import { applyDedupStagesInMemory, resolveRowsInMemory, trigramSimilarity } from '../../scripts/kg-eval/runners/extract-resolve-runner';
 import { fixtureToInput } from '../../scripts/kg-eval/runners/extract-runner';
-import type { ProposedRow } from '../../src/graph/extraction/validate';
+import type { ProposedRow } from './package-internals';
 
 const [m01] = selectFixtures(loadGoldenSet(), ['m01'], null);
 

@@ -5,10 +5,9 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { GraphAiRunResolver } from '../../src/graph/graph-ai-run.service';
-import { GraphObjectsService } from '../../src/graph/graph-objects.service';
-import { attributeOfferResponseSchema, createGraphImportResponseSchema } from '../../src/graph/import/dto/graph-import.dto';
-import { GRAPH_IMPORT_MAX_BYTES } from '../../src/graph/import/graph-import.constants';
+import { GraphAiRunResolver, GraphObjectsService } from '@marinoscar/kvox-api/graph';
+import { attributeOfferResponseSchema, createGraphImportResponseSchema } from '@marinoscar/kvox-contract/graph';
+import { GRAPH_IMPORT_MAX_BYTES } from '@marinoscar/kvox-api/graph-rdf';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 // =============================================================================

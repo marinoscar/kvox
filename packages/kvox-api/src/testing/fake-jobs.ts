@@ -32,6 +32,10 @@ export interface FakeKvoxJobRecord {
   lastError: string | null;
   /** Rate-limit deferrals so far. */
   rateLimitHits: number;
+  /** When the job was queued. */
+  createdAt: Date;
+  /** When the job settled, or `null`. */
+  finishedAt: Date | null;
 }
 
 /**
@@ -117,6 +121,8 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
         attempts: 0,
         lastError: null,
         rateLimitHits: 0,
+        createdAt: new Date(),
+        finishedAt: null,
       };
       jobs.push(record);
       return { id: record.id, deduplicated: false };
@@ -162,6 +168,34 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
         }));
     },
 
+    async findLatest(query) {
+      const matching = jobs.filter(
+        (job) =>
+          job.input.type === query.type &&
+          job.input.subjectType === query.subjectType &&
+          (query.subjectId === undefined || job.input.subjectId === query.subjectId),
+      );
+      const latest = matching[matching.length - 1];
+      if (!latest) return null;
+      return {
+        id: latest.id,
+        type: latest.input.type,
+        status: latest.status,
+        scheduledFor: latest.input.scheduledFor ?? null,
+        createdAt: latest.createdAt,
+        finishedAt: latest.finishedAt,
+      };
+    },
+
+    async runNow(jobId) {
+      const job = jobs.find((record) => record.id === jobId);
+      if (!job || job.status !== 'pending') return false;
+      const due = job.input.scheduledFor;
+      if (!due || due.getTime() <= Date.now()) return false;
+      job.input = { ...job.input, scheduledFor: undefined };
+      return true;
+    },
+
     tempPath(suffix = '') {
       return join(tmpdir(), `kvox-fake-job-${randomUUID()}${suffix}`);
     },
@@ -192,6 +226,7 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
         try {
           await handler.process(view);
           next.status = 'succeeded';
+          next.finishedAt = new Date();
           settle(next, 'succeeded');
         } catch (error) {
           if (error instanceof KvoxRateLimitError) {
@@ -203,7 +238,10 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
           }
           next.lastError = error instanceof Error ? error.message : String(error);
           next.status = next.attempts >= (handler.profile?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS) ? 'failed' : 'pending';
-          if (next.status === 'failed') settle(next, 'failed');
+          if (next.status === 'failed') {
+            next.finishedAt = new Date();
+            settle(next, 'failed');
+          }
         }
       }
     },

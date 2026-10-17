@@ -17,23 +17,12 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { NoteAccessService, NoteOriginService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { ProposalCommitService } from '../../src/graph/proposals/proposal-commit.service';
-import { ProposalRevertService } from '../../src/graph/proposals/proposal-revert.service';
-import { ProposalsService } from '../../src/graph/proposals/proposals.service';
-import { SpanValidator } from '../../src/graph/proposals/span-validator';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
-import { NO_EXPORT_FILES } from './graph-read.fixtures';
-import { AliasLearningService } from '../../src/graph/resolution/alias-learning.service';
-import { DistinctPairService } from '../../src/graph/resolution/distinct-pair.service';
-import { MergeService } from '../../src/graph/resolution/merge.service';
-import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
-import { GraphWriteService } from '../../src/graph/write/graph-write.service';
-import { normalizeAlias, statementHash } from '../../src/graph/write/normalize';
+import { GraphAccessService, GraphOntologyService, GraphPreferencesService, GraphWriteService, normalizeAlias, statementHash } from '@marinoscar/kvox-api/graph';
+import { ProposalCommitService, ProposalRevertService, ProposalsService, SpanValidator, AliasLearningService, DistinctPairService, MergeService } from '@marinoscar/kvox-api/graph-extraction';
+import { KgPurgeService, EvidenceValidator } from './package-internals';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbGraphObjects, createDbAudit, createDbSettings } from '../helpers/graph-ports.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 import { createPlatformTranscriptSharing, createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
@@ -46,17 +35,19 @@ export const NOTE_BODY =
 
 export function buildServices(prisma: PrismaClient) {
   const db = prisma as unknown as PrismaService;
-  const write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
+  const write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
   const access = new GraphAccessService(db);
-  const ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
+  const settings = createDbSettings(prisma);
+  const audit = createDbAudit(prisma);
+  const ontology = new GraphOntologyService(db, new GraphPreferencesService(settings));
   const spans = new SpanValidator(new NoteOriginService(db as never, createPlatformTranscriptSharing(prisma)));
-  const proposals = new ProposalsService(db, access, new NoteAccessService(db), ontology, spans);
+  const proposals = new ProposalsService(db, access, new NoteAccessService(db), ontology, spans, audit);
   const merges = new MergeService(
     db,
     write,
-    { enqueue: jest.fn() } as never,
-    { get: () => undefined } as never,
+    { enqueue: jest.fn(), isRegistered: () => false } as never,
     { enqueueFollowUps: jest.fn(async () => undefined) } as never,
+    audit,
   );
   const commits = new ProposalCommitService(
     db,
@@ -66,13 +57,13 @@ export function buildServices(prisma: PrismaClient) {
     new AliasLearningService(write),
     new DistinctPairService(),
     merges,
-    { enqueue: jest.fn() } as never,
-    { get: () => undefined } as never,
-    { get: async () => ({}) } as never,
+    { enqueue: jest.fn(), isRegistered: () => false } as never,
+    {} as never,
     proposals,
+    audit,
   );
-  const reverts = new ProposalRevertService(db, access, merges, commits, proposals);
-  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE)) };
+  const reverts = new ProposalRevertService(db, access, merges, commits, proposals, audit);
+  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, createDbGraphObjects(prisma)) };
 }
 
 export async function cleanup(prisma: PrismaClient, prefix: string, purge: KgPurgeService): Promise<void> {

@@ -4,7 +4,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { graphEntitySchema } from '../../src/graph/dto/graph-entity.dto';
+import { graphEntitySchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // PATCH /api/graph/entities/:id over the wire (#355, epic #344)
@@ -168,7 +168,8 @@ describe('PATCH /api/graph/entities/:id (integration)', () => {
       action: 'graph.entity_edited',
       targetType: 'kg_entity',
       targetId: ENTITY_ID,
-      meta: { changedKeys: ['title'], labelChanged: true, aliasesAdded: 2, aliasesRemoved: 0 },
+      // The audit port stores a non-scalar detail as JSON text (`PlatformKvoxAuditAdapter`), so the list is a string.
+      meta: { changedKeys: '["title"]', labelChanged: true, aliasesAdded: 2, aliasesRemoved: 0 },
     });
     // No values anywhere in the audit row.
     expect(JSON.stringify(audit)).not.toMatch(/Sarah|Sally|CTO/);

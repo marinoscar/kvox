@@ -1,8 +1,6 @@
 import { ONTOLOGY } from '@app/shared/ontology';
 
-import { buildImportVocabulary } from '../../../src/graph/import/import-vocabulary';
-import { assertionShapeIri, shapeIri } from '../../../src/graph/rdf/iris';
-import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
+import { buildImportVocabulary, assertionShapeIri, shapeIri, generateShacl } from '../package-internals';
 import { FIXTURE_NS, SH, listMembers, objectsOf, parseTurtle, shapePaths, userDef } from './rdf-fixtures';
 
 // =============================================================================

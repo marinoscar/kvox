@@ -29,10 +29,7 @@
 
 import { z } from 'zod';
 
-import { buildExtractionOutputSchema } from '../../src/graph/extraction/output-schema';
-import { buildAdjudicationOutputSchema } from '../../src/graph/resolution/adjudication-prompt';
-import { buildItemAdjudicationOutputSchema } from '../../src/graph/dedup/item-adjudication-prompt';
-import { DIGEST_RESPONSE_SCHEMA } from '../../src/graph/brief/brief-prompt';
+import { buildExtractionOutputSchema, buildAdjudicationOutputSchema, buildItemAdjudicationOutputSchema, DIGEST_RESPONSE_SCHEMA } from '../graph/package-internals';
 import { goodAnswer, makeContext, schemaFor } from '../graph/extraction-fixtures';
 
 type Node = Record<string, unknown>;

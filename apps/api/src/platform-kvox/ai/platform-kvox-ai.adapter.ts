@@ -1,5 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { HttpException } from '@nestjs/common';
+import { Inject, Injectable, HttpException } from '@nestjs/common';
 import { Trace } from '@marinoscar/platform-api/otel-core';
 import { RateLimitError } from '@marinoscar/platform-api/jobs';
 import {
@@ -95,8 +94,18 @@ export function toKvoxAiError(error: unknown): KvoxAiError {
   if (error instanceof AiBudgetError) return new KvoxAiBudgetError(error.requiredTokens, error.availableTokens, message);
   if (error instanceof AiAuthError) return new KvoxAiError('auth', message);
   if (error instanceof AiRefusedError) return new KvoxAiError('refusal', message);
+  if (error instanceof AiStructuredOutputError) {
+    return new KvoxAiError(
+      error.reason === 'truncated' ? 'truncated' : 'invalid_output',
+      message,
+      undefined,
+      error.usage !== undefined
+        ? { inputTokens: error.usage.promptTokens, outputTokens: error.usage.completionTokens }
+        : undefined,
+    );
+  }
   if (error instanceof RateLimitError) return new KvoxAiError('rate_limit', message, error.retryAfterMs);
-  if (error instanceof AiInputError || error instanceof AiStructuredOutputError) return new KvoxAiError('other', message);
+  if (error instanceof AiInputError) return new KvoxAiError('other', message);
 
   if (error instanceof KvoxAiConflict) {
     const byReason: Record<string, KvoxAiErrorClass> = {
@@ -222,7 +231,15 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
   @Trace()
   async generateStructured<T>(
     ctx: KvoxAiContext,
-    req: { target: KvoxAiTarget; system: string; user: string; schema: z.ZodType<T>; schemaName: string },
+    req: {
+      target: KvoxAiTarget;
+      system: string;
+      user: string;
+      schema: z.ZodType<T>;
+      schemaName: string;
+      jsonSchema?: Record<string, unknown>;
+      maxOutputTokens?: number;
+    },
   ): Promise<KvoxStructuredResult<T>> {
     try {
       const result = await this.ai.generateStructured({
@@ -231,6 +248,8 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
         user: req.user,
         schema: req.schema,
         schemaName: req.schemaName,
+        ...(req.jsonSchema !== undefined ? { jsonSchema: req.jsonSchema } : {}),
+        ...(req.maxOutputTokens !== undefined ? { maxOutputTokens: req.maxOutputTokens } : {}),
         ...(req.target.reasoningEffort !== undefined ? { reasoningEffort: req.target.reasoningEffort } : {}),
       });
       return { value: result.value, usage: result.usage };
@@ -300,6 +319,7 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
       feature,
       ...(target !== undefined ? { model: target.model } : {}),
       ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
+      ...(ctx.jobId !== undefined ? { jobId: ctx.jobId } : {}),
     };
   }
 }

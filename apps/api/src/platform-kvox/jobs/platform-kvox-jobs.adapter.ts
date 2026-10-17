@@ -25,6 +25,7 @@ import {
   type KvoxJob,
   type KvoxJobHandler,
   type KvoxJobSettledEvent,
+  type KvoxJobSnapshot,
   type KvoxJobsPort,
 } from '@marinoscar/kvox-api/ports';
 
@@ -255,6 +256,40 @@ export class PlatformKvoxJobsAdapter implements KvoxJobsPort {
       subjectId: row.subjectId,
       payload: row.payload,
     }));
+  }
+
+  @Trace()
+  async findLatest(query: { type: string; subjectType: string; subjectId?: string }): Promise<KvoxJobSnapshot | null> {
+    const row = await this.prisma.job.findFirst({
+      where: {
+        type: query.type,
+        subjectType: query.subjectType,
+        ...(query.subjectId !== undefined ? { subjectId: query.subjectId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, type: true, status: true, scheduledFor: true, createdAt: true, finishedAt: true },
+    });
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      type: row.type,
+      status: row.status as KvoxJobSnapshot['status'],
+      scheduledFor: row.scheduledFor ?? null,
+      createdAt: row.createdAt,
+      finishedAt: row.finishedAt ?? null,
+    };
+  }
+
+  @Trace()
+  async runNow(jobId: string): Promise<boolean> {
+    const pulled = await this.prisma.job.updateMany({
+      where: { id: jobId, status: 'pending', scheduledFor: { gt: new Date() } },
+      data: { scheduledFor: null },
+    });
+
+    return pulled.count > 0;
   }
 
   tempPath(suffix?: string): string {

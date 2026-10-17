@@ -13,7 +13,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { GRAPH_NOT_FOUND_MESSAGES } from '../graph/access/graph-access.service';
+import { GRAPH_NOT_FOUND_MESSAGES } from '@marinoscar/kvox-api/graph';
 import { AskAccessService, ASK_CONVERSATION_NOT_FOUND, ASK_MESSAGE_NOT_FOUND } from './ask-access.service';
 import {
   ASK_CONVERSATION_DELETED_ACTION,

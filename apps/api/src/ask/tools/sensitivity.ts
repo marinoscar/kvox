@@ -21,7 +21,7 @@
 
 import { ONTOLOGY } from '@app/shared/ontology';
 
-import type { GraphPreferences } from '../../graph/preferences/graph-preferences.service';
+import type { GraphPreferences } from '@marinoscar/kvox-api/graph';
 import type { PrismaService } from '../../prisma/prisma.service';
 
 /** Whether a value of this sensitivity may be returned to the agent. */

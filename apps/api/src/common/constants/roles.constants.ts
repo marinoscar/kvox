@@ -28,6 +28,7 @@ import {
   NOTES_READ_PERMISSION,
   NOTES_WRITE_PERMISSION,
 } from '@marinoscar/kvox-api/notes';
+import { GRAPH_READ_PERMISSION, GRAPH_WRITE_PERMISSION } from '@marinoscar/kvox-api/graph';
 import { TRANSCRIPTS_READ_PERMISSION, TRANSCRIPTS_WRITE_PERMISSION } from '@marinoscar/kvox-api/transcripts';
 
 import { KVOX_PERMISSIONS } from '../../app-registrations/permissions';
@@ -48,6 +49,10 @@ export const PERMISSIONS = {
   NOTES_WRITE: NOTES_WRITE_PERMISSION,
   NOTE_TEMPLATES_READ: NOTE_TEMPLATES_READ_PERMISSION,
   NOTE_TEMPLATES_WRITE: NOTE_TEMPLATES_WRITE_PERMISSION,
+  // The graph slice's two permissions, exported as data by the package and registered in
+  // `app-registrations/kvox-permissions.ts` (issue #496).
+  GRAPH_READ: GRAPH_READ_PERMISSION,
+  GRAPH_WRITE: GRAPH_WRITE_PERMISSION,
   ...permissionIds(KVOX_PERMISSIONS),
 } as const;
 

@@ -100,7 +100,7 @@ export class SearchModule {
       global: false,
       controllers,
       providers,
-      exports: [SearchService, SearchQueryEmbedder],
+      exports: [SearchService, SearchQueryEmbedder, SEARCH_TRANSCRIPT_VISIBILITY],
     };
   }
 }

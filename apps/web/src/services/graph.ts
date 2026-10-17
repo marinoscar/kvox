@@ -5,9 +5,9 @@
  * ONE EXPORTED FUNCTION PER ENDPOINT, and every response shape is a TS
  * interface MIRRORING the API's Zod schema field for field:
  *
- *   - #370 `apps/api/src/graph/read/dto/graph-read.dto.ts` — entity index,
+ *   - #370 `packages/kvox-api/src/graph/read/dto/graph-read.dto.ts` — entity index,
  *     detail, neighbourhood, timeline, mentions, evidence links.
- *   - #372 `apps/api/src/graph/brief/dto/entity-brief.dto.ts` — the brief.
+ *   - #372 `packages/kvox-api/src/graph/brief/dto/entity-brief.dto.ts` — the brief.
  *   - #354 `GET /api/graph/ontology` — `EffectiveSchemaPayload`, IMPORTED from
  *     `@app/shared/ontology` rather than re-declared, so a drift fails `tsc`.
  *   - #355 `PATCH /api/graph/entities/:id` and #357 `POST …/forget`.
@@ -720,7 +720,7 @@ export function attributeDefErrorField(err: unknown): AttributeDefField | null {
 // Proposals — the review sheet's transport (#367, epic #346)
 // =============================================================================
 //
-// Mirrors the Contract of #366 (`apps/api/src/graph/proposals/dto/proposal.dto.ts`)
+// Mirrors the Contract of #366 (`packages/kvox-api/src/graph-extraction/proposals/dto/proposal.dto.ts`)
 // field for field, plus #363's `POST /api/graph/notes/:noteId/extract` and
 // `proposal-payload.schema.ts`, and #370's entity search. Components import
 // these types and functions; none of them learns a URL.
@@ -1117,7 +1117,7 @@ export async function searchGraphEntities(params: {
 }
 
 /**
- * `GRAPH_CONFLICT_REASONS` (`apps/api/src/graph/graph-conflict-reasons.ts`)
+ * `GRAPH_CONFLICT_REASONS` (`packages/kvox-api/src/graph/graph-conflict-reasons.ts`)
  * plus the two #366 appends. Typed `| string` at the edge: a newer server may
  * send a reason this build does not know, and that must not be coerced.
  */
@@ -1217,7 +1217,7 @@ export function extractBadRequest(err: unknown): ExtractBadRequest | null {
 // Whole-graph overview (#371) — used by #375's `/graph/overview`
 // =============================================================================
 //
-// Mirrors `apps/api/src/graph/layout/dto/graph-overview.dto.ts` field for
+// Mirrors `packages/kvox-api/src/graph/layout/dto/graph-overview.dto.ts` field for
 // field. The server reads its latest STORED layout snapshot and joins labels
 // live (spec §15, §22.3): a forgotten or merged entity is dropped server-side,
 // so nothing here filters. Cluster ids are stable within ONE snapshot only —
@@ -1296,7 +1296,7 @@ export function refreshGraphOverview(): Promise<GraphOverviewRefreshResponse> {
 }
 
 // =============================================================================
-// Export (#386) — mirrors `apps/api/src/graph/export/dto/graph-export.dto.ts`
+// Export (#386) — mirrors `packages/kvox-api/src/graph-rdf/export/dto/graph-export.dto.ts`
 // =============================================================================
 
 export type { GraphExportFormat };

@@ -38,13 +38,10 @@ import { Parser, type Quad } from 'n3';
 import { APP_SLUG } from '@app/shared';
 import { ONTOLOGY, kvNamespace } from '@app/shared/ontology';
 
-import { GraphExportService } from '../../../src/graph/export/graph-export.service';
-import { GraphExportSource } from '../../../src/graph/export/graph-export.source';
-import { KgExportHandler } from '../../../src/graph/export/kg-export.handler';
-import type { GraphObjectsService } from '../../../src/graph/graph-objects.service';
-import { GraphOntologyService } from '../../../src/graph/ontology/graph-ontology.service';
-import { GraphPreferencesService } from '../../../src/graph/preferences/graph-preferences.service';
-import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
+import { GraphExportService, GraphExportSource, KgExportHandler } from '@marinoscar/kvox-api/graph-rdf';
+import type { GraphObjectsService } from '@marinoscar/kvox-api/graph';
+import { GraphOntologyService, GraphPreferencesService } from '@marinoscar/kvox-api/graph';
+import { generateShacl } from '../package-internals';
 import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
@@ -52,12 +49,17 @@ import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } fro
 import { validateShacl } from './rdf-fixtures';
 import { defaultOrgId } from '../../helpers/storage-object.helper';
 import { createTranscriptAccess } from '../../helpers/sharing-kit.helper';
+import { createDbAudit, createDbSettings } from '../../helpers/graph-ports.helper';
+import { DEFAULT_KVOX_BRAND } from '@marinoscar/kvox-api/core';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('export-conforms.db.spec');
 
 const EMAIL_PREFIX = 'graph-export-test';
 const NS = kvNamespace(APP_SLUG);
 const PROV = 'http://www.w3.org/ns/prov#';
+
+/** The jobs port: the handler only registers itself with it here. */
+const JOBS_STUB = { registerHandler: () => undefined, isRegistered: () => true } as never;
 
 describeWithDb('kg.export — a fixture export conforms to the generated shapes (real Postgres)', () => {
   let prisma: PrismaClient;
@@ -116,7 +118,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     prisma = connectTestPrisma();
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
-    ontology = new GraphOntologyService(p, new GraphPreferencesService(p));
+    ontology = new GraphOntologyService(p, new GraphPreferencesService(createDbSettings(prisma)));
     source = new GraphExportSource(p, ontology, createTranscriptAccess(p), new NoteAccessService(p));
   });
 
@@ -136,7 +138,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
   }, 60_000);
 
   function handler(): KgExportHandler {
-    return new KgExportHandler({ register: () => undefined } as never, prisma as unknown as PrismaService, source, objects);
+    return new KgExportHandler(JOBS_STUB, prisma as unknown as PrismaService, source, objects, createDbAudit(prisma), DEFAULT_KVOX_BRAND);
   }
 
   async function exportRow(ownerId: string, format: 'turtle' | 'jsonld' | 'nquads'): Promise<KgExport> {
@@ -344,6 +346,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
   it('reuses an unchanged graph’s export, re-exports after a change, and 404s another owner', async () => {
     const { user, ids } = await seed();
     const jobs = {
+      isRegistered: () => true,
       enqueue: async (input: { type: string; reason: string; subjectType: string; subjectId: string; payload: object; priority: number }) =>
         prisma.job.create({
           data: { type: input.type, reason: 'rerun', subjectType: input.subjectType, subjectId: input.subjectId, payload: { ...input.payload, test: EMAIL_PREFIX }, priority: input.priority },
@@ -353,8 +356,8 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       prisma as unknown as PrismaService,
       source,
       objects,
-      { get: () => ({}) } as never,
       jobs as never,
+      DEFAULT_KVOX_BRAND,
     );
 
     const first = await service.requestExport(user.id, 'turtle');
@@ -391,14 +394,14 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     await prisma.kgExport.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
     const live = await exportRow(user.id, 'turtle');
     const deleted: string[] = [];
-    const sweeper = new KgExportHandler({ register: () => undefined } as never, prisma as unknown as PrismaService, source, {
+    const sweeper = new KgExportHandler(JOBS_STUB, prisma as unknown as PrismaService, source, {
       ...objects,
       deleteIfPresent: async (id: string) => {
         deleted.push(id);
         await prisma.storageObject.delete({ where: { id } });
         return true;
       },
-    } as unknown as GraphObjectsService);
+    } as unknown as GraphObjectsService, createDbAudit(prisma), DEFAULT_KVOX_BRAND);
     const removed = await sweeper.sweep();
     expect(removed).toBeGreaterThanOrEqual(1);
     expect(await prisma.kgExport.findUnique({ where: { id: expired.id } })).toBeNull();

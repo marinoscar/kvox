@@ -19,19 +19,13 @@ import { computeEffectiveSchema } from '@app/shared/ontology';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { applyPrecheck, type PrecheckItem } from '../../src/graph/extraction/precheck';
-import { ProposalStageRegistry, type ProposalStageContext } from '../../src/graph/extraction/proposal-stage';
-import { ItemCandidateService } from '../../src/graph/dedup/item-candidates.service';
-import { RejectionMemoryStage } from '../../src/graph/dedup/rejection-memory.stage';
-import { TemporalClosingStage } from '../../src/graph/dedup/temporal-closing.stage';
-import { WorkItemDedupStage } from '../../src/graph/dedup/work-item-dedup.stage';
-import { GRAPH_PREFERENCE_DEFAULTS } from '../../src/graph/preferences/graph-preferences.defaults';
-import type { ProposalResolution } from '../../src/graph/proposals/proposal-payload.schema';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
-import { NO_EXPORT_FILES } from './graph-read.fixtures';
-import { statementHash } from '../../src/graph/write/normalize';
+import { applyPrecheck, type PrecheckItem, ProposalStageRegistry, type ProposalStageContext, ItemCandidateService } from '@marinoscar/kvox-api/graph-extraction';
+import { RejectionMemoryStage, TemporalClosingStage, WorkItemDedupStage, KgPurgeService } from './package-internals';
+import { GRAPH_PREFERENCE_DEFAULTS, statementHash } from '@marinoscar/kvox-api/graph';
+import type { ProposalResolution } from '@marinoscar/kvox-contract/graph';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbGraphObjects } from '../helpers/graph-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-dedup.db.spec');
 const EMAIL_PREFIX = 'kg-dedup-test';
@@ -66,7 +60,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(env)) });
     await prisma.$connect();
     db = prisma as unknown as PrismaService;
-    purge = new KgPurgeService(db, NO_EXPORT_FILES, createDbManagedObjects(prisma, UNUSED_STORAGE));
+    purge = new KgPurgeService(db, createDbGraphObjects(prisma));
     const registry = new ProposalStageRegistry();
     const ontology = { effectiveSchemaFor: async () => SCHEMA };
     const candidates = new ItemCandidateService(db);

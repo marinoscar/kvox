@@ -9,6 +9,7 @@ import {
 } from '@marinoscar/platform-api/user-data';
 import type { UserDataModelHint } from '@marinoscar/platform-api/user-data';
 
+import { GRAPH_PURGE_DELEGATE, GRAPH_USER_DATA_CATEGORY, graphUserDataModels } from '../../kvox/graph/user-data';
 import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE, notesUserDataModels } from '../../kvox/notes/user-data';
 import { OWNER_PURGE_MODE } from '../../common/owner-purge';
 import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
@@ -99,7 +100,7 @@ import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
 /** Per-item and owner-level purge of a user's transcripts. */
 export const TRANSCRIPT_PURGE_DELEGATE = 'transcript.purge';
 /** The whole-graph purge. */
-export const KG_PURGE_DELEGATE = 'kg.purge';
+export const KG_PURGE_DELEGATE = GRAPH_PURGE_DELEGATE;
 
 /** The six categories `content` deletes, spelled out (see the header). */
 export const CONTENT_CATEGORIES = [
@@ -133,14 +134,7 @@ registerUserDataCategory({
 for (const category of NOTES_USER_DATA_CATEGORIES) {
   registerUserDataCategory(category);
 }
-registerUserDataCategory({
-  id: 'graph',
-  label: 'Knowledge graph',
-  description:
-    'Your knowledge graph. Your recordings and notes are what it was derived from; deleting the graph never changes them.',
-  content: true,
-  order: 5,
-});
+registerUserDataCategory(GRAPH_USER_DATA_CATEGORY);
 registerUserDataCategory({
   id: 'ask',
   label: 'Ask conversations',
@@ -196,38 +190,13 @@ const ownerDelegate = (jobType: string) => ({
   payload: (userId: string): Record<string, unknown> => ({ mode: OWNER_PURGE_MODE, userId }),
 });
 
-/** One delegate for the whole graph: every `Kg*` hint shares it, so it is enqueued once. */
-const graphDelegate = {
-  jobType: KG_PURGE_DELEGATE,
-  payload: (userId: string): Record<string, unknown> => ({ scope: 'all', userId }),
-};
-
-const graphModel = (model: Prisma.ModelName): UserDataModelHint<Prisma.ModelName> => ({
-  model,
-  category: 'graph',
-  delegate: graphDelegate,
-});
-
 registerUserDataModels<Prisma.ModelName>([
   { model: 'Transcript', category: 'transcripts', delegate: ownerDelegate(TRANSCRIPT_PURGE_DELEGATE) },
   ...notesUserDataModels(ownerDelegate),
 
   { model: 'AskConversation', category: 'ask' },
 
-  graphModel('KgEntity'),
-  graphModel('KgEntityAlias'),
-  graphModel('KgRelation'),
-  graphModel('KgItem'),
-  graphModel('KgEvidence'),
-  graphModel('KgMention'),
-  graphModel('KgProposal'),
-  graphModel('KgMerge'),
-  graphModel('KgDistinctPair'),
-  graphModel('KgAttributeDef'),
-  graphModel('KgEntityDigest'),
-  graphModel('KgExport'),
-  graphModel('KgGraphLayout'),
-  graphModel('KgEntityView'),
+  ...graphUserDataModels(),
 
   {
     model: 'SearchIndexState',

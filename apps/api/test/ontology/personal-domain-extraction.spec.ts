@@ -1,8 +1,6 @@
-import { buildExtractionContext } from '../../src/graph/extraction/extraction-context';
-import { buildExtractionOutputSchema } from '../../src/graph/extraction/output-schema';
-import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../../src/graph/extraction/precheck';
-import { assembleExtractionPrompt } from '../../src/graph/extraction/prompt';
-import { GRAPH_PREFERENCE_DEFAULTS } from '../../src/graph/preferences/graph-preferences.defaults';
+import { buildExtractionContext, buildExtractionOutputSchema, assembleExtractionPrompt } from '../graph/package-internals';
+import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '@marinoscar/kvox-api/graph-extraction';
+import { GRAPH_PREFERENCE_DEFAULTS } from '@marinoscar/kvox-api/graph';
 import { makeInput, schemaFor } from '../graph/extraction-fixtures';
 
 // =============================================================================

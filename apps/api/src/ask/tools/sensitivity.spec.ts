@@ -1,4 +1,4 @@
-import { GRAPH_PREFERENCE_DEFAULTS } from '../../graph/preferences/graph-preferences.service';
+import { GRAPH_PREFERENCE_DEFAULTS } from '@marinoscar/kvox-api/graph';
 import {
   hiddenTypes,
   itemVisible,

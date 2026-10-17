@@ -65,6 +65,30 @@
       "types": "./dist/notes/testing/index.d.ts",
       "default": "./dist/notes/testing/index.js"
     },
+    "./graph": {
+      "types": "./dist/graph/index.d.ts",
+      "default": "./dist/graph/index.js"
+    },
+    "./graph/testing": {
+      "types": "./dist/graph/testing/index.d.ts",
+      "default": "./dist/graph/testing/index.js"
+    },
+    "./graph-extraction": {
+      "types": "./dist/graph-extraction/index.d.ts",
+      "default": "./dist/graph-extraction/index.js"
+    },
+    "./graph-extraction/testing": {
+      "types": "./dist/graph-extraction/testing/index.d.ts",
+      "default": "./dist/graph-extraction/testing/index.js"
+    },
+    "./graph-rdf": {
+      "types": "./dist/graph-rdf/index.d.ts",
+      "default": "./dist/graph-rdf/index.js"
+    },
+    "./graph-rdf/testing": {
+      "types": "./dist/graph-rdf/testing/index.d.ts",
+      "default": "./dist/graph-rdf/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -97,8 +121,15 @@
     "@prisma/client-runtime-utils": "^7.8.0",
     "docx": ">=9.0.0",
     "fastify": "^5.0.0",
+    "graphology": ">=0.26.0",
+    "graphology-communities-louvain": ">=2.0.2",
+    "graphology-layout": ">=0.6.1",
+    "graphology-layout-forceatlas2": ">=0.10.1",
+    "jsonld": ">=9.0.0",
+    "n3": ">=2.7.0",
     "nestjs-zod": "^5.4.0",
     "pdfkit": ">=0.17.0",
+    "rdf-validate-shacl": ">=0.6.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "unpdf": ">=1.0.0",
@@ -126,10 +157,31 @@
     "fastify": {
       "optional": true
     },
+    "graphology": {
+      "optional": true
+    },
+    "graphology-communities-louvain": {
+      "optional": true
+    },
+    "graphology-layout": {
+      "optional": true
+    },
+    "graphology-layout-forceatlas2": {
+      "optional": true
+    },
+    "jsonld": {
+      "optional": true
+    },
+    "n3": {
+      "optional": true
+    },
     "nestjs-zod": {
       "optional": true
     },
     "pdfkit": {
+      "optional": true
+    },
+    "rdf-validate-shacl": {
       "optional": true
     },
     "unpdf": {

@@ -12,8 +12,8 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { TIMELINE_KINDS, type TimelineEvent } from '../../graph/read/dto/graph-read.dto';
-import { GraphReadService } from '../../graph/read/graph-read.service';
+import { TIMELINE_KINDS, type TimelineEvent } from '@marinoscar/kvox-contract/graph';
+import { GraphReadService } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   clip,

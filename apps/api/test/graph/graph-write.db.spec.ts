@@ -29,18 +29,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { computeEffectiveSchema, ONTOLOGY_VERSION } from '@app/shared/ontology';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
-import {
-  GraphDuplicateError,
-  isKgInvariantViolation,
-  toGraphHttpException,
-} from '../../src/graph/write/graph-write.errors';
-import { GraphWriteService } from '../../src/graph/write/graph-write.service';
-import { normalizeAlias } from '../../src/graph/write/normalize';
-import type { EvidenceInput } from '../../src/graph/dto/graph-evidence.dto';
+import { EvidenceValidator, isKgInvariantViolation } from './package-internals';
+import { GraphDuplicateError, toGraphHttpException, GraphWriteService, normalizeAlias } from '@marinoscar/kvox-api/graph';
+import type { EvidenceInput } from '@marinoscar/kvox-contract/graph';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
@@ -58,7 +52,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
-    write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
+    write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
   });
 
   afterAll(async () => {

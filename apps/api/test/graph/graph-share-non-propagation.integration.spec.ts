@@ -6,7 +6,7 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';
 import { GrantsService } from '@marinoscar/platform-api/sharing';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { GraphAccessService } from '../../src/graph/access/graph-access.service';
+import { GraphAccessService } from '@marinoscar/kvox-api/graph';
 import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 
 // =============================================================================
