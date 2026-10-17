@@ -273,8 +273,9 @@ export const homeUser: MockUser = {
     // user that cannot exist, asserted against as though it were the norm.
     'notes:read',
     'notes:write',
-    // `GET /api/storage/objects/:id` is what resolves a document-sourced note's
-    // name in `useNoteSourceNames`. Seeded to every role.
+    // Seeded to every role, so a fixture without it is a user that cannot
+    // exist. Nothing on the home page reads storage for it: a note row carries
+    // its own `sourceName` (#192).
     'storage:read',
   ],
 };
