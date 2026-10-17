@@ -12,9 +12,9 @@
 > inverted — this is "on what is committed to being built, and where".
 >
 > Planned locations: `packages/kvox-api/src/transcription/` (#23 — the provider
-> framework, AssemblyAI, admin settings; moved out of `apps/api/src/` by #492), `apps/api/src/transcripts/` (#24–#29
-> — data model, pipeline, corrections, export, sharing), the `media.audio
-> .transcode` handler under `apps/api/src/transcripts/handlers/` (#26, built),
+> framework, AssemblyAI, admin settings; moved out of `apps/api/src/` by #492), `packages/kvox-api/src/transcripts/` (#24–#29
+> — data model, pipeline, corrections, export, sharing; moved out of `apps/api/src/` by #493), the `media.audio
+> .transcode` handler under `packages/kvox-api/src/transcripts/handlers/` (#26, built),
 > `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
 > /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
 > schema companion, `docs/specs/transcript-export.v1.schema.json` (source of truth since issue #488: `packages/kvox-contract/schemas/transcript-export.v1.schema.json`).
@@ -34,6 +34,23 @@
 > uses the platform stays in the application's `kvox/transcription/` folder:
 > the system-settings declaration, the credential purpose, the onboarding
 > step and facts, and the Doctor check.
+>
+> **Packaged (issue #493, epic #491).** The transcript pipeline itself (the
+> upload hook, the nine job handlers, the correction, export, name-check and
+> share routes, the pure editing core, the access rules and the exporters) is
+> `@marinoscar/kvox-api/transcripts`
+> (`packages/kvox-api/src/transcripts/`, [README](../../packages/kvox-api/src/transcripts/README.md)),
+> configured with `TranscriptsModule.forRoot` over the ports (database, object
+> store, jobs, notify, events, audit, AI, settings, secrets). This application
+> binds it in `apps/api/src/kvox/transcripts/transcripts.config.ts`. Routes,
+> permission strings, job types, settings keys, notification events and the
+> stored data are unchanged. Who else may open a transcript is the slice's
+> `TranscriptSharing` extension point (owner-only by default); the web edition
+> binds the platform's access policy and grants to it
+> (`kvox/transcripts/platform-transcript-sharing.ts`). What uses the platform
+> stays in `apps/api/src/kvox/transcripts/`: the sharing binding, the
+> notification templates, the onboarding step, and the bridge that forwards the
+> slice's `transcript.speakers_identified` event to the graph's listener.
 >
 > **Suggested build order** (from the epic): #20 (this document) →
 > (#21 storage hardening, #23 provider framework, #24 data model, all three
@@ -86,7 +103,7 @@ invented for this epic:
    as the email module's SES/SMTP registry and the storage module's provider
    interface: one small contract, one `NormalizedTranscript` on the way in,
    and a provider-neutral `ExportDocument` (§8) on the way out. Nothing in
-   `apps/api/src/transcripts/` imports an AssemblyAI type, and nothing in
+   `packages/kvox-api/src/transcripts/` imports an AssemblyAI type, and nothing in
    `packages/kvox-api/src/transcription/providers/assemblyai.provider.ts` imports a
    Prisma model.
 4. **Versioning is a normalized current state plus an operation log, not a
@@ -128,7 +145,7 @@ uploading → processing → ready
 | Status | Meaning | Set by |
 |---|---|---|
 | `uploading` | The transcript row exists; the audio is not fully received yet | `POST /api/transcripts` |
-| `processing` | The audio arrived; transcode and/or transcription are in flight | `TranscriptUploadProcessor`, an `ObjectProcessor` run by the `storage.object.process` job once the upload completes (§9.2, issue #469) |
+| `processing` | The audio arrived; transcode and/or transcription are in flight | `TranscriptUploadHook`, subscribed to the object store port's `onUploaded`; the web edition runs it from one `ObjectProcessor` in the `storage.object.process` job once the upload completes (§9.2, issues #469 and #493) |
 | `ready` | `transcript_versions` has a v1 row; the transcript can be read, played and edited | `transcription.ingest`, at the end of its one write transaction |
 | `failed` | Something in the pipeline gave up permanently | Any stage that hits a domain failure or the poll deadline (§1.7) |
 | `deleting` | The owner asked to delete it; `transcript.purge` is removing its storage and rows | `DELETE /api/transcripts/:id` |
@@ -230,7 +247,7 @@ meant to answer "is this transcript usable yet."
 
 ### 1.5 The job types
 
-Eight job types, all under `apps/api/src/transcripts/` except the provider
+Eight job types, all under `packages/kvox-api/src/transcripts/` except the provider
 calls themselves, which live behind `packages/kvox-api/src/transcription/`'s registry
 and are called *from* the job handlers rather than duplicated into them.
 
@@ -254,10 +271,10 @@ types at once.
 
 #### 1.5.1 `media.audio.transcode`
 
-**Built (#26).** `apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts`
-is the handler, `apps/api/src/transcripts/media/` holds the decisions
+**Built (#26).** `packages/kvox-api/src/transcripts/handlers/media-audio-transcode.handler.ts`
+is the handler, `packages/kvox-api/src/transcripts/media/` holds the decisions
 (`audio-transcode.ts`) and the spawns (`ffmpeg.service.ts`),
-`apps/api/src/transcripts/contracts/media-audio-transcode.contract.ts` is the node
+`packages/kvox-contract/src/transcripts/media-audio-transcode.ts` is the node
 result contract, and `apps/cli/src/node/executors/media-audio-transcode.ts` is
 the node executor. It is written up as the fleet's third node-eligible type in
 [`worker-nodes.md` §20.2](worker-nodes.md). Converts whatever format was
@@ -535,7 +552,7 @@ as every ordinary handler before profiles existed at all
 #### 1.5.8 `transcripts.housekeeping`
 
 Enqueued by a ten-minute `@Cron` in
-`apps/api/src/transcripts/tasks/transcripts-housekeeping.task.ts`, through
+`packages/kvox-api/src/transcripts/tasks/transcripts-housekeeping.task.ts`, through
 the shared `enqueueHousekeepingJob` helper (`enqueueHousekeepingJob` from
 `@marinoscar/platform-api/jobs`) — the exact helper `docs/specs/job-queue.md` §7.10
 introduced so that "the cron decides whether work is due and enqueues it; a
@@ -625,7 +642,7 @@ change (§2.7) is the live example — `assertOk` reports the vendor's 400 as a
 plain `Error`, which is correctly retryable, and after `maxAttempts: 3` the
 **job** goes `failed` with no code path having ever decided the **transcript**
 should. `TranscriptJobFailureListener`
-(`apps/api/src/transcripts/listeners/transcript-job-failure.listener.ts`)
+(`packages/kvox-api/src/transcripts/listeners/transcript-job-failure.listener.ts`)
 closes that gap from outside the handler entirely: on `JOB_SETTLED_EVENT` with
 `status: 'failed'` for `transcription.submit`/`transcription.poll` (stage
 `transcription`), `transcription.ingest` (stage `ingest`), or
@@ -984,7 +1001,7 @@ simply laid end to end.
 ### 4.1 Op semantics, with test vectors
 
 All ops are pure functions over `{ speakers, segments }`
-(`apps/api/src/transcripts/editing/`), returning the next state plus the
+(`packages/kvox-api/src/transcripts/editing/`), returning the next state plus the
 per-entity `rev` bumps that happened. A batch of up to 200 ops is applied in
 one transaction (§5).
 
@@ -1368,7 +1385,7 @@ name.
 **Deprecated since #485, kept for one release.** The platform's own routes
 (`GET|POST /api/grants`, `PATCH|DELETE /api/grants/:id`, `GET
 /api/grants/shared-with-me`) are where clients go; the web already uses them.
-These four are thin adapters over `GrantsService` (`TranscriptSharesAdapter`)
+These four are thin adapters over `GrantsService` (`TranscriptSharesService` over the `TranscriptSharing` extension point; the web edition binds it to `GrantsService` in `apps/api/src/kvox/transcripts/platform-transcript-sharing.ts`)
 with the **same request and response shapes, status codes and 404 bodies** as
 before, marked `deprecated` in OpenAPI. `:userId` is still the *recipient's*
 user id; a share's `id` is now the grant's id.
@@ -1611,7 +1628,7 @@ including why the 24px timestamp deliberately stays small beside the new
 
 ### 8.1 The exporter registry
 
-`apps/api/src/transcripts/export/`, following the exact self-registration
+`packages/kvox-api/src/transcripts/export/`, following the exact self-registration
 shape `docs/specs/job-queue.md` §1.2 and the email module's provider
 registry both already establish — an exporter declares `format`, `label`,
 `mimeType`, `extension`, an `optionsSchema` (Zod), and a
@@ -1767,7 +1784,7 @@ the identical file.
 > | Resume and completion from provider `ListParts` | Kept, as `GET :id/upload/parts` (`kvox-s3-part-lister.ts`); the browser passes that list to the platform's `complete`, whose `parts` is now **required** |
 > | `part_size` persisted per upload, adaptive sizing | **Dropped.** One deployment-wide `STORAGE_PART_SIZE`; the operator rule is in §9.4 |
 > | `storage_objects.managed_by` | Moved to the `kvox_object_ownership` side table; the generic list is replaced by `GET /api/kvox/files`, and the generic `DELETE` 409 is an application hook |
-> | `storage.object.uploaded` event and `TranscriptsUploadListener` | Replaced by `TranscriptUploadProcessor`, an `ObjectProcessor` (`name: 'kvox.transcripts.source'`) run by the platform's `storage.object.process` job |
+> | `storage.object.uploaded` event and `TranscriptsUploadListener` | Replaced by `TranscriptUploadHook` (issue #493; first `TranscriptUploadProcessor`, an `ObjectProcessor` named `kvox.transcripts.source`, #469), which the web edition runs from its one port-event `ObjectProcessor` in the platform's `storage.object.process` job |
 > | `storage.object.upload_aborted` and `TranscriptsUploadAbortedListener` | Replaced by the abort reconcile in `transcripts.housekeeping` (§1.5.8), with up to ten minutes of latency |
 > | `STORAGE_STALE_UPLOAD_HOURS` | Fixed at 72 hours in code; the sweep is the platform's `storage.cleanup.stale-uploads` job |
 > | `S3_*` / `AWS_*` / `STORAGE_PROVIDER` environment variables | Runtime configuration at `/admin/settings/storage`; runbook: [`docs/runbooks/storage-configuration.md`](../runbooks/storage-configuration.md) |
@@ -1797,7 +1814,7 @@ section is what §22 and #25 build against.
 > (`[{ partNumber, etag, size }]`, 501 `list_parts_unsupported` outside the S3
 > family). The platform's `GET :id/upload/status` answers from recorded chunks
 > and is not used to resume. `complete` takes the listed parts. The pipeline
-> starts from `TranscriptUploadProcessor`, not an event: it looks up the
+> starts from `TranscriptUploadHook` (once `TranscriptUploadProcessor`), not an event: it looks up the
 > object's ownership row, skips anything not transcripts-owned, finds the
 > transcript by `source_object_id`, promotes it `uploading` → `processing` and
 > enqueues `transcription.submit` and/or `media.audio.transcode` with `orgId`.
@@ -2074,7 +2091,7 @@ authority as reading what flows through it.
 ## Notifying somebody about a transcript
 
 Three events, registered with `registerNotification`
-(`apps/api/src/notifications-registry/transcripts.notifications.ts`) following the exact
+(declared by the slice in `packages/kvox-api/src/transcripts/transcripts.notifications.ts` and registered by the web edition in `apps/api/src/platform/notifications/notification.manifest.ts`) following the exact
 three-step recipe in the [`add-notification` skill](../../.claude/skills/add-notification/SKILL.md) already
 documents — a registry entry, template(s), and a `notify()` call after the
 triggering write commits, outside any transaction:
@@ -2263,15 +2280,15 @@ check the built code against the same list this spec was designed against.
 |---|---|
 | Every job type in §1.5's table declares the profile and node-eligibility this document states | Unit assertions over each handler's `profile`/`nodeResultSchema`/`persistNodeResult`, mirroring `job-handler.registry.spec.ts`'s own pattern |
 | `transcripts-housekeeping.task.ts`'s `@Cron` only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts` — the existing, already-passing test this document's job additions must not break |
-| `transcription.poll`'s backoff schedule and hard deadline | `apps/api/src/transcripts/handlers/transcription-poll.handler.spec.ts`, against an injected clock (the same `JOB_CLOCK` seam `docs/specs/job-queue.md` §5.9 already establishes) |
+| `transcription.poll`'s backoff schedule and hard deadline | `packages/kvox-api/src/transcripts/handlers/transcription-poll.handler.spec.ts`, against an injected clock (the same `JOB_CLOCK` seam `docs/specs/job-queue.md` §5.9 already establishes) |
 | The poll re-enqueue is `skipDedup: true` and does not collapse into the running job | A handler unit test asserting the `enqueue()` call's options directly, plus an integration test driving two real `PrismaClient` connections the way `docs/specs/job-queue.md` §4.8 drives its own claim-concurrency proofs |
 | Domain failures (`ProviderAuthError`, `ProviderInputError`, provider `error` status) mark the transcript `failed` while the job itself succeeds | `transcription-submit.handler.spec.ts` / `-poll` / `-ingest`, each against a fake `TranscriptionProvider` |
 | A 429 throws `RateLimitError` and shares one throttle key across all three provider-calling handlers | A test asserting `registerProviderKey` is called with the identical key string from all three handlers |
 | AssemblyAI error mapping: 401 → auth, 429 (with and without `Retry-After`) → rate limit, provider `error` → input error, 5xx → retryable | `assemblyai.provider.spec.ts`, against a fake injected `fetch` |
-| Word alignment: LCS-based interpolation, split/join word partitioning, and the three `words_alignment` states | Table-driven reducer tests in `apps/api/src/transcripts/editing/word-alignment.spec.ts`, including the exact test vectors in §4.1 |
+| Word alignment: LCS-based interpolation, split/join word partitioning, and the three `words_alignment` states | Table-driven reducer tests in `packages/kvox-api/src/transcripts/editing/word-alignment.spec.ts`, including the exact test vectors in §4.1 |
 | `materialize(currentVersion)` always equals live DB state | A property test generating random op sequences, per issue #27's own acceptance criterion |
 | Find & replace expands to concrete ops before recording, with Unicode-aware whole-word boundaries | `find-replace.spec.ts`, including a non-ASCII test vector (`"José"` not matching a whole-word search for `"os"`) |
-| A `rev` conflict returns 409 with every conflicting entity named; a repeated `clientBatchId` does not duplicate a version | `apps/api/test/transcripts/operations-concurrency.e2e.spec.ts`, driving two concurrent batches against the real database |
+| A `rev` conflict returns 409 with every conflicting entity named; a repeated `clientBatchId` does not duplicate a version | `apps/api/test/transcripts/transcript-corrections.db.spec.ts`, driving two concurrent batches against the real database |
 | No access is 404, never 403, across every access level and every endpoint | An RBAC matrix e2e (owner, editor, viewer, stranger) across read, play, export, edit, restore, share, delete and leave, per issue #29's own acceptance criterion |
 | `transcripts:read`/`write` are seeded for Admin, Contributor and Viewer; no `transcripts:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | The admin transcription settings endpoints are gated on `system_settings:*`, not a new permission | An RBAC e2e asserting a Viewer gets 403 and an Admin gets 200 on `/api/transcription-settings/*` |

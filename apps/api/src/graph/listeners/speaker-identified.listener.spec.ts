@@ -5,7 +5,7 @@
 
 import { Logger } from '@nestjs/common';
 
-import { TranscriptSpeakersIdentifiedEvent } from '../../transcripts/events/transcript-speakers-identified.event';
+import { TranscriptSpeakersIdentifiedEvent } from '@marinoscar/kvox-api/transcripts';
 import { KG_SPEAKER_LINK_JOB_TYPE, KG_SUBJECT_TRANSCRIPT } from '../job-types';
 import { SpeakerIdentifiedListener } from './speaker-identified.listener';
 

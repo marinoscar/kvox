@@ -23,7 +23,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { parseSpeakerIdentities } from '../../src/transcripts/editing/speaker-identity';
+import { parseSpeakerIdentities } from '@marinoscar/kvox-api/transcripts';
 import type { GoldenFixtureInput } from './fixture-schema';
 
 export const REAL_DATA_REFUSAL = 'real meeting data must never be written inside the repository';

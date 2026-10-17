@@ -54,7 +54,7 @@ import {
 import {
   TRANSCRIPTS_ONBOARDING_FACTS,
   TRANSCRIPTS_ONBOARDING_STEPS,
-} from './transcripts/transcripts.onboarding';
+} from './kvox/transcripts/transcripts.onboarding';
 
 import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
 

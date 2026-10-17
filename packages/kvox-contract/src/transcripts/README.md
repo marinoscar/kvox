@@ -9,8 +9,9 @@ The transcript wire contract: list and detail responses, segments and words, edi
 - `transcript.ts`: statuses, summaries, list and detail, segments, words, uploads and keyterms.
 - `transcript-editing.ts` and `editing-ops.ts`: the edit request bodies and the recorded operations a version replays (`requestOpSchema`, `recordedOpSchema`).
 - `transcript-export.ts`, `transcript-share.ts`, `transcript-name-check.ts`: exports, shares and name checks (with `NAME_CHECK_CONFLICT_REASONS`).
+- `media-audio-transcode.ts`: the result a worker node posts back for the `media.audio.transcode` job (`mediaAudioTranscodeResultSchema`), so a node package imports it from the contract.
 
-The editing reducer itself stays in the API (`apps/api/src/transcripts/editing/`, pure by rule); only the operation schemas moved.
+The editing reducer itself stays in the API package (`packages/kvox-api/src/transcripts/editing/`, pure by rule); only the operation schemas moved.
 
 Status: experimental. Moved out of the API DTO files by issue 5.2 (marinoscar/kvox#488) with no change to a field name or a value; every wire shape here is permanent (add, never rename).
 

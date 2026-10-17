@@ -31,7 +31,7 @@
 > the rest of `handlers/`, `access/note-access.service.ts`, `tasks/
 > notes-housekeeping.task.ts`, `notes.controller.ts` and `notes.service.ts`
 > (#53), and `export/` alongside the generic exporter registry (now
-> `@marinoscar/platform-api/exports`, #479) that #54 extracts from `apps/api/src/transcripts/
+> `@marinoscar/platform-api/exports`, #479) that #54 extracts from `packages/kvox-api/src/transcripts/
 > export/transcript-exporter.registry.ts` (a behaviour-preserving refactor,
 > #54). On the web side: the AI key page and the AI policy page with the
 > matching `config/userSettingsSections.tsx` / `config/adminSections.tsx` cards
@@ -149,7 +149,7 @@ Two further postures run through every section below, worth stating once:
 - **Nothing here is a new mechanism.** The provider layer (§2) was first
   modelled on `TranscriptionProviderRegistry` (`docs/specs/transcription.md` §2.1)
   and is now the platform AI slice behind the `KvoxAi` port; prompt
-  assembly (§3) is pure, living beside `apps/api/src/transcripts/editing/`'s
+  assembly (§3) is pure, living beside `packages/kvox-api/src/transcripts/editing/`'s
   reducers in spirit; the five tables (§4) reuse the exact versioning and
   FK-direction discipline `transcripts` established; the export registry (§8)
   is *literally* extracted and reused, not re-implemented; and the built-in
@@ -569,7 +569,7 @@ The application's task routing rides on the platform AI slice. Every caller reac
 ### 3.1 Assembly order, and why it is fixed
 
 `apps/api/src/notes/prompt/prompt-assembly.ts`. **Pure**, like
-`apps/api/src/transcripts/editing/`'s reducers — no `PrismaService`, no
+`packages/kvox-api/src/transcripts/editing/`'s reducers — no `PrismaService`, no
 network call, no clock read inside it — because §3.3 depends on calling the
 identical function twice (once to validate at request time, once to build
 the real prompt at job time) and getting identical answers from identical
@@ -640,7 +640,7 @@ that fixed order**:
 - **`transcript`**: `materialize(transcriptId, currentVersion)`
   (`docs/specs/transcription.md` §4.4) is rendered to plain reading text by
   reusing the transcript module's own Markdown projection
-  (`apps/api/src/transcripts/export/markdown.exporter.ts` and
+  (`packages/kvox-api/src/transcripts/export/markdown.exporter.ts` and
   `export-document.ts`) rather than writing a third transcript-to-text
   serializer that could disagree with the other two about what the transcript
   *says* — the identical "one document shape, several renderers" discipline
@@ -1013,7 +1013,7 @@ is, and that difference is worth stating rather than glossing over:
   care whether a note was ever derived from them. Making these `Restrict`
   therefore has a real, user-visible consequence: **a transcript or note that
   has produced a note cannot be deleted while that note still exists.**
-  `DELETE /api/transcripts/:id` gains a pre-check (`apps/api/src/transcripts/
+  `DELETE /api/transcripts/:id` gains a pre-check (`packages/kvox-api/src/transcripts/
   transcripts.service.ts`, landing with the same migration that adds this
   foreign key, #48) that 409s naming the blocking note ids — the identical
   shape `speaker_id: Restrict` already gives `segment.delete` in
@@ -1792,7 +1792,7 @@ Three real differences, not merely a smaller document:
    provenance line); `pdf.exporter.ts` and `word.exporter.ts` need an actual
    markdown parser (`apps/api/src/notes/export/markdown-ast.ts`, wrapping a
    small, audited parsing library — headings, lists, emphasis, code) to lay
-   out, a capability `apps/api/src/transcripts/export/` has never needed,
+   out, a capability `packages/kvox-api/src/transcripts/export/` has never needed,
    because its PDF and Markdown renderers build their own layout directly
    from segments and speakers and never interpret markdown syntax written by
    anyone else. Since issue #334 (§10), `pdf.exporter.ts` and

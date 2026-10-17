@@ -1,4 +1,5 @@
 import { Module, type DynamicModule } from '@nestjs/common';
+import { APP_NAME, APP_SLUG } from '@app/shared';
 import { JwtAuthGuard } from '@marinoscar/platform-api/identity';
 import { CredentialsModule } from '@marinoscar/platform-api/credentials';
 import { ObjectProcessingModule } from '@marinoscar/platform-api/storage';
@@ -77,7 +78,11 @@ export const platformKvoxPorts: KvoxPortBindings = {
  *   binding stops the boot).
  */
 export function createPlatformKvoxModule(ports: Partial<KvoxPortBindings> = {}): DynamicModule {
-  return KvoxPortsModule.forRoot({ ports: { ...platformKvoxPorts, ...ports } });
+  return KvoxPortsModule.forRoot({
+    ports: { ...platformKvoxPorts, ...ports },
+    // What this deployment calls itself (the PDF footer reads it).
+    brand: { appName: APP_NAME, appSlug: APP_SLUG },
+  });
 }
 
 /** The module `app.module.ts` imports, before any domain module. */

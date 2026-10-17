@@ -13,8 +13,7 @@ import { createFakeManagedObjects } from '../../../test/helpers/fake-managed-obj
 // =============================================================================
 
 import { AiInputError } from '../../ai-port/ai-errors';
-import { MarkdownTranscriptExporter } from '../../transcripts/export/markdown.exporter';
-import { TranscriptExporterRegistry } from '../../transcripts/export/transcript-exporter.interface';
+import { MarkdownTranscriptExporter, TranscriptExporterRegistry } from '@marinoscar/kvox-api/transcripts';
 import { NoteSourceService, readExtractedObjectId } from './note-source.service';
 
 const CORRECTED = 'Ana Rivera confirmed the Kestrel launch date.';

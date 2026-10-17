@@ -30,7 +30,7 @@ import type { KgEvidence } from '@prisma/client';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { GraphAccessService } from '../access/graph-access.service';
 import type { EvidenceLink } from './dto/graph-read.dto';
 

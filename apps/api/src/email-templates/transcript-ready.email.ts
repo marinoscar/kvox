@@ -1,3 +1,4 @@
+import type { TranscriptReadyNotificationData } from '@marinoscar/kvox-api/transcripts';
 import { APP_NAME } from '@app/shared';
 import {
   SafeHtml,
@@ -25,23 +26,8 @@ import {
 // click.
 // =============================================================================
 
-/** Everything the ready message renders. */
-export interface TranscriptReadyEmailData {
-  /** The transcript row's id. Used for the CTA path. */
-  transcriptId: string;
-  /** The owner's own title. Escaped on the way into the html by the `html` tag. */
-  title: string;
-  /** Media length in milliseconds, or null when the provider never reported one. */
-  durationMs: number | null;
-  /** Distinct speakers the diarization found. */
-  speakerCount: number;
-  /** Words in the transcript, as ingested. */
-  wordCount: number;
-  /** Which vendor produced it. Named because §10 says the user is always told. */
-  providerLabel: string;
-  /** Absolute URL of the application root, for the CTA. Optional. */
-  appUrl?: string;
-}
+/** Everything the ready message renders: the slice's notification data (`@marinoscar/kvox-api/transcripts`). */
+export type TranscriptReadyEmailData = TranscriptReadyNotificationData;
 
 // Typed registration (issue #460): this domain declares its own template key,
 // so the base `EmailTemplateDataMap` names no domain payload.

@@ -80,7 +80,7 @@ import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
-import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { NoteAccessService } from '../access/note-access.service';
 import type { NoteSourceDto } from '../dto/note.dto';
 import { NOTES_MANAGED_BY } from '../job-types';

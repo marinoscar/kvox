@@ -31,6 +31,7 @@ import {
   type KvoxSecretsPort,
   type KvoxSettingsPort,
 } from '../../ports/index.js';
+import { DEFAULT_KVOX_BRAND, KVOX_BRAND, type KvoxBrand } from '../brand/kvox-brand.js';
 import { KvoxEventEmitterEvents } from '../events/kvox-event-emitter.events.js';
 
 /** The optional peer that provides Nest's shared event emitter, loaded on first use. */
@@ -130,6 +131,11 @@ export interface KvoxPortBindings {
 export interface KvoxPortsOptions {
   /** The port bindings. */
   ports: KvoxPortBindings;
+  /**
+   * What the host calls itself (`KVOX_BRAND`); the slices that print a product
+   * name read it. Default {@link DEFAULT_KVOX_BRAND}.
+   */
+  brand?: KvoxBrand;
 }
 
 /**
@@ -245,6 +251,7 @@ export class KvoxPortsModule {
       isBinding(bindings.audit)
         ? provider(KVOX_AUDIT, bindings.audit as KvoxPortBinding<unknown>)
         : { provide: KVOX_AUDIT, useValue: NOOP_KVOX_AUDIT },
+      { provide: KVOX_BRAND, useValue: options.brand ?? DEFAULT_KVOX_BRAND },
     );
 
     return {
@@ -252,7 +259,7 @@ export class KvoxPortsModule {
       global: true,
       imports: bindings.imports ?? [],
       providers,
-      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT],
+      exports: [...REQUIRED.map(([, token]) => token), KVOX_EVENTS, KVOX_AUDIT, KVOX_BRAND],
     };
   }
 }

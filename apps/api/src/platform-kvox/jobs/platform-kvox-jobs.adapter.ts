@@ -1,22 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { resolveOrgId } from '@marinoscar/platform-api/identity';
 import {
+  JOB_SETTLED_EVENT,
   JobHandlerRegistry,
   JobsService,
   ProviderThrottleService,
   RateLimitError,
   buildDedupKey,
+  jobTempPath,
   type Job,
   type JobHandler,
+  type JobSettledEvent,
   type JobsInputJsonObject,
 } from '@marinoscar/platform-api/jobs';
 import { Trace } from '@marinoscar/platform-api/otel-core';
 import {
   KvoxRateLimitError,
+  type KvoxActiveJob,
+  type KvoxActiveJobQuery,
   type KvoxEnqueueInput,
   type KvoxEnqueueResult,
   type KvoxJob,
   type KvoxJobHandler,
+  type KvoxJobSettledEvent,
   type KvoxJobsPort,
 } from '@marinoscar/kvox-api/ports';
 
@@ -81,6 +88,7 @@ export class PlatformKvoxJobsAdapter implements KvoxJobsPort {
     private readonly registry: JobHandlerRegistry,
     private readonly throttle: ProviderThrottleService,
     private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
   ) {}
 
   @Trace()
@@ -93,13 +101,13 @@ export class PlatformKvoxJobsAdapter implements KvoxJobsPort {
     const existing =
       input.skipDedup === true
         ? null
-        : await this.prisma.job.findFirst({
+        : ((await this.prisma.job.findFirst({
             where: {
               dedupKey: buildDedupKey(input.type, input.subjectType, input.subjectId),
               status: { in: ['pending', 'running'] },
             },
             select: { id: true },
-          });
+          })) ?? null);
 
     const job = await this.jobs.enqueue({
       type: input.type,
@@ -143,13 +151,89 @@ export class PlatformKvoxJobsAdapter implements KvoxJobsPort {
             persistNodeResult: (job: Job, result: unknown) => handler.persistNodeResult!(toKvoxJob(job), result),
           }
         : {}),
+      // The worker-node plane's two hooks: where a node's output upload lands, and the
+      // deployment's runtime switch for offering the type to nodes at all.
+      ...(handler.deriveOutputKey !== undefined
+        ? { deriveOutputKey: (job: Job) => handler.deriveOutputKey!(toKvoxJob(job)) }
+        : {}),
+      ...(handler.nodeOffloadEnabled !== undefined
+        ? { nodeOffloadEnabled: () => handler.nodeOffloadEnabled!() }
+        : {}),
     };
 
     this.registry.register(adapted);
+
+    // A handler whose type draws on ONE deployment-wide provider bucket says so here (a
+    // per-user bucket is given at `enqueue`).
+    if (handler.throttleKey !== undefined) this.throttle.registerProviderKey(handler.type, handler.throttleKey);
   }
 
   isRegistered(type: string): boolean {
     return this.registry.get(type) !== undefined;
+  }
+
+  onSettled(listener: (event: KvoxJobSettledEvent) => void): void {
+    this.events.on(JOB_SETTLED_EVENT, (event: JobSettledEvent) => {
+      if (event.status !== 'succeeded' && event.status !== 'failed') return;
+
+      try {
+        listener({
+          jobId: event.jobId,
+          type: event.type,
+          status: event.status,
+          subjectType: event.subjectType,
+          subjectId: event.subjectId,
+          payload: event.job.payload,
+          lastError: event.lastError,
+        });
+      } catch (error) {
+        this.logger.error(
+          `A job-settled listener threw for ${event.jobId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    });
+  }
+
+  @Trace()
+  async findActive(query: KvoxActiveJobQuery): Promise<KvoxActiveJob[]> {
+    const matches: Array<Record<string, unknown>> = [];
+
+    if (query.subjectIds !== undefined && query.subjectIds.length > 0) {
+      matches.push({
+        ...(query.subjectType !== undefined ? { subjectType: query.subjectType } : {}),
+        subjectId: { in: [...query.subjectIds] },
+      });
+    }
+
+    if (query.payloadKey !== undefined) {
+      for (const value of query.payloadValues ?? []) {
+        matches.push({ payload: { path: [query.payloadKey], equals: value } });
+      }
+    }
+
+    if (matches.length === 0 && (query.subjectIds !== undefined || query.payloadValues !== undefined)) return [];
+
+    const rows = await this.prisma.job.findMany({
+      where: {
+        type: { in: [...query.types] },
+        status: { in: ['pending', 'running'] },
+        ...(query.excludeJobId !== undefined ? { id: { not: query.excludeJobId } } : {}),
+        ...(matches.length > 0 ? { OR: matches } : {}),
+      },
+      select: { id: true, type: true, subjectType: true, subjectId: true, payload: true },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      subjectType: row.subjectType,
+      subjectId: row.subjectId,
+      payload: row.payload,
+    }));
+  }
+
+  tempPath(suffix?: string): string {
+    return jobTempPath(suffix);
   }
 
   /** One attempt: register the job's throttle bucket, run, and translate a rate limit. */

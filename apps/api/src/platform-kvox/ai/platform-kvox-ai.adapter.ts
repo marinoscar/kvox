@@ -162,7 +162,11 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
   }
 
   @Trace()
-  async resolveTask(ctx: KvoxAiContext, task: string, opts?: { model?: string }): Promise<KvoxAiTarget> {
+  async resolveTask(
+    ctx: KvoxAiContext,
+    task: string,
+    opts?: { model?: string; requireKey?: boolean },
+  ): Promise<KvoxAiTarget> {
     const feature = featureOf(task) ?? featureOf(ctx.feature);
     if (feature === undefined) {
       throw new KvoxAiError('capability', `The web edition has no AI feature named "${scrub(task)}".`);
@@ -174,7 +178,10 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
     } catch (error) {
       throw toKvoxAiError(error);
     }
-    if (!readiness.ok || readiness.provider === null || readiness.model === null) {
+    // `requireKey: false` is for a caller who only counts tokens (a name-check estimate): a
+    // missing key still names the model, which is all it needs.
+    const keyOptional = opts?.requireKey === false && readiness.reason === 'ai_key_missing';
+    if ((!readiness.ok && !keyOptional) || readiness.provider === null || readiness.model === null) {
       throw refusalFor(readiness);
     }
 

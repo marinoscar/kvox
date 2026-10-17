@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // ⚠ THIS MODULE IS PURE, AND THE PURITY IS LOAD-BEARING — the identical rule
-// `apps/api/src/transcripts/editing/` lives under. No `PrismaService`, no
+// `packages/kvox-api/src/transcripts/editing/` lives under. No `PrismaService`, no
 // `@Injectable`, no network call, no `randomUUID()`, no clock read. The same
 // inputs must produce BYTE-IDENTICAL output, every time, because spec §3.3
 // calls this function TWICE for one generation:

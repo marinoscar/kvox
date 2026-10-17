@@ -28,7 +28,7 @@
 // adapters answer the old shapes and the old messages.
 //
 // The services under test are the REAL ones: `TranscriptAccessService` and
-// `TranscriptSharesAdapter` over `AccessPolicy` and `GrantsService`
+// `TranscriptSharesService` over the web edition's `PlatformTranscriptSharing` (on `AccessPolicy` and `GrantsService`)
 // (`../helpers/sharing-kit.helper.ts`). Only the notifier is a double.
 //
 // This is a `*.db.spec.ts` file, excluded from `npm test`/`test:unit`/
@@ -36,10 +36,8 @@
 // `../jobs/db-test-support.ts` for the reachability probe.
 // =============================================================================
 
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 
-import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   ConflictException,
@@ -51,26 +49,25 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
-import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
-import type { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
-import {
-  TRANSCRIPT_NOT_FOUND_MESSAGE,
-  TranscriptAccessService,
-} from '../../src/transcripts/transcript-access.service';
-import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
-import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
-import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
 import {
   SHARE_NOT_FOUND_MESSAGE,
   SHARE_RECIPIENT_NOT_FOUND_MESSAGE,
   SHARE_WITH_SELF_MESSAGE,
-  TranscriptSharesAdapter,
-} from '../../src/transcripts/transcript-shares.adapter';
-import { TranscriptsService } from '../../src/transcripts/transcripts.service';
+  TRANSCRIPT_NOT_FOUND_MESSAGE,
+  TranscriptAccessService,
+  TranscriptEditingService,
+  TranscriptMaterializeService,
+  TranscriptObjectsService,
+  TranscriptSharesService,
+  TranscriptsService,
+  resolveTranscriptsOptions,
+  type TranscriptPipelineService,
+  type TranscriptionRuntimeService,
+} from '@marinoscar/kvox-api/transcripts';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
-import { asPrismaService, createDbManagedObjects } from '../helpers/db-managed-objects.helper';
-import { createSharingKit, type SharingKit } from '../helpers/sharing-kit.helper';
+import { asPrismaService, createDbAudit, createDbObjectStore } from '../helpers/db-managed-objects.helper';
+import { createPlatformTranscriptSharing, createSharingKit, type SharingKit } from '../helpers/sharing-kit.helper';
 import { createTranscript as createTranscriptRow, deleteTranscriptGrants, shareTranscript } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('transcript-sharing.db.spec');
@@ -89,7 +86,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
   let access: TranscriptAccessService;
   let transcripts: TranscriptsService;
   let editing: TranscriptEditingService;
-  let sharing: TranscriptSharesAdapter;
+  let sharing: TranscriptSharesService;
   let kit: SharingKit;
 
   let owner: RequestUser;
@@ -119,10 +116,14 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     } as unknown as StorageProvider;
 
     kit = createSharingKit(prisma);
-    access = new TranscriptAccessService(service, kit.policy);
+    // The web edition's sharing of a transcript (the slice's `TranscriptSharing`) over the same
+    // real `AccessPolicy` and `GrantsService`.
+    const platformSharing = createPlatformTranscriptSharing(prisma, kit);
 
-    const managed = createDbManagedObjects(prisma, storage);
-    const objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
+    access = new TranscriptAccessService(service as never, platformSharing);
+
+    const store = createDbObjectStore(prisma, storage);
+    const objects = new TranscriptObjectsService(store, resolveTranscriptsOptions({}));
 
     const pipeline = {
       enqueuePurge: jest.fn().mockResolvedValue(true),
@@ -136,23 +137,26 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     } as unknown as TranscriptPipelineService;
 
     transcripts = new TranscriptsService(
-      service,
-      managed,
+      service as never,
+      store,
+      createDbAudit(prisma),
       objects,
       access,
       pipeline,
       {} as unknown as TranscriptionRuntimeService,
+      platformSharing,
     );
 
     editing = new TranscriptEditingService(
-      service,
+      service as never,
       access,
-      new TranscriptMaterializeService(service, objects),
+      new TranscriptMaterializeService(service as never, objects),
       pipeline,
-      new EventEmitter2(),
+      { emit: jest.fn(), subscribe: jest.fn() },
+      createDbAudit(prisma),
     );
 
-    sharing = new TranscriptSharesAdapter(access, kit.grants);
+    sharing = new TranscriptSharesService(access, platformSharing);
 
     const accounts = await Promise.all(
       ['owner', 'editor', 'viewer', 'stranger'].map((name) =>

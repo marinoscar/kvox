@@ -603,6 +603,61 @@ export function describeKvoxPortsConformance(
       await store.port.abortUpload(init.objectId);
     });
 
+    rule('put is idempotent on the key: a second put of the same key answers the first object', async (store) => {
+      const first = await store.port.put({
+        ownerId: owner(store),
+        key: 'conformance/idempotent.txt',
+        body: Buffer.from('once'),
+        contentType: 'text/plain',
+        managedBy: 'notes',
+      });
+      const second = await store.port.put({
+        ownerId: owner(store),
+        key: 'conformance/idempotent.txt',
+        body: Buffer.from('once'),
+        contentType: 'text/plain',
+        managedBy: 'notes',
+      });
+      expect(second.objectId).toBe(first.objectId);
+    });
+
+    rule('describe answers the facts of the known ids in one call and leaves the unknown ones out', async (store) => {
+      const { objectId } = await store.port.put({
+        ownerId: owner(store),
+        key: 'conformance/described.txt',
+        body: Buffer.from('describe me'),
+        contentType: 'text/plain',
+        managedBy: 'notes',
+      });
+      const found = await store.port.describe([objectId, 'conformance-unknown-object']);
+      expect(found.size).toBe(1);
+      const info = found.get(objectId);
+      expect(info?.id).toBe(objectId);
+      expect(info?.mimeType).toBe('text/plain');
+      expect(info?.size).toBe('describe me'.length);
+      expect(info?.state).toBe('ready');
+      expect(info?.createdAt instanceof Date).toBe(true);
+      expect(info?.updatedAt instanceof Date).toBe(true);
+      expect((await store.port.describe([])).size).toBe(0);
+    });
+
+    rule('the onAborted handler fires once for a cancelled upload', async (store) => {
+      const seen: Array<{ objectId: string; managedBy: string | null }> = [];
+      store.port.onAborted(async (event) => {
+        seen.push(event);
+      });
+      const init = await store.port.initUpload(
+        { userId: owner(store) },
+        { name: 'c.m4a', mimeType: 'audio/mp4', size: 1024, managedBy: 'transcripts' },
+      );
+      await store.port.abortUpload(init.objectId);
+      await store.port.abortUpload(init.objectId);
+      await tick();
+      expect(seen.length).toBe(1);
+      expect(seen[0]?.objectId).toBe(init.objectId);
+      expect(seen[0]?.managedBy).toBe('transcripts');
+    });
+
     rule('the onUploaded handler fires once per completed upload', async (store) => {
       const seen: Array<{ objectId: string; managedBy: string | null }> = [];
       store.port.onUploaded(async (event) => {
@@ -650,6 +705,54 @@ export function describeKvoxPortsConformance(
       const second = await jobs.port.enqueue({ type, subjectType: 'thing', subjectId: '1', payload: {}, skipDedup: true });
       expect(second.deduplicated).toBe(false);
       expect(second.id === first.id).toBe(false);
+    });
+
+    rule('findActive lists the pending jobs of a type, narrowed by subject and by excluded id', async (jobs) => {
+      const type = uniqueType();
+      jobs.port.registerHandler({ type, async process() {} });
+      const one = await jobs.port.enqueue({ type, subjectType: 'thing', subjectId: 'a', payload: { key: 'one' } });
+      const two = await jobs.port.enqueue({ type, subjectType: 'thing', subjectId: 'b', payload: { key: 'two' } });
+
+      const all = await jobs.port.findActive({ types: [type] });
+      expect(all.map((job) => job.id).sort()).toEqual([one.id, two.id].sort());
+
+      const bySubject = await jobs.port.findActive({ types: [type], subjectType: 'thing', subjectIds: ['a'] });
+      expect(bySubject.map((job) => job.id)).toEqual([one.id]);
+      expect(bySubject[0]?.subjectId).toBe('a');
+
+      const excluding = await jobs.port.findActive({ types: [type], excludeJobId: one.id });
+      expect(excluding.map((job) => job.id)).toEqual([two.id]);
+
+      const byPayload = await jobs.port.findActive({ types: [type], payloadKey: 'key', payloadValues: ['two'] });
+      expect(byPayload.map((job) => job.id)).toEqual([two.id]);
+
+      expect(await jobs.port.findActive({ types: [type], subjectIds: [] })).toEqual([]);
+
+      await jobs.drain();
+      expect(await jobs.port.findActive({ types: [type] })).toEqual([]);
+    });
+
+    rule('onSettled reports a finished job with its type, subject and payload', async (jobs) => {
+      const type = uniqueType();
+      const seen: Array<{ jobId: string; type: string; status: string; subjectId: string | null; payload: unknown }> = [];
+      jobs.port.onSettled((event) => {
+        if (event.type === type) seen.push(event);
+      });
+      jobs.port.registerHandler({ type, async process() {} });
+      const queued = await jobs.port.enqueue({ type, subjectType: 'thing', subjectId: '9', payload: { n: 9 } });
+      await jobs.drain();
+      await tick();
+      expect(seen.length).toBe(1);
+      expect(seen[0]).toMatchObject({ jobId: queued.id, type, status: 'succeeded', subjectId: '9' });
+      expect(seen[0]?.payload).toEqual({ n: 9 });
+    });
+
+    rule('tempPath answers a distinct path each call and keeps the suffix', async (jobs) => {
+      const first = jobs.port.tempPath('.m4a');
+      const second = jobs.port.tempPath('.m4a');
+      expect(typeof first).toBe('string');
+      expect(first.endsWith('.m4a')).toBe(true);
+      expect(first === second).toBe(false);
     });
 
     rule('a registered handler runs each distinct job once', async (jobs) => {

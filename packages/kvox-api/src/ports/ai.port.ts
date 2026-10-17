@@ -467,9 +467,15 @@ export interface KvoxAiPort {
    * @param ctx - who and what for.
    * @param task - the task or feature name.
    * @param opts - `model` is a per-run pick, honoured when the host permits it.
+   *   `requireKey: false` resolves the model for a caller who has saved no key
+   *   (an estimate counts tokens but spends none); the default is true.
    * @throws KvoxAiError `not_configured`, `key_missing` or `capability`.
    */
-  resolveTask(ctx: KvoxAiContext, task: string, opts?: { model?: string }): Promise<KvoxAiTarget>;
+  resolveTask(
+    ctx: KvoxAiContext,
+    task: string,
+    opts?: { model?: string; requireKey?: boolean },
+  ): Promise<KvoxAiTarget>;
 
   /**
    * A streamed plain-text answer: `delta` events, then one `done`.

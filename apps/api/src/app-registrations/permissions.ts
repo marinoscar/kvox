@@ -2,7 +2,10 @@
 // This app's own permissions (issue #465, epic #462)
 // =============================================================================
 //
-// The eight domain permissions the product adds on top of the platform's.
+// The domain permissions the product adds on top of the platform's: six declared
+// here, and `transcripts:read|write`, which the transcripts slice of
+// `@marinoscar/kvox-api` exports as data (`TRANSCRIPTS_PERMISSIONS`) and
+// `kvox-permissions.ts` registers (issue #493).
 // Every one is ORG-SCOPED: a user holds it through the role on their
 // membership of the current organization (`org_admin`, `contributor`,
 // `viewer`), never through `user_roles`. The system `admin` role no longer
@@ -29,20 +32,6 @@ import type { PermissionDeclaration } from '@marinoscar/platform-api/core';
 const ALL_ORG_ROLES = ['org_admin', 'contributor', 'viewer'] as const;
 
 export const KVOX_PERMISSIONS = {
-  TRANSCRIPTS_READ: {
-    id: 'transcripts:read',
-    description:
-      'Read own and shared transcripts (list, get, segments, versions, exporters)',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-  TRANSCRIPTS_WRITE: {
-    id: 'transcripts:write',
-    description:
-      'Create, correct, share and delete own transcripts; edit a transcript shared with the editor role',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
   NOTES_READ: {
     id: 'notes:read',
     description: 'Read own notes (list, get, versions, the generation stream)',

@@ -1,7 +1,7 @@
 /**
  * "Fix names with AI" — the web client for issues #329 and #330, epic #326.
  *
- * The backend half is `apps/api/src/transcripts/transcript-name-checks.controller.ts`
+ * The backend half is `packages/kvox-api/src/transcripts/transcript-name-checks.controller.ts`
  * and `dto/transcript-name-check.dto.ts`. Every type below is a hand-written
  * mirror of one of those Zod schemas, named identically so the two can be
  * diffed by eye — the same discipline `services/transcriptEditing.ts` applies.
@@ -124,7 +124,7 @@ export const MAX_NAME_CHECK_DECISIONS = 1_000;
 
 /**
  * The server's generic-label rule (`GENERIC_NAME` in
- * `apps/api/src/transcripts/name-check/candidates.ts`), mirrored so the UI
+ * `packages/kvox-api/src/transcripts/name-check/candidates.ts`), mirrored so the UI
  * never offers to check for "Speaker A" — the server would drop it anyway, and
  * a checklist entry that silently does nothing is a lie the dialog tells.
  */

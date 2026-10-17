@@ -46,7 +46,8 @@ import {
   describeKvoxPortsConformance,
   type KvoxPortsUnderTest,
 } from '@marinoscar/kvox-api/testing';
-import { RateLimitError } from '@marinoscar/platform-api/jobs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { JOB_SETTLED_EVENT, JobSettledEvent, RateLimitError } from '@marinoscar/platform-api/jobs';
 
 import { AiAuthError, AiBudgetError, AiRefusedError } from '../../src/ai-port/ai-errors';
 import { keyMissingConflict, lacksCapabilityConflict, notConfiguredConflict } from '../../src/ai-port/kvox-ai-errors';
@@ -173,6 +174,8 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
     },
   };
 
+  const abortListeners: Array<(event: { objectId: string; module: string | null }) => Promise<void>> = [];
+
   const managed = {
     async initManagedUpload(input: { module: 'transcripts' | 'notes' | 'graph'; userId: string; name: string; size: number; mimeType: string }) {
       const id = randomUUID();
@@ -215,6 +218,15 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
     async get(id: string) {
       return rows.get(id) ?? null;
     },
+    async findByKey(key: string) {
+      return [...rows.values()].find((row) => row.storageKey === key) ?? null;
+    },
+    async findMany(args: { where: { id: { in: string[] } } }) {
+      return args.where.id.in.flatMap((id) => {
+        const row = rows.get(id);
+        return row ? [{ ...row, createdAt: new Date(), updatedAt: new Date() }] : [];
+      });
+    },
     async managedBy(ids: readonly string[]) {
       return new Map(ids.filter((id) => owners.has(id)).map((id) => [id, owners.get(id)!] as const));
     },
@@ -237,7 +249,11 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
       if (row && row.status === 'pending') {
         row.status = 'failed';
         row.s3UploadId = null;
+        for (const listener of abortListeners) await listener({ objectId: id, module: owners.get(id) ?? null });
       }
+    },
+    onAborted(listener: (event: { objectId: string; module: string | null }) => Promise<void>) {
+      abortListeners.push(listener);
     },
   };
 
@@ -268,11 +284,39 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
 function jobsUnderTest(): KvoxPortsUnderTest['jobs'] {
   const queue = createFakeJobQueue();
   const registerProviderKey = jest.fn();
+  const events = new EventEmitter2();
+
+  type JobWhere = {
+    type?: { in: string[] };
+    status?: { in: string[] };
+    id?: { not: string };
+    OR?: Array<{ subjectType?: string; subjectId?: { in: string[] }; payload?: { path: string[]; equals: unknown } }>;
+  };
+
   const prisma = {
     organization: { findFirst: async () => ({ id: 'org-default' }) },
     job: {
       findFirst: async ({ where }: { where: { dedupKey: string } }) =>
         queue.jobs().find((job) => job.dedupKey === where.dedupKey && (job.status === 'pending' || job.status === 'running')) ?? null,
+      // The adapter's `findActive` query, evaluated over the fake queue's rows.
+      findMany: async ({ where }: { where: JobWhere }) =>
+        queue.jobs().filter((job) => {
+          if (where.type && !where.type.in.includes(job.type)) return false;
+          if (where.status && !where.status.in.includes(job.status)) return false;
+          if (where.id && job.id === where.id.not) return false;
+          if (where.OR) {
+            return where.OR.some((match) => {
+              if (match.subjectId) {
+                return (!match.subjectType || job.subjectType === match.subjectType) && match.subjectId.in.includes(job.subjectId as string);
+              }
+              if (match.payload) {
+                return (job.payload as Record<string, unknown> | null)?.[match.payload.path[0]] === match.payload.equals;
+              }
+              return false;
+            });
+          }
+          return true;
+        }),
     },
   };
   const port = new PlatformKvoxJobsAdapter(
@@ -280,9 +324,18 @@ function jobsUnderTest(): KvoxPortsUnderTest['jobs'] {
     queue.registry,
     { registerProviderKey } as never,
     prisma as never,
+    events,
   );
 
-  return { port, drain: async () => void (await queue.drain()) };
+  return {
+    port,
+    // A worker pass; the worker announces each job it settles on the shared emitter.
+    drain: async () => {
+      for (const run of await queue.drain()) {
+        events.emit(JOB_SETTLED_EVENT, new JobSettledEvent(run.job));
+      }
+    },
+  };
 }
 
 // -- identity ----------------------------------------------------------------

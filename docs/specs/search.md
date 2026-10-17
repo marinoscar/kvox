@@ -351,7 +351,7 @@ document would look edited on every pass; and incremental re-indexing would
 silently degrade into a full re-embed of the corpus, forever, with no error
 anywhere to say so.
 
-The precedent is `apps/api/src/transcripts/editing/` (issue #27, epic #19),
+The precedent is `packages/kvox-api/src/transcripts/editing/` (issue #27, epic #19),
 which holds exactly this discipline for exactly this shape of reason: its
 reducers are pure so that `materialize()` — replaying a version log through *the
 same functions* the live edit path calls — agrees with the live tables **by

@@ -9,6 +9,7 @@
 // failure when a port is left unbound.
 // =============================================================================
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import '../../src/kvox.manifest';
 // Registers this app's notification events and email templates (the app imports it from the notifications config).
 import '../../src/platform/notifications/notification.manifest';
@@ -235,7 +236,7 @@ describe('jobs adapter', () => {
       organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-default' }) },
       job: { findFirst: jest.fn().mockResolvedValue(overrides.dedupHit ? { id: 'existing' } : null) },
     };
-    const adapter = new PlatformKvoxJobsAdapter(jobs, queue.registry, { registerProviderKey } as never, prisma as never);
+    const adapter = new PlatformKvoxJobsAdapter(jobs, queue.registry, { registerProviderKey } as never, prisma as never, new EventEmitter2());
 
     return { queue, adapter, enqueue, recordProvider, registerProviderKey, prisma };
   }
@@ -355,6 +356,8 @@ describe('object store adapter', () => {
     };
     const managed = {
       create: jest.fn(),
+      findByKey: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       get: jest.fn(),
       managedBy: jest.fn(),
       deleteManaged: jest.fn(),
@@ -509,6 +512,31 @@ describe('object store adapter', () => {
 
     expect(result).toEqual({ success: true, metadata: { handlers: 2, failed: 1 } });
     expect(seen).toEqual([{ objectId: 'obj', managedBy: 'graph' }]);
+  });
+
+  it('queues a processing job only for a file some handler wants, and runs only the handlers that want it', async () => {
+    const { adapter, registry, managed } = build();
+    const audio: unknown[] = [];
+    const everything: unknown[] = [];
+    adapter.onUploaded(async (event) => void audio.push(event), { contentTypes: ['audio/*', 'video/*', 'application/zip'] });
+    managed.managedBy.mockResolvedValue(new Map([['obj', 'transcripts']]));
+
+    const processor = registry.register.mock.calls[0]?.[0];
+
+    expect(processor.canProcess({ id: 'a', mimeType: 'audio/mpeg' })).toBe(true);
+    expect(processor.canProcess({ id: 'a', mimeType: 'AUDIO/WAV' })).toBe(true);
+    expect(processor.canProcess({ id: 'v', mimeType: 'video/mp4' })).toBe(true);
+    expect(processor.canProcess({ id: 'z', mimeType: 'application/zip' })).toBe(true);
+    expect(processor.canProcess({ id: 'p', mimeType: 'application/pdf' })).toBe(false);
+    expect(processor.canProcess({ id: 'n', mimeType: '' })).toBe(false);
+
+    // A second handler with no filter wants every file, so every file is processed again.
+    adapter.onUploaded(async (event) => void everything.push(event));
+    expect(processor.canProcess({ id: 'p', mimeType: 'application/pdf' })).toBe(true);
+
+    await processor.process({ id: 'obj', mimeType: 'application/pdf' }, async () => Readable.from([]));
+    expect(audio).toEqual([]);
+    expect(everything).toEqual([{ objectId: 'obj', managedBy: 'transcripts' }]);
   });
 });
 

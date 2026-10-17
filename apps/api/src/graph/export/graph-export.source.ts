@@ -32,7 +32,7 @@ import type { UserAttributeDef } from '@app/shared/ontology';
 
 import { NoteAccessService } from '../../notes/access/note-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
 import { FINGERPRINT_TABLES, type FingerprintTable, type TableSignature } from './graph-fingerprint';
 import type {

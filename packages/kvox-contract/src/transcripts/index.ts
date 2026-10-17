@@ -1,4 +1,5 @@
 export * from './editing-ops.js';
+export * from './media-audio-transcode.js';
 export * from './transcript.js';
 export * from './transcript-editing.js';
 export * from './transcript-export.js';

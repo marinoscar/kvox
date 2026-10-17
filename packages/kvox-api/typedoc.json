@@ -9,7 +9,9 @@
     "./src/transcription/index.ts",
     "./src/transcription/testing/index.ts",
     "./src/search/index.ts",
-    "./src/search/testing/index.ts"
+    "./src/search/testing/index.ts",
+    "./src/transcripts/index.ts",
+    "./src/transcripts/testing/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-api",

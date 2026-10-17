@@ -63,7 +63,13 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - run: npm ci
+      # The transcripts slice's real-ffmpeg spec has no skip guard (see ci.yml).
+      - name: Install ffmpeg (background) and dependencies
+        run: |
+          (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg) &
+          apt_pid=$!
+          npm ci
+          wait "$apt_pid"
 
       - run: npm run build:kvox-packages
       - run: npm run typecheck:kvox-packages
