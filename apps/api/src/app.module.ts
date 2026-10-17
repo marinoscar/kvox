@@ -47,7 +47,6 @@ import { LoggerModule } from './common/logger/logger.module';
 import { KvoxModule } from './kvox/kvox.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
-import { AskModule } from './ask/ask.module';
 import { userDataModule } from './platform/user-data/user-data.config';
 import { sharingModule } from './platform/sharing/sharing.config';
 import { onboardingModule } from './platform/onboarding/onboarding.config';
@@ -270,10 +269,10 @@ import configuration from './config/configuration';
     // epic #491), after the transcripts, notes and search configurations they read through. A ready note
     // reaches the extraction as the notes slice's ready event (`NOTE_READY_EVENT`) on the event port.
 
-    // Ask (#376, epic #348): saved conversations with the read-only graph
-    // agent. Imports GraphModule for `GraphAccessService` (scope validation);
-    // imported by nothing, so the edge runs one way.
-    AskModule,
+    // Ask (#376, epic #348) is `@marinoscar/kvox-api/ask`, configured in `kvox/ask/ask.config.ts` and
+    // imported by `KvoxModule` above (#497, epic #491), after the graph, notes and search configurations it
+    // reads through: saved conversations with the read-only graph agent, imported by nothing, so the
+    // edge runs one way.
 
     // The platform's user-data slice (#480, epic #478): the Danger Zone. `GET
     // /api/user-data/summary`, `POST /api/user-data/deletions`, the `user.data.purge`

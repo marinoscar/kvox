@@ -10,7 +10,8 @@
     "notes": ["ports", "core", "testing", "transcripts", "search"],
     "graph": ["ports", "core", "testing", "transcripts", "notes", "search"],
     "graph-extraction": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"],
-    "graph-rdf": ["ports", "core", "testing", "graph", "graph-extraction", "transcripts", "notes"]
+    "graph-rdf": ["ports", "core", "testing", "graph", "graph-extraction", "transcripts", "notes"],
+    "ask": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"]
   },
   "kvox-web": { "core": [] },
   "kvox-contract": {

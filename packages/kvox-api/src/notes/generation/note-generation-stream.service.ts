@@ -2,7 +2,11 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
 import {
+  DEFAULT_STREAM_HEARTBEAT_INTERVAL_MS as CORE_STREAM_HEARTBEAT_INTERVAL_MS,
+  DEFAULT_STREAM_POLL_INTERVAL_MS as CORE_STREAM_POLL_INTERVAL_MS,
+  KvoxRowStreamPoller,
   KvoxStreamCursor,
+  STREAM_DURATION_CAP_MARGIN_MS as CORE_STREAM_DURATION_CAP_MARGIN_MS,
   toDeltaFrame,
   toDoneFrame,
   toErrorFrame,
@@ -71,46 +75,29 @@ import { NOTE_GENERATE_MAX_RUNTIME_MS } from '../handlers/note-generate.handler.
 // cost them a note.
 // =============================================================================
 
-/** Milliseconds between reads of the row. Spec §5.2 asks for ~150–300 ms. */
-/**
- * DEFAULT_STREAM_POLL_INTERVAL_MS.
- *
- * @stability experimental
- */
-export const DEFAULT_STREAM_POLL_INTERVAL_MS = 250;
+// The poll interval, heartbeat and cap margin are `core/stream/row-stream-poller.ts`'s since issue #497 (the Ask
+// stream shares them); they keep their names here.
 
 /**
- * How often an idle connection is sent a comment line.
- *
- * Same 25 s, for the same reason, as the notification stream's own heartbeat:
- * it sits comfortably under the shortest idle timeout in common use (30 s) and
- * under nginx's `proxy_read_timeout`, with room for a scheduling delay. It
- * matters MORE here than there, because the gap this stream has to survive is
- * routine rather than exceptional — a model can think for tens of seconds
- * before its first token, and an SSE connection that has sent nothing is
- * indistinguishable, to everything between the browser and this process, from a
- * dead one.
- *
- * A COMMENT (`: …`), never an event: comment lines are consumed by the client's
- * parser and never surface as a frame, so a heartbeat can never be mistaken for
- * a delta by a consumer that forgot to check the event name.
+ * Milliseconds between reads of the row. Spec §5.2 asks for roughly 150 to 300 ms.
  *
  * @stability experimental
  */
-export const DEFAULT_STREAM_HEARTBEAT_INTERVAL_MS = 25_000;
+export const DEFAULT_STREAM_POLL_INTERVAL_MS = CORE_STREAM_POLL_INTERVAL_MS;
+
+/**
+ * How often an idle connection is sent a comment line (25 s, under the shortest idle timeout in common use).
+ *
+ * @stability experimental
+ */
+export const DEFAULT_STREAM_HEARTBEAT_INTERVAL_MS = CORE_STREAM_HEARTBEAT_INTERVAL_MS;
 
 /**
  * Slack on top of the job's own timeout before a connection gives up.
  *
- * The cap has to be LONGER than `note.generate` can legitimately run, or a
- * healthy long generation would have its stream torn down at the finish line;
- * and it has to be FINITE, or one wedged job pins a connection (and a Postgres
- * poll every 250 ms) forever. One minute of margin covers the gap between the
- * job's own deadline and the reaper actually settling the row.
- *
  * @stability experimental
  */
-export const STREAM_DURATION_CAP_MARGIN_MS = 60_000;
+export const STREAM_DURATION_CAP_MARGIN_MS = CORE_STREAM_DURATION_CAP_MARGIN_MS;
 
 /** The hard ceiling on one connection. Derived, never a second free number. */
 /**
@@ -204,156 +191,63 @@ export class NoteGenerationStreamService {
    */
   stream(generationId: string, fromOffset = 0): Observable<KvoxStreamMessage> {
     const { pollIntervalMs, heartbeatIntervalMs, durationCapMs, now } = this.tuning;
+    // One cursor per subscription: the poller allocates per subscriber, the cursor must too.
+    const poller = new KvoxRowStreamPoller({ pollIntervalMs, heartbeatMs: heartbeatIntervalMs, durationCapMs, now });
 
-    return new Observable<KvoxStreamMessage>((observer) => {
+    return new Observable<KvoxStreamMessage>((subscriber) => {
       const cursor = new KvoxStreamCursor(fromOffset);
-      const startedAt = now();
 
-      let closed = false;
-      let pollTimer: ReturnType<typeof setTimeout> | undefined;
+      const failure = (errorClass: KvoxStreamErrorClass, reason: string | null): KvoxStreamMessage =>
+        toErrorFrame({ status: 'failed', offset: cursor.position, errorClass, reason });
 
-      // An immediate comment, before anything else. NOT DECORATION: it commits
-      // the response headers, which `SseStream` otherwise defers until the
-      // first message — so a client attaching to a model that has not produced
-      // a token yet could not tell "connected and waiting" from "still
-      // connecting", and a buffering proxy would hold a zero-byte response open
-      // through its own idle timeout.
-      observer.next({ comment: 'connected' });
+      return poller
+        .stream<GenerationSnapshot>({
+          read: () => this.read(generationId),
+          onReadError: (error) => {
+            this.logger.warn(`Poll for note generation ${generationId} failed: ${describe(error)}`);
+          },
+          // Termination 4: the row is gone, a preview's TTL sweep took it, or the parent
+          // note was purged. Nothing is left to tail and nothing to carry an error class.
+          onGone: (emit) => emit(failure('gone', 'This generation is no longer available.')),
+          onRow: (row, emit) => {
+            const delta = cursor.advance(row.content);
 
-      const heartbeat = setInterval(() => {
-        observer.next({ comment: 'heartbeat' });
-      }, heartbeatIntervalMs);
+            if (delta) emit(toDeltaFrame(delta));
 
-      // `unref` so an open connection can never be the reason this process
-      // refuses to exit — without it one idle tab makes every `docker compose
-      // down` wait out its stop grace period. `?.` because a fake-timer
-      // environment need not implement it.
-      heartbeat.unref?.();
+            // Termination 1: terminal status. The delta above is emitted FIRST, in this same
+            // poll, so the last text written before the job settled is never stranded
+            // behind the frame that closes the stream.
+            if (row.status === 'succeeded') {
+              emit(
+                toDoneFrame({
+                  status: 'succeeded',
+                  offset: cursor.position,
+                  currentVersion: row.note?.currentVersion ?? null,
+                }),
+              );
 
-      const finish = (): void => {
-        closed = true;
-        observer.complete();
-      };
+              return 'complete';
+            }
 
-      const fail = (
-        errorClass: KvoxStreamErrorClass,
-        reason: string | null,
-      ): void => {
-        observer.next(
-          toErrorFrame({
-            status: 'failed',
-            offset: cursor.position,
-            errorClass,
-            reason,
-          }),
-        );
-        finish();
-      };
+            if (row.status === 'failed') {
+              emit(failure(toErrorClass(row.errorClass), row.errorDetail));
 
-      const schedule = (): void => {
-        if (closed) return;
+              return 'failed';
+            }
 
-        pollTimer = setTimeout(() => {
-          void poll();
-        }, pollIntervalMs);
-        pollTimer.unref?.();
-      };
-
-      const poll = async (): Promise<void> => {
-        if (closed) return;
-
-        let row: GenerationSnapshot | null;
-
-        try {
-          row = await this.read(generationId);
-        } catch (error) {
-          // A TRANSIENT READ FAILURE MUST NOT CLOSE THE STREAM. The durable
-          // state is untouched and the next poll is 250 ms away; tearing the
-          // connection down would turn one blipped query into a visible
-          // "generation failed" for a generation that is fine. The duration cap
-          // still bounds how long this can go on.
-          this.logger.warn(
-            `Poll for note generation ${generationId} failed: ${describe(error)}`,
-          );
-          schedule();
-
-          return;
-        }
-
-        // The client may have gone away while that read was in flight.
-        if (closed) return;
-
-        if (!row) {
-          // Termination 4: the row is gone — a preview's TTL sweep took it, or
-          // the parent note was purged. There is nothing left to tail and
-          // nothing left to carry an error class.
-          fail('gone', 'This generation is no longer available.');
-
-          return;
-        }
-
-        const delta = cursor.advance(row.content);
-
-        if (delta) observer.next(toDeltaFrame(delta));
-
-        // Termination 1: terminal status. The delta above is emitted FIRST, in
-        // this same poll, so the last text written before the job settled is
-        // never stranded behind the frame that closes the stream.
-        if (row.status === 'succeeded') {
-          observer.next(
-            toDoneFrame({
-              status: 'succeeded',
-              offset: cursor.position,
-              currentVersion: row.note?.currentVersion ?? null,
-            }),
-          );
-          finish();
-
-          return;
-        }
-
-        if (row.status === 'failed') {
-          fail(toErrorClass(row.errorClass), row.errorDetail);
-
-          return;
-        }
-
-        // Termination 3: the hard duration cap. The job is presumably wedged or
-        // was reaped; this is a CLIENT-FACING SAFETY NET layered on top of the
-        // queue's own recovery, never a substitute for it — nothing here
-        // touches the job row.
-        if (now() - startedAt >= durationCapMs) {
-          fail(
-            'timeout',
-            'This generation is taking longer than expected. Reload the note to check on it.',
-          );
-
-          return;
-        }
-
-        schedule();
-      };
-
-      // The first poll is IMMEDIATE, not one interval away. It is what makes a
-      // late attach answer "here is the whole buffer, and it is done" in a
-      // single round trip instead of after a pointless quarter-second wait.
-      void poll();
-
-      // Termination 2: the client disconnected (tab closed, navigation,
-      // network drop). Nest unsubscribes on the raw socket's `close`, which
-      // runs this — and NOTHING ABOUT THE JOB IS AFFECTED. It keeps running and
-      // keeps flushing; this is the literal mechanism behind "closing the tab
-      // loses nothing".
-      //
-      // Idempotent by construction (`clearInterval`/`clearTimeout` are both
-      // safe to run twice) because RxJS is not the only thing that can trigger
-      // it, and a teardown that must run exactly once is one that eventually
-      // runs zero times.
-      return () => {
-        closed = true;
-        clearInterval(heartbeat);
-        if (pollTimer) clearTimeout(pollTimer);
-      };
+            return null;
+          },
+          // Termination 3: the hard duration cap. A CLIENT-FACING SAFETY NET on top of the
+          // queue's own recovery, never a substitute for it.
+          onCap: (emit) =>
+            emit(
+              failure(
+                'timeout',
+                'This generation is taking longer than expected. Reload the note to check on it.',
+              ),
+            ),
+        })
+        .subscribe(subscriber);
     });
   }
 

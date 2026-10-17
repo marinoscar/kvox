@@ -23,9 +23,9 @@
 
 import { Prisma, type PrismaClient } from '@prisma/client';
 
-import { AskAccessService } from '../../src/ask/ask-access.service';
-import { AskConversationsService } from '../../src/ask/ask-conversations.service';
+import { AskAccessService, AskConversationsService } from '@marinoscar/kvox-api/ask';
 import { GraphAccessService } from '@marinoscar/kvox-api/graph';
+import { createDbAudit } from '../helpers/graph-ports.helper';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
@@ -43,7 +43,7 @@ describeWithDb('Ask conversations (real Postgres)', () => {
     prisma = connectTestPrisma();
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
-    service = new AskConversationsService(p, new AskAccessService(p), new GraphAccessService(p));
+    service = new AskConversationsService(p, new AskAccessService(p), new GraphAccessService(p), createDbAudit(prisma));
   });
 
   afterAll(async () => {

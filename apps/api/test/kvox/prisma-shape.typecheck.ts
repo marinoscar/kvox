@@ -16,7 +16,7 @@
 //
 // TRANSCRIPTION NEEDS NO PRISMA. It reads and writes through the settings,
 // secrets and audit ports only, so it adds no line here. The first line is search's
-// (#494), the second the transcripts slice's (#493), the third the notes slice's (#495), the last the graph's (#496).
+// (#494), the second the transcripts slice's (#493), the third the notes slice's (#495), the graph's (#496), the last Ask's (#497).
 //
 // Keep one line per slice, named `_<slice>`.
 // =============================================================================
@@ -69,3 +69,12 @@ import type { KvoxGraphDb } from '@marinoscar/kvox-api/graph';
  * and array forms. `GraphExtractionModule` and `GraphRdfModule` use the same client type.
  */
 export const _graph: KvoxGraphDb = null as unknown as KvoxHostPrisma;
+
+import type { KvoxAskDb } from '@marinoscar/kvox-api/ask';
+
+/**
+ * Ask (#497): the `ask_conversations` and `ask_messages` tables with the columns the slice reads and
+ * writes, the read-only `kg_*`, `transcript` and `note` delegates the tools use, and `$transaction`
+ * in both its callback and array forms.
+ */
+export const _ask: KvoxAskDb = null as unknown as KvoxHostPrisma;

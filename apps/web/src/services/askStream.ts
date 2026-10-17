@@ -45,7 +45,7 @@ import type { AskCitation, AskErrorClass, AskFinishReason, AskToolCall } from '.
 export { applyDelta };
 
 /**
- * The four `event:` names. MUST MATCH `apps/api/src/ask/stream/ask-stream.ts`
+ * The four `event:` names. MUST MATCH `packages/kvox-api/src/ask/stream/ask-stream.ts`
  * (#379) — the first three are the note stream's own values, re-exported
  * there. A mismatch fails silently, so they are constants.
  */

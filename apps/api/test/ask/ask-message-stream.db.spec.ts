@@ -13,9 +13,9 @@
 import type { PrismaClient } from '@prisma/client';
 import { firstValueFrom, toArray } from 'rxjs';
 
-import { AskAccessService } from '../../src/ask/ask-access.service';
-import { AskMessageStreamService } from '../../src/ask/stream/ask-message-stream.service';
-import type { AskStreamMessage } from '../../src/ask/stream/ask-stream';
+import { AskAccessService } from '@marinoscar/kvox-api/ask';
+import type { KvoxStreamMessage as AskStreamMessage } from '@marinoscar/kvox-api/core';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
@@ -44,7 +44,7 @@ const tick = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describeWithDb('Ask message stream (real Postgres)', () => {
   let prisma: PrismaClient;
-  let streams: AskMessageStreamService;
+  let streams: InstanceType<typeof internals.AskMessageStreamService>;
   let access: AskAccessService;
 
   beforeAll(async () => {
@@ -52,7 +52,7 @@ describeWithDb('Ask message stream (real Postgres)', () => {
     prisma = connectTestPrisma();
     await prisma.$connect();
     const p = prisma as unknown as PrismaService;
-    streams = new AskMessageStreamService(p, { pollIntervalMs: 5, heartbeatIntervalMs: 10_000, durationCapMs: 20_000 });
+    streams = new internals.AskMessageStreamService(p, { pollIntervalMs: 5, heartbeatIntervalMs: 10_000, durationCapMs: 20_000 });
     access = new AskAccessService(p);
   });
 

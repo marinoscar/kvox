@@ -18,22 +18,14 @@
 
 import type { PrismaClient } from '@prisma/client';
 
-import { AskToolset } from '../../src/ask/tools/ask-toolset';
-import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
-import { EvidenceTool } from '../../src/ask/tools/evidence.tool';
-import { GetEntityTool } from '../../src/ask/tools/get-entity.tool';
-import { ListCommitmentsTool } from '../../src/ask/tools/list-commitments.tool';
-import { NeighborsTool } from '../../src/ask/tools/neighbors.tool';
-import { SearchTool } from '../../src/ask/tools/search.tool';
-import { TimelineTool } from '../../src/ask/tools/timeline.tool';
-import type { AskToolContext } from '../../src/ask/tools/ask-tool';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { GraphAccessService, EntityBriefService, GraphOntologyService, GraphPreferencesService, GraphEvidenceService, GraphNeighborhoodService, GraphReadService } from '@marinoscar/kvox-api/graph';
 import { EntityViewService } from '../graph/package-internals';
 import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { UUID_ANYWHERE } from './ask-tool-fakes';
+import { UUID_ANYWHERE } from '@marinoscar/kvox-api/ask/testing';
 import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 import { createDbSettings } from '../helpers/graph-ports.helper';
@@ -45,7 +37,7 @@ const EMAIL_PREFIX = 'ask-tools-test';
 
 describeWithDb('Ask toolset (real Postgres)', () => {
   let prisma: PrismaClient;
-  let toolset: AskToolset;
+  let toolset: InstanceType<typeof internals.AskToolset>;
   let evidence: GraphEvidenceService;
 
   beforeAll(async () => {
@@ -73,14 +65,15 @@ describeWithDb('Ask toolset (real Postgres)', () => {
       { isRegistered: () => { throw new Error('the Ask tool must never reach the queue'); } } as never,
       { enqueue: async () => { throw new Error('the Ask tool must never enqueue'); } } as never,
     );
-    toolset = new AskToolset(
-      new SearchTool(reads, search as never, p),
-      new GetEntityTool(reads, ontology, p),
-      new NeighborsTool(neighborhood, p),
-      new TimelineTool(reads, p),
-      new EvidenceTool(evidence, p),
-      new EntityBriefTool(brief, p),
-      new ListCommitmentsTool(p),
+    const visibility = new SharedTranscriptVisibility(p);
+    toolset = new internals.AskToolset(
+      new internals.SearchTool(reads, search as never, p, visibility),
+      new internals.GetEntityTool(reads, ontology, p),
+      new internals.NeighborsTool(neighborhood, p),
+      new internals.TimelineTool(reads, p),
+      new internals.EvidenceTool(evidence, p),
+      new internals.EntityBriefTool(brief, p),
+      new internals.ListCommitmentsTool(p),
       preferences,
     );
   });
@@ -98,15 +91,12 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     const user = await createUser(prisma, EMAIL_PREFIX, suffix);
     const ctx = await toolset.createContext({
       id: user.id,
-      email: user.email,
-      roles: ['Viewer'],
       permissions: ['graph:read', 'transcripts:read', 'notes:read'],
-      isActive: true,
     });
     return { user, ctx, g: new GraphFixture(prisma, user.id) };
   }
 
-  async function call(ctx: AskToolContext, name: string, args: Record<string, unknown>) {
+  async function call(ctx: internals.AskToolContext, name: string, args: Record<string, unknown>) {
     const out = await toolset.execute(ctx, name, JSON.stringify(args));
     expect(out.json).not.toMatch(UUID_ANYWHERE);
     return out;

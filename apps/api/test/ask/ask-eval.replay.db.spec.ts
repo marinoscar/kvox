@@ -22,34 +22,16 @@
 // Marcus Webb's shellfish allergy — and are never returned by any tool).
 // =============================================================================
 
-import type { Job, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
-import { AskAccessService } from '../../src/ask/ask-access.service';
-import { toAskMessage } from '../../src/ask/ask-message.mapper';
-import { AskMessagesService } from '../../src/ask/ask-messages.service';
-import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
-import { AskToolset } from '../../src/ask/tools/ask-toolset';
-import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
-import { EvidenceTool } from '../../src/ask/tools/evidence.tool';
-import { GetEntityTool } from '../../src/ask/tools/get-entity.tool';
-import { ListCommitmentsTool } from '../../src/ask/tools/list-commitments.tool';
-import { NeighborsTool } from '../../src/ask/tools/neighbors.tool';
-import { SearchTool } from '../../src/ask/tools/search.tool';
-import { TimelineTool } from '../../src/ask/tools/timeline.tool';
-import { GraphAccessService, EntityBriefService, GraphOntologyService, GraphPreferencesService, GraphEvidenceService, GraphNeighborhoodService, GraphReadService } from '@marinoscar/kvox-api/graph';
-import { EntityViewService } from '../graph/package-internals';
-import { NoteAccessService } from '@marinoscar/kvox-api/notes';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { loadGoldenSet } from '../../scripts/kg-eval/load';
-import { createFakeAskPort, done, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
+import { done, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
 import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
-import { JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
-import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
-import { createDbSettings } from '../helpers/graph-ports.helper';
-import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
+import { createAskTurn, toKvoxJob } from '../helpers/ask-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-eval.replay.db.spec');
 
@@ -59,8 +41,8 @@ const SENSITIVE_TEXT = 'shellfish allergy';
 describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no model)', () => {
   let prisma: PrismaClient;
   let seeded: SeededGraph;
-  let handler: AskRespondHandler;
-  let service: AskMessagesService;
+  let handler: ReturnType<typeof createAskTurn>['handler'];
+  let service: ReturnType<typeof createAskTurn>['service'];
   let provider: FakeAskStream;
   let roleId: string;
   /** Every `messages` array sent to the provider, across EVERY question this suite asks — for the leak gate. */
@@ -70,8 +52,6 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
     if (!dbReachable) return;
     prisma = connectTestPrisma();
     await prisma.$connect();
-    const p = prisma as never;
-
     seeded = await seedGraph(prisma, loadGoldenSet());
 
     const permission = await prisma.permission.upsert({
@@ -84,50 +64,10 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
     await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
     await prisma.userRole.create({ data: { userId: seeded.userId, roleId } });
 
-    const access = new GraphAccessService(p);
-    const transcriptAccess = createTranscriptAccess(p);
-    const preferences = new GraphPreferencesService(createDbSettings(prisma));
-    const ontology = new GraphOntologyService(p, preferences);
-    const reads = new GraphReadService(p, access, ontology, transcriptAccess, new SharedTranscriptVisibility(p));
-    const neighborhood = new GraphNeighborhoodService(p, access, ontology);
-    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbObjectStore(prisma, UNUSED_STORAGE));
-    const search = { search: async () => ({ results: [], nextCursor: null }) };
-    const brief = new EntityBriefService(
-      p,
-      access,
-      ontology,
-      new EntityViewService(p),
-      search as never,
-      new SharedTranscriptVisibility(p),
-      { resolve: async () => { throw new Error('never'); } } as never,
-      { isRegistered: () => { throw new Error('never'); } } as never,
-      { enqueue: async () => { throw new Error('never'); } } as never,
-    );
-    const toolset = new AskToolset(
-      new SearchTool(reads, search as never, p),
-      new GetEntityTool(reads, ontology, p),
-      new NeighborsTool(neighborhood, p),
-      new TimelineTool(reads, p),
-      new EvidenceTool(evidence, p),
-      new EntityBriefTool(brief, p),
-      new ListCommitmentsTool(p),
-      preferences,
-    );
-
     provider = new FakeAskStream();
-    const jobs = new JobsService(p);
-    // Readiness is scripted; `chat()` and everything under it is production code
-    // over the fake platform stream.
-    const port = createFakeAskPort(provider);
-    service = new AskMessagesService(p, new AskAccessService(p), port.ai, jobs);
-    handler = new AskRespondHandler(
-      { register: () => undefined } as never,
-      p,
-      port.ai,
-      port.settings as never,
-      { registerProviderKey: () => undefined } as never,
-      toolset,
-    );
+    // Readiness is scripted; `chat()`, the AI port's adapter and everything under them are production
+    // code over the fake platform stream.
+    ({ service, handler } = createAskTurn(prisma, provider));
   }, 120_000);
 
   afterAll(async () => {
@@ -145,11 +85,11 @@ describeWithDb('ask:eval replay (real Postgres, scripted platform stream, no mod
     script();
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     const job = await prisma.job.findUniqueOrThrow({ where: { id: row.jobId! } });
-    await handler.process(job as Job);
+    await handler.process(toKvoxJob(job));
     const finished = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     const capturedPrompts = provider.requests.map((r) => JSON.stringify(r));
     allCapturedPrompts.push(...capturedPrompts);
-    return { message: toAskMessage(finished), capturedPrompts };
+    return { message: internals.toAskMessage(finished), capturedPrompts };
   }
 
   it('search → get_entity → cites [^ent1]: valid, citation validity 1.0', async () => {

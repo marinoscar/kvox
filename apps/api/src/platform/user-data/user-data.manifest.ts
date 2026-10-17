@@ -10,6 +10,7 @@ import {
 import type { UserDataModelHint } from '@marinoscar/platform-api/user-data';
 
 import { GRAPH_PURGE_DELEGATE, GRAPH_USER_DATA_CATEGORY, graphUserDataModels } from '../../kvox/graph/user-data';
+import { ASK_USER_DATA_CATEGORY, askUserDataModels } from '../../kvox/ask/user-data';
 import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE, notesUserDataModels } from '../../kvox/notes/user-data';
 import { OWNER_PURGE_MODE } from '../../common/owner-purge';
 import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
@@ -135,13 +136,7 @@ for (const category of NOTES_USER_DATA_CATEGORIES) {
   registerUserDataCategory(category);
 }
 registerUserDataCategory(GRAPH_USER_DATA_CATEGORY);
-registerUserDataCategory({
-  id: 'ask',
-  label: 'Ask conversations',
-  description: 'Your saved Ask conversations and every message in them.',
-  content: true,
-  order: 6,
-});
+registerUserDataCategory(ASK_USER_DATA_CATEGORY);
 
 registerUserDataScope({
   id: 'transcripts',
@@ -194,7 +189,7 @@ registerUserDataModels<Prisma.ModelName>([
   { model: 'Transcript', category: 'transcripts', delegate: ownerDelegate(TRANSCRIPT_PURGE_DELEGATE) },
   ...notesUserDataModels(ownerDelegate),
 
-  { model: 'AskConversation', category: 'ask' },
+  ...askUserDataModels(),
 
   ...graphUserDataModels(),
 
