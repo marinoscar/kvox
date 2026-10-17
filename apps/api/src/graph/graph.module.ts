@@ -4,7 +4,7 @@ import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchConfig } from '../kvox/search/search.config';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
-import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { TranscriptsConfig } from '../kvox/transcripts/transcripts.config';
 import { GraphAccessService } from './access/graph-access.service';
 import { GraphAiRunResolver } from './graph-ai-run.service';
 import { EntityBriefController } from './brief/entity-brief.controller';
@@ -80,7 +80,7 @@ import { GraphWriteService } from './write/graph-write.service';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, TranscriptsModule, SearchConfig, KvoxObjectsModule],
+  imports: [PrismaModule, TranscriptsConfig, SearchConfig, KvoxObjectsModule],
   providers: [
     GraphAccessService,
     // #475 — the graph's one question to the AI port (model, limits, graph switch).

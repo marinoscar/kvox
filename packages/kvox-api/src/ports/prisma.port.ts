@@ -59,7 +59,31 @@ export interface KvoxPrismaClientLike {
    * Runs a callback in a transaction.
    *
    * @param fn - receives the transaction client.
-   * @param options - an optional timeout, in milliseconds.
+   * @param options - an optional timeout, in milliseconds, and isolation level.
    */
-  $transaction<T>(fn: (tx: any) => Promise<T>, options?: { timeout?: number }): Promise<T>;
+  $transaction<T>(fn: (tx: any) => Promise<T>, options?: KvoxTransactionOptions): Promise<T>;
+
+  /**
+   * Runs several prepared queries in one transaction and returns their results,
+   * in order.
+   *
+   * @param queries - the queries (delegate calls not yet awaited).
+   * @param options - an optional timeout and isolation level.
+   */
+  $transaction<const Q extends readonly unknown[]>(
+    queries: [...Q],
+    options?: KvoxTransactionOptions,
+  ): Promise<{ -readonly [K in keyof Q]: Awaited<Q[K]> }>;
+}
+
+/**
+ * Options of a transaction.
+ *
+ * @stability experimental
+ */
+export interface KvoxTransactionOptions {
+  /** The longest the transaction may run, in milliseconds. */
+  timeout?: number;
+  /** The isolation level; the host default when absent. */
+  isolationLevel?: 'ReadCommitted' | 'RepeatableRead' | 'Serializable';
 }

@@ -5,8 +5,8 @@
 > deterministic phonetic retrieval, an optional thorough discovery pass, and
 > LLM adjudication — that finds and proposes fixes for the names speech
 > recognition still got wrong. Implemented in `packages/kvox-api/src/transcription/
-> keyterms.ts` (#327), `apps/api/src/transcripts/name-check/` and
-> `apps/api/src/transcripts/handlers/transcript-name-check.handler.ts` (#328),
+> keyterms.ts` (#327), `packages/kvox-api/src/transcripts/name-check/` and
+> `packages/kvox-api/src/transcripts/handlers/transcript-name-check.handler.ts` (#328),
 > `apps/web/src/components/transcripts/` name-check review panel (#329), and
 > the `thorough` mode plus its discovery pass on top of #328's pipeline
 > (#330). Builds on `docs/specs/transcription.md` (the transcript pipeline
@@ -93,9 +93,9 @@ all, whether typing a name will do anything.
 
 ## 3. The three-stage correction pipeline (#328, #330)
 
-`apps/api/src/transcripts/name-check/` is entirely **pure** — no Prisma, no
+`packages/kvox-api/src/transcripts/name-check/` is entirely **pure** — no Prisma, no
 `@Injectable`, no clock, no randomness — the identical discipline
-`apps/api/src/transcripts/editing/` holds for the correction reducers
+`packages/kvox-api/src/transcripts/editing/` holds for the correction reducers
 (`docs/specs/transcription.md` §4.4). Every function here is a deterministic
 function of its arguments, which is what lets `estimate.ts` compute a request
 cost *with the job's own prompt-building functions* rather than a formula
@@ -392,7 +392,7 @@ and `materialize()` — which replays the version log through the *same*
 reducer functions the live edit path calls (`docs/specs/transcription.md`
 §4.4) — could no longer be guaranteed to rebuild what the user actually sees.
 This is exactly the shape the Transcripts rule in
-[`apps/api/AGENTS.md`](../../apps/api/AGENTS.md) protects: nothing outside `apps/api/src/transcripts/editing/` may write a
+[`apps/api/AGENTS.md`](../../apps/api/AGENTS.md) protects: nothing outside `packages/kvox-api/src/transcripts/editing/` may write a
 segment's text.
 
 **Deterministic chunking and `clientBatchId`.** An apply call is chunked at
@@ -603,10 +603,10 @@ forever.
 
 ## 13. Verification
 
-- `apps/api/src/transcripts/name-check/phonetic.spec.ts` — Double Metaphone
+- `packages/kvox-api/src/transcripts/name-check/phonetic.spec.ts` — Double Metaphone
   vectors checked against PostgreSQL's `dmetaphone()`/`dmetaphone_alt()`,
   plus Jaro-Winkler and Levenshtein unit coverage.
-- `apps/api/src/transcripts/name-check/candidates.spec.ts` — retrieval gating,
+- `packages/kvox-api/src/transcripts/name-check/candidates.spec.ts` — retrieval gating,
   scoring, stopword handling, greedy non-overlap selection, memoisation.
 - `packages/kvox-api/src/transcription/providers/assemblyai.provider.spec.ts` —
   `keyterms_prompt` sent when terms exist, omitted entirely when they do not.

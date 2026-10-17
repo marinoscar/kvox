@@ -248,6 +248,20 @@ describe('Transcript exports integration', () => {
         size: BigInt(1234),
         mimeType: 'text/markdown; charset=utf-8',
       });
+      // The slice reads the export object through the object-store port (`describe`), which the
+      // web edition's adapter answers with one `findMany`.
+      prismaMock.storageObject.findMany.mockResolvedValue([
+        {
+          id: 'obj-export',
+          name: 'y.md',
+          status: 'ready',
+          storageKey: 'transcripts/x/exports/y.md',
+          size: BigInt(1234),
+          mimeType: 'text/markdown; charset=utf-8',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ] as never);
 
       const response = await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/exports`)
@@ -277,6 +291,20 @@ describe('Transcript exports integration', () => {
         size: BigInt(1234),
         mimeType: 'text/markdown; charset=utf-8',
       });
+      // The slice reads the export object through the object-store port (`describe`), which the
+      // web edition's adapter answers with one `findMany`.
+      prismaMock.storageObject.findMany.mockResolvedValue([
+        {
+          id: 'obj-export',
+          name: 'y.md',
+          status: 'ready',
+          storageKey: 'transcripts/x/exports/y.md',
+          size: BigInt(1234),
+          mimeType: 'text/markdown; charset=utf-8',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ] as never);
 
       await request(context.app.getHttpServer())
         .post(`${TRANSCRIPTS}/${TRANSCRIPT_ID}/exports`)

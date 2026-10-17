@@ -46,7 +46,7 @@
 import { api } from './api';
 
 // =============================================================================
-// Types — mirrors of `apps/api/src/transcripts/dto/transcript-export.dto.ts`
+// Types — mirrors of `packages/kvox-api/src/transcripts/dto/transcript-export.dto.ts`
 // =============================================================================
 
 /** `TRANSCRIPT_EXPORT_STATUSES` on the API side. */

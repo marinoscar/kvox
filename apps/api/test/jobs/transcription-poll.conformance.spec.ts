@@ -26,14 +26,16 @@
 
 import { Test } from '@nestjs/testing';
 
-import { JobHandlerRegistry, ProviderThrottleService, type JobHandler } from '@marinoscar/platform-api/jobs';
+import { type JobHandler } from '@marinoscar/platform-api/jobs';
 import { createFakeJobQueue, describeJobHandlerConformance, type FakeJobQueue } from '@marinoscar/platform-api/jobs/testing';
+import { KVOX_JOBS, KVOX_PRISMA } from '@marinoscar/kvox-api/ports';
+import {
+  TranscriptPipelineService,
+  TranscriptionPollHandler,
+  TranscriptionRuntimeService,
+} from '@marinoscar/kvox-api/transcripts';
 
-import { createFakeProvider, type FakeProvider } from '../../src/transcripts/handlers/__fixtures__/fake-provider';
-import { TranscriptionPollHandler } from '../../src/transcripts/handlers/transcription-poll.handler';
-import { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
-import { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
-import { PrismaService } from '../../src/prisma/prisma.service';
+import { createKvoxJobsHarness, platformHandlerOf } from '../helpers/kvox-handler.helper';
 
 const TRANSCRIPT_ID = 'transcript-1';
 
@@ -70,8 +72,8 @@ async function buildWorld(): Promise<JobHandler> {
   ingests = 0;
   failures = 0;
 
-  const provider: FakeProvider = createFakeProvider();
-  provider.getStatus.mockResolvedValue(mode === 'completed' ? 'completed' : 'processing');
+  // The poll asks the provider one question: is it finished?
+  const provider = { getStatus: jest.fn().mockResolvedValue(mode === 'completed' ? 'completed' : 'processing') };
 
   const prisma = {
     transcript: {
@@ -92,7 +94,7 @@ async function buildWorld(): Promise<JobHandler> {
     // The REAL method, on the fake queue: this is what carries `skipDedup`.
     enqueuePoll: (transcriptId: string, delayMs: number, reason?: 'upload' | 'rerun') =>
       TranscriptPipelineService.prototype.enqueuePoll.call(
-        { jobs: queue().asJobsService() },
+        { jobs: createKvoxJobsHarness(queue().asJobsService()).adapter },
         transcriptId,
         delayMs,
         reason,
@@ -106,18 +108,21 @@ async function buildWorld(): Promise<JobHandler> {
         : jest.fn().mockResolvedValue({ provider, ctx: { apiKey: 'k' }, policy: {} }),
   };
 
+  // The handler registers itself through the web edition's jobs adapter, as at boot; the platform
+  // contract is held against what the registry then holds.
+  const harness = createKvoxJobsHarness(queue().asJobsService());
+
   const module = await Test.createTestingModule({
     providers: [
       TranscriptionPollHandler,
-      { provide: JobHandlerRegistry, useValue: new JobHandlerRegistry() },
-      { provide: PrismaService, useValue: prisma },
+      { provide: KVOX_JOBS, useValue: harness.adapter },
+      { provide: KVOX_PRISMA, useValue: prisma },
       { provide: TranscriptionRuntimeService, useValue: runtime },
       { provide: TranscriptPipelineService, useValue: pipeline },
-      { provide: ProviderThrottleService, useValue: { registerProviderKey: jest.fn() } },
     ],
   }).compile();
 
-  return module.get(TranscriptionPollHandler);
+  return platformHandlerOf(harness, module.get(TranscriptionPollHandler));
 }
 
 beforeEach(() => {

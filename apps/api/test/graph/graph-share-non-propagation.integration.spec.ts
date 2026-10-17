@@ -7,7 +7,7 @@ import { setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.help
 import { GrantsService } from '@marinoscar/platform-api/sharing';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 
 // =============================================================================
 // A transcript share never exposes the graph derived from it (#357, §12)

@@ -34,30 +34,33 @@
 // `../jobs/db-test-support.ts` for the reachability probe.
 // =============================================================================
 
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import { ConfigService } from '@nestjs/config';
 import { ConflictException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
-import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
-import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
-import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
-import { TranscriptSnapshotHandler } from '../../src/transcripts/handlers/transcript-snapshot.handler';
-import { ORDINAL_GAP, OP_TYPES, sortByOrdinal } from '../../src/transcripts/editing';
+import type { KvoxJobsPort } from '@marinoscar/kvox-api/ports';
+import {
+  ORDINAL_GAP,
+  OP_TYPES,
+  TranscriptEditingService,
+  TranscriptMaterializeService,
+  TranscriptObjectsService,
+  TranscriptSnapshotHandler,
+  resolveTranscriptsOptions,
+  sortByOrdinal,
+  type TranscriptPipelineService,
+} from '@marinoscar/kvox-api/transcripts';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { type JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createDbAudit, createDbObjectStore } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
@@ -88,7 +91,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
   /** Build the whole correction stack over one client. */
   function stackFor(client: PrismaClient) {
     const service = client as unknown as PrismaService;
-    const objects = new TranscriptObjectsService(createDbManagedObjects(client, storage), new ConfigService({}), storage);
+    const objects = new TranscriptObjectsService(createDbObjectStore(client, storage), resolveTranscriptsOptions({}));
     const materializeService = new TranscriptMaterializeService(service, objects);
     const access = createTranscriptAccess(prisma);
     const pipeline = {
@@ -104,7 +107,14 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
     return {
       objects,
       materialize: materializeService,
-      editing: new TranscriptEditingService(service, access, materializeService, pipeline, new EventEmitter2()),
+      editing: new TranscriptEditingService(
+        service,
+        access,
+        materializeService,
+        pipeline,
+        { emit: jest.fn(), subscribe: jest.fn() },
+        createDbAudit(client),
+      ),
     };
   }
 
@@ -125,7 +135,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
     otherEditing = theirs.editing;
 
     snapshotHandler = new TranscriptSnapshotHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
+      { registerHandler: jest.fn() } as unknown as KvoxJobsPort,
       prisma as unknown as PrismaService,
       mine.materialize,
       mine.objects,

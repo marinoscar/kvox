@@ -428,8 +428,8 @@ Object storage (uploads, avatars, renditions, exports, backups, the node data pl
 │  ├── KvoxS3PartLister  (S3 ListParts)                               │
 │  ├── KvoxFilesController  (GET /api/kvox/files)                     │
 │  ├── managed-delete.hook  (Fastify onRequest: 409 on managed delete)│
-│  └── TranscriptUploadProcessor  (ObjectProcessor, starts the        │
-│                   transcription pipeline)                           │
+│  └── (the transcripts slice's upload hook runs from the platform    │
+│       adapter's one ObjectProcessor, platform-kvox/object-store)    │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Host bindings (apps/api/src/platform/storage/)                     │
 │  ├── storage.config.ts  (StorageModule.forRoot, StorageConfigModule,│
@@ -470,7 +470,8 @@ storage.object.process job (queued in the completing transaction)
          ↓
 ObjectProcessorRegistry: every processor whose canProcess() matches
          ↓
-TranscriptUploadProcessor (kvox.transcripts.source): if the object is
+the web edition's port processor (kvox.ports.uploaded) fans the event to
+TranscriptUploadHook (@marinoscar/kvox-api/transcripts): if the object is
 transcripts-owned, enqueue transcription.submit / media.audio.transcode
          ↓
 Status updated: ready | failed
@@ -520,9 +521,10 @@ apps/api/src/kvox-objects/
 ├── kvox-multipart.controller.ts     # POST/GET /api/storage/objects/:id/upload/parts
 ├── kvox-s3-part-lister.ts           # ListPartsCommand
 ├── kvox-files.controller.ts         # GET /api/kvox/files
-├── managed-delete.hook.ts           # 409 on a managed DELETE
-└── transcript-upload.processor.ts   # ObjectProcessor kvox.transcripts.source
+└── managed-delete.hook.ts           # 409 on a managed DELETE
 ```
+
+The transcripts code is the `@marinoscar/kvox-api/transcripts` slice (`packages/kvox-api/src/transcripts/`, `TranscriptsModule.forRoot`, issue #493); its web-edition binding is `apps/api/src/kvox/transcripts/` (the module configuration, the platform sharing, the notification templates, the onboarding step and the events bridge).
 
 ---
 
@@ -1222,7 +1224,9 @@ satisfies it.
 **KVox's domain permissions are org-scoped app permissions.** `transcripts:read|write`,
 `notes:read|write`, `note_templates:read|write` and `graph:read|write` are declared in
 `apps/api/src/app-registrations/permissions.ts` (`KVOX_PERMISSIONS`, each `scope: 'org'` with
-`defaultGrants: ['org_admin', 'contributor', 'viewer']`) and registered with
+`defaultGrants: ['org_admin', 'contributor', 'viewer']`; the `transcripts:*` pair is the
+transcripts slice's `TRANSCRIPTS_PERMISSIONS`, registered as the `kvox-transcripts` set in
+`app-registrations/kvox-permissions.ts`, same scope and grants, same catalog order) and registered with
 `registerPlatformPermissions` in `app-registrations/registrations.ts`, which every entry point
 imports first. `common/constants/roles.constants.ts` derives `ROLES`, `PERMISSIONS` and
 `PermissionName` from the registries, so a permission string cannot drift from what the seed

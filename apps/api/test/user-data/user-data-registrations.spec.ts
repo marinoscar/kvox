@@ -31,7 +31,7 @@ import {
   CONTENT_CATEGORIES,
   assertKvoxUserDataRegistrations,
 } from '../../src/platform/user-data/user-data.manifest';
-import { TRANSCRIPT_PURGE_JOB_TYPE } from '../../src/transcripts/job-types';
+import { TRANSCRIPT_PURGE_JOB_TYPE } from '@marinoscar/kvox-api/transcripts';
 
 const USER_ID = '22222222-2222-4222-8222-222222222222';
 

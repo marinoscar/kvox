@@ -282,7 +282,7 @@ describe('MediaAudioTranscodeExecutor', () => {
 // The duplication guard
 // =============================================================================
 //
-// The ffmpeg helpers in the executor file restate, by hand, the rules `apps/api/src/transcripts/media
+// The ffmpeg helpers in the executor file restate, by hand, the rules `packages/kvox-api/src/transcripts/media
 // /audio-transcode.ts` owns. The two cannot import each other (a worker node
 // has no API source tree), so the only defence against drift is that both
 // sides assert the SAME facts about the SAME inputs. These mirror the

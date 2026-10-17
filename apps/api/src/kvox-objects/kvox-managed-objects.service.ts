@@ -105,6 +105,9 @@ export class KvoxManagedObjectsService implements KvoxManagedObjects {
 
   private defaultOrg: Promise<string> | null = null;
 
+  /** Called after an upload is aborted (see {@link onAborted}). */
+  private readonly abortListeners: Array<(event: { objectId: string; module: KvoxModule }) => Promise<void>> = [];
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ownership: KvoxObjectOwnershipStore,
@@ -377,6 +380,25 @@ export class KvoxManagedObjectsService implements KvoxManagedObjects {
     });
 
     this.logger.log(`Aborted ${owner}-managed upload ${id}`);
+
+    for (const listener of this.abortListeners) {
+      try {
+        await listener({ objectId: id, module: owner });
+      } catch (error) {
+        // A listener is a bystander: the abort itself is done.
+        this.logger.warn(
+          `An abort listener failed for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Registers a listener that runs after each managed upload is aborted, once the
+   * abort has committed. The object-store port's `onAborted` is built on it.
+   */
+  onAborted(listener: (event: { objectId: string; module: KvoxModule }) => Promise<void>): void {
+    this.abortListeners.push(listener);
   }
 
   /** The organization of a caller-held transaction: the explicit one, else the default. */

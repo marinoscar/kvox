@@ -4,6 +4,7 @@ import { platformKvoxModule } from '../platform-kvox/platform-kvox.module';
 import { SearchConfig, SearchIndexingConfig } from './search/search.config';
 import { TranscriptionBindingModule } from './transcription/transcription-binding.module';
 import { TranscriptionConfig } from './transcription/transcription.config';
+import { TranscriptsBindingModule, TranscriptsConfig } from './transcripts/transcripts.config';
 
 // =============================================================================
 // KvoxModule (issue #492, epic #491)
@@ -20,8 +21,9 @@ import { TranscriptionConfig } from './transcription/transcription.config';
 // binding stops the boot.
 //
 // Search (#494) sits before transcription because the transcripts and notes modules
-// (still the application's) import its indexing half; later slices (transcripts,
-// notes, graph, Ask) append their config to this list as they move into the package.
+// import its indexing half; transcripts (#493) comes after transcription and search,
+// which it imports; later slices (notes, graph, Ask) append their config to this list
+// as they move into the package.
 // =============================================================================
 
 @Module({
@@ -31,6 +33,8 @@ import { TranscriptionConfig } from './transcription/transcription.config';
     SearchIndexingConfig,
     TranscriptionConfig,
     TranscriptionBindingModule,
+    TranscriptsConfig,
+    TranscriptsBindingModule,
   ],
 })
 export class KvoxModule {}

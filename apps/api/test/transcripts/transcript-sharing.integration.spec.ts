@@ -21,8 +21,8 @@ import {
   SHARE_NOT_FOUND_MESSAGE,
   SHARE_RECIPIENT_NOT_FOUND_MESSAGE,
   SHARE_WITH_SELF_MESSAGE,
-} from '../../src/transcripts/transcript-shares.adapter';
-import { TRANSCRIPT_NOT_FOUND_MESSAGE } from '../../src/transcripts/transcript-access.service';
+  TRANSCRIPT_NOT_FOUND_MESSAGE,
+} from '@marinoscar/kvox-api/transcripts';
 
 // =============================================================================
 // The deprecated `:id/shares` routes over the wire (issue #29, epic #19; adapters since #485)

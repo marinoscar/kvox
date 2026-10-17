@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   KvoxRateLimitError,
   type KvoxEnqueueInput,
   type KvoxJob,
   type KvoxJobHandler,
+  type KvoxJobSettledEvent,
   type KvoxJobsPort,
 } from '../ports/index.js';
 
@@ -39,6 +42,8 @@ export interface FakeKvoxJobRecord {
 export interface FakeKvoxJobs extends KvoxJobsPort {
   /** Every job ever enqueued, in order. */
   readonly jobs: readonly FakeKvoxJobRecord[];
+  /** Every handler registered so far, in registration order. */
+  readonly handlers: readonly KvoxJobHandler[];
   /**
    * Runs pending jobs of registered types until none is runnable. A job that
    * fails is retried until its attempts are used up; one that raises
@@ -60,6 +65,26 @@ export interface FakeKvoxJobs extends KvoxJobsPort {
 export function createFakeKvoxJobs(): FakeKvoxJobs {
   const handlers = new Map<string, KvoxJobHandler>();
   const jobs: FakeKvoxJobRecord[] = [];
+  const settled: Array<(event: KvoxJobSettledEvent) => void> = [];
+
+  const settle = (record: FakeKvoxJobRecord, status: 'succeeded' | 'failed'): void => {
+    const event: KvoxJobSettledEvent = {
+      jobId: record.id,
+      type: record.input.type,
+      status,
+      subjectType: record.input.subjectType ?? null,
+      subjectId: record.input.subjectId ?? null,
+      payload: record.input.payload,
+      lastError: record.lastError,
+    };
+    for (const listener of settled) {
+      try {
+        listener(event);
+      } catch {
+        // A bystander's failure never reaches the queue.
+      }
+    }
+  };
 
   const dedupKey = (input: KvoxEnqueueInput): string =>
     `${input.type}:${input.subjectType ?? ''}:${input.subjectId ?? ''}`;
@@ -69,6 +94,10 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
   return {
     get jobs() {
       return jobs;
+    },
+
+    get handlers() {
+      return [...handlers.values()];
     },
 
     async enqueue(input) {
@@ -100,6 +129,39 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
       return handlers.has(type);
     },
 
+    onSettled(listener) {
+      settled.push(listener);
+    },
+
+    async findActive(query) {
+      return jobs
+        .filter((job) => active(job) && job.id !== query.excludeJobId && query.types.includes(job.input.type))
+        .filter((job) => {
+          if (query.subjectIds === undefined && query.payloadValues === undefined) return true;
+
+          const bySubject =
+            query.subjectIds !== undefined &&
+            job.input.subjectType === query.subjectType &&
+            job.input.subjectId !== undefined &&
+            query.subjectIds.includes(job.input.subjectId);
+          const value = query.payloadKey === undefined ? undefined : job.input.payload[query.payloadKey];
+          const byPayload =
+            query.payloadValues !== undefined && typeof value === 'string' && query.payloadValues.includes(value);
+          return bySubject || byPayload;
+        })
+        .map((job) => ({
+          id: job.id,
+          type: job.input.type,
+          subjectType: job.input.subjectType ?? null,
+          subjectId: job.input.subjectId ?? null,
+          payload: job.input.payload,
+        }));
+    },
+
+    tempPath(suffix = '') {
+      return join(tmpdir(), `kvox-fake-job-${randomUUID()}${suffix}`);
+    },
+
     async runAll() {
       let ran = 0;
       const deferred = new Set<string>();
@@ -126,6 +188,7 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
         try {
           await handler.process(view);
           next.status = 'succeeded';
+          settle(next, 'succeeded');
         } catch (error) {
           if (error instanceof KvoxRateLimitError) {
             next.status = 'pending';
@@ -136,6 +199,7 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
           }
           next.lastError = error instanceof Error ? error.message : String(error);
           next.status = next.attempts >= (handler.profile?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS) ? 'failed' : 'pending';
+          if (next.status === 'failed') settle(next, 'failed');
         }
       }
     },

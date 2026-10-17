@@ -10,9 +10,11 @@ import {
   readExtractedObjectId,
   readExtractionMetadata,
 } from '../source-metadata';
-import { buildExportDocument } from '../../transcripts/export/export-document';
-import { MarkdownTranscriptExporter } from '../../transcripts/export/markdown.exporter';
-import { TranscriptMaterializeService } from '../../transcripts/transcript-materialize.service';
+import {
+  buildExportDocument,
+  MarkdownTranscriptExporter,
+  TranscriptMaterializeService,
+} from '@marinoscar/kvox-api/transcripts';
 
 // =============================================================================
 // Resolving a note's source text (issue #49, epic #45, docs/specs/notes.md §3.2)

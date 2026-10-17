@@ -26,7 +26,8 @@ import {
 } from '@marinoscar/platform-api/sharing';
 
 import { platformHost } from '../../src/platform/platform-host';
-import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
+import { PlatformTranscriptSharing } from '../../src/kvox/transcripts/platform-transcript-sharing';
 import { asPrismaService } from './db-managed-objects.helper';
 
 export interface SharingKit {
@@ -63,7 +64,12 @@ export function createSharingKit(client: PrismaClient): SharingKit {
   return { data, policy, grants, notified };
 }
 
-/** A real `TranscriptAccessService` over `client`: the app's service on the platform's real `AccessPolicy`. */
+/** The web edition's sharing of a transcript (the slice's `TranscriptSharing`) over `client`, on the platform's real policy and grants. */
+export function createPlatformTranscriptSharing(client: PrismaClient, kit: SharingKit = createSharingKit(client)): PlatformTranscriptSharing {
+  return new PlatformTranscriptSharing(kit.policy, kit.grants, asPrismaService(client));
+}
+
+/** A real `TranscriptAccessService` over `client`: the slice's service on the web edition's sharing. */
 export function createTranscriptAccess(client: PrismaClient): TranscriptAccessService {
-  return new TranscriptAccessService(asPrismaService(client), createSharingKit(client).policy);
+  return new TranscriptAccessService(asPrismaService(client) as never, createPlatformTranscriptSharing(client));
 }

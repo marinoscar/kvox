@@ -1,9 +1,9 @@
 /**
  * The corrections API, as the web app sees it — issue #31, epic #19.
  *
- * The backend half is `apps/api/src/transcripts/transcripts.controller.ts`'s
+ * The backend half is `packages/kvox-api/src/transcripts/transcripts.controller.ts`'s
  * five correction routes and `dto/transcript-editing.dto.ts`; the op shapes
- * themselves are `apps/api/src/transcripts/editing/ops.ts`. Every type below is
+ * themselves are `packages/kvox-api/src/transcripts/editing/ops.ts`. Every type below is
  * a hand-written mirror of one of those Zod schemas, named identically so the
  * two can be diffed by eye — the same discipline `services/transcripts.ts`
  * (#30) applies to the read half, and this file is its sibling rather than a

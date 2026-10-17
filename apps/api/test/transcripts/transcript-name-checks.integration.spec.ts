@@ -1,6 +1,6 @@
 import request from 'supertest';
 
-import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../../src/transcripts/job-types';
+import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '@marinoscar/kvox-api/transcripts';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { mockTranscriptShare, setupBaseMocks, TEST_DEFAULT_ORG_ID } from '../fixtures/mock-setup.helper';

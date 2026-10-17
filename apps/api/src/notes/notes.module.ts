@@ -4,7 +4,7 @@ import { GraphExtractionModule } from '../graph/extraction/extraction.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchIndexingConfig } from '../kvox/search/search.config';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
-import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { TranscriptsConfig } from '../kvox/transcripts/transcripts.config';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService } from './note-origin.service';
 import { NoteSourceNameService } from './note-source-name.service';
@@ -88,7 +88,7 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 @Module({
   imports: [
     PrismaModule,
-    TranscriptsModule,
+    TranscriptsConfig,
     KvoxObjectsModule,
     // The semantic index (#188, epic #165). ONE-WAY, exactly as in
     // `TranscriptsModule`: this module queues a re-index after a note's content

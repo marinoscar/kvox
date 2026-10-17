@@ -2376,7 +2376,7 @@ then the default organization (`resolveJobOrgId` from
 `@marinoscar/platform-api/identity`).
 
 The worked example for a handler that does real work is this app's own
-`apps/api/src/transcripts/tasks/transcripts-housekeeping.task.ts` with its
+`packages/kvox-api/src/transcripts/tasks/transcripts-housekeeping.task.ts` with its
 handler (a scheduling task that only enqueues), and the platform's
 `job-history-purge.handler` (§7.5) for a batched loop in a transaction. The
 template's `example.echo` and `example.checksum` demonstration handlers are

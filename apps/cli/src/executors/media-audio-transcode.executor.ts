@@ -10,7 +10,7 @@ import type { JobExecutionContext, JobExecutor } from '@marinoscar/platform-cli/
 // executor since #482)
 // =============================================================================
 //
-// The node-side counterpart of `apps/api/src/transcripts/media/` and of
+// The node-side counterpart of `packages/kvox-api/src/transcripts/media/` and of
 // `MediaAudioTranscodeHandler`. The engine around it (claim, lease renewal,
 // input download, result and failure reports, the credential rule) is the
 // platform's `@marinoscar/platform-cli`; this file is the part only this app

@@ -45,7 +45,6 @@ import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { telemetryModule } from './platform/telemetry/telemetry.config';
 import { LoggerModule } from './common/logger/logger.module';
 import { KvoxModule } from './kvox/kvox.module';
-import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
 import { NotesModule } from './notes/notes.module';
@@ -242,20 +241,15 @@ import configuration from './config/configuration';
     // rather than touching `system_settings` itself.
     KvoxModule,
 
-    // The transcript pipeline (#25, epic #19): create, the upload processor,
-    // five job handlers, the reconciliation cron and the read/lifecycle
-    // routes. After KvoxModule because it imports the transcription slice for the provider
-    // registry and the settings service, and after KvoxObjectsModule because it
-    // calls `KvoxManagedObjects.initManagedUpload` with a module only a module
-    // may claim.
-    TranscriptsModule,
+    // The transcript pipeline (#25, epic #19) is `@marinoscar/kvox-api/transcripts`, configured in
+    // `kvox/transcripts/transcripts.config.ts` and imported by `KvoxModule` above (#493, epic #491).
 
     // The platform's sharing slice (#485, epic #478): `/api/grants` (share a record,
     // change or revoke a share, "shared with me"), `/api/grants/links`, `/api/groups`,
     // `AccessPolicy`, the user purge and the `sharing.grants.prune` job, over one
     // registered resource type, `transcript` (`app-registrations/sharing.ts`; users
-    // only: no group or link shares). Before TranscriptsModule, which imports the
-    // same module object for `AccessPolicy` and `GrantsService`.
+    // only: no group or link shares). The transcripts configuration imports the same
+    // module object for `AccessPolicy` and `GrantsService`.
     sharingModule,
 
     // The platform's AI slice (#473, epic #472): `GET /api/ai/config`, `/api/ai/keys`
@@ -274,15 +268,15 @@ import configuration from './config/configuration';
     KvoxAiModule,
 
     // Notes (#49, epic #45): the `note.generate` pipeline. AFTER the AI
-    // modules above (`KvoxAiModule` is global) and AFTER TranscriptsModule,
-    // which it imports for `materialize()` — a
+    // modules above (`KvoxAiModule` is global) and AFTER KvoxModule's transcripts
+    // configuration, which it imports for `materialize()` — a
     // note is generated from the transcript AS THE USER CORRECTED IT, never
     // from the AI's original result.
     NotesModule,
 
     // Connected knowledge (#354, epic #344): the graph scaffold — the
     // `graph:*` access service, the effective-ontology service and
-    // `GET /api/graph/ontology`. After NotesModule and TranscriptsModule
+    // `GET /api/graph/ontology`. After NotesModule and the transcripts configuration
     // (imported for #355's evidence validation); imported by nothing, so the
     // dependency edge runs one way.
     GraphModule,

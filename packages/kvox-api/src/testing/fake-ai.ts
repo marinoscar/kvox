@@ -121,7 +121,11 @@ export function createFakeKvoxAi(options: { script?: FakeKvoxAiScript } = {}): F
       };
     },
 
-    async resolveTask(ctx: KvoxAiContext, task: string, opts?: { model?: string }): Promise<KvoxAiTarget> {
+    async resolveTask(
+      ctx: KvoxAiContext,
+      task: string,
+      opts?: { model?: string; requireKey?: boolean },
+    ): Promise<KvoxAiTarget> {
       calls.push({ method: 'resolveTask', ctx, req: { task, ...opts } });
       if (fake.script.failWith) throw errorFor(fake.script.failWith);
       return {

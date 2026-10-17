@@ -32,7 +32,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
-import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { evidenceInputSchema, type EvidenceInput } from '../dto/graph-evidence.dto';
 
 export const INVALID_EVIDENCE_MESSAGE =

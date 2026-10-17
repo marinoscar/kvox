@@ -37,13 +37,13 @@ import {
 } from '../../src/graph/speaker-link/speaker-link.reconciler';
 import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
-import { OP_TYPES } from '../../src/transcripts/editing';
 import {
+  OP_TYPES,
   TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  TranscriptEditingService,
+  TranscriptMaterializeService,
   type TranscriptSpeakersIdentifiedEvent,
-} from '../../src/transcripts/events/transcript-speakers-identified.event';
-import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
-import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
+} from '@marinoscar/kvox-api/transcripts';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
@@ -283,9 +283,16 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
    * `kg.speaker_link` handler do in production).
    */
   function editingService() {
-    const events = new EventEmitter2();
+    const emitter = new EventEmitter2();
+    // The slice publishes on the events port; here it is the emitter, observed below.
+    const events = {
+      emit: (name: string, payload: unknown) => {
+        emitter.emit(name, payload);
+      },
+      subscribe: jest.fn(),
+    };
     const emitted: TranscriptSpeakersIdentifiedEvent[] = [];
-    events.on(TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT, (event: TranscriptSpeakersIdentifiedEvent) => {
+    emitter.on(TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT, (event: TranscriptSpeakersIdentifiedEvent) => {
       emitted.push(event);
     });
     const access = {
@@ -304,6 +311,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
       new TranscriptMaterializeService(prisma as never, {} as never),
       pipeline as never,
       events,
+      { record: async () => undefined },
     );
     const drain = async () => {
       const batch = emitted.splice(0);

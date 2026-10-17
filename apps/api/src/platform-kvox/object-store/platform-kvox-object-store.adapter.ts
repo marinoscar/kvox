@@ -1,4 +1,4 @@
-import { PassThrough, Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 
 import { APP_SLUG } from '@app/shared';
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -12,15 +12,20 @@ import {
   type StorageObject,
   type StorageProvider,
 } from '@marinoscar/platform-api/storage';
-import type {
-  KvoxInitUploadResult,
-  KvoxManagedBy,
-  KvoxObjectHead,
-  KvoxObjectStatus,
-  KvoxObjectStorePort,
-  KvoxPutResult,
-  KvoxUploadPart,
-  KvoxUploadedEvent,
+import {
+  KvoxObjectMissingError,
+  type KvoxAbortedEvent,
+  type KvoxInitUploadResult,
+  type KvoxManagedBy,
+  type KvoxObjectHead,
+  type KvoxObjectInfo,
+  type KvoxObjectState,
+  type KvoxObjectStatus,
+  type KvoxObjectStorePort,
+  type KvoxPutResult,
+  type KvoxUploadPart,
+  type KvoxUploadedEvent,
+  type KvoxUploadedOptions,
 } from '@marinoscar/kvox-api/ports';
 
 import { KvoxManagedObjectsService, type StorageObjectRow } from '../../kvox-objects/kvox-managed-objects.service';
@@ -42,7 +47,7 @@ import { KvoxS3PartLister } from '../../kvox-objects/kvox-s3-part-lister';
 // registered `ObjectProcessor` in its server-only `storage.object.process` job once
 // an upload completes, so this adapter registers ONE processor and fans the event
 // out to the handlers. A handler decides from `managedBy` whether the object is its
-// own, exactly as `TranscriptUploadProcessor` does with the ownership table.
+// own, as the transcripts slice's upload hook does with the event's `managedBy`.
 // =============================================================================
 
 /** The processor name recorded in a processed object's metadata. */
@@ -55,6 +60,23 @@ function statusOf(status: string): KvoxObjectStatus {
   return 'pending';
 }
 
+/** The platform object statuses, narrowed to the port's five. */
+function stateOf(status: string): KvoxObjectState {
+  if (status === 'ready' || status === 'failed' || status === 'processing' || status === 'uploading') return status;
+  return 'pending';
+}
+
+/** Whether a content type is one a handler asked for (`audio/*` is a family, anything else exact). */
+function wants(contentTypes: readonly string[] | undefined, mimeType: string | null | undefined): boolean {
+  if (contentTypes === undefined) return true;
+  const type = (mimeType ?? '').toLowerCase();
+
+  return contentTypes.some((wanted) => {
+    const pattern = wanted.toLowerCase();
+    return pattern.endsWith('/*') ? type.startsWith(pattern.slice(0, -1)) : type === pattern;
+  });
+}
+
 /** A `Content-Disposition` for a download, safe for any file name. */
 function attachment(filename: string): string {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
@@ -65,9 +87,13 @@ function attachment(filename: string): string {
 export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
   private readonly logger = new Logger(PlatformKvoxObjectStoreAdapter.name);
 
-  private readonly handlers: Array<(e: KvoxUploadedEvent) => Promise<void>> = [];
+  private readonly handlers: Array<{ handler: (e: KvoxUploadedEvent) => Promise<void>; contentTypes?: readonly string[] }> = [];
 
   private processorRegistered = false;
+
+  private readonly abortHandlers: Array<(e: KvoxAbortedEvent) => Promise<void>> = [];
+
+  private abortRegistered = false;
 
   constructor(
     private readonly managed: KvoxManagedObjectsService,
@@ -80,7 +106,13 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
   @Trace()
   async initUpload(
     ctx: { userId: string },
-    req: { name: string; mimeType: string; size: number; managedBy: KvoxManagedBy },
+    req: {
+      name: string;
+      mimeType?: string | null;
+      size: number;
+      managedBy: KvoxManagedBy;
+      allowedMimeTypes?: readonly string[];
+    },
   ): Promise<KvoxInitUploadResult> {
     const init = await this.managed.initManagedUpload({
       module: req.managedBy,
@@ -88,9 +120,16 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
       name: req.name,
       size: req.size,
       mimeType: req.mimeType,
+      ...(req.allowedMimeTypes !== undefined ? { allowedMimeTypes: req.allowedMimeTypes } : {}),
     });
 
-    return { objectId: init.objectId, partSize: init.partSize, parts: init.presignedUrls };
+    return {
+      objectId: init.objectId,
+      uploadId: init.uploadId,
+      partSize: init.partSize,
+      totalParts: init.totalParts,
+      parts: init.presignedUrls,
+    };
   }
 
   @Trace()
@@ -150,12 +189,18 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
     body: NodeJS.ReadableStream | Buffer;
     contentType: string;
     managedBy: KvoxManagedBy;
+    name?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<KvoxPutResult> {
-    // Count the bytes as they pass; a stream is never collected.
+    // Count the bytes as they pass; a stream is never collected. A Transform, not a `data`
+    // listener on a PassThrough: a listener would start the stream flowing before the provider
+    // reads it and the early chunks would be lost.
     let size = 0;
-    const counted = new PassThrough();
-    counted.on('data', (chunk: Buffer) => {
-      size += chunk.length;
+    const counted = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        callback(null, chunk);
+      },
     });
 
     const source = Buffer.isBuffer(req.body)
@@ -172,12 +217,20 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
     });
 
     try {
+      // IDEMPOTENT ON THE KEY: a retry of a job that already stored and recorded these bytes
+      // (the key is a pure function of the job) finds its row and reuses it rather than
+      // creating a second one for one file.
+      const existing = await this.managed.findByKey(req.key);
+      if (existing) return { objectId: existing.id, size: Number(existing.size) };
+
       const row = await this.managed.create({
         module: req.managedBy,
         key: req.key,
         mimeType: req.contentType,
         size,
         uploadedById: req.ownerId,
+        ...(req.name !== undefined ? { name: req.name } : {}),
+        ...(req.metadata !== undefined ? { metadata: req.metadata } : {}),
       });
       return { objectId: row.id, size };
     } catch (error) {
@@ -189,6 +242,56 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
       });
       throw error;
     }
+  }
+
+  @Trace()
+  async adopt(req: {
+    ownerId: string;
+    key: string;
+    name: string;
+    contentType: string;
+    size: number;
+    managedBy: KvoxManagedBy;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ objectId: string }> {
+    const existing = await this.managed.findByKey(req.key);
+    if (existing) return { objectId: existing.id };
+
+    if (!(await this.storage.exists(req.key))) throw new KvoxObjectMissingError(req.key);
+
+    const row = await this.managed.create({
+      module: req.managedBy,
+      key: req.key,
+      name: req.name,
+      mimeType: req.contentType,
+      size: req.size,
+      uploadedById: req.ownerId,
+      ...(req.metadata !== undefined ? { metadata: req.metadata } : {}),
+    });
+
+    return { objectId: row.id };
+  }
+
+  @Trace()
+  async describe(objectIds: readonly string[]): Promise<Map<string, KvoxObjectInfo>> {
+    const found = new Map<string, KvoxObjectInfo>();
+    if (objectIds.length === 0) return found;
+
+    const rows = await this.managed.findMany({ where: { id: { in: [...new Set(objectIds)] } } });
+
+    for (const row of rows) {
+      found.set(row.id, {
+        id: row.id,
+        name: row.name,
+        mimeType: row.mimeType,
+        size: Number(row.size),
+        state: stateOf(row.status),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+    }
+
+    return found;
   }
 
   @Trace()
@@ -238,8 +341,27 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
     await this.objects.delete(objectId, object.uploadedById, object.orgId, { canDeleteAny: true });
   }
 
-  onUploaded(handler: (e: KvoxUploadedEvent) => Promise<void>): void {
-    this.handlers.push(handler);
+  onAborted(handler: (e: KvoxAbortedEvent) => Promise<void>): void {
+    if (!this.abortRegistered) {
+      this.abortRegistered = true;
+      this.managed.onAborted(async ({ objectId, module }) => {
+        for (const registered of this.abortHandlers) {
+          try {
+            await registered({ objectId, managedBy: asKvoxModule(module) });
+          } catch (error) {
+            this.logger.error(
+              `An abort handler failed for ${objectId}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+      });
+    }
+
+    this.abortHandlers.push(handler);
+  }
+
+  onUploaded(handler: (e: KvoxUploadedEvent) => Promise<void>, options?: KvoxUploadedOptions): void {
+    this.handlers.push({ handler, ...(options?.contentTypes !== undefined ? { contentTypes: options.contentTypes } : {}) });
     if (this.processorRegistered) return;
 
     this.processorRegistered = true;
@@ -252,7 +374,10 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
       name: KVOX_PORT_UPLOAD_PROCESSOR_NAME,
       // After the module processors, which only enqueue.
       priority: 900,
-      canProcess: () => true,
+      // The platform queues one `storage.object.process` job per completed upload that ANY
+      // processor accepts, so the processor says yes only to a file some handler wants (a
+      // transcript's source is audio or video; a handler with no filter wants everything).
+      canProcess: (object: StorageObject) => this.handlers.some((entry) => wants(entry.contentTypes, object.mimeType)),
       process: async (object: StorageObject): Promise<ObjectProcessorResult> => {
         const owners = await this.managed.managedBy([object.id]);
         const event: KvoxUploadedEvent = {
@@ -262,7 +387,9 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
 
         // A handler's failure is recorded and does not fail the object or stop the next handler.
         let failed = 0;
-        for (const handler of this.handlers) {
+        for (const { handler, contentTypes } of this.handlers) {
+          if (!wants(contentTypes, object.mimeType)) continue;
+
           try {
             await handler(event);
           } catch (error) {

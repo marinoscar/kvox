@@ -57,15 +57,18 @@ import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { SearchIndexService } from '@marinoscar/kvox-api/search';
-import { TranscriptPurgeHandler } from '../../src/transcripts/handlers/transcript-purge.handler';
-import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
+import {
+  TranscriptObjectsService,
+  TranscriptPurgeHandler,
+  resolveTranscriptsOptions,
+} from '@marinoscar/kvox-api/transcripts';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createDbAudit, createDbManagedObjects, createDbObjectStore } from '../helpers/db-managed-objects.helper';
 import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { buildNotesService } from '../notes/notes-service-test-factory';
 import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
-import { createSharingKit } from '../helpers/sharing-kit.helper';
+import { createPlatformTranscriptSharing } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('user-data-purge.db.spec');
 
@@ -147,9 +150,10 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
 
     // The real per-item machinery, over the real gateway and the fake provider.
     transcriptPurge = new TranscriptPurgeHandler(
-      registry,
+      { registerHandler: jest.fn() } as never,
       prisma as unknown as PrismaService,
-      new TranscriptObjectsService(managed, { get: (_key: string, fallback: unknown) => fallback } as never, storage as never),
+      createDbAudit(prisma),
+      new TranscriptObjectsService(createDbObjectStore(prisma, storage as never), resolveTranscriptsOptions({})),
       { resolve: jest.fn() } as never, // no transcript here has a provider copy
       searchIndex,
       {
@@ -163,7 +167,7 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
           });
         },
       } as never,
-      createSharingKit(prisma).grants,
+      createPlatformTranscriptSharing(prisma),
     );
 
     const notes = buildNotesService({

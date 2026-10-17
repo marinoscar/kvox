@@ -53,3 +53,51 @@ export const UNUSED_STORAGE: StorageProvider = {
   kind: 's3',
   getBucket: () => 'test-bucket',
 } as unknown as StorageProvider;
+
+// -----------------------------------------------------------------------------
+// The slice ports over the same client (issue #493, epic #491)
+// -----------------------------------------------------------------------------
+//
+// `@marinoscar/kvox-api/transcripts` reaches storage and the audit trail through ports. The
+// real-Postgres suites bind the web edition's REAL object-store adapter over the same gateway
+// (so the ownership table, the composite keys and the storage provider are exercised, not a fake)
+// and an audit port that writes the same `audit_events` rows the platform sink does.
+// -----------------------------------------------------------------------------
+
+import type { KvoxAuditPort, KvoxObjectStorePort } from '@marinoscar/kvox-api/ports';
+import type { ObjectProcessorRegistry } from '@marinoscar/platform-api/storage';
+
+import { PlatformKvoxObjectStoreAdapter } from '../../src/platform-kvox/object-store/platform-kvox-object-store.adapter';
+import type { KvoxS3PartLister } from '../../src/kvox-objects/kvox-s3-part-lister';
+
+/** The web edition's `KVOX_OBJECT_STORE` adapter over `client` and `storage`. */
+export function createDbObjectStore(
+  client: PrismaClient,
+  storage: StorageProvider,
+  objects: Partial<ObjectsService> = {},
+): KvoxObjectStorePort {
+  return new PlatformKvoxObjectStoreAdapter(
+    createDbManagedObjects(client, storage, objects),
+    objects as ObjectsService,
+    {} as KvoxS3PartLister,
+    { register: () => undefined } as unknown as ObjectProcessorRegistry,
+    storage,
+  );
+}
+
+/** An audit port that writes the `audit_events` row the platform sink writes. */
+export function createDbAudit(client: PrismaClient): KvoxAuditPort {
+  return {
+    record: async (event) => {
+      await client.auditEvent.create({
+        data: {
+          actorUserId: event.actorUserId,
+          action: event.action,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          ...(event.meta !== undefined ? { meta: event.meta as never } : {}),
+        },
+      });
+    },
+  };
+}

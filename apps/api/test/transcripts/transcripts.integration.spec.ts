@@ -15,7 +15,7 @@ import {
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { encodeCursor as encodeTranscriptCursor } from '../../src/transcripts/transcripts.service';
+import { encodeCursor as encodeTranscriptCursor } from '@marinoscar/kvox-api/transcripts';
 
 // =============================================================================
 // Transcripts integration (issue #25, epic #19)
@@ -86,6 +86,32 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+/**
+ * A stored object, as both readers of it see it: the slice describes objects through the object-store
+ * port (one `findMany`), and the web edition's signed URL reads the row (`findUnique`).
+ */
+function storedObject(row: Record<string, unknown>): void {
+  const full = {
+    id: 'obj-source',
+    status: 'ready',
+    storageKey: 'uploads/1/a.mp3',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...row,
+  };
+
+  prismaMock.storageObject.findUnique.mockResolvedValue(full as never);
+  prismaMock.storageObject.findMany.mockResolvedValue([full] as never);
+}
+
+/** What the credentials slice reports for a stored key (the secrets port reads `hint` and `updatedAt`). */
+const describedKey = {
+  name: 'assemblyai',
+  hint: '…-key',
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedByUserId: null,
+};
+
 describe('Transcripts Integration', () => {
   let context: TestContext;
   let mockCredentials: { describe: jest.Mock; getSecret: jest.Mock };
@@ -93,7 +119,7 @@ describe('Transcripts Integration', () => {
 
   beforeAll(async () => {
     mockCredentials = {
-      describe: jest.fn().mockResolvedValue({ name: 'assemblyai' }),
+      describe: jest.fn().mockResolvedValue(describedKey),
       getSecret: jest.fn().mockResolvedValue('aai-key'),
     };
 
@@ -132,12 +158,14 @@ describe('Transcripts Integration', () => {
     setupBaseMocks();
     jest.clearAllMocks();
 
-    mockCredentials.describe.mockResolvedValue({ name: 'assemblyai' });
+    mockCredentials.describe.mockResolvedValue(describedKey);
     mockCredentials.getSecret.mockResolvedValue('aai-key');
     mockStorage.getBucket.mockReturnValue('test-bucket');
     mockStorage.initMultipartUpload.mockResolvedValue({ uploadId: 'upload-1' });
     mockStorage.getSignedUploadUrl.mockResolvedValue('https://signed/put');
     mockStorage.getSignedDownloadUrl.mockResolvedValue('https://signed/get');
+    // The web edition's jobs adapter reads the created row's id back.
+    prismaMock.job.create.mockResolvedValue({ id: 'job-1' } as never);
 
     prismaMock.systemSettings.findUnique.mockResolvedValue({
       key: 'global',
@@ -170,7 +198,7 @@ describe('Transcripts Integration', () => {
         transcriptRow({ ownerId: user.id, status: 'uploading', currentVersion: 0 }),
       );
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         name: 'meeting.mp3',
         mimeType: 'audio/mpeg',
         size: BigInt(5_000_000),
@@ -270,7 +298,7 @@ describe('Transcripts Integration', () => {
         transcriptRow({ ownerId: viewer.id, status: 'uploading' }),
       );
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         name: 'meeting.mp3',
         mimeType: 'audio/mpeg',
         size: BigInt(5_000_000),
@@ -415,7 +443,7 @@ describe('Transcripts Integration', () => {
       prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
       mockTranscriptShare('viewer');
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         name: 'meeting.mp3',
         mimeType: 'audio/mpeg',
         size: BigInt(5_000_000),
@@ -448,7 +476,7 @@ describe('Transcripts Integration', () => {
       prismaMock.transcript.update.mockImplementation((({ data }: { data: object }) =>
         Promise.resolve(transcriptRow({ ownerId: owner.id, ...data }))) as never);
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         name: 'meeting.mp3',
         mimeType: 'audio/mpeg',
         size: BigInt(5_000_000),
@@ -584,7 +612,7 @@ describe('Transcripts Integration', () => {
       );
       prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
       prismaMock.transcriptSegment.findMany.mockResolvedValue([]);
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         name: 'meeting.mp3',
         mimeType: 'audio/mpeg',
         size: BigInt(5_000_000),
@@ -678,7 +706,7 @@ describe('Transcripts Integration', () => {
       prismaMock.transcript.findUnique.mockResolvedValue(
         transcriptRow({ ownerId: owner.id }),
       );
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         id: 'obj-playback',
         status: 'ready',
         storageKey: 'transcripts/1/renditions/a.m4a',
@@ -705,7 +733,7 @@ describe('Transcripts Integration', () => {
       prismaMock.transcript.findUnique.mockResolvedValue(
         transcriptRow({ ownerId: owner.id, playbackStatus: 'failed' }),
       );
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      storedObject({
         id: 'obj-source',
         status: 'ready',
         storageKey: 'uploads/1/a.mp3',

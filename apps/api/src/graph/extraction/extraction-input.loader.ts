@@ -15,7 +15,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { defaultSpeakerName, parseSpeakerIdentities } from '../../transcripts/editing/speaker-identity';
+import { defaultSpeakerName, parseSpeakerIdentities } from '@marinoscar/kvox-api/transcripts';
 import { NOTE_NOT_FOUND_MESSAGE } from '../../notes/access/note-access.service';
 import { NoteOriginService } from '../../notes/note-origin.service';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';

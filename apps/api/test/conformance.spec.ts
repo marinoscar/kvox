@@ -42,6 +42,29 @@ import {
   type ResolvedSearchOptions,
 } from '@marinoscar/kvox-api/search';
 import { describeSearchConformance } from '@marinoscar/kvox-api/search/testing';
+import { createFakeKvoxJobs } from '@marinoscar/kvox-api/testing';
+import {
+  MediaAudioTranscodeHandler,
+  TRANSCRIPTS_MODULE_OPTIONS,
+  TranscriptExportHandler,
+  TranscriptNameCheckHandler,
+  TranscriptPipelineService,
+  TranscriptPurgeHandler,
+  TranscriptSnapshotHandler,
+  TranscriptionIngestHandler,
+  TranscriptionPollHandler,
+  TranscriptionSubmitHandler,
+  TranscriptsHousekeepingHandler,
+  JsonTranscriptExporter,
+  MarkdownTranscriptExporter,
+  PdfTranscriptExporter,
+  TranscriptExporterRegistry,
+  type ResolvedTranscriptsOptions,
+} from '@marinoscar/kvox-api/transcripts';
+import {
+  describeTranscriptExporterConformance,
+  describeTranscriptsConformance,
+} from '@marinoscar/kvox-api/transcripts/testing';
 import { AssemblyAiProvider, TranscriptionProviderRegistry } from '@marinoscar/kvox-api/transcription';
 import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/transcription/testing';
 
@@ -193,7 +216,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'app-sharing/transcript-visibility.ts', why: 'Reads the ids of the transcripts shared with the caller through the platform\'s accessibleWhere EXISTS form, past 1,000 shares (issue #485); the statement is built by the platform and bound to the caller and their organization.' },
   { file: 'platform/onboarding/onboarding-data.adapter.ts', why: 'The onboarding activation metrics (issue #481): the platform builds one aggregate statement over the registered funnel and milestone expressions and this port runs it in a READ ONLY transaction. It returns counts only, every value is a bound parameter, and the expressions are developer-authored (refused at registration if they contain a semicolon).' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
-  { file: 'transcripts/transcript-editing.service.ts', why: 'Row locks and ordered segment rewrites inside the edit transaction; scoped to a transcript the caller owns.' },
 ] as const;
 
 const HOSTILE = '<script>alert(1)</script>';
@@ -271,25 +293,28 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Four files hold a @Cron: kg-export-expiry, kg-migrate-scheduler, notes-housekeeping,
-    // transcripts-housekeeping (the storage cleanup cron is the platform's since #469; the backup
-    // schedule and the telemetry retention crons are the platform's since #471).
-    cronEnqueueOnly: { exempt: [], minCronFiles: 4 },
+    // Three files hold a @Cron here: kg-export-expiry, kg-migrate-scheduler, notes-housekeeping
+    // (the storage cleanup cron is the platform's since #469; the backup schedule and the
+    // telemetry retention crons are the platform's since #471; the transcripts housekeeping
+    // cron moved into `@marinoscar/kvox-api/transcripts` with #493 and is scanned by the second
+    // run at the bottom of this file).
+    cronEnqueueOnly: { exempt: [], minCronFiles: 3 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
     // provider). Five files hold a listener, one body each, every one a dispatch or one bounded
     // write. The job-failure and node-offline notifiers are the platform's since #470 (outside
     // this source root, scanned by the package's own run). The two transcript upload listeners and storage/processing/object-processing.service.ts
-    // are gone (#469): the pipeline starts from transcripts/transcript-upload.processor.ts, a
-    // platform ObjectProcessor that runs in the storage.object.process job.
+    // are gone (#469): the pipeline starts from the transcripts slice's upload hook, which the
+    // platform adapter runs as an ObjectProcessor in the storage.object.process job. The transcript
+    // job-failure listener moved into the slice with #493 (it subscribes through the job port,
+    // not `@OnEvent`), so it is no longer in this source root.
     onEventNoIo: {
-      minListenerFiles: 5,
-      minListenerBodies: 5,
+      minListenerFiles: 4,
+      minListenerBodies: 4,
       mustScan: [
         'graph/layout/graph-layout.listener.ts',
         'graph/listeners/speaker-identified.listener.ts',
         'graph/preferences/graph-preferences-change.forwarder.ts',
         'graph/resolution/listeners/graph-preferences.listener.ts',
-        'transcripts/listeners/transcript-job-failure.listener.ts',
       ],
     },
     userOwnedData: {
@@ -433,7 +458,7 @@ describeTranscriptionProviderConformance(
 describeSearchConformance(
   'the web edition binding',
   () => {
-    const jobs = { registerHandler: () => undefined, enqueue: async () => ({ id: 'job', deduplicated: false }), isRegistered: () => false };
+    const jobs = createFakeKvoxJobs();
     const unusedDb = {} as never;
     const indexOptions = { batchSize: KVOX_EMBEDDING.maxBatchSize };
 
@@ -471,6 +496,60 @@ describeSearchConformance(
   { permissions: { transcript: PERMISSIONS.TRANSCRIPTS_READ, note: PERMISSIONS.NOTES_READ } },
 );
 
+// The transcripts slice's conformance suites (`@marinoscar/kvox-api/transcripts/testing`, #493), over the
+// web edition's binding: the nine handlers as the application's module built them (the real DI wiring
+// over the platform adapters), and the three built-in exporters. The pipeline invariants (the poll
+// re-enqueue passes `skipDedup`, name_check is server-only and tried once, only the transcode is node
+// eligible, the three provider types share one bucket) are held here exactly as the package holds
+// them over its fakes.
+let transcriptsContext: TestContext | undefined;
+
+afterAll(async () => {
+  if (transcriptsContext) await closeTestApp(transcriptsContext);
+});
+
+describeTranscriptsConformance(
+  'the web edition binding',
+  async () => {
+    transcriptsContext = await createTestApp();
+    const app = transcriptsContext.module;
+    const options = app.get<ResolvedTranscriptsOptions>(TRANSCRIPTS_MODULE_OPTIONS, { strict: false });
+
+    return {
+      handlers: [
+        MediaAudioTranscodeHandler,
+        TranscriptExportHandler,
+        TranscriptNameCheckHandler,
+        TranscriptPurgeHandler,
+        TranscriptSnapshotHandler,
+        TranscriptionIngestHandler,
+        TranscriptionPollHandler,
+        TranscriptionSubmitHandler,
+        TranscriptsHousekeepingHandler,
+      ].map((handler) => app.get(handler, { strict: false })),
+      // The slice's service over the given queue and the application's own resolved options.
+      pipelineFor: (jobs) =>
+        new TranscriptPipelineService({} as never, jobs, {} as never, options, {} as never, {} as never),
+    };
+  },
+  { describe, it, expect },
+);
+
+for (const exporter of [
+  new JsonTranscriptExporter(new TranscriptExporterRegistry()),
+  new MarkdownTranscriptExporter(new TranscriptExporterRegistry()),
+  new PdfTranscriptExporter(new TranscriptExporterRegistry()),
+]) {
+  describeTranscriptExporterConformance(exporter, { describe, it, expect }, { minBytes: exporter.format === 'pdf' ? 500 : 1 });
+}
+
+// The transcripts housekeeping cron lives in the package, outside `apps/api/src`; the queue rule that a
+// `@Cron` only enqueues (CLAUDE.md rule 1) is held for it by scanning its folder with the same suite.
+runPlatformConformance({
+  sourceRoots: [join(REPO_DIR, 'packages', 'kvox-api', 'src', 'transcripts', 'tasks')],
+  suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
+});
+
 // kvox-guarded routes: the identity suite's two route rules, for the controllers it cannot see (see
 // `isKvoxGuarded`). Every route of a controller the `@marinoscar/kvox-api` slices guard is authenticated
 // through `KvoxAuthGuard`, and every permission it enforces (the option names resolved through the
@@ -482,12 +561,14 @@ describe('kvox-guarded routes', () => {
       .map((name) => ({ name, handler: controller.prototype[name] as Function }))
       .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
 
-  it('finds the transcription and search controllers (a path mistake must not make this vacuous)', () => {
+  it('finds the transcription, transcripts and search controllers (a path mistake must not make this vacuous)', () => {
     expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
       'SearchController',
       'SearchIndexController',
+      'TranscriptNameChecksController',
       'TranscriptionConfigController',
       'TranscriptionSettingsController',
+      'TranscriptsController',
     ]);
   });
 

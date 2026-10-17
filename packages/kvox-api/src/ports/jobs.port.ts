@@ -76,6 +76,13 @@ export interface KvoxJobHandler<P = unknown> {
    */
   readonly usesAi?: boolean;
   /**
+   * The provider throttle bucket every job of this type draws on (for example
+   * the transcription provider's deployment-wide key). Registered with the host's
+   * throttle when the handler is registered, so the queue holds back claims while
+   * the bucket is cooling down. Per-user buckets are given at `enqueue` instead.
+   */
+  readonly throttleKey?: string;
+  /**
    * Runs one attempt. Throwing fails the attempt; throwing
    * {@link KvoxRateLimitError} defers it.
    *
@@ -92,6 +99,18 @@ export interface KvoxJobHandler<P = unknown> {
    * @param result - the validated node result.
    */
   persistNodeResult?(job: KvoxJob<P>, result: unknown): Promise<void>;
+  /**
+   * Where a worker node's output upload lands (the object-store key). Present on a
+   * node-eligible type whose node uploads a file.
+   *
+   * @param job - the job.
+   */
+  deriveOutputKey?(job: KvoxJob<P>): Promise<string>;
+  /**
+   * A deployment's runtime switch for offering this type to worker nodes. Absent
+   * means yes; a rejection is treated as no.
+   */
+  nodeOffloadEnabled?(): Promise<boolean>;
 }
 
 /**
@@ -133,6 +152,68 @@ export interface KvoxEnqueueResult {
 }
 
 /**
+ * What a settled job reports to {@link KvoxJobsPort.onSettled} listeners.
+ *
+ * @stability experimental
+ */
+export interface KvoxJobSettledEvent {
+  /** The job id. */
+  jobId: string;
+  /** The handler type. */
+  type: string;
+  /** How it ended: `failed` is terminal (attempts exhausted), not a retry. */
+  status: 'succeeded' | 'failed';
+  /** The kind of thing the job was about, or `null`. */
+  subjectType: string | null;
+  /** Which one, or `null`. */
+  subjectId: string | null;
+  /** The input the enqueuer gave. */
+  payload: unknown;
+  /** The last error message of a failed job, or `null`. */
+  lastError: string | null;
+}
+
+/**
+ * Which not-yet-settled jobs {@link KvoxJobsPort.findActive} looks for. A job
+ * matches when its type is listed and it is about one of the named subjects OR
+ * carries one of the named payload values.
+ *
+ * @stability experimental
+ */
+export interface KvoxActiveJobQuery {
+  /** The handler types to look at. */
+  types: readonly string[];
+  /** The subject kind to match, together with `subjectIds`. */
+  subjectType?: string;
+  /** The subject ids to match. */
+  subjectIds?: readonly string[];
+  /** A top-level payload key to match, together with `payloadValues`. */
+  payloadKey?: string;
+  /** The payload values to match. */
+  payloadValues?: readonly string[];
+  /** A job to leave out (the one asking). */
+  excludeJobId?: string;
+}
+
+/**
+ * A pending or running job, as {@link KvoxJobsPort.findActive} reports it.
+ *
+ * @stability experimental
+ */
+export interface KvoxActiveJob {
+  /** The job id. */
+  id: string;
+  /** The handler type. */
+  type: string;
+  /** The subject kind, or `null`. */
+  subjectType: string | null;
+  /** The subject id, or `null`. */
+  subjectId: string | null;
+  /** The input the enqueuer gave. */
+  payload: unknown;
+}
+
+/**
  * The job port.
  *
  * @extensionPoint token
@@ -162,6 +243,31 @@ export interface KvoxJobsPort {
    * @param type - the job type.
    */
   isRegistered(type: string): boolean;
+
+  /**
+   * Listens for jobs that reached a terminal state. The listener is a
+   * bystander: it must not do work inline (enqueue, or detach), and a throw is
+   * logged, never propagated.
+   *
+   * @param listener - called once for each settled job.
+   */
+  onSettled(listener: (event: KvoxJobSettledEvent) => void): void;
+
+  /**
+   * The pending or running jobs that match a query: the answer to "is anything
+   * still about to touch this subject?".
+   *
+   * @param query - the types, and the subjects or payload values to look for.
+   */
+  findActive(query: KvoxActiveJobQuery): Promise<KvoxActiveJob[]>;
+
+  /**
+   * A fresh path for a scratch file the host sweeps if the process dies before
+   * the handler removes it. The caller creates and deletes the file.
+   *
+   * @param suffix - a file extension such as `.m4a`.
+   */
+  tempPath(suffix?: string): string;
 }
 
 /**

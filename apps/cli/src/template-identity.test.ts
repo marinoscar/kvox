@@ -193,14 +193,8 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // publishes `<name>.transcript/v1` as a NEW schema beside this one; it
   // does not renumber this one. See docs/specs/transcription.md §8.2.
   'docs/specs/transcript-export.v1.schema.json',
-  // The exporter that WRITES that `$id` into every document it renders
-  // (issue #28). Exactly the same standing, for exactly the same reason: the
-  // string is the published format identifier a third-party parser matches on,
-  // not a display string, and a rebrand that rewrote it would invalidate every
-  // consumer of every file exported before the rename. Everything else in the
-  // file is product-neutral; the constant carries the argument at its own
-  // declaration so nobody "tidies" it into a template literal.
-  'apps/api/src/transcripts/export/json.exporter.ts',
+  // The exporter that WRITES that `$id` (issue #28) moved to `packages/kvox-api/src/transcripts/export/
+  // json.exporter.ts` with the transcripts slice (#493); the package folders are exempt by prefix.
 
   // ---------------------------------------------------------------------
   // Added by epic #45 (issue #46), the notes/AI architecture spec.
@@ -231,7 +225,6 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // or say "this app".
   // ---------------------------------------------------------------------
   'apps/api/src/db-backup/restore-preflight.service.ts',
-  'apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts',
 
   // ---------------------------------------------------------------------
   // Added when the CLI rename from `appctl` to `kvox` finished across the
@@ -627,12 +620,13 @@ function stripRegistryScopes(lineText: string): string {
  * `20-kvox-extensions.sh` init script and `kvox.extensions` restore-gate id, and (#490) the
  * `platform-kvox/` folder of the web edition's port adapters and the paths inside it, and (#492) the
  * application's `kvox/` binding folder (`apps/api/src/kvox/`, `test/kvox/`), `app-registrations/kvox-permissions.ts`
- * and the `packages/kvox-*` folders other files point at. They are stripped per
+ * the `packages/kvox-*` folders other files point at and (#493) the `kvox-transcripts` permission-set slice id
+ * (a registry key, persisted by `registerPermissionSet`). They are stripped per
  * token, like the registry scopes above, so any other mention of the product name on the same line is
  * still flagged. A rename of the product renames these with the module directory.
  */
 const STORAGE_ADOPTION_TOKEN_RE =
-  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bplatform-kvox[\w./-]*|(?<!marinoscar\/)\bkvox\/[\w./-]*|\bkvox-permissions\b|\bpackages\/kvox-[\w./-]*/g;
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bplatform-kvox[\w./-]*|(?<!marinoscar\/)\bkvox\/[\w./-]*|\bkvox-permissions\b|\bkvox-transcripts\b|\bpackages\/kvox-[\w./-]*/g;
 
 function stripStorageAdoptionTokens(lineText: string): string {
   return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');

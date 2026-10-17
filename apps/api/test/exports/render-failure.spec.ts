@@ -1,10 +1,12 @@
 import { PassThrough } from 'node:stream';
 
-import { JsonTranscriptExporter } from '../../src/transcripts/export/json.exporter';
-import { MarkdownTranscriptExporter } from '../../src/transcripts/export/markdown.exporter';
-import { PdfTranscriptExporter } from '../../src/transcripts/export/pdf.exporter';
-import { TranscriptExporterRegistry } from '../../src/transcripts/export/transcript-exporter.interface';
-import { fixtureDocument } from '../../src/transcripts/export/__fixtures__/document';
+import {
+  JsonTranscriptExporter,
+  MarkdownTranscriptExporter,
+  PdfTranscriptExporter,
+  TranscriptExporterRegistry,
+} from '@marinoscar/kvox-api/transcripts';
+import { fixtureDocument } from '@marinoscar/kvox-api/transcripts/testing';
 import { MarkdownNoteExporter } from '../../src/notes/export/markdown.exporter';
 import { PdfNoteExporter } from '../../src/notes/export/pdf.exporter';
 import { WordNoteExporter } from '../../src/notes/export/word.exporter';

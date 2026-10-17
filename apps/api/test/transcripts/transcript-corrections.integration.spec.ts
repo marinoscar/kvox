@@ -499,7 +499,7 @@ describe('Transcript corrections Integration', () => {
           snapshotObjectId: 'object-1',
           ops: [],
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          author: null,
+          authorId: null,
         },
       ] as never);
 
