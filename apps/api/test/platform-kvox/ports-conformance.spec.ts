@@ -462,6 +462,8 @@ function settingsUnderTest(): KvoxPortsUnderTest['settings'] {
     ],
     system: { name: 'transcription', patch: { enabled: true, label: 'x' }, actorUserId: 'user-conformance' },
     user: { name: 'graph', userId: 'user-conformance', patch: { mode: 'dark' } },
+    // The real per-user `graph` namespace is declared with `defaults: undefined` (absent means the slice's own).
+    noDefaults: { name: 'graph', schema: z.object({ mode: z.string() }), userId: 'user-conformance-fresh', patch: { mode: 'dark' } },
   };
 }
 
