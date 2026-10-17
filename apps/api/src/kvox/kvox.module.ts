@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { platformKvoxModule } from '../platform-kvox/platform-kvox.module';
+import { AskConfig } from './ask/ask.config';
 import { GraphBindingModule, GraphConfig, GraphExtractionConfig, GraphRdfConfig } from './graph/graph.config';
 import { NotesConfig } from './notes/notes.config';
 import { SearchConfig, SearchIndexingConfig } from './search/search.config';
@@ -26,8 +27,8 @@ import { TranscriptsConfig } from './transcripts/transcripts.config';
 // import its indexing half; transcripts (#493) comes after transcription and search,
 // which it imports; notes (#495) comes after transcripts and search, which it imports;
 // graph (#496) comes after notes, transcripts and search, which it reads through, with its
-// extraction and RDF halves after it; later slices (Ask) append their config to this list as they
-// move into the package.
+// extraction and RDF halves after it; Ask (#497) comes last of the slices, after the graph, notes and
+// search it reads through.
 // =============================================================================
 
 @Module({
@@ -43,6 +44,7 @@ import { TranscriptsConfig } from './transcripts/transcripts.config';
     GraphExtractionConfig,
     GraphRdfConfig,
     GraphBindingModule,
+    AskConfig,
   ],
 })
 export class KvoxModule {}

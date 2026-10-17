@@ -22,21 +22,25 @@
 import { toJsonSchema } from '@marinoscar/platform-api/ai';
 
 import { clearToolCache, toPlatformTools } from '../../src/ai-port/chat-mapping';
-import { ASK_TOOL_NAMES, AskToolset } from '../../src/ask/tools/ask-toolset';
-import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
-import { EvidenceTool } from '../../src/ask/tools/evidence.tool';
-import { GetEntityTool } from '../../src/ask/tools/get-entity.tool';
-import { ListCommitmentsTool } from '../../src/ask/tools/list-commitments.tool';
-import { NeighborsTool } from '../../src/ask/tools/neighbors.tool';
-import { SearchTool } from '../../src/ask/tools/search.tool';
-import { TimelineTool } from '../../src/ask/tools/timeline.tool';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 
 type Node = Record<string, unknown>;
 
 /** The collaborators are never called here: only `definitions()` is read. */
 const none = {} as never;
+const {
+  ASK_TOOL_NAMES,
+  AskToolset,
+  EntityBriefTool,
+  EvidenceTool,
+  GetEntityTool,
+  ListCommitmentsTool,
+  NeighborsTool,
+  SearchTool,
+  TimelineTool,
+} = internals;
 const toolset = new AskToolset(
-  new SearchTool(none, none, none),
+  new SearchTool(none, none, none, none),
   new GetEntityTool(none, none, none),
   new NeighborsTool(none, none),
   new TimelineTool(none, none),

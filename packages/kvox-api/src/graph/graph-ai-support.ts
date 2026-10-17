@@ -16,14 +16,15 @@ import { aiProviderThrottleKey } from '../core/index.js';
 // ⚠ NO KEY, NO PROMPT TEXT, NO PROVIDER OBJECT PASSES THROUGH HERE.
 // =============================================================================
 
-/** The connected-knowledge tasks that run through the AI port. @stability experimental */
-export type GraphAiTask = 'graph.extract' | 'graph.adjudicate' | 'graph.digest';
+/** The connected-knowledge tasks that run through the AI port (the graph's three and Ask's). @stability experimental */
+export type GraphAiTask = 'graph.extract' | 'graph.adjudicate' | 'graph.digest' | 'ask.respond';
 
 /** The label each task is shown under, as the 409 sentences name it. @stability experimental */
 export const GRAPH_AI_TASK_LABELS: Readonly<Record<GraphAiTask, string>> = {
   'graph.extract': 'Graph extraction',
   'graph.adjudicate': 'Entity matching',
   'graph.digest': 'Entity digest',
+  'ask.respond': 'Ask (graph agent)',
 };
 
 /** The `details.reason` values an unready AI feature answers with. @stability experimental */
@@ -150,7 +151,10 @@ export function refusalForResolution(error: unknown, task: GraphAiTask, model: s
     case 'key_missing':
       return keyMissingConflict(label);
     case 'capability':
-      return lacksCapabilityConflict({ label, task, model: model ?? 'unknown', missing: ['structuredOutput'] });
+      // Ask needs a model that calls tools; the 409's `details.task` keeps the name its clients have always seen.
+      return task === 'ask.respond'
+        ? lacksCapabilityConflict({ label, task: 'graph.agent', model: model ?? 'unknown', missing: ['toolCalling'] })
+        : lacksCapabilityConflict({ label, task, model: model ?? 'unknown', missing: ['structuredOutput'] });
     case 'not_configured':
       return notConfiguredConflict(label);
     default:

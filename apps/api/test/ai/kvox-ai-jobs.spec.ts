@@ -424,8 +424,8 @@ describe('(c) the per-user throttle key is registered before the first model cal
     .filter(({ calls }) => calls.length > 0);
 
   it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
-    // The Ask handler and the `KVOX_AI` adapter: the graph's calls moved into `@marinoscar/kvox-api` (#496), scanned below.
-    expect(files.map(({ rel }) => rel).sort()).toEqual(['ask/handlers/ask-respond.handler.ts', 'platform-kvox/ai/platform-kvox-ai.adapter.ts']);
+    // Only the `KVOX_AI` adapter: the graph's calls moved into `@marinoscar/kvox-api` (#496) and Ask's (#497), scanned below.
+    expect(files.map(({ rel }) => rel).sort()).toEqual(['platform-kvox/ai/platform-kvox-ai.adapter.ts']);
   });
 
   it('every file that calls the model registers the key above its first call (or is exempt, with a reason)', () => {
@@ -511,5 +511,40 @@ describe('(c) the graph slices route a rate limit onto the caller\'s own bucket 
     const support = readFileSync(join(PACKAGE_SRC, 'graph', 'graph-ai-support.ts'), 'utf8');
 
     expect(support).toMatch(/new KvoxRateLimitError\(aiProviderThrottleKey\(/);
+  });
+});
+
+// =============================================================================
+// (c) for Ask, which moved into the package last (#497)
+// =============================================================================
+//
+// `ask.respond` is the one Ask file that calls the model (`KVOX_AI.chat`). Like the graph handlers it
+// has no throttle registry: a provider 429 leaves it as a `KvoxRateLimitError` built from
+// `aiProviderThrottleKey(userId)` for the ASKER, and the jobs adapter registers that bucket from the
+// error. The per-package conformance suite (`describeAskConformance`, run in test/platform-kvox/ask-conformance.spec.ts
+// over the web edition's adapter) proves the deferral end to end; this pins the one place it is built.
+// =============================================================================
+
+describe('(c) Ask routes a rate limit onto the asker\'s own bucket (#477, #497)', () => {
+  const askFiles = (() => {
+    const walkAsk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) return entry === 'testing' || entry === '__fixtures__' ? [] : walkAsk(full);
+        return entry.endsWith('.ts') && !entry.endsWith('.spec.ts') ? [full] : [];
+      });
+
+    return walkAsk(join(PACKAGE_SRC, 'ask'))
+      .map((full) => ({ rel: relative(PACKAGE_SRC, full).split(sep).join('/'), full }))
+      .map((file) => ({ ...file, ...positionsIn(file.full), text: readFileSync(file.full, 'utf8') }))
+      .filter(({ calls }) => calls.length > 0);
+  })();
+
+  it('finds the model call site at all, so a broken scan cannot pass vacuously', () => {
+    expect(askFiles.map(({ rel }) => rel)).toEqual(['ask/handlers/ask-respond.handler.ts']);
+  });
+
+  it('the handler builds the deferral from aiProviderThrottleKey of the asker', () => {
+    expect(askFiles[0].text).toMatch(/new KvoxRateLimitError\(\s*aiProviderThrottleKey\(state\.userId\)/);
   });
 });
