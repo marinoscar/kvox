@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import type { NoteGeneration } from '@prisma/client';
+import type { NoteGenerationRow as NoteGeneration } from '../../src/notes/data/notes-db.js';
 
 import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service.js';
 import {
