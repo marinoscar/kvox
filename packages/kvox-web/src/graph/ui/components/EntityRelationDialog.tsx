@@ -32,14 +32,25 @@ import { useEntityRelationEdits } from '../../headless/hooks/useEntityRelationEd
 import { EntitySearchField } from './schema/EntitySearchField.js';
 
 /**
+ * How one manual relation edit is named on screen.
+ *
+ * @stability experimental
+ */
+export interface EntityRelationEditCopy {
+  /** The button and dialog title: "Set manager", "Set employer", "Add role". */
+  action: string;
+  /** The target combobox's label: "Manager", "Employer", "Organization". */
+  target: string;
+  /** The entity types the target may be. */
+  targetTypes: readonly string[];
+}
+
+/**
  * What each manual relation edit is called, and what it may point at.
  *
  * @stability experimental
  */
-export const ENTITY_RELATION_EDITS: Record<
-  ManualRelationType,
-  { action: string; target: string; targetTypes: readonly string[] }
-> = {
+export const ENTITY_RELATION_EDITS: Record<ManualRelationType, EntityRelationEditCopy> = {
   REPORTS_TO: { action: 'Set manager', target: 'Manager', targetTypes: ['Person'] },
   WORKS_FOR: { action: 'Set employer', target: 'Employer', targetTypes: ['Organization'] },
   HAS_ROLE: { action: 'Add role', target: 'Organization', targetTypes: ['Organization'] },

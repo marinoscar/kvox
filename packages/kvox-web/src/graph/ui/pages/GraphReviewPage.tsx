@@ -41,6 +41,18 @@ import { useGraphReviewQueue } from '../../headless/hooks/useGraphReviewQueue.js
 const SKELETON_ROWS = 4;
 
 /**
+ * Where a waiting proposal is reviewed.
+ *
+ * @stability experimental
+ */
+export interface ReviewTarget {
+  /** The path of the page that reviews it. */
+  href: string;
+  /** The source's title: the note's, or the imported file's name. */
+  title: string;
+}
+
+/**
  * Where a waiting proposal is reviewed, and what it is called.
  *
  * @param proposal - A draft proposal.
@@ -49,10 +61,7 @@ const SKELETON_ROWS = 4;
  *
  * @stability experimental
  */
-export function reviewTarget(
-  proposal: ProposalSummary,
-  links: KvoxLinks
-): { href: string; title: string } | null {
+export function reviewTarget(proposal: ProposalSummary, links: KvoxLinks): ReviewTarget | null {
   if (proposal.kind === 'import') {
     return {
       href: `/graph/imports/${encodeURIComponent(proposal.id)}`,

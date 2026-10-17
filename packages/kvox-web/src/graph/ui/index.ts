@@ -20,6 +20,7 @@ export { GraphExplorerPage } from './pages/GraphExplorerPage.js';
 export { GraphOverviewPage } from './pages/GraphOverviewPage.js';
 export { GraphImportPage } from './pages/GraphImportPage.js';
 export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
+export type { ReviewTarget } from './pages/GraphReviewPage.js';
 export { UserKnowledgeGraphPage } from './pages/UserKnowledgeGraphPage.js';
 
 export { EvidenceChip, EvidenceChips } from './components/EvidenceChip.js';
@@ -27,7 +28,7 @@ export type { EvidenceChipProps } from './components/EvidenceChip.js';
 export { EntityConnectionsList } from './components/EntityConnectionsList.js';
 export type { EntityConnectionsListProps } from './components/EntityConnectionsList.js';
 export { ENTITY_RELATION_EDITS, EntityRelationDialog } from './components/EntityRelationDialog.js';
-export type { EntityRelationDialogProps } from './components/EntityRelationDialog.js';
+export type { EntityRelationDialogProps, EntityRelationEditCopy } from './components/EntityRelationDialog.js';
 export { NeighborhoodWidget } from './components/NeighborhoodWidget.js';
 export type { NeighborhoodWidgetProps } from './components/NeighborhoodWidget.js';
 export { SchemaForm } from './components/schema/SchemaForm.js';

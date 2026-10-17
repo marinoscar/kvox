@@ -39,7 +39,7 @@ function serve(pages: Record<string, { items: ProposalSummary[]; nextCursor: str
       const url = new URL(request.url);
       requests.push(url);
       return HttpResponse.json({ data: pages[url.searchParams.get('cursor') ?? ''] });
-    }),
+    })
   );
 }
 
@@ -59,7 +59,7 @@ function renderPage() {
       <Route path="/" element={<GraphReviewPage />} />
       <Route path="*" element={<Where />} />
     </Routes>,
-    { wrapperOptions: { user: graphReader } },
+    { wrapperOptions: { user: graphReader } }
   );
 }
 
@@ -88,7 +88,10 @@ describe('GraphReviewPage', () => {
     const note = await screen.findByRole('link', { name: /^Weekly sync 1/ });
     expect(note).toHaveAttribute('href', `/notes/${NOTE_ID}?review=1`);
     expect(note).toHaveTextContent('3 to decide · 5 items');
-    expect(screen.getByRole('link', { name: /^graph\.ttl/ })).toHaveAttribute('href', `/graph/imports/${gid(850)}`);
+    expect(screen.getByRole('link', { name: /^graph\.ttl/ })).toHaveAttribute(
+      'href',
+      `/graph/imports/${gid(850)}`
+    );
     expect(screen.getAllByRole('link')).toHaveLength(2);
     expect(requests[0].searchParams.get('status')).toBe('draft');
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
@@ -113,7 +116,9 @@ describe('GraphReviewPage', () => {
     await user.click(screen.getByRole('button', { name: 'Load more' }));
     expect(await screen.findByRole('link', { name: /^Weekly sync 2/ })).toBeInTheDocument();
     expect(requests[1].searchParams.get('cursor')).toBe('c2');
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    );
   });
 
   it('says Nothing to review when nothing waits', async () => {
@@ -123,7 +128,11 @@ describe('GraphReviewPage', () => {
   });
 
   it('shows an error with Retry', async () => {
-    server.use(http.get('*/api/graph/proposals', () => HttpResponse.json({ message: 'boom' }, { status: 500 })));
+    server.use(
+      http.get('*/api/graph/proposals', () =>
+        HttpResponse.json({ message: 'boom' }, { status: 500 })
+      )
+    );
     renderPage();
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
