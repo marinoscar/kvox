@@ -10,6 +10,11 @@
  * press does, through `useSourceAudio`. A note page is read far more often than
  * its recording is heard, and a signed URL per view would be a signature per
  * page load for audio nobody asked for.
+ *
+ * An imported transcript has no recording (`hasAudio: false`, #604): the card
+ * keeps the title and the way to the transcript but renders no player, so
+ * nothing can ask `GET /:id/audio` for a URL it would answer with 404.
+ * `undefined` (an older server) keeps the player.
  */
 
 import Box from '@mui/material/Box';
@@ -64,6 +69,7 @@ export function spokenDuration(ms: number): string {
 export function NoteSourceMedia({ origin }: NoteSourceMediaProps) {
   const player = useSourceAudio(origin.id);
 
+  const noAudio = origin.hasAudio === false;
   const processing = origin.status !== 'ready';
   const totalMs = player.durationMs ?? origin.durationMs ?? 0;
   const positionMs = Math.min(player.positionMs, totalMs || player.positionMs);
@@ -138,7 +144,11 @@ export function NoteSourceMedia({ origin }: NoteSourceMediaProps) {
           spacing={1}
           sx={{ alignItems: 'center', minWidth: 0, flex: { xs: '1 1 auto', sm: '1 1 280px' } }}
         >
-          {processing ? (
+          {noAudio ? (
+            <Typography variant="body2" color="text.secondary">
+              No audio (imported transcript)
+            </Typography>
+          ) : processing ? (
             <Tooltip title="Audio is still processing">
               {/* A disabled button fires no pointer events; the span carries
                   the tooltip for it. */}
@@ -147,7 +157,7 @@ export function NoteSourceMedia({ origin }: NoteSourceMediaProps) {
           ) : (
             playButton
           )}
-          {failed ? (
+          {noAudio ? null : failed ? (
             <Stack
               direction="row"
               spacing={1}

@@ -204,6 +204,14 @@ describe('proposal view mapper', () => {
       expect(evidenceViewOf({ ...note, noteId: null }, l).stale).toBe(true);
     });
 
+    it('hasAudio (#604): only segment evidence from a non-import transcript can play', () => {
+      const l = lookups({ segments: new Map([['s', { rev: 2, speakerName: null }]]), noteVersions: new Map([['n', 3]]) });
+      expect(evidenceViewOf({ ...seg, transcript: { provider: 'import' } }, l).hasAudio).toBe(false);
+      expect(evidenceViewOf({ ...seg, transcript: { provider: 'openai' } }, l).hasAudio).toBe(true);
+      expect(evidenceViewOf({ ...note, transcript: { provider: 'openai' } }, l).hasAudio).toBe(false);
+      expect(evidenceViewOf({ ...seg, transcript: null }, l).hasAudio).toBe(false);
+    });
+
     it('import (#387): cited to the file, never stale, carrying its object and IRI', () => {
       const imported = { ...base, charStart: null, charEnd: null, quote: 'Imported from a.ttl', importObjectId: 'f1', sourceIri: 'https://s.example/joe' };
       expect(evidenceViewOf(imported, lookups({}))).toEqual(

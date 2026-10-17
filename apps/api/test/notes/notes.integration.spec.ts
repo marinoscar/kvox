@@ -835,6 +835,7 @@ describe('Notes API (#53)', () => {
         durationMs: 120_000,
         status: 'ready',
         playbackStatus: 'ready',
+        provider: 'alpha',
       });
 
       const response = await request(context.app.getHttpServer())
@@ -848,6 +849,7 @@ describe('Notes API (#53)', () => {
         durationMs: 120_000,
         status: 'ready',
         playbackStatus: 'ready',
+        hasAudio: true,
         via: 'direct',
         hops: 0,
       });

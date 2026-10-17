@@ -83,6 +83,28 @@ describe('EvidenceList', () => {
     expect(onShowInNote).toHaveBeenCalledWith(note);
   });
 
+  it('offers no Play for a transcript without audio, but keeps the link (#604)', () => {
+    const onPlay = vi.fn();
+    render(<EvidenceList evidence={[segmentEvidence({ segmentId: 'seg-4', hasAudio: false })]} onPlay={onPlay} />);
+    expect(screen.queryByRole('button', { name: /Play/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open in transcript' })).toHaveAttribute(
+      'href',
+      '/transcripts/t1?segment=seg-4',
+    );
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('offers Play when hasAudio is true or absent', () => {
+    render(
+      <EvidenceList
+        evidence={[segmentEvidence({ hasAudio: true }), segmentEvidence({ startMs: 5_000 })]}
+        onPlay={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Play from 1:05' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play from 0:05' })).toBeInTheDocument();
+  });
+
   it('expands a long quote', async () => {
     const user = userEvent.setup();
     render(<EvidenceList evidence={[segmentEvidence({ quote: 'word '.repeat(60) })]} />);
@@ -163,6 +185,25 @@ describe('Evidence inside the sheet', () => {
     await secondUser.click(plays[plays.length - 1]);
     expect(audio.seek).toHaveBeenCalledTimes(2);
     expect(audio.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no ▶ for evidence in a transcript without audio, and never plays (#604)', async () => {
+    const detail = mockProposalDetail('draft');
+    detail.items = detail.items.map((item) => ({
+      ...item,
+      evidence: item.evidence.map((ev) => (ev.source === 'segment' ? { ...ev, hasAudio: false } : ev)),
+    }));
+    proposalMock.reset(detail);
+    render(
+      <ProposalReviewSheet open onClose={vi.fn()} source={{ noteId: 'n1' }} originTranscriptId="t1" />,
+      { wrapperOptions: { user: graphUser } },
+    );
+    await openEvidence('Sarah Chen');
+    expect(await screen.findByRole('link', { name: 'Open in transcript' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Play from/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Play the recording' })).not.toBeInTheDocument();
+    expect(audio.seek).not.toHaveBeenCalled();
+    expect(audio.toggle).not.toHaveBeenCalled();
   });
 
   it('"Show in note" highlights the quote in the note body', async () => {

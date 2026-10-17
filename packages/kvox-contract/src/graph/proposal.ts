@@ -154,6 +154,13 @@ export const evidenceViewSchema = z.object({
   importObjectId: z.guid().nullable().describe('Import evidence: the stored file the row was imported from.'),
   sourceIri: z.string().nullable().describe('Import evidence: the node’s IRI in that file.'),
   speakerName: z.string().nullable().describe('Segment evidence: the speaker\'s display name at read time.'),
+  hasAudio: z
+    .boolean()
+    .describe(
+      'Segment evidence (#604): whether the cited transcript has a recording to play. False for a ' +
+        'transcript imported from a kvox.transcript/v1 file (its audio route answers 404), for a ' +
+        'transcript that no longer exists, and for note and import evidence.',
+    ),
   stale: z.boolean().describe('The cited text changed since (segment rev or note version moved on), or its source is gone.'),
 });
 /**

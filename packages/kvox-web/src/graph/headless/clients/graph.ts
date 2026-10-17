@@ -526,6 +526,8 @@ export interface SegmentEvidenceSource {
   available: boolean;
   /** App link that opens the transcript at the quoted moment, or `null` when unavailable. */
   href: string | null;
+  /** Whether the cited transcript has a recording to play (#604); `false` for an imported transcript. Absent from an older server: treat `undefined` as `true`. */
+  hasAudio?: boolean;
 }
 
 /**
@@ -1547,6 +1549,8 @@ export interface ProposalEvidence {
   speakerName: string | null;
   /** `true` when the cited text changed since (the segment revision or note version moved on) or its source is gone. */
   stale: boolean;
+  /** Segment evidence (#604): whether the cited transcript has a recording to play; `false` for an imported transcript. Absent from an older server: treat `undefined` as `true`. */
+  hasAudio?: boolean;
 }
 
 /**

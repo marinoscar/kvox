@@ -180,6 +180,35 @@ describe('NoteSourceMedia — playing', () => {
   });
 });
 
+describe('NoteSourceMedia — an imported transcript without audio (#604)', () => {
+  it('renders no player and never requests the audio when hasAudio is false', async () => {
+    const { container } = render(<NoteSourceMedia origin={origin({ hasAudio: false })} />);
+
+    expect(screen.getByText('No audio (imported transcript)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /source recording/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    // The way to the transcript text stays.
+    expect(screen.getByRole('link', { name: 'Open transcript' })).toHaveAttribute('href', '/transcripts/t1');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(audioRequests).toBe(0);
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('keeps the player when hasAudio is true', () => {
+    render(<NoteSourceMedia origin={origin({ hasAudio: true })} />);
+
+    expect(screen.getByRole('button', { name: 'Play source recording' })).toBeInTheDocument();
+    expect(screen.queryByText('No audio (imported transcript)')).not.toBeInTheDocument();
+  });
+
+  it('keeps the player when hasAudio is absent (an older server)', () => {
+    render(<NoteSourceMedia origin={origin()} />);
+
+    expect(screen.getByRole('button', { name: 'Play source recording' })).toBeInTheDocument();
+  });
+});
+
 describe('NoteSourceMedia — a processing transcript', () => {
   it('disables Play with a tooltip explaining why', async () => {
     const user = userEvent.setup();

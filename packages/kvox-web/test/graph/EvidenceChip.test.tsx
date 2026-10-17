@@ -10,8 +10,19 @@ import { server } from './msw-compat.js';
 import { render } from './helpers.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
 import { graphReader } from './graphTestUsers.js';
-import { EV_EDITED, EV_GONE, EV_NOTE, EV_SEGMENT, SEGMENT_ID, TRANSCRIPT_ID, gid } from './graphData.js';
+import {
+  EV_EDITED,
+  EV_GONE,
+  EV_NOTE,
+  EV_NO_AUDIO,
+  EV_SEGMENT,
+  SEGMENT_ID,
+  TRANSCRIPT_ID,
+  briefFixture,
+  gid,
+} from './graphData.js';
 import { EvidenceChip, EvidenceChips } from '../../src/graph/ui/components/EvidenceChip.js';
+import { EntityBriefCard } from '../../src/graph/ui/components/EntityBriefCard.js';
 import { clearEvidenceCache } from '../../src/graph/headless/hooks/useGraphEvidence.js';
 
 /** The numbered citation chip (#373; reused by #380's Ask citations). */
@@ -97,6 +108,17 @@ describe('EvidenceChip', () => {
     );
   });
 
+  it('offers Open transcript, not Play, for a transcript without audio (#604)', async () => {
+    const user = userEvent.setup();
+    renderChips([EV_NO_AUDIO]);
+    await user.click(await screen.findByRole('button', { name: 'Source 1: Imported board minutes' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Imported board minutes' });
+    expect(within(dialog).queryByRole('button', { name: /Play/ })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Open transcript' }));
+    expect(await screen.findByTestId('where')).toHaveTextContent(`/transcripts/${TRANSCRIPT_ID}`);
+  });
+
   it('offers "Open note" for a note span, with the edited caption', async () => {
     const user = userEvent.setup();
     renderChips([EV_NOTE]);
@@ -162,5 +184,34 @@ describe('EvidenceChip', () => {
     await user.click(screen.getByRole('button', { name: 'Source 4' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+});
+
+describe('EntityBriefCard citations (#604)', () => {
+  function renderBrief(evidenceIds: string[]) {
+    const brief = briefFixture();
+    brief.digest = { ...brief.digest!, statements: [{ text: 'The vendor contract renews in March.', evidenceIds }] };
+    return render(<EntityBriefCard brief={brief} ontology={null} onRefresh={() => undefined} />, {
+      wrapperOptions: { user: graphReader },
+    });
+  }
+
+  it('offers no Play for a citation in a transcript without audio', async () => {
+    const user = userEvent.setup();
+    renderBrief([EV_NO_AUDIO]);
+    await user.click(await screen.findByRole('button', { name: 'Source 1: Imported board minutes' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: /Play/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Open transcript' })).toBeInTheDocument();
+  });
+
+  it('offers Play for a citation with audio', async () => {
+    const user = userEvent.setup();
+    renderBrief([EV_SEGMENT]);
+    // The brief's sections cite this transcript too (EV_SEGMENT, EV_EDITED; both hasAudio: true).
+    const [chip] = await screen.findAllByRole('button', { name: 'Source 1: Q3 planning call' });
+    await user.click(chip);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /^Play from / })).toBeInTheDocument();
   });
 });

@@ -15,6 +15,7 @@
 import type { EffectiveSchema } from '@marinoscar/kvox-contract/ontology';
 
 import { userGuidanceSchema } from '../extraction/dto/extraction.dto.js';
+import { transcriptHasAudio } from '../../transcripts/index.js';
 import type { ProposalResolution } from './proposal-payload.schema.js';
 import { describeFills, knownRelationTargetOf, relationFills } from './relation-fills.js';
 import {
@@ -78,6 +79,12 @@ export interface EvidenceRowInput {
   /** #387 — an import citation's stored file and the node's source IRI. */
   importObjectId?: string | null;
   sourceIri?: string | null;
+  /**
+   * #604 — the cited transcript's provider, joined on the evidence read
+   * (`include: { transcript: { select: { provider: true } } }`). `null` once the
+   * transcript is gone (the FK is SetNull); absent when the caller did not join it.
+   */
+  transcript?: { provider: string } | null;
 }
 
 /** What the mapper looks up; the service fills it with bounded queries. */
@@ -290,6 +297,9 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
   const isImport = !isSegment && e.noteId === null && (Boolean(e.importObjectId) || Boolean(e.sourceIri));
   let stale: boolean;
   let speakerName: string | null = null;
+  // #604: only segment evidence can play, and only from a transcript with audio
+  // (an imported one has none). An unjoined or vanished transcript reports false.
+  const hasAudio = isSegment && e.transcript != null && transcriptHasAudio(e.transcript.provider);
   if (isImport) {
     stale = false;
   } else if (isSegment) {
@@ -316,6 +326,7 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
     importObjectId: e.importObjectId ?? null,
     sourceIri: e.sourceIri ?? null,
     speakerName,
+    hasAudio,
     stale,
   };
 }
