@@ -2,8 +2,9 @@
 //
 // Depends on `ports`, `core`, `transcripts`, `notes` and `search`. The one way in is
 // `GraphModule.forRoot(options)`; the rest of this file is what a host or a sibling slice
-// (`graph-extraction`, `graph-rdf`, Ask) imports. The classes are internal wiring (tagged
-// `@internal`): a host configures them through `forRoot` and never instantiates them.
+// (`graph-extraction`, `graph-rdf`, Ask) imports. Most classes are internal wiring (tagged
+// `@internal`): a host configures them through `forRoot` and never instantiates them. The
+// exception is `KgMigrateEnqueuer`, which a host with `schedules: false` calls on its own timer.
 
 export { GraphModule } from './graph.module.js';
 export {
@@ -121,6 +122,7 @@ export { GraphObjectsService } from './graph-objects.service.js';
 export { subjectHousekeeping } from './housekeeping-subject.enqueue.js';
 export { DEFAULT_KG_MIGRATE_DEFINITION, KG_MIGRATE_DEFINITION, KG_MIGRATE_TABLES, candidatePredicate, kgMigrateEnqueueFields, migrationsUpTo } from './migrate/kg-migrate.plan.js';
 export type { KgMigrateDefinition, KgMigrateTable } from './migrate/kg-migrate.plan.js';
+export { KG_MIGRATE_OWNERS_PER_TICK, KgMigrateEnqueuer } from './migrate/kg-migrate.enqueuer.js';
 export { KgMigrateRepository } from './migrate/kg-migrate.repository.js';
 export { GraphOntologyService } from './ontology/graph-ontology.service.js';
 export { GRAPH_PREFERENCE_DEFAULTS } from './preferences/graph-preferences.defaults.js';

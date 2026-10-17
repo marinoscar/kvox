@@ -233,6 +233,8 @@ export class GraphModule {
         GraphObjectsService,
         GraphAttributeDefsService,
         KgMigrateRepository,
+        // A host with `schedules: false` calls `enqueue()` on its own timer.
+        KgMigrateEnqueuer,
         GraphUserDataService,
         KgPurgeService,
       ],
