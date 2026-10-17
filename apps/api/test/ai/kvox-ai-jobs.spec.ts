@@ -8,7 +8,7 @@ import { JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 
 import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
 import { KvoxAiTargetResolver } from '../../src/ai-port/kvox-ai-target-resolver';
-import { KVOX_AI_FEATURES, type KvoxAiFeatureId } from '../../src/ai-port/features';
+import { KVOX_AI_FEATURES, type KvoxAiFeatureId } from '@marinoscar/kvox-ai';
 import { AdjudicationService, GraphEmbedder } from '@marinoscar/kvox-api/graph-extraction';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';

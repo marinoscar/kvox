@@ -4,6 +4,7 @@ import {
   HttpException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import type { KvoxAiFeatureId, KvoxAiReason } from '@marinoscar/kvox-ai';
 import { AiError } from '@marinoscar/platform-api/ai';
 
 import {
@@ -13,7 +14,6 @@ import {
   AiStructuredOutputError,
   RateLimitError,
 } from './ai-errors';
-import type { KvoxAiFeatureId } from './features';
 
 // =============================================================================
 // Platform AiError -> this app's wire codes and job error classes (issue #473)
@@ -36,13 +36,8 @@ import type { KvoxAiFeatureId } from './features';
 // `AiError`'s own message, which the platform keeps free of both.
 // =============================================================================
 
-/** The five `details.reason` values the product's AI routes answer with. */
-export type KvoxAiReason =
-  | 'ai_not_configured'
-  | 'ai_key_missing'
-  | 'model_not_permitted'
-  | 'model_lacks_capability'
-  | 'graph_disabled';
+// The five `details.reason` values the product's AI routes answer with are
+// `KvoxAiReason` of `@marinoscar/kvox-ai` (moved there with `KvoxAiReadiness`, #579).
 
 /**
  * The 409 reasons. `ai_key_invalid` is the search indexer's own spelling of a

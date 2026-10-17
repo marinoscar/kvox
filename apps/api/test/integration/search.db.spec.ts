@@ -59,7 +59,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-import { EMBEDDING_DIMENSIONS } from '../../src/ai-port/embedding-catalog';
+import { EMBEDDING_DIMENSIONS } from '@marinoscar/kvox-ai';
 import {
   DEFAULT_SEARCH_TYPE_PERMISSIONS,
   MAX_CANDIDATE_DOCUMENTS,

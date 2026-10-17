@@ -1,21 +1,23 @@
 import type { z } from 'zod';
 
+import {
+  EMBEDDING_DIMENSIONS,
+  KVOX_EMBEDDING,
+  countTokens,
+  type JsonSchema,
+  type KvoxAiCallBase,
+  type KvoxAiFeatureId,
+  type KvoxAiReadiness,
+  type KvoxAiReason,
+  type KvoxChatEvent,
+  type KvoxChatRequest,
+  type KvoxEmbeddingCapability,
+  type KvoxTextEvent,
+  type KvoxUsage,
+} from '@marinoscar/kvox-ai';
+
 import { AiInputError, AiStructuredOutputError } from '../ai-errors';
-import { countTokens } from '../count-tokens';
-import { EMBEDDING_DIMENSIONS, KVOX_EMBEDDING } from '../embedding-catalog';
-import type { KvoxAiFeatureId } from '../features';
-import type {
-  JsonSchema,
-  KvoxAi,
-  KvoxAiCallBase,
-  KvoxAiReadiness,
-  KvoxChatEvent,
-  KvoxChatRequest,
-  KvoxEmbeddingCapability,
-  KvoxTextEvent,
-  KvoxUsage,
-} from '../kvox-ai';
-import type { KvoxAiReason } from '../kvox-ai-errors';
+import type { KvoxAi } from '../kvox-ai';
 
 // =============================================================================
 // FakeKvoxAi: a controllable test double for the `KvoxAi` port (issue #475)

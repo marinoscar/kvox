@@ -1,4 +1,4 @@
-import { assertStrictJsonSchema } from '../../src/ai-port/strict-json-schema';
+import { assertStrictJsonSchema } from '@marinoscar/kvox-ai';
 import { goodAnswer, makeContext, makeInput, schemaFor } from './extraction-fixtures';
 import {
   DIGEST_RESPONSE_SCHEMA,

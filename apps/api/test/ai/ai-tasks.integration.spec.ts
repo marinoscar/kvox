@@ -12,7 +12,7 @@ import {
   createMockViewerUser,
 } from '../helpers/auth-mock.helper';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { KVOX_AI_FEATURES } from '../../src/ai-port/features';
+import { KVOX_AI_FEATURES } from '@marinoscar/kvox-ai';
 
 // =============================================================================
 // /api/ai-tasks/* and the platform's /api/ai/* beside it (issue #473)

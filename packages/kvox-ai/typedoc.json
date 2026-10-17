@@ -1,0 +1,28 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "extends": ["../../typedoc.base.json"],
+  "tsconfig": "./tsconfig.json",
+  "entryPoints": ["./src/index.ts"],
+  "entryPointStrategy": "resolve",
+  "name": "@marinoscar/kvox-ai",
+  "out": "./docs-api/html",
+  "json": "./docs-api/api.json",
+  // The anonymous properties TypeDoc expands out of the two exported Zod schemas
+  // of `src/tasks/ai-task-keys.ts` (the enum members and the task keys of a
+  // `z.partialRecord`), which no TSDoc comment can reach. Their meaning is on the
+  // schemas' own TSDoc and on `AiTaskModel` / `AiTaskModels`. Everything else,
+  // every interface property included, is documented (unlike kvox-contract, the
+  // package keeps "Property" in `requiredToBeDocumented`).
+  "intentionallyNotDocumented": [
+    "aiTaskModelSchema.__type.reasoningEffort.__type.low",
+    "aiTaskModelSchema.__type.reasoningEffort.__type.medium",
+    "aiTaskModelSchema.__type.reasoningEffort.__type.high",
+    "aiTaskModelsSchema.__type.graph.extract",
+    "aiTaskModelsSchema.__type.graph.adjudicate",
+    "aiTaskModelsSchema.__type.graph.digest",
+    "aiTaskModelsSchema.__type.graph.agent",
+    "aiTaskModelsSchema.__type.reasoningEffort.__type.low",
+    "aiTaskModelsSchema.__type.reasoningEffort.__type.medium",
+    "aiTaskModelsSchema.__type.reasoningEffort.__type.high"
+  ]
+}
