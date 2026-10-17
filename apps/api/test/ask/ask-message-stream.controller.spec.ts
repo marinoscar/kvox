@@ -1,7 +1,7 @@
 import request from 'supertest';
 
-import { ASK_MESSAGE_NOT_FOUND } from '../../src/ask/ask-access.service';
-import { ASK_STREAM_TUNING, AskMessageStreamService } from '../../src/ask/stream/ask-message-stream.service';
+import { ASK_MESSAGE_NOT_FOUND, ASK_STREAM_TUNING } from '@marinoscar/kvox-api/ask';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
@@ -154,7 +154,7 @@ describe('Ask message stream (#379)', () => {
     resetPrismaMock();
     setupBaseMocks();
     jest.clearAllMocks();
-    streamSpy = jest.spyOn(AskMessageStreamService.prototype, 'stream');
+    streamSpy = jest.spyOn(internals.AskMessageStreamService.prototype, 'stream');
   });
 
   afterEach(() => {

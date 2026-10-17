@@ -1711,7 +1711,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 ## 11. Job types
 
 Eleven types, all under `packages/kvox-api/src/graph/handlers/` (planned) except
-`ask.respond`, which lives under `apps/api/src/ask/handlers/` (built, issue #378) —
+`ask.respond`, which lives under `packages/kvox-api/src/ask/handlers/` (built, issue #378; moved into the package by #497) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
@@ -1861,7 +1861,7 @@ override), entity `merge`/`merges/:id/reverse`/`distinct-pairs` (§7),
 manual re-cluster).
 
 **Ask is a separate controller and OpenAPI tag (`Ask`,
-`apps/api/src/ask/ask-conversations.controller.ts`, built by #376) but a reused permission.**
+`packages/kvox-api/src/ask/ask-conversations.controller.ts`, built by #376) but a reused permission.**
 `GET/POST/PATCH/DELETE /api/ask/conversations[...]`, `POST .../messages`, and
 `GET /api/ask/messages/:id/stream` (§21) are gated on `graph:read` alone,
 with no `ask:*` pair — asking a question of one's own graph is a read of it,
@@ -3171,6 +3171,15 @@ it.
 
 ## 21. Ask — the read-only graph agent
 
+> **Where the code lives (issue #497, epic #491).** The server side of this section is the `ask` slice of
+> `@marinoscar/kvox-api` (`packages/kvox-api/src/ask/`), written against the host ports and configured by the web
+> edition in `apps/api/src/kvox/ask/ask.config.ts`. The turn drives `KVOX_AI.chat` (`delta`, `tool_call`, `step_end`,
+> `done`, with the optional `finishReason`), so any `KVOX_AI` adapter that passes `describeKvoxPortsConformance` and
+> `describeAskConformance` runs Ask. The caps below are the slice's defaults and a host may only lower them
+> (`AskModule.forRoot({ limits })` throws for a higher value). A model the deployment does not permit now answers like
+> one that cannot call tools (`409 model_lacks_capability`), because the AI port has one `capability` class for both.
+> Paths below that begin `apps/api/src/ask/` in older prose mean the matching folder of the slice.
+
 §9.3 named the toolset — `search`, `get_entity`, `neighbors`, `evidence`,
 `timeline`, `entity_brief` — as re-exposable "for any future agent-style
 consumer of this graph." Ask is that consumer, built now rather than left as
@@ -3212,8 +3221,8 @@ without the user having to name it. `GET/POST/PATCH/DELETE
 conversation is the caller's own scratch history over data they can already
 read.
 
-**As built (issue #376)** — `apps/api/src/ask/`, OpenAPI tag `Ask`, wire
-schemas in `ask/dto/ask.dto.ts` (the `AskMessage` shape #378–#382 use
+**As built (issue #376)** — `packages/kvox-api/src/ask/` (`@marinoscar/kvox-api/ask`, #497), OpenAPI tag `Ask`, wire
+schemas in `@marinoscar/kvox-contract/ask` (re-exported by `ask/dto/ask.dto.ts`; the `AskMessage` shape #378–#382 use
 unchanged; see `docs/API.md` `### Ask`). The list is ordered `updated_at
 DESC, id DESC` with a keyset cursor fingerprinted to the caller and the
 `scopeEntityId` filter (a cursor from another list is a 400, never a silent
@@ -3273,7 +3282,7 @@ already enforces for extraction, applied here to an agent's answer instead
 of a proposal.
 
 **As built (issue #378)** — `AskMessagesController`/`AskMessagesService` and
-`AskRespondHandler` in `apps/api/src/ask/`, with the caps in `ask-limits.ts`.
+`AskRespondHandler` in `packages/kvox-api/src/ask/`, with the caps in `ask-limits.ts`.
 
 - *The POST* checks the conversation (404), then `KvoxAi
   .readiness(user, 'graph_agent', model)` (originally `AiTaskModelResolver
@@ -3379,7 +3388,7 @@ independently-written SSE frame format for the same "stream durable text as
 it is written" problem is a second place the two could quietly disagree
 about what "resume from here" means.
 
-**As shipped (#379).** `apps/api/src/ask/stream/` — `ask-stream.ts` (pure
+**As shipped (#379).** `packages/kvox-api/src/ask/stream/` — `ask-stream.ts` (pure
 frames and `StepCursor`), `AskMessageStreamService` (the poll loop) and
 `AskMessageStreamController`. It is §21.4's `delta | done | error` contract
 **plus one additive `step` event** for tool progress. The text arithmetic is
@@ -3559,8 +3568,8 @@ conversations through `ask_conversations.owner_id` Cascade instead.
 
 ### 21.7 The toolset, as shipped (#377)
 
-`apps/api/src/ask/tools/` — `AskToolset` (exported by `AskToolsModule`, which
-imports only `GraphModule`, `SearchModule` and `PrismaModule`) holds seven
+`packages/kvox-api/src/ask/tools/` — `AskToolset` (provided by `AskModule`, which
+imports only the graph and search slices' modules and reads through `KVOX_PRISMA`) holds seven
 tools, each a fixed, parameterized read shape with a Zod `input` and a
 strict-mode JSON Schema `parameters` (`type: 'object'`,
 `additionalProperties: false`, every property in `required`, optional ones
@@ -3667,7 +3676,7 @@ Two run modes, mirroring `kg:eval`'s own posture: `npm run ask:eval
 --workspace=api` needs a real key and is **local and report-only** — CI never
 gates on a real model's answer quality, which would need a paid key in CI and
 flakes on provider variance. `apps/api/test/ask/ask-eval.replay.db.spec.ts`
-is what runs in CI (the `db-test` job's `npm run test:db`): the full gold graph,
+(the web edition's replay, over its AI adapter; the slice's own conformance suite, `describeAskConformance`, runs the same scripted turns over the in-memory tables) is what runs in CI (the `db-test` job's `npm run test:db`): the full gold graph,
 the real handler and toolset, and a **scripted fake provider**
 (`fake-provider.ts`) with a fixed tool-call sequence per question, using
 handles the real tools actually returned — plus one answer that cites an
@@ -4120,7 +4129,7 @@ serve for their own epics.
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
 | Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai-port/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
-| Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/citations.spec.ts` and `apps/api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
+| Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `packages/kvox-api/src/ask/citations.spec.ts` and `packages/kvox-api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 
 ## Sources

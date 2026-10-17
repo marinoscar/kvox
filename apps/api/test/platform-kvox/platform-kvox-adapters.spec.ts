@@ -178,7 +178,7 @@ describe('AI adapter', () => {
         { type: 'tool_call', id: 'c1', name: 'lookup', arguments: { q: 'acme' } },
         { type: 'tool_call', id: 'c2', name: 'lookup', arguments: 'not json' },
         { type: 'step_end' },
-        { type: 'done', usage: { inputTokens: 3, outputTokens: 4 } },
+        { type: 'done', usage: { inputTokens: 3, outputTokens: 4 }, finishReason: 'stop' },
       ]);
     });
 

@@ -3,7 +3,8 @@ import request from 'supertest';
 
 import { KVOX_AI } from '../../src/ai-port/kvox-ai';
 import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
-import { postAskMessageResponseSchema } from '../../src/ask/dto/ask-messages.dto';
+import { GraphAiRunResolver } from '@marinoscar/kvox-api/graph';
+import { postAskMessageResponseSchema } from '@marinoscar/kvox-contract/ask';
 import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.helper';
 import { prismaMock, resetPrismaMock, mockPrismaTransaction } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
@@ -17,8 +18,9 @@ import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 // and the AI port a `FakeKvoxAi`. What it pins:
 //   - 401 / 403 (without `graph:read`, before any row is read) / 400 bodies;
 //   - 404 for a conversation that is not the caller's;
-//   - the readiness refusals answered as the 409s and 400 the product always sent,
-//     before any write;
+//   - the readiness refusals answered as the 409s the product always sent (a model the
+//     deployment does not permit now answers like one that cannot call tools: the AI port has one
+//     'capability' class for both), before any write;
 //   - the running-turn index violation → 409 `ask_turn_running`;
 //   - 202 with both messages, the job enqueued at priority −10 with the
 //     assistant message as its subject, and the derived title.
@@ -71,6 +73,8 @@ const row = (over: Record<string, unknown>) => ({
 
 describe('POST /api/ask/conversations/:id/messages (integration)', () => {
   let context: TestContext;
+  /** The deployment's `ai` namespace as the graph's resolver reads it (the switch is the resolver's, not the port's). */
+  let policy: jest.SpyInstance;
 
   beforeAll(async () => {
     context = await createTestApp({
@@ -88,6 +92,10 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     setupBaseMocks();
     mockPrismaTransaction();
     ai.reset();
+    policy?.mockRestore();
+    policy = jest
+      .spyOn(context.app.get(GraphAiRunResolver) as unknown as { policy(): Promise<unknown> }, 'policy')
+      .mockResolvedValue({ graphEnabled: true });
     ai.setReadiness({ model: 'gpt-test', reasoningEffort: 'low', source: 'task' });
     prismaMock.askConversation.findFirst.mockResolvedValue({ id: CONV, ownerId: 'x', title: null, scopeEntityId: null } as never);
   });
@@ -140,20 +148,19 @@ describe('POST /api/ask/conversations/:id/messages (integration)', () => {
     'answers the readiness refusal %s as a 409 with that reason, writing nothing',
     async (reason) => {
       const user = await createMockTestUser(context, { roleName: 'viewer' });
-      ai.setNotReady(reason);
+      if (reason === 'graph_disabled') policy.mockResolvedValue({ graphEnabled: false });
+      else ai.setNotReady(reason);
       const res = await post(user.accessToken, { content: 'Hi?' }).expect(409);
       expect(res.body.details).toMatchObject({ reason });
       expect(prismaMock.askMessage.create).not.toHaveBeenCalled();
     },
   );
 
-  it('answers 400 model_not_permitted for an unpermitted model, listing the enabled ones', async () => {
+  it('answers a model the deployment does not permit as model_lacks_capability (409), naming the task and the model', async () => {
     const user = await createMockTestUser(context, { roleName: 'viewer' });
     ai.setNotReady('model_not_permitted');
-    prismaMock.aiModel.findMany.mockResolvedValue([{ modelId: 'gpt-a' }, { modelId: 'gpt-b' }] as never);
-    const res = await post(user.accessToken, { content: 'Hi?', model: 'gpt-nope' }).expect(400);
-    expect(res.body.details).toMatchObject({ reason: 'model_not_permitted', task: 'graph.agent' });
-    expect(res.body.message).toContain('gpt-a, gpt-b');
+    const res = await post(user.accessToken, { content: 'Hi?', model: 'gpt-nope' }).expect(409);
+    expect(res.body.details).toMatchObject({ reason: 'model_lacks_capability', task: 'graph.agent', model: 'gpt-nope', missing: ['toolCalling'] });
     expect(ai.lastCall('readiness')).toMatchObject({ userId: user.id, feature: 'graph_agent', model: 'gpt-nope' });
     expect(prismaMock.askMessage.create).not.toHaveBeenCalled();
   });

@@ -38,7 +38,7 @@ import '../../src/kvox.manifest';
 
 import { NestFactory } from '@nestjs/core';
 import type { INestApplicationContext } from '@nestjs/common';
-import type { Job, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { UserAiKeysService } from '@marinoscar/platform-api/ai';
 
@@ -46,11 +46,9 @@ import { AppModule } from '../../src/app.module';
 import { AiTasksService } from '../../src/ai-port/ai-tasks.service';
 import type { UpdateAiTasksSettings } from '../../src/ai-port/dto/ai-tasks.dto';
 import { KVOX_AI, type KvoxAi, type KvoxChatRequest } from '../../src/ai-port/kvox-ai';
-import { AskConversationsService } from '../../src/ask/ask-conversations.service';
-import { toAskMessage } from '../../src/ask/ask-message.mapper';
-import { AskMessagesService } from '../../src/ask/ask-messages.service';
-import type { AskMessageResponse } from '../../src/ask/dto/ask.dto';
-import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
+import type { AskMessageResponse } from '@marinoscar/kvox-contract/ask';
+import { AskConversationsService } from '@marinoscar/kvox-api/ask';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { loadGoldenSet } from '../kg-eval/load';
 import type { AskEvalQuestion } from './question-schema';
@@ -135,8 +133,8 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
   const aiTasks = app.get(AiTasksService, { strict: false });
   const port = app.get<KvoxAi>(KVOX_AI, { strict: false });
   const conversations = app.get(AskConversationsService);
-  const messages = app.get(AskMessagesService);
-  const handler = app.get(AskRespondHandler);
+  const messages = app.get(internals.AskMessagesService);
+  const handler = app.get(internals.AskRespondHandler);
 
   const fixtures = loadGoldenSet();
   const seeded = await seedGraph(prisma, fixtures);
@@ -161,12 +159,12 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
 
         const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
         const job = await prisma.job.findUniqueOrThrow({ where: { id: row.jobId! } });
-        await handler.process(job as Job);
+        await handler.process({ id: job.id, type: job.type, subjectType: job.subjectType, subjectId: job.subjectId, payload: job.payload, attempts: job.attempts, orgId: job.orgId });
 
         const finished = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
         results.push({
           question,
-          message: toAskMessage(finished),
+          message: internals.toAskMessage(finished),
           capturedPrompts: captureBucket.map((r) => JSON.stringify(r)),
           ms: Date.now() - started,
         });

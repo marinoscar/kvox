@@ -23,107 +23,35 @@
 // =============================================================================
 
 import { ConflictException } from '@nestjs/common';
-import type { Job, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
-import { AskAccessService } from '../../src/ask/ask-access.service';
-import { AskMessagesService } from '../../src/ask/ask-messages.service';
-import { AskRespondHandler } from '../../src/ask/handlers/ask-respond.handler';
-import { AskToolset } from '../../src/ask/tools/ask-toolset';
-import { EntityBriefTool } from '../../src/ask/tools/entity-brief.tool';
-import { EvidenceTool } from '../../src/ask/tools/evidence.tool';
-import { GetEntityTool } from '../../src/ask/tools/get-entity.tool';
-import { ListCommitmentsTool } from '../../src/ask/tools/list-commitments.tool';
-import { NeighborsTool } from '../../src/ask/tools/neighbors.tool';
-import { SearchTool } from '../../src/ask/tools/search.tool';
-import { TimelineTool } from '../../src/ask/tools/timeline.tool';
-import { GraphAccessService, EntityBriefService, GraphOntologyService, GraphPreferencesService, GraphEvidenceService, GraphNeighborhoodService, GraphReadService } from '@marinoscar/kvox-api/graph';
-import { EntityViewService } from '../graph/package-internals';
-import { NoteAccessService } from '@marinoscar/kvox-api/notes';
-import type { PrismaService } from '../../src/prisma/prisma.service';
+import { ASK_MAX_TOOL_STEPS } from '@marinoscar/kvox-api/ask';
+import { KvoxRateLimitError } from '@marinoscar/kvox-api/ports';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { JobsService, RateLimitError } from '@marinoscar/platform-api/jobs';
-import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
-import { createFakeAskPort, done, failure, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
-import { ASK_MAX_TOOL_STEPS } from '../../src/ask/ask-limits';
-import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
-import { createDbSettings } from '../helpers/graph-ports.helper';
-import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
+import { done, failure, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
+import { createAskTurn, toKvoxJob } from '../helpers/ask-ports.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('ask-respond.db.spec');
 
 const EMAIL_PREFIX = 'ask-respond-test';
-const ROLE_NAME = `${EMAIL_PREFIX}-role-${Date.now()}`;
 
 describeWithDb('ask.respond (real Postgres)', () => {
   let prisma: PrismaClient;
-  let toolset: AskToolset;
-  let roleId: string;
 
   const stream = new FakeAskStream();
 
-  let service: AskMessagesService;
-  let handler: AskRespondHandler;
+  let service: ReturnType<typeof createAskTurn>['service'];
+  let handler: ReturnType<typeof createAskTurn>['handler'];
 
   beforeAll(async () => {
     if (!dbReachable) return;
     prisma = connectTestPrisma();
     await prisma.$connect();
-    const p = prisma as unknown as PrismaService;
-    const access = new GraphAccessService(p);
-    const transcriptAccess = createTranscriptAccess(p);
-    const preferences = new GraphPreferencesService(createDbSettings(prisma));
-    const ontology = new GraphOntologyService(p, preferences);
-    const reads = new GraphReadService(p, access, ontology, transcriptAccess, new SharedTranscriptVisibility(p));
-    const neighborhood = new GraphNeighborhoodService(p, access, ontology);
-    const evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p), createDbObjectStore(prisma, UNUSED_STORAGE));
-    const search = { search: async () => ({ results: [], nextCursor: null }) };
-    const brief = new EntityBriefService(
-      p,
-      access,
-      ontology,
-      new EntityViewService(p),
-      search as never,
-      new SharedTranscriptVisibility(p),
-      { resolve: async () => { throw new Error('never'); } } as never,
-      { isRegistered: () => { throw new Error('never'); } } as never,
-      { enqueue: async () => { throw new Error('never'); } } as never,
-    );
-    toolset = new AskToolset(
-      new SearchTool(reads, search as never, p),
-      new GetEntityTool(reads, ontology, p),
-      new NeighborsTool(neighborhood, p),
-      new TimelineTool(reads, p),
-      new EvidenceTool(evidence, p),
-      new EntityBriefTool(brief, p),
-      new ListCommitmentsTool(p),
-      preferences,
-    );
-    const jobs = new JobsService(p);
-    // Readiness is scripted; `chat()` and everything under it is production code over the fake stream.
-    const port = createFakeAskPort(stream, { model: 'gpt-test' });
-    service = new AskMessagesService(p, new AskAccessService(p), port.ai, jobs);
-    handler = new AskRespondHandler(
-      { register: () => undefined } as never,
-      p,
-      port.ai,
-      port.settings as never,
-      { registerProviderKey: () => undefined } as never,
-      toolset,
-    );
-
-    const permission = await prisma.permission.upsert({
-      where: { name: 'graph:read' },
-      update: {},
-      create: { name: 'graph:read' },
-    });
-    const role = await prisma.role.create({ data: { name: ROLE_NAME } });
-    roleId = role.id;
-    await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
+    ({ service, handler } = createAskTurn(prisma, stream, { model: 'gpt-test' }));
   });
 
   afterAll(async () => {
-    if (dbReachable && roleId) await prisma.role.delete({ where: { id: roleId } }).catch(() => undefined);
     await prisma?.$disconnect();
   });
 
@@ -143,7 +71,6 @@ describeWithDb('ask.respond (real Postgres)', () => {
 
   async function owner(suffix: string) {
     const user = await createUser(prisma, EMAIL_PREFIX, suffix);
-    await prisma.userRole.create({ data: { userId: user.id, roleId } });
     return { user, g: new GraphFixture(prisma, user.id) };
   }
 
@@ -151,7 +78,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     return prisma.askConversation.create({ data: { ownerId } });
   }
 
-  async function jobFor(messageId: string): Promise<Job> {
+  async function jobFor(messageId: string) {
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: messageId } });
     return prisma.job.findUniqueOrThrow({ where: { id: row.jobId! } });
   }
@@ -183,7 +110,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
       text('Nothing else.[^ev99]'),
       done('stop', 300, 30),
     ]);
-    await handler.process(job);
+    await handler.process(toKvoxJob(job));
 
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id: posted.assistantMessage.id } });
     expect(row).toMatchObject({
@@ -260,7 +187,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const job = await jobFor(posted.assistantMessage.id);
     await prisma.askConversation.delete({ where: { id: conv.id } });
 
-    await expect(handler.process(job)).resolves.toBeUndefined();
+    await expect(handler.process(toKvoxJob(job))).resolves.toBeUndefined();
     expect(stream.requests).toHaveLength(0);
     expect(await prisma.askMessage.count({ where: { id: posted.assistantMessage.id } })).toBe(0);
   });
@@ -279,7 +206,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const { id, job } = await post('hold');
     stream.enqueue([text('Let me look that up for you'), text(' right away…'), toolCall('c1', 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
     stream.enqueue([text(ANSWER), done('stop')]);
-    await handler.process(job);
+    await handler.process(toKvoxJob(job));
 
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id } });
     expect(row).toMatchObject({ status: 'complete', finishReason: 'stop', content: ANSWER });
@@ -292,7 +219,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
       stream.enqueue([toolCall(`c${i}`, 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
     }
     stream.enqueue([text(ANSWER), done('stop')]);
-    await handler.process(job);
+    await handler.process(toKvoxJob(job));
 
     const row = await prisma.askMessage.findUniqueOrThrow({ where: { id } });
     expect(row).toMatchObject({ status: 'complete', finishReason: 'step_cap', content: ANSWER });
@@ -304,7 +231,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
   it('ends token_cap when the answer stops on length', async () => {
     const { id, job } = await post('tokencap');
     stream.enqueue([text(ANSWER), done('length')]);
-    await handler.process(job);
+    await handler.process(toKvoxJob(job));
 
     expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
       status: 'complete',
@@ -317,7 +244,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const { id, job } = await post('defer');
     stream.enqueue([failure('AI_RATE_LIMITED', 'slow down')]);
 
-    await expect(handler.process(job)).rejects.toBeInstanceOf(RateLimitError);
+    await expect(handler.process(toKvoxJob(job))).rejects.toBeInstanceOf(KvoxRateLimitError);
     expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
       status: 'pending',
       content: '',
@@ -331,7 +258,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     stream.enqueue([text(long), toolCall('c1', 'search', '{"query":"x","scope":"all","limit":null}'), done('tool_calls')]);
     stream.enqueue([failure('AI_RATE_LIMITED', 'slow down')]);
 
-    await expect(handler.process(job)).resolves.toBeUndefined();
+    await expect(handler.process(toKvoxJob(job))).resolves.toBeUndefined();
     expect(await prisma.askMessage.findUniqueOrThrow({ where: { id } })).toMatchObject({
       status: 'failed',
       errorClass: 'rate_limit',

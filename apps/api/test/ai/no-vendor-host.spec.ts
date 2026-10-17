@@ -8,7 +8,7 @@ import { join, relative, resolve, sep } from 'node:path';
 // This app used to carry a hand-written OpenAI client over `fetch`: it imported no SDK, so the
 // platform's `ai-no-sdk-leak` suite (which reads import specifiers) could not see it. A model call
 // now goes through the platform AI slice only, which owns every vendor endpoint. This guard reads
-// TEXT, not imports: no file under `apps/api/src` or `apps/cli/src` (specs included) names a
+// TEXT, not imports: no file under `apps/api/src`, `apps/cli/src` or `packages/kvox-api/src` (specs included) names a
 // provider's API host, as a URL, a default or a fixture.
 //
 // A failure names the file and the host. Do not add an exception: route the call through `KvoxAi`
@@ -16,7 +16,7 @@ import { join, relative, resolve, sep } from 'node:path';
 // =============================================================================
 
 const REPO = resolve(__dirname, '../../../..');
-const ROOTS = ['apps/api/src', 'apps/cli/src'];
+const ROOTS = ['apps/api/src', 'apps/cli/src', 'packages/kvox-api/src'];
 
 const VENDOR_HOSTS = ['api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com'] as const;
 
@@ -39,7 +39,7 @@ describe('no direct vendor host (#477)', () => {
     expect(files.some((file) => file.includes(`${sep}ai-port${sep}`))).toBe(true);
   });
 
-  it.each(VENDOR_HOSTS)('no file under apps/api/src or apps/cli/src contains %s', (host) => {
+  it.each(VENDOR_HOSTS)('no file under apps/api/src, apps/cli/src or packages/kvox-api/src contains %s', (host) => {
     const offenders = files
       .filter((file) => readFileSync(file, 'utf8').includes(host))
       .map((file) => relative(REPO, file).split(sep).join('/'));

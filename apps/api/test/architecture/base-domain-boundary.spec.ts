@@ -88,7 +88,9 @@ const SRC = resolve(__dirname, '..', '..', 'src');
  * it, so it is argued in a pull request, not done to silence a failure.
  */
 const DOMAIN_DIRS: readonly string[] = [
-  'ask',
+  // Empty since #497: Ask was the last domain directory, and it moved into `@marinoscar/kvox-api/ask`. All of
+  // the product now lives in the packages, and the application's `kvox/` binding folder is the one
+  // place it is configured. The rule stays as a guard: a domain directory added again must be listed.
 ];
 
 /**
@@ -271,19 +273,19 @@ interface Edge {
 }
 
 /** The domain a resolved path lies in, or `null` when it lies in none. */
-function domainOf(resolved: string): string | null {
+function domainOf(resolved: string, domains: readonly string[] = DOMAIN_DIRS): string | null {
   const rel = relative(SRC, resolved);
   if (rel.startsWith('..') || rel === '') return null;
   const [top] = rel.split(sep);
-  return DOMAIN_DIRS.includes(top) ? top : null;
+  return domains.includes(top) ? top : null;
 }
 
-function edgesIn(file: string, text: string): Edge[] {
+function edgesIn(file: string, text: string, domains: readonly string[] = DOMAIN_DIRS): Edge[] {
   const edges: Edge[] = [];
   for (const { specifier, line } of findSpecifiers(file, text)) {
     if (!specifier.startsWith('.')) continue; // a package, not a project file
     const resolved = resolve(dirname(file), specifier);
-    const domain = domainOf(resolved);
+    const domain = domainOf(resolved, domains);
     if (domain === null) continue;
     edges.push({
       from: posix(relative(SRC, file)),
@@ -515,7 +517,8 @@ describe('the import scanner', () => {
       "import { d } from '../../test/helpers/membership-user.helper';",
     ].join('\n');
 
-    expect(edgesIn(FILE, text).map((edge) => [edge.line, edge.domain, edge.to])).toEqual([
+    // `ask` stands for any domain directory: the real list is empty since #497.
+    expect(edgesIn(FILE, text, ['ask']).map((edge) => [edge.line, edge.domain, edge.to])).toEqual([
       [4, 'ask', 'ask/ask.service'],
     ]);
   });

@@ -13,7 +13,7 @@
 // WHOLE run) are per-question booleans/ratios here; the run aggregates them.
 // =============================================================================
 
-import type { AskCitation, AskMessageResponse } from '../../src/ask/dto/ask.dto';
+import type { AskCitation, AskMessageResponse } from '@marinoscar/kvox-contract/ask';
 import type { AskEvalQuestion } from './question-schema';
 
 /** What the scorer needs from the seeder's `idMap` — just the reverse evidence lookup. */

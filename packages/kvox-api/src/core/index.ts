@@ -7,6 +7,7 @@ export * from './ai/throttle.js';
 export * from './ai/token-budget.js';
 export * from './stream/stream-flusher.js';
 export * from './stream/sse-stream.js';
+export * from './stream/row-stream-poller.js';
 export * from './http/etag.js';
 export * from './events/kvox-event-emitter.events.js';
 export * from './prisma/sql.js';

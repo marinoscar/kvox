@@ -282,7 +282,12 @@ export class PlatformKvoxAiAdapter implements KvoxAiPort {
           yield { type: 'tool_call', id: event.id, name: event.name, arguments: parseArguments(event.argumentsJson) };
         } else {
           yield { type: 'step_end' };
-          yield { type: 'done', usage: event.usage };
+          yield {
+            type: 'done',
+            usage: event.usage,
+            finishReason:
+              event.finishReason === 'length' || event.finishReason === 'content_filter' ? event.finishReason : 'stop',
+          };
         }
       }
     } catch (error) {

@@ -309,6 +309,11 @@ export interface KvoxChatDoneEvent {
   type: 'done';
   /** What the call consumed. */
   usage: KvoxAiUsage;
+  /**
+   * Why the model stopped, when the adapter knows. `length` means the output ceiling cut the
+   * step off; `content_filter` means the provider declined to finish it. Absent means `stop`.
+   */
+  finishReason?: 'stop' | 'length' | 'content_filter';
 }
 
 /**

@@ -4,8 +4,8 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { askConversationSummarySchema } from '../../src/ask/dto/ask.dto';
-import { ASK_TOOL_NAMES, AskToolset } from '../../src/ask/tools/ask-toolset';
+import { askConversationSummarySchema } from '@marinoscar/kvox-contract/ask';
+import { internals } from '@marinoscar/kvox-api/ask/testing';
 
 // =============================================================================
 // The Ask conversation routes over the wire (issue #376, epic #348)
@@ -70,13 +70,13 @@ describe('Ask conversation routes (integration)', () => {
     prismaMock.askConversation.findFirst.mockResolvedValue(null as never);
   });
 
-  // The real AppModule graph resolves AskModule → AskToolsModule, i.e. every
+  // The real AppModule graph resolves AskModule, i.e. every
   // read service a tool injects is exported by GraphModule/SearchModule (#377).
   // Proved here, on the app this suite already compiles, rather than in a
   // second standalone module compile (which ran a jest worker out of memory).
   it('resolves AskToolset with all seven tools from the real module graph', () => {
-    const toolset = context.app.get(AskToolset);
-    expect(toolset.definitions().map((d) => d.name)).toEqual([...ASK_TOOL_NAMES]);
+    const toolset = context.app.get(internals.AskToolset);
+    expect(toolset.definitions().map((d) => d.name)).toEqual([...internals.ASK_TOOL_NAMES]);
   });
 
   const http = () => request(context.app.getHttpServer());

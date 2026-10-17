@@ -5,7 +5,7 @@
  * TypeScript mirrors of the API's wire schemas, field for field:
  *
  *   - `AskConversationSummary`, `AskConversationDetail`, `AskMessage`,
- *     `AskToolCall`, `AskCitation` — #376's `apps/api/src/ask/dto/ask.dto.ts`;
+ *     `AskToolCall`, `AskCitation` — #376's `@marinoscar/kvox-contract/ask`;
  *   - `postAskMessage` and its 409 reasons — #378's
  *     `POST /api/ask/conversations/:id/messages`.
  *

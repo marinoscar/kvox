@@ -134,6 +134,17 @@
         "rdf-validate-shacl",
         "zod"
       ]
+    },
+    "ask": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/swagger",
+        "nestjs-zod",
+        "rxjs",
+        "zod"
+      ]
     }
   },
   "kvox-web": {

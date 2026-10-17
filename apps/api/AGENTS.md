@@ -4,12 +4,12 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. Endpoint reference: [docs/API.m
 
 ## Layout
 
-- `src/<module>/` per feature (`transcripts`, `notes`, `graph`, `ask`, `onboarding`, ...). Job handlers live in the owning module's `handlers/`.
+- `src/<module>/` per feature (`onboarding`, ...); the six domain slices are `packages/kvox-api/src/<slice>/`, set up in `src/kvox/<slice>/<slice>.config.ts`.
 - `prisma/schema/` is generated (`db:compose`); `prisma/migrations/` holds the SQL (hashed by `prisma/*.lock`). `test/` holds integration specs; `*.db.spec.ts` need real Postgres (`npm run test:db --workspace=api`).
 
 ## Rules
 
-- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`, `/api/onboarding`). Add routes to RBAC coverage in `test/rbac/`.
+- **Every route declares `@Auth()`** and, where it has a permission, the exact string the card/UI uses. A route with no permission is ownership-scoped (`/api/pat`). Add routes to RBAC coverage in `test/rbac/`.
 - **Validate input with Zod** DTOs; annotate OpenAPI; run `npm run openapi:dump && npm run openapi:lint` from the repo root after route changes.
 - **Adding an endpoint**: controller method (auth/RBAC decorators), service method (all business logic), OpenAPI annotations, unit + integration tests, update `docs/API.md`.
 - **Adding a setting**: a `system_settings` or `user_settings` namespace is one declaration (with its `merge`) appended to `src/app-registrations/settings.ts`; the platform settings slice composes schemas and OpenAPI from the registries (`src/settings/registry/`). No local settings services or DTOs. See [DEVELOPMENT.md](../../docs/DEVELOPMENT.md#settings-namespace-registry).
@@ -30,6 +30,6 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. Endpoint reference: [docs/API.m
 - **User data** ([spec](../../docs/specs/user-data-deletion.md)): the platform slice owns `/api/user-data` and `user.data.purge`; this app registers categories, scopes and hints in `src/platform/user-data/user-data.manifest.ts`, before `registerPlatformUserData()`. `transcript.purge`/`note.purge` take `{ mode: 'owner', userId }` and clear `Restrict` FKs first (never catch an FK violation); `files.purge_unmanaged` never touches a `kvox_object_ownership` object.
 - **Onboarding** ([spec](../../docs/specs/onboarding.md)): the platform slice, steps and facts in `src/platform/onboarding/` plus the `*.onboarding.ts` of each domain. Completion is derived on every read; a step reads facts only, never queries. Keep exactly one `admin.ai` (pinned in `test/onboarding/onboarding-steps.spec.ts`).
 - **Graph** ([spec](../../docs/specs/ontology.md)): every write through `GraphWriteService` (the graph slice), only `kg.migrate` excepted; evidence on every accepted/edited row (`kg_assert_has_evidence`, write subject and evidence in one transaction); `kg.purge` is re-entrant and `maxAttempts: 1`; speaker naming writes the graph only via `kg.speaker_link`; `kg.graph_layout` coalesces 120 s; RDF libs (`n3`, `jsonld`, `rdf-validate-shacl`) only in their allowed files. Ontology and wire schemas are in `@marinoscar/kvox-contract` (DTO files keep only `createZodDto` classes); rebuild: `npm run build -w @marinoscar/kvox-contract`.
-- **Ask** (`src/ask/`): `ask.respond` is `maxAttempts: 1`; text before a tool call is held and discarded (`answer-hold.ts`); every write is `WHERE status = 'streaming'`; the handler imports no write service.
+- **Ask** (`packages/kvox-api/src/ask/`): `ask.respond` is `maxAttempts: 1`; text before a tool call is held and discarded (`answer-hold.ts`); every write is `WHERE status = 'streaming'`; no write service.
 
 Run: `npm test`, `npm run test:db`, `npm run typecheck` (`--workspace=api`).

@@ -209,8 +209,6 @@ function readCatalog(): string | undefined {
 const RAW_SQL_ALLOWLIST = [
   { file: 'ai-port/migrate/ai-legacy-migrate.ts', why: 'One-off operator command (issue #474): reads the database clock and counts platform key-import audit rows; no user-owned rows, no request input, and it runs from the command line only.' },
   { file: 'allowlist-reminders/allowlist-reminders.service.ts', why: 'The kvox_allowlist_reminders side table: atomic INSERT .. ON CONFLICT counter, a join to allowed_emails and a bounded orphan DELETE. Allowlist bookkeeping, no user-owned rows; ids are bound uuid parameters.' },
-  { file: 'ask/ask-conversations.service.ts', why: 'Conversation summaries and the running-turn partial-unique-index paths Prisma cannot express; every statement filters on the authenticated owner_id.' },
-  { file: 'ask/citations.ts', why: 'Resolves citation sources across transcripts and notes with a join Prisma cannot express; bound by the owner id of the conversation.' },
   { file: 'doctor/checks/db-extensions.doctor-check.ts', why: 'Doctor check: one read-only `SELECT` on the `pg_extension` catalog (are `vector` and `pg_trgm` installed); no user data, no request input.' },
   { file: 'app-sharing/transcript-visibility.ts', why: 'Reads the ids of the transcripts shared with the caller through the platform\'s accessibleWhere EXISTS form, past 1,000 shares (issue #485); the statement is built by the platform and bound to the caller and their organization.' },
   { file: 'platform/onboarding/onboarding-data.adapter.ts', why: 'The onboarding activation metrics (issue #481): the platform builds one aggregate statement over the registered funnel and milestone expressions and this port runs it in a READ ONLY transaction. It returns counts only, every value is a bound parameter, and the expressions are developer-authored (refused at registration if they contain a semicolon).' },
@@ -645,8 +643,11 @@ describe('kvox-guarded routes', () => {
       .map((name) => ({ name, handler: controller.prototype[name] as Function }))
       .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
 
-  it('finds the transcription, transcripts, search, notes and graph controllers (a path mistake must not make this vacuous)', () => {
+  it('finds the transcription, transcripts, search, notes, graph and Ask controllers (a path mistake must not make this vacuous)', () => {
     expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
+      'AskConversationsController',
+      'AskMessageStreamController',
+      'AskMessagesController',
       'EntityBriefController',
       'GraphAttributeDefsController',
       'GraphController',

@@ -2,7 +2,7 @@
 // The Ask evaluation's scorer: unit tests on hand-built messages (issue #382)
 // =============================================================================
 
-import type { AskCitation, AskMessageResponse } from '../../src/ask/dto/ask.dto';
+import type { AskCitation, AskMessageResponse } from '@marinoscar/kvox-contract/ask';
 import {
   scoreAnswer,
   scoreAnswerMatch,

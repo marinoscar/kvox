@@ -89,6 +89,14 @@
       "types": "./dist/graph-rdf/testing/index.d.ts",
       "default": "./dist/graph-rdf/testing/index.js"
     },
+    "./ask": {
+      "types": "./dist/ask/index.d.ts",
+      "default": "./dist/ask/index.js"
+    },
+    "./ask/testing": {
+      "types": "./dist/ask/testing/index.d.ts",
+      "default": "./dist/ask/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -6,7 +6,7 @@ The NestJS side of the KVox domain: the host ports a slice needs, their in-memor
 
 The domain's server code in slices, one subpath per slice, so a second host (KVox Desktop) can install it without the web edition. A slice imports only `@marinoscar/kvox-api/ports` and `@marinoscar/kvox-contract`, never `@marinoscar/platform-*`: the web edition binds the platform to the ports in the app (`apps/api/src/platform-kvox/`), which keeps the package host-neutral (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)).
 
-Status: ports, core and testing are in place (issue 5.4); `transcription` (issue #492, epic #491), `search` (issue #494), `transcripts` (issue #493) and `notes` (issue #495) and `graph`, `graph-extraction` and `graph-rdf` (issue #496) are the domain slices so far; `./ask` follows. Every declaration is `@stability experimental`.
+Status: ports, core and testing are in place (issue 5.4); `transcription` (issue #492, epic #491), `search` (issue #494), `transcripts` (issue #493) and `notes` (issue #495) `graph`, `graph-extraction` and `graph-rdf` (issue #496) and `ask` (issue #497) are the domain slices: all six are in the package. Every declaration is `@stability experimental`.
 
 - `@marinoscar/kvox-api/ports`: the ten host ports (AI, object store, jobs, identity, notify, events, Prisma, settings, secrets, audit) and their injection tokens. [README](src/ports/README.md).
 - `@marinoscar/kvox-api/core`: `KvoxPortsModule`, `@KvoxAuth()` and `@KvoxAuthFromOptions()`, and the helpers the domain slices share (throttle key, token budget, stream flusher and SSE helpers, ETags, the `Prisma` SQL helper). [README](src/core/README.md).
@@ -26,6 +26,8 @@ Status: ports, core and testing are in place (issue 5.4); `transcription` (issue
 - `@marinoscar/kvox-api/graph-extraction/testing`: `describeGraphExtractionConformance` and the `internals` namespace the evaluation scripts import. [README](src/graph-extraction/README.md#conformance-suite).
 - `@marinoscar/kvox-api/graph-rdf`: `GraphRdfModule.forRoot` (the OWL and SHACL artefacts, `kg.export`, `kg.import`) on the graph and graph-extraction slices. [README](src/graph-rdf/README.md).
 - `@marinoscar/kvox-api/graph-rdf/testing`: `describeGraphRdfConformance` and the `internals` namespace. [README](src/graph-rdf/README.md#conformance-suite).
+- `@marinoscar/kvox-api/ask`: `AskModule.forRoot` (saved conversations, the `ask.respond` job on `KVOX_AI.chat` with the seven read-only graph tools, the SSE view over the durable answer) on the graph, notes and search slices. [README](src/ask/README.md#purpose-and-scope).
+- `@marinoscar/kvox-api/ask/testing`: `describeAskConformance`, `createScriptedChat`, the in-memory Ask tables, the tool fakes and the `internals` namespace. [README](src/ask/README.md#conformance-suite).
 
 The web edition binds every port to a platform slice in `apps/api/src/platform-kvox/`; the contract in prose, with the Desktop mapping notes, is [docs/specs/kvox-ports.md](../../docs/specs/kvox-ports.md).
 
@@ -37,7 +39,7 @@ npm install @marinoscar/kvox-api@next
 
 Install these in the app; the package never bundles its own copy (a second copy of Nest breaks dependency injection). Import slices by their subpath. Which peers you need depends on the slices you import ([the rule](../../docs/PACKAGES.md#peer-dependencies-per-slice)).
 
-Required by every slice (`ports`, `core`, `transcription`, `search`, `transcripts`, `notes`, `graph`, `graph-extraction`, `graph-rdf`):
+Required by every slice (`ports`, `core`, `transcription`, `search`, `transcripts`, `notes`, `graph`, `graph-extraction`, `graph-rdf`, `ask`):
 
 | Package | Range |
 |---|---|
@@ -149,6 +151,8 @@ What a host implements, binds or registers. The per-port table (web adapter path
 | `graphPreferencesSchema`, `mergeGraphPreferences`, `assertGraphPreferenceLimits` | graph | What the host's `graph` per-user settings namespace is built from. |
 | `GraphExtractionModuleOptions`, `ProposalStage`, `ProposalStageRegistry` | graph-extraction | The options of `GraphExtractionModule.forRoot` and the proposal-stage extension point. |
 | `GraphRdfModuleOptions`, `ShaclEngine` | graph-rdf | The options of `GraphRdfModule.forRoot` and the SHACL engine a test replaces. |
+| `AskModuleOptions`, `AskUserDataService`, `KvoxAskDb` | ask | The options of `AskModule.forRoot` (the turn's caps, which a host may only lower, and the stream's pacing), the account-data deletion for a host without a planner and the narrowed database client the host's client must satisfy. |
+| `describeAskConformance`, `createScriptedChat` | ask/testing | The turn-invariant kit (run it against your `KVOX_AI` adapter) and the scripted model. |
 | `describeGraphConformance`, `describeGraphExtractionConformance`, `describeGraphRdfConformance` | graph/testing, graph-extraction/testing, graph-rdf/testing | The invariant kits of the three graph slices. |
 
 ## Data
