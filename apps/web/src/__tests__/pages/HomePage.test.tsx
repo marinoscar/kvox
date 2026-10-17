@@ -22,7 +22,7 @@ import { mockGraphAiConfig, proposalSummaryRow } from '../mocks/graphData';
 import { render, mockAdminUser, mockUser, type MockUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
 import { useUploadManager } from '@marinoscar/kvox-web/transcripts/headless';
-import type { NoteSummary } from '../../services/notes';
+import type { NoteSummary } from '@marinoscar/kvox-web/notes/headless';
 import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 import {

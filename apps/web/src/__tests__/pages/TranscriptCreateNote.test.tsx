@@ -21,7 +21,7 @@ import type {
   TranscriptSegment,
   TranscriptSpeaker,
 } from '@marinoscar/kvox-web/transcripts/headless';
-import NewNotePage from '../../pages/NewNotePage';
+import { NewNotePageWithAi as NewNotePage } from '../../kvox/NewNotePageWithAi';
 import { appTranscriptAiAccess } from '../../kvox/transcriptAiAccess';
 import { appTranscriptSharing } from '../../kvox/transcriptSharing';
 import { appTranscriptPageSlots } from '../../kvox/transcriptSlots';

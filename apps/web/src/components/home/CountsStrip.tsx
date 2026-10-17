@@ -82,7 +82,7 @@ import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { NoteSummary } from '../../services/notes';
+import type { NoteSummary } from '@marinoscar/kvox-web/notes/headless';
 import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 
 export interface CountsStripProps {

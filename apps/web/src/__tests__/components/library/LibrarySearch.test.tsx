@@ -26,9 +26,10 @@ import { TranscriptsLibraryView } from '@marinoscar/kvox-web/transcripts/ui';
 import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
 import { appTranscriptSharing } from '../../../kvox/transcriptSharing';
 import { appTranscriptsLibrarySlots } from '../../../kvox/transcriptSlots';
-import NotesLibraryView from '../../../components/library/NotesLibraryView';
+import { NotesLibraryView } from '@marinoscar/kvox-web/notes/ui';
+import { appNotesLibrarySlots } from '../../../kvox/noteSlots';
 import type { SearchResponse, SearchResult } from '@marinoscar/kvox-web/search/headless';
-import type { NoteListItem } from '../../../services/notes';
+import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -158,7 +159,7 @@ function renderTranscripts() {
 }
 
 function renderNotes() {
-  return render(<NotesLibraryView />, { wrapperOptions: { user: mockAdminUser } });
+  return render(<NotesLibraryView slots={appNotesLibrarySlots} />, { wrapperOptions: { user: mockAdminUser } });
 }
 
 describe('TranscriptsLibraryView — the box switches the source', () => {

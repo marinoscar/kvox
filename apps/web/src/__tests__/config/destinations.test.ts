@@ -10,6 +10,8 @@ import {
   kvoxTranscriptsDestinations,
   kvoxTranscriptsRoutes,
 } from '@marinoscar/kvox-web/transcripts/ui';
+import { kvoxNotesRoutes } from '@marinoscar/kvox-web/notes/ui';
+import { appNotesRoutes } from '../../kvox/notesRoutes';
 import { appTranscriptsRoutes } from '../../kvox/transcriptsRoutes';
 import {
   isDestinationVisible,
@@ -58,6 +60,11 @@ function declaredRoutePaths(): string[] {
   // #500, epic #498), so their paths are read from the slice's list.
   if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
     paths.push(...kvoxTranscriptsRoutes.map((route) => route.path));
+  }
+  // The notes routes (#502, epic #498), the same way; the list includes the Note
+  // Templates settings route.
+  if (/renderKvoxRoutes\(appNotesRoutes\)/.test(source)) {
+    paths.push(...kvoxNotesRoutes.map((route) => route.path));
   }
   // `*` is the catch-all, which redirects to `/` rather than rendering a page.
   return [...new Set(paths)].filter((path) => path !== '*');
@@ -561,6 +568,16 @@ describe('admin sections — registry against the live routes', () => {
     if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
       for (const route of kvoxTranscriptsRoutes) gates.set(route.path, route.permission ?? null);
     }
+    // The notes routes (#502, epic #498), the same way: `appNotesRoutes` is the
+    // slice's `kvoxNotesRoutes` with four pages swapped for slot / AI wrappers,
+    // so its path-and-gate half is the slice's list. It includes the Note
+    // Templates settings route, which carries no gate.
+    if (/renderKvoxRoutes\(appNotesRoutes\)/.test(source)) {
+      expect(appNotesRoutes.map((route) => route.path)).toEqual(
+        kvoxNotesRoutes.map((route) => route.path),
+      );
+      for (const route of kvoxNotesRoutes) gates.set(route.path, route.permission ?? null);
+    }
     if (/renderKvoxRoutes\(kvoxSearchRoutes\)/.test(source)) {
       for (const route of kvoxSearchRoutes) gates.set(route.path, route.permission ?? null);
     }
@@ -659,6 +676,11 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
     // `<Route>` element in `App.tsx`; its gate is the slice list's `permission`.
     if (/renderKvoxRoutes\(appTranscriptsRoutes\)/.test(source)) {
       const route = kvoxTranscriptsRoutes.find((candidate) => candidate.path === targetPath);
+      if (route) return route.permission ? [route.permission] : [];
+    }
+    // Likewise the notes routes (#502): the gate is the slice list's `permission`.
+    if (/renderKvoxRoutes\(appNotesRoutes\)/.test(source)) {
+      const route = kvoxNotesRoutes.find((candidate) => candidate.path === targetPath);
       if (route) return route.permission ? [route.permission] : [];
     }
     // Not found is a real failure, not "no gate" — surfaced as an empty array

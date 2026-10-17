@@ -101,8 +101,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { useIsMounted } from '../../hooks/useIsMounted';
 import { ApiError } from '../../services/api';
-import { regenerateNote } from '../../services/notes';
-import type { NoteListItem } from '../../services/notes';
+import { regenerateNote } from '@marinoscar/kvox-web/notes/headless';
+import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
 import { failureMessage, retryTranscript } from '@marinoscar/kvox-web/transcripts/headless';
 import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
 import { KvoxApiError, formatRelativeTime, useKvoxHost } from '@marinoscar/kvox-web/core/headless';
@@ -288,7 +288,7 @@ export function NeedsAttention({
       action: canRetryNotes
         ? {
             verb: 'Regenerate',
-            run: () => regenerateNote(item.id),
+            run: () => regenerateNote(host, item.id),
             onDone: onNoteRetried,
           }
         : null,

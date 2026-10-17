@@ -54,7 +54,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNavigate } from 'react-router-dom';
 
 import { NoteSummaryCard } from './NoteSummaryCard';
-import type { NoteListItem } from '../../services/notes';
+import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
 
 export interface RecentNotesProps {
   /** Already ordered newest-first by the API. */

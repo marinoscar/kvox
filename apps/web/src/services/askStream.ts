@@ -36,8 +36,8 @@
  */
 
 import { API_BASE_URL, api } from './api';
-import { applyDelta, parseDeltaFrame } from './noteGenerationStream';
-import type { NoteStreamDelta } from './noteGenerationStream';
+import { applyDelta, parseDeltaFrame } from '@marinoscar/kvox-web/notes/headless';
+import type { NoteStreamDelta } from '@marinoscar/kvox-web/notes/headless';
 import { connectSse, type SseConnection } from '@marinoscar/kvox-web/core/headless';
 import { ASK_ERROR_CLASSES, ASK_FINISH_REASONS } from './ask';
 import type { AskCitation, AskErrorClass, AskFinishReason, AskToolCall } from './ask';

@@ -61,6 +61,7 @@ import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/head
 import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from './kvox/transcriptsRoutes';
+import { appNotesRoutes } from './kvox/notesRoutes';
 import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
@@ -106,14 +107,6 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // viewer, and #31's history page. Lazy like every other page here, and with
 // more reason than most: the viewer alone pulls in the virtualizer and the
 // playback engine, neither of which a user who never opens a transcript needs.
-const NotesPage = lazy(() => import('./pages/NotesPage'));
-// Notes (#57, epic #45) — the new-note flow, the generation view and the
-// version history. Lazy for the same reason and one of its own: the note
-// surfaces pull in `react-markdown` and `remark-gfm`, which nobody who never
-// opens a note should pay for.
-const NewNotePage = lazy(() => import('./pages/NewNotePage'));
-const NotePage = lazy(() => import('./pages/NotePage'));
-const NoteHistoryPage = lazy(() => import('./pages/NoteHistoryPage'));
 // Knowledge graph (#373, epic #347).
 const GraphIndexPage = lazy(() => import('./pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('./pages/GraphEntityPage'));
@@ -160,10 +153,6 @@ const UserDangerZonePage = lazy(() =>
 const UserAiKeysPage = lazy(() =>
   import('@marinoscar/platform-web/ai/ui').then((m) => ({ default: m.UserAiKeysPage })),
 );
-// Issue #56, epic #45 — the note template editor and its live AI preview. It
-// renders `AiKeyRequired` and nothing else until `UserAiKeysPage` above has been
-// used, so the two are ordered here the way the setup actually happens.
-const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage'));
 const UserKnowledgeGraphPage = lazy(() => import('./pages/UserKnowledgeGraphPage'));
 // Issue #279, epic #271; the platform's Get started page since #481 — the caller's own activation
 // checklist, and the place the shell banner (#277) leads. A registry card in
@@ -387,80 +376,33 @@ function AppRoutes() {
                       specificity, so `/transcripts/new` beats
                       `/transcripts/:id` wherever each is written. */}
                   {renderKvoxRoutes(appTranscriptsRoutes)}
-                  {/* Notes (#57, epic #45) — a DESTINATION OF ITS OWN since
-                      #106, where it used to be the other half of the `library`
-                      destination. See `config/destinations.ts`: four NON-PINNED
-                      destinations is the bottom bar's ceiling, and #106 freed
-                      the fourth slot by pinning Console rather than by merging
-                      these two nouns onto one row.
+                  {/* Notes (#57, epic #45; the slice's since #502, epic #498) — a
+                      DESTINATION OF ITS OWN since #106. See
+                      `config/destinations.ts`: four NON-PINNED destinations is
+                      the bottom bar's ceiling, and #106 freed the fourth slot by
+                      pinning Console rather than by merging these two nouns
+                      onto one row.
 
-                      GATED ON THE SAME STRINGS `notes.controller.ts` ENFORCES,
-                      verified against it rather than assumed: `notes:read` on
-                      every read route (`@Auth({ permissions:
-                      [PERMISSIONS.NOTES_READ] })`) and `notes:write` on the one
-                      that creates. Both are seeded to all three roles, for the
-                      identical reason the transcript pair is — producing a note
-                      is the action this epic exists to enable — so in practice
-                      nobody is refused, and the gate is here anyway for the
-                      deployment that revokes it.
+                      The routes (`/notes`, `/notes/new`, `/notes/:id`,
+                      `/notes/:id/history`) and the Note Templates settings route
+                      (`/settings/note-templates`) are DATA exported by
+                      `@marinoscar/kvox-web/notes/ui`: their paths, their lazy
+                      pages and the permissions they are gated on, the exact
+                      strings `notes.controller.ts` enforces (`notes:read` on
+                      every read route, `notes:write` on the one that creates,
+                      which sends a reader without it back to the list). The
+                      settings route carries no gate, like every `/settings/*`
+                      sibling. `appNotesRoutes` is that data with the four pages
+                      that take slots or AI access swapped for this app's
+                      wrappers (`kvox/notesRoutes.ts`). This app supplies the
+                      guard (`renderKvoxRoutes`).
 
-                      `/notes` renders its OWN page since #106 — `NotesPage`,
-                      the sibling of `TranscriptsPage` above — rather than the
-                      shared `LibraryPage` selecting a tab from the pathname.
-                      Its fallback is `/` and always was. */}
-                  <Route
-                    path="/notes"
-                    element={
-                      <RequirePermission
-                        permission="notes:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <NotesPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* `:write`, and its fallback is `/notes` rather than `/` —
-                      the same asymmetry `/transcripts/new` has, for the same
-                      reason: a user who may read notes but not create one
-                      belongs on the list they can reach. Unlike `/transcripts`'
-                      own fallback above, this one never pointed at the other
-                      subtree and is unchanged by #106. */}
-                  <Route
-                    path="/notes/new"
-                    element={
-                      <RequirePermission
-                        permission="notes:write"
-                        fallback={<Navigate to="/notes" replace />}
-                      >
-                        <NewNotePage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/notes/:id"
-                    element={
-                      <RequirePermission
-                        permission="notes:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <NotePage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Issue #58 builds this page out; the route, its gate and
-                      its AppBar drill-down entry are #57's and are meant to
-                      survive that. See the page's own header. */}
-                  <Route
-                    path="/notes/:id/history"
-                    element={
-                      <RequirePermission
-                        permission="notes:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <NoteHistoryPage />
-                      </RequirePermission>
-                    }
-                  />
+                      ORDER IS NOT SIGNIFICANT — React Router ranks by
+                      specificity, so `/notes/new` beats `/notes/:id`. The page
+                      routes are rendered here, at the notes position, rather
+                      than the settings one: the same layout parent, so the same
+                      result. */}
+                  {renderKvoxRoutes(appNotesRoutes)}
                   {/* Knowledge graph (#373, epic #347; spec §13). OWNED BY
                       `knowledge` in `config/destinations.ts` since #438 — a
                       bottom-bar tab of its own while connected knowledge is on
@@ -608,15 +550,6 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Issue #56, epic #45. Ungated like every `/settings/*`
-                      sibling: `note-templates.controller.ts` enforces
-                      `note_templates:read` / `note_templates:write`, and BOTH
-                      are seeded to all three roles — so a `RequirePermission`
-                      here would deny nobody while inventing a gate the API
-                      does not have. The page's own real gate is
-                      `keyConfigured`, which is a capability rather than an
-                      authorization and is therefore checked in the page. */}
-                  <Route path="/settings/note-templates" element={<UserNoteTemplatesPage />} />
                   {/* Search Indexing (#191, epic #165; the slice's since #501, epic
                       #498). The route is DATA exported by
                       `@marinoscar/kvox-web/search/ui`: its path and its lazy page.

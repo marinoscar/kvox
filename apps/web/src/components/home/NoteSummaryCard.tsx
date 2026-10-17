@@ -35,10 +35,9 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
-import { SourceLine } from '../library/NotesLibraryView';
-import { NoteStatusChip } from '../notes/NoteStatusChip';
-import { isNoteInFlight } from '../../hooks/useNotes';
-import type { NoteListItem } from '../../services/notes';
+import { NoteStatusChip, SourceLine } from '@marinoscar/kvox-web/notes/ui';
+import { isNoteInFlight } from '@marinoscar/kvox-web/notes/headless';
+import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export interface NoteSummaryCardProps {
