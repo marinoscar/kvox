@@ -40,7 +40,7 @@
 //      in this module truncates.
 //
 //   5. `RateLimitError` (429) — REUSED FROM `@marinoscar/platform-api/jobs`,
-//      deliberately not redefined here, for the reason `transcription/errors.ts`
+//      deliberately not redefined here, for the reason `@marinoscar/kvox-api/transcription`'s errors
 //      states at length: the queue's deferral path keys off
 //      `err instanceof RateLimitError`, and a second class of the same name in
 //      a different module would satisfy no such check. Re-exported below so a

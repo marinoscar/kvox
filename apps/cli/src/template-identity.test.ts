@@ -625,12 +625,14 @@ function stripRegistryScopes(lineText: string): string {
  * its classes, the `kvox_object_ownership` table, the `GET /api/kvox/files` route, the `kvox.transcripts.source`
  * processor name, the retired `kvox:storage-managed-by-part-size` deviation id and (#471) the
  * `20-kvox-extensions.sh` init script and `kvox.extensions` restore-gate id, and (#490) the
- * `platform-kvox/` folder of the web edition's port adapters and the paths inside it. They are stripped per
+ * `platform-kvox/` folder of the web edition's port adapters and the paths inside it, and (#492) the
+ * application's `kvox/` binding folder (`apps/api/src/kvox/`, `test/kvox/`), `app-registrations/kvox-permissions.ts`
+ * and the `packages/kvox-*` folders other files point at. They are stripped per
  * token, like the registry scopes above, so any other mention of the product name on the same line is
  * still flagged. A rename of the product renames these with the module directory.
  */
 const STORAGE_ADOPTION_TOKEN_RE =
-  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bplatform-kvox[\w./-]*/g;
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bplatform-kvox[\w./-]*|(?<!marinoscar\/)\bkvox\/[\w./-]*|\bkvox-permissions\b|\bpackages\/kvox-[\w./-]*/g;
 
 function stripStorageAdoptionTokens(lineText: string): string {
   return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');
@@ -712,6 +714,31 @@ describe('stripRegistryScopes (issue #465): the external npm scope is not an ide
 
   it('still flags a real literal on the same line as a scope specifier', () => {
     expect(flagged("from '@marinoscar/platform-api'; // github.com/marinoscar/kvox")).toBe(true);
+  });
+});
+
+describe('stripStorageAdoptionTokens (#492): the application\'s kvox/ binding folder and the package folders', () => {
+  const productRe = wordBoundaryPattern('kvox');
+  const flagged = (line: string): boolean => productRe.test(stripStorageAdoptionTokens(stripRegistryScopes(line)));
+
+  it.each([
+    "import { KvoxModule } from './kvox/kvox.module';",
+    "import { TranscriptionConfig } from '../kvox/transcription/transcription.config';",
+    "import './kvox-permissions';",
+    'Worked example: `apps/api/src/kvox/transcription/transcription.system-settings.ts`.',
+    'see `packages/kvox-api/src/transcription/README.md#quick-start`',
+    '"test/kvox/*.typecheck.ts"',
+  ])('hides %s', (line) => {
+    expect(flagged(line)).toBe(false);
+  });
+
+  it.each([
+    'run the kvox command',
+    'see marinoscar/kvox for details',
+    'https://github.com/marinoscar/kvox/issues/492',
+    'the kvox-api package',
+  ])('still flags %s', (line) => {
+    expect(flagged(line)).toBe(true);
   });
 });
 

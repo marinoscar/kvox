@@ -38,8 +38,17 @@ export class PlatformKvoxSecretsAdapter implements KvoxSecretsPort {
   }
 
   @Trace()
-  async set(purpose: string, name: string, value: string, actorUserId: string): Promise<void> {
-    await this.credentials.setSecret(purpose, name, value, { updatedByUserId: actorUserId });
+  async set(
+    purpose: string,
+    name: string,
+    value: string,
+    actorUserId: string,
+    meta: { label?: string } = {},
+  ): Promise<void> {
+    await this.credentials.setSecret(purpose, name, value, {
+      updatedByUserId: actorUserId,
+      ...(meta.label !== undefined ? { label: meta.label } : {}),
+    });
   }
 
   @Trace()
@@ -52,6 +61,11 @@ export class PlatformKvoxSecretsAdapter implements KvoxSecretsPort {
     const info = await this.credentials.describe(purpose, name);
     if (!info) return { configured: false, hint: null, updatedAt: null };
 
-    return { configured: true, hint: info.hint, updatedAt: info.updatedAt.toISOString() };
+    return {
+      configured: true,
+      hint: info.hint,
+      updatedAt: info.updatedAt.toISOString(),
+      updatedByUserId: info.updatedByUserId,
+    };
   }
 }

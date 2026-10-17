@@ -69,7 +69,7 @@ namespace collapses back to absent, never `{}`.
 | The slice | `apps/api/src/platform/onboarding/onboarding.config.ts`: `OnboardingModule.forRoot({ imports: [OnboardingHostModule] })`, mounted in `app.module.ts`. `adminPermission` is the default `system_settings:read` |
 | The data port | `onboarding-data.adapter.ts` (bound to `ONBOARDING_DATA` by `onboarding-host.module.ts`): a `select` of the caller's `user_settings.value`, the allowlist count, the push-subscription check and the metrics' one aggregate statement inside a `READ ONLY` transaction. `transcripts`, `notes` and `users` carry no row-level-security policy, so no bypass client is involved. `ONBOARDING_FEATURES` is not bound: no step names a `feature` |
 | Base facts and steps | `onboarding.facts.ts`, `onboarding.steps.ts`, registered with the platform's own by `onboarding.manifest.ts` |
-| Domain facts and steps | beside their domain (base code may not import domain code, `test/architecture/base-domain-boundary.spec.ts`): `transcription/transcription.onboarding.ts`, `transcripts/transcripts.onboarding.ts`, `notes/notes.onboarding.ts`, registered by `kvox.manifest.ts` |
+| Domain facts and steps | beside their domain (base code may not import domain code, `test/architecture/base-domain-boundary.spec.ts`): `kvox/transcription/transcription.onboarding.ts`, `transcripts/transcripts.onboarding.ts`, `notes/notes.onboarding.ts`, registered by `kvox.manifest.ts` |
 | The stored namespace | the platform's `ONBOARDING_USER_SETTINGS`, listed in `app-registrations/settings.ts` so the stored key order stays `dataTables`, `navigation`, `notifications`, `onboarding`, `graph` |
 
 `kvox.manifest.ts` is the composition root every entry point loads first, and it

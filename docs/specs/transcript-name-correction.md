@@ -4,7 +4,7 @@
 > transcription provider as a recognition hint, then a three-stage pipeline —
 > deterministic phonetic retrieval, an optional thorough discovery pass, and
 > LLM adjudication — that finds and proposes fixes for the names speech
-> recognition still got wrong. Implemented in `apps/api/src/transcription/
+> recognition still got wrong. Implemented in `packages/kvox-api/src/transcription/
 > keyterms.ts` (#327), `apps/api/src/transcripts/name-check/` and
 > `apps/api/src/transcripts/handlers/transcript-name-check.handler.ts` (#328),
 > `apps/web/src/components/transcripts/` name-check review panel (#329), and
@@ -46,7 +46,7 @@ person accepts or rejects it. Nothing this feature does writes
 
 ## 2. Feed-forward keyterms (#327)
 
-`apps/api/src/transcription/keyterms.ts` is the whole surface: pure
+`packages/kvox-api/src/transcription/keyterms.ts` is the whole surface: pure
 normalisation (`normalizeKeyterms` — trim, collapse whitespace, drop empties,
 de-duplicate case-insensitively keeping the first spelling), a reader
 (`readKeyterms`, defensive like `readSpeakersExpected` — a row written before
@@ -67,7 +67,7 @@ can do and only clamped at the edge — a deployment that switches to a
 keyterm-capable provider then honours terms a user already typed, on a
 retry, rather than having silently discarded them at upload.
 
-**AssemblyAI** (`apps/api/src/transcription/providers/assemblyai.provider.ts`)
+**AssemblyAI** (`packages/kvox-api/src/transcription/providers/assemblyai.provider.ts`)
 is the only provider that implements the capability today: `keyterms:
 { maxTerms: 1000, maxWordsPerTerm: 6 }`, sent as `keyterms_prompt` — **never**
 the deprecated `word_boost`/`boost_param` pair (see §7's rejected
@@ -608,8 +608,8 @@ forever.
   plus Jaro-Winkler and Levenshtein unit coverage.
 - `apps/api/src/transcripts/name-check/candidates.spec.ts` — retrieval gating,
   scoring, stopword handling, greedy non-overlap selection, memoisation.
-- `apps/api/src/transcription/providers/assemblyai.provider.spec.ts` —
+- `packages/kvox-api/src/transcription/providers/assemblyai.provider.spec.ts` —
   `keyterms_prompt` sent when terms exist, omitted entirely when they do not.
-- `apps/api/src/transcription/transcription-config.service.spec.ts` —
+- `packages/kvox-api/src/transcription/transcription-config.service.spec.ts` —
   `keytermsSupported`/`maxKeyterms` for a keyterm-capable provider, a
   provider with none, and no provider chosen at all.

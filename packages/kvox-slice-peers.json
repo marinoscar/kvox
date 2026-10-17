@@ -21,9 +21,7 @@
     "kvox-api": [
       "@nestjs/event-emitter",
       "@nestjs/schedule",
-      "@nestjs/swagger",
-      "@prisma/client-runtime-utils",
-      "nestjs-zod"
+      "@prisma/client-runtime-utils"
     ],
     "kvox-web": ["@mui/icons-material", "@mui/material", "react-router-dom"]
   },
@@ -47,6 +45,16 @@
     },
     "testing": {
       "peers": ["@marinoscar/kvox-contract", "rxjs", "zod"]
+    },
+    "transcription": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/swagger",
+        "nestjs-zod",
+        "zod"
+      ]
     }
   },
   "kvox-web": {

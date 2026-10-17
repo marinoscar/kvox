@@ -7,10 +7,13 @@ import {
   userSettingsNamespaceRegistry,
 } from '@marinoscar/platform-api/settings';
 import type {
+  KvoxReadSystemOptions,
   KvoxSettingsNamespaceDef,
   KvoxSettingsPort,
   KvoxVersionedSettings,
 } from '@marinoscar/kvox-api/ports';
+
+import { PrismaService } from '../../prisma/prisma.service';
 
 // =============================================================================
 // PlatformKvoxSettingsAdapter: the `KVOX_SETTINGS` port over the platform settings
@@ -40,6 +43,7 @@ export class PlatformKvoxSettingsAdapter implements KvoxSettingsPort {
   constructor(
     @Inject(SYSTEM_SETTINGS_STORE) private readonly system: SystemSettingsStore,
     private readonly users: UserSettingsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   registerNamespace(def: KvoxSettingsNamespaceDef): void {
@@ -54,10 +58,14 @@ export class PlatformKvoxSettingsAdapter implements KvoxSettingsPort {
   }
 
   @Trace()
-  async readSystem<T>(name: string): Promise<KvoxVersionedSettings<T>> {
+  async readSystem<T>(name: string, options: KvoxReadSystemOptions = {}): Promise<KvoxVersionedSettings<T>> {
     const snapshot = await this.system.read(name);
+    const versioned: KvoxVersionedSettings<T> = {
+      value: (snapshot.value ?? this.declared.get(`system:${name}`)?.defaults) as T,
+      version: snapshot.version,
+    };
 
-    return { value: (snapshot.value ?? this.declared.get(`system:${name}`)?.defaults) as T, version: snapshot.version };
+    return options.withUpdatedBy ? { ...versioned, ...(await this.lastUpdate()) } : versioned;
   }
 
   @Trace()
@@ -83,5 +91,19 @@ export class PlatformKvoxSettingsAdapter implements KvoxSettingsPort {
     const updated = (await this.users.patchSettings(userId, { [name]: patch } as never)) as unknown as Record<string, unknown>;
 
     return updated[name] as T;
+  }
+
+  /**
+   * Who last wrote the `global` settings row, and when. One row holds every system
+   * namespace, so this is the row's own record rather than the namespace's: the same
+   * answer the admin screens showed before the namespace moved behind the port.
+   */
+  private async lastUpdate(): Promise<Pick<KvoxVersionedSettings<unknown>, 'updatedAt' | 'updatedBy'>> {
+    const row = await this.prisma.systemSettings.findUnique({
+      where: { key: 'global' },
+      select: { updatedAt: true, updatedByUser: { select: { id: true, email: true } } },
+    });
+
+    return { updatedAt: row?.updatedAt.toISOString() ?? null, updatedBy: row?.updatedByUser ?? null };
   }
 }

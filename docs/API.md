@@ -1277,7 +1277,7 @@ default. Registration order is the stored key order; a new namespace is appended
 | `nodes.staleHeartbeatSeconds` / `nodes.offlineStaleMultiplier` / `nodes.offlineRetentionDays` | number | Worker-node fleet health thresholds — see `docs/specs/worker-nodes.md` |
 | `nodes.jobSecretBrokerEnabled` | boolean | Whether a worker node may be issued short-lived, job-scoped database credentials at all (epic #345). Default off |
 | `databaseBackup.*` | — | Backup schedule and retention policy — see `GET /admin/db-backup/config` and `docs/specs/database-backup.md`. The platform declaration is wider than the app's old one: `frequency` also accepts `cron`, and `cron` and `retention` (`count`, `maxAgeDays`) exist. `storageProvider` keeps the app's default `s3` (the platform's is empty). **Known behaviour change, closed by #467:** `PUT /admin/db-backup/config` now also accepts `frequency: "cron"`, without the minimum-interval validation the other frequencies get |
-| `transcription.*` | — | Speech-to-text policy. Registered by the app (`transcription/transcription.system-settings.ts`); see `GET /transcription-settings` and `docs/specs/transcription.md`. Carries no API key |
+| `transcription.*` | — | Speech-to-text policy. Registered by the app (`kvox/transcription/transcription.system-settings.ts`); see `GET /transcription-settings` and `docs/specs/transcription.md`. Carries no API key |
 | `ai.*` | — | AI policy. The platform AI slice's namespace, extended by the app (`platform/ai/ai-settings.extension.ts`); see `GET /ai-tasks/settings`, the platform `/api/admin/ai/*` routes and `docs/specs/notes.md`. Carries no API key |
 | `maintenance.*` | — | Maintenance-window state — see `GET /admin/maintenance` and `docs/specs/maintenance-mode.md` |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
@@ -7595,7 +7595,7 @@ Packaged by the platform (its `doctor` slice), mounted by `apps/api/src/doctor/d
 | Check id | Category | Result |
 |----------|----------|--------|
 | `<APP_SLUG>.db.extensions` | `core` | `fail` when `vector` or `pg_trgm` is not installed (remedy: create the extension as a superuser before migrating); `data` holds extension names only. Provider: `apps/api/src/doctor/checks/db-extensions.doctor-check.ts`. |
-| `<APP_SLUG>.transcription.configured` | `ai` | `warn` when no transcription provider is selected or the selected provider has no stored key; a credential presence check only. Provider: `apps/api/src/transcription/transcription-configured.doctor-check.ts` (under `transcription` because base code must not import domain code). |
+| `<APP_SLUG>.transcription.configured` | `ai` | `warn` when no transcription provider is selected or the selected provider has no stored key; a credential presence check only. Provider: `apps/api/src/kvox/transcription/transcription-configured.doctor-check.ts` (in the application's `kvox/` folder because base code must not import domain code and the package slice imports no platform class). |
 
 **`db.rls_role` passes when the API connects as the ordinary application role** (`NOSUPERUSER NOBYPASSRLS`, since #471; runbook: [`runbooks/application-role.md`](runbooks/application-role.md)). A deployment that still connects as `postgres` reports `fail`, and the overall `verdict` is `fail` with it. Do not loosen the check.
 

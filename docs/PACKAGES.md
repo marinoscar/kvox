@@ -23,7 +23,7 @@ How the four publishable KVox packages are laid out, documented, checked and rel
 |---|---|---|---|
 | `@marinoscar/kvox-contract` | `packages/kvox-contract` | dual ESM + CommonJS | `.`, `./transcription`, `./transcripts`, `./search`, `./notes`, `./graph`, `./ask`, `./ontology`, `./errors`, `./schemas/transcript-export.v1.json` |
 | `@marinoscar/kvox-db` | `packages/kvox-db` | CommonJS, plus the `kvox-db` bin | `.` |
-| `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing` |
+| `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing`, `./transcription`, `./transcription/testing` |
 | `@marinoscar/kvox-web` | `packages/kvox-web` | ESM | `./core` |
 
 Every package: `"version"` moved by Changesets (the source says `0.0.0`), `"license": "MIT"`, `engines.node >=24`, `publishConfig` `{ "access": "public", "provenance": true }`, a `repository.directory`, and a `files` list of `dist`, `README.md`, `CHANGELOG.md` and `LICENSE` (plus `bin`, `schema`, `migrations`, `raw-sql-indexes.json`, `extensions.json`, `schema-objects.json` for `kvox-db`). `LICENSE` is copied from the repository root by the `prepack` script (`scripts/kvox-packages/copy-license.mjs`) and is git-ignored in the package.
@@ -42,12 +42,14 @@ packages/kvox-api/
   src/core/index.ts  src/core/README.md
   src/ports/index.ts src/ports/README.md
   src/testing/index.ts src/testing/README.md
-  test/jest.config.js  test/core.spec.ts
+  test/jest.config.js  test/core.spec.ts  test/host/ (the real-database test host)
 ```
 
 `packages/kvox-slices.json` is the slice graph, `{ "kvox-api": { "core": ["ports"] } }`. A slice may be declared before its folder exists; a folder under `src/` that the file does not declare is an error. Both data files are **append-only**: later issues add slices, they never rename or remove one, because a slice name is a published subpath.
 
 Import rules for sources (ESLint, `npm run lint:packages`): never a deep import into another package (`src/`, `dist/`, `internal/`), never a relative path that leaves the package, never `@app/shared`. The contract imports only `zod` and its own files. Keep the `.js` extension in every relative import of an ESM or NodeNext package; without it the typecheck can pass and a consumer fails with `ERR_MODULE_NOT_FOUND`.
+
+A slice may ship a second entry for its tests, `src/<slice>/testing/index.ts` exported as `./<slice>/testing` (`@marinoscar/kvox-api/transcription/testing`: the slice's conformance suite and fakes). It belongs to the slice, so it imports only what the slice may import, and it has its own `typedoc.json` entry point and README mention.
 
 Subpaths are the package's public API. Document a subpath, or do not export it; an undocumented export fails `check:kvox-package-docs`. An `exports` entry whose value is a plain string is a data file shipped as-is (the contract's `./schemas/transcript-export.v1.json`): the README must name it, and `typedoc.json` has no entry point for it.
 
@@ -166,7 +168,9 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 |---|---|
 | `npm run build:kvox-packages` | Builds the four packages (`build:packages` is an alias). |
 | `npm run typecheck:kvox-packages` | `tsc --noEmit` in each. |
-| `npm run test:kvox-packages` | Vitest (contract, db, web) and Jest (api); `test:packages` also runs the script tests. |
+| `npm run test:kvox-packages` | Vitest (contract, db, web) and Jest (api, project `unit`); `test:packages` also runs the script tests. |
+| `npm run test:host:prepare -w @marinoscar/kvox-api` | Builds the real-database test host (`packages/kvox-api/test/host/`: platform and domain schema and migrations, a test-only Prisma client). Needs no database. |
+| `npm run test:db -w @marinoscar/kvox-api` | The `db` Jest project: `test/**/*.db.spec.ts` against PostgreSQL 16 with pgvector, a throwaway database per spec file ([host README](../packages/kvox-api/test/host/README.md)). |
 | `npm run test:kvox-scripts` | `node --test scripts/kvox-packages/test/`: the check scripts against fixtures, including `host-neutral`. |
 | `npm run lint:packages` | ESLint over `packages/kvox-*/src` (deep imports, slice direction, TSDoc, contract imports). |
 | `npm run docs:kvox-packages` | TypeDoc for the four packages. |

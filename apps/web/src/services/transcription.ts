@@ -2,7 +2,7 @@
  * The transcription admin API, as the web app sees it.
  *
  * Issue #23, epic #19 — see the parallel backend work in
- * `apps/api/src/transcription/`. Shaped after `services/pushConfig.ts`:
+ * `packages/kvox-api/src/transcription/`. Shaped after `services/pushConfig.ts`:
  * `services/api.ts` stays the transport (the `ApiService` instance, the
  * refresh dance, the maintenance recogniser), and this module holds the five
  * calls next to the types they produce.

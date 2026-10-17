@@ -1,6 +1,7 @@
 export * from './auth/kvox-auth.constants.js';
 export * from './auth/kvox-auth.guard.js';
 export * from './auth/kvox-auth.decorator.js';
+export * from './auth/kvox-auth-docs.js';
 export * from './auth/current-principal.decorator.js';
 export * from './ai/throttle.js';
 export * from './ai/token-budget.js';

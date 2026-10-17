@@ -7,7 +7,7 @@ import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { sharingModule } from '../platform/sharing/sharing.config';
 import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
-import { TranscriptionModule } from '../transcription/transcription.module';
+import { TranscriptionConfig } from '../kvox/transcription/transcription.config';
 import { MediaAudioTranscodeHandler } from './handlers/media-audio-transcode.handler';
 import { TranscriptionIngestHandler } from './handlers/transcription-ingest.handler';
 import { TranscriptionPollHandler } from './handlers/transcription-poll.handler';
@@ -62,7 +62,7 @@ import { TranscriptsService } from './transcripts.service';
 //   • `JobsModule` — `JobsService` to enqueue and `JobHandlerRegistry` for the
 //     five handlers to register themselves with, plus `ProviderThrottleService`
 //     so submit/poll/ingest can share ONE vendor rate-limit bucket.
-//   • `TranscriptionModule` — the provider registry and the settings service.
+//   • `TranscriptionConfig` (the configured transcription slice) — the provider registry and the settings service.
 //     It is deliberately NOT `@Global()`, so this line is how a reader sees
 //     that this module can reach a plaintext-returning credential path.
 //   • `CredentialsModule` — `TranscriptionRuntimeService` resolves the provider
@@ -106,7 +106,7 @@ import { TranscriptsService } from './transcripts.service';
     // transcript and `GrantsService` stores a share. The module is not global,
     // so every feature module that injects either imports the SAME object.
     sharingModule,
-    TranscriptionModule,
+    TranscriptionConfig,
     CredentialsModule,
     // #469: the ownership gateway the upload processor asks, and the registry it registers into.
     KvoxObjectsModule,

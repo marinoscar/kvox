@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   systemTranscriptionPatchSchema,
-  TRANSCRIPTION_PROVIDER_IDS,
+  transcriptionProviderIdSchema,
 } from './transcription-settings.schema.js';
 
 // =============================================================================
@@ -95,7 +95,7 @@ export type UpdateTranscriptionSettingsBody = z.infer<
  * @stability experimental
  */
 export const testTranscriptionConnectionSchema = z.object({
-  provider: z.enum(TRANSCRIPTION_PROVIDER_IDS),
+  provider: transcriptionProviderIdSchema,
   /** Region to probe, overriding the stored one for this call only. */
   region: z.string().trim().min(1).max(16).nullish(),
   /**
@@ -244,8 +244,7 @@ export const transcriptionSettingsResponseSchema = z.object({
   settings: z
     .object({
       enabled: z.boolean().describe('Master switch for transcription.'),
-      provider: z
-        .enum(TRANSCRIPTION_PROVIDER_IDS)
+      provider: transcriptionProviderIdSchema
         .nullable()
         .describe('The active provider, or null when none has been chosen.'),
       providers: z

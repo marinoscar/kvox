@@ -28,11 +28,11 @@ import {
 import {
   TRANSCRIPTION_CREDENTIAL_PURPOSE,
   transcriptionCredentialName,
-} from '../../src/transcription/transcription-credential.constants';
+} from '@marinoscar/kvox-api/transcription';
 import {
   TranscriptionConfiguredDoctorCheck,
   decideTranscriptionConfigured,
-} from '../../src/transcription/transcription-configured.doctor-check';
+} from '../../src/kvox/transcription/transcription-configured.doctor-check';
 
 /** Every string value the outcome would put on the wire (`detail`, `remedy`, `data`). */
 function wireText(outcome: DoctorCheckOutcome): string {

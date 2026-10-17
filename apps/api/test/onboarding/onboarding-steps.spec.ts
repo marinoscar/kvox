@@ -12,7 +12,7 @@ import type { OnboardingResponse, OnboardingStep } from '@marinoscar/platform-co
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import { KVOX_AI } from '../../src/ai-port/kvox-ai';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { TranscriptionConfigService } from '../../src/transcription/transcription-config.service';
+import { TranscriptionConfigService } from '@marinoscar/kvox-api/transcription';
 
 // =============================================================================
 // This app's onboarding steps and facts on the platform slice (issue #481, epic #478)

@@ -24,7 +24,7 @@ import {
 // common causes — an unusable file, and a deployment whose provider is not
 // configured — the trip tells them nothing they can act on either. So
 // `failure_reason` is rendered verbatim. It is written by this application, not
-// by the vendor: the taxonomy in `transcription/errors.ts` is what turns a
+// by the vendor: the taxonomy in `@marinoscar/kvox-api/transcription` (`errors.ts`) is what turns a
 // provider's own opaque message into a sentence a person can read.
 //
 // ⚠ `reason` IS INTERPOLATED INTO HTML AND IS ESCAPED BY CONSTRUCTION. It is

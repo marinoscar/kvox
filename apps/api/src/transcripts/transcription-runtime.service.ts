@@ -39,16 +39,17 @@
 import { Injectable } from '@nestjs/common';
 
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
-import { ProviderAuthError } from '../transcription/errors';
-import { createProviderContext, type TranscriptionProviderContext } from '../transcription/provider-context';
-import type { TranscriptionProvider } from '../transcription/providers/transcription-provider.interface';
-import { TranscriptionProviderRegistry } from '../transcription/transcription-provider.registry';
-import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
-import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
 import {
+  ProviderAuthError,
+  createProviderContext,
+  type TranscriptionProviderContext,
+  type TranscriptionProvider,
+  TranscriptionProviderRegistry,
+  type SystemTranscriptionValue,
+  TranscriptionSettingsService,
   TRANSCRIPTION_CREDENTIAL_PURPOSE,
   transcriptionCredentialName,
-} from '../transcription/transcription-credential.constants';
+} from '@marinoscar/kvox-api/transcription';
 
 /** Everything a job needs to call the vendor exactly once. */
 export interface ResolvedTranscriptionProvider {

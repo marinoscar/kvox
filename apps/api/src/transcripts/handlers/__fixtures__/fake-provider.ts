@@ -11,11 +11,11 @@
 
 import { z } from 'zod';
 
-import type { NormalizedTranscript } from '../../../transcription/normalized-transcript';
-import type {
-  TranscriptionProvider,
-  TranscriptionProviderCapabilities,
-} from '../../../transcription/providers/transcription-provider.interface';
+import {
+  type NormalizedTranscript,
+  type TranscriptionProvider,
+  type TranscriptionProviderCapabilities,
+} from '@marinoscar/kvox-api/transcription';
 
 export type FakeProvider = TranscriptionProvider<never> & {
   testConnection: jest.Mock;

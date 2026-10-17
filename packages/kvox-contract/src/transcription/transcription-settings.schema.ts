@@ -70,6 +70,40 @@ export type TranscriptionProviderId =
   (typeof TRANSCRIPTION_PROVIDER_IDS)[number];
 
 /**
+ * The id of a transcription provider: any non-empty string.
+ *
+ * OPEN ON PURPOSE (issue #492). The built-in list is
+ * {@link TRANSCRIPTION_PROVIDER_IDS}, but a host registers more through
+ * `TranscriptionModule.forRoot({ extraProviders })`, and a closed enum here
+ * would make such a provider impossible to select. The schema cannot know which
+ * ids a host registered, so membership is checked at WRITE time against the
+ * provider registry (an unknown id is a 400 naming the registered ids).
+ *
+ * The generated API document still lists the built-in ids (`meta.enum`): that
+ * is exactly right for a host with no extra provider, and the registry check is
+ * what a host with one relies on.
+ *
+ * @stability experimental
+ */
+export const transcriptionProviderIdSchema = z
+  .string()
+  .refine((id) => id.length > 0, { message: 'A provider id must not be empty' })
+  .meta({ enum: [...TRANSCRIPTION_PROVIDER_IDS] });
+
+/**
+ * JSON Schema metadata for a `providers` block that is open to other providers'
+ * blocks (`z.looseObject`).
+ *
+ * `additionalProperties` is left out of the generated document: in JSON Schema an
+ * absent keyword already means "other properties allowed", which is exactly what
+ * the schema accepts, and the block was documented without it before it opened,
+ * so the published API document stays as it was.
+ *
+ * @stability experimental
+ */
+export const OPEN_PROVIDER_BLOCKS_META = { additionalProperties: undefined } as const;
+
+/**
  * AssemblyAI's two API regions. See `providers/assemblyai.provider.ts`.
  *
  * @stability experimental
@@ -121,7 +155,7 @@ export type AudioDeliveryMode = (typeof AUDIO_DELIVERY_MODES)[number];
  *
  * @stability experimental
  */
-export const transcriptionProvidersSchema = z.object({
+export const transcriptionProvidersSchema = z.looseObject({
   assemblyai: z.object({
     region: z.enum(ASSEMBLYAI_REGIONS),
     /**
@@ -136,7 +170,7 @@ export const transcriptionProvidersSchema = z.object({
      */
     speechModel: z.string().trim().min(1).max(64),
   }),
-});
+}).meta(OPEN_PROVIDER_BLOCKS_META);
 
 /**
  * The `TranscriptionProvidersValue` type (transcription providers value).
@@ -196,7 +230,7 @@ export const systemTranscriptionSchema = z.object({
   enabled: z.boolean(),
 
   /** The active provider, or `null` when none has been chosen. */
-  provider: z.enum(TRANSCRIPTION_PROVIDER_IDS).nullable(),
+  provider: transcriptionProviderIdSchema.nullable(),
 
   /** Per-provider configuration; every provider's block is always present. */
   providers: transcriptionProvidersSchema,
@@ -295,9 +329,9 @@ export type SystemTranscriptionValue = z.infer<typeof systemTranscriptionSchema>
  */
 export const systemTranscriptionPatchSchema = z.object({
   enabled: z.boolean().optional(),
-  provider: z.enum(TRANSCRIPTION_PROVIDER_IDS).nullable().optional(),
+  provider: transcriptionProviderIdSchema.nullable().optional(),
   providers: z
-    .object({
+    .looseObject({
       assemblyai: z
         .object({
           region: z.enum(ASSEMBLYAI_REGIONS).optional(),
@@ -305,6 +339,7 @@ export const systemTranscriptionPatchSchema = z.object({
         })
         .optional(),
     })
+    .meta(OPEN_PROVIDER_BLOCKS_META)
     .optional(),
   audioDelivery: z.enum(AUDIO_DELIVERY_MODES).optional(),
   presignedUrlTtlMinutes: z.number().int().min(1).max(1440).optional(),

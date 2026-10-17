@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProviderAuthError } from '../../transcription/errors';
+import { ProviderAuthError } from '@marinoscar/kvox-api/transcription';
 import { TRANSCRIPTION_THROTTLE_KEY } from '../job-types';
 import { MAX_POLL_DELAY_MS, MIN_POLL_DELAY_MS } from '../poll-schedule';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';

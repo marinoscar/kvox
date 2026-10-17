@@ -36,10 +36,10 @@ import type {
 
 import { GRAPH_USER_SETTINGS } from '../graph/preferences/graph.user-settings';
 import type { GraphPreferencesValue } from '../graph/preferences/graph-preferences.schema';
-import type { SystemTranscriptionValue } from '../transcription/transcription-settings.schema';
+import type { SystemTranscriptionValue } from '@marinoscar/kvox-api/transcription';
 import { KVOX_AI_SETTINGS_EXTENSION } from '../platform/ai/ai-settings.extension';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../platform/telemetry/telemetry.system-settings';
-import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../transcription/transcription.system-settings';
+import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../kvox/transcription/transcription.system-settings';
 
 /** this app's system namespaces, in stored key order (after the platform's five). */
 export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [

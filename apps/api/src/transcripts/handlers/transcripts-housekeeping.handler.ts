@@ -78,10 +78,10 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
-import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../transcription/transcription.system-settings';
+import { TRANSCRIPTION_SYSTEM_SETTINGS } from '../../kvox/transcription/transcription.system-settings';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
+import { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCRIPT_SUBJECT_TYPE,
   TRANSCRIPTION_POLL_JOB_TYPE,

@@ -529,3 +529,17 @@ jobs:
         run: npm run test:run --workspace=@marinoscar/kvox-db -- apply.db
         env:
           DATABASE_URL: ${{ format('postgres://postgres:ci-{0}-{1}-{2}@127.0.0.1:5432/postgres', github.run_id, github.run_attempt, matrix.shard) }}
+
+      # The kvox-api real-database tier (issue #492): the test host composes the
+      # platform and domain schema (`kvox-db sync --names after-host`), generates
+      # its own client and migrates a database of its own per spec file next to
+      # the one named here, so it too runs on one shard only. `test:host:prepare`
+      # needs the `kvox-db` bin, which runs from its built output.
+      - if: matrix.shard == 1
+        run: npm run build --workspace=@marinoscar/kvox-db
+      - if: matrix.shard == 1
+        run: npm run test:host:prepare --workspace=@marinoscar/kvox-api
+      - if: matrix.shard == 1
+        run: npm run test:db --workspace=@marinoscar/kvox-api
+        env:
+          DATABASE_URL: ${{ format('postgres://postgres:ci-{0}-{1}-{2}@127.0.0.1:5432/postgres', github.run_id, github.run_attempt, matrix.shard) }}

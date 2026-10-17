@@ -1,4 +1,4 @@
-import type { TranscriptionProviderCapabilities } from '../transcription/providers/transcription-provider.interface';
+import type { TranscriptionProviderCapabilities } from '@marinoscar/kvox-api/transcription';
 import { selectTranscriptionInput } from './transcription-input';
 
 // =============================================================================

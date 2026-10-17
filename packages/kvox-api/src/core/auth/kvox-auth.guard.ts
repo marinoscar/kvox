@@ -4,12 +4,18 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { KVOX_IDENTITY, type KvoxIdentityPort } from '../../ports/index.js';
-import { KVOX_PERMISSIONS_KEY, KVOX_PRINCIPAL_REQUEST_KEY } from './kvox-auth.constants.js';
+import {
+  KVOX_AUTH_PERMISSIONS,
+  KVOX_PERMISSIONS_KEY,
+  KVOX_PERMISSION_KEYS_KEY,
+  KVOX_PRINCIPAL_REQUEST_KEY,
+} from './kvox-auth.constants.js';
 
 /**
  * Authenticates a request through the identity port and checks the permissions
@@ -35,10 +41,16 @@ export class KvoxAuthGuard implements CanActivate {
   /**
    * @param identity - the bound identity port.
    * @param reflector - reads the permissions `KvoxAuth` set.
+   * @param permissionMap - the permission map of the owning slice module
+   *   ({@link KVOX_AUTH_PERMISSIONS}); only a route declared with
+   *   `KvoxAuthFromOptions` needs it.
    */
   constructor(
     @Inject(KVOX_IDENTITY) private readonly identity: KvoxIdentityPort,
     private readonly reflector: Reflector,
+    @Optional()
+    @Inject(KVOX_AUTH_PERMISSIONS)
+    private readonly permissionMap?: Readonly<Record<string, string>>,
   ) {}
 
   /**
@@ -48,11 +60,13 @@ export class KvoxAuthGuard implements CanActivate {
    * @returns true when the request is authenticated and holds every permission.
    */
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required =
-      this.reflector.getAllAndOverride<string[] | undefined>(KVOX_PERMISSIONS_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) ?? [];
+    const targets = [context.getHandler(), context.getClass()];
+    const required = [
+      ...(this.reflector.getAllAndOverride<string[] | undefined>(KVOX_PERMISSIONS_KEY, targets) ?? []),
+      ...this.resolveOptionKeys(
+        this.reflector.getAllAndOverride<string[] | undefined>(KVOX_PERMISSION_KEYS_KEY, targets) ?? [],
+      ),
+    ];
 
     const principal = await this.identity.authenticate(context);
     if (principal === null) {
@@ -68,5 +82,19 @@ export class KvoxAuthGuard implements CanActivate {
     request[KVOX_PRINCIPAL_REQUEST_KEY] = principal;
 
     return true;
+  }
+
+  /**
+   * Maps permission option names to the host's permission strings. An unmapped
+   * name is a wiring error and fails closed (500), never open.
+   */
+  private resolveOptionKeys(keys: string[]): string[] {
+    return keys.map((key) => {
+      const permission = this.permissionMap?.[key];
+      if (!permission) {
+        throw new Error(`No permission is configured for the option "${key}"`);
+      }
+      return permission;
+    });
   }
 }

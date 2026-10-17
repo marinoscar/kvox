@@ -25,11 +25,11 @@
     ]
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "test/kvox/*.typecheck.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "test"
+    "dist"
   ]
 }

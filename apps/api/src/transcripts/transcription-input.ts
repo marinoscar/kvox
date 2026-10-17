@@ -47,7 +47,7 @@
 // from the provider's capability table by hand.
 // =============================================================================
 
-import type { TranscriptionProviderCapabilities } from '../transcription/providers/transcription-provider.interface';
+import type { TranscriptionProviderCapabilities } from '@marinoscar/kvox-api/transcription';
 
 /** How the provider receives the audio. Mirrors `transcription.audioDelivery`. */
 export type AudioDeliveryMode = 'presigned_url' | 'upload';

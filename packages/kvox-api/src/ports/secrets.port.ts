@@ -33,6 +33,8 @@ export interface KvoxSecretStatus {
   hint: string | null;
   /** When the value last changed (ISO 8601), or `null`. */
   updatedAt: string | null;
+  /** Who last changed it, when the host records that; `null` or absent otherwise. */
+  updatedByUserId?: string | null;
 }
 
 /**
@@ -66,8 +68,15 @@ export interface KvoxSecretsPort {
    * @param name - the secret's name within the purpose.
    * @param value - the secret.
    * @param actorUserId - who changed it.
+   * @param meta - non-secret facts to store beside the value; `label` names it in a listing.
    */
-  set(purpose: string, name: string, value: string, actorUserId: string): Promise<void>;
+  set(
+    purpose: string,
+    name: string,
+    value: string,
+    actorUserId: string,
+    meta?: { label?: string },
+  ): Promise<void>;
 
   /**
    * Removes a secret. Idempotent.

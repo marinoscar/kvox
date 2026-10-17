@@ -12,10 +12,13 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import { PERMISSIONS_KEY } from '@marinoscar/platform-api/identity';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
-import { TranscriptionSettingsController } from '../../src/transcription/transcription-settings.controller';
-import { TranscriptionConfigController } from '../../src/transcription/transcription-config.controller';
+import { KVOX_AUTH_PERMISSIONS, KVOX_PERMISSION_KEYS_KEY } from '@marinoscar/kvox-api/core';
+import {
+  TranscriptionConfigController,
+  TranscriptionSettingsController,
+} from '@marinoscar/kvox-api/transcription';
+import { TranscriptionConfig } from '../../src/kvox/transcription/transcription.config';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 
 // =============================================================================
@@ -43,6 +46,24 @@ import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-sys
 const SETTINGS = '/api/transcription-settings';
 const CONFIG = '/api/transcription/config';
 const API_KEY = 'aai-integration-secret-77f1';
+
+/**
+ * The permissions a handler enforces, as the application configured them.
+ *
+ * The controllers name options (`KvoxAuthFromOptions('settingsRead')`) and the
+ * binding (`kvox/transcription/transcription.config.ts`) maps each to the string
+ * the settings card declares, so the strings are read from the configured module
+ * itself: if the binding drifted from `system_settings:read|write` and
+ * `transcripts:read`, the assertions below fail.
+ */
+const PERMISSION_MAP = (
+  TranscriptionConfig.providers as Array<{ provide: unknown; useValue?: Record<string, string> }>
+).find((provider) => provider.provide === KVOX_AUTH_PERMISSIONS)?.useValue as Record<string, string>;
+
+function enforcedBy(target: object): string[] {
+  const keys = Reflect.getMetadata(KVOX_PERMISSION_KEYS_KEY, target) as string[];
+  return keys.map((key) => PERMISSION_MAP[key]);
+}
 
 describe('Transcription Settings Integration', () => {
   let context: TestContext;
@@ -119,7 +140,7 @@ describe('Transcription Settings Integration', () => {
       '%s requires exactly %s',
       (handler, permission) => {
         const target = TranscriptionSettingsController.prototype[handler];
-        expect(Reflect.getMetadata(PERMISSIONS_KEY, target)).toEqual([permission]);
+        expect(enforcedBy(target)).toEqual([permission]);
       },
     );
 
@@ -127,12 +148,9 @@ describe('Transcription Settings Integration', () => {
       // It is side-effecting — it spends a request against a third party using
       // a credential — and `:read` is held by anyone who may look at settings.
       // Looking is not probing.
-      expect(
-        Reflect.getMetadata(
-          PERMISSIONS_KEY,
-          TranscriptionSettingsController.prototype.testConnection,
-        ),
-      ).toEqual(['system_settings:write']);
+      expect(enforcedBy(TranscriptionSettingsController.prototype.testConnection)).toEqual([
+        'system_settings:write',
+      ]);
     });
 
     it('the config endpoint is gated on `transcripts:read`, not `system_settings:read`', () => {
@@ -141,12 +159,7 @@ describe('Transcription Settings Integration', () => {
       // what keeps that true while still naming a real permission. Gating it
       // on `system_settings:read` would lock the answer away from precisely
       // the users it is about.
-      expect(
-        Reflect.getMetadata(
-          PERMISSIONS_KEY,
-          TranscriptionConfigController.prototype.getConfig,
-        ),
-      ).toEqual(['transcripts:read']);
+      expect(enforcedBy(TranscriptionConfigController.prototype.getConfig)).toEqual(['transcripts:read']);
     });
   });
 

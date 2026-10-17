@@ -165,9 +165,35 @@ export interface KvoxJobsPort {
 }
 
 /**
+ * The well-known key under which an error answers "am I a provider rate limit?"
+ * for a queue that classifies thrown values. A string registered with
+ * `Symbol.for`, so a host recognises it without importing this package; it is
+ * the same key the web edition's platform queue reads.
+ *
+ * @stability experimental
+ */
+export const KVOX_CLASSIFY_RATE_LIMIT: unique symbol = Symbol.for('jobs.classifyRateLimit');
+
+/**
+ * What a rate-limit error says about itself to a queue that asks.
+ *
+ * @stability experimental
+ */
+export interface KvoxRateLimitClassification {
+  /** Always true: this error is a provider rate limit. */
+  rateLimited: true;
+  /** The provider's retry hint in milliseconds, or `null` when it gave none. */
+  retryAfterMs: number | null;
+}
+
+/**
  * Thrown by a handler when the provider's rate limit was hit. The queue defers
- * the job instead of failing it. The bucket is per user for AI work, never a
- * shared one.
+ * the job instead of failing it. The bucket is per user for AI work, except the
+ * transcription provider, whose key is the deployment's.
+ *
+ * The error classifies itself through {@link KVOX_CLASSIFY_RATE_LIMIT}, so a
+ * handler a host registers without the jobs port (the web edition's transcript
+ * handlers until they move into this package) still defers on it.
  * @stability experimental
  */
 export class KvoxRateLimitError extends Error {
@@ -180,12 +206,23 @@ export class KvoxRateLimitError extends Error {
   /**
    * @param throttleKey - the bucket that was limited.
    * @param retryAfterMs - the provider's retry hint.
+   * @param message - what to say in the job's last error; defaults to naming the bucket.
    */
-  constructor(throttleKey: string, retryAfterMs?: number) {
-    super(`Rate limited on ${throttleKey}`);
+  constructor(throttleKey: string, retryAfterMs?: number, message?: string) {
+    super(message ?? `Rate limited on ${throttleKey}`);
     this.name = 'KvoxRateLimitError';
     this.throttleKey = throttleKey;
     this.retryAfterMs = retryAfterMs;
     Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  /**
+   * Answers a queue's self-classification question: this is a rate limit, with
+   * the provider's retry hint.
+   *
+   * @returns the verdict.
+   */
+  [KVOX_CLASSIFY_RATE_LIMIT](): KvoxRateLimitClassification {
+    return { rateLimited: true, retryAfterMs: this.retryAfterMs ?? null };
   }
 }

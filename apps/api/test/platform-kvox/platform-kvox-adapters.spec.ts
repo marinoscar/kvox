@@ -628,7 +628,8 @@ describe('notify adapter', () => {
 describe('settings adapter', () => {
   const store = { read: jest.fn(), patch: jest.fn() };
   const users = { getSettings: jest.fn(), patchSettings: jest.fn() };
-  const adapter = () => new PlatformKvoxSettingsAdapter(store as never, users as never);
+  const prisma = { systemSettings: { findUnique: jest.fn() } };
+  const adapter = () => new PlatformKvoxSettingsAdapter(store as never, users as never, prisma as never);
 
   it('verifies a namespace is in the platform registry instead of declaring it', () => {
     expect(() => adapter().registerNamespace({ scope: 'system', name: 'transcription', schema: z.object({}), defaults: {} })).not.toThrow();
@@ -646,6 +647,39 @@ describe('settings adapter', () => {
 
     expect(await a.readUser('u', 'graph')).toEqual({ mode: 'off' });
     expect(await a.readSystem('missing')).toEqual({ value: undefined, version: 3 });
+  });
+
+  it('reads who last changed the settings row only when asked', async () => {
+    store.read.mockResolvedValue({ value: { a: 1 }, version: 5 });
+    prisma.systemSettings.findUnique.mockReset().mockResolvedValue({
+      updatedAt: new Date('2026-01-02T03:04:05Z'),
+      updatedByUser: { id: 'u1', email: 'admin@example.com' },
+    });
+
+    expect(await adapter().readSystem('transcription')).toEqual({ value: { a: 1 }, version: 5 });
+    expect(prisma.systemSettings.findUnique).not.toHaveBeenCalled();
+
+    expect(await adapter().readSystem('transcription', { withUpdatedBy: true })).toEqual({
+      value: { a: 1 },
+      version: 5,
+      updatedAt: '2026-01-02T03:04:05.000Z',
+      updatedBy: { id: 'u1', email: 'admin@example.com' },
+    });
+    expect(prisma.systemSettings.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { key: 'global' } }),
+    );
+  });
+
+  it('reports no author for a settings row nobody has written', async () => {
+    store.read.mockResolvedValue({ value: { a: 1 }, version: 0 });
+    prisma.systemSettings.findUnique.mockReset().mockResolvedValue(null);
+
+    expect(await adapter().readSystem('transcription', { withUpdatedBy: true })).toEqual({
+      value: { a: 1 },
+      version: 0,
+      updatedAt: null,
+      updatedBy: null,
+    });
   });
 
   it('passes the actor and the If-Match version to the platform store', async () => {
@@ -685,6 +719,26 @@ describe('secrets adapter', () => {
 
     expect(credentials.setSecret).toHaveBeenCalledWith('p', 'n', 'secret-value', { updatedByUserId: 'admin' });
     expect(await adapter.status('p', 'n')).toEqual({ configured: true, hint: '…1234', updatedAt: '2026-01-01T00:00:00.000Z' });
+  });
+
+  it('stores the label the caller names, and reports who last changed the secret', async () => {
+    const credentials = {
+      setSecret: jest.fn(),
+      describe: jest.fn().mockResolvedValue({
+        hint: '…1234',
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+        updatedByUserId: 'admin',
+      }),
+    };
+    const adapter = new PlatformKvoxSecretsAdapter(credentials as never);
+
+    await adapter.set('p', 'n', 'secret-value', 'admin', { label: 'AssemblyAI API key' });
+
+    expect(credentials.setSecret).toHaveBeenCalledWith('p', 'n', 'secret-value', {
+      updatedByUserId: 'admin',
+      label: 'AssemblyAI API key',
+    });
+    expect(await adapter.status('p', 'n')).toMatchObject({ updatedByUserId: 'admin' });
   });
 });
 

@@ -8,7 +8,7 @@
 // (`docs/specs/doctor.md` in the platform repository, section "Extending it").
 //
 // Only the checks that need no domain code are here. The transcription check
-// (`<slug>.transcription.configured`) is provided by `TranscriptionModule`, beside
+// (`<slug>.transcription.configured`) is provided by `TranscriptionBindingModule` (`kvox/transcription/`), beside
 // the credential purpose it reads (base code does not import domain code).
 // =============================================================================
 

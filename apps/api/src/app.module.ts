@@ -44,11 +44,10 @@ import { BroadcastsModule, notificationsModule } from './platform/notifications/
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { telemetryModule } from './platform/telemetry/telemetry.config';
 import { LoggerModule } from './common/logger/logger.module';
-import { TranscriptionModule } from './transcription/transcription.module';
+import { KvoxModule } from './kvox/kvox.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
-import { platformKvoxModule } from './platform-kvox/platform-kvox.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
@@ -232,25 +231,21 @@ import configuration from './config/configuration';
     // `<slug>.transcription.configured`, registered with the platform Doctor.
     DoctorChecksModule,
 
-    // The web edition's binding of the host ports in `@marinoscar/kvox-api/ports` (#490, epic
-    // #486): `KVOX_AI`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_IDENTITY`, `KVOX_NOTIFY`,
-    // `KVOX_EVENTS`, `KVOX_PRISMA`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_AUDIT`, one adapter
-    // per port over a platform slice (`platform-kvox/`). Global; BEFORE every domain module
-    // (transcription, transcripts, notes, the graph, Ask, search), so a packaged slice injects a
-    // port without importing anything. A missing binding stops the boot.
-    platformKvoxModule,
-
-    // Transcription (#23, epic #19): the provider framework, the AssemblyAI
-    // provider, the admin settings surface and the non-admin capability probe.
-    // Imported after SettingsModule because it writes the `transcription`
-    // namespace through `SystemSettingsService.patchSettings` rather than
-    // touching `system_settings` itself — the same arrangement DbBackupModule
-    // has with `databaseBackup`.
-    TranscriptionModule,
+    // The domain as configured packages (`kvox/kvox.module.ts`, #492, epic #491). First the
+    // web edition's binding of the host ports in `@marinoscar/kvox-api/ports` (#490, epic #486):
+    // `KVOX_AI`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_IDENTITY`, `KVOX_NOTIFY`, `KVOX_EVENTS`,
+    // `KVOX_PRISMA`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_AUDIT`, one adapter per port over a
+    // platform slice (`platform-kvox/`; global; a missing binding stops the boot). Then each
+    // slice's configuration, today transcription (#23, epic #19): the provider framework, the
+    // AssemblyAI provider, the admin settings surface and the non-admin capability probe.
+    // After SettingsModule and CredentialsModule: the settings and secrets adapters inject their
+    // services, and the slice writes its `transcription` namespace through the settings port
+    // rather than touching `system_settings` itself.
+    KvoxModule,
 
     // The transcript pipeline (#25, epic #19): create, the upload processor,
     // five job handlers, the reconciliation cron and the read/lifecycle
-    // routes. After TranscriptionModule because it imports it for the provider
+    // routes. After KvoxModule because it imports the transcription slice for the provider
     // registry and the settings service, and after KvoxObjectsModule because it
     // calls `KvoxManagedObjects.initManagedUpload` with a module only a module
     // may claim.
