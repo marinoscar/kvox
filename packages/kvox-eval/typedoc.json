@@ -1,0 +1,27 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "extends": ["../../typedoc.base.json"],
+  "tsconfig": "./tsconfig.json",
+  "entryPoints": ["./src/index.ts", "./src/fixtures/index.ts"],
+  "entryPointStrategy": "resolve",
+  "name": "@marinoscar/kvox-eval",
+  "out": "./docs-api/html",
+  "json": "./docs-api/api.json",
+  // The shared list minus "Property", as in kvox-contract. The fixture, prediction,
+  // report and question contracts are Zod schemas and `z.infer` types, whose object
+  // shapes TypeDoc expands into hundreds of anonymous properties; their meaning is
+  // on each schema's own TSDoc and in fixtures/kg-golden/README.md. Every exported
+  // declaration still needs TSDoc and `@stability`.
+  "requiredToBeDocumented": [
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Method",
+    "Accessor",
+    "TypeAlias"
+  ]
+}

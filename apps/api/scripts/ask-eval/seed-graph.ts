@@ -43,7 +43,7 @@ import {
   type GoldenItemLabel,
   type GoldenRelationLabel,
   type ItemLabelKind,
-} from '../kg-eval/fixture-schema';
+} from '@marinoscar/kvox-eval/fixtures';
 
 // `storage_objects.org_id` is required, so the fixture inserts use the default
 // organization; which module owns an object is a `kvox_object_ownership` row.

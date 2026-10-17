@@ -63,7 +63,9 @@
 //                    until the lean adapter package of #578); any other
 //                    platform specifier, the bare package or a deeper path
 //                    such as @marinoscar/platform-api/ai/core, is a violation
-//                    (HOST_NEUTRAL_ALLOWED).
+//                    (HOST_NEUTRAL_ALLOWED). packages/kvox-eval/src/** has the
+//                    same single exception, for the provider adapters its live
+//                    runs call (issue #580).
 //   7. headless      No file under packages/kvox-web/src/<slice>/headless/**
 //                    imports @mui/*, @emotion/* or a router (react-router*), or
 //                    reaches into a ui/ folder. A headless entry is what a host
@@ -121,15 +123,18 @@ export const SLICES_FILE = 'packages/kvox-slices.json';
 /** Per-slice peers, relative to the root. */
 export const PEERS_FILE = 'packages/kvox-slice-peers.json';
 /** Packages whose `src/` may not import the platform (rule 6). */
-export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvox-ai']);
+export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvox-ai', 'kvox-eval']);
 /**
  * The platform specifiers a host-neutral package may import anyway, matched
  * EXACTLY (rule 6). `kvox-ai` implements the model port over the provider-adapter
  * types and classes of `@marinoscar/platform-api/ai` (issue #579) until the lean
  * adapter package (#578) replaces that peer; nothing else of the platform.
+ * `kvox-eval` builds its live runs' port over the OpenAI and OpenAI-compatible
+ * adapters of the same subpath (issue #580), under the same interim rule.
  */
 export const HOST_NEUTRAL_ALLOWED = Object.freeze({
   'kvox-ai': Object.freeze(['@marinoscar/platform-api/ai']),
+  'kvox-eval': Object.freeze(['@marinoscar/platform-api/ai']),
 });
 /** Specifier prefix rule 6 forbids. */
 export const PLATFORM_PREFIX = '@marinoscar/platform-';

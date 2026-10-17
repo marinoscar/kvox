@@ -5,7 +5,8 @@
     "kvox-web": ["core"],
     "kvox-contract": "*",
     "kvox-db": ["bin"],
-    "kvox-ai": "*"
+    "kvox-ai": "*",
+    "kvox-eval": "*"
   },
   "$implies": {
     "@mui/icons-material": ["@mui/material"],
@@ -276,5 +277,13 @@
     "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
     "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
     "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] }
+  },
+  "kvox-eval": {
+    "ask": { "peers": ["@marinoscar/kvox-contract", "zod"] },
+    "fixtures": { "peers": ["@marinoscar/kvox-contract", "zod"] },
+    "real-data": { "peers": [] },
+    "live": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/platform-api"] },
+    "kg": { "peers": ["@marinoscar/kvox-api", "@marinoscar/kvox-contract", "zod"] },
+    "cli": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] }
   }
 }

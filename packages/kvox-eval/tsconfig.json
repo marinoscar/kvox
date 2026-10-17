@@ -1,0 +1,15 @@
+{
+  // Typecheck and ts-jest. No decorator metadata: the package holds no Nest
+  // provider (the host-neutral rule, docs/PACKAGES.md#the-host-neutral-rule).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node", "jest"]
+  },
+  "include": ["src", "test"]
+}

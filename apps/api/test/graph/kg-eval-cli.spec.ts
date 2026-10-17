@@ -9,20 +9,18 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSyn
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 
+import { emptyPrediction, goldPrediction, KG_EVAL_RUNNERS, kgEvalReportSchema } from '@marinoscar/kvox-eval';
+import { GOLDEN_MEETINGS_DIR, listFixtureFiles, loadGoldenSet } from '@marinoscar/kvox-eval/fixtures';
+
 import { main } from '../../scripts/kg-eval';
-import { goldPrediction } from '../../scripts/kg-eval/gold-runner';
-import { GOLDEN_MEETINGS_DIR, listFixtureFiles, loadGoldenSet } from '../../scripts/kg-eval/load';
-import { emptyPrediction } from '../../scripts/kg-eval/prediction-schema';
 import { assertOutsideRepo, RealDataPathError, REAL_DATA_REFUSAL, syntheticRunsDir } from '../../scripts/kg-eval/real-data';
-import { kgEvalReportSchema } from '../../scripts/kg-eval/report';
-import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
 
 const API_DIR = resolve(__dirname, '../..');
 const REPO_ROOT = resolve(API_DIR, '../..');
 const TS_NODE = require.resolve('ts-node/dist/bin.js');
 
 function cli(args: string[], env: NodeJS.ProcessEnv = {}) {
-  const { KG_EVAL_REAL_DIR: _unset, ...base } = process.env;
+  const { KG_EVAL_REAL_DIR: _unset, KVOX_EVAL_OPENAI_API_KEY: _key, KG_EVAL_OPENAI_API_KEY: _old, ...base } = process.env;
   const res = spawnSync(
     process.execPath,
     [TS_NODE, '-P', 'scripts/tsconfig.json', '--transpile-only', 'scripts/kg-eval.ts', ...args],
@@ -75,9 +73,16 @@ describe('kg:eval CLI (issue #362)', () => {
   });
 
   it('--run extract (#363) is registered, and exits 2 without its API key', () => {
-    const res = cli(['--run', 'extract', '--model', 'any-model'], { KG_EVAL_OPENAI_API_KEY: '' });
+    const res = cli(['--run', 'extract', '--model', 'any-model'], { KVOX_EVAL_OPENAI_API_KEY: '', KG_EVAL_OPENAI_API_KEY: '' });
     expect(res.status).toBe(2);
-    expect(res.stderr).toContain('--run reads its API key from KG_EVAL_OPENAI_API_KEY; it is not set');
+    // #580: one variable for every live eval run.
+    expect(res.stderr).toContain('--run reads its API key from KVOX_EVAL_OPENAI_API_KEY; it is not set');
+  });
+
+  it('--run --provider copilot is refused with exit 2 until the Copilot adapter exists (#581)', () => {
+    const res = cli(['--run', 'extract', '--provider', 'copilot', '--model', 'any-model']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain("the 'copilot' provider is not available yet");
   });
 
   it('--real-dir inside the repository is refused with exit 3', () => {
@@ -164,7 +169,7 @@ describe('kg:eval --run with a registered runner (in process)', () => {
 
   it('writes one prediction per fixture, never the API key, then scores them', async () => {
     const code = await main(['--run', 'stub', '--model', 'stub-model', '--only', 'm01,m03', '--out', tmp], io({
-      KG_EVAL_OPENAI_API_KEY: 'sk-test-never-written',
+      KVOX_EVAL_OPENAI_API_KEY: 'sk-test-never-written',
     }));
     expect(code).toBe(0);
     expect(readdirSync(tmp).sort()).toEqual(['m01.json', 'm03.json']);
@@ -177,11 +182,18 @@ describe('kg:eval --run with a registered runner (in process)', () => {
   it('requires the API key from the environment', async () => {
     const code = await main(['--run', 'stub', '--model', 'm', '--only', 'm01', '--out', tmp], io({}));
     expect(code).toBe(2);
-    expect(err.join('\n')).toContain('KG_EVAL_OPENAI_API_KEY');
+    expect(err.join('\n')).toContain('KVOX_EVAL_OPENAI_API_KEY');
+  });
+
+  it('still reads the deprecated KG_EVAL_OPENAI_API_KEY for one release, with a note that never shows the key', async () => {
+    const code = await main(['--run', 'stub', '--model', 'm', '--only', 'm01', '--out', tmp], io({ KG_EVAL_OPENAI_API_KEY: 'sk-old-name-secret' }));
+    expect(code).toBe(0);
+    expect(err.join('\n')).toContain('KG_EVAL_OPENAI_API_KEY is deprecated');
+    expect([...out, ...err].join('\n')).not.toContain('sk-old-name-secret');
   });
 
   it('refuses --out inside the repository except under apps/api/.kg-eval/ for synthetic runs', async () => {
-    const env = { KG_EVAL_OPENAI_API_KEY: 'k' };
+    const env = { KVOX_EVAL_OPENAI_API_KEY: 'k' };
     const inRepo = await main(['--run', 'stub', '--model', 'm', '--only', 'm01', '--out', resolve(API_DIR, 'tmp-out')], io(env));
     expect(inRepo).toBe(3);
     expect(existsSync(resolve(API_DIR, 'tmp-out'))).toBe(false);

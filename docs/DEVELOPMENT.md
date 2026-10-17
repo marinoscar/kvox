@@ -61,7 +61,7 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    change under `packages/kvox-contract/`. CI builds it right after `npm ci`, and
    both application Dockerfiles build it inside the image (`.dockerignore` drops every `dist/`).
 
-   The API also imports `@marinoscar/kvox-api` and `@marinoscar/kvox-ai` from their built output. On a fresh checkout run `npm run build:kvox-packages` (order: contract, db, api, ai, web) instead of building one package at a time.
+   The API also imports `@marinoscar/kvox-api`, `@marinoscar/kvox-ai` and `@marinoscar/kvox-eval` (the `kg:eval` and `ask:eval` scripts) from their built output. On a fresh checkout run `npm run build:kvox-packages` (order: contract, db, api, ai, eval, web) instead of building one package at a time.
 
 2. **Set up environment variables**
    ```bash
@@ -240,6 +240,10 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 
 **Knowledge graph:**
 - `KG_MIGRATE_SCHEDULE_ENABLED` - Whether this process runs the hourly (minute 17) tick that enqueues `kg.migrate` for owners whose graph rows a declared ontology migration still has to reshape (#384). The tick only enqueues, and returns at once while `ONTOLOGY_MIGRATIONS` is empty. Only the literal `false` turns it off (default: on), the `DB_BACKUP_SCHEDULE_ENABLED` convention; an admin can still re-run one owner's migration with Retry in the job list. See `docs/runbooks/ontology-migration.md`
+
+**Evaluation (developer and CI only, never set in a deployment):**
+- `KVOX_EVAL_OPENAI_API_KEY` - The API key of a live `kg:eval` / `ask:eval` / `kvox-eval kg` run. Read from the environment only, never a flag, never printed. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases, read for one more release with a one-line deprecation note on standard error. Details: [TESTING.md](TESTING.md#knowledge-graph-and-ask-evaluation)
+- `KG_EVAL_REAL_DIR` - Stands in for `--real-dir` (real meetings; must resolve outside the git work tree)
 
 **Observability** (OpenTelemetry through `@marinoscar/platform-api/otel-core`, stored in GreptimeDB by the platform telemetry slice; full design in `docs/ARCHITECTURE.md` section 11):
 - `OTEL_ENABLED` - Turn the SDK on. `base.compose.yml` defaults it to `false`; `telemetry.compose.yml` sets it to `true` and points the API at the collector
@@ -912,18 +916,18 @@ The root `package.json` carries `"overrides": { "@marinoscar/platform-contract":
 | `npm run check:single-instance` | Runs `scripts/check-single-instance.mjs`. Fails (exit 1) when a library with module-level state resolves to more than one copy: Nest, Fastify, Prisma client, Zod, `reflect-metadata`, `@opentelemetry/api`, React, React Router, MUI, Emotion, `ink`, plus any `packages/platform-*` workspace. It scans the lockfile and, after `npm ci`, resolves each name from every workspace and compares real paths. Flags: `--lockfile-only` (no `node_modules` needed), `--json`, `--lockfile <path>`, `--root <dir>`, `--guard <name>`. `node scripts/kvox-packages/check-single-instance.mjs` wraps it for the packages pipeline: it also accepts `--guard '@marinoscar/platform-*'` patterns and always guards every `@marinoscar/kvox-*` workspace. A duplicate is usually fixed by aligning a range in the workspace that drifted. |
 | `npm run check:platform-imports` | ESLint over `apps/{api,web,cli}/src/**/*.{ts,tsx}` with `--max-warnings=0`. Only the deep-import ban applies: app code may not reach into a platform or `@marinoscar/kvox-*` package's `src/`, `dist/` or `internal/` paths. |
 | `npm run lint:packages` | ESLint over `packages/kvox-*/src/**/*.{ts,tsx}` (`--no-error-on-unmatched-pattern`). Enforces the no-deep-import rule and the slice-direction rule. |
-| `npm run build:kvox-packages`, `typecheck:kvox-packages`, `test:kvox-packages`, `docs:kvox-packages` | Run the `build`, `typecheck`, `test:run` and `docs` script of the five `@marinoscar/kvox-{contract,db,api,ai,web}` workspaces. `build:packages`, `typecheck:packages`, `docs:packages` are aliases; `test:packages` also runs `test:kvox-scripts`. |
+| `npm run build:kvox-packages`, `typecheck:kvox-packages`, `test:kvox-packages`, `docs:kvox-packages` | Run the `build`, `typecheck`, `test:run` and `docs` script of the six `@marinoscar/kvox-{contract,db,api,ai,eval,web}` workspaces. `build:packages`, `typecheck:packages`, `docs:packages` are aliases; `test:packages` also runs `test:kvox-scripts`. |
 | `npm run test:kvox-scripts` | The tests of `scripts/kvox-packages/` (`node --test`), including the fixture that pins the `host-neutral` rule. |
 | `npm run check:kvox-slice-peers`, `check:kvox-package-docs`, `check:kvox-pack` | The slice and peer rules, the README and TSDoc standard, and the pack check. All three are described in [PACKAGES.md](PACKAGES.md#checks-and-commands). |
 
-`scripts/run-kvox-packages.mjs <script> [--if-present]` is a generic helper kept from issue #461: it lists the workspaces whose name starts with `@marinoscar/kvox-` and runs `npm run <script> -w <name>...` for all of them in one call (for example `node scripts/run-kvox-packages.mjs build`). The root `*:kvox-packages` scripts name the five packages explicitly instead, so a package added later is a deliberate edit of the root `package.json` and the workflows.
+`scripts/run-kvox-packages.mjs <script> [--if-present]` is a generic helper kept from issue #461: it lists the workspaces whose name starts with `@marinoscar/kvox-` and runs `npm run <script> -w <name>...` for all of them in one call (for example `node scripts/run-kvox-packages.mjs build`). The root `*:kvox-packages` scripts name the six packages explicitly instead, so a package added later is a deliberate edit of the root `package.json` and the workflows.
 
 ### Lint, TSDoc and TypeDoc configuration
 
 | File | Purpose |
 |---|---|
 | `eslint.config.mjs` | Flat ESLint 10 config adapted from EnterpriseAppBase. Rule A: no deep imports into a package (only its `exports` map; no relative path that leaves the package, no app code, no `@app/shared`). Rule B: a slice under `packages/kvox-<pkg>/src/` may import another slice only when `packages/kvox-slices.json` lists it, and only through that slice's `index.ts`. Also applies the app deep-import ban. The apps' own `lint` scripts are untouched, and ESLint 10 ignores the legacy `.eslintrc.js`. |
-| `packages/kvox-slices.json` | The slice dependency graph, `{ "kvox-<pkg>": { "<slice>": ["<allowed dependency slice>"] } }`. Slices of the five packages are declared; `packages/kvox-slice-peers.json` lists the peers each slice needs ([PACKAGES.md](PACKAGES.md#peer-dependencies-per-slice)). Append-only. |
+| `packages/kvox-slices.json` | The slice dependency graph, `{ "kvox-<pkg>": { "<slice>": ["<allowed dependency slice>"] } }`. Slices of the six packages are declared; `packages/kvox-slice-peers.json` lists the peers each slice needs ([PACKAGES.md](PACKAGES.md#peer-dependencies-per-slice)). Append-only. |
 | `tsdoc.json` | TSDoc configuration. Extends TypeDoc's and declares the custom `@stability` and `@extensionPoint` block tags. |
 | `typedoc.base.json` | Shared TypeDoc options for the `@marinoscar/kvox-*` packages. Each package's own `typedoc.json` extends it and sets its tsconfig, entry points and output. The generated `docs-api/` folder is git-ignored. |
 
@@ -931,7 +935,7 @@ The root `package.json` carries `"overrides": { "@marinoscar/platform-contract":
 
 Releases of the `@marinoscar/kvox-*` packages use [Changesets](https://github.com/changesets/changesets) in pre mode: `.changeset/pre.json` has `"mode": "pre"` and `"tag": "next"`, so releases are `x.y.z-next.N` on the `next` dist-tag. Do not edit or delete `pre.json` by hand.
 
-The five packages are one `fixed` group in `.changeset/config.json`, so they always share a version; `api`, `web`, `cli` and `@app/shared` are listed under `ignore`: they are versioned by their own rules (the CLI by the version bump in [AGENTS.md](../AGENTS.md)), never through a changeset. `onlyUpdatePeerDependentsWhenOutOfRange` is on, for the reason in [PACKAGES.md](PACKAGES.md#the-contract-peer-range).
+The six packages are one `fixed` group in `.changeset/config.json`, so they always share a version; `api`, `web`, `cli` and `@app/shared` are listed under `ignore`: they are versioned by their own rules (the CLI by the version bump in [AGENTS.md](../AGENTS.md)), never through a changeset. `onlyUpdatePeerDependentsWhenOutOfRange` is on, for the reason in [PACKAGES.md](PACKAGES.md#the-contract-peer-range).
 
 Run `npx changeset` in any pull request that changes a package; `npx changeset --empty` records that a change has no release impact. Writing guidance is in [`.changeset/README.md`](../.changeset/README.md). The version pull request and the publish are automated: `.github/workflows/kvox-release.yml`, procedure in the [release runbook](runbooks/release-kvox-packages.md). `npm run version-packages` is what the workflow runs; `npm run release` (`changeset publish`) is a manual escape hatch and does not publish with provenance.
 

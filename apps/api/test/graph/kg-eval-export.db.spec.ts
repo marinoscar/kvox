@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { goldenFixtureSchema } from '../../scripts/kg-eval/fixture-schema';
+import { goldenFixtureSchema } from '@marinoscar/kvox-eval/fixtures';
 import { exportNoteSkeleton, RealDataNotFoundError, RealDataPathError } from '../../scripts/kg-eval/real-data';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { resolveDbSuite } from '../jobs/db-test-support';
