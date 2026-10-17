@@ -228,7 +228,10 @@ export class ProposalsService {
     const evidence = rows.length === 0 ? [] : await this.prisma.kgEvidence.findMany({
       where: { ownerId: proposal.ownerId, subjectKind: 'proposal_item', subjectId: { in: rows.map((r) => r.id) } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+      // #604: the cited transcript's provider rides the same read (a join, not a
+      // query per row) so each segment citation can say whether it has audio.
+      include: { transcript: { select: { provider: true } } },
+    }) as EvidenceRowInput[];
     const lookups = await this.lookups(proposal, rows, evidence, schema);
     const note = proposal.noteId ? await this.noteHeader(proposal.noteId) : null;
 

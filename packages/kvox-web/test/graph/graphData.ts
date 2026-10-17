@@ -174,6 +174,8 @@ export const EV_SEGMENT = gid(701);
 export const EV_NOTE = gid(702);
 export const EV_GONE = gid(703);
 export const EV_EDITED = gid(704);
+/** Segment evidence in an imported transcript: no recording to play (#604). */
+export const EV_NO_AUDIO = gid(705);
 
 export const evidenceFixtures: EvidenceLink[] = [
   {
@@ -194,6 +196,7 @@ export const evidenceFixtures: EvidenceLink[] = [
       textChanged: false,
       available: true,
       href: `/transcripts/${TRANSCRIPT_ID}?segment=${SEGMENT_ID}&t=754000`,
+      hasAudio: true,
     },
   },
   {
@@ -233,6 +236,7 @@ export const evidenceFixtures: EvidenceLink[] = [
       textChanged: false,
       available: false,
       href: null,
+      hasAudio: false,
     },
   },
   {
@@ -253,6 +257,28 @@ export const evidenceFixtures: EvidenceLink[] = [
       textChanged: true,
       available: true,
       href: `/transcripts/${TRANSCRIPT_ID}?segment=${gid(902)}&t=65000`,
+      hasAudio: true,
+    },
+  },
+  {
+    id: EV_NO_AUDIO,
+    subjectKind: 'item',
+    subjectId: gid(304),
+    quote: 'The vendor contract renews in March.',
+    createdAt: '2026-09-14T16:00:00.000Z',
+    source: {
+      kind: 'segment',
+      transcriptId: TRANSCRIPT_ID,
+      transcriptTitle: 'Imported board minutes',
+      segmentId: gid(903),
+      segmentRev: 1,
+      currentSegmentRev: 1,
+      startMs: 30_000,
+      endMs: 34_000,
+      textChanged: false,
+      available: true,
+      href: `/transcripts/${TRANSCRIPT_ID}?segment=${gid(903)}&t=30000`,
+      hasAudio: false,
     },
   },
 ];

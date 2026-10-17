@@ -136,6 +136,13 @@ export interface NoteOriginTranscript {
   status: TranscriptStatus;
   /** Whether the transcript has playable audio. */
   playbackStatus: PlaybackStatus;
+  /**
+   * Whether the transcript has a recording at all (#604). `false` for a
+   * transcript imported from a `kvox.transcript/v1` file, whose
+   * `GET /api/transcripts/:id/audio` answers 404. Absent from an older server:
+   * treat `undefined` as `true`.
+   */
+  hasAudio?: boolean;
   /** `direct` when the note came from the transcript, `note_chain` when it came from a note that did. */
   via: 'direct' | 'note_chain';
   /** How many notes sit between this one and the transcript (`0` for `direct`). */

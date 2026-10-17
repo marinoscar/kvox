@@ -114,9 +114,16 @@ function EvidenceBody({
   if (source.available && source.href) {
     const href = source.href;
     if (source.kind === 'segment') {
+      // #604: an imported transcript has no recording — open it, never "Play".
+      const playable = source.startMs !== null && source.hasAudio !== false;
       action = (
-        <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={() => onGo(href)}>
-          {source.startMs !== null ? `Play from ${formatTimestamp(source.startMs)}` : 'Open transcript'}
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={playable ? <PlayArrowIcon /> : <DescriptionOutlinedIcon />}
+          onClick={() => onGo(href)}
+        >
+          {playable && source.startMs !== null ? `Play from ${formatTimestamp(source.startMs)}` : 'Open transcript'}
         </Button>
       );
     } else if (source.kind === 'note') {

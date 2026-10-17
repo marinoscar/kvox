@@ -332,3 +332,23 @@ describe('ProposalsService — add from span', () => {
     expect(tx.kgProposalItem.create.mock.calls[0][0].data.payload.statementHash).not.toBe('forged');
   });
 });
+
+describe('ProposalsService.detail evidence read (#604)', () => {
+  it('joins the cited transcript provider into the evidence findMany', async () => {
+    const { service, prisma } = setup();
+    (service.detail as jest.Mock).mockRestore();
+    prisma.kgProposalItem.findMany = jest.fn(async () => [item(E1, { sortOrder: 0 })]);
+    prisma.kgEvidence.findMany = jest.fn(async () => []);
+    jest.spyOn(service as any, 'lookups').mockResolvedValue({
+      schema, entityLabels: new Map(), segments: new Map(), noteVersions: new Map(), prechecked: new Set(),
+    });
+    jest.spyOn(service as any, 'noteHeader').mockResolvedValue(null);
+
+    await service.detail({ id: P, ownerId: OWNER, noteId: null, createdAt: new Date(), stats: {}, userGuidance: null } as never, false);
+
+    expect(prisma.kgEvidence.findMany).toHaveBeenCalledTimes(1);
+    const arg = prisma.kgEvidence.findMany.mock.calls[0][0];
+    expect(arg.where).toEqual(expect.objectContaining({ subjectKind: 'proposal_item', subjectId: { in: [E1] } }));
+    expect(arg.include).toEqual({ transcript: { select: { provider: true } } });
+  });
+});

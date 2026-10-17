@@ -28,7 +28,7 @@ import { Injectable, Inject } from '@nestjs/common';
 
 import { KVOX_OBJECT_STORE, type KvoxObjectStorePort, KVOX_PRISMA } from '../../ports/index.js';
 import { NoteAccessService } from '../../notes/index.js';
-import { TranscriptAccessService } from '../../transcripts/index.js';
+import { TranscriptAccessService, transcriptHasAudio } from '../../transcripts/index.js';
 import { GraphAccessService } from '../access/graph-access.service.js';
 import type { EvidenceLink } from './dto/graph-read.dto.js';
 import type { KvoxGraphDb, KgEvidenceRow as KgEvidence } from '../data/graph-db.js';
@@ -179,10 +179,12 @@ export class GraphEvidenceService {
     ]);
 
     // Which transcripts the caller may VIEW right now — the module's own rule.
-    const viewableTranscripts = new Map<string, { title: string }>();
+    const viewableTranscripts = new Map<string, { title: string; hasAudio: boolean }>();
     for (const t of transcripts) {
       if (t.deletedAt !== null) continue;
-      if ((await this.transcriptAccess.roleFor(userId, t)) !== null) viewableTranscripts.set(t.id, { title: t.title });
+      if ((await this.transcriptAccess.roleFor(userId, t)) !== null) {
+        viewableTranscripts.set(t.id, { title: t.title, hasAudio: transcriptHasAudio(t.provider) });
+      }
     }
     const segmentById = new Map(segments.map((s) => [s.id, s]));
     const viewableNotes = new Map<string, { title: string; currentVersion: number }>();
@@ -256,6 +258,9 @@ export class GraphEvidenceService {
               // Not "changed" when we cannot look: an unavailable source reports nothing about itself.
               textChanged: available && currentSegmentRev !== row.segmentRev,
               available,
+              // #604: an imported transcript has no recording to play. Reported only
+              // for a source the caller can see, like everything else about it.
+              hasAudio: transcript?.hasAudio ?? false,
               href: available && row.transcriptId ? segmentHref(row.transcriptId, row.segmentId, row.startMs) : null,
             },
           };

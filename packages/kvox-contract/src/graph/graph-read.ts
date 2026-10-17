@@ -472,6 +472,13 @@ export const evidenceLinkSchema = z
         endMs: z.number().int().nullable(),
         textChanged: z.boolean(),
         available: z.boolean(),
+        hasAudio: z
+          .boolean()
+          .describe(
+            'Whether the cited transcript has a recording to play (#604). False for a transcript ' +
+              'imported from a kvox.transcript/v1 file (its audio route answers 404), and whenever ' +
+              '`available` is false.',
+          ),
         href: z.string().nullable(),
       }),
       z.object({

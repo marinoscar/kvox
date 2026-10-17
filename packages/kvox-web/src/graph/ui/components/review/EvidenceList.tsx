@@ -9,6 +9,8 @@
  * `stale` evidence says so: the cited text has changed since extraction.
  * Import evidence (#387) cites the uploaded file itself — its quote is the
  * file's own annotation, or "Imported from <filename>" — with nothing to play.
+ * Segment evidence whose transcript has no recording (`hasAudio: false`, an
+ * imported transcript — #604) offers no ▶ either; "Open in transcript" stays.
  */
 
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -93,7 +95,7 @@ function EvidenceEntry({
             {expanded ? 'Show less' : 'Show more'}
           </Button>
         )}
-        {onPlay && evidence.source === 'segment' && evidence.startMs !== null && (
+        {onPlay && evidence.source === 'segment' && evidence.startMs !== null && evidence.hasAudio !== false && (
           <Button
             size="small"
             startIcon={<PlayArrowIcon fontSize="small" />}
