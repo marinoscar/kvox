@@ -176,6 +176,7 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { RecordedAtDialog } from '../components/RecordedAtDialog.js';
 import { formatDuration, formatTimestamp } from '../../headless/utils/playbackIntervals.js';
 import { hasPlaybackRendition } from '../../headless/utils/transcriptDisplay.js';
+import { isImportedTranscript } from '../../headless/clients/transcriptImports.js';
 
 /**
  * Should a document-level transport shortcut be ignored for this event?
@@ -222,6 +223,9 @@ export function formatRecordedAt(iso: string): string {
 }
 
 /** The speaker-people slot's default: nobody is a known person. */
+/** The timestamp handler of a transcript with no audio. */
+function noop(): void {}
+
 function useNoSpeakerPeople(): TranscriptSpeakerPeople | null {
   return null;
 }
@@ -263,6 +267,14 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
 
   const { transcript, isLoading, error, setTranscript } = useTranscript(id);
   const isReady = transcript?.status === 'ready';
+  /**
+   * An imported transcript (#571) has NO audio at all: `GET /:id/audio` answers
+   * 404 by design. Its `playbackStatus` is `not_needed`, which an upload whose
+   * source plays as-is also carries, so the provider is what decides. The
+   * engine is never given its id, and the page draws no player, no per-line
+   * play button and no play shortcuts.
+   */
+  const isImported = isImportedTranscript(transcript);
   const { segments: serverSegments, version: serverVersion } = useTranscriptSegments(
     id,
     isReady,
@@ -319,7 +331,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
     // The engine is only given an id once the transcript is READY. Before that
     // `GET /:id/audio` has nothing to sign, and mounting an element that 404s
     // would put the player into its error state for the whole processing wait.
-    transcriptId: isReady ? id : undefined,
+    transcriptId: isReady && !isImported ? id : undefined,
     segments,
     selectedSpeakerIds,
     title: transcript?.title ?? 'Transcript',
@@ -638,6 +650,8 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
       if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
+      // No audio, no transport: Space keeps scrolling the page.
+      if (isImported) return;
       if (event.code === 'Space') {
         // Prevented BEFORE toggling: Space also scrolls the page, and a
         // transcript that jumps a screenful every time playback starts is
@@ -657,7 +671,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [engine, isReady]);
+  }, [engine, isImported, isReady]);
 
   const navigateMatch = useCallback(
     (delta: 1 | -1) => {
@@ -1065,7 +1079,13 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
   }
 
   const playerBlocked = engine.status === 'preparing' || engine.status === 'error';
-  const playerNotice = playerBlocked ? (
+  /** Whether the player is drawn: there is audio and it is not blocked. */
+  const showPlayer = !isImported && !playerBlocked;
+  const playerNotice = isImported ? (
+    <Typography variant="body2" color="text.secondary" role="note">
+      No audio (imported transcript).
+    </Typography>
+  ) : playerBlocked ? (
     <Alert severity={engine.status === 'error' ? 'error' : 'info'}>
       {engine.status === 'error'
         ? (engine.error ?? 'The audio could not be loaded.')
@@ -1085,7 +1105,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
 
   /** The explicit ▶ a deep link offers instead of autoplay (#373). */
   const deepLinkPlayChip =
-    deepLinkPlayMs !== null && !playerBlocked ? (
+    deepLinkPlayMs !== null && showPlayer ? (
       <Chip
         icon={<PlayArrowIcon />}
         label={`Play from ${formatTimestamp(deepLinkPlayMs)}`}
@@ -1107,13 +1127,16 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
         currentSegmentIndex={engine.currentSegmentIndex}
         positionMs={engine.positionMs}
         wordsBySegment={wordsBySegment}
-        onPlayFrom={engine.playFromMs}
+        // Without audio the timestamps stay as reading anchors, the same
+        // posture as the history preview's no-op.
+        onPlayFrom={isImported ? noop : engine.playFromMs}
         selectedSpeakerIds={selectedSpeakerIds}
-        // Per-line playback (#108). Unconditional, unlike the editing props
-        // below: hearing one line is a READ, so a viewer gets it too.
+        // Per-line playback (#108). Not gated on a role, unlike the editing
+        // props below: hearing one line is a READ, so a viewer gets it too.
+        // Only an imported transcript (#571) goes without, having no audio.
         activeSegmentId={engine.activeSegmentId}
         isPlaying={engine.isPlaying}
-        onPlaySegment={engine.playSegment}
+        {...(isImported ? {} : { onPlaySegment: engine.playSegment })}
         onPause={engine.pause}
         editable={canEdit}
         editingSegmentId={editingSegmentId}
@@ -1421,7 +1444,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
               {namePanel}
               {playerNotice}
               {deepLinkPlayChip}
-              {!playerBlocked && (
+              {showPlayer && (
                 <TranscriptPlayer
                   engine={engine}
                   segments={segments}
@@ -1492,7 +1515,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
       {namePanel}
       {notesSection ? <Box sx={{ mt: 2 }}>{notesSection}</Box> : null}
 
-      {!playerBlocked && (
+      {showPlayer && (
         <>
           <TranscriptPlayer
             engine={engine}

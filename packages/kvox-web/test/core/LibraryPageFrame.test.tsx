@@ -128,3 +128,35 @@ describe('LibraryPageFrame — accessibility', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+describe('LibraryPageFrame — the secondary action', () => {
+  function renderWithSecondary(width: number) {
+    setViewportWidth(width);
+    return renderWithKvoxHost(
+      <LibraryPageFrame
+        title="Transcripts"
+        action={ACTION}
+        secondaryAction={<button type="button">Import</button>}
+      >
+        <p>view body</p>
+      </LibraryPageFrame>,
+      createFakeKvoxWebHost({ viewer: mockAdminUser }),
+      { route: '/transcripts' },
+    );
+  }
+
+  it('sits in the header beside the primary action from sm up', () => {
+    renderWithSecondary(DESKTOP);
+
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New transcript' })).toBeInTheDocument();
+  });
+
+  it('stays in the header on a phone, where only the primary action floats', () => {
+    renderWithSecondary(PHONE);
+
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument();
+    // The FAB carries the primary action's name.
+    expect(screen.getByRole('button', { name: 'New transcript' })).toBeInTheDocument();
+  });
+});
