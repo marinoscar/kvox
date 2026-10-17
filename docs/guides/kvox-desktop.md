@@ -171,9 +171,9 @@ Seed before the first request (`examples/bare-host/src/seed.ts`): the one `users
 This is `examples/bare-host/scripts/prepare-db.mjs`. It needs no database: composing a schema and installing migrations only write files under `prisma/`, which is generated and git-ignored.
 
 ```bash
-npx platform db sync    --root .                          # 1. install the platform migrations (byte copies)
+npx platform db sync    --root . --timestamp 2024-01-01T00:00:00Z   # 1. install the platform migrations (byte copies), pinned before the domain ids
 npx platform db compose --root .                          # 2. compose the platform schema; kvox-db refuses a host without User, StorageObject, Job
-npx kvox-db sync        --root . --names after-host       # 3. install the domain fragments and migrations
+npx kvox-db sync        --root . --names stable           # 3. install the domain fragments and migrations
 npx platform db compose --root .                          # 4. compose again, now with the domain fragments
 npx prisma generate --config prisma.config.ts             # 5. generate the client
 ```
@@ -185,14 +185,14 @@ npx prisma migrate deploy --config prisma.config.ts       # platform history, th
 npx kvox-db check --root . --database                     # exit 1 if an extension or a raw-SQL object is missing
 ```
 
-Why `--names after-host`: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. `after-host` names each one `<ts>_kvox_<slug>`, one second after the newest directory in `prisma/migrations` (which is why step 1 comes before step 3). A host that already ran the migrations under the original names (the web edition) keeps `original`. (The issue text lists `platform db sync` last; the working order is the one above.)
+Why `--names stable` and the pinned timestamp: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. The pin `--timestamp 2024-01-01T00:00:00Z` dates the platform migrations before them, so the platform tables come first and the platform names are deterministic. `stable` names each domain migration `<the id's timestamp>_kvox_<slug>`, a pure function of the package migration id, never of build time or other packages' migration counts. `after-host` is deprecated: its names are the newest host directory plus one second, so a platform upgrade on a host that builds `prisma/` from scratch shifts every domain name and breaks databases that recorded the old ones. A host that already ran the migrations under the original names (the web edition) keeps `original`; a host with a lock keeps the policy the lock records. Upstream gap: `platform db sync` still derives names from the clock or `--timestamp` and the newest directory; see [marinoscar/EnterpriseAppBase#992](https://github.com/marinoscar/EnterpriseAppBase/issues/992). Rule: [migration folder names](../runbooks/kvox-domain-migration.md#migration-folder-names). (The issue text lists `platform db sync` last; the working order is the one above.)
 
 `prisma.config.ts` points `schema` at `prisma/schema` and `migrations.path` at `prisma/migrations`, and reads `DATABASE_URL`; copy it from the bare host.
 
 ### Upgrades
 
 1. Bump the four packages together, and `@marinoscar/platform-db` to the version `@marinoscar/kvox-db` was tested with.
-2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names after-host` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
+2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names stable` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
 3. `npx prisma migrate deploy`, then `npx kvox-db check --root . --database`.
 
 Never edit, rename or reformat an installed migration or a generated `prisma/fragments/kvox.*.prisma`: `kvox-db check` fails with `INSTALLED_MODIFIED` or `FRAGMENT_MODIFIED`, and comments count toward the hash. Exclude `**/migration.sql` from any formatter. A fix is a new migration released in a package, never an edit. Details: [kvox-db README](../../packages/kvox-db/README.md#upgrade-notes).
@@ -827,7 +827,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 **`Unknown transcription provider "x". Known providers: ...` (a provider id rejected).** The settings only accept an id some registered class declares. Register it through `TranscriptionModule.forRoot({ extraProviders: [YourProvider] })` (a class the container builds, not an instance), keep `id` lowercase `[a-z][a-z0-9_-]*`, and store a key for it under the `transcription` secret purpose. A settings row that names a provider this build lacks reads as unavailable.
 
-**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `kvox-db sync --names after-host` after `platform db sync`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`.
+**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `platform db sync --timestamp 2024-01-01T00:00:00Z`, then `kvox-db sync --names stable`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`; one that recorded `after-host` names keeps the policy its lock records.
 
 **`kvox-db check`: `INSTALLED_MODIFIED`, `FRAGMENT_MODIFIED`, `NOT_INSTALLED`, `LOCK_MISSING`.** Someone edited, formatted or lost an installed file. Restore it from version control, or run `kvox-db sync`; edit nothing under `prisma/migrations` or `prisma/fragments/kvox.*`.
 
