@@ -112,6 +112,9 @@ jobs:
 
       - run: npm ci
 
+      # kvox-api's slices import the contract's built subpaths.
+      - run: npm run build -w @marinoscar/kvox-contract
+
       # TypeDoc for the four packages (fails on an undocumented export or a
       # broken {@link}), then README, TSDoc tag and entry-point checks.
       - run: npm run check:kvox-package-docs
