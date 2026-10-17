@@ -20,7 +20,7 @@ Default redaction applies to every source and cannot be switched off: a column n
 | `user-data` | platform | The account row, then one dataset per model the user-owned registry marks `export: 'include'` (table 3), rows where the owner column is the user. |
 | `kvox-content` | this application | Datasets that need a **parent-keyed** filter (table 4). |
 
-`org-data` (an organization's rows and member list, for `org_members:read`) stays on as the platform's default. No kvox model is org-kind, so it carries none of the content in this document.
+`org-data` (an organization's rows and member list, for `org_members:read`) stays on as the platform's default. No model of this app is org-kind, so it carries none of the content in this document.
 
 `kvox-content` is registered **after** `ExportsModule.forRoot` so `user-data` stays the first source in the dialog. Unlike `user-data`, it **lists** its formats (`json`, `csv`, `xlsx`): the built-in writers attach only to the platform's own source ids, and the slice silently drops a source that offers no format.
 
@@ -58,6 +58,6 @@ File bytes (the audio, renditions and rendered exports): the `storage_object` da
 
 ## 6. Changing the policy
 
-Add a model: classify it in `user-owned-models.ts` (the `user-owned-data` conformance suite fails otherwise). To export a model whose rows cannot be selected by its own owner column, add a dataset to `KVOX_CONTENT_DATASETS` with a parent-keyed `where`, mark the model `exclude`, and extend `apps/api/test/exports/kvox-export-policy.spec.ts`. Never export `KgItem` or `KgEvidence` without a sensitivity filter that the spec proves.
+Add a model: classify it in `user-owned-models.ts` (the `user-owned-data` conformance suite fails otherwise). To export a model whose rows cannot be selected by its own owner column, add a dataset to the dataset list in `kvox-content.source.ts` with a parent-keyed `where`, mark the model `exclude`, and extend the export policy spec in `apps/api/test/exports/`. Never export `KgItem` or `KgEvidence` without a sensitivity filter that the spec proves.
 
 Follow-up worth doing: a sensitivity-aware entity dataset that exports `props` per key (the attribute definitions already say which are sensitive).
