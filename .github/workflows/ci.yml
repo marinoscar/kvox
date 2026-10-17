@@ -81,6 +81,9 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-api
       # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
       - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -179,6 +182,9 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-api
       # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
       - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
@@ -523,6 +529,9 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-api
       # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
       - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
         working-directory: apps/api

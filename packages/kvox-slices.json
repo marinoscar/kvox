@@ -54,5 +54,13 @@
     "testing": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors"],
     "port": ["types", "features", "tasks", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
     "direct": ["runtime", "errors"]
+  },
+  "kvox-eval": {
+    "ask": [],
+    "fixtures": ["ask"],
+    "real-data": [],
+    "live": [],
+    "kg": ["fixtures"],
+    "cli": ["fixtures", "kg", "live", "real-data"]
   }
 }
