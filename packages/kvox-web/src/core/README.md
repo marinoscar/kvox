@@ -31,3 +31,7 @@ None. The behaviour is the host's.
 - `KvoxSettingsCard<F>`: a settings card as data, structurally the app's `SettingsCardDef`. `F` is the union of settings-feature keys the card may name; it defaults to `never`, so a card without a feature spreads into the app's registry without a cast.
 - `KvoxDestination<K, F>` and `KvoxDestinationRoutes<K>`: a navigation destination and the prefixes it owns, structurally the shell's `ShellDestination`.
 - `KvoxRouteDef`: a route as data (`path`, optional `permission`, lazy `Component`); the app renders it inside its own guard (`apps/web/src/platform-kvox/renderKvoxRoutes.tsx`).
+
+### Desktop
+
+`KvoxWebHost` is the one port Desktop implements; the guide lists every member with its rule and gives an illustrative implementation over `fetch` and `createFetchSseConnect`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#wiring-the-web).

@@ -23,3 +23,7 @@ None declared. `pg` is resolved at run time from the app (then from this package
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+Desktop runs `kvox-db check` and `kvox-db check --database` after every migration. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

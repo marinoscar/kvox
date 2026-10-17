@@ -23,3 +23,7 @@ None. The constants are read from the package folder when the module loads.
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+The manifest is what `kvox-db sync` installs from in Desktop. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

@@ -125,3 +125,7 @@ None. This package has not been published yet (see the [release runbook](../../d
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
 - [core README](src/core/README.md) and [transcription README](src/transcription/README.md): the slices
+
+### Desktop
+
+The renderer of KVox Desktop installs this package and provides one `KvoxWebHost` over its local server (HTTP and SSE on loopback, or IPC). The guide documents every host member and how to render the slices' routes, destinations and settings cards. See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#wiring-the-web).

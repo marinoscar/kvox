@@ -79,3 +79,7 @@ A limit above today's value, or one that is not a positive integer, throws when 
 | `AskUserDataService` | Call `deleteAll(userId)` from an account-data deletion; the web edition's planner deletes the rows itself from its model hint. |
 | `KvoxAskDb` | The structural database client the slice injects through `KVOX_PRISMA`. |
 | `describeAskConformance`, `createScriptedChat` | The conformance kit and the scripted model it and the replay runs use. |
+
+### Desktop
+
+An Ask turn needs the Copilot adapter online with tool calling; any `KVOX_AI` that passes `describeAskConformance` runs it. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#prove-it-conformance).

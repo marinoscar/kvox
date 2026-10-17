@@ -85,3 +85,7 @@ A `sensitive` PersonFact never leaves the deployment: it is dropped from the bri
 | `GraphUserDataService` | What a deletion would remove and the enqueue of `kg.purge`; the host's user-data registry delegates to it. |
 | `graphPreferencesSchema`, `mergeGraphPreferences`, `assertGraphPreferenceLimits` | What the host's `graph` user-settings namespace is built from. |
 | `describeGraphConformance` | The conformance kit and the binding it is run against. |
+
+### Desktop
+
+Desktop must declare `graphEnabled` in the system `ai` settings namespace for the graph to run, and installs the graph layout peers from the full set. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#install).

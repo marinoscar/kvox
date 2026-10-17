@@ -23,3 +23,7 @@ None. The slice imports Node built-ins only.
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+Desktop does not author domain migrations; they come with a package release. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

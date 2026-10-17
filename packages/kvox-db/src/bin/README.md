@@ -23,3 +23,7 @@ Status: implemented (issue 5.3).
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+The `kvox-db` command Desktop runs in its prepare and upgrade sequence. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

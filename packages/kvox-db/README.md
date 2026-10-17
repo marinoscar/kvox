@@ -146,3 +146,7 @@ Fragment copies carry no version in their header, so a package version bump chan
 - [Authoring a domain migration](../../docs/runbooks/kvox-domain-migration.md): edit a fragment, create the migration, `kvox-db promote`
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
+
+### Desktop
+
+Desktop builds its embedded database with this package: `kvox-db sync --names after-host`, PGlite or a bundled PostgreSQL, the required extensions, and upgrades. The guide gives the exact prepare sequence. See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#database).

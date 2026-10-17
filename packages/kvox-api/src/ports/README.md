@@ -78,3 +78,7 @@ Every token and its port interface are `@extensionPoint`s: a host implements the
 | `KVOX_SETTINGS` | `KvoxSettingsPort` | `settings/platform-kvox-settings.adapter.ts` over the platform settings registries | a local JSON file or table |
 | `KVOX_SECRETS` | `KvoxSecretsPort` | `secrets/platform-kvox-secrets.adapter.ts` over `CredentialsService` | the operating-system keychain |
 | `KVOX_AUDIT` | `KvoxAuditPort` | `audit/platform-kvox-audit.adapter.ts` over the platform `AUDIT_SINK` | a local log |
+
+### Desktop
+
+Desktop implements every port here. The guide gives each interface with its rules, the bare-host reference class and the Desktop recommendation (the keychain for `KVOX_SECRETS`, operating-system notifications for `KVOX_NOTIFY`, one local user for `KVOX_IDENTITY`). See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#ports-to-implement).

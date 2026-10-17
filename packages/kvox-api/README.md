@@ -209,3 +209,7 @@ Search answers `semantic: false` with `embeddings_unavailable` on a host that sh
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [Bare-host smoke app](../../examples/bare-host/README.md): a host that is not the web edition, and the local port implementations Desktop starts from
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
+
+### Desktop
+
+The main process of KVox Desktop installs this package. The guide lists the ten ports to implement, the module wiring (`KvoxPortsModule.forRoot`, one `forRoot` per slice), the Copilot SDK `KVOX_AI` sketch and the offline behaviour of every feature, and names the conformance kits to run against your adapters. See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#ports-to-implement).

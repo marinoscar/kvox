@@ -28,3 +28,7 @@ None. The hooks and the page read their host (`useKvoxHost`). `SearchResultsView
 - `kvoxSearchUserSettingsSections`: one card, `{ title: 'Search Indexing', path: '/settings/search-index' }` with NO `permission`, by design. `search-index.controller.ts` gates both routes on `@Auth()` alone: the resource is the caller's own content and the caller's own AI provider account. A card's permission must equal what the controller enforces, so none is declared.
 - `kvoxSearchRoutes`: one ungated route on the same path. The page's real gate is a capability (does the deployment embed, has the user saved a key), which the page checks itself.
 - `SemanticSearchNotice` copy: every value of `SEMANTIC_REASONS` in `@marinoscar/kvox-contract/search` has a sentence, the newest being `embeddings_unavailable` ("Search by meaning isn't available on this installation. Results match your words exactly."). Upgrade note: when the contract gains a reason, add its copy to `SEARCH_ONLY_REASON_TEXT` (a search-only reason) or to the indexing lookup in `search-index-client.ts` (an indexing outcome); `test/search/semantic-reasons-copy.test.tsx` fails until you do, and an unknown reason otherwise renders as `Indexing reported: <token>`.
+
+### Desktop
+
+Desktop spreads `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` into its own navigation; without an embeddings model `SemanticSearchNotice` explains the keyword-only answer. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#offline-constraints-feature-by-feature).

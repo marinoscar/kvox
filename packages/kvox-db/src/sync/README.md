@@ -23,3 +23,7 @@ None. The slice imports Node built-ins only.
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+Desktop runs `kvox-db sync --names after-host` on a database with no domain history, after `platform db sync`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

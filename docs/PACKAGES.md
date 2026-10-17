@@ -118,6 +118,7 @@ npm run check:kvox-package-docs     # docs, then the standard above
 5. Name the new subpath in the package README and link the slice README there.
 6. Add a changeset (`npx changeset`).
 7. Run `npm run lint:packages`, `build:kvox-packages`, `check:kvox-slice-peers`, `check:kvox-package-docs` and `check:kvox-pack`.
+8. Update the [KVox Desktop guide](guides/kvox-desktop.md): the slice's peers in its Install section, its row in the offline table (what works without a network, what needs a model, a provider or a binary), its job types, and a `### Desktop` note under the last `##` section of the slice README.
 
 ## Peer dependencies per slice
 

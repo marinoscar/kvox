@@ -23,3 +23,7 @@ None.
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+`prisma/kvox.lock` is what makes an upgrade install only the new migrations in Desktop. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).

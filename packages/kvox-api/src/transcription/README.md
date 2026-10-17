@@ -71,3 +71,7 @@ The routes document themselves through `documentKvoxAuth` (called by `forRoot`):
 | `TRANSCRIPTION_EXTRA_PROVIDERS` | The token under which the module provides the instances of `extraProviders`. |
 | `describeTranscriptionProviderConformance`, `TranscriptionConformanceOptions.scenarios` | The provider conformance kit and the failing upstreams a provider author wires in. |
 | `createFakeTranscriptionProvider` | A scriptable provider for tests of the transcripts pipeline. |
+
+### Desktop
+
+Offline, AssemblyAI is unavailable: Desktop registers a local provider through `extraProviders` and runs `describeTranscriptionProviderConformance` against it. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#offline-constraints-feature-by-feature).

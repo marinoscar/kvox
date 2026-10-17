@@ -23,3 +23,7 @@ None.
 ## Extension-point catalog
 
 None.
+
+### Desktop
+
+The raw-SQL inventory is what `kvox-db check --database` proves on PGlite and on a bundled PostgreSQL. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#database).
