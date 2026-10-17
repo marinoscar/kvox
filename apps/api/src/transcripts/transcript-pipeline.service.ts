@@ -39,8 +39,7 @@ import type { TranscriptFailedEmailData } from '../email-templates/transcript-fa
 import type { TranscriptReadyEmailData } from '../email-templates/transcript-ready.email';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
-import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
-import { SearchIndexService } from '../search/indexing/search-index.service';
+import { SEARCH_DOC_TRANSCRIPT, SearchIndexService } from '@marinoscar/kvox-api/search';
 import { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCODE_JOB_TYPE,

@@ -15,11 +15,11 @@
 // (`test/kvox/*.typecheck.ts`), and `tsconfig.build.json` does not.
 //
 // TRANSCRIPTION NEEDS NO PRISMA. It reads and writes through the settings,
-// secrets and audit ports only, so it adds no line here. The first line arrives
-// with the transcripts slice (6.2):
+// secrets and audit ports only, so it adds no line here. The first line is search's
+// (#494); the transcripts slice (6.2) adds:
 //
 //   import type { KvoxTranscriptsDb } from '@marinoscar/kvox-api/transcripts';
-//   const _transcripts: KvoxTranscriptsDb = null as unknown as PrismaService;
+//   const _transcripts: KvoxTranscriptsDb = null as unknown as KvoxHostPrisma;
 //
 // Keep one line per slice, named `_<slice>`.
 // =============================================================================
@@ -28,3 +28,13 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 
 /** The type every slice line assigns from. */
 export type KvoxHostPrisma = PrismaService;
+
+import type { KvoxSearchDb } from '@marinoscar/kvox-api/search';
+
+/**
+ * Search (#494): the delegates `searchChunk`, `searchEmbedding` and `searchIndexState`
+ * with exactly the arguments and result columns the slice uses, plus the raw methods.
+ * Its reads of the transcripts and notes tables are raw SQL, so those delegates are
+ * not part of the shape.
+ */
+export const _search: KvoxSearchDb = null as unknown as KvoxHostPrisma;

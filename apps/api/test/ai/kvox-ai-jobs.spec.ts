@@ -35,7 +35,10 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 //       so a job that returned early for a missing row cannot pass for a job that was gated.
 //       A control run with AI on proves the counters count.
 //   (c) the per-user throttle key (`aiProviderThrottleKey`) is registered before the first call:
-//       every source file that calls the model registers it above the call.
+//       every source file of THIS application that calls the model registers it above the call.
+//       The packaged slices (`@marinoscar/kvox-api/*`) have no throttle service to register with: a
+//       rate limit there is a `KvoxRateLimitError` naming the per-user bucket, which the job adapter
+//       registers (`search.index`: `search-index.handler.spec.ts` in the package).
 // =============================================================================
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -280,7 +283,9 @@ describe('kvox AI job types (#477)', () => {
         };
       },
       'search.index': () => {
-        prismaMock.transcript.findFirst.mockResolvedValue({ ownerId: USER } as never);
+        // The handler reads the owner of the document with raw SQL (the transcripts table belongs to
+        // another slice; #494), so the double answers the statement rather than a delegate.
+        prismaMock.$queryRaw.mockResolvedValue([{ owner_id: USER }]);
         return { payload: { documentType: 'transcript', documentId: GUID(4) } };
       },
     };
@@ -371,8 +376,6 @@ const AI_METHODS = new Set(['generateStructured', 'streamText', 'embed', 'chat']
 const EXEMPT: Readonly<Record<string, string>> = {
   'graph/resolution/graph-embedder.service.ts':
     'a closure returned to the job that calls it; its callers (kg-embed.handler.ts, resolution.service.ts) register above `embedder.embed(`, which this test checks',
-  'search/search-query-embedder.service.ts':
-    'embeds a search QUERY inside the HTTP request, never inside a job: the provider throttle is a job-queue mechanism',
   'platform-kvox/ai/platform-kvox-ai.adapter.ts':
     'the `KVOX_AI` port adapter (#490) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
 };

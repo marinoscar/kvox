@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { platformKvoxModule } from '../platform-kvox/platform-kvox.module';
+import { SearchConfig, SearchIndexingConfig } from './search/search.config';
 import { TranscriptionBindingModule } from './transcription/transcription-binding.module';
 import { TranscriptionConfig } from './transcription/transcription.config';
 
@@ -18,13 +19,16 @@ import { TranscriptionConfig } from './transcription/transcription.config';
 // `app.module.ts`: the ports' adapters inject their services. A missing port
 // binding stops the boot.
 //
-// Later slices (transcripts, search, notes, graph, Ask) append their config to
-// this list as they move into the package.
+// Search (#494) sits before transcription because the transcripts and notes modules
+// (still the application's) import its indexing half; later slices (transcripts,
+// notes, graph, Ask) append their config to this list as they move into the package.
 // =============================================================================
 
 @Module({
   imports: [
     platformKvoxModule,
+    SearchConfig,
+    SearchIndexingConfig,
     TranscriptionConfig,
     TranscriptionBindingModule,
   ],

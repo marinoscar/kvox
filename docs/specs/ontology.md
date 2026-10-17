@@ -12,7 +12,7 @@
 > against the current tree as of this document's writing (2026-09) —
 > `apps/api/prisma/schema.prisma`'s `Transcript.speakerIdentities` (line
 > ~2391), `TranscriptSegment`, `TranscriptNameSuggestion`, `NoteGeneration`
-> and `SearchEmbedding` models; `apps/api/src/search/search-fusion.ts`
+> and `SearchEmbedding` models; `packages/kvox-api/src/search/search-fusion.ts`
 > (`reciprocalRankFusion`, `RRF_K = 60`); `apps/api/src/notes/job-types.ts`
 > (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
@@ -1312,7 +1312,7 @@ from stored rows:
    summary here.
 3. **FTS + pgvector over segments and notes** (`SearchService`, itself
    already FTS+vector fused) **fused with the graph's own cited documents**
-   using **`reciprocalRankFusion()`** (`apps/api/src/search/search-fusion.ts`,
+   using **`reciprocalRankFusion()`** (`packages/kvox-api/src/search/search-fusion.ts`,
    verified above, `RRF_K = 60`) — the *exact same* fusion function
    `docs/specs/search.md` already uses for its two retrieval arms, reused
    rather than re-implemented, because a second RRF implementation that

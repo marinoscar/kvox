@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
-import { SearchIndexService } from '../search/indexing/search-index.service';
+import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCODE_JOB_TYPE,

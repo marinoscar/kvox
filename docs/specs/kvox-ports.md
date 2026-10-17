@@ -125,7 +125,7 @@ It runs against the fakes (`packages/kvox-api/test/ports-conformance.spec.ts`) a
 
 - `chat` maps to a Copilot session with the tool definitions registered; a session turn is one step, `step_end` marks it.
 - `generateStructured` maps to a prompt plus JSON Schema validation with one repair retry inside the adapter; the port still returns a value validated against the caller's Zod schema or throws `KvoxAiError('other')`.
-- If the SDK offers no embeddings, `capabilities().embeddings` is `null` and search answers with full-text only (`SEMANTIC_REASONS` already models that degradation).
+- If the SDK offers no embeddings, `capabilities().embeddings` is `null` and search answers with full-text only and the reason `embeddings_unavailable` (added to `SEMANTIC_REASONS` by the search slice, issue #494; a model whose vectors are not 1536 wide, the width of the index column, gets the same answer and a one-time warning). The search slice also needs a rule for which transcripts a user may see, which is not a port but an option of `SearchModule.forRoot` (`transcriptVisibility`); the Desktop default is the owner's own.
 - Keys are the user's Copilot sign-in. They are never stored by a slice and never cross the port.
 - `KVOX_OBJECT_STORE` maps to the local filesystem (the same ownership tag in a table), `KVOX_JOBS` to an in-process queue on a table with the same dedup and attempts rules, `KVOX_IDENTITY` to one local user, `KVOX_NOTIFY` to operating-system notifications, `KVOX_SECRETS` to the keychain, `KVOX_EVENTS` to `KvoxEventEmitterEvents`.
 

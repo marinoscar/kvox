@@ -19,7 +19,7 @@
 // `inGraph: false`. Graph-only answers are forbidden by design.
 // =============================================================================
 
-import { reciprocalRankFusion } from '../../search/search-fusion';
+import { reciprocalRankFusion } from '@marinoscar/kvox-api/search';
 import { BRIEF_RELATED_LIMIT, type RelatedSource } from './dto/entity-brief.dto';
 
 /** Half-life of the recency factor, in days. */

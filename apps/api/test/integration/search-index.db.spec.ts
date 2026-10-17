@@ -34,16 +34,15 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
-import { EMBEDDING_DIMENSIONS } from '../../src/ai-port/embedding-catalog';
 import {
   SEARCH_DOC_TRANSCRIPT,
+  SEARCH_EMBEDDING_DIMENSIONS as EMBEDDING_DIMENSIONS,
   SEARCH_INDEX_JOB_TYPE,
-} from '../../src/search/indexing/job-types';
-import { SearchIndexHandler } from '../../src/search/indexing/search-index.handler';
-import { SearchIndexService } from '../../src/search/indexing/search-index.service';
+  SearchIndexHandler,
+  SearchIndexService,
+} from '@marinoscar/kvox-api/search';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('search-index.db.spec');
@@ -164,48 +163,39 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
    * pairing would be visible rather than hidden behind identical numbers.
    */
   function buildHandler() {
-    const embed = jest.fn(async (request: { texts: string[] }) => ({
-      vectors: request.texts.map((_input, position) => {
+    const embed = jest.fn(async (_ctx: unknown, request: { inputs: string[] }) => ({
+      model: MODEL,
+      dimensions: EMBEDDING_DIMENSIONS,
+      vectors: request.inputs.map((_input, position) => {
         const vector = new Array(EMBEDDING_DIMENSIONS).fill(0);
         vector[position % EMBEDDING_DIMENSIONS] = 1;
 
         return vector as number[];
       }),
-      promptTokens: 42,
-      model: MODEL,
     }));
 
     const ai = {
-      readiness: async () => ({
-        ok: true,
-        reason: null,
-        provider: 'openai',
-        model: MODEL,
-        source: 'default',
-        contextWindowTokens: null,
-        maxOutputTokens: null,
-        reasoningEffort: 'none',
-        hasKey: true,
-      }),
-      embeddingCapability: () => ({
-        model: MODEL,
-        dimensions: EMBEDDING_DIMENSIONS,
-        maxInputTokens: 8191,
-        maxBatchSize: 2,
+      capabilities: async () => ({
+        available: true,
+        structuredOutput: false,
+        toolCalling: false,
+        embeddings: { model: MODEL, dimensions: EMBEDDING_DIMENSIONS },
+        graphEnabled: false,
       }),
       embed,
     };
 
-    const jobs = { enqueue: jest.fn(async () => ({ id: 'job' })) };
+    const jobs = {
+      enqueue: jest.fn(async () => ({ id: 'job', deduplicated: false })),
+      registerHandler: jest.fn(),
+      isRegistered: jest.fn(),
+    };
     const index = new SearchIndexService(prisma as never, jobs as never);
 
-    const handler = new SearchIndexHandler(
-      new JobHandlerRegistry(),
-      prisma as never,
-      ai as never,
-      { registerProviderKey: jest.fn() } as never,
-      index as never,
-    );
+    // `batchSize: 2` so the batching is real rather than incidental.
+    const handler = new SearchIndexHandler(jobs as never, prisma as never, ai as never, index as never, {
+      batchSize: 2,
+    });
 
     return { handler, embed, index, jobs };
   }
@@ -250,7 +240,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     expect(vectors.every((row) => row.model === MODEL)).toBe(true);
 
     // `maxBatchSize: 2` above, so the batching is real rather than incidental.
-    expect(embed.mock.calls.every((call) => call[0].texts.length <= 2)).toBe(true);
+    expect(embed.mock.calls.every((call) => call[1].inputs.length <= 2)).toBe(true);
 
     const state = await prisma.searchIndexState.findUnique({
       where: {
@@ -343,7 +333,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
     expect(moved.length).toBeLessThan(after.length);
 
     const embeddedInputs = embed.mock.calls.reduce(
-      (total, call) => total + call[0].texts.length,
+      (total, call) => total + call[1].inputs.length,
       0,
     );
 

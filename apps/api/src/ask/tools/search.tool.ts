@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { GraphReadService } from '../../graph/read/graph-read.service';
 import { sharedTranscriptsWhere } from '../../app-sharing/transcript-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SearchService } from '../../search/search.service';
+import { SearchService } from '@marinoscar/kvox-api/search';
 import {
   clip,
   isoDate,
@@ -134,7 +134,11 @@ export class SearchTool implements AskTool<SearchToolInput> {
    */
   private async searchDocuments(ctx: AskToolContext, q: string, limit: number) {
     try {
-      const res = await this.search.search({ q, types: 'transcript,note', limit }, ctx.user);
+      // The search slice reads a normalised principal (an id and a permission set), not the request user.
+      const res = await this.search.search(
+        { q, types: 'transcript,note', limit },
+        { userId: ctx.user.id, permissions: new Set(ctx.user.permissions) },
+      );
       return { results: res.results, truncated: res.nextCursor !== null, unavailable: null as string | null };
     } catch (err) {
       if (err instanceof ForbiddenException) {
