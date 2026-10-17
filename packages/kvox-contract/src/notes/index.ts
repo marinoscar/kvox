@@ -5,3 +5,4 @@ export * from './note-source.js';
 export * from './note-template.js';
 export * from './note-source-extract.js';
 export * from './note-events.js';
+export * from './note-import.js';

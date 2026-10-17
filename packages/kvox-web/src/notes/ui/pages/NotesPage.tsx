@@ -14,6 +14,8 @@
  * product produces, and the navigation now says so.
  */
 
+import type { ReactNode } from 'react';
+
 import { LibraryPageFrame } from '../../../core/ui/index.js';
 import { NotesLibraryView } from '../components/NotesLibraryView.js';
 import type { NotesLibrarySlots } from '../slots.js';
@@ -26,6 +28,11 @@ import type { NotesLibrarySlots } from '../slots.js';
 export interface NotesPageProps {
   /** What the host adds to the library (the search-hits slot). */
   slots?: NotesLibrarySlots;
+  /**
+   * A control beside "New note" in the header (#585: KVox Desktop's "Import…"). Rendered
+   * as given at every width; it gates itself.
+   */
+  secondaryAction?: ReactNode;
 }
 
 /**
@@ -36,13 +43,14 @@ export interface NotesPageProps {
  *
  * @stability experimental
  */
-export function NotesPage({ slots }: NotesPageProps = {}) {
+export function NotesPage({ slots, secondaryAction }: NotesPageProps = {}) {
   return (
     <LibraryPageFrame
       title="Notes"
       // `notes:write` — what `notes.controller.ts` enforces on create. The
       // route above already required `notes:read` to reach this page at all.
       action={{ label: 'New note', path: '/notes/new', permission: 'notes:write' }}
+      secondaryAction={secondaryAction}
     >
       <NotesLibraryView slots={slots} />
     </LibraryPageFrame>

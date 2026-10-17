@@ -45,6 +45,9 @@ The pages that need AI take `ai` (`NotesAiAccess`): a hook returning `{ isLoadin
   - `SelectionActions`: `ComponentType<{ noteId, version, markdown, containerRef, enabled, onReload }>`, an action over a text selection in the rendered body.
 - `NotesLibrarySlots.SearchPrefix` (prop `slots` of `NotesPage` and `NotesLibraryView`): `ComponentType<{ query }>`, rendered above the ranked results while the search box holds a query.
 - `NotesAiAccess` (prop `ai` of `NotePage`, `NewNotePage` and `UserNoteTemplatesPage`).
+- `NotesPage`'s `secondaryAction` (#585): a node rendered beside "New note" in the header at every width (KVox Desktop's "Import…"); it gates itself.
+- `NewNotePage` query parameters: `?transcriptId=` and `?templateId=` pre-select a source transcript and a template; `?objectId=` (#585) pre-selects a document the host already uploaded (with `?documentName=` as its display name) and polls its extraction, which is how KVox Desktop offers "Create note" after an import.
+- `importNoteMarkdown(host, file)` (#585): `POST /api/notes/import`, a Markdown note export (or any Markdown or text file) into a new note.
 - `TranscriptNotesSection`: the component the transcript page draws through its `NotesSection` slot.
 - `kvoxNotesDestinations`: one destination, `notes` ("Notes" for both labels, the page icon, `/notes`, `notes:read`, not pinned). `kvoxNotesDestinationRoutes`: its single ownership prefix `/notes`.
 - `kvoxNotesUserSettingsSections.account`: the Note Templates card, with NO `permission` (the API's `note_templates:*` permissions are seeded to every role, and the page's real gate is the key).

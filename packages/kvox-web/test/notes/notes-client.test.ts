@@ -16,6 +16,7 @@ import {
   retitleNote,
   updateNote,
   uploadNoteSourceDocument,
+  importNoteMarkdown,
 } from '../../src/notes/headless/clients/notes.js';
 
 /**
@@ -226,6 +227,28 @@ describe('uploadNoteSourceDocument', () => {
 
     expect(result.objectId).toBe('obj-1');
     expect(result.status).toBe('extracting');
+  });
+});
+
+describe('importNoteMarkdown', () => {
+  it('posts the file as the single "file" part of /notes/import and answers the note (#585)', async () => {
+    const file = new File(['# Title\n\nBody'], 'note.md', { type: 'text/markdown' });
+    let body: FormData | null = null;
+
+    server.use(
+      http.post(`${API_BASE}/notes/import`, async ({ request }) => {
+        body = await request.formData();
+        return HttpResponse.json({ data: { id: 'n-1', title: 'Title', body: 'Body' } }, { status: 201 });
+      }),
+    );
+
+    const note = await importNoteMarkdown(host, file);
+
+    expect(host.callsTo('POST /notes/import')).toHaveLength(1);
+    const sent = body as unknown as FormData;
+    expect([...sent.keys()]).toEqual(['file']);
+    expect(sent.get('file')).toBe(file);
+    expect(note).toMatchObject({ id: 'n-1', title: 'Title' });
   });
 });
 
