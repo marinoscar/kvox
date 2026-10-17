@@ -30,12 +30,12 @@ export class HttpResponse {
   readonly body: unknown;
   readonly status: number;
 
-  constructor(body: unknown = null, init: { status?: number } = {}) {
+  constructor(body: unknown = null, init: { status?: number; headers?: Record<string, string> } = {}) {
     this.body = body;
     this.status = init.status ?? 200;
   }
 
-  static json(body: unknown, init: { status?: number } = {}): HttpResponse {
+  static json(body: unknown, init: { status?: number; headers?: Record<string, string> } = {}): HttpResponse {
     return new HttpResponse(body, init);
   }
 }
@@ -45,6 +45,8 @@ export interface CompatRequest {
   url: string;
   method: string;
   headers: { get(name: string): string | null };
+  /** The caller's abort signal; a signal that never aborts when the caller passed none. */
+  signal: AbortSignal;
   json(): Promise<unknown>;
   text(): Promise<string>;
   formData(): Promise<FormData>;
@@ -64,6 +66,21 @@ export interface CompatHandler {
   route: FakeRoute;
 }
 
+/** What a `request:start` listener is called with. */
+export interface CompatRequestEvent {
+  request: CompatRequest;
+}
+
+type RequestListener = (event: CompatRequestEvent) => void;
+
+let listeners: RequestListener[] = [];
+
+/** MSW's `delay`: resolves after `ms` milliseconds, or never for `'infinite'`. */
+export function delay(ms: number | 'infinite' | 'real' = 0): Promise<void> {
+  if (ms === 'infinite') return new Promise(() => undefined);
+  return new Promise((resolve) => setTimeout(resolve, ms === 'real' ? 0 : ms));
+}
+
 function toRoute(resolver: Resolver): FakeRoute {
   return async (req: FakeRouteRequest) => {
     const query = req.query.toString();
@@ -75,12 +92,14 @@ function toRoute(resolver: Resolver): FakeRoute {
           Object.entries(req.headers).find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1] ??
           null,
       },
+      signal: req.signal ?? new AbortController().signal,
       // What crosses the wire: JSON drops an `undefined` member, as a transport would.
       json: async () => (req.body === undefined ? undefined : JSON.parse(JSON.stringify(req.body))),
       text: async () =>
         req.body === undefined ? '' : typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
       formData: async () => req.body as FormData,
     };
+    for (const listener of listeners) listener({ request });
     const result = await resolver({ request, params: req.params });
     if (!(result instanceof HttpResponse)) return result;
     if (result.status >= 400) {
@@ -93,7 +112,12 @@ function toRoute(resolver: Resolver): FakeRoute {
 }
 
 function handler(method: string, url: string, resolver: Resolver): CompatHandler {
-  const path = url.startsWith(API_BASE) ? url.slice(API_BASE.length) : url;
+  // `*/api/...` is MSW's any-origin form; the shim routes by path alone.
+  const path = url.startsWith(API_BASE)
+    ? url.slice(API_BASE.length)
+    : url.startsWith('*/api')
+      ? url.slice('*/api'.length)
+      : url;
   return { key: `${method} ${path}`, route: toRoute(resolver) };
 }
 
@@ -120,6 +144,15 @@ export const server = {
   resetHandlers(): void {
     held = [];
   },
+  /** MSW's life-cycle events; only `request:start` is emulated, for the handlers registered here. */
+  events: {
+    on(_type: 'request:start', listener: RequestListener): void {
+      listeners.push(listener);
+    },
+    removeAllListeners(): void {
+      listeners = [];
+    },
+  },
 };
 
 /** The held handlers as host routes, in registration order (the last wins). */
@@ -135,4 +168,5 @@ export function bindHost(host: FakeKvoxWebHost | null): void {
 afterEach(() => {
   held = [];
   current = null;
+  listeners = [];
 });

@@ -311,7 +311,7 @@ export async function installHomeApi(
     // the section entirely, which keeps these baselines identical to Home
     // before the section existed. Before this answer existed the catch-all's
     // `{}` reached the section as `items: undefined` and crashed the whole
-    // app into `ErrorBoundary` (PR #415); `services/graph.ts` now refuses
+    // app into `ErrorBoundary` (PR #415); the graph client (`@marinoscar/kvox-web/graph/headless`) now refuses
     // that shape too, but the fixture should say what it means.
     if (path === '/graph/entities') {
       return json(route, { items: [], nextCursor: null });

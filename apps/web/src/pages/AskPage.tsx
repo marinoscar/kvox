@@ -52,8 +52,7 @@ import { DeleteConversationDialog } from '../components/ask/DeleteConversationDi
 import { RenameConversationDialog } from '../components/ask/RenameConversationDialog';
 import { askComposerAlert } from '../components/ask/askComposerAlert';
 import { ASK_DISABLED_COPY } from '../components/ask/askErrorCopy';
-import { EntityTypeIcon } from '../components/graph/entityTypeIcon';
-import { entityPath } from '../components/graph/EntityListRow';
+import { EntityTypeIcon, entityPath } from '@marinoscar/kvox-web/graph/ui';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useAskConversation } from '../hooks/useAskConversation';
 import { useAskConversations } from '../hooks/useAskConversations';

@@ -20,7 +20,7 @@ import {
   proposalMock,
   countsFor,
 } from './graphData';
-import type { ProposalItem, PatchProposalItemInput } from '../../services/graph';
+import type { ProposalItem, PatchProposalItemInput } from '@marinoscar/kvox-web/graph/headless';
 import { askMessage, askMock, askSummary, detailOf } from './askData';
 
 // Use wildcard pattern to match relative URLs

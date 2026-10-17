@@ -9,8 +9,7 @@
 import Chip from '@mui/material/Chip';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { EntityTypeIcon } from '../graph/entityTypeIcon';
-import { entityPath } from '../graph/EntityListRow';
+import { EntityTypeIcon, entityPath } from '@marinoscar/kvox-web/graph/ui';
 
 export interface EntityCitationChipProps {
   entityId: string;

@@ -196,6 +196,20 @@
           "remark-gfm"
         ]
       }
+    },
+    "graph": {
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": [
+          "@mui/icons-material",
+          "@mui/material",
+          "@react-sigma/core",
+          "graphology",
+          "graphology-layout-forceatlas2",
+          "react-router-dom",
+          "sigma"
+        ]
+      }
     }
   },
   "kvox-contract": {

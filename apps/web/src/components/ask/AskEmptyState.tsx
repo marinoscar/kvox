@@ -16,8 +16,8 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
-import { useGraphEntities } from '../../hooks/useGraphEntities';
-import type { GraphEntitySummary } from '../../services/graph';
+import { useGraphEntities } from '@marinoscar/kvox-web/graph/headless';
+import type { GraphEntitySummary } from '@marinoscar/kvox-web/graph/headless';
 
 export const ASK_GENERIC_SUGGESTIONS = [
   'What did I commit to this week?',

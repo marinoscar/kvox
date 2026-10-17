@@ -25,14 +25,13 @@ import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { kvoxGraphUserSettingsSections } from '@marinoscar/kvox-web/graph/ui';
 import { kvoxNotesUserSettingsSections } from '@marinoscar/kvox-web/notes/ui';
 import { kvoxSearchUserSettingsSections } from '@marinoscar/kvox-web/search/ui';
 import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 // Getting Started (#279, epic #271) — the same icon the admin `Setup` card
 // carries, on purpose: the two are the same idea on two axes (this deployment
 // vs. this account), and a user who has seen one recognises the other.
-// Knowledge graph (#369, epic #346).
-import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { gettingStartedSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
 
@@ -174,16 +173,10 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // has no graph to have preferences about. `graph:write` is seeded to all
     // three roles, so in a stock deployment this hides the card from nobody.
     label: 'Knowledge',
-    cards: [
-      {
-        title: 'Knowledge graph',
-        description:
-          'How notes become connected knowledge: automatic extraction, how sure a match must be, domains, and your own attributes.',
-        Icon: HubOutlinedIcon,
-        path: '/settings/knowledge-graph',
-        permission: 'graph:write',
-      },
-    ],
+    // The card is the graph slice's since #503 (epic #498), spread where it was
+    // written out: the `permission` is the exact string the API enforces, see the
+    // note above and `kvoxGraphUserSettingsSections`.
+    cards: [...kvoxGraphUserSettingsSections.knowledge],
   },
   {
     label: 'Security',

@@ -3715,7 +3715,7 @@ below, rather than left open any further.
 **Built** (issue #374). The exact versions: `sigma` `^3.0.3`, `graphology`
 `^0.26.0`, `@react-sigma/core` `^5.0.6`, `graphology-layout` `^0.6.1`,
 `graphology-layout-forceatlas2` `^0.10.1`, `graphology-types` `^0.24.8`.
-`apps/web/src/components/graph/explorer/GraphCanvas.tsx` is the **one** file
+`packages/kvox-web/src/graph/ui/components/explorer/GraphCanvas.tsx` is the **one** file
 in the codebase that imports `sigma`, generic enough that the entity page's
 `NeighborhoodWidget` (§13) and the future whole-graph overview (§22.3) both
 draw through it rather than each carrying its own renderer.
@@ -3832,11 +3832,11 @@ straight to the explorer** (§22.2) as its seed set, so the transition from
 it" is one click, sharing the same graphology graph object (§22.1) rather
 than a second fetch.
 
-**As built (issue #375).** `/graph/overview` (`apps/web/src/pages/GraphOverviewPage.tsx`,
+**As built (issue #375).** `/graph/overview` (`packages/kvox-web/src/graph/ui/pages/GraphOverviewPage.tsx`,
 owned by `knowledge` through the `/graph` prefix since issue #438 (`home` before it), gated
 on `graph:read`) draws the stored snapshot
 through the explorer's own `GraphCanvas` with `layout="static"` — it never moves a node. The
-pure model is `apps/web/src/components/graph/overview/overviewModel.ts`: a **clusters** layer
+pure model is `packages/kvox-web/src/graph/ui/components/overview/overviewModel.ts`: a **clusters** layer
 (one node per cluster at its centroid, sized by radius, labelled `Label (size)`, plus the
 `clusterEdges`) and an **everything** layer (every positioned node, ≤ 5,000, coloured by
 cluster, no edges — the positions carry the structure), switched by an explicit toggle
