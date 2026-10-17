@@ -100,7 +100,10 @@ export function NewTranscriptButton({
         <Typography
           variant="body2"
           color="text.secondary"
-          sx={{ mt: 1 }}
+          // `maxWidth` in `ch` so the sentence wraps in a narrow column
+          // instead of sizing the hero's actions column to its full length —
+          // the hero would otherwise squeeze the greeting to a sliver.
+          sx={{ mt: 1, maxWidth: '28ch' }}
           // Tied to the button rather than left floating, so a screen-reader
           // user who lands on a disabled control is told why it is disabled
           // instead of having to go hunting for the sentence below it.
