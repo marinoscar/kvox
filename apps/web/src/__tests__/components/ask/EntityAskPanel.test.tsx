@@ -20,7 +20,7 @@ import { render } from '../../utils/test-utils';
 import { setViewportWidth } from '../../setup';
 import { graphReader } from '../../utils/graphTestUsers';
 import type { AskStreamHandlers } from '../../../services/askStream';
-import { clearEvidenceCache } from '../../../hooks/useGraphEvidence';
+import { clearEvidenceCache } from '@marinoscar/kvox-web/graph/headless';
 import { ENTITY_ASK_GONE_COPY } from '../../../components/ask/EntityAskPanel';
 
 /**
@@ -51,7 +51,7 @@ vi.mock('../../../services/askStream', async (importOriginal) => {
 });
 
 // Imported after the mock so the panel picks up the recorder.
-import GraphEntityPage from '../../../pages/GraphEntityPage';
+import { GraphEntityPageWithSlots as GraphEntityPage } from '../../../kvox/GraphEntityPageWithSlots';
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 const API = '*/api';
@@ -84,7 +84,13 @@ function renderEntity(search = '') {
       </Routes>
       <Probe />
     </>,
-    { wrapperOptions: { route: `/graph/entities/${JOE_ID}${search}`, user: graphReader } },
+    {
+      wrapperOptions: {
+        route: `/graph/entities/${JOE_ID}${search}`,
+        user: graphReader,
+        graphFeature: true,
+      },
+    },
   );
 }
 

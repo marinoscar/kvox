@@ -114,7 +114,10 @@ import {
   kvoxTranscriptsDestinations,
 } from '@marinoscar/kvox-web/transcripts/ui';
 import { kvoxNotesDestinationRoutes, kvoxNotesDestinations } from '@marinoscar/kvox-web/notes/ui';
-import HubIcon from '@mui/icons-material/Hub';
+import {
+  kvoxGraphDestinationRoutes,
+  kvoxGraphDestinations,
+} from '@marinoscar/kvox-web/graph/ui';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
@@ -168,12 +171,13 @@ export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string
   ...kvoxTranscriptsDestinationRoutes,
   // The notes slice's prefix (#502, epic #498), spread at the same key.
   ...kvoxNotesDestinationRoutes,
+  // The graph slice's prefixes (#503, epic #498), spread at the same key.
   // `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
   // `/graph/overview` and `/graph/imports/:id` (#373–#375, #387); `/ask` covers
   // `/ask` and `/ask/:conversationId` (#380). Owned here whether or not the
   // tab is DRAWN: with connected knowledge off the row is hidden, and a user
   // who reaches one of these pages anyway simply sees no highlighted row.
-  knowledge: ['/graph', '/ask'],
+  ...kvoxGraphDestinationRoutes,
   settings: ['/settings'],
   console: ['/admin'],
 };
@@ -264,21 +268,13 @@ export const DESTINATIONS: readonly Destination[] = [
   // index: ONE permission (`notes:read`, what `notes.controller.ts` enforces),
   // not pinned, the page icon, "Notes" for both labels.
   ...kvoxNotesDestinations,
-  {
-    // Issue #438 — see the file header. ONE PERMISSION, the one every
-    // `/api/graph/*` read and every `/api/ask/*` route enforces, seeded to all
-    // three roles; PLUS the `graph` runtime feature (`ai.graphEnabled`), so a
-    // deployment that has connected knowledge switched off shows no tab.
-    key: 'knowledge',
-    label: 'Knowledge',
-    compactLabel: 'Knowledge',
-    // The same hub glyph the graph surfaces already use (`GraphReviewButton`,
-    // the Organization entity icon), filled to match its sibling rows.
-    Icon: HubIcon,
-    path: '/graph',
-    permission: 'graph:read',
-    feature: 'graph',
-  },
+  // Issue #438 — see the file header; the record is the graph slice's since
+  // #503 (epic #498), spread at the same index: ONE permission (`graph:read`,
+  // the one every `/api/graph/*` read and every `/api/ask/*` route enforces,
+  // seeded to all three roles) PLUS the `graph` runtime feature
+  // (`ai.graphEnabled`), so a deployment that has connected knowledge switched
+  // off shows no tab. The hub glyph the graph surfaces already use.
+  ...kvoxGraphDestinations,
   {
     key: 'settings',
     label: 'User Settings',

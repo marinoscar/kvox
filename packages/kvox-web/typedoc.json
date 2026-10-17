@@ -13,7 +13,10 @@
     "./src/transcripts/headless/index.ts",
     "./src/transcripts/ui/index.ts",
     "./src/notes/headless/index.ts",
-    "./src/notes/ui/index.ts"
+    "./src/notes/ui/index.ts",
+    "./src/graph/headless/index.ts",
+    "./src/graph/ui/index.ts",
+    "./src/graph/testing/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

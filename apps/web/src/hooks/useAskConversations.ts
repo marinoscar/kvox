@@ -18,7 +18,7 @@ import {
 } from '../services/ask';
 import type { AskConversationSummary, CreateAskConversationInput } from '../services/ask';
 import { ApiError } from '../services/api';
-import { isAbortError, useAbortControllers } from './graphHookUtils';
+import { isAbortError, useAbortControllers } from '@marinoscar/kvox-web/graph/headless';
 import { useIsMounted } from './useIsMounted';
 
 export const ASK_CONVERSATIONS_LOAD_ERROR = 'Could not load your conversations';

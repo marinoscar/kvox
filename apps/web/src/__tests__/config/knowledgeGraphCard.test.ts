@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import { kvoxGraphRoutes } from '@marinoscar/kvox-web/graph/ui';
+import { appGraphRoutes } from '../../kvox/graphRoutes';
 import {
   USER_SETTINGS_SECTIONS,
   USER_HUB_PATH,
@@ -71,12 +73,15 @@ describe('USER_SETTINGS_SECTIONS — Knowledge graph card (issue #369)', () => {
   });
 
   it('is routed behind RequirePermission graph:write, redirecting to /settings', () => {
+    // The route is the graph slice's data since #503 (epic #498), rendered by
+    // `renderKvoxRoutes`, which wraps a gated route in `RequirePermission` and
+    // sends a viewer without the permission to `redirectTo`.
     const source = readFileSync(APP_TSX, 'utf8');
-    const route = source.slice(source.indexOf(`path="${PATH}"`));
-    expect(route.indexOf(`path="${PATH}"`)).toBe(0);
-    const element = route.slice(0, route.indexOf('</RequirePermission>'));
-    expect(element).toContain('permission="graph:write"');
-    expect(element).toContain('<Navigate to="/settings" replace />');
-    expect(element).toContain('<UserKnowledgeGraphPage />');
+    expect(source).toContain('renderKvoxRoutes(appGraphRoutes)');
+
+    const route = kvoxGraphRoutes.find((candidate) => candidate.path === PATH);
+    expect(route?.permission).toBe('graph:write');
+    expect(route?.redirectTo).toBe('/settings');
+    expect(appGraphRoutes.find((candidate) => candidate.path === PATH)).toBe(route);
   });
 });

@@ -20,7 +20,7 @@ import Typography from '@mui/material/Typography';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { EntityTypeIcon } from '../graph/entityTypeIcon';
+import { EntityTypeIcon } from '@marinoscar/kvox-web/graph/ui';
 import type { AskConversationSummary } from '../../services/ask';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 

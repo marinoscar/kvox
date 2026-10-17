@@ -62,6 +62,7 @@ import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from './kvox/transcriptsRoutes';
 import { appNotesRoutes } from './kvox/notesRoutes';
+import { appGraphRoutes } from './kvox/graphRoutes';
 import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
@@ -107,16 +108,6 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // viewer, and #31's history page. Lazy like every other page here, and with
 // more reason than most: the viewer alone pulls in the virtualizer and the
 // playback engine, neither of which a user who never opens a transcript needs.
-// Knowledge graph (#373, epic #347).
-const GraphIndexPage = lazy(() => import('./pages/GraphIndexPage'));
-const GraphEntityPage = lazy(() => import('./pages/GraphEntityPage'));
-// The explorer (#374) — sigma/graphology live only behind this lazy import.
-const GraphExplorerPage = lazy(() => import('./pages/GraphExplorerPage'));
-// The whole-graph overview (#375) — draws #371's stored snapshot with the
-// explorer's own `GraphCanvas`, so sigma stays behind these lazy imports too.
-const GraphOverviewPage = lazy(() => import('./pages/GraphOverviewPage'));
-// One RDF import, checked and reviewed (#387) — reuses the proposal review sheet.
-const GraphImportPage = lazy(() => import('./pages/GraphImportPage'));
 // Ask — the read-only graph agent (#380, epic #348). One page for both routes.
 const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -153,7 +144,6 @@ const UserDangerZonePage = lazy(() =>
 const UserAiKeysPage = lazy(() =>
   import('@marinoscar/platform-web/ai/ui').then((m) => ({ default: m.UserAiKeysPage })),
 );
-const UserKnowledgeGraphPage = lazy(() => import('./pages/UserKnowledgeGraphPage'));
 // Issue #279, epic #271; the platform's Get started page since #481 — the caller's own activation
 // checklist, and the place the shell banner (#277) leads. A registry card in
 // `userSettingsSections.tsx` like every sibling above, and ungated here for the same reason they
@@ -403,78 +393,21 @@ function AppRoutes() {
                       than the settings one: the same layout parent, so the same
                       result. */}
                   {renderKvoxRoutes(appNotesRoutes)}
-                  {/* Knowledge graph (#373, epic #347; spec §13). OWNED BY
-                      `knowledge` in `config/destinations.ts` since #438 — a
-                      bottom-bar tab of its own while connected knowledge is on
-                      (it was owned by `home`, with no tab, before that) — and
-                      gated on `graph:read`, the exact string
-                      `graph-read.controller.ts` (#370) enforces. Seeded to all
-                      three roles, so the gate is here for the deployment that
-                      revokes it. */}
-                  <Route
-                    path="/graph"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <GraphIndexPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/graph/entities/:id"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <GraphEntityPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* The explorer (#374, spec §22.2). Same owner, same gate:
-                      `POST /api/graph/explore/expand` is `graph:read`. */}
-                  <Route
-                    path="/graph/explore"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <GraphExplorerPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* The whole-graph overview (#375, spec §22.3). Same owner,
-                      same gate: `GET /api/graph/overview` is `graph:read`;
-                      its Refresh (`graph:write`) is gated inside the page. */}
-                  <Route
-                    path="/graph/overview"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <GraphOverviewPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* One RDF import (#387, spec §18.3). Same owner
-                      (`knowledge` since #438, via the `/graph` prefix); gated on `graph:write`, the
-                      exact string `POST /api/graph/imports` and the review
-                      writes enforce — importing is curating the graph. */}
-                  <Route
-                    path="/graph/imports/:proposalId"
-                    element={
-                      <RequirePermission
-                        permission="graph:write"
-                        fallback={<Navigate to="/graph" replace />}
-                      >
-                        <GraphImportPage />
-                      </RequirePermission>
-                    }
-                  />
+                  {/* Knowledge graph (#373, epic #347; spec §13), the routes
+                      of `@marinoscar/kvox-web/graph/ui`: their paths, their lazy
+                      pages and the permission each is gated on come from
+                      `kvoxGraphRoutes` (`/graph`, `/graph/entities/:id`,
+                      `/graph/explore`, `/graph/overview`,
+                      `/graph/imports/:proposalId` and the Knowledge graph
+                      settings page `/settings/knowledge-graph`), with the
+                      entity page swapped for this app's wrapper that fills
+                      the Ask slots (`kvox/graphRoutes.ts`). OWNED BY
+                      `knowledge` in `config/destinations.ts` since #438. This
+                      app supplies the guard (`renderKvoxRoutes`). Declaration
+                      order does not matter — React Router ranks by
+                      specificity — so the settings route sits here beside its
+                      slice's other routes. */}
+                  {renderKvoxRoutes(appGraphRoutes)}
                   {/* Ask (#380, epic #348; spec §21.5). OWNED BY `knowledge`
                       like the graph routes above (#438; `home` before that) —
                       and gated on
@@ -557,22 +490,6 @@ function AppRoutes() {
                       `search-index.controller.ts` gates both routes on `@Auth()`
                       and no permission; the slice's own header says why. */}
                   {renderKvoxRoutes(kvoxSearchRoutes)}
-                  {/* Issue #369, epic #346. The ONE gated `/settings/*` route,
-                      and the gate is the exact string the API enforces:
-                      `graph:write` on the attribute-definition write routes
-                      (Settings UI rule 3, docs/specs/ontology.md §13). The
-                      registry card carries the same string. */}
-                  <Route
-                    path="/settings/knowledge-graph"
-                    element={
-                      <RequirePermission
-                        permission="graph:write"
-                        fallback={<Navigate to="/settings" replace />}
-                      >
-                        <UserKnowledgeGraphPage />
-                      </RequirePermission>
-                    }
-                  />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Issue #80. Ungated like every `/settings/*` sibling, and
                       with the same reason `/settings/ai` carries: the platform

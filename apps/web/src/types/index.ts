@@ -1,3 +1,8 @@
+import type {
+  GraphPreferencesPatch,
+  GraphPreferencesSettings,
+} from '@marinoscar/kvox-web/graph/headless';
+
 export interface Role {
   name: string;
 }
@@ -445,7 +450,7 @@ export interface UserSettings {
    * Connected-knowledge preferences (#369, epic #346).
    *
    * OPTIONAL, AND ABSENT MEANS EVERY DEFAULT — resolve through
-   * `resolveGraphPreferences` (`hooks/useGraphPreferences.ts`), never by
+   * `resolveGraphPreferences` (`@marinoscar/kvox-web/graph/headless`), never by
    * backfilling a literal. A present sub-object carries all of its fields.
    */
   graph?: GraphPreferencesSettings;
@@ -535,38 +540,6 @@ export interface UserSettingsUpdate {
    * defaults, `null` on the whole namespace resets everything.
    */
   graph?: GraphPreferencesPatch | null;
-}
-
-// =============================================================================
-// Connected-knowledge preferences — the `graph` user-settings namespace (#369)
-// =============================================================================
-
-export type GraphResolutionMode = 'precheck_confident' | 'review_all';
-export type GraphAdjudication = 'llm' | 'off';
-
-/** The stored (sparse) `graph` namespace, mirroring the API's `graphPreferencesSchema`. */
-export interface GraphPreferencesSettings {
-  extraction?: { autoExtract: boolean };
-  resolution?: {
-    mode: GraphResolutionMode;
-    autoLinkThreshold: number;
-    newThreshold: number;
-    adjudication: GraphAdjudication;
-  };
-  /** `core` is always on and never stored. `personal` is off by default (#383). */
-  domains?: { work: boolean; personal: boolean };
-}
-
-/** PATCH form: every field optional; `null` resets to the default. */
-export interface GraphPreferencesPatch {
-  extraction?: { autoExtract?: boolean | null } | null;
-  resolution?: {
-    mode?: GraphResolutionMode | null;
-    autoLinkThreshold?: number | null;
-    newThreshold?: number | null;
-    adjudication?: GraphAdjudication | null;
-  } | null;
-  domains?: { work?: boolean | null; personal?: boolean | null } | null;
 }
 
 /**

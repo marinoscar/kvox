@@ -2,7 +2,7 @@
  * Knowledge-graph MSW fixtures (#369's settings card; #373's read side; #367
  * appends proposal fixtures).
  *
- * TYPED BY `services/graph.ts`, which mirrors #370/#372's Zod shapes field for
+ * TYPED BY `@marinoscar/kvox-web/graph/headless`, which mirrors #370/#372's Zod shapes field for
  * field — so a field renamed on the API fails `tsc` here instead of leaving a
  * suite green against a shape the server no longer sends. If either API PR
  * changes a field, update this file in that PR.
@@ -48,7 +48,7 @@ import type {
   ProposalStatus,
   ProposalSummary,
   RevertKept,
-} from '../../services/graph';
+} from '@marinoscar/kvox-web/graph/headless';
 
 /** A deterministic v4-shaped uuid, so fixtures read as ids and sort predictably. */
 export function gid(n: number): string {
@@ -1091,8 +1091,8 @@ export function mockGraphAiConfig(overrides: Record<string, unknown> = {}) {
 
 /** `GET /api/graph/extract/estimate`'s answer. */
 export function mockExtractEstimate(
-  overrides: Partial<import('../../services/graph').ExtractionEstimate> = {},
-): import('../../services/graph').ExtractionEstimate {
+  overrides: Partial<import('@marinoscar/kvox-web/graph/headless').ExtractionEstimate> = {},
+): import('@marinoscar/kvox-web/graph/headless').ExtractionEstimate {
   return {
     providerId: 'openai',
     model: 'gpt-4.1',

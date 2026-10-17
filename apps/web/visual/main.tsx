@@ -101,6 +101,7 @@ import { AppKvoxHostProvider } from '../src/platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from '../src/platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from '../src/kvox/transcriptsRoutes';
 import { appNotesRoutes } from '../src/kvox/notesRoutes';
+import { appGraphRoutes } from '../src/kvox/graphRoutes';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
@@ -123,20 +124,12 @@ const UserAppearancePage = lazy(() =>
 const UserTokensPage = lazy(() =>
   import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
 );
-// Issue #369, epic #346. Registered for the same reason every route in this
-// file is: a route the harness cannot reach is one this suite cannot capture.
-const UserKnowledgeGraphPage = lazy(() => import('../src/pages/UserKnowledgeGraphPage'));
-// Knowledge graph (#373, epic #347). Mirrors `App.tsx`: owned by `home`,
-// gated on `graph:read`. The default harness user DOES hold `graph:read`
-// (see `DEFAULT_PERMISSIONS`, #369), so Home's Knowledge section asks
+// Knowledge graph (#373, epic #347). The default harness user DOES hold
+// `graph:read` (see `DEFAULT_PERMISSIONS`, #369), so Home's Knowledge section asks
 // `GET /graph/entities` in every Home baseline — `support/homeApi.ts` answers
 // it with an empty list, which hides the section, keeping Home's captures
-// identical to what they were before the section existed.
-const GraphIndexPage = lazy(() => import('../src/pages/GraphIndexPage'));
-const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
-const GraphExplorerPage = lazy(() => import('../src/pages/GraphExplorerPage'));
-// The whole-graph overview (#375), mirroring `App.tsx`.
-const GraphOverviewPage = lazy(() => import('../src/pages/GraphOverviewPage'));
+// identical to what they were before the section existed. The graph pages and
+// the Knowledge graph settings page (#369) are the slice's routes (#503).
 // Ask (#380), mirroring `App.tsx`: one optional-segment route, `graph:read`.
 const AskPage = lazy(() => import('../src/pages/AskPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
@@ -322,38 +315,10 @@ function HarnessRoutes() {
               and a route the harness does not know renders nothing at all. */}
           {renderKvoxRoutes(appNotesRoutes)}
 
-          <Route
-            path="/graph"
-            element={
-              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
-                <GraphIndexPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/graph/entities/:id"
-            element={
-              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
-                <GraphEntityPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/graph/explore"
-            element={
-              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
-                <GraphExplorerPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/graph/overview"
-            element={
-              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
-                <GraphOverviewPage />
-              </RequirePermission>
-            }
-          />
+          {/* Knowledge graph (#373 to #375) and the Knowledge graph settings page
+              (#369): the slice's routes, rendered by the same `renderKvoxRoutes`
+              `App.tsx` uses, so the gates are the app's. */}
+          {renderKvoxRoutes(appGraphRoutes)}
           <Route
             path="/ask/:conversationId?"
             element={
@@ -374,18 +339,6 @@ function HarnessRoutes() {
           <Route path="/settings/profile" element={<UserProfilePage />} />
           <Route path="/settings/appearance" element={<UserAppearancePage />} />
           <Route path="/settings/tokens" element={<UserTokensPage />} />
-          {/* Issue #369 — gate copied verbatim from `App.tsx`. */}
-          <Route
-            path="/settings/knowledge-graph"
-            element={
-              <RequirePermission
-                permission="graph:write"
-                fallback={<Navigate to="/settings" replace />}
-              >
-                <UserKnowledgeGraphPage />
-              </RequirePermission>
-            }
-          />
 
           <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
           <Route

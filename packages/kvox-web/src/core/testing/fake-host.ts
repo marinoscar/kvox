@@ -44,6 +44,8 @@ export interface FakeRouteRequest {
   headers: Record<string, string>;
   /** How the call was made. */
   kind: 'json' | 'blob' | 'formData' | 'meta';
+  /** The caller's abort signal, when it passed one, so a route can observe a superseded request. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -346,6 +348,7 @@ export function createFakeKvoxWebHost(options: FakeKvoxWebHostOptions = {}): Fak
       body,
       headers,
       kind,
+      ...(init?.signal === undefined ? {} : { signal: init.signal }),
     };
     return typeof route === 'function' ? (route as (r: FakeRouteRequest) => unknown)(request) : route;
   }

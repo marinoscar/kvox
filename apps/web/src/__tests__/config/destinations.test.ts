@@ -11,6 +11,8 @@ import {
   kvoxTranscriptsRoutes,
 } from '@marinoscar/kvox-web/transcripts/ui';
 import { kvoxNotesRoutes } from '@marinoscar/kvox-web/notes/ui';
+import { kvoxGraphRoutes } from '@marinoscar/kvox-web/graph/ui';
+import { appGraphRoutes } from '../../kvox/graphRoutes';
 import { appNotesRoutes } from '../../kvox/notesRoutes';
 import { appTranscriptsRoutes } from '../../kvox/transcriptsRoutes';
 import {
@@ -66,6 +68,11 @@ function declaredRoutePaths(): string[] {
   if (/renderKvoxRoutes\(appNotesRoutes\)/.test(source)) {
     paths.push(...kvoxNotesRoutes.map((route) => route.path));
   }
+  // The graph routes (#503, epic #498), the same way; the list includes the
+  // Knowledge graph settings route.
+  if (/renderKvoxRoutes\(appGraphRoutes\)/.test(source)) {
+    paths.push(...kvoxGraphRoutes.map((route) => route.path));
+  }
   // `*` is the catch-all, which redirects to `/` rather than rendering a page.
   return [...new Set(paths)].filter((path) => path !== '*');
 }
@@ -95,7 +102,7 @@ describe('destinations — route ownership', () => {
         '/notes/new',
         '/notes/:id',
         '/notes/:id/history',
-        // #373, epic #347 — the knowledge graph, owned by `home`.
+        // #373, epic #347 — the knowledge graph, owned by `knowledge` since #438.
         '/graph',
         '/graph/entities/:id',
         // #374 — the explorer, owned by `home` through the `/graph` prefix.
@@ -577,6 +584,16 @@ describe('admin sections — registry against the live routes', () => {
         kvoxNotesRoutes.map((route) => route.path),
       );
       for (const route of kvoxNotesRoutes) gates.set(route.path, route.permission ?? null);
+    }
+    // The graph routes (#503, epic #498): `appGraphRoutes` is the slice's
+    // `kvoxGraphRoutes` with the entity page swapped for the wrapper that fills
+    // the Ask slots, so its path-and-gate half is the slice's list. It includes
+    // the Knowledge graph settings route, the one gated `/settings/*` route.
+    if (/renderKvoxRoutes\(appGraphRoutes\)/.test(source)) {
+      expect(appGraphRoutes.map((route) => route.path)).toEqual(
+        kvoxGraphRoutes.map((route) => route.path),
+      );
+      for (const route of kvoxGraphRoutes) gates.set(route.path, route.permission ?? null);
     }
     if (/renderKvoxRoutes\(kvoxSearchRoutes\)/.test(source)) {
       for (const route of kvoxSearchRoutes) gates.set(route.path, route.permission ?? null);
