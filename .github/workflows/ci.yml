@@ -298,6 +298,9 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-api
       # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
       - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (issue #580): openapi:typecheck compiles scripts/, whose
+      # kg:eval and ask:eval wrappers import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       # The dump imports AppModule, which imports @prisma/client. Preview mode
       # never instantiates PrismaService, but the generated client still has to
