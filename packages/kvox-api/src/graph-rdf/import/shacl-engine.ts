@@ -7,9 +7,10 @@
 // than depend on how a dynamic `import()` behaves under each runtime that
 // loads this file (the compiled Nest build, and Jest's `vm` context — where it
 // needs `--experimental-vm-modules` and still depends on which worker loaded
-// it first), validation runs in a CHILD `node` process started with an inline
-// ES-module script. That is deterministic everywhere, and it earns two more
-// things an untrusted upload needs:
+// it first), validation runs in a CHILD `node` process running the plain
+// CommonJS script `runners/shacl-runner.cjs`, the one implementation of the
+// step. That is deterministic everywhere, and it earns two more things an
+// untrusted upload needs:
 //
 //   - THE WORKER'S EVENT LOOP STAYS FREE. The engine's `validateAll` is
 //     synchronous; over 200,000 triples it can run for a long time, and on the
@@ -24,12 +25,21 @@
 // `maxResults`, violations first. `conforms` means "no `sh:Violation`":
 // warnings are reported and never fail an import.
 //
+// A HOST THAT CANNOT SPAWN NODE (KVox Desktop: `process.execPath` is the
+// Electron binary and its RunAsNode fuse is off) passes `shacl.run` to
+// `GraphRdfModule.forRoot`: the engine hands it the same input JSON instead of
+// spawning, and the host runs `runShaclValidation`
+// (`@marinoscar/kvox-api/graph-rdf/shacl-runner`, the same script) in an
+// isolated process of its own. The timeout still applies; the host owns the
+// process and its memory ceiling, and is told to stop through `signal`.
+//
 // ⚠ §18.4: only the `kg.import` job handler imports this file.
 // =============================================================================
 
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+import { shaclRunnerScriptPath, type ShaclRun } from '../shacl-runner/index.js';
 import type { ImportQuad, ImportTerm } from './import-dataset.js';
 
 /**
@@ -86,49 +96,16 @@ export interface ShaclEngine {
   validate(shapes: readonly ImportQuad[], data: readonly ImportQuad[], maxResults: number): Promise<ShaclEngineReport>;
 }
 
-/** Ceilings for one validation run. */
+/** Ceilings for one validation run, and the host's runner when it does not spawn Node. */
 export interface ChildProcessShaclOptions {
   timeoutMs: number;
+  /** The child's heap ceiling. Not applied to `run`: the host sizes its own process. */
   maxOldSpaceMb: number;
+  /** Validate through the host instead of spawning `process.execPath`. */
+  run?: ShaclRun;
 }
 
 export const DEFAULT_SHACL_OPTIONS: ChildProcessShaclOptions = { timeoutMs: 20 * 60_000, maxOldSpaceMb: 2048 };
-
-/** The inline ES module the child runs. Plain JavaScript; reads everything it needs from stdin. */
-export const SHACL_CHILD_SCRIPT = `
-const chunks = [];
-for await (const chunk of process.stdin) chunks.push(chunk);
-const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-const { default: SHACLValidator } = await import(input.moduleUrl);
-const f = new SHACLValidator([]).factory;
-const term = (t) => t.t === 'N' ? f.namedNode(t.v) : t.t === 'B' ? f.blankNode(t.v) : f.literal(t.v, t.l ? t.l : f.namedNode(t.d));
-const quads = (rows) => rows.map(([s, p, o]) => f.quad(term(s), f.namedNode(p), term(o)));
-const validator = new SHACLValidator(quads(input.shapes), { factory: f });
-const report = await validator.validate(f.dataset(quads(input.data)));
-const name = (t) => (t ? (t.termType === 'BlankNode' ? '_:' + t.value : t.value) : null);
-const local = (t) => (t ? String(t.value).split(/[#/]/).pop() : null);
-const COMPONENT_MESSAGES = {
-  ClassConstraintComponent: 'The value is not a node of an allowed type',
-  ClosedConstraintComponent: 'The property is not allowed on this node',
-  NodeKindConstraintComponent: 'The value is not the right kind of node',
-  OrConstraintComponent: 'The value satisfies none of the allowed alternatives',
-  DatatypeConstraintComponent: 'The value does not have the required datatype',
-};
-const all = report.results.map((r) => ({
-  focusNode: name(r.focusNode) ?? '',
-  path: name(r.path),
-  message: (r.message ?? []).map((m) => m.value).join(' ') || COMPONENT_MESSAGES[local(r.sourceConstraintComponent)] || local(r.sourceConstraintComponent) || 'Constraint not satisfied',
-  severity: local(r.severity) ?? 'Violation',
-}));
-const violations = all.filter((r) => r.severity === 'Violation');
-const others = all.filter((r) => r.severity !== 'Violation');
-process.stdout.write(JSON.stringify({
-  conforms: violations.length === 0,
-  violationCount: violations.length,
-  warningCount: others.filter((r) => r.severity === 'Warning').length,
-  results: [...violations, ...others].slice(0, input.maxResults),
-}));
-`;
 
 type WireTerm = { t: 'N' | 'B' | 'L'; v: string; d?: string; l?: string };
 
@@ -168,15 +145,68 @@ export function assertShaclEngineResolvable(): void {
   }
 }
 
+/** The engine's output JSON, parsed as the report; the same message whoever printed it. */
+function parseReport(output: string): ShaclEngineReport {
+  try {
+    return JSON.parse(output) as ShaclEngineReport;
+  } catch (parseError) {
+    throw new Error(`SHACL validation printed no report: ${String(parseError)}`);
+  }
+}
+
+function timeoutError(timeoutMs: number): Error {
+  return new Error(`SHACL validation did not finish within ${timeoutMs} ms`);
+}
+
 export class ChildProcessShaclEngine implements ShaclEngine {
   constructor(private readonly options: ChildProcessShaclOptions = DEFAULT_SHACL_OPTIONS) {}
 
   validate(shapes: readonly ImportQuad[], data: readonly ImportQuad[], maxResults: number): Promise<ShaclEngineReport> {
     const input = JSON.stringify({ moduleUrl: shaclModuleUrl(), shapes: wire(shapes), data: wire(data), maxResults });
+    return this.options.run ? this.validateWithHost(this.options.run, input) : this.validateInChild(input);
+  }
+
+  private validateWithHost(run: ShaclRun, input: string): Promise<ShaclEngineReport> {
+    return new Promise((resolve, reject) => {
+      const abort = new AbortController();
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        abort.abort();
+        reject(timeoutError(this.options.timeoutMs));
+      }, this.options.timeoutMs);
+      timer.unref?.();
+
+      const settle = (outcome: () => ShaclEngineReport): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          resolve(outcome());
+        } catch (error) {
+          reject(error as Error);
+        }
+      };
+      // A synchronous throw from `run` is a failed run, like a rejection.
+      Promise.resolve()
+        .then(() => run(input, { signal: abort.signal }))
+        .then(
+          (output) => settle(() => parseReport(String(output))),
+          (error: unknown) =>
+            settle(() => {
+              // The runner's reason names engine internals, never the file's content.
+              throw new Error(`SHACL validation failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 500)}`);
+            }),
+        );
+    });
+  }
+
+  private validateInChild(input: string): Promise<ShaclEngineReport> {
     return new Promise((resolve, reject) => {
       const child = spawn(
         process.execPath,
-        [`--max-old-space-size=${this.options.maxOldSpaceMb}`, '--input-type=module', '-e', SHACL_CHILD_SCRIPT],
+        [`--max-old-space-size=${this.options.maxOldSpaceMb}`, shaclRunnerScriptPath()],
         // A clean Node: no inherited NODE_OPTIONS (a test runner's or a profiler's flags are not the child's).
         { env: { ...process.env, NODE_OPTIONS: '' }, stdio: ['pipe', 'pipe', 'pipe'] },
       );
@@ -187,7 +217,7 @@ export class ChildProcessShaclEngine implements ShaclEngine {
         if (settled) return;
         settled = true;
         child.kill('SIGKILL');
-        reject(new Error(`SHACL validation did not finish within ${this.options.timeoutMs} ms`));
+        reject(timeoutError(this.options.timeoutMs));
       }, this.options.timeoutMs);
       timer.unref?.();
 
@@ -209,9 +239,9 @@ export class ChildProcessShaclEngine implements ShaclEngine {
           return;
         }
         try {
-          resolve(JSON.parse(Buffer.concat(out).toString('utf8')) as ShaclEngineReport);
-        } catch (parseError) {
-          reject(new Error(`SHACL validation printed no report: ${String(parseError)}`));
+          resolve(parseReport(Buffer.concat(out).toString('utf8')));
+        } catch (error) {
+          reject(error as Error);
         }
       });
       child.stdin.on('error', () => undefined); // a child that died early surfaces through 'close'

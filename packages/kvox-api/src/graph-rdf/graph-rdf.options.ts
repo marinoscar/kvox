@@ -1,6 +1,7 @@
 import type { DynamicModule } from '@nestjs/common';
 
 import { GRAPH_IMPORT_MAX_BYTES } from './import/graph-import.constants.js';
+import type { ShaclRun } from './shacl-runner/index.js';
 
 // =============================================================================
 // GraphRdfModule options (issue #496, epic #491)
@@ -36,6 +37,32 @@ export interface GraphRdfModuleOptions {
 
   /** The largest file one import accepts, in bytes. Default 20 MiB. */
   maxImportBytes?: number;
+
+  /**
+   * How the import validates an upload against the SHACL shapes.
+   *
+   * By default `kg.import` spawns `process.execPath` as a child `node` process (memory ceiling,
+   * timeout, SIGKILL), which needs a binary that runs Node. A host whose binary cannot (KVox
+   * Desktop: the Electron binary with the RunAsNode fuse off) passes `run`.
+   */
+  shacl?: {
+    /**
+     * Runs one SHACL validation in an isolated process of the host's choosing: receives the JSON
+     * the default child reads on stdin, resolves with the JSON report it prints. The host's
+     * process calls `runShaclValidation` of `@marinoscar/kvox-api/graph-rdf/shacl-runner` on the
+     * input and hands back what it returns. The import's timeout still applies; when it fires,
+     * `signal` aborts and the host kills its process. A rejection fails the import like a child
+     * that exited non-zero.
+     *
+     * @example
+     * ```ts
+     * GraphRdfModule.forRoot({
+     *   shacl: { run: (input, { signal }) => desktop.runIsolated('shacl-validate.cjs', input, signal) },
+     * });
+     * ```
+     */
+    run?: ShaclRun;
+  };
 
   /**
    * Register the export-expiry cron with `@nestjs/schedule` (default true). False exposes the
@@ -82,6 +109,8 @@ export interface ResolvedGraphRdfOptions {
   maxImportBytes: number;
   /** Whether the export-expiry cron is registered. */
   schedules: boolean;
+  /** The host's SHACL runner; `undefined` spawns the default child process. */
+  shaclRun: ShaclRun | undefined;
 }
 
 /**
@@ -104,5 +133,6 @@ export function resolveGraphRdfOptions(options: GraphRdfModuleOptions): Resolved
     import: options.import !== false,
     maxImportBytes: options.maxImportBytes ?? GRAPH_IMPORT_MAX_BYTES,
     schedules: options.schedules !== false,
+    shaclRun: options.shacl?.run,
   };
 }
