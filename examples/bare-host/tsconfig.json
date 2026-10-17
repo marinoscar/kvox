@@ -1,0 +1,24 @@
+{
+  // CommonJS output under NodeNext, with the decorator settings Nest needs.
+  // skipLibCheck is OFF on purpose: the consumer typechecks the packages' own
+  // .d.ts files, so a declaration that names a package the host did not
+  // install (an optional peer) fails here instead of on a customer's machine.
+  // `emscripten` is PGlite's: its declarations use the global Emscripten types
+  // without depending on them (see the README, "PGlite").
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+    "declaration": true,
+    "sourceMap": false,
+    "types": ["node", "emscripten"]
+  },
+  "include": ["src/**/*.ts"]
+}

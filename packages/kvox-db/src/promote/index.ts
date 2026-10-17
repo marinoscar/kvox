@@ -68,7 +68,7 @@ function fragmentTables(schemaDir: string): Set<string> {
  * records it in `kvox.lock`.
  *
  * The only thing a domain migration may do to a host table is declare a foreign
- * key to `users`, `storage_objects` or `jobs` (`REFERENCES`); any other
+ * key to `users`, `storage_objects`, `jobs` or `organizations` (`REFERENCES`); any other
  * statement on a table that is neither in a domain fragment nor created by a
  * domain migration is refused.
  *

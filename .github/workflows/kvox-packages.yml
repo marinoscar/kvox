@@ -4,6 +4,10 @@ name: KVox packages
 # -db, -api, -web). Publishing is kvox-release.yml's job. The standard these
 # jobs enforce: docs/PACKAGES.md.
 #
+# The `bare-host` job is the consumer proof: it installs the PACKED tarballs into
+# a project outside the repository (examples/bare-host), with no platform-api,
+# and runs the domain end to end on two databases. It needs the build job first.
+#
 # `ci.yml` also runs build/typecheck/test of the packages in its `tooling` job
 # on every pull request; this workflow adds the checks that only matter when a
 # package changes (docs, peers, pack, smoke imports) and runs on the paths below.
@@ -25,6 +29,7 @@ on:
       - 'package-lock.json'
       - 'apps/api/package.json'
       - 'apps/web/package.json'
+      - 'examples/bare-host/**'
       - '.github/workflows/kvox-packages.yml'
   push:
     branches: [main]
@@ -42,6 +47,7 @@ on:
       - 'package-lock.json'
       - 'apps/api/package.json'
       - 'apps/web/package.json'
+      - 'examples/bare-host/**'
       - '.github/workflows/kvox-packages.yml'
 
 concurrency:
@@ -170,3 +176,56 @@ jobs:
 
       - run: git fetch origin main
       - run: npx changeset status --since=origin/main
+
+  bare-host:
+    name: Bare host (${{ matrix.db }})
+    # A host that is not the web edition: stub ports, an embedded PostgreSQL and
+    # NO @marinoscar/platform-api, installed from the packed tarballs in a
+    # directory outside the repository. What a workspace link would hide (a file
+    # missing from `files`, a dev-only dependency, a wrong `exports` condition, a
+    # duplicated singleton, an optional peer that is really required) fails here.
+    # examples/bare-host/README.md describes what it proves.
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [service, pglite]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Only the `service` leg needs a server; PGlite runs inside the test process.
+      # A plain `docker run` instead of `services:` because a service container
+      # cannot be switched on per matrix entry.
+      - name: Start PostgreSQL with pgvector
+        if: matrix.db == 'service'
+        run: |
+          docker run -d --name kvox-pg -e POSTGRES_PASSWORD=pg -p 5433:5432 pgvector/pgvector:pg16
+          for attempt in $(seq 1 30); do
+            docker exec kvox-pg pg_isready -U postgres && exit 0
+            sleep 2
+          done
+          docker logs kvox-pg
+          exit 1
+
+      - run: npm ci
+
+      - run: npm run build:kvox-packages
+
+      - name: Pack the three packages the host installs
+        run: |
+          mkdir -p "$RUNNER_TEMP/tarballs"
+          for package in contract db api; do
+            npm pack -w "@marinoscar/kvox-$package" --pack-destination "$RUNNER_TEMP/tarballs"
+          done
+
+      - name: Run the bare host
+        env:
+          DATABASE_URL: postgresql://postgres:pg@127.0.0.1:5433/postgres
+        run: node examples/bare-host/run.mjs --from tarballs "$RUNNER_TEMP/tarballs" --db ${{ matrix.db }}

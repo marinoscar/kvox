@@ -32,7 +32,7 @@ const searchIndexing = SearchIndexingModule.forRoot();
 export class KvoxModule {}
 ```
 
-The host binds `KVOX_PRISMA`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_NOTIFY`, `KVOX_EVENTS`, `KVOX_AUDIT`, `KVOX_AI`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_IDENTITY` first (`KvoxPortsModule.forRoot`), and registers the two permission strings and the two notification events (below). A test uses `createKvoxTestingModule` from `@marinoscar/kvox-api/testing`.
+The host binds `KVOX_PRISMA`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_NOTIFY`, `KVOX_EVENTS`, `KVOX_AUDIT`, `KVOX_AI`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_IDENTITY` first (`KvoxPortsModule.forRoot`), and registers the two permission strings and the two notification events (below). The upload itself is the host's: `POST /api/transcripts` answers with the part URLs of `KVOX_OBJECT_STORE.initUpload`, and the host serves the route that seals the upload with `completeUpload` (the web edition: the platform storage slice's `POST /api/storage/objects/:id/upload/complete`; the bare host: `examples/bare-host/src/local-store.controller.ts`). A test uses `createKvoxTestingModule` from `@marinoscar/kvox-api/testing`.
 
 ### Data
 

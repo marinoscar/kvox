@@ -5,12 +5,14 @@ import { KvoxLockError, serializeJson } from '../lock/index.js';
 
 /**
  * The host tables a domain migration may reference by foreign key. A host
- * (the web app, KVox Desktop, the bare host) must provide all three before the
- * first domain migration runs.
+ * (the web app, KVox Desktop, the bare host) must provide all four before the
+ * first domain migration runs. `organizations` is the fourth: `transcripts.org_id`
+ * is a NOT NULL foreign key to it, so a host with one user still owns one
+ * organization row.
  *
  * @stability experimental
  */
-export const KVOX_HOST_TABLES = ['users', 'storage_objects', 'jobs'] as const;
+export const KVOX_HOST_TABLES = ['users', 'storage_objects', 'jobs', 'organizations'] as const;
 
 /**
  * The host models the composed schema must declare, in the same order as
@@ -18,7 +20,7 @@ export const KVOX_HOST_TABLES = ['users', 'storage_objects', 'jobs'] as const;
  *
  * @stability experimental
  */
-export const KVOX_HOST_MODELS = ['User', 'StorageObject', 'Job'] as const;
+export const KVOX_HOST_MODELS = ['User', 'StorageObject', 'Job', 'Organization'] as const;
 
 /**
  * One domain migration in `migrations/manifest.json`.

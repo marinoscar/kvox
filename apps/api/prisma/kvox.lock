@@ -91,6 +91,11 @@
       "installedDir": "20260926231512_add_kg_exports",
       "originId": "kvox:20260926231512_add_kg_exports",
       "sha256": "cede3d7d9db346d38e82f9b070953093c0c5a22253a4a81a04ca884add4238bf"
+    },
+    {
+      "installedDir": "20261016120000_transcripts_org_id",
+      "originId": "kvox:20261016120000_transcripts_org_id",
+      "sha256": "a15ee44a552634c705bf5b408c26bf708427cd81e82de3f0f58218c022e4c9b0"
     }
   ]
 }

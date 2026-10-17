@@ -76,6 +76,7 @@ import {
   defaultPdfFontDir,
   registerPdfFonts,
   type KvoxBrand,
+  type KvoxPdfDocument,
 } from '../../core/index.js';
 import { TRANSCRIPTS_MODULE_OPTIONS, type ResolvedTranscriptsOptions } from '../transcripts.options.js';
 
@@ -237,7 +238,8 @@ export class PdfTranscriptExporter implements TranscriptExporter, OnModuleInit {
 type Pdf = InstanceType<typeof PDFDocumentType>;
 
 /** Title, date, duration and the participants with their share of the talking. */
-export function drawCover(pdf: Pdf, doc: ExportDocument): void {
+export function drawCover(target: KvoxPdfDocument, doc: ExportDocument): void {
+  const pdf = target as Pdf;
   const width = contentWidth(pdf);
 
   pdf.font(PDF_FONTS.bold).fontSize(22).fillColor(INK).text(doc.title, { width });
@@ -294,7 +296,8 @@ export function drawCover(pdf: Pdf, doc: ExportDocument): void {
 }
 
 /** One block per speaker turn: timestamp in the gutter, name, then the text. */
-export function drawBody(pdf: Pdf, doc: ExportDocument, includeTimestamps: boolean): void {
+export function drawBody(target: KvoxPdfDocument, doc: ExportDocument, includeTimestamps: boolean): void {
+  const pdf = target as Pdf;
   const speakers = speakerIndex(doc);
   const textX = MARGIN + (includeTimestamps ? TIMESTAMP_GUTTER : 0);
   const textWidth = contentWidth(pdf) - (includeTimestamps ? TIMESTAMP_GUTTER : 0);
@@ -346,7 +349,8 @@ export function drawBody(pdf: Pdf, doc: ExportDocument, includeTimestamps: boole
  * Page 1 gets no header when it carries the cover: the title is already there
  * at 22pt, and repeating it 8pt above itself looks like a mistake.
  */
-export function decoratePages(pdf: Pdf, doc: ExportDocument, appName: string): void {
+export function decoratePages(target: KvoxPdfDocument, doc: ExportDocument, appName: string): void {
+  const pdf = target as Pdf;
   const range = pdf.bufferedPageRange();
   const total = range.count;
 
