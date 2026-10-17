@@ -185,12 +185,21 @@ export function HomeHero({
           justifyContent: 'space-between',
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
+        {/* The greeting column GROWS to take what the actions leave and has a
+            floor, so it can never be squeezed to nothing. `minWidth: 0` was the
+            bug: an actions column that claimed the whole
+            row — a blocked `NewTranscriptButton` carries a sentence — left this
+            column ~0px wide and "Hi, Oscar" wrapped one letter per line.
+            `overflowWrap: 'break-word'` rather than `'anywhere'` for the same
+            reason: `anywhere` lowers the column's min-content width to a single
+            glyph, so flexbox is allowed to shrink it that far; `break-word`
+            wraps by WORDS and splits only a single word that cannot fit. */}
+        <Box sx={{ flex: '1 1 auto', minWidth: { sm: '12rem' } }}>
           <Typography
             id="home-greeting"
             variant="h4"
             component="h1"
-            sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}
+            sx={{ fontWeight: 600, overflowWrap: 'break-word' }}
           >
             {firstName ? `Hi, ${firstName}` : 'Hi there'}
           </Typography>
@@ -207,12 +216,23 @@ export function HomeHero({
             `flex-start` again at `sm`+, and it earns its keep here: a
             `NewTranscriptButton` whose deployment cannot transcribe grows an
             explanation and a set-up link BELOW its button, and stretching the
-            row would drag New note down to the bottom of that column. */}
+            row would drag New note down to the bottom of that column.
+
+            The column may SHRINK and WRAP from `sm` up, and is capped at half the
+            row: it used to be `flexShrink: 0` with `width: auto`, which let a
+            blocked `NewTranscriptButton`'s explanation widen it to the whole row,
+            squeezing the greeting and clipping New note off the right edge. With
+            the cap, New note wraps UNDER New transcript when the pair does not
+            fit. `gap` rather than `spacing` because `Stack`'s spacing is a
+            margin on every sibling after the first, which would indent the
+            wrapped line. */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
           sx={{
-            flexShrink: 0,
+            gap: 1.5,
+            flexWrap: { sm: 'wrap' },
+            flexShrink: { sm: 1 },
+            maxWidth: { sm: '50%' },
             width: { xs: '100%', sm: 'auto' },
             alignItems: { xs: 'stretch', sm: 'flex-start' },
           }}

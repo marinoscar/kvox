@@ -231,6 +231,60 @@ describe('HomeHero — the New transcript button', () => {
 });
 
 // =============================================================================
+// The blocked state must not squeeze the greeting
+// =============================================================================
+
+// jsdom does not evaluate `@media` rules, so the `sm`-scoped half of the fix
+// (the actions column's `maxWidth` and `flexWrap`) is invisible here; these pin
+// the parts that are NOT breakpoint-scoped, which are the ones whose regression
+// produced the one-letter-per-line greeting.
+describe('HomeHero — the blocked state keeps the greeting readable', () => {
+  function renderBlocked() {
+    return renderHero(
+      <HomeHero displayName="Oscar Marin" transcriptionAvailable={false} canCreateNote />,
+      mockAdminUser,
+    );
+  }
+
+  it('renders the whole greeting in one heading element', () => {
+    renderBlocked();
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Hi, Oscar$/);
+  });
+
+  it('wraps the greeting by words, never by letter', () => {
+    // `overflow-wrap: anywhere` lets flexbox shrink the column to one glyph;
+    // `break-word` only splits a single word that cannot fit on its own line.
+    renderBlocked();
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveStyle({ overflowWrap: 'break-word' });
+  });
+
+  it('lets the greeting column grow and never forbids it from sharing the row', () => {
+    renderBlocked();
+
+    const column = screen.getByRole('heading', { level: 1 }).parentElement!;
+    expect(column).toHaveStyle({ flexGrow: '1' });
+    expect(column).not.toHaveStyle({ minWidth: '0px' });
+  });
+
+  it('bounds the explanation so it wraps instead of widening the actions column', () => {
+    renderBlocked();
+
+    const reason = screen.getByText(/transcription is not set up for this workspace yet/i);
+    expect(reason).toHaveStyle({ maxWidth: '28ch' });
+  });
+
+  it('still shows New note beside the blocked New transcript button', () => {
+    renderBlocked();
+
+    expect(screen.getByRole('button', { name: 'New note' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
+  });
+});
+
+// =============================================================================
 // The New note action — issue #173, epic #166
 // =============================================================================
 
