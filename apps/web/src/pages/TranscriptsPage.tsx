@@ -8,7 +8,7 @@
  *
  * This is what is left of `LibraryPage` once the Transcripts | Notes tab strip
  * is removed: a heading, a primary action and the view. Both of the first two
- * live in `components/library/LibraryPageFrame.tsx`, which `NotesPage` renders
+ * live in `LibraryPageFrame` (`@marinoscar/kvox-web/core/ui`), which `NotesPage` renders
  * too — the header is genuinely the same header, and duplicating it would mean
  * two copies of a FAB offset derived from the bottom bar's height.
  *
@@ -36,7 +36,7 @@
  * table is what handles its children.)
  */
 
-import { LibraryPageFrame } from '../components/library/LibraryPageFrame';
+import { LibraryPageFrame } from '@marinoscar/kvox-web/core/ui';
 import { TranscriptsLibraryView } from '../components/library/TranscriptsLibraryView';
 
 export function TranscriptsPage() {

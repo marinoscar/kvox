@@ -135,6 +135,13 @@ const DEEP_IMPORT_PATTERNS = [
 ];
 
 /**
+ * The files of a slice another slice may import: its `index.ts`, and the
+ * `index.ts` of each of its entries (a web slice is split into `headless`, `ui`
+ * and `testing`, each a package subpath with an index of its own).
+ */
+const SLICE_ENTRY_INDEX = '{index,headless/index,ui/index,testing/index}.{ts,tsx}';
+
+/**
  * Rule B policies, generated from the slice graph. `boundaries/dependencies`
  * evaluates every policy and keeps the effect of the LAST one that matches,
  * so the order is: broad disallow first, narrow allows after.
@@ -198,7 +205,7 @@ export function slicePolicies(graph) {
           from: { element: { type: 'slice', captured: { pkg, slice } } },
           allow: {
             to: {
-              element: { type: 'slice', captured: { pkg, slice: dep }, fileInternalPath: 'index.{ts,tsx}' },
+              element: { type: 'slice', captured: { pkg, slice: dep }, fileInternalPath: SLICE_ENTRY_INDEX },
             },
           },
         });

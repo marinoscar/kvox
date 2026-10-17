@@ -51,6 +51,19 @@
 //                    A slice that did could not be installed on Desktop, where
 //                    the platform does not exist. The one place that imports
 //                    the platform is the app folder apps/api/src/platform-kvox.
+//   7. headless      No file under packages/kvox-web/src/<slice>/headless/**
+//                    imports @mui/*, @emotion/* or a router (react-router*), or
+//                    reaches into a ui/ folder. A headless entry is what a host
+//                    with another design system builds its own UI on.
+//
+// ENTRIES. A web slice is split into entries, the folders headless/, ui/ and
+// testing/ directly under the slice. A slice entry in kvox-slice-peers.json may
+// carry `"entries": { "ui": ["@mui/material"] }`: peers that ONLY the files of
+// that entry (and the same entry of the slices it depends on) may import. The
+// slice's own `peers` are what every file of it may import, so a host that
+// installs only the headless entry installs none of the entries' peers; they
+// are optional in package.json even when the slice is universal. App installs
+// (rule 5) follow the entry the app imports (`@marinoscar/kvox-web/core/ui`).
 //
 // Usage: node scripts/kvox-packages/check-slice-peers.mjs [--root <dir>]
 //          [--app <dir>]... [--table] [--json]
@@ -224,11 +237,25 @@ function ownPeers(peers, pkg, slice) {
   return peers.slices[pkg]?.[slice]?.peers ?? [];
 }
 
-/** The packages a slice needs: its own and those of the slices it depends on. */
-export function closurePeers(graph, peers, pkg, slice) {
+/** The extra packages only the files of `entry` of a slice may import. */
+function entryPeers(peers, pkg, slice, entry) {
+  return peers.slices[pkg]?.[slice]?.entries?.[entry] ?? [];
+}
+
+/** Every entry name a slice declares extra peers for. */
+function entryNames(peers, pkg, slice) {
+  return Object.keys(peers.slices[pkg]?.[slice]?.entries ?? {});
+}
+
+/**
+ * The packages a slice needs: its own and those of the slices it depends on.
+ * With `entry`, also the extra peers of that entry in each of those slices.
+ */
+export function closurePeers(graph, peers, pkg, slice, entry = null) {
   const out = new Set();
   for (const name of sliceClosure(graph, pkg, slice)) {
     for (const peer of ownPeers(peers, pkg, name)) out.add(peer);
+    if (entry !== null) for (const peer of entryPeers(peers, pkg, name, entry)) out.add(peer);
   }
   return out;
 }
@@ -264,6 +291,11 @@ export function packagePeers(graph, peers, pkg) {
   const optional = new Set();
   for (const slice of Object.keys(graph[pkg] ?? {})) {
     for (const peer of ownPeers(peers, pkg, slice)) if (!required.has(peer)) optional.add(peer);
+    for (const entry of entryNames(peers, pkg, slice)) {
+      // An entry's peers are never required: a host that uses only the other
+      // entries (headless) must not have to install them.
+      for (const peer of entryPeers(peers, pkg, slice, entry)) if (!required.has(peer)) optional.add(peer);
+    }
   }
   for (const peer of [...(peers.reserved[pkg] ?? []), ...(peers.hostOnly[pkg] ?? [])]) {
     if (!required.has(peer)) optional.add(peer);
@@ -392,8 +424,10 @@ function checkImports(root, packages, graph, peers, violations) {
       const top = rel.split('/')[0];
       const isRootFile = !rel.includes('/');
       const slice = isRootFile ? null : top;
+      // The entry folder (headless, ui, testing) of a file two levels down.
+      const entry = isRootFile || rel.split('/').length < 3 ? null : rel.split('/')[1];
       const allowed = withImplied(
-        isRootFile ? allPeers : closurePeers(graph, peers, dir, slice),
+        isRootFile ? allPeers : closurePeers(graph, peers, dir, slice, entry),
         peers.implies
       );
       for (const specifier of importSpecifiers(readFileSync(file, 'utf8'))) {
@@ -403,7 +437,7 @@ function checkImports(root, packages, graph, peers, violations) {
           rule: 'imports',
           message: isRootFile
             ? `packages/${dir}/src/${rel} imports '${specifier}', which is not a peer of ${dir}`
-            : `packages/${dir}/src/${rel} imports '${specifier}', but slice '${slice}' (and the slices it depends on) list no peer '${name}' in ${PEERS_FILE}`,
+            : `packages/${dir}/src/${rel} imports '${specifier}', but slice '${slice}'${entry ? ` (entry '${entry}')` : ''} (and the slices it depends on) list no peer '${name}' in ${PEERS_FILE}`,
         });
       }
     }
@@ -422,6 +456,29 @@ function checkHostNeutral(root, violations) {
             message: `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice must not import @marinoscar/platform-*: it would not install on Desktop. Bind the platform in apps/api/src/platform-kvox (or the web app) behind a port instead.`,
           });
         }
+      }
+    }
+  }
+}
+
+/** Rule 7. */
+function checkHeadless(root, violations) {
+  const src = join(root, 'packages', 'kvox-web', 'src');
+  for (const file of sourceFiles(src)) {
+    const rel = toPosix(relative(src, file));
+    const parts = rel.split('/');
+    if (parts.length < 3 || parts[1] !== 'headless') continue;
+    for (const specifier of importSpecifiers(readFileSync(file, 'utf8'))) {
+      const name = packageNameOf(specifier);
+      const forbidden =
+        name !== null &&
+        (name.startsWith('@mui/') || name.startsWith('@emotion/') || name.startsWith('react-router'));
+      const intoUi = specifier.startsWith('.') && /(^|\/)ui(\/|$)/.test(specifier);
+      if (forbidden || intoUi) {
+        violations.push({
+          rule: 'headless',
+          message: `packages/kvox-web/src/${rel} imports '${specifier}'. A headless entry imports no @mui/*, @emotion/*, router or ui/ folder: a host with another design system builds its own UI on it.`,
+        });
       }
     }
   }
@@ -456,10 +513,12 @@ function checkApps(root, apps, packages, graph, peers, violations) {
         if (!pkg) continue;
         const rest = specifier.slice(name.length + 1);
         const slices = rest === '' ? universalSlices(graph, peers, pkg.dir) : [rest.split('/')[0]];
+        // `@marinoscar/kvox-web/core/ui`: the second segment is the entry.
+        const entry = rest.split('/')[1] ?? null;
         need(name, `imported by ${toPosix(relative(root, file))}`);
         for (const slice of slices) {
           if (!(slice in (graph[pkg.dir] ?? {}))) continue;
-          for (const peer of closurePeers(graph, peers, pkg.dir, slice)) {
+          for (const peer of closurePeers(graph, peers, pkg.dir, slice, entry)) {
             need(peer, `needed by ${name}/${slice} (imported by ${toPosix(relative(root, file))})`);
           }
         }
@@ -486,6 +545,7 @@ export function checkSlicePeers({ root, apps = [] }) {
   checkManifest(packages, graph, peers, violations);
   checkImports(root, packages, graph, peers, violations);
   checkHostNeutral(root, violations);
+  checkHeadless(root, violations);
   if (apps.length > 0) checkApps(root, apps, packages, graph, peers, violations);
   return violations;
 }
@@ -505,6 +565,10 @@ export function peersTable(root) {
     for (const slice of Object.keys(graph[dir])) {
       const all = [...closurePeers(graph, peers, dir, slice)].sort();
       lines.push(`  ${slice}: ${all.join(', ') || '(none)'}`);
+      for (const entry of entryNames(peers, dir, slice)) {
+        const extra = [...closurePeers(graph, peers, dir, slice, entry)].filter((p) => !all.includes(p)).sort();
+        lines.push(`  ${slice}/${entry}: + ${extra.join(', ') || '(none)'}`);
+      }
     }
   }
   return lines.join('\n');

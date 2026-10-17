@@ -148,11 +148,13 @@ import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headl
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteSummary } from '../hooks/useNotes';
 import { useTranscriptSummary } from '../hooks/useTranscripts';
-import { getTranscriptionConfig } from '../services/transcription';
+import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';
+import { getTranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 
 export default function HomePage() {
   const { user } = useAuth();
   const isMounted = useIsMounted();
+  const kvoxHost = useKvoxHost();
   const { hasPermission } = usePermissions();
   const { summary, isLoading, error, refresh } = useTranscriptSummary();
 
@@ -180,7 +182,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    void getTranscriptionConfig()
+    void getTranscriptionConfig(kvoxHost)
       .then((config) => {
         if (!cancelled && isMounted()) setTranscriptionAvailable(config.available);
       })
@@ -195,7 +197,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [isMounted]);
+  }, [isMounted, kvoxHost]);
 
   // THE FIRST READ ONLY, AND ONLY THE TRANSCRIPT ONE. A poll never raises
   // `isLoading` (see the hook), so the skeleton appears once on arrival and the

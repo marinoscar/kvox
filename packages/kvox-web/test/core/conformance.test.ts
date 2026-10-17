@@ -1,0 +1,67 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+import {
+  createFakeKvoxWebHost,
+  describeKvoxWebConformance,
+  scanKvoxWebSources,
+} from '../../src/core/testing/index.js';
+
+const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../src');
+
+// The package's own sources must satisfy the host-neutral rules, and its
+// in-memory host must satisfy the host contract: the kit run against itself.
+describeKvoxWebConformance({ describe, it, expect }, { srcDir: SRC, createHost: () => createFakeKvoxWebHost() });
+
+describe('scanKvoxWebSources', () => {
+  it('finds nothing in the real sources', () => {
+    expect(scanKvoxWebSources(SRC)).toEqual([]);
+  });
+});
+
+describe('scanKvoxWebSources finds a violation', () => {
+  function sandbox(files: Record<string, string>): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kvox-web-scan-'));
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
+    return dir;
+  }
+
+  it('in a headless file that imports MUI, a router or a ui folder, naming the file', () => {
+    const dir = sandbox({
+      'core/headless/a.ts': "import Box from '@mui/material/Box';\nexport const A = Box;\n",
+      'core/headless/b.ts': "import { useNavigate } from 'react-router-dom';\nexport const B = useNavigate;\n",
+      'core/headless/c.ts': "export { X } from '../ui/index.js';\n",
+      'core/ui/ok.ts': "import Box from '@mui/material/Box';\nexport const OK = Box;\n",
+    });
+    try {
+      const problems = scanKvoxWebSources(dir);
+      expect(problems).toHaveLength(3);
+      expect(problems.join('\n')).toMatch(/core\/headless\/a\.ts imports @mui\/material\/Box/);
+      expect(problems.join('\n')).toMatch(/core\/headless\/b\.ts imports react-router-dom/);
+      expect(problems.join('\n')).toMatch(/core\/headless\/c\.ts imports \.\.\/ui\/index\.js/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('in any file that imports a platform package, but not in a comment', () => {
+    const platform = `@marinoscar/${'platform'}-web/core`;
+    const dir = sandbox({
+      'transcription/ui/x.ts': `import { x } from '${platform}';\nexport { x };\n`,
+      'transcription/ui/y.ts': `// import { y } from '${platform}';\nexport const y = 1;\n`,
+    });
+    try {
+      const problems = scanKvoxWebSources(dir);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toMatch(/transcription\/ui\/x\.ts/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

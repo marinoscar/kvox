@@ -53,7 +53,7 @@
  */
 
 import { API_BASE_URL, api } from './api';
-import { connectSse, type SseConnection } from './sse';
+import { connectSse, type SseConnection } from '@marinoscar/kvox-web/core/headless';
 
 /**
  * The three `event:` names this stream emits.
