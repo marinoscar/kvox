@@ -1566,7 +1566,7 @@ AI is the platform's slice (`@marinoscar/platform-api/ai`), mounted in `apps/api
 | Routes `/api/ai/config`, `/api/ai/keys`, `/api/ai/features`, `/api/admin/ai/usage`, the `ai_models` catalogue, usage rows | platform AI slice | `platform/ai/ai.config.ts` |
 | The `ai` namespace; task models, `graphEnabled`, `defaultModel`, limits | platform, extended | `KVOX_AI_SETTINGS_EXTENSION` (`platform/ai/ai-settings.extension.ts`) |
 | Which model a call runs on | KVox, as the `AI_TARGET_RESOLVER` port | `KvoxAiTargetResolver` over the ported pure `chooseTaskModel` (`ai-port/`), bound in `AiHostModule` |
-| Nine registered features (group `kvox`) | KVox | `app-registrations/ai.ts`; ids to task keys in `ai-port/features.ts` |
+| Nine registered features (group `kvox`) | KVox | `app-registrations/ai.ts`; ids to task keys in `packages/kvox-ai/src/features/features.ts` |
 | `AiError` to wire reason or job error class | KVox | `ai-port/kvox-ai-errors.ts` (`mapAiError`) |
 | `GET /api/ai-tasks/config`, `GET`/`PUT /api/ai-tasks/settings` | KVox | `ai-port/ai-tasks.controller.ts` |
 | The one way code reaches a model | KVox | `KvoxAi` (`ai-port/kvox-ai.ts`, token `KVOX_AI`), implemented by `PlatformKvoxAi` over `AiService.forUser` (#475) |
