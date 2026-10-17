@@ -9,7 +9,7 @@ import { kgEvalPredictionSchema } from '../../scripts/kg-eval/prediction-schema'
 import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
 import { createExtractRunner, fixtureToInput } from '../../scripts/kg-eval/runners/extract-runner';
 import { scoreFixture } from '../../scripts/kg-eval/scorer';
-import { buildExtractionContext } from '../../src/graph/extraction/extraction-context';
+import { buildExtractionContext } from './package-internals';
 
 const [m01] = selectFixtures(loadGoldenSet(), ['m01'], null);
 

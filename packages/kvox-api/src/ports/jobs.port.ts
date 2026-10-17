@@ -214,6 +214,27 @@ export interface KvoxActiveJob {
 }
 
 /**
+ * The newest job of a type and subject, whatever its state, as
+ * {@link KvoxJobsPort.findLatest} reports it.
+ *
+ * @stability experimental
+ */
+export interface KvoxJobSnapshot {
+  /** The job id. */
+  id: string;
+  /** The handler type. */
+  type: string;
+  /** Where the job stands. `succeeded` and `failed` are terminal. */
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  /** The earliest time the job may run, or `null` when it may run now. */
+  scheduledFor: Date | null;
+  /** When the job was queued. */
+  createdAt: Date;
+  /** When the job settled, or `null` while it has not. */
+  finishedAt: Date | null;
+}
+
+/**
  * The job port.
  *
  * @extensionPoint token
@@ -273,6 +294,24 @@ export interface KvoxJobsPort {
    * @param query - the types, and the subjects or payload values to look for.
    */
   findActive(query: KvoxActiveJobQuery): Promise<KvoxActiveJob[]>;
+
+  /**
+   * The newest job of a type about one subject, in any state: the answer to "did the
+   * last one fail, and when?" and to "is a delayed one still waiting?".
+   *
+   * @param query - the handler type and the subject.
+   * @returns the job, or `null` when none was ever queued.
+   */
+  findLatest(query: { type: string; subjectType: string; subjectId?: string }): Promise<KvoxJobSnapshot | null>;
+
+  /**
+   * Makes a pending job runnable now by clearing a `scheduledFor` that lies in the
+   * future. A job that is running, finished or already due is left alone.
+   *
+   * @param jobId - the job.
+   * @returns true when a delayed job was pulled forward.
+   */
+  runNow(jobId: string): Promise<boolean>;
 
   /**
    * A fresh path for a scratch file the host sweeps if the process dies before

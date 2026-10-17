@@ -250,6 +250,19 @@ export function createInMemoryKvoxObjectStore(): InMemoryKvoxObjectStore {
       return found;
     },
 
+    async listManaged(query) {
+      return [...objects.values()]
+        .filter(
+          (object) =>
+            object.ownerId === query.ownerId &&
+            object.managedBy === query.managedBy &&
+            (query.keyPrefix === undefined || object.key.startsWith(query.keyPrefix)),
+        )
+        .map((object) => object.id)
+        .sort()
+        .slice(0, query.limit);
+    },
+
     async setMetadata(objectId, metadata) {
       const object = objects.get(objectId);
       if (!object) return;

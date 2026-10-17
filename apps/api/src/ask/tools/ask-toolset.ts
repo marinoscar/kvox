@@ -32,7 +32,7 @@ import type { ZodError } from 'zod';
 
 import type { KvoxToolDefinition } from '../../ai-port/kvox-ai';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { GraphPreferencesService } from '../../graph/preferences/graph-preferences.service';
+import { GraphPreferencesService } from '@marinoscar/kvox-api/graph';
 import { AskToolError, type AskTool, type AskToolContext, type AskToolResult } from './ask-tool';
 import { ASK_TOOL_RESULT_MAX_TOKENS, compactToBudget, estimateTokens, toolMessageBody } from './compact-result';
 import { EntityBriefTool } from './entity-brief.tool';

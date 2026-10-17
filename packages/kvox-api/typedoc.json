@@ -14,7 +14,13 @@
     "./src/transcripts/testing/index.ts",
     "./src/notes/index.ts",
     "./src/notes/templates/index.ts",
-    "./src/notes/testing/index.ts"
+    "./src/notes/testing/index.ts",
+    "./src/graph/index.ts",
+    "./src/graph/testing/index.ts",
+    "./src/graph-extraction/index.ts",
+    "./src/graph-extraction/testing/index.ts",
+    "./src/graph-rdf/index.ts",
+    "./src/graph-rdf/testing/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-api",

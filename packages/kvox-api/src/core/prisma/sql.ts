@@ -22,6 +22,7 @@ interface RuntimeUtils {
   raw(value: string): KvoxSql;
   join(values: readonly unknown[], separator?: string, prefix?: string, suffix?: string): KvoxSql;
   empty: KvoxSql;
+  DbNull: unknown;
 }
 
 let loaded: RuntimeUtils | undefined;
@@ -87,5 +88,13 @@ export const Prisma = Object.freeze({
   /** An empty fragment. */
   get empty(): KvoxSql {
     return runtimeUtils().empty;
+  },
+
+  /**
+   * The value that writes SQL `NULL` into a nullable `jsonb` column (a bare `null` would be
+   * the JSON value `null`). The very object the generated client's own `Prisma.DbNull` is.
+   */
+  get DbNull(): unknown {
+    return runtimeUtils().DbNull;
   },
 });

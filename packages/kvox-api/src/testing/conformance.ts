@@ -660,6 +660,37 @@ export function describeKvoxPortsConformance(
       await store.port.setMetadata('conformance-unknown-object', { ignored: true });
     });
 
+    rule('listManaged answers the ids of one module\'s files of one user under a key prefix, ascending', async (store) => {
+      const prefix = `conformance/listed-${Date.now().toString(36)}/`;
+      const ids: string[] = [];
+      for (const name of ['a.txt', 'b.txt']) {
+        const { objectId } = await store.port.put({
+          ownerId: owner(store),
+          key: `${prefix}${name}`,
+          body: Buffer.from(name),
+          contentType: 'text/plain',
+          managedBy: 'graph',
+        });
+        ids.push(objectId);
+      }
+      await store.port.put({
+        ownerId: owner(store),
+        key: `${prefix}notes.txt`,
+        body: Buffer.from('other module'),
+        contentType: 'text/plain',
+        managedBy: 'notes',
+      });
+      const listed = await store.port.listManaged({
+        ownerId: owner(store),
+        managedBy: 'graph',
+        keyPrefix: prefix,
+        limit: 10,
+      });
+      expect(listed).toEqual([...ids].sort());
+      const limited = await store.port.listManaged({ ownerId: owner(store), managedBy: 'graph', keyPrefix: prefix, limit: 1 });
+      expect(limited.length).toBe(1);
+    });
+
     rule('the onAborted handler fires once for a cancelled upload', async (store) => {
       const seen: Array<{ objectId: string; managedBy: string | null }> = [];
       store.port.onAborted(async (event) => {
@@ -749,6 +780,27 @@ export function describeKvoxPortsConformance(
 
       await jobs.drain();
       expect(await jobs.port.findActive({ types: [type] })).toEqual([]);
+    });
+
+    rule('findLatest reports the newest job of a subject and runNow pulls a delayed one forward', async (jobs) => {
+      const type = uniqueType();
+      jobs.port.registerHandler({ type, async process() {} });
+      expect(await jobs.port.findLatest({ type, subjectType: 'thing', subjectId: 'z' })).toBeNull();
+
+      const delayed = await jobs.port.enqueue({
+        type,
+        subjectType: 'thing',
+        subjectId: 'z',
+        payload: {},
+        scheduledFor: new Date(Date.now() + 3_600_000),
+      });
+      const before = await jobs.port.findLatest({ type, subjectType: 'thing', subjectId: 'z' });
+      expect(before).toMatchObject({ id: delayed.id, status: 'pending' });
+      expect(before?.scheduledFor).not.toBeNull();
+
+      expect(await jobs.port.runNow(delayed.id)).toBe(true);
+      expect((await jobs.port.findLatest({ type, subjectType: 'thing', subjectId: 'z' }))?.scheduledFor).toBeNull();
+      expect(await jobs.port.runNow(delayed.id)).toBe(false);
     });
 
     rule('onSettled reports a finished job with its type, subject and payload', async (jobs) => {

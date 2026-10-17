@@ -25,7 +25,7 @@ import {
 } from '@marinoscar/platform-api/user-data';
 
 import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../src/kvox-objects/job-types';
-import { KG_PURGE_JOB_TYPE } from '../../src/graph/job-types';
+import { KG_PURGE_JOB_TYPE } from '@marinoscar/kvox-api/graph';
 import { NOTE_PURGE_JOB_TYPE } from '@marinoscar/kvox-api/notes';
 import {
   CONTENT_CATEGORIES,

@@ -84,6 +84,8 @@ export interface KvoxPrismaClientLike {
 export interface KvoxTransactionOptions {
   /** The longest the transaction may run, in milliseconds. */
   timeout?: number;
+  /** The longest to wait for a connection before the transaction starts, in milliseconds. */
+  maxWait?: number;
   /** The isolation level; the host default when absent. */
   isolationLevel?: 'ReadCommitted' | 'RepeatableRead' | 'Serializable';
 }

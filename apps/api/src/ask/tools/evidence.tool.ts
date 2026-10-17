@@ -15,12 +15,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GraphEvidenceService } from '../../graph/read/graph-evidence.service';
-import {
-  AS_OF_RELATION_STATUSES,
-  READABLE_ENTITY_STATUSES,
-  TIMELINE_ITEM_STATUSES,
-} from '../../graph/read/readable';
+import { GraphEvidenceService, AS_OF_RELATION_STATUSES, READABLE_ENTITY_STATUSES, TIMELINE_ITEM_STATUSES } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   AskToolError,

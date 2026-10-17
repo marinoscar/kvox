@@ -15,7 +15,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GraphReadService } from '../../graph/read/graph-read.service';
+import { GraphReadService } from '@marinoscar/kvox-api/graph';
 import { sharedTranscriptsWhere } from '../../app-sharing/transcript-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '@marinoscar/kvox-api/search';

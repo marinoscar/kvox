@@ -94,6 +94,46 @@
         "unpdf",
         "zod"
       ]
+    },
+    "graph": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/schedule",
+        "@nestjs/swagger",
+        "graphology",
+        "graphology-communities-louvain",
+        "graphology-layout",
+        "graphology-layout-forceatlas2",
+        "nestjs-zod",
+        "zod"
+      ]
+    },
+    "graph-extraction": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/swagger",
+        "nestjs-zod",
+        "zod"
+      ]
+    },
+    "graph-rdf": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/schedule",
+        "@nestjs/swagger",
+        "fastify",
+        "jsonld",
+        "n3",
+        "nestjs-zod",
+        "rdf-validate-shacl",
+        "zod"
+      ]
     }
   },
   "kvox-web": {

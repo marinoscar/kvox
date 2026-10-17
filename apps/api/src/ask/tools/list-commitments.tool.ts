@@ -15,8 +15,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
-import { parseAsOf } from '../../graph/read/as-of';
-import { READABLE_ENTITY_STATUSES, READABLE_ITEM_STATUSES } from '../../graph/read/readable';
+import { parseAsOf, READABLE_ENTITY_STATUSES, READABLE_ITEM_STATUSES } from '@marinoscar/kvox-api/graph';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   AskToolError,

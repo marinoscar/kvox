@@ -4,7 +4,7 @@ import { TestContext, createTestApp, closeTestApp } from '../helpers/test-app.he
 import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
-import { listEntitiesResponseSchema } from '../../src/graph/read/dto/graph-read.dto';
+import { listEntitiesResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // The graph read routes over the wire (#370, epic #347)

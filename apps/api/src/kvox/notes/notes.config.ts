@@ -25,14 +25,13 @@ import { TranscriptsConfig } from '../transcripts/transcripts.config';
 //
 // What stays out of the slice and lives beside this file, because it uses the platform: the
 // onboarding step and fact (`notes.onboarding.ts`), the notification registrations
-// (`notification-templates.ts`), the Danger Zone categories (`user-data.ts`) and the TEMPORARY
-// listener that hands a ready note to the graph (`graph/extraction/note-ready-auto-extract.listener.ts`,
-// provided by `GraphExtractionModule`). The permissions
+// (`notification-templates.ts`) and the Danger Zone categories (`user-data.ts`). A ready note reaches
+// the graph as the notes slice's ready event (`NOTE_READY_EVENT`) on the event port, which `@marinoscar/kvox-api/graph-extraction`
+// subscribes to itself (#496): this configuration knows nothing about it. The permissions
 // the slice exports as data are registered in `app-registrations/kvox-permissions.ts`; the
 // email templates stay in `email-templates/`.
 //
-// Exported as a constant because other modules (the graph and Ask, until they move into the
-// package) import it: a dynamic module built twice with the same options is one module, but
+// Exported as a constant because other modules (the graph and Ask) import it: a dynamic module built twice with the same options is one module, but
 // one constant is the unmistakable way to say so.
 // =============================================================================
 

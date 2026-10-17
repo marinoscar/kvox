@@ -318,6 +318,20 @@ export interface KvoxObjectStorePort {
   setMetadata(objectId: string, metadata: Record<string, unknown>): Promise<void>;
 
   /**
+   * The ids of the objects a module manages that one user uploaded, in ascending id order:
+   * the way a purge finds every file it owns without a row of its own to point at it.
+   *
+   * @param query - the uploader, the managing module, an optional storage-key prefix and the page size.
+   * @returns up to `limit` object ids.
+   */
+  listManaged(query: {
+    ownerId: string;
+    managedBy: KvoxManagedBy;
+    keyPrefix?: string;
+    limit: number;
+  }): Promise<string[]>;
+
+  /**
    * A time-limited download URL.
    *
    * @param objectId - the object.

@@ -2,11 +2,12 @@
 // This app's own permissions (issue #465, epic #462)
 // =============================================================================
 //
-// The domain permissions the product adds on top of the platform's: two declared
-// here (`graph:read|write`), and `transcripts:read|write` and the four note permissions,
-// which the transcripts and notes slices of `@marinoscar/kvox-api` export as data
-// (`TRANSCRIPTS_PERMISSIONS`, `NOTES_PERMISSIONS`, `NOTE_TEMPLATES_PERMISSIONS`) and
-// `kvox-permissions.ts` registers (issues #493 and #495).
+// The domain permissions the product adds on top of the platform's: NONE of its own any more.
+// `transcripts:read|write`, the four note permissions and `graph:read|write` are exported as
+// data by the slices of `@marinoscar/kvox-api` (`TRANSCRIPTS_PERMISSIONS`, `NOTES_PERMISSIONS`,
+// `NOTE_TEMPLATES_PERMISSIONS`, `GRAPH_PERMISSIONS`) and `kvox-permissions.ts` registers them
+// (issues #493, #495 and #496). The empty object stays so the registration call and the
+// `PERMISSIONS` derivation keep their shape.
 // Every one is ORG-SCOPED: a user holds it through the role on their
 // membership of the current organization (`org_admin`, `contributor`,
 // `viewer`), never through `user_roles`. The system `admin` role no longer
@@ -30,21 +31,4 @@
 
 import type { PermissionDeclaration } from '@marinoscar/platform-api/core';
 
-const ALL_ORG_ROLES = ['org_admin', 'contributor', 'viewer'] as const;
-
-export const KVOX_PERMISSIONS = {
-  GRAPH_READ: {
-    id: 'graph:read',
-    description:
-      'Read own connected-knowledge graph: entities, relations, facts, proposals and the effective ontology',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-  GRAPH_WRITE: {
-    id: 'graph:write',
-    description:
-      'Commit proposals and edit, merge and forget entities in own graph; manage attribute definitions',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-} as const satisfies Record<string, PermissionDeclaration>;
+export const KVOX_PERMISSIONS = {} as const satisfies Record<string, PermissionDeclaration>;

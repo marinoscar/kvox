@@ -27,11 +27,12 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { KgPurgeService } from './package-internals';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbGraphObjects } from '../helpers/graph-ports.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-purge.db.spec');
@@ -50,7 +51,7 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
     // No export files in these fixtures (#386's step finds nothing to delete).
-    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never, createDbManagedObjects(prisma, UNUSED_STORAGE));
+    purge = new KgPurgeService(prisma as unknown as PrismaService, createDbGraphObjects(prisma));
   });
 
   afterAll(async () => {
