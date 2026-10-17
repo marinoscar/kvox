@@ -49,6 +49,7 @@
         },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the exported VERSION was created (transcript_versions.created_at), not when the export file was rendered." },
         "exportedAt": { "type": "string", "format": "date-time", "description": "When this export document was rendered." },
+        "recordedAt": { "type": "string", "format": "date-time", "description": "When the recording was made: the transcript's recordedAt (the meeting date), not when it was uploaded or exported. Absent in files exported before this field existed; an importer then falls back to createdAt." },
         "provider": {
           "type": ["object", "null"],
           "description": "Which transcription provider produced the AI original. Null is not expected in practice (every transcript has one) but is legal so a hand-authored or fully-manual transcript created by a future import path is still valid against this schema.",
@@ -122,6 +123,7 @@
         "author": { "displayName": "Oscar Marin", "email": "oscar@marin.cr" },
         "createdAt": "2026-09-10T15:04:22.000Z",
         "exportedAt": "2026-09-13T18:20:00.000Z",
+        "recordedAt": "2026-09-10T14:30:00.000Z",
         "provider": { "id": "assemblyai", "model": "best" },
         "speakers": [
           { "id": "spk_a", "displayName": "Oscar", "talkTimeMs": 920100 },
