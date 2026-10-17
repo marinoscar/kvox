@@ -112,6 +112,10 @@ Design and the full exemption list: [docs/specs/job-queue.md §7.10](docs/specs/
 3. **A node never persists a job-scoped credential.** Every per-job secret is issued through `POST /api/nodes/:id/jobs/:jobId/secret`, gated by `assertJobHeldByNode`, bounded by the job's lease, held in node memory only, revoked when the job settles or by the sweep. `job_node_secrets` stores the credential's **handle**, never material. A handler declares the need with `nodeSecretBroker` (`JobSecretBroker` in `@marinoscar/platform-api/jobs`). The node's own `nod_` identity token is the single exception.
 4. **A job type declares its execution profile or takes the global default.** `JobHandler.profile` is optional and carries exactly `{ maxRuntimeMs, maxAttempts }` (`JobExecutionProfile` in `@marinoscar/platform-api/jobs`). Lease, renewal interval and reaper patience derive from `maxRuntimeMs`. Never add `leaseMs` or `heartbeatMs`.
 
+## MANDATORY: Packages first
+
+Domain and AI-harness code lives once in the `@marinoscar/kvox-*` packages; web and KVox Desktop are hosts (ports, shell, packaging). Never copy slice code, prompts, schemas or parsers into a host; vary by package option or port. [ADR-0001](docs/decisions/0001-packages-first.md).
+
 ## MANDATORY: Invariants that are easy to break
 
 Each is enforced by a test or a spec; detail lives in the linked doc.
