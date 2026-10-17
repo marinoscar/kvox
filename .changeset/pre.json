@@ -5,7 +5,33 @@
     "api": "1.2.2",
     "cli": "1.8.0",
     "web": "1.2.2",
-    "@app/shared": "1.0.0"
+    "@app/shared": "1.0.0",
+    "@marinoscar/kvox-api": "0.0.0",
+    "@marinoscar/kvox-contract": "0.0.0",
+    "@marinoscar/kvox-db": "0.0.0",
+    "@marinoscar/kvox-web": "0.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "kvox-api-ask",
+    "kvox-api-conformance-upload-parts",
+    "kvox-api-graph-migrate-enqueuer",
+    "kvox-api-graph",
+    "kvox-api-notes",
+    "kvox-api-ports",
+    "kvox-api-search",
+    "kvox-api-transcription",
+    "kvox-api-transcripts",
+    "kvox-bare-host",
+    "kvox-contract-wire-schemas",
+    "kvox-db-domain-schema",
+    "kvox-desktop-guide",
+    "kvox-packages-scaffold",
+    "kvox-web-ask",
+    "kvox-web-core",
+    "kvox-web-graph-tsdoc",
+    "kvox-web-graph",
+    "kvox-web-notes",
+    "kvox-web-search",
+    "kvox-web-transcripts"
+  ]
 }
