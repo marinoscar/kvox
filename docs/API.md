@@ -5252,7 +5252,7 @@ Both take the ordinary `Authorization: Bearer …` header, and `EventSource`
 accepts no headers; a `?token=` query parameter is rejected because a URL is
 written verbatim into the nginx access log, kept in browser history, and
 forwarded in `Referer` — turning a live bearer credential into something
-replayable out of a log file. `apps/web/src/services/sse.ts` is the
+replayable out of a log file. `packages/kvox-web/src/core/headless/sse.ts` is the
 fetch-based client built for this.
 
 **Resuming with `Last-Event-ID`.** Every frame's `id:` is the **buffer
@@ -7152,8 +7152,7 @@ the row about every 250 ms, so it works whichever API replica runs the job.
 conversations.
 
 **Client.** Send the ordinary `Authorization: Bearer …` header — the native
-`EventSource` cannot, so use a fetch-based SSE client (`apps/web/src/services/
-sse.ts`); a `?token=` query parameter is not accepted.
+`EventSource` cannot, so use a fetch-based SSE client (`packages/kvox-web/src/core/headless/sse.ts`); a `?token=` query parameter is not accepted.
 
 **Resume.** Every text frame's `id:` is the UTF-16 offset into `content` it
 ends at. Reconnect with `Last-Event-ID: <last id seen>`, or `?lastEventId=`

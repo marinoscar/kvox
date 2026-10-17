@@ -7,7 +7,7 @@
 > recognition still got wrong. Implemented in `packages/kvox-api/src/transcription/
 > keyterms.ts` (#327), `packages/kvox-api/src/transcripts/name-check/` and
 > `packages/kvox-api/src/transcripts/handlers/transcript-name-check.handler.ts` (#328),
-> `apps/web/src/components/transcripts/` name-check review panel (#329), and
+> `packages/kvox-web/src/transcripts/ui/components/` name-check review panel (#329), and
 > the `thorough` mode plus its discovery pass on top of #328's pipeline
 > (#330). Builds on `docs/specs/transcription.md` (the transcript pipeline
 > and its `TranscriptionProvider` contract) and `docs/specs/notes.md` §2.5–3.3

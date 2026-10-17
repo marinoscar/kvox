@@ -17,7 +17,7 @@
 > (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
 > (the four-tab ceiling). Everything under `packages/kvox-api/src/graph/`,
-> `apps/web/src/pages/graph/` (or wherever §13 lands it), and every `kg_*`
+> `packages/kvox-web/src/graph/ui/pages/` (or wherever §13 lands it), and every `kg_*`
 > table is *planned*.
 >
 > Builds on: `docs/specs/transcription.md` (segment stability, the version

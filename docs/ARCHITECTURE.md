@@ -1876,8 +1876,8 @@ pattern this route belongs to.
 
 ### 9.5 Shared Clipboard Primitive
 
-`apps/web/src/hooks/useCopyToClipboard.ts` and
-`apps/web/src/components/common/CopyButton.tsx` (issue #308) are the shared
+`packages/kvox-web/src/core/headless/hooks/useCopyToClipboard.ts` and
+`packages/kvox-web/src/core/ui/CopyButton.tsx` (issue #308) are the shared
 copy-to-clipboard primitive for new call sites: the hook exposes an
 idle/done/failed status, prefers the secure-context `navigator.clipboard` API
 and falls back to `execCommand('copy')`, and reports a failure honestly

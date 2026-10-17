@@ -7,10 +7,10 @@
 > drawn), a Regenerate dialog that can actually change what it regenerates,
 > and an indigo/amber brand palette and K-and-waveform mark with their
 > contrast measured rather than eyeballed. Implemented across
-> `apps/web/src/config/destinations.ts`, `apps/web/src/components/library/`,
-> `apps/web/src/pages/HomePage.tsx`, `apps/web/src/hooks/usePlaybackEngine.ts`,
-> `apps/web/src/components/notes/`, `apps/web/src/theme/tokens.ts`,
-> `apps/web/src/utils/transcriptDisplay.ts`, and
+> `apps/web/src/config/destinations.ts`, `packages/kvox-web/src/core/ui/library/`,
+> `apps/web/src/pages/HomePage.tsx`, `packages/kvox-web/src/transcripts/headless/hooks/usePlaybackEngine.ts`,
+> `packages/kvox-web/src/notes/ui/components/`, `apps/web/src/theme/tokens.ts`,
+> `packages/kvox-web/src/transcripts/headless/utils/transcriptDisplay.ts`, and
 > `apps/web/scripts/generate-icons.py` plus the two hand-written brand SVGs.
 > Issue #113 — this document — is the epic's last, per AGENTS.md's
 > Issue-Driven Development rule that documentation lands after the code it
@@ -405,7 +405,7 @@ is gone) finds the parked position outside every window and pulls the
 playhead to the nearest allowed one, the same reassertion any ordinary seek
 into a filtered gap produces. This is the filter reclaiming the playhead,
 not the parking logic failing, and
-`apps/web/src/__tests__/hooks/usePlaybackEngine.test.tsx`'s *"lets the
+`packages/kvox-web/test/transcripts/usePlaybackEngine.test.tsx`'s *"lets the
 speaker filter reclaim the playhead once the line has ended"* pins exactly
 this sequence: park on the boundary first (`audio.paused === true`,
 `currentTime` at the line's `endMs`), then one more tick moves the position
@@ -434,7 +434,7 @@ could ask for anything else.
 
 ### The regenerate dialog sends a diff, not a snapshot
 
-`apps/web/src/components/notes/regenerateInput.ts`'s `buildRegenerateInput`
+`packages/kvox-web/src/notes/headless/utils/regenerateInput.ts`'s `buildRegenerateInput`
 is pure and takes the note's own three stored values plus the form's three
 string values, and its output is a **diff**:
 
@@ -581,7 +581,7 @@ unconditionally rather than branching per mode at every call site.
 
 ### Speaker-palette rules
 
-`apps/web/src/utils/transcriptDisplay.ts`'s `SPEAKER_COLORS_LIGHT`/`_DARK`
+`packages/kvox-web/src/transcripts/headless/utils/transcriptDisplay.ts`'s `SPEAKER_COLORS_LIGHT`/`_DARK`
 carry three rules, restated here because each is easy to break from a
 neighbouring file:
 
