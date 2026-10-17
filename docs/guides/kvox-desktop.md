@@ -4,6 +4,8 @@ This guide is for the engineers who build KVox Desktop: an offline application w
 
 Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
 
+> Decisions behind this guide: [ADR-0001 to ADR-0006](../decisions/README.md) (packages first, Electron shell, PostgreSQL and PGlite, local-only data, AI layering, Desktop inputs). The Desktop repository starts from [../desktop/README.md](../desktop/README.md).
+
 ## Who this is for and what you get
 
 **The four packages.** One Changesets `fixed` group: they always share one version.
@@ -412,6 +414,8 @@ Optional; the default records nothing (`NOOP_KVOX_AUDIT`). Settings changes and 
 Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appName, appSlug } })` (`KvoxBrand`, token `KVOX_BRAND`, both from `@marinoscar/kvox-api/core`). It is the product name a document carries (the PDF export footer) and the slug names are built from. Omitted, `DEFAULT_KVOX_BRAND` (`KVox` / `kvox`) applies.
 
 ## The Copilot SDK `KVOX_AI` adapter (sketch)
+
+Note: per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md), the Copilot integration now targets an `AiProviderAdapter` beneath `@marinoscar/kvox-ai` (#579, #581), not `KvoxAiPort` directly. The sketch below is kept for history.
 
 The code below is **illustrative and not compiled**. It maps each port method onto a Copilot session at the level of the port contract. The SDK's API changes; this sketch declares a tiny `CopilotLike` stand-in instead of naming SDK methods, so replace it with calls from the SDK's own documentation. What is fixed is the right-hand side: the port types, the event order and the error classes.
 
