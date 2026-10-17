@@ -57,6 +57,7 @@ function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
     failureReason: null,
     access: 'owner',
     ownerName: 'Test User',
+    hasAudio: true,
     recordedAt: RECORDED_AT,
     createdAt: '2026-03-20T00:00:00.000Z',
     updatedAt: '2026-03-20T00:00:00.000Z',

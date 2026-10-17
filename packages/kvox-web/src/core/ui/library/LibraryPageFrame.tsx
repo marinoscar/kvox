@@ -86,6 +86,12 @@ export interface LibraryPageFrameProps {
    * with no primary action.
    */
   action: LibraryPageAction | null;
+  /**
+   * An optional secondary action, drawn in the header beside the primary one at
+   * every width (it never floats). The node gates itself: the frame renders it
+   * as given, so a control that needs a permission must check it.
+   */
+  secondaryAction?: ReactNode;
   /** Children. */
   children: ReactNode;
 }
@@ -98,7 +104,7 @@ export interface LibraryPageFrameProps {
  *
  * @stability experimental
  */
-export function LibraryPageFrame({ title, action, children }: LibraryPageFrameProps) {
+export function LibraryPageFrame({ title, action, secondaryAction, children }: LibraryPageFrameProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const hasPermission = useKvoxPermissionCheck();
@@ -134,14 +140,19 @@ export function LibraryPageFrame({ title, action, children }: LibraryPageFramePr
         {/* The FAB below is the phone's primary action; at `sm` and up the same
             action is an ordinary button in the header, where there is room for
             it and where a floating control would only cover content. */}
-        {createAction && !isPhone && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate(createAction.path)}
-          >
-            {createAction.label}
-          </Button>
+        {(secondaryAction || (createAction && !isPhone)) && (
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {secondaryAction}
+            {createAction && !isPhone && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate(createAction.path)}
+              >
+                {createAction.label}
+              </Button>
+            )}
+          </Box>
         )}
       </Box>
 

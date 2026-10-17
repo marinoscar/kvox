@@ -37,6 +37,7 @@
  */
 
 import { LibraryPageFrame } from '../../../core/ui/index.js';
+import { ImportTranscriptButton } from '../components/ImportTranscriptButton.js';
 import { TranscriptsLibraryView } from '../components/TranscriptsLibraryView.js';
 import type { TranscriptSharingAdapter, TranscriptsLibrarySlots } from '../slots.js';
 
@@ -73,6 +74,10 @@ export function TranscriptsPage({ slots, sharing }: TranscriptsPageProps = {}) {
         path: '/transcripts/new',
         permission: 'transcripts:write',
       }}
+      // Import a `kvox.transcript/v1` file (#571): a secondary action beside
+      // "New transcript", gated inside on the same `transcripts:write`. Its
+      // errors float, so an alert never pushes the heading around.
+      secondaryAction={<ImportTranscriptButton errorPlacement="snackbar" />}
     >
       <TranscriptsLibraryView {...(slots ? { slots } : {})} {...(sharing ? { sharing } : {})} />
     </LibraryPageFrame>

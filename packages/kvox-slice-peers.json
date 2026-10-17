@@ -45,6 +45,13 @@
           "range": "^10.0.0",
           "why": "POST /api/graph/imports reads the RDF file with request.isMultipart() and request.file(); the host registers the plugin on its Fastify app"
         }
+      ],
+      "transcripts": [
+        {
+          "name": "@fastify/multipart",
+          "range": "^10.0.0",
+          "why": "POST /api/transcripts/imports reads the transcript export JSON with request.isMultipart() and request.file(); the host registers the plugin on its Fastify app"
+        }
       ]
     }
   },

@@ -53,6 +53,7 @@ function item(overrides: Partial<TranscriptListItem> = {}): TranscriptListItem {
     failureReason: null,
     access: 'owner',
     ownerName: 'Admin User',
+    hasAudio: true,
     recordedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

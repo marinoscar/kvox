@@ -98,6 +98,7 @@ function detail(access: TranscriptAccessRole = 'owner'): TranscriptDetail {
     failureReason: null,
     access,
     ownerName: 'Admin User',
+    hasAudio: true,
     recordedAt: '2026-09-14T08:00:00.000Z',
     createdAt: '2026-09-14T08:00:00.000Z',
     updatedAt: '2026-09-14T10:00:00.000Z',

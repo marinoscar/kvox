@@ -348,6 +348,13 @@ export function hasPlaybackRendition(status: PlaybackStatus): boolean {
  * Three facts decide it, and the two that are deliberately absent matter as
  * much as the one that is present.
  *
+ * **`hasAudio === false` rules it out first** (#571). A transcript imported
+ * from a `kvox.transcript/v1` file has no recording at all and its
+ * `GET /:id/audio` answers 404; it is `ready` with
+ * `playbackStatus: 'not_needed'`, so nothing below would catch it. `hasAudio` is optional in the
+ * parameter so a caller that predates the field still compiles; only an
+ * explicit `false` withholds the control.
+ *
  * **`status === 'ready'` is required.** It is the app's existing notion of
  * "there is audio here": `TranscriptPage` hands the playback engine a
  * transcript id only once the transcript is ready, on the stated grounds that
@@ -377,8 +384,10 @@ export function hasPlaybackRendition(status: PlaybackStatus): boolean {
  * a role gate to add.
  */
 export function hasPlayableAudio(
-  item: Pick<TranscriptListItem, 'status' | 'playbackStatus'>,
+  item: Pick<TranscriptListItem, 'status' | 'playbackStatus'> &
+    Partial<Pick<TranscriptListItem, 'hasAudio'>>,
 ): boolean {
+  if (item.hasAudio === false) return false;
   if (item.status !== 'ready') return false;
   return item.playbackStatus !== 'pending' && item.playbackStatus !== 'processing';
 }

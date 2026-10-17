@@ -68,7 +68,7 @@ Optional peers, installed for the features that need them. The three marked "loa
 | `@prisma/client-runtime-utils` | `^7.8.0` | `core`: the `Prisma.sql`, `raw` and `join` helpers (loaded on first use) |
 | `@marinoscar/platform-api` | `0.1.0-next.5` | no slice: host wiring only (`apps/api/src/platform-kvox`) |
 
-Host plugin (not a peer, nothing imports it): `@fastify/multipart@^10.0.0` for `notes` (document-source upload) and `graph-rdf` (RDF import), hence also `graph`, `graph-extraction` and `ask`. Install it and `register` it on the Fastify app; without it the upload routes answer 500 naming the plugin. Declared as `$hostPlugins` and checked by `check-slice-peers` rule 8.
+Host plugin (not a peer, nothing imports it): `@fastify/multipart@^10.0.0` for `transcripts` (transcript import), `notes` (document-source upload) and `graph-rdf` (RDF import), hence also `graph`, `graph-extraction` and `ask`. Install it and `register` it on the Fastify app; without it the upload routes answer 500 naming the plugin. Declared as `$hostPlugins` and checked by `check-slice-peers` rule 8.
 
 The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 

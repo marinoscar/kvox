@@ -78,6 +78,7 @@ function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
     failureReason: null,
     access: 'owner',
     ownerName: 'Admin User',
+    hasAudio: true,
     recordedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -935,5 +936,57 @@ describe('TranscriptPage — the notes and header slots', () => {
     } finally {
       error.mockRestore();
     }
+  });
+});
+
+describe('TranscriptPage — an imported transcript (#571)', () => {
+  function importedDetail(): TranscriptDetail {
+    return detail({
+      playbackStatus: 'not_needed',
+      provider: 'import',
+      hasAudio: false,
+      sourceName: 'standup.json',
+      sourceMimeType: 'application/json',
+    });
+  }
+
+  it('asks for no audio and draws no player, only a small note', async () => {
+    mockGetTranscript.mockResolvedValue({ status: 'ok', data: importedDetail(), etag: 'W/"v1"' });
+    renderPage();
+
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    expect(screen.getByText('No audio (imported transcript).')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Audio player' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Play this line/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('The audio could not be loaded.')).not.toBeInTheDocument();
+    expect(mockGetAudio).not.toHaveBeenCalled();
+  });
+
+  it('still plays an upload whose source needed no transcode', async () => {
+    // `not_needed` alone is NOT "no audio": `hasAudio` decides.
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail({ playbackStatus: 'not_needed' }),
+      etag: 'W/"v1"',
+    });
+    renderPage();
+
+    expect(await screen.findByRole('region', { name: 'Audio player' })).toBeInTheDocument();
+    expect(screen.queryByText('No audio (imported transcript).')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockGetAudio).toHaveBeenCalled());
+  });
+
+  it('follows hasAudio, not the provider, when the two disagree', async () => {
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail({ playbackStatus: 'ready', hasAudio: false }),
+      etag: 'W/"v1"',
+    });
+    renderPage();
+
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    expect(screen.getByText('No audio (imported transcript).')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Audio player' })).not.toBeInTheDocument();
+    expect(mockGetAudio).not.toHaveBeenCalled();
   });
 });

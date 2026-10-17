@@ -15,7 +15,10 @@
 // document carries and all of which are tempting — makes previously-valid
 // output INVALID against the published schema. A field is added by publishing
 // a new schema version first, never by emitting it and updating the schema
-// afterwards.
+// afterwards. `recordedAt` (#571) is the worked example: the optional property
+// was added to `transcript.properties` in both schema copies, and only then
+// emitted below — so the import (`POST /api/transcripts/imports`) can restore a
+// meeting date, and every file exported before it still validates.
 //
 // The permanence rule from §8.2, restated where somebody editing would see it:
 // a field is added, never removed or repurposed. A breaking change is a **v2**
@@ -157,6 +160,10 @@ export class JsonTranscriptExporter implements TranscriptExporter, OnModuleInit 
       ['author', doc.author],
       ['createdAt', doc.createdAt.toISOString()],
       ['exportedAt', doc.exportedAt.toISOString()],
+      // #571: published in the schema FIRST (an optional `recordedAt`), then emitted
+      // here. Omitted, not null, when the document has no date: the schema types it
+      // as a string, and a file without it is what every pre-#571 export looks like.
+      ...(doc.recordedAt ? ([['recordedAt', doc.recordedAt.toISOString()]] as Array<[string, unknown]>) : []),
       ['provider', doc.provider],
     ];
 

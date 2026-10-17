@@ -4,4 +4,5 @@
 
 export * from './export-fixtures.js';
 export * from './exporter-conformance.js';
+export * from './import-fixtures.js';
 export * from './transcripts-conformance.js';

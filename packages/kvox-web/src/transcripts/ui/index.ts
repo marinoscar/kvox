@@ -12,6 +12,8 @@ export type { TranscriptsPageProps } from './pages/TranscriptsPage.js';
 export { TranscriptsLibraryView } from './components/TranscriptsLibraryView.js';
 export type { TranscriptsLibraryViewProps } from './components/TranscriptsLibraryView.js';
 export { TranscriptStatusChip } from './components/TranscriptStatusChip.js';
+export { IMPORT_TRANSCRIPT_LABEL, ImportTranscriptButton } from './components/ImportTranscriptButton.js';
+export type { ImportTranscriptButtonProps } from './components/ImportTranscriptButton.js';
 export type { TranscriptStatusChipProps } from './components/TranscriptStatusChip.js';
 export { SlotBoundary } from './slots.js';
 export type {

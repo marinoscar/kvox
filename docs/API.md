@@ -3417,6 +3417,32 @@ moved, and refusing a 12 GB file before the upload starts is the entire value of
 checking here. The real size is enforced again when the multipart upload
 completes.
 
+#### POST /transcripts/imports
+Create a transcript from a `kvox.transcript/v1` JSON file, the document `POST /transcripts/{id}/exports` writes for the `json` format. Issue #571, spec §8.6.
+
+`multipart/form-data` with a single `file` part (a part under another name is a 400). The transcript is owned by the caller and answers **201** `{ data: <the transcript detail> }`, already `status: ready`, `transcriptionStatus: completed`, `playbackStatus: not_needed`, `provider: "import"`. Segments, speakers, speaker names and word timings (only if the file carries them) are stored; `recordedAt` is the file's `transcript.recordedAt`, else its `createdAt`. Version 1 is `ai_original` with no author. Named speakers are recorded as identified, as if named by hand.
+
+The import is **synchronous** and bounded by the size limit; no transcription, transcode or ready-notification job is created, and `GET /transcripts/{id}/audio` answers 404 for it. The uploaded JSON is kept as the transcript's managed source object and removed with it.
+
+| Status | Meaning |
+|---|---|
+| **201** | Imported |
+| **400** | No file, a part not named `file`, or not multipart; or the file is refused, with `details.reason` below |
+| **413** | The file is over `maxImportBytes` (25 MiB by default) |
+
+| `details.reason` | Meaning |
+|---|---|
+| `not_json` | Not UTF-8 JSON |
+| `unsupported_schema` | JSON, but not `kvox.transcript/v1`; `details.schema` echoes the value it names |
+| `invalid_document` | Fails the published schema or holds a value a transcript cannot store; `details.issues` lists up to 20 `{ path, message }` |
+| `duplicate_id` | Two speakers, or two segments, share an id |
+| `unknown_speaker` | A segment names an undeclared speaker |
+| `empty_transcript` | No segments |
+
+Ids, the version number, the provider and edit authors are **not** preserved; word timings survive only if the export used `includeWords`.
+
+**Requires:** `transcripts:write`
+
 #### GET /transcripts
 The transcripts this caller can open. Ordered by `updatedAt` descending and
 paginated by an **opaque cursor** rather than a page number — every pipeline
@@ -3978,7 +4004,7 @@ touched.
 
 | Format | What it is |
 |---|---|
-| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one |
+| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one. `transcript.recordedAt` (the meeting date) is an optional field added under that rule; older files lack it, and `POST /transcripts/imports` then uses `createdAt` |
 | `markdown` | YAML front matter (title, date, duration, speakers, version) then `**Speaker** · 00:01:23` paragraphs. Every interpolated value is escaped for Markdown's own specials, because a speaker name and a line of speech are text, not markup |
 | `pdf` | pdfkit, streamed, with bundled Noto faces: a cover block (title, date, duration, participants with talk time), speaker names in their own colours, a timestamp margin, a running header, and a footer reading `Page x of y · Version n · Exported from <app>` |
 

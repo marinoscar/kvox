@@ -316,6 +316,22 @@ export const transcriptListItemSchema = z.object({
    * to say who shared it would be worse.
    */
   ownerName: z.string(),
+  /**
+   * Whether the transcript has a recording to play (#571).
+   *
+   * `false` exactly when it was imported from a `kvox.transcript/v1` file: its
+   * source object is that JSON document, so `GET /api/transcripts/:id/audio`
+   * answers 404. `true` for every uploaded or recorded transcript. Derived from
+   * the provider, so a client never has to know the import provider id, and
+   * never inferred from `playbackStatus` (`not_needed` also describes an upload
+   * that plays as it is).
+   */
+  hasAudio: z
+    .boolean()
+    .describe(
+      'Whether the transcript has a recording to play. False when it was imported from a ' +
+        'kvox.transcript/v1 file (GET /api/transcripts/:id/audio answers 404); true otherwise.',
+    ),
   createdAt: z.string(),
   /**
    * When the recording was made (issue #352). Backfilled from, and for a new

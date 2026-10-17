@@ -26,6 +26,7 @@ import { MarkdownTranscriptExporter } from './export/markdown.exporter.js';
 import { PdfTranscriptExporter } from './export/pdf.exporter.js';
 import { TranscriptExportService } from './export/transcript-export.service.js';
 import { TranscriptExporterRegistry, type TranscriptExporter } from './export/transcript-exporter.interface.js';
+import { TranscriptImportService } from './import/transcript-import.service.js';
 import { TranscriptJobFailureListener } from './listeners/transcript-job-failure.listener.js';
 import { FfmpegService } from './media/ffmpeg.service.js';
 import { OwnerOnlyTranscriptSharing, TranscriptSharing } from './sharing/transcript-sharing.js';
@@ -154,6 +155,8 @@ export class TranscriptsModule {
       TranscriptAccessService,
       TranscriptEditingService,
       TranscriptExportService,
+      // #571: `POST /api/transcripts/imports`, a `kvox.transcript/v1` file as a new transcript.
+      TranscriptImportService,
       TranscriptExporterRegistry,
       TranscriptMaterializeService,
       // The four deprecated `:id/shares` routes (#29, #485): thin adapters over `TranscriptSharing`.
@@ -213,6 +216,8 @@ export class TranscriptsModule {
         TranscriptExporterRegistry,
         MarkdownTranscriptExporter,
         TranscriptsHousekeepingEnqueuer,
+        // #571: a host without HTTP (Desktop) imports a file through the service directly.
+        TranscriptImportService,
         // The notes slice (#495) asks which transcripts are shared with a user.
         TranscriptSharing,
       ],

@@ -122,6 +122,14 @@ export interface TranscriptsModuleOptions {
    * default).
    */
   staleUploadHours?: number;
+
+  /**
+   * The largest `kvox.transcript/v1` file `POST /api/transcripts/imports` accepts, in
+   * bytes (#571). Default 25 MiB: a ten-hour transcript exported without word timings is a
+   * few MiB. The multipart read stops at this many bytes and answers 413, so the import
+   * stays bounded by it (it runs inside the request, not as a job).
+   */
+  maxImportBytes?: number;
 }
 
 /**
@@ -142,6 +150,8 @@ export interface ResolvedTranscriptsOptions {
   staleUploadHours: number;
   /** The application root URL, or `undefined`. */
   appUrl: (() => string | undefined) | undefined;
+  /** The largest transcript file an import accepts, in bytes. */
+  maxImportBytes: number;
 }
 
 /**
@@ -156,6 +166,9 @@ export const DEFAULT_PLAYBACK_URL_TTL_SECONDS = 6 * 60 * 60;
 
 /** Default hours an unfinished upload is left alone. @stability experimental */
 export const DEFAULT_STALE_UPLOAD_HOURS = 72;
+
+/** Default largest transcript file an import accepts: 25 MiB. @stability experimental */
+export const DEFAULT_MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
 /**
  * Applies the defaults to a host's options.
@@ -172,5 +185,6 @@ export function resolveTranscriptsOptions(options: TranscriptsModuleOptions): Re
     playbackUrlTtlSeconds: options.playbackUrlTtlSeconds ?? DEFAULT_PLAYBACK_URL_TTL_SECONDS,
     staleUploadHours: options.staleUploadHours ?? DEFAULT_STALE_UPLOAD_HOURS,
     appUrl: options.appUrl,
+    maxImportBytes: options.maxImportBytes ?? DEFAULT_MAX_IMPORT_BYTES,
   };
 }

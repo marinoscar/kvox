@@ -30,6 +30,7 @@ import {
 } from './transcripts.controller.js';
 import type { TranscriptsService } from './transcripts.service.js';
 import type { TranscriptExportService } from './export/transcript-export.service.js';
+import { resolveTranscriptsOptions } from './transcripts.options.js';
 
 const USER: TranscriptsActor = {
   id: 'user-1',
@@ -93,6 +94,8 @@ describe('TranscriptsController — GET :id / :id/segments', () => {
       {} as TranscriptEditingService,
       {} as TranscriptSharesService,
       {} as TranscriptExportService,
+      {} as never,
+      resolveTranscriptsOptions({}),
     );
   });
 

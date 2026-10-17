@@ -149,6 +149,11 @@ export interface ExportDocument {
   createdAt: Date;
   /** When this document was rendered. */
   exportedAt: Date;
+  /**
+   * When the recording was made (`transcripts.recorded_at`, #352), or `null` when the
+   * builder was not given one. Optional so a document built before #571 still compiles.
+   */
+  recordedAt?: Date | null;
   /** Who made the version. */
   author: ExportAuthor | null;
   /** The provider that transcribed it. */
@@ -179,6 +184,8 @@ export interface BuildExportDocumentInput {
   createdAt: Date;
   /** When the document was rendered. */
   exportedAt: Date;
+  /** When the recording was made (`transcripts.recorded_at`); absent or null when unknown. */
+  recordedAt?: Date | null;
   /** Who made the version. */
   author: ExportAuthor | null;
   /** The provider that transcribed it. */
@@ -240,6 +247,7 @@ export function buildExportDocument(input: BuildExportDocumentInput): ExportDocu
     version: input.version,
     createdAt: input.createdAt,
     exportedAt: input.exportedAt,
+    recordedAt: input.recordedAt ?? null,
     author: input.author,
     provider: input.provider,
     speakers,

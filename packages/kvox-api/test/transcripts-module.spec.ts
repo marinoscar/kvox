@@ -21,6 +21,7 @@ import {
   type TranscriptsModuleOptions,
 } from '../src/transcripts/index.js';
 import {
+  DEFAULT_MAX_IMPORT_BYTES,
   DEFAULT_PLAYBACK_URL_TTL_SECONDS,
   DEFAULT_STALE_UPLOAD_HOURS,
   TRANSCRIPTS_MODULE_OPTIONS,
@@ -138,7 +139,9 @@ describe('TranscriptsModule.forRoot', () => {
         ffprobePath: 'ffprobe',
         playbackUrlTtlSeconds: DEFAULT_PLAYBACK_URL_TTL_SECONDS,
         staleUploadHours: DEFAULT_STALE_UPLOAD_HOURS,
+        maxImportBytes: DEFAULT_MAX_IMPORT_BYTES,
       });
+      expect(DEFAULT_MAX_IMPORT_BYTES).toBe(25 * 1024 * 1024);
       expect(DEFAULT_PLAYBACK_URL_TTL_SECONDS).toBe(21_600);
       expect(DEFAULT_STALE_UPLOAD_HOURS).toBe(72);
     });
@@ -148,6 +151,7 @@ describe('TranscriptsModule.forRoot', () => {
         media: { ffmpegPath: '/opt/ffmpeg', ffprobePath: '/opt/ffprobe' },
         playbackUrlTtlSeconds: 600,
         staleUploadHours: 24,
+        maxImportBytes: 1024,
         appUrl: () => 'https://app.example.test',
       });
 
@@ -161,6 +165,7 @@ describe('TranscriptsModule.forRoot', () => {
         ffprobePath: '/opt/ffprobe',
         playbackUrlTtlSeconds: 600,
         staleUploadHours: 24,
+        maxImportBytes: 1024,
       });
       expect(resolved.appUrl()).toBe('https://app.example.test');
     });

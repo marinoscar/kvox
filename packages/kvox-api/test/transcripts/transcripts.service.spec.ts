@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 
 import { KVOX_AUDIT, KVOX_OBJECT_STORE, KVOX_PRISMA, type KvoxObjectInfo } from '../../src/ports/index.js';
 import { createFakeProvider, type FakeProvider } from '../../src/transcripts/handlers/__fixtures__/fake-provider.js';
+import { TRANSCRIPT_IMPORT_PROVIDER } from '../../src/transcripts/import/transcript-import.js';
 import { TRANSCRIPTS_MANAGED_BY } from '../../src/transcripts/job-types.js';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service.js';
 import { TranscriptSharing } from '../../src/transcripts/sharing/transcript-sharing.js';
@@ -711,6 +712,36 @@ describe('TranscriptsService', () => {
 
       expect(prisma.transcript.count).toHaveBeenCalledWith({ where: { deletedAt: null, ownerId: USER.id } });
       expect(listedWhere()).toHaveProperty('AND');
+    });
+  });
+
+  // ===========================================================================
+  // hasAudio (#571) — the same predicate as the audio route's 404
+  // ===========================================================================
+
+  describe('hasAudio', () => {
+    const imported = () => transcriptRow({ id: 'imported-1', provider: TRANSCRIPT_IMPORT_PROVIDER });
+
+    it('is true on a list row for a transcribed recording and false for an import', async () => {
+      prisma.transcript.findMany.mockResolvedValue([transcriptRow(), imported()]);
+
+      const page = await service.list({ scope: 'owned', limit: 20 } as never, USER.id);
+
+      expect(page.items.map((item) => [item.id, item.hasAudio])).toEqual([
+        [TRANSCRIPT_ID, true],
+        ['imported-1', false],
+      ]);
+    });
+
+    it('is true on the detail of a transcribed recording', async () => {
+      await expect(service.detail(TRANSCRIPT_ID, USER)).resolves.toMatchObject({ hasAudio: true });
+    });
+
+    it('is false on the detail of an import, whose audio route answers 404', async () => {
+      access.require.mockResolvedValue({ transcript: imported(), role: 'owner' });
+
+      await expect(service.detail('imported-1', USER)).resolves.toMatchObject({ hasAudio: false });
+      await expect(service.audio('imported-1', USER)).rejects.toMatchObject({ status: 404 });
     });
   });
 

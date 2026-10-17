@@ -7,6 +7,19 @@ export * from './clients/transcripts.js';
 export * from './clients/transcriptEditing.js';
 export * from './clients/transcriptNameChecks.js';
 export {
+  TRANSCRIPT_IMPORT_ACCEPT,
+  TRANSCRIPT_IMPORT_MAX_BYTES,
+  TRANSCRIPT_IMPORT_PROVIDER,
+  checkTranscriptImportFile,
+  importTranscript,
+  transcriptImportErrorDetails,
+  transcriptImportErrorMessage,
+} from './clients/transcriptImports.js';
+export type {
+  TranscriptImportErrorDetails,
+  TranscriptImportFailureReason,
+} from './clients/transcriptImports.js';
+export {
   UploadSessionGoneError,
   UploadSessionMismatchError,
   matchUploadSession,
