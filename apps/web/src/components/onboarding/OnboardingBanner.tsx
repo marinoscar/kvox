@@ -89,9 +89,15 @@ export function requiredProgress(block: OnboardingBlock) {
   return { total, remaining, done, percent: total === 0 ? 0 : (done / total) * 100 };
 }
 
-/** Which checklist the banner is about, or `null` when it has nothing to say. */
+/**
+ * Which checklist the banner is about, or `null` when it has nothing to say.
+ *
+ * A state without `settings` is not an `OnboardingResponse` (a proxy or a stub answering `{}`
+ * for a path it does not know): it says nothing rather than crashing the shell the banner is
+ * mounted in.
+ */
 export function chooseBannerAudience(state: OnboardingResponse | null): BannerAudience | null {
-  if (!state) return null;
+  if (!state?.settings) return null;
   const outstanding = (block: OnboardingBlock | null, dismissedAt: string | null) =>
     Boolean(block && dismissedAt === null && requiredProgress(block).remaining > 0);
 
