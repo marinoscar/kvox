@@ -117,11 +117,13 @@ export type { TitleNoteInput } from './generation/note-title.service.js';
 export { assemblePrompt, parseTemplateStructure } from './generation/prompt.js';
 export type { AssemblePromptInput, AssembledPrompt } from './generation/prompt.js';
 export {
+  budgetFromTarget,
   NOTE_GENERATE_AI_FEATURE,
   NOTE_TITLE_AI_FEATURE,
   NoteAiConflict,
   NoteInputError,
   providerLabelOf,
+  type AiTokenCaps,
   type NoteAiConflictReason,
 } from './generation/ai-support.js';
 

@@ -284,6 +284,9 @@
     "real-data": { "peers": [] },
     "live": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/platform-api"] },
     "kg": { "peers": ["@marinoscar/kvox-api", "@marinoscar/kvox-contract", "zod"] },
+    "parity": {
+      "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/kvox-contract", "@marinoscar/platform-api"]
+    },
     "cli": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] }
   }
 }
