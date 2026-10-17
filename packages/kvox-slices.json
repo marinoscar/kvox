@@ -19,7 +19,8 @@
     "search": ["core"],
     "transcripts": ["core", "transcription", "search"],
     "notes": ["core", "transcripts", "search"],
-    "graph": ["core", "transcripts", "notes", "search"]
+    "graph": ["core", "transcripts", "notes", "search"],
+    "ask": ["core", "transcripts", "notes", "graph"]
   },
   "kvox-contract": {
     "errors": [],

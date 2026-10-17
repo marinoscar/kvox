@@ -63,6 +63,7 @@ import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from './kvox/transcriptsRoutes';
 import { appNotesRoutes } from './kvox/notesRoutes';
 import { appGraphRoutes } from './kvox/graphRoutes';
+import { kvoxAskRoutes } from '@marinoscar/kvox-web/ask/ui';
 import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
@@ -108,8 +109,6 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // viewer, and #31's history page. Lazy like every other page here, and with
 // more reason than most: the viewer alone pulls in the virtualizer and the
 // playback engine, neither of which a user who never opens a transcript needs.
-// Ask — the read-only graph agent (#380, epic #348). One page for both routes.
-const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 // Profile and Appearance are the platform's (#466, epic #462): the packaged
 // pages over the packaged `useUserSettings`, themed through the host's
@@ -408,27 +407,18 @@ function AppRoutes() {
                       specificity — so the settings route sits here beside its
                       slice's other routes. */}
                   {renderKvoxRoutes(appGraphRoutes)}
-                  {/* Ask (#380, epic #348; spec §21.5). OWNED BY `knowledge`
-                      like the graph routes above (#438; `home` before that) —
-                      and gated on
+                  {/* Ask (#380, epic #348; spec §21.5), the route of
+                      `@marinoscar/kvox-web/ask/ui`: `kvoxAskRoutes` carries the
+                      path (`/ask/:conversationId?`, ONE route with an optional
+                      segment so `/ask` → `/ask/:id` after the first question
+                      keeps the page mounted), the lazy page and its gate,
                       `graph:read`, the exact string every `/api/ask/*` route
-                      (#376, #378, #379) enforces. `graphEnabled` is checked
-                      inside the page, which shows an info state when it is off.
-                      ONE route with an optional segment, not two: `/ask` →
-                      `/ask/:id` after the first question must keep the page
-                      mounted, so the rows it just posted stay on screen instead
-                      of the page re-reading its configuration from scratch. */}
-                  <Route
-                    path="/ask/:conversationId?"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <AskPage />
-                      </RequirePermission>
-                    }
-                  />
+                      (#376, #378, #379) enforces. OWNED BY `knowledge` like the
+                      graph routes above (#438; `home` before that).
+                      `graphEnabled` is checked inside the page, which shows an
+                      info state when it is off. This app supplies the guard
+                      (`renderKvoxRoutes`). */}
+                  {renderKvoxRoutes(kvoxAskRoutes)}
                   {/* The per-user settings surface (#96, epic #90) — the same
                       hub component `/admin/settings` renders, over
                       `USER_SETTINGS_SECTIONS`, plus one route per card.

@@ -21,12 +21,12 @@ Everything here is grounded in code that exists: the packages (`packages/kvox-{c
 |---|---|---|
 | Transcription (provider framework, settings) | `transcription` | `transcription/{headless,ui}` (merged) |
 | Search | `search` (query side and `SearchIndexingModule`) | `search/{headless,ui}` (merged) |
-| Transcripts (upload, pipeline, editing, exports) | `transcripts` | `transcripts` (lands with issue #500) |
-| Notes (templates, generation, exports) | `notes`, `notes/templates` | `notes` (lands with issue #502) |
-| Graph (connected knowledge) | `graph`, `graph-extraction`, `graph-rdf` | `graph` (lands with issue #503) |
-| Ask (agent over the graph) | `ask` | `ask` (lands with issue #504) |
+| Transcripts (upload, pipeline, editing, exports) | `transcripts` | `transcripts/{headless,ui}` (merged) |
+| Notes (templates, generation, exports) | `notes`, `notes/templates` | `notes/{headless,ui}` (merged) |
+| Graph (connected knowledge) | `graph`, `graph-extraction`, `graph-rdf` | `graph/{headless,ui,testing}` (merged) |
+| Ask (agent over the graph) | `ask` | `ask/{headless,ui}` (merged) |
 
-The web slices not merged yet are described in this guide by what they need from the host (the same `KvoxWebHost`, the same API routes), not by their component names. `packages/kvox-web/README.md` is the source of truth for what is exported today.
+All six web slices are merged. `packages/kvox-web/README.md` and each slice's own README (`packages/kvox-web/src/<slice>/README.md`) are the source of truth for what is exported.
 
 **What is host-neutral.** All slice code. A slice imports `@marinoscar/kvox-contract` and `@marinoscar/kvox-api/{ports,core}`, never a `@marinoscar/platform-*` package (the `host-neutral` rule, enforced by `npm run check:kvox-slice-peers`). The web slices read their host only through `KvoxWebHost`.
 
@@ -134,7 +134,7 @@ npm install react@^19.2.7 react-dom@^19.2.7
 npm install @mui/material@^9.1.0 @mui/icons-material@^9.1.0 react-router-dom@^7.17.0
 ```
 
-MUI also needs its own peers, `@emotion/react` and `@emotion/styled`. The web slices that are not merged yet declare more optional peers on their `ui` entry only (the issue bodies name `@tiptap/*`, `react-markdown` and `remark-gfm` for notes and Ask, and `sigma`, `@react-sigma/core`, `graphology`, `graphology-layout`, `graphology-layout-forceatlas2` for the graph); read each slice README and `node scripts/kvox-packages/check-slice-peers.mjs --table` when you add one. Optional peers are not installed by npm for you: the application lists them itself.
+MUI also needs its own peers, `@emotion/react` and `@emotion/styled`. Some slices declare more optional peers on their `ui` entry only: `@tanstack/react-virtual` for transcripts; `react-markdown` and `remark-gfm` for notes, and `react-markdown` for Ask (one copy only: the citation plugin walks the tree it builds); `@tiptap/*` for the note editor (loaded lazily); `sigma`, `@react-sigma/core`, `graphology` and `graphology-layout-forceatlas2` for the graph canvas (loaded lazily, `graphology` one copy only). The table in the [package README](../../packages/kvox-web/README.md#install-and-peer-dependencies) lists the versions and the entries; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints the per-slice data. Optional peers are not installed by npm for you: the application lists them itself.
 
 Singletons (Nest, Zod, the contract, Prisma, React, MUI) must exist once. A second copy breaks dependency injection, `instanceof ZodError` or hooks; see [Troubleshooting](#troubleshooting).
 
@@ -724,7 +724,7 @@ export const desktopHost: KvoxWebHost = {
 
 Build the host object once, at module scope or with `useMemo`: hooks key on its identity. If you carry traffic over IPC instead of loopback HTTP, implement the same members over the IPC channel; nothing in a slice assumes a URL. `createFetchSseConnect` sends `Accept`, `Last-Event-ID` and the `Authorization` value its `authorization` callback returns, so use the `Authorization: Bearer <per-launch token>` scheme in `KVOX_IDENTITY` and the same callback for `http`; a different header needs your own `connect` (a thin wrapper over `fetch` plus the exported `SseParser`). `reauthenticate` has nothing to renew for a per-launch token: return `false`.
 
-**Routes, destinations and settings cards are data.** A slice exports `KvoxRouteDef[]` (`path`, optional `permission`, lazy `Component`), `KvoxSettingsCard` records and `KvoxDestination` records (types in `@marinoscar/kvox-web/core/ui`). Today: `kvoxTranscriptionAdminSections` and `kvoxTranscriptionRoutes` (`@marinoscar/kvox-web/transcription/ui`; the card needs `system_settings:read`), and `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`@marinoscar/kvox-web/search/ui`; no permission, by design). The app spreads them where its own literal entries are. The web edition renders a route with its own guard (`apps/web/src/platform-kvox/renderKvoxRoutes.tsx`); a Desktop router does the same with `useHasPermission(permission)` from `core/headless`:
+**Routes, destinations and settings cards are data.** A slice exports `KvoxRouteDef[]` (`path`, optional `permission`, lazy `Component`), `KvoxSettingsCard` records and `KvoxDestination` records (types in `@marinoscar/kvox-web/core/ui`). Today: `kvoxTranscriptionAdminSections` and `kvoxTranscriptionRoutes` (`@marinoscar/kvox-web/transcription/ui`; the card needs `system_settings:read`), `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`search/ui`; no permission, by design), `kvoxTranscriptsDestinations`, `kvoxTranscriptsRoutes`, `kvoxNotesDestinations`, `kvoxNotesUserSettingsSections`, `kvoxNotesRoutes`, `kvoxGraphDestinations` (the `knowledge` tab, shown only while `graphEnabled`), `kvoxGraphUserSettingsSections`, `kvoxGraphRoutes` and `kvoxAskRoutes` (`/ask/:conversationId?`; Ask adds a route under the graph slice's `knowledge` destination and no destination of its own). The app spreads them where its own literal entries are. The web edition renders a route with its own guard (`apps/web/src/platform-kvox/renderKvoxRoutes.tsx`); a Desktop router does the same with `useHasPermission(permission)` from `core/headless`:
 
 ```tsx
 // Illustrative — not compiled
@@ -744,7 +744,7 @@ export const renderRoutes = (routes: readonly KvoxRouteDef[]) =>
 
 A card's `permission` is the exact string the API enforces, so the Desktop settings hub can hide a card with the same viewer it uses for routes.
 
-**Slots.** The cross-slice screens (the notes section of a transcript, the graph actions on a note, the Ask panel on an entity) are **slots** the host fills, so a lower slice does not import a higher one (transcripts does not import notes, graph does not import ask). They are designed as optional props on the packaged pages that take a component and render nothing when absent, with the higher slice shipping ready-made slot components gated on `graphEnabled` and the `graph:*` permissions. Slot names and signatures are fixed in the web slices' own READMEs as they land (issues #500, #502, #503, #504); this guide will not quote them before they exist. Until then a Desktop host that mounts only transcription and search needs no slots.
+**Slots.** The cross-slice screens (the notes section of a transcript, the graph actions on a note, the Ask panel on an entity) are **slots** the host fills, so a lower slice does not import a higher one (transcripts does not import notes, graph does not import ask). They are optional props on the packaged pages that take a component and render nothing when absent, with the higher slice shipping ready-made slot components gated on `graphEnabled` and the `graph:*` permissions. The names: `TranscriptPageSlots` (`NotesSection`, `useSpeakerPeople`, `SelectionActions`, `HeaderActions`) and `TranscriptsLibrarySlots` (`SearchPrefix`) in `transcripts/ui`; `NotePageSlots` (`Provider`, `useAsideWidth`, `HeaderActions`, `ProposalActions`, `SelectionActions`) and `NotesLibrarySlots` (`SearchPrefix`) in `notes/ui`; the graph slice's ready-made fillers `graphTranscriptPageSlots`, `graphNotePageSlots`, `graphTranscriptsLibrarySlots` and `graphNotesLibrarySlots`; and `GraphEntityPageSlots` (`AskButton`, `AskPanel`) on the entity page, filled by the ask slice's `AskEntityButtonSlot` and `AskEntityPanelSlot`. The signatures are in each slice's README. A Desktop host that mounts only transcription and search needs no slots.
 
 **Permissions and the graph switch.** `useHasPermission` reads the same `viewer()` you provide. `features().graphEnabled` should mirror the main process's `ai.graphEnabled` and the adapter's `capabilities().graphEnabled`; when it is `false` or `undefined` the graph UI stays hidden.
 

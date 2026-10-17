@@ -35,7 +35,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../services/api';
 import { getAiTasksConfig } from '../services/aiTasks';
 import type { AiTasksConfig } from '../services/aiTasks';
-import { useIsMounted } from './useIsMounted';
+import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
 
 function messageFor(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
