@@ -9,6 +9,7 @@ The transcript wire contract: list and detail responses, segments and words, edi
 - `transcript.ts`: statuses, summaries, list and detail, segments, words, uploads and keyterms.
 - `transcript-editing.ts` and `editing-ops.ts`: the edit request bodies and the recorded operations a version replays (`requestOpSchema`, `recordedOpSchema`).
 - `transcript-export.ts`, `transcript-share.ts`, `transcript-name-check.ts`: exports, shares and name checks (with `NAME_CHECK_CONFLICT_REASONS`).
+- `transcript-import.ts`: the `kvox.transcript/v1` document as a strict Zod schema (`transcriptDocumentV1Schema`, `TRANSCRIPT_DOCUMENT_V1_SCHEMA`) that the import validates against, the `POST /api/transcripts/imports` answer (`transcriptImportResponseSchema`, the transcript detail), and the typed refusal (`TRANSCRIPT_IMPORT_FAILURE_REASONS`, `transcriptImportErrorDetailsSchema`, `TRANSCRIPT_IMPORT_MAX_ISSUES`). A test proves the schema and the published JSON Schema accept and reject the same files.
 - `media-audio-transcode.ts`: the result a worker node posts back for the `media.audio.transcode` job (`mediaAudioTranscodeResultSchema`), so a node package imports it from the contract.
 
 The editing reducer itself stays in the API package (`packages/kvox-api/src/transcripts/editing/`, pure by rule); only the operation schemas moved.
