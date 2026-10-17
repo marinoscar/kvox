@@ -176,7 +176,6 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { RecordedAtDialog } from '../components/RecordedAtDialog.js';
 import { formatDuration, formatTimestamp } from '../../headless/utils/playbackIntervals.js';
 import { hasPlaybackRendition } from '../../headless/utils/transcriptDisplay.js';
-import { isImportedTranscript } from '../../headless/clients/transcriptImports.js';
 
 /**
  * Should a document-level transport shortcut be ignored for this event?
@@ -268,13 +267,13 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
   const { transcript, isLoading, error, setTranscript } = useTranscript(id);
   const isReady = transcript?.status === 'ready';
   /**
-   * An imported transcript (#571) has NO audio at all: `GET /:id/audio` answers
-   * 404 by design. Its `playbackStatus` is `not_needed`, which an upload whose
-   * source plays as-is also carries, so the provider is what decides. The
-   * engine is never given its id, and the page draws no player, no per-line
-   * play button and no play shortcuts.
+   * A transcript with NO audio at all (today: one imported from a file, #571):
+   * `GET /:id/audio` answers 404 by design. The API's `hasAudio` is the
+   * authoritative field; `playbackStatus: 'not_needed'` is not, since an upload
+   * whose source plays as-is carries it too. The engine is never given its id,
+   * and the page draws no player, no per-line play button and no play shortcuts.
    */
-  const isImported = isImportedTranscript(transcript);
+  const noAudio = transcript?.hasAudio === false;
   const { segments: serverSegments, version: serverVersion } = useTranscriptSegments(
     id,
     isReady,
@@ -331,7 +330,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
     // The engine is only given an id once the transcript is READY. Before that
     // `GET /:id/audio` has nothing to sign, and mounting an element that 404s
     // would put the player into its error state for the whole processing wait.
-    transcriptId: isReady && !isImported ? id : undefined,
+    transcriptId: isReady && !noAudio ? id : undefined,
     segments,
     selectedSpeakerIds,
     title: transcript?.title ?? 'Transcript',
@@ -651,7 +650,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
         return;
       }
       // No audio, no transport: Space keeps scrolling the page.
-      if (isImported) return;
+      if (noAudio) return;
       if (event.code === 'Space') {
         // Prevented BEFORE toggling: Space also scrolls the page, and a
         // transcript that jumps a screenful every time playback starts is
@@ -671,7 +670,7 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [engine, isImported, isReady]);
+  }, [engine, noAudio, isReady]);
 
   const navigateMatch = useCallback(
     (delta: 1 | -1) => {
@@ -1080,8 +1079,8 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
 
   const playerBlocked = engine.status === 'preparing' || engine.status === 'error';
   /** Whether the player is drawn: there is audio and it is not blocked. */
-  const showPlayer = !isImported && !playerBlocked;
-  const playerNotice = isImported ? (
+  const showPlayer = !noAudio && !playerBlocked;
+  const playerNotice = noAudio ? (
     <Typography variant="body2" color="text.secondary" role="note">
       No audio (imported transcript).
     </Typography>
@@ -1129,14 +1128,14 @@ export function TranscriptPage({ slots, sharing, ai }: TranscriptPageProps = {})
         wordsBySegment={wordsBySegment}
         // Without audio the timestamps stay as reading anchors, the same
         // posture as the history preview's no-op.
-        onPlayFrom={isImported ? noop : engine.playFromMs}
+        onPlayFrom={noAudio ? noop : engine.playFromMs}
         selectedSpeakerIds={selectedSpeakerIds}
         // Per-line playback (#108). Not gated on a role, unlike the editing
         // props below: hearing one line is a READ, so a viewer gets it too.
         // Only an imported transcript (#571) goes without, having no audio.
         activeSegmentId={engine.activeSegmentId}
         isPlaying={engine.isPlaying}
-        {...(isImported ? {} : { onPlaySegment: engine.playSegment })}
+        {...(noAudio ? {} : { onPlaySegment: engine.playSegment })}
         onPause={engine.pause}
         editable={canEdit}
         editingSegmentId={editingSegmentId}

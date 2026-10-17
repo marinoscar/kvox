@@ -6,7 +6,6 @@ import {
   TRANSCRIPT_IMPORT_MAX_BYTES,
   checkTranscriptImportFile,
   importTranscript,
-  isImportedTranscript,
   transcriptImportErrorDetails,
   transcriptImportErrorMessage,
 } from '../../src/transcripts/headless/clients/transcriptImports.js';
@@ -162,13 +161,5 @@ describe('checkTranscriptImportFile', () => {
     expect(checkTranscriptImportFile({ size: TRANSCRIPT_IMPORT_MAX_BYTES + 1 })).toBe(
       'That file is too large to import. Transcript exports up to 25 MB can be imported.',
     );
-  });
-});
-
-describe('isImportedTranscript', () => {
-  it('is decided by the provider, not by playbackStatus', () => {
-    expect(isImportedTranscript({ provider: 'import' })).toBe(true);
-    expect(isImportedTranscript({ provider: 'AssemblyAI' })).toBe(false);
-    expect(isImportedTranscript(null)).toBe(false);
   });
 });

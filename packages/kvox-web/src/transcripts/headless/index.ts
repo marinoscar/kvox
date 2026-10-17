@@ -12,7 +12,6 @@ export {
   TRANSCRIPT_IMPORT_PROVIDER,
   checkTranscriptImportFile,
   importTranscript,
-  isImportedTranscript,
   transcriptImportErrorDetails,
   transcriptImportErrorMessage,
 } from './clients/transcriptImports.js';

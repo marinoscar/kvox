@@ -111,6 +111,20 @@ describe('TranscriptRowActions — the Play button', () => {
     expect(screen.queryByRole('button', { name: /play|pause/i })).not.toBeInTheDocument();
   });
 
+  it('is absent for an imported transcript with no audio (hasAudio false), though it is ready', () => {
+    renderActions(item({ status: 'ready', playbackStatus: 'not_needed', hasAudio: false }));
+
+    expect(screen.queryByRole('button', { name: /play|pause/i })).not.toBeInTheDocument();
+    // The rest of the row is still offered.
+    expect(screen.getByRole('button', { name: 'More options for "Weekly standup"' })).toBeInTheDocument();
+  });
+
+  it('is present for a ready upload whose source needed no transcode (hasAudio true)', () => {
+    renderActions(item({ playbackStatus: 'not_needed', hasAudio: true }));
+
+    expect(screen.getByRole('button', { name: 'Play "Weekly standup"' })).toBeInTheDocument();
+  });
+
   it('calls onTogglePreview and does not call onOpen', async () => {
     const user = userEvent.setup();
     const { onTogglePreview, onOpen } = renderActions(item({ title: 'Weekly standup' }));

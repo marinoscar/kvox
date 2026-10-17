@@ -944,6 +944,7 @@ describe('TranscriptPage — an imported transcript (#571)', () => {
     return detail({
       playbackStatus: 'not_needed',
       provider: 'import',
+      hasAudio: false,
       sourceName: 'standup.json',
       sourceMimeType: 'application/json',
     });
@@ -962,7 +963,7 @@ describe('TranscriptPage — an imported transcript (#571)', () => {
   });
 
   it('still plays an upload whose source needed no transcode', async () => {
-    // `not_needed` alone is NOT "no audio": the provider decides.
+    // `not_needed` alone is NOT "no audio": `hasAudio` decides.
     mockGetTranscript.mockResolvedValue({
       status: 'ok',
       data: detail({ playbackStatus: 'not_needed' }),
@@ -973,5 +974,19 @@ describe('TranscriptPage — an imported transcript (#571)', () => {
     expect(await screen.findByRole('region', { name: 'Audio player' })).toBeInTheDocument();
     expect(screen.queryByText('No audio (imported transcript).')).not.toBeInTheDocument();
     await waitFor(() => expect(mockGetAudio).toHaveBeenCalled());
+  });
+
+  it('follows hasAudio, not the provider, when the two disagree', async () => {
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail({ playbackStatus: 'ready', hasAudio: false }),
+      etag: 'W/"v1"',
+    });
+    renderPage();
+
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    expect(screen.getByText('No audio (imported transcript).')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Audio player' })).not.toBeInTheDocument();
+    expect(mockGetAudio).not.toHaveBeenCalled();
   });
 });

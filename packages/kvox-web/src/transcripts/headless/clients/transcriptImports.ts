@@ -5,7 +5,7 @@
  * turns it back into a transcript: segments, speakers and their names, the
  * recording date. No audio is stored and no transcription job runs, so the
  * transcript answers `status: 'ready'` at once, with
- * `playbackStatus: 'not_needed'` and `provider: 'import'` (see {@link isImportedTranscript}).
+ * `playbackStatus: 'not_needed'`, `provider: 'import'` and `hasAudio: false`.
  *
  * The request goes through `host.http.postFormData` (`kvoxPostFormData`), the
  * same as the notes source upload and the graph import, so the host's token,
@@ -70,24 +70,6 @@ export const TRANSCRIPT_IMPORT_PROVIDER = 'import';
 
 /** How many of a refusal's `details.issues` the message lists. */
 const ISSUES_SHOWN = 3;
-
-/**
- * Whether a transcript was imported from a file, and so has no audio at all.
- *
- * `playbackStatus: 'not_needed'` alone does not say this: an upload whose source
- * plays as it is carries the same value and HAS audio. The provider is what
- * tells the two apart.
- *
- * @param transcript - The transcript, or nothing yet.
- * @returns `true` for an imported transcript.
- *
- * @stability experimental
- */
-export function isImportedTranscript(
-  transcript: Pick<TranscriptDetail, 'provider'> | null | undefined,
-): boolean {
-  return transcript?.provider === TRANSCRIPT_IMPORT_PROVIDER;
-}
 
 /**
  * `POST /api/transcripts/imports` — create a transcript from a `kvox.transcript/v1` file.
