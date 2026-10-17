@@ -96,3 +96,7 @@ The routes document themselves through `documentKvoxAuth` (called by `forRoot`).
 | `KvoxTranscriptsDb` | The narrowed client the slice casts `KVOX_PRISMA` to; the host proves its client satisfies it with a compile-time assignment. |
 | `TranscriptsHousekeepingEnqueuer` | Queues one housekeeping sweep unless one is in flight; a host without a scheduler calls it itself. |
 | `describeTranscriptsConformance`, `describeTranscriptExporterConformance` | The conformance kits and the bindings they are run against. |
+
+### Desktop
+
+Desktop sets `schedules: false` and calls `TranscriptsHousekeepingEnqueuer.enqueue()` on its own timer, and either ships ffmpeg or sets `media: { transcode: false }`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#jobs-offline).

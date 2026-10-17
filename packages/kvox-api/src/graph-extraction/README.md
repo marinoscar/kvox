@@ -66,3 +66,7 @@ A `sensitive` PersonFact is never embedded, never sent to an adjudication prompt
 | `GraphExtractionModuleOptions` | The options of `GraphExtractionModule.forRoot`. |
 | `ProposalStage`, `ProposalStageRegistry` | A new proposal stage is one class registered on the registry in `onModuleInit`; the handler runs stages in `order`. |
 | `describeGraphExtractionConformance` | The conformance kit and the binding it is run against. |
+
+### Desktop
+
+`autoExtract` spends the user's Copilot quota the moment a note is ready; Desktop may set it to `false`. Extraction needs structured output from `KVOX_AI`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#wiring-the-api).

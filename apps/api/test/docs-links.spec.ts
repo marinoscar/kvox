@@ -101,6 +101,11 @@ function packageReadmes(root: string): string[] {
   return found;
 }
 
+/** Every `README.md` under `examples/` (the reference hosts the guides quote, #506). */
+function exampleReadmes(root: string): string[] {
+  return markdownFilesUnder(join(root, 'examples'), 'README.md');
+}
+
 /** Nested `AGENTS.md` / `CLAUDE.md` directly inside each `apps/*` and `packages/*` directory. */
 function nestedAssistantFiles(root: string): string[] {
   const found: string[] = [];
@@ -143,6 +148,7 @@ function scannedFiles(root: string = REPO_ROOT): string[] {
   // nested directory of unrelated material under .claude/agents/.
   files.push(...markdownFilesIn(join(root, '.claude', 'agents')));
   files.push(...packageReadmes(root));
+  files.push(...exampleReadmes(root));
   files.push(...assistantConfigFiles(root));
 
   return files;
@@ -257,6 +263,24 @@ describe('repo-level documentation links resolve (#335)', () => {
     for (const expected of ['AGENTS.md', 'apps/api/AGENTS.md', '.opencode/agents/backend-dev.md', '.claude/skills/new-project/SKILL.md']) {
       expect(scanned).toContain(expected);
     }
+  });
+
+  it('scans the consumer guides and the reference host README (#506)', () => {
+    const scanned = files.map((file) => relative(REPO_ROOT, file).split('\\').join('/'));
+    for (const expected of ['docs/guides/README.md', 'docs/guides/kvox-desktop.md', 'examples/bare-host/README.md']) {
+      expect(scanned).toContain(expected);
+    }
+  });
+
+  it('links the KVox Desktop guide from every kvox package README (#506)', () => {
+    const missing = readdirSync(join(REPO_ROOT, 'packages'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('kvox-'))
+      .map((entry) => join('packages', entry.name, 'README.md'))
+      .filter((readme) => {
+        const links = extractLinks(join(REPO_ROOT, readme)).map((link) => resolveTarget(link.file, link.target));
+        return !links.includes(join(REPO_ROOT, 'docs', 'guides', 'kvox-desktop.md'));
+      });
+    expect(missing).toEqual([]);
   });
 
   it('fails on a broken link in AGENTS.md, a nested CLAUDE.md, an OpenCode agent or a skill (#456)', () => {

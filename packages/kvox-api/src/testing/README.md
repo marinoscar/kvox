@@ -27,3 +27,7 @@ Status: experimental.
 ## Extension-point catalog
 
 None. The fakes are test doubles, not points a host implements; the conformance suite is described in the package README.
+
+### Desktop
+
+Desktop runs `describeKvoxPortsConformance` against its real adapters, and `createFakeKvoxPortsUnderTest` is the worked example of the factory it takes. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#prove-it-conformance).

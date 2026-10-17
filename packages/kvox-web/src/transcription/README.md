@@ -28,3 +28,7 @@ None. The page reads its host (`useKvoxHost`).
 - `renderSecretField` (prop of `TranscriptionSettingsPage`, `(props: KvoxSecretFieldProps) => ReactNode`): renders the API key control. A host with its own secret input (masking, reveal, paste handling) supplies it; the slice never imports one. The default is a plain MUI password field. The function runs inside its own component, so it may use hooks. It receives the draft, a change handler, the disabled flag and the helper text, never a stored key.
 - `kvoxTranscriptionAdminSections`: one card, `{ title: 'Transcription', path: '/admin/settings/transcription', permission: 'system_settings:read' }`. The permission is the exact string `transcription-settings.controller.ts` enforces on its GET: the page edits the `transcription` namespace of the `global` system settings row, so it has no permission pair of its own.
 - `kvoxTranscriptionRoutes`: one route on the same path, gated on the same permission. Saving, testing and removing the key need `system_settings:write`, which the page checks itself and answers by disabling its controls: the card gate is about reachability, and the configuration is worth reading for anyone diagnosing why a recording never came back. The page also redirects home when it is mounted without `system_settings:read`.
+
+### Desktop
+
+Desktop spreads `kvoxTranscriptionAdminSections` and `kvoxTranscriptionRoutes` into its own navigation, gated by the same `system_settings:read` string the API enforces. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#wiring-the-web).

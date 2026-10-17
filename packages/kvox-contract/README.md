@@ -100,3 +100,7 @@ None. This package has not been published yet (see the [release runbook](../../d
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
 - [Ontology spec](../../docs/specs/ontology.md): section 17 on versioning
+
+### Desktop
+
+Desktop's main process and renderer share this wire contract; install the same version in both (the four packages are one `fixed` group). See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#who-this-is-for-and-what-you-get).

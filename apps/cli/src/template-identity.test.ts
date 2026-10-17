@@ -354,6 +354,11 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // Added by issue #490: the contract of the ports in `@marinoscar/kvox-api/ports`. It names the
   // package folders it documents (`packages/kvox-api/...`), on the same standing as PACKAGES.md.
   'docs/specs/kvox-ports.md',
+  // Added by issue #506: the consumer guide for KVox Desktop and its folder index. They document the
+  // published `@marinoscar/kvox-*` packages, the `kvox-db` command and the product that consumes them
+  // (KVox Desktop) by name, on the same standing as PACKAGES.md and kvox-ports.md above.
+  'docs/guides/kvox-desktop.md',
+  'docs/guides/README.md',
   'LICENSE',
 
   // ---------------------------------------------------------------------
