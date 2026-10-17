@@ -63,6 +63,8 @@ export interface RunningBareHost {
   readonly database: BareHostDatabase;
   readonly jobs: PgTableJobs;
   readonly objectStore: LocalFsObjectStore;
+  /** The identity port the application authenticates with. */
+  readonly identity: LocalSingleUserIdentity;
   readonly notify: RecordingKvoxNotify;
   readonly ai: FakeKvoxAi;
   /** The data folder. */
@@ -155,6 +157,7 @@ export async function startBareHost(options: StartOptions = {}): Promise<Running
       database,
       jobs,
       objectStore,
+      identity,
       notify,
       ai,
       dataDir,

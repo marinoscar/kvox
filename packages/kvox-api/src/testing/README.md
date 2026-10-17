@@ -22,7 +22,7 @@ Status: experimental.
 
 ## Configuration
 
-`describeKvoxPortsConformance` takes `options.skip`, the ports to leave out of the run. A port the factory omits and that is not skipped fails its section.
+`describeKvoxPortsConformance` takes `options.skip`, the ports to leave out of the run. A port the factory omits and that is not skipped fails its section. The object-store section takes an optional `uploadParts(init, size)` hook: a store that checks its parts when an upload is sealed (a filesystem store, S3) needs the kit to PUT the bytes to the signed part URLs before `completeUpload`; the fakes accept an empty upload and leave it out.
 
 ## Extension-point catalog
 

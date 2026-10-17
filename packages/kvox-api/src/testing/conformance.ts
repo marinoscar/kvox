@@ -12,6 +12,7 @@ import {
   type KvoxAuditPort,
   type KvoxEventsPort,
   type KvoxIdentityPort,
+  type KvoxInitUploadResult,
   type KvoxJobsPort,
   type KvoxNotifyPort,
   type KvoxObjectStorePort,
@@ -169,6 +170,13 @@ export interface KvoxObjectStoreUnderTest {
   port: KvoxObjectStorePort;
   /** The owner to put objects as. Defaults to a throwaway user. */
   ownerId?: string;
+  /**
+   * Puts the bytes of an upload the kit just started to the part URLs `initUpload` handed out.
+   * A store that checks its parts at `completeUpload` (a filesystem store, S3) refuses to seal an
+   * upload nothing was sent to; leave the hook out only when the port accepts that (the fakes do).
+   * The kit calls it with the result of `initUpload` and the declared size, before `completeUpload`.
+   */
+  uploadParts?(init: KvoxInitUploadResult, size: number): Promise<void>;
 }
 
 /**
@@ -717,6 +725,7 @@ export function describeKvoxPortsConformance(
         { userId: owner(store) },
         { name: 'b.m4a', mimeType: 'audio/mp4', size: 1024, managedBy: 'transcripts' },
       );
+      await store.uploadParts?.(init, 1024);
       await store.port.completeUpload(init.objectId);
       await tick();
       expect(seen.length).toBe(1);
