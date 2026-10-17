@@ -189,6 +189,11 @@ export interface FakeKvoxWebHostOptions {
   /** Link builders. Default: `/transcripts/:id`, `/notes/:id`, `/graph/entities/:id`, `/ask/:id`. */
   links?: Partial<KvoxLinks>;
   /**
+   * The host's notification-stream hook (`KvoxWebHost.useLatestEventId`). Default:
+   * the host has none. A test passes a hook that reads a variable it controls.
+   */
+  useLatestEventId?: (prefix: string) => string | null;
+  /**
    * Include the host's own `upload.putPart` port, recording each part. Default
    * `true`. Pass `false` to leave it out so the engine uses `XMLHttpRequest`
    * (and a test drives it with `createFakeXhrFactory`).
@@ -436,6 +441,8 @@ export function createFakeKvoxWebHost(options: FakeKvoxWebHostOptions = {}): Fak
     links,
     features: () => features,
   };
+
+  if (options.useLatestEventId) host.useLatestEventId = options.useLatestEventId;
 
   if (options.upload !== false) {
     const answer = typeof options.upload === 'function' ? options.upload : null;

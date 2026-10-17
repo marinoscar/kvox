@@ -1,0 +1,163 @@
+/**
+ * The library's status filter options — issue #30, epic #19; the URL seeds are
+ * #170, epic #166.
+ *
+ * A SEPARATE MODULE from the page, so a test can assert the list without
+ * mounting the page, and so the "Any" sentinel is defined once. `'all'` is a
+ * UI value the API knows nothing about: `GET /api/transcripts` filters by
+ * OMITTING `status`, never by a magic value, so the page translates rather than
+ * forwarding it.
+ *
+ * ⚠ THIS LIST NO LONGER FEEDS A `<Select>` — issue #193 removed it. The filter
+ * bar is one search box, and a status now reaches the library only through
+ * `?status=`, which something elsewhere hands the user (the home counts strip
+ * is the first caller). The list has two remaining jobs, and both are why it
+ * did NOT go with the dropdown:
+ *
+ *   1. It is the ALLOWLIST `transcriptStatusFromQuery` validates against, so a
+ *      status the API knows and this page does not offer cannot seed a filter.
+ *   2. It is where the chip above the feed gets its LABEL — "Failed", not the
+ *      raw API value — so the user-facing wording stays in one place.
+ *
+ * `deleting` is deliberately offered. It is a real, visible state a transcript
+ * can sit in for minutes while its purge job removes multi-gigabyte objects,
+ * and a user who just deleted something and wants to know whether it is gone
+ * has nowhere else to look.
+ */
+
+import type { TranscriptStatus } from '../clients/transcripts.js';
+
+/**
+ * One status the library's filter chip offers.
+ *
+ * @stability experimental
+ */
+export interface TranscriptStatusFilterOption {
+  /** The status, or `'all'`. */
+  value: TranscriptStatus | 'all';
+  /** The label shown on the chip. */
+  label: string;
+}
+
+/**
+ * The statuses the transcripts library offers as a filter, `'all'` first. It is
+ * also the allowlist {@link transcriptStatusFromQuery} validates against.
+ *
+ * @stability experimental
+ */
+export const TRANSCRIPT_STATUS_FILTERS: readonly TranscriptStatusFilterOption[] = [
+  { value: 'all', label: 'Any status' },
+  { value: 'uploading', label: 'Uploading' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'deleting', label: 'Deleting' },
+];
+
+/**
+ * =============================================================================
+ * THE URL SEEDS THE VIEW'S STATE. IT DOES NOT BIND TO IT.
+ * =============================================================================
+ *
+ * `/transcripts?scope=shared`, `?status=failed` and `?q=budget` exist so that
+ * something ELSEWHERE in the app can hand a user a filtered library: the home
+ * page's counts strip (issue #170, epic #166) is the first caller, and a
+ * notification email or a shared link is the next obvious one. The three
+ * functions below are what turns that query string into the view's INITIAL
+ * state, once, on mount.
+ *
+ * ⚠ THEY ARE SEEDS, NOT A TWO-WAY BINDING, and that is the decision this block
+ * exists to record. Once the view is mounted, changing a filter updates
+ * component state and NOTHING writes back to the URL.
+ *
+ * FULL TWO-WAY SYNC WAS CONSIDERED AND REJECTED, for two concrete reasons
+ * rather than a preference:
+ *
+ *   1. The search box is DEBOUNCED (300 ms) precisely because a keystroke is a
+ *      `LIKE` query against the column the list is also ordering by. Pushing
+ *      the box's value into the URL puts a second clock beside that one —
+ *      either a history entry per character, or a URL that lags the input and
+ *      is wrong for exactly as long as the debounce is pending.
+ *   2. A deep link is an ENTRY POINT, not a document location. `?scope=shared`
+ *      answers "what should this page show when you arrive"; it is not a claim
+ *      that the back button should walk a user backwards through their own
+ *      filter edits, which is what a `history.push` per change would build.
+ *
+ * A future issue that genuinely wants shareable-at-any-moment library URLs
+ * would be adding `replace: true` writes on the COMMITTED (post-debounce)
+ * values — a different feature with a different failure mode, not an extension
+ * of this one.
+ *
+ * Every function here is PURE and takes `URLSearchParams`, so the rules below
+ * are asserted without mounting a page — the same reason this module was split
+ * out from the view in the first place.
+ */
+
+/**
+ * The scope tab the view offers. `'all'` is an API value with no tab.
+ *
+ * @stability experimental
+ */
+export type TranscriptScopeFilter = 'owned' | 'shared';
+
+/**
+ * `?scope=shared` → the "Shared with me" tab; anything else → "Mine".
+ *
+ * An unknown value falls back rather than throwing, and it falls back to
+ * `'owned'` specifically: a user who followed a broken link should land on
+ * their own transcripts, which is the tab the page opens on anyway.
+ *
+ * @param params - The page's query string.
+ * @returns The scope tab to open on.
+ *
+ * @stability experimental
+ */
+export function transcriptScopeFromQuery(params: URLSearchParams): TranscriptScopeFilter {
+  return params.get('scope') === 'shared' ? 'shared' : 'owned';
+}
+
+/**
+ * `?status=<value>` → the status filter, VALIDATED AGAINST THE OFFERED LIST.
+ *
+ * Membership of `TRANSCRIPT_STATUS_FILTERS` is the check, not membership of
+ * `TranscriptStatus`: the list is what this page can actually NAME, so a status
+ * the API knows and this page does not offer would otherwise filter the feed by
+ * something the reader cannot see or undo. Since #193 that is the chip rather
+ * than a `<Select>`, and the failure it prevents got worse rather than better —
+ * an unnamed filter used to render a blank dropdown, and would now render no
+ * chip at all, leaving a silently filtered feed with no way out of it.
+ *
+ * Absent, unknown, empty and `all` all answer `'all'`, which the view already
+ * translates into omitting `status` from the request.
+ *
+ * @param params - The page's query string.
+ * @returns The status to filter by, or `'all'`.
+ *
+ * @stability experimental
+ */
+export function transcriptStatusFromQuery(params: URLSearchParams): TranscriptStatus | 'all' {
+  const raw = params.get('status');
+  const offered = TRANSCRIPT_STATUS_FILTERS.find((option) => option.value === raw);
+  return offered ? offered.value : 'all';
+}
+
+/**
+ * `?q=<text>` → the search box's initial text.
+ *
+ * Returned RAW, not trimmed: the box is a text input and seeding it with
+ * something other than what the URL said would make the first edit look like a
+ * correction the user did not make. Consumers that care about emptiness already
+ * trim at the point they ask the question (`isFiltered`).
+ *
+ * Shared with `notesLibraryFilters.ts`, which re-exports it rather than
+ * spelling a second `?q` convention — two libraries whose deep links disagreed
+ * about the name of the search parameter is the failure that costs.
+ *
+ * @param params - The page's query string.
+ * @returns The text to seed the search box with.
+ *
+ * @stability experimental
+ */
+export function searchFromQuery(params: URLSearchParams): string {
+  return params.get('q') ?? '';
+}

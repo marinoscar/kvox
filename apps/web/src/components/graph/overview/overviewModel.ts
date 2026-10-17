@@ -28,7 +28,7 @@ import type Graph from 'graphology';
 import { UndirectedGraph } from 'graphology';
 
 import type { GraphOverview, GraphOverviewCluster } from '../../../services/graph';
-import { SPEAKER_PALETTES } from '../../../utils/transcriptDisplay';
+import { SPEAKER_PALETTES } from '@marinoscar/kvox-web/transcripts/headless';
 import type { ExplorerHandoff, ExplorerHandoffNode } from '../explorer/explorerHandoff';
 import { ringPosition, type ExplorerPalette } from '../explorer/explorerModel';
 

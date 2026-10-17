@@ -83,7 +83,7 @@ import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
 import type { NoteSummary } from '../../services/notes';
-import type { TranscriptSummary } from '../../services/transcripts';
+import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 
 export interface CountsStripProps {
   /** `GET /api/transcripts/summary`'s counts, or null if it never answered. */

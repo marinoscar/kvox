@@ -109,7 +109,10 @@
 
 import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
 import HomeIcon from '@mui/icons-material/Home';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import {
+  kvoxTranscriptsDestinationRoutes,
+  kvoxTranscriptsDestinations,
+} from '@marinoscar/kvox-web/transcripts/ui';
 import DescriptionIcon from '@mui/icons-material/Description';
 import HubIcon from '@mui/icons-material/Hub';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -161,7 +164,8 @@ export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string
   // #57 and #106. Splitting them is what makes the two rows light up
   // independently; a merged entry would leave the bar highlighting the same tab
   // for both halves of the app.
-  transcripts: ['/transcripts'],
+  // The transcripts slice's prefix (#500, epic #498), spread at the same key.
+  ...kvoxTranscriptsDestinationRoutes,
   notes: ['/notes'],
   // `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
   // `/graph/overview` and `/graph/imports/:id` (#373–#375, #387); `/ask` covers
@@ -249,38 +253,11 @@ export const DESTINATIONS: readonly Destination[] = [
     Icon: HomeIcon,
     path: '/',
   },
-  {
-    // Issue #30 (epic #19), restored to a destination of its own by #106.
-    //
-    // ONE PERMISSION, NOT AN `anyPermission` PAIR. This row fronts exactly one
-    // controller — `transcripts.controller.ts` carries
-    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads —
-    // so the "or" the `library` row needed has no meaning here. A deployment
-    // that revokes transcripts and keeps notes now loses this row and keeps the
-    // Notes one, which is exactly the outcome `library`'s `anyPermission`
-    // existed to fake with a single row.
-    //
-    // Seeded to ALL THREE roles (the controller's header says why: recording a
-    // conversation is the action epic #19 exists to enable, and a new account's
-    // default role is Viewer), so in practice this row is visible to everybody
-    // — but the GATE is still the permission, because a deployment that revokes
-    // it must lose the row.
-    key: 'transcripts',
-    label: 'Transcripts',
-    // Both fields say "Transcripts", and at 11 characters it is the longest
-    // compact label this app ships — which is why the collapsed rail went from
-    // 56 to 72px in #106 (a 48px caption box cannot hold it; abbreviating it to
-    // "Audio" would name something other than what the row fronts). The rail is
-    // the package's since #484 and its collapsed width is its own 56px
-    // (`RAIL_WIDTH_COLLAPSED`); check this caption when that width or the
-    // label changes.
-    compactLabel: 'Transcripts',
-    // The audio waveform this row carried before #57 renamed it to Library.
-    // It fronts recordings again, so it gets the recording icon back.
-    Icon: GraphicEqIcon,
-    path: '/transcripts',
-    permission: 'transcripts:read',
-  },
+  // Issue #30 (epic #19), restored to a destination of its own by #106; the
+  // record is the transcripts slice's since #500 (epic #498), spread at the same
+  // index: ONE permission (`transcripts:read`, what `transcripts.controller.ts`
+  // enforces), not pinned, `GraphicEq` icon, "Transcripts" for both labels.
+  ...kvoxTranscriptsDestinations,
   {
     // Issue #57 (epic #45), promoted from a tab to a destination by #106.
     //

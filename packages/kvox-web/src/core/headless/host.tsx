@@ -255,6 +255,19 @@ export interface KvoxWebHost {
   links: KvoxLinks;
   /** Deployment switches. Read per render. */
   features: () => KvoxFeatures;
+  /**
+   * A React hook that returns the id of the most recent notification whose
+   * event key starts with `prefix`, or `null` when there is none.
+   *
+   * Optional. A page that lists records the user's own actions can change in
+   * the background (a transcript that finished processing) re-reads itself when
+   * the id changes, which makes the notification stream the fast path of its
+   * polling. It is a hook, so it must be the SAME function for the life of the
+   * host and follow the rules of hooks; a host without a notification stream
+   * leaves it out and the pages poll alone. Read it through
+   * {@link useKvoxLatestEventId}.
+   */
+  useLatestEventId?: (prefix: string) => string | null;
 }
 
 /**
@@ -299,6 +312,23 @@ export function useKvoxHost(): KvoxWebHost {
   const host = useContext(KvoxHostContext);
   if (host === null) throw new KvoxHostMissingError();
   return host;
+}
+
+/**
+ * The id of the most recent notification whose event key starts with `prefix`,
+ * from the host's {@link KvoxWebHost.useLatestEventId}; `null` when the host
+ * has none or there is no such notification.
+ *
+ * @param prefix - The event-key prefix, for example `transcripts.`.
+ * @returns The notification id, which changes exactly when a NEW matching event arrives.
+ *
+ * @stability experimental
+ */
+export function useKvoxLatestEventId(prefix: string): string | null {
+  const host = useKvoxHost();
+  const hook = host.useLatestEventId;
+  // A host's hook is fixed for its lifetime, so the hook order is stable.
+  return hook ? hook(prefix) : null;
 }
 
 /**

@@ -52,7 +52,7 @@
 
 import { api, ApiError } from './api';
 import type { NoteBodyFormat } from './noteTemplates';
-import type { PlaybackStatus, TranscriptStatus } from './transcripts';
+import type { PlaybackStatus, TranscriptStatus } from '@marinoscar/kvox-web/transcripts/headless';
 import type { NoteConflictReason, NoteTitleSource } from '@marinoscar/kvox-contract/notes';
 
 // =============================================================================

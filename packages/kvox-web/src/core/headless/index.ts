@@ -7,6 +7,7 @@ export {
   KvoxWebHostProvider,
   useHasPermission,
   useKvoxHost,
+  useKvoxLatestEventId,
   useKvoxPermissionCheck,
   useKvoxViewer,
 } from './host.js';

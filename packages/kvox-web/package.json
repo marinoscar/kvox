@@ -46,6 +46,14 @@
       "types": "./dist/search/ui/index.d.ts",
       "default": "./dist/search/ui/index.js"
     },
+    "./transcripts/headless": {
+      "types": "./dist/transcripts/headless/index.d.ts",
+      "default": "./dist/transcripts/headless/index.js"
+    },
+    "./transcripts/ui": {
+      "types": "./dist/transcripts/ui/index.d.ts",
+      "default": "./dist/transcripts/ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -69,6 +77,7 @@
     "@marinoscar/platform-web": "0.1.0-next.5",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
+    "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/react": "^16.3.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -84,6 +93,9 @@
     "@mui/material": {
       "optional": true
     },
+    "@tanstack/react-virtual": {
+      "optional": true
+    },
     "@testing-library/react": {
       "optional": true
     },
@@ -96,6 +108,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
+    "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

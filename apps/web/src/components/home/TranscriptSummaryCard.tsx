@@ -22,9 +22,9 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
-import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
-import type { TranscriptAccessRole, TranscriptListItem } from '../../services/transcripts';
-import { formatDuration } from '../../utils/playbackIntervals';
+import { TranscriptStatusChip } from '@marinoscar/kvox-web/transcripts/ui';
+import type { TranscriptAccessRole, TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
+import { formatDuration } from '@marinoscar/kvox-web/transcripts/headless';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /**

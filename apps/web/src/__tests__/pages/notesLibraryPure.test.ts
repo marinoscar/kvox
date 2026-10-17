@@ -12,12 +12,7 @@ import {
   noteStatusFromQuery,
   searchFromQuery as notesSearchFromQuery,
 } from '../../pages/notesLibraryFilters';
-import {
-  TRANSCRIPT_STATUS_FILTERS,
-  searchFromQuery,
-  transcriptScopeFromQuery,
-  transcriptStatusFromQuery,
-} from '../../pages/transcriptsLibraryFilters';
+import { searchFromQuery } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   noteSourceFallbackLabel,
   noteSourcePath,
@@ -206,43 +201,6 @@ describe('notesLibraryFilters', () => {
 function query(search: string): URLSearchParams {
   return new URLSearchParams(search);
 }
-
-describe('transcriptScopeFromQuery', () => {
-  it('reads ?scope=shared', () => {
-    expect(transcriptScopeFromQuery(query('?scope=shared'))).toBe('shared');
-  });
-
-  it('reads ?scope=owned', () => {
-    expect(transcriptScopeFromQuery(query('?scope=owned'))).toBe('owned');
-  });
-
-  it('falls back to the user’s own transcripts for anything else', () => {
-    // A broken link should land somebody on their own library, which is the
-    // tab the page opens on anyway — never on an error.
-    expect(transcriptScopeFromQuery(query(''))).toBe('owned');
-    expect(transcriptScopeFromQuery(query('?scope=everything'))).toBe('owned');
-    expect(transcriptScopeFromQuery(query('?scope='))).toBe('owned');
-    // `all` is a real API scope with no tab to select. It is not a tab value.
-    expect(transcriptScopeFromQuery(query('?scope=all'))).toBe('owned');
-  });
-});
-
-describe('transcriptStatusFromQuery', () => {
-  it('reads every status the page actually offers', () => {
-    for (const option of TRANSCRIPT_STATUS_FILTERS) {
-      expect(transcriptStatusFromQuery(query(`?status=${option.value}`))).toBe(option.value);
-    }
-  });
-
-  it('falls back to "all" for an unknown status', () => {
-    expect(transcriptStatusFromQuery(query('?status=bogus'))).toBe('all');
-  });
-
-  it('falls back to "all" when there is no status at all', () => {
-    expect(transcriptStatusFromQuery(query(''))).toBe('all');
-    expect(transcriptStatusFromQuery(query('?status='))).toBe('all');
-  });
-});
 
 describe('noteStatusFromQuery', () => {
   it('reads every status the page actually offers', () => {

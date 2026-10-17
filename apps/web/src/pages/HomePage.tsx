@@ -147,7 +147,7 @@ import { SharedWithMe } from '../components/home/SharedWithMe';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteSummary } from '../hooks/useNotes';
-import { useTranscriptSummary } from '../hooks/useTranscripts';
+import { useTranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';
 import { getTranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 

@@ -89,4 +89,4 @@ export function noteStatusFromQuery(params: URLSearchParams): NoteStatus | 'all'
  * second spelling of "which parameter carries the search term" is exactly the
  * kind of divergence a deep link discovers in production rather than in review.
  */
-export { searchFromQuery } from './transcriptsLibraryFilters';
+export { searchFromQuery } from '@marinoscar/kvox-web/transcripts/headless';

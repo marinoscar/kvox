@@ -117,6 +117,12 @@ export interface KvoxRouteDef {
   path: string;
   /** The permission the route is gated on, when it is gated. */
   permission?: string;
+  /**
+   * Where a viewer without `permission` is sent. Defaults to `/` (home); a
+   * route that is only the creating half of a list (`/transcripts/new`) sends
+   * the viewer back to the list.
+   */
+  redirectTo?: string;
   /** The page, lazily loaded. */
   Component: LazyExoticComponent<ComponentType> | ComponentType;
 }
