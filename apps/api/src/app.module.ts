@@ -47,7 +47,6 @@ import { LoggerModule } from './common/logger/logger.module';
 import { KvoxModule } from './kvox/kvox.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
-import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
 import { GraphResolutionModule } from './graph/resolution/resolution.module';
@@ -267,12 +266,10 @@ import configuration from './config/configuration';
     // the platform `AiService`. Global; BEFORE the features that inject it.
     KvoxAiModule,
 
-    // Notes (#49, epic #45): the `note.generate` pipeline. AFTER the AI
-    // modules above (`KvoxAiModule` is global) and AFTER KvoxModule's transcripts
-    // configuration, which it imports for `materialize()` — a
-    // note is generated from the transcript AS THE USER CORRECTED IT, never
-    // from the AI's original result.
-    NotesModule,
+    // Notes (#49, epic #45) are `@marinoscar/kvox-api/notes`, configured in `kvox/notes/notes.config.ts`
+    // and imported by `KvoxModule` above (#495, epic #491), after its transcripts configuration: a
+    // note is generated from the transcript AS THE USER CORRECTED IT, never from the AI's original
+    // result.
 
     // Connected knowledge (#354, epic #344): the graph scaffold — the
     // `graph:*` access service, the effective-ontology service and
@@ -282,8 +279,9 @@ import configuration from './config/configuration';
     GraphModule,
 
     // Graph extraction (#363): `kg.extract`, its two routes and the proposal
-    // stage registry. NotesModule imports it too (the note-ready hook); listed
-    // here explicitly for the reason SearchIndexingModule is below.
+    // stage registry. The notes configuration's temporary listener (#495) calls it
+    // when a note is ready; listed here explicitly for the reason SearchIndexingModule
+    // is below.
     GraphExtractionModule,
 
     // Entity resolution (#364): the `resolution` proposal stage, merges and

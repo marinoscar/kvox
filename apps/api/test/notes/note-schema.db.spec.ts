@@ -36,7 +36,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { NOTE_TEMPLATES } from '../../prisma/seed-app';
+import { NOTE_BUILTIN_TEMPLATES as NOTE_TEMPLATES } from '@marinoscar/kvox-api/notes/templates';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 

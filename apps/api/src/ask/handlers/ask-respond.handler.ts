@@ -109,7 +109,7 @@ import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { resolveServiceName } from '../../common/otel/telemetry-identity';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
 import { StreamFlusher } from '@marinoscar/kvox-api/core';
-import { providerLabelOf } from '../../notes/generation/ai-readiness';
+import { providerLabelOf } from '@marinoscar/kvox-api/notes';
 import { aiProviderThrottleKey } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fitToBudget, messageTokens, MESSAGE_OVERHEAD_TOKENS, selectHistory, type AskHistoryRow } from '../ask-history';

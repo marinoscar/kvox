@@ -131,6 +131,12 @@ export interface KvoxObjectInfo {
   createdAt: Date;
   /** When it last changed. */
   updatedAt: Date;
+  /** The user who uploaded or stored it, when the host records one. */
+  ownerId?: string | null;
+  /** The owning module, when the host records one (`null` for an object no module owns). */
+  managedBy?: KvoxManagedBy | null;
+  /** Free-form data stored with the object (`put` and `adopt` accept it; `setMetadata` replaces it). */
+  metadata?: Record<string, unknown> | null;
 }
 
 /**
@@ -301,6 +307,15 @@ export interface KvoxObjectStorePort {
    * @param objectIds - the objects.
    */
   describe(objectIds: readonly string[]): Promise<Map<string, KvoxObjectInfo>>;
+
+  /**
+   * Replaces the free-form data stored with an object. The caller passes the WHOLE
+   * value (read it from `describe`, change it, write it back); keys it leaves out are
+   * removed. A missing object is ignored.
+   * @param objectId - the object.
+   * @param metadata - the new data.
+   */
+  setMetadata(objectId: string, metadata: Record<string, unknown>): Promise<void>;
 
   /**
    * A time-limited download URL.

@@ -2191,7 +2191,7 @@ and posted back for the server to persist. **There is no `if (isNode)`
 branch anywhere in a handler or in the claim path** — a node is an option a
 deployment can add, never a requirement any handler must plan around. See
 the `add-job-type` skill (`.claude/skills/add-job-type/SKILL.md`) for the
-recipe, and `apps/api/src/notes/handlers/note-source-extract.handler.ts` for
+recipe, and `packages/kvox-api/src/notes/handlers/note-source-extract.handler.ts` for
 what that split looks like in a real node-eligible handler.
 
 The node's data plane is a second, deliberate asymmetry: a node fetches and

@@ -15,8 +15,7 @@ import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
-import { NoteOriginService } from '../../src/notes/note-origin.service';
+import { NoteAccessService, NoteOriginService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
@@ -36,7 +35,7 @@ import { normalizeAlias, statementHash } from '../../src/graph/write/normalize';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
-import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
+import { createPlatformTranscriptSharing, createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
 export const V = 'test';
 
@@ -50,7 +49,7 @@ export function buildServices(prisma: PrismaClient) {
   const write = new GraphWriteService(new EvidenceValidator(createDbManagedObjects(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
   const access = new GraphAccessService(db);
   const ontology = new GraphOntologyService(db, new GraphPreferencesService(db));
-  const spans = new SpanValidator(new NoteOriginService(db));
+  const spans = new SpanValidator(new NoteOriginService(db as never, createPlatformTranscriptSharing(prisma)));
   const proposals = new ProposalsService(db, access, new NoteAccessService(db), ontology, spans);
   const merges = new MergeService(
     db,

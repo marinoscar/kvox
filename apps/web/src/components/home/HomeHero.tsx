@@ -57,7 +57,7 @@
  * manufacture one the user may not be allowed to take.
  *
  * `notes:write` is the string, because it is the string
- * `apps/api/src/notes/notes.controller.ts` enforces on `POST /api/notes` and the
+ * `packages/kvox-api/src/notes/notes.controller.ts` enforces on `POST /api/notes` and the
  * one `App.tsx` guards `/notes/new` with — the same Settings-UI-Pattern rule 3
  * discipline the admin cards and `config/destinations.ts` follow.
  *

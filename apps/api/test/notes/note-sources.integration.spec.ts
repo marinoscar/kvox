@@ -13,7 +13,7 @@ import { createMockStorageProvider } from '../mocks/storage-provider.mock';
 import { APP_SLUG } from '@app/shared';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
-import { markdownFile, multiPagePdf } from '../fixtures/documents.fixture';
+import { markdownFile, multiPagePdf } from '@marinoscar/kvox-api/notes/testing';
 
 // =============================================================================
 // Note source documents, over the wire (issue #51, epic #45)

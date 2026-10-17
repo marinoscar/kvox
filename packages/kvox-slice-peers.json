@@ -78,6 +78,22 @@
         "pdfkit",
         "zod"
       ]
+    },
+    "notes": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/schedule",
+        "@nestjs/swagger",
+        "docx",
+        "fastify",
+        "nestjs-zod",
+        "pdfkit",
+        "rxjs",
+        "unpdf",
+        "zod"
+      ]
     }
   },
   "kvox-web": {

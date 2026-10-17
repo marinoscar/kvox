@@ -5,7 +5,7 @@
 // DERIVED, NOT DECLARED. The roles and permissions the platform's slices
 // enforce are declared by `@marinoscar/platform-api` (`PLATFORM_ROLES`,
 // `PLATFORM_PERMISSIONS`); this app's own domain permissions are declared in
-// `app-registrations/permissions.ts` (and the transcripts slice's two by the package). This file only turns those declaration
+// `app-registrations/permissions.ts` (and the transcripts and notes slices' by the package). This file only turns those declaration
 // maps into the `ROLES` / `PERMISSIONS` constants the rest of the codebase
 // imports, so a permission string can never drift from what the seed writes
 // and what the guards check.
@@ -22,6 +22,12 @@
 import { permissionIds, roleIds } from '@marinoscar/platform-api/core';
 import { PLATFORM_PERMISSIONS, PLATFORM_ROLES } from '@marinoscar/platform-api/manifest';
 
+import {
+  NOTE_TEMPLATES_READ_PERMISSION,
+  NOTE_TEMPLATES_WRITE_PERMISSION,
+  NOTES_READ_PERMISSION,
+  NOTES_WRITE_PERMISSION,
+} from '@marinoscar/kvox-api/notes';
 import { TRANSCRIPTS_READ_PERMISSION, TRANSCRIPTS_WRITE_PERMISSION } from '@marinoscar/kvox-api/transcripts';
 
 import { KVOX_PERMISSIONS } from '../../app-registrations/permissions';
@@ -36,6 +42,12 @@ export const PERMISSIONS = {
   // registered in `app-registrations/kvox-permissions.ts` (issue #493).
   TRANSCRIPTS_READ: TRANSCRIPTS_READ_PERMISSION,
   TRANSCRIPTS_WRITE: TRANSCRIPTS_WRITE_PERMISSION,
+  // The notes slice's four permissions, exported as data by the package and registered in
+  // `app-registrations/kvox-permissions.ts` (issue #495).
+  NOTES_READ: NOTES_READ_PERMISSION,
+  NOTES_WRITE: NOTES_WRITE_PERMISSION,
+  NOTE_TEMPLATES_READ: NOTE_TEMPLATES_READ_PERMISSION,
+  NOTE_TEMPLATES_WRITE: NOTE_TEMPLATES_WRITE_PERMISSION,
   ...permissionIds(KVOX_PERMISSIONS),
 } as const;
 

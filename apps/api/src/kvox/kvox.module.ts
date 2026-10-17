@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { platformKvoxModule } from '../platform-kvox/platform-kvox.module';
+import { NotesConfig } from './notes/notes.config';
 import { SearchConfig, SearchIndexingConfig } from './search/search.config';
 import { TranscriptionBindingModule } from './transcription/transcription-binding.module';
 import { TranscriptionConfig } from './transcription/transcription.config';
@@ -22,8 +23,8 @@ import { TranscriptsBindingModule, TranscriptsConfig } from './transcripts/trans
 //
 // Search (#494) sits before transcription because the transcripts and notes modules
 // import its indexing half; transcripts (#493) comes after transcription and search,
-// which it imports; later slices (notes, graph, Ask) append their config to this list
-// as they move into the package.
+// which it imports; notes (#495) comes after transcripts and search, which it imports;
+// later slices (graph, Ask) append their config to this list as they move into the package.
 // =============================================================================
 
 @Module({
@@ -35,6 +36,7 @@ import { TranscriptsBindingModule, TranscriptsConfig } from './transcripts/trans
     TranscriptionBindingModule,
     TranscriptsConfig,
     TranscriptsBindingModule,
+    NotesConfig,
   ],
 })
 export class KvoxModule {}

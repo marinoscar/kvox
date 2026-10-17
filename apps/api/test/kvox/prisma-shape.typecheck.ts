@@ -16,7 +16,7 @@
 //
 // TRANSCRIPTION NEEDS NO PRISMA. It reads and writes through the settings,
 // secrets and audit ports only, so it adds no line here. The first line is search's
-// (#494), the second the transcripts slice's (#493).
+// (#494), the second the transcripts slice's (#493), the third the notes slice's (#495).
 //
 // Keep one line per slice, named `_<slice>`.
 // =============================================================================
@@ -44,3 +44,17 @@ import type { KvoxTranscriptsDb } from '@marinoscar/kvox-api/transcripts';
  * callback and array forms.
  */
 export const _transcripts: KvoxTranscriptsDb = null as unknown as KvoxHostPrisma;
+
+import type { KvoxNotesDb } from '@marinoscar/kvox-api/notes';
+
+/**
+ * Notes (#495): the six note tables, the `transcript` and `transcriptVersion` reads and
+ * `$transaction` in both its callback and array forms; the `noteTemplate` delegate carries the
+ * `upsert` the built-in seed uses.
+ */
+export const _notes: KvoxNotesDb = null as unknown as KvoxHostPrisma;
+
+import type { NoteTemplateSeedDb } from '@marinoscar/kvox-api/notes/templates';
+
+/** The built-in note template seed (#495): the application's seed script passes its own client. */
+export const _noteSeed: NoteTemplateSeedDb = null as unknown as KvoxHostPrisma;

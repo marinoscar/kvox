@@ -4,9 +4,9 @@ import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-sys
 import {
   BUILT_IN_TEMPLATE_IMMUTABLE_MESSAGE,
   NOTE_TEMPLATE_NOT_FOUND_MESSAGE,
-} from '../../src/notes/access/note-template-access.service';
-import { NoteSourceService } from '../../src/notes/generation/note-source.service';
-import { MAX_INSTRUCTIONS_CHARS } from '../../src/notes/dto/note-template.dto';
+  NoteSourceService,
+} from '@marinoscar/kvox-api/notes';
+import { MAX_INSTRUCTIONS_CHARS } from '@marinoscar/kvox-contract/notes';
 import {
   authHeader,
   createMockTestUser,
@@ -868,7 +868,7 @@ describe('Note templates (#50)', () => {
       expect(prismaMock.noteGeneration.create).not.toHaveBeenCalled();
     });
 
-    it('is 400 for a model this deployment does not permit, naming the ones it does', async () => {
+    it('is 400 for a model this deployment does not permit, naming the model that was refused', async () => {
       const user = await createMockTestUser(context);
 
       readyToPreview(user.id);
@@ -879,7 +879,8 @@ describe('Note templates (#50)', () => {
         .send({ ...inlineBody, model: 'gpt-9-imaginary' })
         .expect(400);
 
-      expect(response.body.message).toContain('gpt-4o');
+      // The port's resolver names the refused model; the permitted list is the host's to give.
+      expect(response.body.message).toContain('gpt-9-imaginary');
       expect(prismaMock.noteGeneration.create).not.toHaveBeenCalled();
     });
 

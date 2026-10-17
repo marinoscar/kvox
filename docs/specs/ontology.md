@@ -13,7 +13,7 @@
 > `apps/api/prisma/schema.prisma`'s `Transcript.speakerIdentities` (line
 > ~2391), `TranscriptSegment`, `TranscriptNameSuggestion`, `NoteGeneration`
 > and `SearchEmbedding` models; `packages/kvox-api/src/search/search-fusion.ts`
-> (`reciprocalRankFusion`, `RRF_K = 60`); `apps/api/src/notes/job-types.ts`
+> (`reciprocalRankFusion`, `RRF_K = 60`); `packages/kvox-api/src/notes/job-types.ts`
 > (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
 > (the four-tab ceiling). Everything under `apps/api/src/graph/`,
@@ -1701,7 +1701,7 @@ Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
-`kg.extract` lives under `graph/extraction/` (§6; `GraphExtractionModule`, imported by `NotesModule` for the auto-extract hook — one-way: it provides the two note services it needs itself), `kg.resolve`/`kg.embed` under `graph/resolution/` (`GraphResolutionModule`, §7), `kg.graph_layout`
+`kg.extract` lives under `graph/extraction/` (§6; `GraphExtractionModule`, which subscribes to the notes slice's `kvox.notes.note_ready` event for the auto-extract hook and imports the notes configuration for the two note services it needs — one-way: the notes slice knows no graph), `kg.resolve`/`kg.embed` under `graph/resolution/` (`GraphResolutionModule`, §7), `kg.graph_layout`
 under `graph/layout/` (§22.3) and `kg.migrate` under `graph/migrate/` (§17.4) —
 each grouped with the feature it belongs to rather than in one shared handler
 directory:
@@ -1773,7 +1773,7 @@ app's default role is Viewer.
   (`GET /api/graph/proposals?kind=import`, `GET /api/graph/proposals/:id`).
 
 `GraphAccessService` (planned) mirrors `NoteAccessService`
-(`apps/api/src/notes/access/note-access.service.ts`, verified above) exactly:
+(`packages/kvox-api/src/notes/access/note-access.service.ts`, verified above) exactly:
 **owner-only, 404 never 403, no `read_any`** — the identical reasoning
 transcripts and notes already state for themselves, applied to this graph's
 rows: a private conversation's derived facts are not shared infrastructure,
@@ -3358,7 +3358,7 @@ of a proposal.
 
 `GET /api/ask/messages/:id/stream` — the same `delta | done | error` frame
 contract, `Last-Event-ID` resume, and offset-addressed content
-`src/notes/generation/note-stream.ts` (verified above) already defines for
+`packages/kvox-api/src/core/stream/sse-stream.ts` (verified above) already defines for
 `note_generations`, reused rather than reimplemented for the identical
 reason §9.4's fusion discipline reuses `reciprocalRankFusion()`: a second,
 independently-written SSE frame format for the same "stream durable text as

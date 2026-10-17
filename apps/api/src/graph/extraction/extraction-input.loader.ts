@@ -16,8 +16,7 @@ import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { defaultSpeakerName, parseSpeakerIdentities } from '@marinoscar/kvox-api/transcripts';
-import { NOTE_NOT_FOUND_MESSAGE } from '../../notes/access/note-access.service';
-import { NoteOriginService } from '../../notes/note-origin.service';
+import { NOTE_NOT_FOUND_MESSAGE, NoteOriginService } from '@marinoscar/kvox-api/notes';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
 import type { UserGuidance } from './dto/extraction.dto';
 import { MAX_KNOWN_ENTITIES, type ExtractionInput, type KnownEntityRow } from './extraction-context';

@@ -9,6 +9,7 @@ import {
 } from '@marinoscar/platform-api/user-data';
 import type { UserDataModelHint } from '@marinoscar/platform-api/user-data';
 
+import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE, notesUserDataModels } from '../../kvox/notes/user-data';
 import { OWNER_PURGE_MODE } from '../../common/owner-purge';
 import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
 
@@ -97,8 +98,6 @@ import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
 
 /** Per-item and owner-level purge of a user's transcripts. */
 export const TRANSCRIPT_PURGE_DELEGATE = 'transcript.purge';
-/** Per-item and owner-level purge of a user's notes. */
-export const NOTE_PURGE_DELEGATE = 'note.purge';
 /** The whole-graph purge. */
 export const KG_PURGE_DELEGATE = 'kg.purge';
 
@@ -124,14 +123,6 @@ registerUserDataCategory({
   order: 1,
 });
 registerUserDataCategory({
-  id: 'notes',
-  label: 'Notes',
-  description: 'Your notes, their rendered exports and any document you uploaded as a source.',
-  content: true,
-  order: 2,
-});
-// The platform's own `files` category is skipped once this one is registered.
-registerUserDataCategory({
   id: 'files',
   label: 'Files',
   description:
@@ -139,14 +130,9 @@ registerUserDataCategory({
   content: true,
   order: 3,
 });
-registerUserDataCategory({
-  id: 'noteTemplates',
-  label: 'Note templates',
-  description:
-    'Your own custom note templates. Built-in templates are not yours and stay. A template a note still uses is kept.',
-  content: true,
-  order: 4,
-});
+for (const category of NOTES_USER_DATA_CATEGORIES) {
+  registerUserDataCategory(category);
+}
 registerUserDataCategory({
   id: 'graph',
   label: 'Knowledge graph',
@@ -172,15 +158,7 @@ registerUserDataScope({
   layer: 'specific',
   order: 10,
 });
-registerUserDataScope({
-  id: 'notes',
-  label: 'Notes',
-  description: 'Your notes only, not your note templates.',
-  categories: ['notes'],
-  confirmation: 'NOTES',
-  layer: 'specific',
-  order: 20,
-});
+registerUserDataScope(NOTES_USER_DATA_SCOPE);
 registerUserDataScope({
   id: 'files',
   label: 'Files',
@@ -232,10 +210,7 @@ const graphModel = (model: Prisma.ModelName): UserDataModelHint<Prisma.ModelName
 
 registerUserDataModels<Prisma.ModelName>([
   { model: 'Transcript', category: 'transcripts', delegate: ownerDelegate(TRANSCRIPT_PURGE_DELEGATE) },
-  { model: 'Note', category: 'notes', delegate: ownerDelegate(NOTE_PURGE_DELEGATE) },
-
-  { model: 'NoteTemplate', category: 'noteTemplates', keepWhenReferenced: true },
-  { model: 'UserHiddenNoteTemplate', category: 'noteTemplates' },
+  ...notesUserDataModels(ownerDelegate),
 
   { model: 'AskConversation', category: 'ask' },
 

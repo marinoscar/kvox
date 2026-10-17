@@ -65,6 +65,22 @@ import {
   describeTranscriptExporterConformance,
   describeTranscriptsConformance,
 } from '@marinoscar/kvox-api/transcripts/testing';
+import {
+  MarkdownNoteExporter,
+  NoteExportHandler,
+  NoteExporterRegistry,
+  NoteGenerateHandler,
+  NotePurgeHandler,
+  NoteRetitleHandler,
+  NoteSourceExtractHandler,
+  NotesHousekeepingHandler,
+  PdfNoteExporter,
+} from '@marinoscar/kvox-api/notes';
+import {
+  WordNoteExporter,
+  describeNoteExporterConformance,
+  describeNotesConformance,
+} from '@marinoscar/kvox-api/notes/testing';
 import { AssemblyAiProvider, TranscriptionProviderRegistry } from '@marinoscar/kvox-api/transcription';
 import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/transcription/testing';
 
@@ -293,12 +309,12 @@ runPlatformConformance({
   suites: {
     // The three permanent exemptions (lease reaper, temp-file janitor, node secret sweep) live in
     // the package, outside this source root, and run from it: KVox has none of its own.
-    // Three files hold a @Cron here: kg-export-expiry, kg-migrate-scheduler, notes-housekeeping
+    // Two files hold a @Cron here: kg-export-expiry, kg-migrate-scheduler
     // (the storage cleanup cron is the platform's since #469; the backup schedule and the
-    // telemetry retention crons are the platform's since #471; the transcripts housekeeping
-    // cron moved into `@marinoscar/kvox-api/transcripts` with #493 and is scanned by the second
-    // run at the bottom of this file).
-    cronEnqueueOnly: { exempt: [], minCronFiles: 3 },
+    // telemetry retention crons are the platform's since #471; the transcripts and notes
+    // housekeeping crons moved into `@marinoscar/kvox-api/transcripts` (#493) and
+    // `@marinoscar/kvox-api/notes` (#495) and are scanned by the extra runs below).
+    cronEnqueueOnly: { exempt: [], minCronFiles: 2 },
     // The listener half of queue rule 1 (no @OnEvent body downloads, uploads or calls the storage
     // provider). Five files hold a listener, one body each, every one a dispatch or one bounded
     // write. The job-failure and node-offline notifiers are the platform's since #470 (outside
@@ -550,6 +566,51 @@ runPlatformConformance({
   suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
 });
 
+// The notes slice's conformance suites (`@marinoscar/kvox-api/notes/testing`, #495), over the web edition's
+// binding: the six handlers as the application's module built them, and the three built-in exporters. The
+// pipeline invariants (six pinned job types; note.generate and note.retitle server-only and tried once;
+// only note.source.extract node-eligible; the ready event after the commit) are held here exactly as the
+// package holds them over its fakes.
+let notesContext: TestContext | undefined;
+
+afterAll(async () => {
+  if (notesContext) await closeTestApp(notesContext);
+});
+
+describeNotesConformance(
+  'the web edition binding',
+  async () => {
+    notesContext = await createTestApp();
+    const app = notesContext.module;
+
+    return {
+      handlers: [
+        NoteExportHandler,
+        NoteGenerateHandler,
+        NotePurgeHandler,
+        NoteRetitleHandler,
+        NoteSourceExtractHandler,
+        NotesHousekeepingHandler,
+      ].map((handler) => app.get(handler, { strict: false })),
+    };
+  },
+  { describe, it, expect },
+);
+
+for (const exporter of [
+  new MarkdownNoteExporter(new NoteExporterRegistry()),
+  new PdfNoteExporter(new NoteExporterRegistry()),
+  new WordNoteExporter(new NoteExporterRegistry()),
+]) {
+  describeNoteExporterConformance(exporter, { describe, it, expect }, { minBytes: exporter.format === 'markdown' ? 1 : 500 });
+}
+
+// The notes housekeeping cron lives in the package too; the same queue rule holds for its folder.
+runPlatformConformance({
+  sourceRoots: [join(REPO_DIR, 'packages', 'kvox-api', 'src', 'notes', 'tasks')],
+  suites: { cronEnqueueOnly: { exempt: [], minCronFiles: 1 } },
+});
+
 // kvox-guarded routes: the identity suite's two route rules, for the controllers it cannot see (see
 // `isKvoxGuarded`). Every route of a controller the `@marinoscar/kvox-api` slices guard is authenticated
 // through `KvoxAuthGuard`, and every permission it enforces (the option names resolved through the
@@ -561,8 +622,12 @@ describe('kvox-guarded routes', () => {
       .map((name) => ({ name, handler: controller.prototype[name] as Function }))
       .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
 
-  it('finds the transcription, transcripts and search controllers (a path mistake must not make this vacuous)', () => {
+  it('finds the transcription, transcripts, search and notes controllers (a path mistake must not make this vacuous)', () => {
     expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
+      'NoteGenerationStreamController',
+      'NoteSourcesController',
+      'NoteTemplatesController',
+      'NotesController',
       'SearchController',
       'SearchIndexController',
       'TranscriptNameChecksController',

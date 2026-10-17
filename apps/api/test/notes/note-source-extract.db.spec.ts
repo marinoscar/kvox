@@ -51,14 +51,20 @@ import {
   NodeUploadUrlDto,
 } from '@marinoscar/platform-api/nodes';
 import { NodeJobInputsAdapter } from '../../src/platform/jobs/node-job-inputs.adapter';
-import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from '../../src/notes/job-types';
-import { extractDocumentText } from '../../src/notes/extraction';
-import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
-import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import {
   EXTRACTION_METADATA_KEY,
+  NOTE_SOURCE_EXTRACT_JOB_TYPE,
+  NoteObjectsService,
+  NoteSourceExtractHandler,
+  extractDocumentText,
   extractedTextStorageKey,
-} from '../../src/notes/source-metadata';
+} from '@marinoscar/kvox-api/notes';
+import {
+  MARKDOWN_BODY,
+  PDF_PAGE_TWO,
+  markdownFile,
+  multiPagePdf,
+} from '@marinoscar/kvox-api/notes/testing';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type {
   MultipartUploadInit,
@@ -72,10 +78,10 @@ import type {
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '@marinoscar/platform-api/storage';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
-import { MARKDOWN_BODY, markdownFile, multiPagePdf, PDF_PAGE_TWO } from '../fixtures/documents.fixture';
 import { createStorageObject, managedByOf } from '../helpers/storage-object.helper';
 import { JobClaimService, JobHandlerRegistry, JobLeaseService, JobScope, JobsService, JobTerminalService, NodeOffloadService, ProviderThrottleService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore } from '../helpers/db-managed-objects.helper';
+import { createKvoxJobsHarness } from '../helpers/kvox-handler.helper';
 
 const { describeWithDb } = resolveDbSuite('note-source-extract.db.spec');
 
@@ -256,21 +262,17 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
     await prisma.$connect();
 
     storage = new InMemorySignedStorage();
-    registry = new JobHandlerRegistry();
+    // The slice handler registers through the jobs port; the web edition's adapter turns it into
+    // the platform handler this registry holds (and the node fleet claims).
+    const harness = createKvoxJobsHarness();
+    registry = harness.registry;
 
     const service = prisma as unknown as PrismaService;
     const jobScope = new JobScope(prisma as never);
-    const managed = createDbManagedObjects(prisma, storage);
+    const store = createDbObjectStore(prisma, storage);
     defaultOrgId = (await prisma.organization.findFirstOrThrow({ where: { isDefault: true } })).id;
 
-    handler = new NoteSourceExtractHandler(
-      registry,
-      service,
-      new NoteObjectsService(managed, storage),
-      jobScope,
-      storage,
-      managed,
-    );
+    handler = new NoteSourceExtractHandler(harness.adapter, store, new NoteObjectsService(store));
 
     // Self-registration, exactly as `NotesModule` triggers it — this is what
     // makes the type node-eligible and therefore claimable at all.
@@ -544,7 +546,7 @@ describeWithDb('note.source.extract end to end on a worker node (real Postgres)'
     const serverObjectId = await seedDocument(markdownFile(), 'text/markdown');
     const serverJob = await enqueue(serverObjectId);
 
-    await handler.process(serverJob);
+    await handler.process(serverJob as never);
 
     const nodeMetadata = await readMetadata(nodeObjectId);
     const serverMetadata = await readMetadata(serverObjectId);

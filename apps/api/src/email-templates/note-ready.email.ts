@@ -1,3 +1,4 @@
+import type { NoteReadyNotificationData } from '@marinoscar/kvox-api/notes';
 import { APP_NAME } from '@app/shared';
 import {
   SafeHtml,
@@ -32,23 +33,8 @@ import {
 // choose.
 // =============================================================================
 
-/** Everything the ready message renders. */
-export interface NoteReadyEmailData {
-  /** The note row's id. Used for the CTA path. */
-  noteId: string;
-  /** The owner's own title. Escaped on the way into the html by the `html` tag. */
-  title: string;
-  /** `note_generations.template_name_snapshot` — the recipe that produced it. */
-  templateName: string;
-  /** Which vendor produced it. Named because §9 says the user is always told. */
-  providerLabel: string;
-  /** The model id, verbatim. */
-  model: string;
-  /** Words in the generated note. A size cue, not a quality one. */
-  wordCount: number;
-  /** Absolute URL of the application root, for the CTA. Optional. */
-  appUrl?: string;
-}
+/** Everything the ready message renders: the slice's notification data (`@marinoscar/kvox-api/notes`). */
+export type NoteReadyEmailData = NoteReadyNotificationData;
 
 // Typed registration (issue #460): this domain declares its own template key,
 // so the base `EmailTemplateDataMap` names no domain payload.

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { NoteAccessService } from '../../notes/access/note-access.service';
-import { NoteOriginService } from '../../notes/note-origin.service';
+import { NotesConfig } from '../../kvox/notes/notes.config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GraphModule } from '../graph.module';
 import { GraphResolutionModule } from '../resolution/resolution.module';
@@ -33,11 +32,9 @@ import { SpanValidator } from './span-validator';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, GraphModule, GraphResolutionModule],
+  imports: [PrismaModule, NotesConfig, GraphModule, GraphResolutionModule],
   controllers: [GraphProposalsController],
   providers: [
-    NoteAccessService,
-    NoteOriginService,
     SpanValidator,
     ProposalsService,
     ProposalCommitService,

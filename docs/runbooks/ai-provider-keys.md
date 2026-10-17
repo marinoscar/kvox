@@ -39,7 +39,7 @@ Source of truth for every claim below:
   (`AiAuthError`, `AiInputError`, `AiRefusedError`, `AiBudgetError`,
   `RateLimitError`) and `isTerminalAiError`; `kvox-ai-errors.ts` maps the
   platform's `AiError` codes onto them.
-- `apps/api/src/notes/handlers/note-generate.handler.ts` — the job that
+- `packages/kvox-api/src/notes/handlers/note-generate.handler.ts` — the job that
   actually calls the provider: `profile: { maxAttempts: 1 }`, the
   per-user throttle key, and which failures return normally (terminal)
   versus rethrow (retryable/deferred).

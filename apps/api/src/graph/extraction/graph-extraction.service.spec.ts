@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, HttpException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { NoteAccessService } from '../../notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { IDS, makeInput, schemaFor } from '../../../test/graph/extraction-fixtures';
 import { memberHolding } from '../../../test/fixtures/principal-user.fixture';

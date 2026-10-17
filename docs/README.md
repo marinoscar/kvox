@@ -130,7 +130,7 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Recipe | What it covers |
 |---|---|
 | [../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md) | Adding a job type on the packaged queue (`@marinoscar/platform-api/jobs`): handler, explicit `orgId`, labels, node eligibility |
-| [../apps/api/src/notes/contracts/README.md](../apps/api/src/notes/contracts/README.md) | Job contracts: the result shape a worker node posts back, kept beside the module that owns the job type |
+| [../packages/kvox-api/src/notes/contracts/README.md](../packages/kvox-api/src/notes/contracts/README.md) | Job contracts: the result shape a worker node posts back, kept beside the module that owns the job type |
 | [../.claude/skills/add-notification/SKILL.md](../.claude/skills/add-notification/SKILL.md) | Adding a notification on the packaged slices (`@marinoscar/platform-api/notifications`, `/email`): template in `email-templates/`, `registerNotification` in `notifications-registry/`, `notify()` after commit |
 | [../apps/cli/README.md](../apps/cli/README.md) | `kvox`: install, `login`, `api`, `config`, `deploy`, `node`, CI usage |
 

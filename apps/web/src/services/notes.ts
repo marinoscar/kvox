@@ -1,7 +1,7 @@
 /**
  * The notes API, as the web app sees it — issue #57, epic #45.
  *
- * The backend half is `apps/api/src/notes/notes.controller.ts`,
+ * The backend half is `packages/kvox-api/src/notes/notes.controller.ts`,
  * `note-sources.controller.ts` and `dto/note.dto.ts`; every type below is a
  * hand-written mirror of a Zod schema in those files, named identically so the
  * two can be diffed by eye. Shaped after `services/transcripts.ts`:
@@ -39,7 +39,7 @@
  * 'extracting' }` and queues `note.source.extract`. There is deliberately no
  * sixth table and no "extraction status" endpoint: the extracted text is a
  * SECOND storage object, and the link plus the outcome are keys in the FIRST
- * object's own `metadata` (`apps/api/src/notes/source-metadata.ts` is the one
+ * object's own `metadata` (`packages/kvox-api/src/notes/source-metadata.ts` is the one
  * definition both the writer and the reader import).
  *
  * So {@link getNoteDocumentExtraction} polls `GET /api/storage/objects/:id` and
@@ -88,7 +88,7 @@ export type { NoteTitleSource };
 /**
  * The transcript a note was ultimately generated from — issue #309.
  *
- * Mirrors `originTranscript` in `apps/api/src/notes/dto/note.dto.ts`. DETAIL
+ * Mirrors `originTranscript` in `packages/kvox-api/src/notes/dto/note.dto.ts`. DETAIL
  * ONLY: the single-note responses carry it, list and summary rows do not.
  * `via: 'note_chain'` means the note was generated from a note that
  * (eventually) was generated from this transcript; `hops` counts the notes in
@@ -200,7 +200,7 @@ export type NoteSource =
 /**
  * Characters a note title may hold.
  *
- * MIRRORS `MAX_TITLE_CHARS` in `apps/api/src/notes/dto/note.dto.ts`, and lives
+ * MIRRORS `MAX_TITLE_CHARS` in `packages/kvox-api/src/notes/dto/note.dto.ts`, and lives
  * here — beside the types that mirror the rest of that DTO — rather than as a
  * literal in whichever form happens to accept a title, so the create form and
  * every rename surface cannot drift apart from each other or from the API.
@@ -369,7 +369,7 @@ export interface NoteDocumentExtraction {
  * What this application will accept as a note source document.
  *
  * MIRRORS `NOTE_DOCUMENT_MIME_TYPES` in
- * `apps/api/src/notes/extraction/document-format.ts`. The extensions are listed
+ * `packages/kvox-api/src/notes/extraction/document-format.ts`. The extensions are listed
  * alongside the media types because a `<input type="file" accept>` that names
  * only media types silently rejects a `.md` on the platforms that do not map
  * that extension to `text/markdown` — which is most of them.

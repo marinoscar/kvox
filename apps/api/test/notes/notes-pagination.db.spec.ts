@@ -50,11 +50,11 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { NoteSourceNameService } from '../../src/notes/note-source-name.service';
-import type { NotesService } from '../../src/notes/notes.service';
-import { buildNotesService } from './notes-service-test-factory';
+import { NoteSourceNameService, type NotesService } from '@marinoscar/kvox-api/notes';
+import { createNotesServiceTestFactory } from '@marinoscar/kvox-api/notes/testing';
+import { OwnerOnlyTranscriptSharing } from '@marinoscar/kvox-api/transcripts';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { createDbManagedObjects, UNUSED_STORAGE, asPrismaService } from '../helpers/db-managed-objects.helper';
+import { createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 /**
@@ -131,10 +131,11 @@ describeWithDb('Note list paging (real Postgres)', () => {
     // other method (`create`, `update`, `remove`, `retitle`, ...) is out of
     // scope for this file. Named by role (see `notes-service-test-factory.ts`)
     // so no argument can land in the wrong slot the way #224's did.
-    notes = buildNotesService({
+    notes = createNotesServiceTestFactory({
       prisma: prisma as never,
+      audit: null as never, // `list` never reaches it
       access: null as never, // `list` never reaches it
-      sourceNames: new NoteSourceNameService(asPrismaService(prisma), createDbManagedObjects(prisma, UNUSED_STORAGE)), // `list` calls `.resolve()` per page
+      sourceNames: new NoteSourceNameService(prisma as never, createDbObjectStore(prisma, UNUSED_STORAGE), new OwnerOnlyTranscriptSharing()), // `list` calls `.resolve()` per page
       templates: null as never, // `list` never reaches it
       requests: null as never, // `list` never reaches it
       sources: null as never, // `list` never reaches it

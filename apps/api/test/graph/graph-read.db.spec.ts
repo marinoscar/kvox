@@ -24,7 +24,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';

@@ -641,6 +641,25 @@ export function describeKvoxPortsConformance(
       expect((await store.port.describe([])).size).toBe(0);
     });
 
+    rule('describe reports the owner and owning module, and setMetadata replaces the stored data', async (store) => {
+      const { objectId } = await store.port.put({
+        ownerId: owner(store),
+        key: 'conformance/metadata.txt',
+        body: Buffer.from('meta'),
+        contentType: 'text/plain',
+        managedBy: 'notes',
+        metadata: { first: 1 },
+      });
+      const before = (await store.port.describe([objectId])).get(objectId);
+      expect(before?.ownerId).toBe(owner(store));
+      expect(before?.managedBy).toBe('notes');
+      expect(before?.metadata).toEqual({ first: 1 });
+      await store.port.setMetadata(objectId, { second: 2 });
+      const after = (await store.port.describe([objectId])).get(objectId);
+      expect(after?.metadata).toEqual({ second: 2 });
+      await store.port.setMetadata('conformance-unknown-object', { ignored: true });
+    });
+
     rule('the onAborted handler fires once for a cancelled upload', async (store) => {
       const seen: Array<{ objectId: string; managedBy: string | null }> = [];
       store.port.onAborted(async (event) => {

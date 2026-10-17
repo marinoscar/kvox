@@ -5,7 +5,7 @@ import {
   DEFAULT_STREAM_HEARTBEAT_INTERVAL_MS,
   DEFAULT_STREAM_POLL_INTERVAL_MS,
   STREAM_DURATION_CAP_MARGIN_MS,
-} from '../../notes/generation/note-generation-stream.service';
+} from '@marinoscar/kvox-api/notes';
 import { KvoxStreamCursor, toDeltaFrame } from '@marinoscar/kvox-api/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ASK_RESPOND_MAX_RUNTIME_MS } from '../ask-limits';

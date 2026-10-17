@@ -213,6 +213,8 @@ export class TranscriptsModule {
         TranscriptExporterRegistry,
         MarkdownTranscriptExporter,
         TranscriptsHousekeepingEnqueuer,
+        // The notes slice (#495) asks which transcripts are shared with a user.
+        TranscriptSharing,
       ],
     };
   }

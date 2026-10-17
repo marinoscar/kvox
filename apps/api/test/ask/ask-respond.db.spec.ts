@@ -44,7 +44,7 @@ import { GraphPreferencesService } from '../../src/graph/preferences/graph-prefe
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';

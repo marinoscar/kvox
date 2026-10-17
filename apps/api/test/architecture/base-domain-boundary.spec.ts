@@ -4,7 +4,7 @@
 //
 // KVox is a platform (auth, RBAC, settings, jobs, storage, notifications, AI
 // plumbing, ...) with a product on top (notes, the knowledge graph, Ask;
-// transcription, transcripts and search are packaged slices now,
+// transcription, transcripts, search and notes are packaged slices now,
 // `@marinoscar/kvox-api/*`, and no longer directories here). The platform half is being replaced by
 // published packages, one slice at a time, and a published package cannot
 // import `apps/api/src/notes/...`. Every edge from a base module INTO a domain
@@ -88,7 +88,6 @@ const SRC = resolve(__dirname, '..', '..', 'src');
  * it, so it is argued in a pull request, not done to silence a failure.
  */
 const DOMAIN_DIRS: readonly string[] = [
-  'notes',
   'graph',
   'ask',
 ];
@@ -435,7 +434,9 @@ describe('domain registrations are imported by the composition roots only (issue
         .map((edge) => edge.from),
     );
 
-    expect(importers.has('kvox.manifest.ts')).toBe(true);
+    // Since #495 every registration `kvox.manifest.ts` imports is an app binding under `kvox/` (the
+    // notes onboarding moved there with the slice), so the manifest no longer reaches into a domain
+    // directory; the settings roots still do.
     // Since #466 the settings declarations are imported by `app-registrations/settings.ts`.
     expect(importers.has('app-registrations/settings.ts')).toBe(true);
   });
@@ -505,13 +506,13 @@ describe('the import scanner', () => {
       "import { Injectable } from '@nestjs/common';",
       "import { a } from './ai-token-budget';",
       "import { b } from '../common/registry';",
-      "import { c } from '../notes/notes.service';",
+      "import { c } from '../ask/ask.service';",
       "import { d } from '../../test/helpers/membership-user.helper';",
       "import { e } from '../graph';",
     ].join('\n');
 
     expect(edgesIn(FILE, text).map((edge) => [edge.line, edge.domain, edge.to])).toEqual([
-      [4, 'notes', 'notes/notes.service'],
+      [4, 'ask', 'ask/ask.service'],
       [6, 'graph', 'graph'],
     ]);
   });

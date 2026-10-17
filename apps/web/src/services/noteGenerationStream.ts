@@ -58,8 +58,8 @@ import { connectSse, type SseConnection } from './sse';
 /**
  * The three `event:` names this stream emits.
  *
- * MUST MATCH `NOTE_STREAM_DELTA_EVENT` / `_DONE_` / `_ERROR_` in
- * `apps/api/src/notes/generation/note-stream.ts`. A mismatch fails SILENTLY —
+ * MUST MATCH `KVOX_STREAM_DELTA_EVENT` / `_DONE_` / `_ERROR_` in
+ * `packages/kvox-api/src/core/stream/sse-stream.ts`. A mismatch fails SILENTLY —
  * frames arrive, nothing matches, the panel stays empty forever — so the names
  * are constants compared explicitly rather than string literals in a switch.
  */

@@ -53,6 +53,18 @@
       "types": "./dist/transcripts/testing/index.d.ts",
       "default": "./dist/transcripts/testing/index.js"
     },
+    "./notes": {
+      "types": "./dist/notes/index.d.ts",
+      "default": "./dist/notes/index.js"
+    },
+    "./notes/templates": {
+      "types": "./dist/notes/templates/index.d.ts",
+      "default": "./dist/notes/templates/index.js"
+    },
+    "./notes/testing": {
+      "types": "./dist/notes/testing/index.d.ts",
+      "default": "./dist/notes/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -69,9 +81,9 @@
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
     "docs": "typedoc --options typedoc.json",
-    "test": "jest -c test/jest.config.js --selectProjects unit",
-    "test:run": "jest -c test/jest.config.js --selectProjects unit --ci",
-    "test:db": "jest -c test/jest.config.js --selectProjects db --runInBand",
+    "test": "node test/jest.js -c test/jest.config.js --selectProjects unit",
+    "test:run": "node test/jest.js -c test/jest.config.js --selectProjects unit --ci",
+    "test:db": "node test/jest.js -c test/jest.config.js --selectProjects db --runInBand",
     "test:host:prepare": "node test/host/prepare.mjs"
   },
   "peerDependencies": {
@@ -83,11 +95,13 @@
     "@nestjs/schedule": "^6.1.0",
     "@nestjs/swagger": "^11.2.5",
     "@prisma/client-runtime-utils": "^7.8.0",
+    "docx": ">=9.0.0",
     "fastify": "^5.0.0",
     "nestjs-zod": "^5.4.0",
     "pdfkit": ">=0.17.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "unpdf": ">=1.0.0",
     "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
@@ -106,6 +120,9 @@
     "@prisma/client-runtime-utils": {
       "optional": true
     },
+    "docx": {
+      "optional": true
+    },
     "fastify": {
       "optional": true
     },
@@ -113,6 +130,9 @@
       "optional": true
     },
     "pdfkit": {
+      "optional": true
+    },
+    "unpdf": {
       "optional": true
     }
   },

@@ -46,7 +46,7 @@ import {
   registerOnboardingFact,
   registerOnboardingStep,
 } from '@marinoscar/platform-api/onboarding';
-import { NOTES_ONBOARDING_FACTS, NOTES_ONBOARDING_STEPS } from './notes/notes.onboarding';
+import { NOTES_ONBOARDING_FACTS, NOTES_ONBOARDING_STEPS } from './kvox/notes/notes.onboarding';
 import {
   TRANSCRIPTION_ONBOARDING_FACTS,
   TRANSCRIPTION_ONBOARDING_STEPS,

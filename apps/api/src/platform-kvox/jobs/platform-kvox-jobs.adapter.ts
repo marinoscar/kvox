@@ -13,6 +13,7 @@ import {
   type JobHandler,
   type JobSettledEvent,
   type JobsInputJsonObject,
+  type JobsTx,
 } from '@marinoscar/platform-api/jobs';
 import { Trace } from '@marinoscar/platform-api/otel-core';
 import {
@@ -126,6 +127,30 @@ export class PlatformKvoxJobsAdapter implements KvoxJobsPort {
     }
 
     return { id: job.id, deduplicated: existing !== null && existing.id === job.id };
+  }
+
+  /** Joins the caller's open transaction through the platform queue's `enqueueWithin`. */
+  @Trace()
+  async enqueueWithin(tx: unknown, input: KvoxEnqueueInput): Promise<KvoxEnqueueResult> {
+    const orgId = await this.orgId();
+
+    const job = await this.jobs.enqueueWithin(tx as JobsTx, {
+      type: input.type,
+      reason: input.reason ?? DEFAULT_REASON,
+      subjectType: input.subjectType ?? null,
+      subjectId: input.subjectId ?? null,
+      payload: input.payload as JobsInputJsonObject,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      scheduledFor: input.scheduledFor ?? null,
+      skipDedup: input.skipDedup === true,
+      orgId,
+    });
+
+    // `throttleKey` is not recorded here: the job row exists only once the caller's
+    // transaction commits, and a handler that hits a provider limit names its bucket
+    // itself (`KvoxRateLimitError`), which `run` registers with the throttle.
+
+    return { id: job.id, deduplicated: false };
   }
 
   registerHandler(handler: KvoxJobHandler): void {

@@ -1,12 +1,12 @@
 # @marinoscar/kvox-api
 
-The NestJS side of the KVox domain: the host ports a slice needs, their in-memory fakes and the domain slices (transcription, search and transcripts so far). CommonJS, built with `tsc` and decorator metadata.
+The NestJS side of the KVox domain: the host ports a slice needs, their in-memory fakes and the domain slices (transcription, search, transcripts and notes so far). CommonJS, built with `tsc` and decorator metadata.
 
 ## Purpose and scope
 
 The domain's server code in slices, one subpath per slice, so a second host (KVox Desktop) can install it without the web edition. A slice imports only `@marinoscar/kvox-api/ports` and `@marinoscar/kvox-contract`, never `@marinoscar/platform-*`: the web edition binds the platform to the ports in the app (`apps/api/src/platform-kvox/`), which keeps the package host-neutral (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)).
 
-Status: ports, core and testing are in place (issue 5.4); `transcription` (issue #492, epic #491), `search` (issue #494) and `transcripts` (issue #493) are the first domain slices; the others follow (`./notes`, `./graph`, `./graph-extraction`, `./graph-rdf`, `./ask`). Every declaration is `@stability experimental`.
+Status: ports, core and testing are in place (issue 5.4); `transcription` (issue #492, epic #491), `search` (issue #494), `transcripts` (issue #493) and `notes` (issue #495) are the first domain slices; the others follow (`./graph`, `./graph-extraction`, `./graph-rdf`, `./ask`). Every declaration is `@stability experimental`.
 
 - `@marinoscar/kvox-api/ports`: the ten host ports (AI, object store, jobs, identity, notify, events, Prisma, settings, secrets, audit) and their injection tokens. [README](src/ports/README.md).
 - `@marinoscar/kvox-api/core`: `KvoxPortsModule`, `@KvoxAuth()` and `@KvoxAuthFromOptions()`, and the helpers the domain slices share (throttle key, token budget, stream flusher and SSE helpers, ETags, the `Prisma` SQL helper). [README](src/core/README.md).
@@ -17,6 +17,9 @@ Status: ports, core and testing are in place (issue 5.4); `transcription` (issue
 - `@marinoscar/kvox-api/search/testing`: `describeSearchConformance`, `seedSearchCorpus` and `sparseVector`. [README](src/search/README.md#conformance-suite).
 - `@marinoscar/kvox-api/transcripts`: `TranscriptsModule.forRoot` (the upload, the nine job handlers, the correction, export, name-check and share routes, the pure editing core, the access rules and the sharing extension point) over the database, object store, jobs, notify, events, audit, AI, settings and secrets ports. [README](src/transcripts/README.md).
 - `@marinoscar/kvox-api/transcripts/testing`: `describeTranscriptsConformance`, `describeTranscriptExporterConformance` and the export fixtures. [README](src/transcripts/README.md#conformance-suite).
+- `@marinoscar/kvox-api/notes`: `NotesModule.forRoot` (the note, template, document-source and generation-stream routes, the six job handlers, the access rules, the three exporters and the ready event) over the database, object store, jobs, notify, events, audit, AI, settings and identity ports, on the transcripts and search slices. [README](src/notes/README.md).
+- `@marinoscar/kvox-api/notes/templates`: the built-in note templates and the idempotent `seedNoteTemplates`, with no Nest import, for a seed script. [README](src/notes/README.md#quick-start).
+- `@marinoscar/kvox-api/notes/testing`: `describeNotesConformance`, `describeNoteExporterConformance`, `createNotesServiceTestFactory` and the document and export fixtures. [README](src/notes/README.md#conformance-suite).
 
 The web edition binds every port to a platform slice in `apps/api/src/platform-kvox/`; the contract in prose, with the Desktop mapping notes, is [docs/specs/kvox-ports.md](../../docs/specs/kvox-ports.md).
 
@@ -28,7 +31,7 @@ npm install @marinoscar/kvox-api@next
 
 Install these in the app; the package never bundles its own copy (a second copy of Nest breaks dependency injection). Import slices by their subpath. Which peers you need depends on the slices you import ([the rule](../../docs/PACKAGES.md#peer-dependencies-per-slice)).
 
-Required by every slice (`ports`, `core`, `transcription`, `search`, `transcripts`):
+Required by every slice (`ports`, `core`, `transcription`, `search`, `transcripts`, `notes`):
 
 | Package | Range |
 |---|---|
@@ -43,12 +46,14 @@ Optional peers, installed for the features that need them. The three marked "loa
 
 | Package | Range | Needed by |
 |---|---|---|
-| `@nestjs/swagger` | `^11.2.5` | `core`: the default bearer-auth marker `documentKvoxAuth` applies (loaded on first use); `transcription`, `search` and `transcripts`: the controllers' OpenAPI decorators (required by those slices) |
+| `@nestjs/swagger` | `^11.2.5` | `core`: the default bearer-auth marker `documentKvoxAuth` applies (loaded on first use); `transcription`, `search`, `transcripts` and `notes`: the controllers' OpenAPI decorators (required by those slices) |
 | `@nestjs/event-emitter` | `^3.0.1` | `core`: `KvoxPortsModule` shares Nest's `EventEmitter2` as the default `KVOX_EVENTS` (loaded on first use); listeners |
-| `@nestjs/schedule` | `^6.1.0` | `transcripts`: the housekeeping cron (loaded only when `schedules` is not `false`) |
-| `fastify` | `^5.0.0` | `transcripts`: the request and reply types of the conditional reads (types only) |
-| `pdfkit` | `>=0.17.0` | `transcripts`: the PDF exporter (loaded when a PDF is rendered) |
-| `nestjs-zod` | `^5.4.0` | `transcription`, `search` and `transcripts`: the DTO classes (required by those slices) |
+| `@nestjs/schedule` | `^6.1.0` | `transcripts` and `notes`: the housekeeping cron (loaded only when `schedules` is not `false`) |
+| `fastify` | `^5.0.0` | `transcripts` and `notes`: the request and reply types of the conditional reads and the upload (types only) |
+| `pdfkit` | `>=0.17.0` | `transcripts` and `notes`: the PDF exporter (loaded when a PDF is rendered) |
+| `docx` | `>=9.0.0` | `notes`: the Word exporter (loaded when a document is rendered) |
+| `unpdf` | `>=1.0.0` | `notes`: reading a PDF source (loaded when one is extracted) |
+| `nestjs-zod` | `^5.4.0` | `transcription`, `search`, `transcripts` and `notes`: the DTO classes (required by those slices) |
 | `@prisma/client-runtime-utils` | `^7.8.0` | `core`: the `Prisma.sql`, `raw` and `join` helpers (loaded on first use) |
 | `@marinoscar/platform-api` | `0.1.0-next.5` | no slice: host wiring only (`apps/api/src/platform-kvox`) |
 
@@ -126,14 +131,19 @@ What a host implements, binds or registers. The per-port table (web adapter path
 | `TranscriptsModuleOptions`, `TranscriptSharing`, `OwnerOnlyTranscriptSharing` | transcripts | The options of `TranscriptsModule.forRoot` and the host's sharing system (the default is owner-only; the web edition binds the platform's grants). |
 | `TranscriptExporter`, `TRANSCRIPTS_PERMISSIONS`, `TRANSCRIPTS_NOTIFICATION_EVENTS`, `KvoxTranscriptsDb`, `TranscriptsHousekeepingEnqueuer` | transcripts | A new export format, the permission set and the notification events the host registers, the narrowed database client and the housekeeping entry for a host without a scheduler. |
 | `describeTranscriptsConformance`, `describeTranscriptExporterConformance` | transcripts/testing | The pipeline-invariant kit and the exporter kit. |
+| `NotesModuleOptions`, `NOTE_READY_EVENT` | notes | The options of `NotesModule.forRoot` and the domain event (`kvox.notes.note_ready`) a host subscribes to on `KVOX_EVENTS` to react to a ready note. |
+| `NoteExporter`, `NOTES_PERMISSIONS`, `NOTE_TEMPLATES_PERMISSIONS`, `NOTES_NOTIFICATION_EVENTS`, `KvoxNotesDb` | notes | A new note export format, the permission sets and the notification events the host registers, and the narrowed database client. |
+| `NOTE_BUILTIN_TEMPLATES`, `seedNoteTemplates` | notes/templates | The built-in templates and their idempotent seed, for a seed script. |
+| `NotesUserDataService`, `NotesHousekeepingEnqueuer`, `NoteExportHandler`, `NotePurgeHandler`, `NoteRetitleHandler`, `NotesHousekeepingHandler` | notes | What a deletion would remove and how derived notes are unlinked, the housekeeping entry for a host without a scheduler, and the job handlers a host that composes its own module lists. |
+| `describeNotesConformance`, `describeNoteExporterConformance` | notes/testing | The pipeline-invariant kit and the exporter kit. |
 
 ## Data
 
-None declared by the package itself: the schema is `@marinoscar/kvox-db`'s and slices see rows through structural types. The search slice works on `search_chunks`, `search_embeddings` (`vector(1536)`, HNSW) and `search_index_state`, and reads the generated `tsvector` columns of the transcripts and notes tables with raw SQL ([the Data section](src/search/README.md#data)). The transcripts slice works on the seven transcript tables and reads `users`, `organizations` and `notes` ([the Data section](src/transcripts/README.md#data)).
+None declared by the package itself: the schema is `@marinoscar/kvox-db`'s and slices see rows through structural types. The search slice works on `search_chunks`, `search_embeddings` (`vector(1536)`, HNSW) and `search_index_state`, and reads the generated `tsvector` columns of the transcripts and notes tables with raw SQL ([the Data section](src/search/README.md#data)). The transcripts slice works on the seven transcript tables and reads `users`, `organizations` and `notes` ([the Data section](src/transcripts/README.md#data)). The notes slice works on `notes`, `note_templates`, `user_hidden_note_templates`, `note_generations`, `note_versions` and `note_exports` and reads `transcripts` and `transcript_versions` ([the Data section](src/notes/README.md#data)).
 
 ## Permissions and settings
 
-The package declares no permission string. `KvoxAuth` checks the strings a route names against the principal the host returns, and `KvoxAuthFromOptions` takes them from the slice's options; the host declares them (`apps/api/src/app-registrations/permissions.ts`, and `kvox-permissions.ts` for a slice's own set). The transcription slice enforces three: `system_settings:read` and `system_settings:write` (the admin settings routes) and `transcripts:read` (the capability probe), the defaults of its `permissions` option. Settings: the `transcription` system namespace (declared by the slice through the settings port) and the `graph` user namespace; the web adapter verifies a namespace is already in the platform registry rather than declaring one late. Secrets: the `transcription` purpose, one secret per provider id. The search slice declares no permission, setting or secret: its three routes are `@KvoxAuth()` with no permission string and the service narrows by `transcripts:read` and `notes:read` from the principal ([why](src/search/README.md#permissions-and-settings)); the job type `search.index` is permanent and server-only. The transcripts slice enforces `transcripts:read` and `transcripts:write` (exported as `TRANSCRIPTS_PERMISSIONS` for the host to register), raises the notification events `transcripts.transcript_ready` and `transcripts.transcript_failed`, and owns nine permanent job types, all server-only except `media.audio.transcode` ([the lists](src/transcripts/README.md#permissions-and-settings)).
+The package declares no permission string. `KvoxAuth` checks the strings a route names against the principal the host returns, and `KvoxAuthFromOptions` takes them from the slice's options; the host declares them (`apps/api/src/app-registrations/permissions.ts`, and `kvox-permissions.ts` for a slice's own set). The transcription slice enforces three: `system_settings:read` and `system_settings:write` (the admin settings routes) and `transcripts:read` (the capability probe), the defaults of its `permissions` option. Settings: the `transcription` system namespace (declared by the slice through the settings port) and the `graph` user namespace; the web adapter verifies a namespace is already in the platform registry rather than declaring one late. Secrets: the `transcription` purpose, one secret per provider id. The search slice declares no permission, setting or secret: its three routes are `@KvoxAuth()` with no permission string and the service narrows by `transcripts:read` and `notes:read` from the principal ([why](src/search/README.md#permissions-and-settings)); the job type `search.index` is permanent and server-only. The transcripts slice enforces `transcripts:read` and `transcripts:write` (exported as `TRANSCRIPTS_PERMISSIONS` for the host to register), raises the notification events `transcripts.transcript_ready` and `transcripts.transcript_failed`, and owns nine permanent job types, all server-only except `media.audio.transcode` ([the lists](src/transcripts/README.md#permissions-and-settings)). The notes slice enforces `notes:read`, `notes:write`, `note_templates:read` and `note_templates:write` (exported as `NOTES_PERMISSIONS` and `NOTE_TEMPLATES_PERMISSIONS`), raises the notification events `notes.note_ready` and `notes.note_failed`, publishes `kvox.notes.note_ready`, and owns six permanent job types, all server-only except `note.source.extract` ([the lists](src/notes/README.md#permissions-and-settings)).
 
 ## UI
 

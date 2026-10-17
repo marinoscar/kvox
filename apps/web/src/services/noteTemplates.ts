@@ -53,7 +53,7 @@ import type { NoteOutputFormat, NoteBodyFormat } from '@marinoscar/kvox-contract
 
 /**
  * `note_templates.output_format` — the fixed set, mirroring
- * `NOTE_OUTPUT_FORMATS` in `apps/api/src/notes/dto/note-template.dto.ts`.
+ * `NOTE_OUTPUT_FORMATS` in `packages/kvox-api/src/notes/dto/note-template.dto.ts`.
  *
  * A UNION OF LITERALS rather than `string`, so a picker that offered a value
  * the API would refuse could not be written. The labels live beside it because

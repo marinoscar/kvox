@@ -25,13 +25,13 @@ import { ProposalWriter } from '../../src/graph/extraction/proposal-writer.servi
 import { KgExtractHandler } from '../../src/graph/handlers/kg-extract.handler';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
-import { NoteOriginService } from '../../src/notes/note-origin.service';
+import { NoteAccessService, NoteOriginService } from '@marinoscar/kvox-api/notes';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 import { asPrismaService } from '../helpers/db-managed-objects.helper';
+import { createPlatformTranscriptSharing } from '../helpers/sharing-kit.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-extract.db.spec');
 
@@ -92,7 +92,7 @@ describeWithDb('kg.extract (real Postgres)', () => {
     const resolver = { resolve: jest.fn(async () => resolution), graphEnabled: jest.fn(async () => true) };
     const preferences = new GraphPreferencesService(prisma as never);
     const ontology = new GraphOntologyService(prisma as never, preferences);
-    const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(asPrismaService(prisma)), ontology);
+    const loader = new ExtractionInputLoader(prisma as never, new NoteOriginService(asPrismaService(prisma) as never, createPlatformTranscriptSharing(prisma)), ontology);
     const writer = new ProposalWriter(prisma as never);
 
     service = new GraphExtractionService(

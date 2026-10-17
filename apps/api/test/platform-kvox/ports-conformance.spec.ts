@@ -199,7 +199,7 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
         presignedUrls: [{ partNumber: 1, url: `https://upload.example/${id}/1` }],
       };
     },
-    async create(input: { module: 'transcripts' | 'notes' | 'graph'; key: string; mimeType: string; size: number; uploadedById: string }) {
+    async create(input: { module: 'transcripts' | 'notes' | 'graph'; key: string; mimeType: string; size: number; uploadedById: string; metadata?: Record<string, unknown> }) {
       const id = randomUUID();
       rows.set(id, {
         id,
@@ -211,9 +211,14 @@ function objectStoreUnderTest(): KvoxPortsUnderTest['objectStore'] {
         s3UploadId: null,
         uploadedById: input.uploadedById,
         orgId: 'org-default',
+        metadata: input.metadata ?? null,
       });
       owners.set(id, input.module);
       return rows.get(id)!;
+    },
+    async setMetadata(id: string, metadata: Record<string, unknown>) {
+      const row = rows.get(id);
+      if (row) row.metadata = metadata;
     },
     async get(id: string) {
       return rows.get(id) ?? null;
