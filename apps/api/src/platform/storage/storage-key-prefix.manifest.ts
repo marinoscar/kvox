@@ -8,9 +8,9 @@
 // here is a prefix a purge silently leaves behind. The `storage` conformance
 // suite fails on a malformed or overlapping prefix and on a missing id.
 //
-// PLATFORM prefixes (the storage slice's own four, then `database-backups`) are
-// listed first, in the platform's purge order. `StorageModule.forRoot()` and
-// `DbBackupModule` register them too; a registration identical to an existing
+// PLATFORM prefixes (the storage slice's own four, then `database-backups`, then the exports
+// slice's `exports/users/` and `exports/orgs/`, #532) are listed first, in the platform's purge
+// order. `StorageModule.forRoot()`, `DbBackupModule` and `ExportsModule.forRoot()` register them too; a registration identical to an existing
 // one is skipped, which is what lets this manifest fix the ORDER.
 //
 // KVOX prefixes are `deployment` scope: this app keeps its own key builders
@@ -20,6 +20,7 @@
 // =============================================================================
 
 import { DB_BACKUP_KEY_PREFIX } from '@marinoscar/platform-api/db-backup';
+import { EXPORTS_KEY_PREFIXES } from '@marinoscar/platform-api/exports';
 import {
   STORAGE_SLICE_KEY_PREFIXES,
   registerStorageKeyPrefixes,
@@ -56,6 +57,7 @@ export const KVOX_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [
 export const ALL_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [
   ...STORAGE_SLICE_KEY_PREFIXES,
   DB_BACKUP_KEY_PREFIX,
+  ...EXPORTS_KEY_PREFIXES,
   ...KVOX_KEY_PREFIXES,
 ];
 

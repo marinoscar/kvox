@@ -48,6 +48,7 @@ import { KvoxModule } from './kvox/kvox.module';
 import { AiPortModule } from './ai-port/ai-port.module';
 import { KvoxAiModule } from './ai-port/kvox-ai.module';
 import { userDataModule } from './platform/user-data/user-data.config';
+import { exportsModule } from './platform/exports/exports.config';
 import { sharingModule } from './platform/sharing/sharing.config';
 import { onboardingModule } from './platform/onboarding/onboarding.config';
 
@@ -283,6 +284,16 @@ import configuration from './config/configuration';
     // `files.purge_unmanaged`) are their handlers: it enqueues them by type string and
     // imports none of them.
     userDataModule,
+
+    // The platform's exports slice (#532, Part B of #479): "Download your data". `GET
+    // /api/exports/sources`, `POST|GET /api/exports`, `GET /api/exports/:id`, the `export.run`
+    // and `export.purge` job types (server-only) and the daily expiry cron, over two sources:
+    // the platform's `user-data` (every model the user-owned registry marks `include`) and this
+    // app's `kvox-content` (`platform/exports/kvox-content.source.ts`: transcript speakers and
+    // segments, note history, Ask messages, each tied to the user through its parent row). After
+    // `userDataModule`: it reads the same user-owned registry and notifies through the global
+    // `NotificationsService`.
+    exportsModule,
 
     // First-run onboarding (#481, epic #478): the platform slice. `GET /api/onboarding` (the caller's
     // checklists, and the admin one for a holder of `system_settings:read`) and the activation

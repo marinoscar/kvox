@@ -138,6 +138,15 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'user record, roles, memberships and session survive every scope.',
       },
       {
+        name: 'Exports',
+        description:
+          'Download your data (the platform exports slice, #532): request a copy of the calling ' +
+          "user's own data as JSON, CSV or XLSX, list recent exports and fetch one with a short-lived " +
+          'signed download. An export is a background job; the permission is the source\'s ' +
+          '(`user_settings:read` for the two sources every role sees), so the routes are `@Auth()` ' +
+          'with no route-level permission. Files expire after 7 days.',
+      },
+      {
         name: 'Factory reset',
         description:
           'Returns the whole deployment to a fresh install, keeping configuration and backups ' +

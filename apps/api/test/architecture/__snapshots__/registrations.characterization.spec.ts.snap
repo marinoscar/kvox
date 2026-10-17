@@ -292,6 +292,36 @@ exports[`Domain registrations characterization HTTP responses GET /api/notificat
       ],
       "defaultEnabled": true,
       "mandatory": false
+    },
+    {
+      "key": "export.ready",
+      "label": "Export ready",
+      "description": "Sent when a data export you asked for is ready to download.",
+      "channels": [
+        "browser",
+        "push"
+      ],
+      "declaredChannels": [
+        "browser",
+        "push"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
+    },
+    {
+      "key": "export.failed",
+      "label": "Export failed",
+      "description": "Sent when a data export you asked for could not be created.",
+      "channels": [
+        "browser",
+        "push"
+      ],
+      "declaredChannels": [
+        "browser",
+        "push"
+      ],
+      "defaultEnabled": true,
+      "mandatory": false
     }
   ],
   "meta": {
@@ -452,6 +482,26 @@ exports[`Domain registrations characterization pure registry values NOTIFICATION
     "description": "Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.",
     "key": "notes.note_failed",
     "label": "Note generation failed",
+  },
+  {
+    "channels": [
+      "browser",
+      "push",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a data export you asked for is ready to download.",
+    "key": "export.ready",
+    "label": "Export ready",
+  },
+  {
+    "channels": [
+      "browser",
+      "push",
+    ],
+    "defaultEnabled": true,
+    "description": "Sent when a data export you asked for could not be created.",
+    "key": "export.failed",
+    "label": "Export failed",
   },
 ]
 `;

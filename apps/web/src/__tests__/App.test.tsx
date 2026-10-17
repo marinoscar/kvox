@@ -96,6 +96,14 @@ vi.mock('@marinoscar/platform-web/user-data/ui', async (importOriginal) => ({
   UserDangerZonePage: () => <h1>User Danger Zone Page</h1>,
 }));
 
+// Issue #532: "Download your data" is the platform's page. Same rationale as the stand-ins above (the
+// real one opens `GET /api/exports/sources` and `/api/exports`, and polls while an export runs); only the
+// page is replaced, the barrel's `dataExportSettingsPage` (read by `config/userSettingsSections.tsx`) stays real.
+vi.mock('@marinoscar/platform-web/exports/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/platform-web/exports/ui')>()),
+  DataExportPage: () => <h1>Data Export Page</h1>,
+}));
+
 // Issue #126, epic #109. Same rationale as the four stand-ins above: the real
 // page's own suite (`UserNotificationsPage.test.tsx`) already proves it
 // renders correctly, so this stand-in makes the assertions below about
@@ -471,6 +479,7 @@ describe('App', () => {
       ['/settings/notifications', 'User Notifications Page'],
       ['/settings/tokens', 'User Tokens Page'],
       ['/settings/danger-zone', 'User Danger Zone Page'],
+      ['/settings/data-export', 'Data Export Page'],
     ])('renders %s as %s for a user holding only user_settings:read', async (path, heading) => {
       signInAs(['user_settings:read']);
 
@@ -493,6 +502,7 @@ describe('App', () => {
         'User Notifications Page',
         'User Tokens Page',
         'User Danger Zone Page',
+        'Data Export Page',
       ];
       for (const other of allHeadings.filter((h) => h !== heading)) {
         expect(screen.queryByRole('heading', { name: other })).not.toBeInTheDocument();

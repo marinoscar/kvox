@@ -14,6 +14,7 @@ import '@marinoscar/platform-api/credentials/testing';
 import '@marinoscar/platform-api/db-backup/testing';
 import '@marinoscar/platform-api/doctor/testing';
 import '@marinoscar/platform-api/email/testing';
+import '@marinoscar/platform-api/exports/testing';
 import '@marinoscar/platform-api/host/testing';
 import '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/jobs/testing';
@@ -94,6 +95,7 @@ import { PERMISSIONS } from '../src/common/constants/roles.constants';
 import '../src/platform/notifications/notification.manifest';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { composedSchemaDatamodel } from '@marinoscar/platform-api/user-data';
+import { Prisma } from '@prisma/client';
 import { IS_PUBLIC_KEY } from '@marinoscar/platform-api/identity';
 // The user-data registries (this app's categories, scopes and hints, then the platform's); also
 // reached through AppModule, named here because the `userData` suite reads them.
@@ -334,7 +336,7 @@ runPlatformConformance({
     // three below are this app's writers (platform/storage/storage-key-prefix.manifest.ts, deployment scope).
     // The suite fails on a malformed or overlapping prefix, a missing id, an org-scoped prefix that
     // builds a key without an organization, and a secret-named field in the storage settings schemas.
-    storage: { requiredPrefixIds: ['transcripts', 'notes', 'graph'] },
+    storage: { requiredPrefixIds: ['transcripts', 'notes', 'graph', 'exports-users', 'exports-orgs'] },
     // The email slice (#470): the platform templates are registered, every sampled template renders a
     // complete document and escapes markup in its data, and no email settings shape carries a secret.
     // The platform's own templates are sampled by the suite; these are this app's six plus its two
@@ -423,6 +425,13 @@ runPlatformConformance({
       isPublic: (target) => Reflect.getMetadata(IS_PUBLIC_KEY, target) === true,
       resourceTypeIds: ['transcript'],
     },
+    // The exports slice (#532, Part B of #479): every source names a registered permission and offers a
+    // registered writer, the user-owned registry agrees with the datamodel (`exportOmit` names real
+    // fields), and no secret, hash, omitted column or excluded model reaches an export file with any
+    // writer. The datamodel is the generated client's, the one `exports.config.ts` mounts the slice with.
+    // The sentinel run covers the platform sources; the `kvox-content` source is held to the same rules
+    // by `test/exports/kvox-export-policy.spec.ts`.
+    exports: { datamodel: Prisma.dmmf.datamodel, permissions: permissionRegistry.list() },
   },
 });
 
