@@ -1275,6 +1275,22 @@ an entity page**
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
 
+The manual edit covers a **manual relation edit** too (#586): on a `Person`'s
+page the owner may set a `REPORTS_TO` (→ `Person`), `WORKS_FOR` or `HAS_ROLE`
+(→ `Organization`) by hand, or remove a wrong one
+(`POST`/`DELETE /api/graph/entities/:id/relations`, §12). It changes no part
+of the model above. The write still goes through `GraphWriteService`, and it
+still carries evidence: one server-authored citation whose source is **the
+owner** (§5.3's row with every anchor `NULL`, the `quote` "Set by hand: …",
+and a reserved `source_iri` no wire caller may send), so the no-orphans
+invariant (§3.3) holds and Ask can cite the fact. Setting one applies §5.4's
+closing rule exactly as committing a proposal does — the person's still-open
+edge of the type, started earlier, closes at the new start and is linked to
+the new edge — because the owner stating "Jenny now reports to Mark" is the
+review that a `closing` row otherwise waits for. Removing one is a
+correction, not an end of validity: the row becomes `rejected` (kept, never
+read, §5.5) and an edge it had closed reopens.
+
 The speaker-naming write (#356) is **owner-only and a full reconcile**: it
 writes only into the transcript owner's graph, only when the owner performed
 the naming and holds `graph:write` (an editor-share's naming enqueues a job
@@ -1775,7 +1791,9 @@ app's default role is Viewer.
   (§18.2 — reading one's own graph or its shapes out in a standard format is
   a read, not a write).
 - **`graph:write`** — proposal commit/discard, re-extract, entity
-  create/edit/merge/reverse-merge/forget-a-person, relation edit, resolution
+  create/edit/merge/reverse-merge/forget-a-person, relation edit (realized by
+  #586 as `POST /api/graph/entities/:id/relations` and `DELETE
+  /api/graph/entities/:id/relations/:relationId`, §8), resolution
   settings, `kg_attribute_defs` CRUD (§17.3 — adding, editing, and
   deprecating a user-defined attribute is authoring the schema one proposes
   against, gated the same as every other write to it), and import (§18.3 —
