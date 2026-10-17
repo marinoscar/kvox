@@ -958,3 +958,23 @@ export async function uploadNoteSourceDocument(
   form.append('file', file);
   return kvoxPostFormData<NoteSourceDocument>(host, '/notes/sources/documents', form);
 }
+
+/**
+ * `POST /api/notes/import` — create a note from a Markdown note export (#585).
+ *
+ * Multipart with a single `file` part. Any Markdown or text file is accepted; a KVox note
+ * export keeps its title and body. A refused file is a `KvoxApiError` (400) whose
+ * `details.reason` is one of `NOTE_IMPORT_FAILURE_REASONS` (`not_text`,
+ * `invalid_front_matter`, `unsupported_note_format`, `empty_note`) and whose message a
+ * person can read; over the size limit is a 413.
+ *
+ * @param host - the host.
+ * @param file - the file.
+ * @returns the new note, as {@link getNote} returns it.
+ * @stability experimental
+ */
+export async function importNoteMarkdown(host: KvoxWebHost, file: File): Promise<Note> {
+  const form = new FormData();
+  form.append('file', file);
+  return kvoxPostFormData<Note>(host, '/notes/import', form);
+}

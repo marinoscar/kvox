@@ -33,6 +33,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Writable } from 'node:stream';
 
+import { NOTE_MARKDOWN_EXPORT_SCHEMA } from '@marinoscar/kvox-contract/notes';
+
 import {
   endStream,
   failStream,
@@ -120,7 +122,10 @@ export class MarkdownNoteExporter implements NoteExporter, OnModuleInit {
 export function renderFrontMatter(doc: NoteExportDocument): string {
   const lines = [
     '---',
+    // The format identifier `POST /api/notes/import` reads the file back by (#585).
+    `schema: ${yaml(NOTE_MARKDOWN_EXPORT_SCHEMA)}`,
     `title: ${yaml(doc.title)}`,
+    `bodyFormat: ${yaml(doc.bodyFormat)}`,
     `noteId: ${yaml(doc.noteId)}`,
     `version: ${doc.version}`,
     `versionSavedAt: ${yaml(doc.createdAt.toISOString())}`,

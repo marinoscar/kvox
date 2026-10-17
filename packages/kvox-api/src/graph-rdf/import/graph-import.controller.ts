@@ -63,6 +63,7 @@ interface MultipartRequest {
         filename: string;
         mimetype: string;
         toBuffer(): Promise<Buffer>;
+        file?: { truncated?: boolean };
       }
     | undefined
   >;
@@ -145,6 +146,9 @@ export class GraphImportController {
       filename = part.filename;
       mimeType = part.mimetype;
       body = await part.toBuffer();
+      // ⚠ `toBuffer` can return the first `fileSize` bytes WITHOUT throwing when the limit is
+      // hit as the last chunk is read (#585); a truncated file is over the limit, never valid.
+      if (part.file?.truncated) throw Object.assign(new Error('File too large'), { code: 'FST_REQ_FILE_TOO_LARGE' });
     } catch (error) {
       throw toClientError(error, this.options.maxImportBytes);
     }

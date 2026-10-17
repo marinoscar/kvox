@@ -566,6 +566,26 @@ describe('NewNotePage — the document source', () => {
     expect(createdBodies[0].source).toEqual({ type: 'document', objectId: 'obj-1' });
   });
 
+  it('pre-selects a document the host already uploaded, named by ?objectId= (#585)', async () => {
+    // KVox Desktop imports a file from disk, then offers "Create note" on it.
+    const user = userEvent.setup();
+    extraction = { status: 'extracted', message: null, characters: 42 };
+    renderPage('/notes/new?objectId=obj-1&documentName=minutes.pdf');
+    await waitForForm();
+
+    expect(screen.getByRole('radio', { name: /A document/ })).toBeChecked();
+    expect(screen.getByText('minutes.pdf')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled(),
+      { timeout: 6000 },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].source).toEqual({ type: 'document', objectId: 'obj-1' });
+  });
+
   it('shows the API’s OWN recorded sentence when no text could be read', async () => {
     // The API stores a human sentence precisely so the client does not have to
     // guess between "encrypted", "scanned images" and "corrupt".

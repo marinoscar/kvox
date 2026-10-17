@@ -694,6 +694,7 @@ describe('kvox-guarded routes', () => {
       'GraphReadController',
       'GraphResolutionController',
       'NoteGenerationStreamController',
+      'NoteImportController',
       'NoteSourcesController',
       'NoteTemplatesController',
       'NotesController',

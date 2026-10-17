@@ -8,7 +8,8 @@
 // (`GRAPH_CONFLICT_REASONS`, `NOTE_CONFLICT_REASONS`, `NAME_CHECK_CONFLICT_REASONS`,
 // `ASK_CONFLICT_REASONS`, `ASK_FINISH_REASONS`, `PROPOSAL_BAD_REQUEST_REASONS`,
 // `DIGEST_UNAVAILABLE_REASONS`, `GRAPH_IMPORT_FAILURE_REASONS`,
-// `SEMANTIC_REASONS`, and since #571 `TRANSCRIPT_IMPORT_FAILURE_REASONS`). This
+// `SEMANTIC_REASONS`, since #571 `TRANSCRIPT_IMPORT_FAILURE_REASONS`, and since #585
+// `NOTE_IMPORT_FAILURE_REASONS`). This
 // catalogue is the merged, de-duplicated view of them
 // (`ai_not_configured` is named by five of those lists and appears here once),
 // with the HTTP status the API answers each with. A spec
@@ -256,6 +257,30 @@ export const KVOX_ERROR_CODES = {
     status: 400,
     slice: 'transcripts',
     description: 'A transcript import: the document holds no segments.',
+  },
+  not_text: {
+    code: 'not_text',
+    status: 400,
+    slice: 'notes',
+    description: 'A note import: the uploaded file is not UTF-8 text.',
+  },
+  invalid_front_matter: {
+    code: 'invalid_front_matter',
+    status: 400,
+    slice: 'notes',
+    description: 'A note import: the file opens a front matter block that is not closed or not `key: value` lines; `details.line` names the line.',
+  },
+  unsupported_note_format: {
+    code: 'unsupported_note_format',
+    status: 400,
+    slice: 'notes',
+    description: 'A note import: the front matter names a note format other than `kvox.note/v1`; `details.schema` echoes it.',
+  },
+  empty_note: {
+    code: 'empty_note',
+    status: 400,
+    slice: 'notes',
+    description: 'A note import: nothing is left once the front matter, title and provenance are read.',
   },
 
   // --- 200: reasons carried inside a successful response body ---------------

@@ -4901,6 +4901,29 @@ a failed row is never reused.
 
 ---
 
+#### POST /notes/import
+Creates a note from a Markdown note export (issue #585). Multipart, single
+`file` part. The title comes from the front matter (`title`), else the leading
+`# heading`, else the file name; the exporter's title heading and provenance
+block are not part of the body. Any Markdown or text file is accepted the same
+way, so an export without front matter imports as a plain-body note. Version 1
+is an `edit` by the caller (`Imported from <file>`); the file is kept as the
+note's source document (`sourceType: document`) and its extraction is queued;
+`kvox.notes.note_ready` is published. Spec: `docs/specs/notes.md` §8.7.
+
+**Requires:** `notes:write`. Size limit: the notes slice option
+`maxImportBytes` (5 MiB by default).
+
+**Response:** `201` — the new note, exactly as `GET /notes/{id}` returns it.
+
+**Error Cases:**
+- `400` - Missing file or invalid multipart body; or `details.reason`:
+  `not_text` (not UTF-8 text), `invalid_front_matter` (`details.line`),
+  `unsupported_note_format` (`details.schema`), `empty_note`
+- `413` - The file is over the import size limit
+
+---
+
 #### POST /notes/sources/documents
 Uploads a document to generate a note from. Multipart, single `file` part.
 Stored as a storage object owned by the notes module — absent from

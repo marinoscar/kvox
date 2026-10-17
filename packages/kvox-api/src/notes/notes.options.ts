@@ -117,7 +117,17 @@ export interface NotesModuleOptions {
    * built, not when the module is declared. Absent: the message carries no link.
    */
   appUrl?: () => string | undefined;
+
+  /**
+   * The largest note file `POST /api/notes/import` accepts, in bytes (default 5 MiB: a
+   * note is text). The multipart read stops at this many bytes and answers 413, so the
+   * import stays bounded by it (it runs inside the request, not as a job).
+   */
+  maxImportBytes?: number;
 }
+
+/** The default of {@link NotesModuleOptions.maxImportBytes}: 5 MiB. */
+const DEFAULT_MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 /**
  * The options with defaults applied, as the providers read them.
@@ -135,6 +145,8 @@ export interface ResolvedNotesOptions {
   documentText: boolean;
   /** The stream's tuning; absent fields keep the stream service's defaults. */
   stream: NoteStreamOptions;
+  /** The largest note file an import accepts, in bytes. */
+  maxImportBytes: number;
 }
 
 /**
@@ -158,5 +170,6 @@ export function resolveNotesOptions(options: NotesModuleOptions): ResolvedNotesO
     documentPdf: options.documentSources?.pdf !== false,
     documentText: options.documentSources?.text !== false,
     stream: { ...(options.stream ?? {}) },
+    maxImportBytes: options.maxImportBytes ?? DEFAULT_MAX_IMPORT_BYTES,
   };
 }

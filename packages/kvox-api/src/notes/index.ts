@@ -62,6 +62,9 @@ export {
 export { NoteObjectsService, MissingUploadedNoteObjectError } from './note-objects.service.js';
 export type { ManagedObjectRef } from './note-objects.service.js';
 export { NoteSourcesService } from './note-sources.service.js';
+// The Markdown note import (#585): the service and its typed 400. The parser is the
+// contract's (`parseNoteMarkdownExport` in `@marinoscar/kvox-contract/notes`).
+export { NoteImportService, noteImportException, type NoteImportFile } from './import/note-import.service.js';
 export type { NoteSourceDocument, UploadedDocument } from './note-sources.service.js';
 export { NoteSourceNameService, noteSourceId, noteSourceNameKey } from './note-source-name.service.js';
 export type { NoteSourceFields, NoteSourceNames } from './note-source-name.service.js';
@@ -126,6 +129,7 @@ export {
 export { NotesController } from './notes.controller.js';
 export { NoteTemplatesController } from './note-templates.controller.js';
 export { NoteSourcesController } from './note-sources.controller.js';
+export { NoteImportController } from './import/note-import.controller.js';
 export { NoteGenerationStreamController } from './note-generation-stream.controller.js';
 
 // Handlers.

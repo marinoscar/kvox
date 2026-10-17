@@ -11,6 +11,7 @@ The notes wire contract: notes and their versions, templates, source documents a
 - `note.ts`: create, update, regenerate and restore bodies, the note and version responses, `NOTE_CONFLICT_REASONS`.
 - `note-template.ts`: templates, the preview and the body formats.
 - `note-source.ts`, `note-export.ts`, `document-format.ts`: uploaded source documents, exports and the accepted document MIME types.
+- `note-import.ts` (#585): reading a Markdown note export back. `parseNoteMarkdownExport` (pure, total: the note, or a typed refusal), the format identifier `NOTE_MARKDOWN_EXPORT_SCHEMA` (`kvox.note/v1`), `NOTE_IMPORT_FAILURE_REASONS`, the `POST /api/notes/import` response, and `detectKvoxImport`: which import route a local file goes to (`/transcripts/imports`, `/notes/import` or `/notes/sources/documents`) and the media type to send, decided from its first `KVOX_IMPORT_SNIFF_BYTES` bytes, the name only separating Markdown from plain text. A host routes a dropped or chosen file with it instead of keeping its own table.
 
 Token budgets and model allow-lists stay in the API: they are policy, not wire shape.
 
@@ -34,4 +35,4 @@ None. The slice exposes data shapes, not extension points.
 
 ### Desktop
 
-Desktop's main process and renderer both import this slice, so the wire shapes cannot drift between them; install the same version in both. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#who-this-is-for-and-what-you-get).
+Desktop's main process and renderer both import this slice, so the wire shapes cannot drift between them; install the same version in both. Desktop's import ("Import…" and drag and drop) calls `detectKvoxImport` in the main process on the file's first bytes and streams the file to the route it names. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#who-this-is-for-and-what-you-get).
