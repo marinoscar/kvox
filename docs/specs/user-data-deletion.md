@@ -215,10 +215,12 @@ run, and a `files` deletion never touches a managed object.
 - **The job label** in the admin job list is the platform's, "User data deletion"
   (it was "Account data deletion").
 - The platform also mounts the **factory reset** and **organization offboarding**
-  routes (`system:factory_reset`, `orgs:offboard`; Admin only). This application has
-  no page for either yet. Neither is reachable from the web, and both are refused in
-  deployments the platform gates them out of (`saas` mode; offboarding needs
-  multi-organization tenancy).
+  routes (`system:factory_reset`, `orgs:offboard`; Admin only). The factory reset has
+  a page since #562: the `Factory reset` card in the pinned-last admin `Danger Zone`
+  group, routed at `/admin/settings/factory-reset` behind `system:factory_reset`.
+  Organization offboarding has no page yet. Both routes are refused in deployments
+  the platform gates them out of (`saas` mode; offboarding needs multi-organization
+  tenancy).
 
 ## 8. Testing
 

@@ -137,6 +137,10 @@ const UserTokensPage = lazy(() =>
 const UserDangerZonePage = lazy(() =>
   import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.UserDangerZonePage })),
 );
+// Issue #562. The admin counterpart: the factory reset, `system:factory_reset`.
+const FactoryResetPage = lazy(() =>
+  import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.FactoryResetPage })),
+);
 // Issue #55, epic #45; the platform's since #477 (epic #472) — the user's OWN
 // AI provider key (`UserAiKeysPage`). Every AI surface in that epic is
 // unreachable until this page has been used once.
@@ -990,6 +994,24 @@ function AppRoutes() {
                         <RequireTelemetryEnabled>
                           <TelemetryDashboardPage />
                         </RequireTelemetryEnabled>
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #562. The factory reset: `system:factory_reset`,
+                      the exact SYSTEM permission the platform user-data
+                      factory reset controller enforces (Admin only; never
+                      implied by `system_settings:write`). Declared by the
+                      pinned-last `Danger Zone` card in `adminSections.tsx`.
+                      The page re-reads the user itself through the host's
+                      `viewer.refresh`, so no props are passed. */}
+                  <Route
+                    path="/admin/settings/factory-reset"
+                    element={
+                      <RequirePermission
+                        permission="system:factory_reset"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <FactoryResetPage />
                       </RequirePermission>
                     }
                   />

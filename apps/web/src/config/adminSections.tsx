@@ -45,6 +45,10 @@ import { kvoxTranscriptionAdminSections } from '@marinoscar/kvox-web/transcripti
 // package (title, description, path, `system_settings:read`) and appended below.
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { setupGuideSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
+// Factory reset (#562; a packaged page: card and icon from its descriptor) and
+// the label of the `Danger Zone` group both registries pin last.
+import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
+import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 // Telemetry (#471, epic #467) — the platform's three Observability cards,
 // declared by the package (data only, so importing them pulls no page into the
 // main chunk). Each carries the exact permission the platform's telemetry
@@ -557,6 +561,18 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
     // `telemetry:query` sees no section at all.
     label: 'Observability',
     cards: [...telemetryAdminCards],
+  },
+  // Issue #562. `Danger Zone`, PINNED LAST: the one documented exception to
+  // append-only (docs/specs/settings-ui.md). A group added later is inserted
+  // BEFORE this one, never after; the settings registry test asserts it
+  // (`dangerZoneLastViolations`). The packaged factory reset page
+  // (`@marinoscar/platform-web/user-data/ui`): `system:factory_reset`, the
+  // exact SYSTEM permission the user-data slice's controller enforces (Admin
+  // only; never implied by `system_settings:write`). No `feature`. The group
+  // sits alone and is never folded into Operations.
+  {
+    label: DANGER_ZONE_GROUP_LABEL,
+    cards: [{ ...factoryResetSettingsPage.card, Icon: factoryResetSettingsPage.Icon }],
   },
 ];
 

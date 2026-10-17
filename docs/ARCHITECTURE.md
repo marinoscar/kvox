@@ -1951,6 +1951,13 @@ card gate is about reachability, the page gates content. `Maintenance` is a
 `General` card, not an `Operations` one — it is a system setting, not a
 running-system view.
 
+The registry ends with a **`Danger Zone`** group, pinned **last** (issue #562): the one documented
+exception to append-only, so a group added later is inserted before it
+(`dangerZoneLastViolations` asserts it). It holds one card, **Factory reset**
+(`/admin/settings/factory-reset`, `system:factory_reset`, Admin only, no `feature`), the packaged
+`factoryResetSettingsPage` of `@marinoscar/platform-web/user-data/ui`. The route is wrapped in
+`RequirePermission permission="system:factory_reset"`; `system_settings:write` does not imply it.
+
 ---
 
 ## 10. Infrastructure Architecture
