@@ -28,9 +28,9 @@ import type { PrismaClient } from '@prisma/client';
 import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { loadGoldenSet } from '../../scripts/kg-eval/load';
+import { scoreCitationValidity, scoreSensitiveLeak } from '@marinoscar/kvox-eval';
+import { loadGoldenSet } from '@marinoscar/kvox-eval/fixtures';
 import { done, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
-import { scoreCitationValidity, scoreSensitiveLeak } from '../../scripts/ask-eval/scorer';
 import { seedGraph, teardownSeededGraph, type SeededGraph } from '../../scripts/ask-eval/seed-graph';
 import { createAskTurn, toKvoxJob } from '../helpers/ask-ports.helper';
 

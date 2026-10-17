@@ -1,0 +1,71 @@
+{
+  "name": "@marinoscar/kvox-eval",
+  "version": "0.0.0",
+  "description": "The KVox knowledge-graph and Ask evaluation: the synthetic golden set, its schemas, the scorers, the report and the live runners, over the model port only (CommonJS, with the kvox-eval CLI).",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marinoscar/kvox.git",
+    "directory": "packages/kvox-eval"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "kvox-eval": "./dist/cli/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtures": {
+      "types": "./dist/fixtures/index.d.ts",
+      "default": "./dist/fixtures/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/kvox-packages/copy-license.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc --options typedoc.json",
+    "test": "jest -c test/jest.config.js",
+    "test:run": "jest -c test/jest.config.js --ci"
+  },
+  "peerDependencies": {
+    "@marinoscar/kvox-ai": ">=0.0.0-0 || >=0.1.0-0",
+    "@marinoscar/kvox-api": ">=0.0.0-0 || >=0.1.0-0",
+    "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
+    "@marinoscar/platform-api": "0.1.0-next.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@marinoscar/kvox-ai": "*",
+    "@marinoscar/kvox-api": "*",
+    "@marinoscar/kvox-contract": "*",
+    "@marinoscar/platform-api": "0.1.0-next.5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.32",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  }
+}
