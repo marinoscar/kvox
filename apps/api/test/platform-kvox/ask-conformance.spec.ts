@@ -1,10 +1,11 @@
 // =============================================================================
-// describeAskConformance against the web edition's AI adapter (issue #497, epic #491)
+// describeAskConformance against the web edition's AI binding (issue #497, epic #491; #579)
 // =============================================================================
 //
 // The same suite `packages/kvox-api/test/ask-conformance.spec.ts` runs against the scripted fake,
-// run against the REAL `PlatformKvoxAiAdapter` over the app's `KvoxAi` facade, whose platform
-// stream is scripted (`FakeAskStream`: `AiService.forUser(...).stream()` is the one thing faked).
+// run against the REAL web `KVOX_AI` binding (`createWebKvoxAi`: `createKvoxAi` over the real
+// `PlatformAiRuntime`, #579), whose platform stream is scripted (`FakeAskStream`:
+// `AiService.forUser(...).stream()` is the one thing faked).
 // So a turn is proven with the web edition's feature mapping, its event mapping
 // (`output_text.delta`, `function_call`, `response.completed`, the platform's `error` event), its
 // error translation (a provider 429 becomes a `KvoxAiError` of class `rate_limit`) and its step
@@ -19,7 +20,6 @@ import { join } from 'node:path';
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 import { describeAskConformance, type AskAiUnderTest, type ScriptedTurn } from '@marinoscar/kvox-api/ask/testing';
 
-import { PlatformKvoxAiAdapter } from '../../src/platform-kvox/ai/platform-kvox-ai.adapter';
 import { createFakeAskPort, done, failure, FakeAskStream, text, toolCall } from '../../scripts/ask-eval/fake-provider';
 
 /** One scripted step as the platform's own stream events. */
@@ -45,11 +45,7 @@ function platformEvents(turn: ScriptedTurn) {
 
 function webEditionAi(): AskAiUnderTest {
   const stream = new FakeAskStream();
-  const fake = createFakeAskPort(stream, { model: 'scripted-model' });
-  const port = new PlatformKvoxAiAdapter(
-    { ...fake.ai, embeddingCapability: () => ({ model: 'text-embedding-test', dimensions: 1536, maxInputTokens: 8191 }) } as never,
-    { graphEnabled: async () => true } as never,
-  );
+  const { ai: port } = createFakeAskPort(stream, { model: 'scripted-model' });
 
   return {
     port,
@@ -60,6 +56,6 @@ function webEditionAi(): AskAiUnderTest {
   };
 }
 
-describeAskConformance('the web edition AI adapter', webEditionAi, { describe, it, expect }, {
+describeAskConformance('the web edition AI binding', webEditionAi, { describe, it, expect }, {
   sourceRoot: join(__dirname, '..', '..', '..', '..', 'packages', 'kvox-api', 'src'),
 });

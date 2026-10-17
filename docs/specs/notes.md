@@ -148,7 +148,7 @@ Two further postures run through every section below, worth stating once:
   what that does and does not let an administrator see.
 - **Nothing here is a new mechanism.** The provider layer (§2) was first
   modelled on `TranscriptionProviderRegistry` (`docs/specs/transcription.md` §2.1)
-  and is now the platform AI slice behind the `KvoxAi` port; prompt
+  and is now the platform AI slice behind the `KVOX_AI` port; prompt
   assembly (§3) is pure, living beside `packages/kvox-api/src/transcripts/editing/`'s
   reducers in spirit; the five tables (§4) reuse the exact versioning and
   FK-direction discipline `transcripts` established; the export registry (§8)
@@ -270,7 +270,7 @@ The module is `@marinoscar/kvox-api/notes` (`packages/kvox-api/src/notes/`, `Not
 
 ## 2. The AI call contract
 
-> **The AI layer is the platform's.** Since issues #473 to #477 (epic #472) this repository has no `AiProvider` interface, provider registry, hand-written OpenAI client or per-user credentials table: `apps/api/src/ai/` and `user_ai_credentials` were deleted by #477. Code under `apps/api/src` outside `ai-port/` and `platform/ai/` reaches a model through `KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`) and imports no platform AI type. `KvoxAi` is implemented over the platform `AiService.forUser`, which resolves the user's key from the platform `user_ai_keys`; a caller never sees a key. Sections 2.1 to 2.7 keep their numbers because other documents cite them, and each says what replaced its original text. The contract callers use today is "`KvoxAi` call path (issue #475)" under §2.8.
+> **The AI layer is the platform's.** Since issues #473 to #477 (epic #472) this repository has no `AiProvider` interface, provider registry, hand-written OpenAI client or per-user credentials table: `apps/api/src/ai/` and `user_ai_credentials` were deleted by #477. Code under `apps/api/src` outside the host glue (`ai-port/`, `platform-kvox/ai/`, `platform/ai/`) reaches a model through the `KVOX_AI` port (`KvoxAiPort` of `@marinoscar/kvox-api/ports`) and imports no platform AI type. Since issue #579 the port is `createKvoxAi` of `@marinoscar/kvox-ai`, bound over `PlatformAiRuntime`, which calls the platform `AiService.forUser`; the platform resolves the user's key from `user_ai_keys` and a caller never sees a key. The app facade `KvoxAi` and `PlatformKvoxAi` that issue #475 introduced are deleted. Sections 2.1 to 2.7 keep their numbers because other documents cite them, and each says what replaced its original text. The call contract is now the port; "`KvoxAi` call path (issue #475)" under §2.8 is the history of how it was reached and says where each rule lives today.
 
 ### 2.1 What replaced `AiProvider`
 
@@ -282,7 +282,7 @@ No source file in `apps/api/src` or `apps/cli/src` names a vendor host (`api.ope
 
 ### 2.2 Error taxonomy
 
-`apps/api/src/ai-port/ai-errors.ts` (the job-side classes; `mapAiError` in `ai-port/kvox-ai-errors.ts` produces them from the platform's `AiError`, table under §2.8). Three named classes, plus a default,
+The port's `KvoxAiError` classes (`packages/kvox-api/src/ports/ai.port.ts`; the job handlers of `@marinoscar/kvox-api` map them to their job error classes). The former `apps/api/src/ai-port/ai-errors.ts` and `mapAiError` are gone (#579): `toKvoxAiError` in `@marinoscar/kvox-ai` produces the class from the platform's `AiError`, table under §2.8. Three named classes, plus a default,
 following the identical "positively identify, otherwise assume ordinary"
 posture `classifyRateLimit` takes for the queue generally
 (`docs/specs/job-queue.md` §5.2, restated for transcription in
@@ -400,7 +400,7 @@ the same assertion, so a caller writes one Zod schema and gets both the
 wire schema and its own runtime validator from it. See that file for the
 exact rules and `apps/api/src/ai-port/` specs for every rejection case.
 
-**End-of-call outcomes**, produced by `PlatformKvoxAi` and `mapAiError`: a truncated answer is `AiStructuredOutputError('truncated')`, a schema mismatch or unparseable answer `'invalid_json'`, a refusal or `content_filter` finish `AiRefusedError` (the message quotes at most 300 characters of the refusal), a 429 `RateLimitError`, a rejected key `AiAuthError`, a 400 `AiInputError`. Only the answer that parses and validates is returned.
+**End-of-call outcomes**, produced by `createKvoxAi` (`@marinoscar/kvox-ai`, `port/` and `errors/` slices; the names below are the job error classes the handlers raise from the port's `KvoxAiError`): a truncated answer is `AiStructuredOutputError('truncated')`, a schema mismatch or unparseable answer `'invalid_json'`, a refusal or `content_filter` finish `AiRefusedError` (the message quotes at most 300 characters of the refusal), a 429 `RateLimitError`, a rejected key `AiAuthError`, a 400 `AiInputError`. Only the answer that parses and validates is returned.
 
 **The `structuredOutput` capability flag** is a boolean on the `ai_models` row (`capabilities.structured_output`), required for the identical reason the two numbers are: "unknown" has no safe call-site interpretation, so a row without the flag is `false`. `KvoxAi.readiness` reads it and the task check of §2.8 refuses a task whose model lacks it. There is no per-model override of a capability flag in the application. `GET /api/ai-tasks/config` and `GET /api/ai-tasks/settings` publish it per model — see "AI Tasks" in [`docs/API.md`](../API.md).
 
@@ -410,7 +410,7 @@ The connected-knowledge Ask agent (`docs/specs/ontology.md` §21) needs a
 **conversation**, not a prompt: it sends a growing message list, lets the
 model call read-only typed tools (§9.3), and appends each call and its result
 before asking again. `streamText` cannot carry that — it takes exactly one
-system prompt and one user message — so the port has `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. Since #476 `PlatformKvoxAi.chat` is one platform `stream()` call per turn; the pure mapping between the two vocabularies is `packages/kvox-ai/src/chat/chat-mapping.ts`.
+system prompt and one user message — so the port has `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. Since #476 `chat` of `createKvoxAi` is one platform `stream()` call per turn (through `PlatformAiRuntime`); the pure mapping between the two vocabularies is `packages/kvox-ai/src/chat/chat-mapping.ts`.
 
 **The port transports; it never executes.** A tool definition goes out
 and a complete tool call comes back as an event — running the tool,
@@ -519,7 +519,7 @@ The application's task routing rides on the platform AI slice. Every caller reac
 | `graph_embed` | `kg.embed`, resolution | `embeddings` | none (catalog) |
 | `search_embed` | `search.index`, query embed | `embeddings` | none (catalog) |
 
-**Wire code mapping.** `mapAiError(err, { feature, inJob })` (`ai-port/kvox-ai-errors.ts`) turns a platform `AiError` into the application's existing wire reason or, in a job, its job error class (`ai-port/ai-errors.ts`). `KvoxAiConflict` (409, `details.reason`) and `KvoxAiBadRequest` (400, `model_not_permitted`) keep the previous response bodies.
+**Wire code mapping.** `toKvoxAiError(err, { feature, inJob })` (`@marinoscar/kvox-ai`, `errors/`) turns a platform `AiError` into the port's `KvoxAiError` class; on a route the 409/400 bodies are `KvoxAiConflict` (409, `details.reason`) and `KvoxAiBadRequest` (400, `model_not_permitted`) in `ai-port/kvox-ai-errors.ts`, which keep the previous response bodies. The table below is the former `mapAiError` table, frozen as `packages/kvox-ai/test/fixtures/error-parity.v1.json`; the job column names the job error class a handler raises from the resulting `KvoxAiError`.
 
 | Platform `AiError.code` | HTTP route | Job |
 |---|---|---|
@@ -542,7 +542,9 @@ The application's task routing rides on the platform AI slice. Every caller reac
 
 #### `KvoxAi` call path (issue #475)
 
-`KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`, provided globally by `KvoxAiModule`) is the **only** way KVox code reaches a model. `PlatformKvoxAi` (`platform-kvox-ai.ts`) implements it over `AiService.forUser(userId, { orgId, jobId, feature })`. `kvox-ai.ts` imports only Zod and `ai-port` types, so the port can be published later as `KVOX_AI` without leaking a platform type. A caller injects `@Inject(KVOX_AI) ai: KvoxAi`, passes a `feature` id from the table above and, inside a handler, `jobId: job.id` so the platform span and the `ai_usage_events` row link to the job. One usage row is written per provider round trip, carrying the feature id.
+> **Superseded by issue #579 ([ADR-0005](../decisions/0005-ai-architecture-shared-harness.md)).** The `KvoxAi` facade, `PlatformKvoxAi`, `mapAiError`, `ai-port/ai-errors.ts`, `ai-port/ai-token-budget.ts` and `ai-port/testing/fake-kvox-ai.ts` described below no longer exist. Today `KVOX_AI` is the `KvoxAiPort` of `@marinoscar/kvox-api/ports` (`capabilities`, `resolveTask`, `generateText`, `generateStructured`, `chat`, `embed`, `countTokens`), implemented once by `createKvoxAi` of `@marinoscar/kvox-ai` (`packages/kvox-ai/src/port/`) and bound for the web edition in `apps/api/src/platform-kvox/ai/web-kvox-ai.ts` over `PlatformAiRuntime` (`ai-port/platform-ai-runtime.ts`, which calls `AiService.forUser` and so still writes one usage row per round trip), `PlatformTaskModelSource` and `AiReadinessService` (which replaces `readiness()`). Old to new: `streamText` is `generateText`, `embeddingCapability()` is `capabilities().embeddings`, `mapAiError` is `toKvoxAiError`, the token budget is `core/ai/token-budget.ts` of `@marinoscar/kvox-api`, the test double is `createFakeKvoxAi` (`@marinoscar/kvox-api/testing`) or `createScriptedRuntime` (`@marinoscar/kvox-ai/testing`). The rules in the table and bullets below (strict-schema round trip, truncation inference, reasoning clamp, timeout, usage `null`, embedding shape checks) are unchanged and now live in the package.
+
+`KvoxAi` (as built in #475; token `KVOX_AI`, provided globally by `KvoxAiModule`) was the **only** way KVox code reached a model; `KVOX_AI` remains so. `PlatformKvoxAi` implemented it over `AiService.forUser(userId, { orgId, jobId, feature })`. A caller injects `@Inject(KVOX_AI) ai: KvoxAi`, passes a `feature` id from the table above and, inside a handler, `jobId: job.id` so the platform span and the `ai_usage_events` row link to the job. One usage row is written per provider round trip, carrying the feature id.
 
 | Method | Contract |
 |---|---|
@@ -556,17 +558,17 @@ The application's task routing rides on the platform AI slice. Every caller reac
 
 **What stays the caller's.** `assertWithinBudget` and the token budget (§3.3) run before the call, fed `contextWindowTokens` and `maxOutputTokens` from `readiness()` and `countTokens`; over-budget stays a 400 with the required and available numbers. The per-user throttle key (`aiProviderThrottleKey(userId)`) is still registered by the handler immediately before the call. Job types, `maxAttempts: 1` profiles and the node-ineligible posture of AI jobs are unchanged. No ported file holds an `apiKey`.
 
-**What `PlatformKvoxAi` owns.** The model (the per-run `model` pick, else the resolver, §2.8 above), the reasoning effort, the timeout and the failure translation:
+**What `createKvoxAi` owns (formerly `PlatformKvoxAi`).** The model (the per-run `model` pick, else the resolver, §2.8 above), the reasoning effort, the timeout and the failure translation:
 
 - **Reasoning clamp.** The effort is the policy's, or the task's own when the chosen model is that task's configured model (`chooseTaskModel`). `streamText` and `generateStructured` also take an optional per-call `reasoningEffort` that wins over both (for a short call such as a title that must not spend its ceiling thinking). `none` omits `reasoning`; `xhigh` is sent as `high` (`toPlatformReasoningEffort`). Embedding features send none.
 - **Timeout.** Every call carries `AbortSignal.timeout(ai.requestTimeoutMs)` combined with the caller's `signal`. When the caller's signal aborts, its own abort reason is rethrown (handlers check for it); a backstop expiry is a plain `Error` naming the limit.
-- **Errors.** Every method rethrows through `mapAiError(err, { feature, inJob })` (table above), with `inJob = jobId !== undefined`. Its own errors (`AiInputError`, `AiRefusedError`, `AiStructuredOutputError`, `EmbeddingShapeError`) pass through unchanged. A 429 becomes `RateLimitError` with the provider's retry-after, so the queue defers without charging an attempt.
+- **Errors.** Every method rethrows through `toKvoxAiError(err, { feature, inJob })` (table above), with `inJob = jobId !== undefined`. Its own errors (`AiInputError`, `AiRefusedError`, `AiStructuredOutputError`, `EmbeddingShapeError`) pass through unchanged. A 429 becomes `RateLimitError` with the provider's retry-after, so the queue defers without charging an attempt.
 - **Usage.** An absent usage field is `null`, never `0` (0 means free).
-- **Truncation of a structured answer.** The platform's `AI_STRUCTURED_OUTPUT_INVALID` carries no finish reason. When the response reports `finishReason: 'length'`, that is honoured first (`'truncated'`). Otherwise a not-valid-JSON failure of a call that set `maxOutputTokens` is read as truncation (a strict schema guarantees well-formed JSON unless the answer was cut off), which is what the extraction retry needs; a well-formed answer that fails the schema is `'invalid_json'`. This inference is a marked shim, `PLATFORM-ADOPTION-SHIM(#475)` in `platform-kvox-ai.ts`, listed in [`local-exceptions.md`](../platform-adoption/local-exceptions.md).
+- **Truncation of a structured answer.** The platform's `AI_STRUCTURED_OUTPUT_INVALID` carries no finish reason. When the response reports `finishReason: 'length'`, that is honoured first (`'truncated'`). Otherwise a not-valid-JSON failure of a call that set `maxOutputTokens` is read as truncation (a strict schema guarantees well-formed JSON unless the answer was cut off), which is what the extraction retry needs; a well-formed answer that fails the schema is `'invalid_json'`. This inference is a marked shim, `PLATFORM-ADOPTION-SHIM(#475)`, now in `packages/kvox-ai/src/port/create-kvox-ai.ts`, listed in [`local-exceptions.md`](../platform-adoption/local-exceptions.md).
 
 **Settings and graph reads.** `KvoxAiSettings` (`ai-port/kvox-ai-settings.ts`) is the typed reader of the extended `ai` namespace (`graphEnabled`, `requestTimeoutMs`, limits) and replaces every read of the former AI settings service. It reads only; writes go through `AiTasksService`. The graph's resolver is `GraphAiRunResolver` (`graph/graph-ai-run.service.ts`), see [ontology.md](ontology.md) §20.3.
 
-**Tests and guards.** `ai-port/testing/fake-kvox-ai.ts` is the test double handler specs inject in place of the old registry. `platform-kvox-ai.spec.ts` drives `PlatformKvoxAi` over a fake `AiUserClient`. `test/ai/ai-port-boundary.spec.ts` fails when a file outside `ai-port/` and `platform/ai/` imports `@marinoscar/platform-api/ai`, or when `apps/api/src/ai/` exists. `test/ai/kvox-ai-jobs.spec.ts` pins the kvox AI job types (server-only, zero calls with `ai.enabled = false`, throttle key registered before the first call), `test/ai/no-vendor-host.spec.ts` forbids a vendor host in `apps/api/src` and `apps/cli/src`, and `test/ai-conformance.spec.ts` runs the platform AI conformance suites against the real application module.
+**Tests and guards.** Handler specs inject `createFakeKvoxAi` (`@marinoscar/kvox-api/testing`); the package's specs and `describeKvoxAiConformance` (`@marinoscar/kvox-ai/testing`) drive `createKvoxAi` over a scripted runtime, and `apps/api/test/ai/platform-ai-runtime.spec.ts` drives `PlatformAiRuntime` over a fake `AiUserClient`. `test/ai/ai-port-boundary.spec.ts` fails when a file outside `ai-port/` and `platform/ai/` imports `@marinoscar/platform-api/ai`, or when `apps/api/src/ai/` exists. `test/ai/kvox-ai-jobs.spec.ts` pins the kvox AI job types (server-only, zero calls with `ai.enabled = false`, throttle key registered before the first call), `test/ai/no-vendor-host.spec.ts` forbids a vendor host in `apps/api/src` and `apps/cli/src`, and `test/ai-conformance.spec.ts` runs the platform AI conformance suites against the real application module.
 
 ## 3. Prompt assembly and the token budget
 
@@ -660,11 +662,11 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/ai-port/ai-token-budget.ts`. `computeTokenBudget` is pure
+`packages/kvox-api/src/core/ai/token-budget.ts` (moved out of `apps/api/src/ai-port/ai-token-budget.ts`, now deleted). `computeTokenBudget` is pure
 and takes the model's own `contextWindowTokens`/`maxOutputTokens` plus the deployment's policy (`ai.maxInputTokens`/`maxOutputTokens`),
 an optional per-task clamp, and the reasoning effort the call will actually
-send. Since #475 the two model numbers come from `KvoxAi.readiness()` (the enabled `ai_models` row, floored to 128,000 and 16,384 when the row carries none), not from per-provider `allowedModels` entries (§2.5). Every caller reads them from that one function so none of them can disagree about a given model's
-window. `KvoxAi.countTokens` (the local estimator, §2.8 "`KvoxAi` call path") measures the assembled `system +
+send. Since #475 the two model numbers come from the readiness answer (`AiReadinessService`, and `resolveTask` on the port) (the enabled `ai_models` row, floored to 128,000 and 16,384 when the row carries none), not from per-provider `allowedModels` entries (§2.5). Every caller reads them from that one function so none of them can disagree about a given model's
+window. `countTokens` of the port (the local estimator, §2.8 "`KvoxAi` call path") measures the assembled `system +
 user` text; `assertWithinBudget` stays in each caller, immediately before the `KvoxAi` call.
 
 **Decided in #436 — nullable policy caps, a demand-driven split, and
@@ -1058,7 +1060,7 @@ A user's own provider key is stored by the platform AI slice in `user_ai_keys`, 
 Never returned over the wire in any form: `GET /api/ai/keys` returns `hint` and the verification fields, never `secret` (the platform conformance suite `ai-secret-egress` proves it against the running application), following
 `CredentialsService.describe()`'s exact no-plaintext-egress discipline
 (the platform cipher's own header: "THIS MODULE MUST NOT LOG" — the same
-invariant extends to every consumer of it). This application never reads the table: `KvoxAi` passes the user id and the platform resolves the key; `readiness` and `GET /api/ai-tasks/config` test only that a row exists.
+invariant extends to every consumer of it). This application never reads the table: the `KVOX_AI` port passes the user id and the platform resolves the key; `readiness` and `GET /api/ai-tasks/config` test only that a row exists.
 
 ### 4.3 `note_templates`
 
@@ -1864,6 +1866,53 @@ does); it only removes this note's own managed storage objects (a document
 source and its extraction, if any) and export files, then the SQL rows via
 cascade.
 
+### 8.7 Import — a Markdown note export back into a note (issue #585)
+
+`POST /api/notes/import` (multipart, one `file` part, `notes:write`) is the
+inverse of the Markdown exporter (§8.3): a note exported from one deployment
+(the web edition) becomes the same note in another (KVox Desktop), editable and
+extractable to the graph.
+
+- **The format is the contract's.** `parseNoteMarkdownExport` and the format
+  identifier `NOTE_MARKDOWN_EXPORT_SCHEMA` (`kvox.note/v1`) live in
+  `@marinoscar/kvox-contract/notes`, pure, so the API slice and a host that
+  routes a dropped file ("is this a note export?", `detectKvoxImport`) share one
+  definition. The exporter's front matter now opens with `schema:
+  "kvox.note/v1"` and carries `bodyFormat`.
+- **What is read.** The title comes from the front matter's `title`, else the
+  leading `# heading`, else the file name. The exporter's title heading and its
+  provenance block (`> **Source:** …`, stripped only right after the heading)
+  are not body. The body is everything after them, trailing whitespace removed
+  (the exporter normalises it the same way), so export → import → export gives
+  the same title and body.
+- **Lenient where it is safe.** A file with no front matter (an export written
+  with `includeFrontMatter: false`, or written before `schema` existed, or any
+  Markdown or text file) imports as a plain-body note. A front matter block that
+  is opened and never closed, or holds a line that is not `key: value`, is
+  refused (`invalid_front_matter`, `details.line`): guessing where it ends would
+  import YAML as the note's first paragraph. A `schema` other than
+  `kvox.note/v1` is refused (`unsupported_note_format`, `details.schema`), as is
+  a file that is not UTF-8 text (`not_text`) or holds no text once the header
+  is read (`empty_note`). The four reasons are `NOTE_IMPORT_FAILURE_REASONS`,
+  also in `KVOX_ERROR_CODES`.
+- **What is written**, in one transaction: a `ready` note (`titleSource:
+  user`, a person supplied the title) and version 1, kind `edit`, authored by
+  the importer, summary `Imported from <file>`. That pair is the import's origin
+  record; no new version kind and no migration. The file itself is stored first
+  as the note's **source document** (`sourceType: document`, `managed_by:
+  notes`, the uploaded-source key space) and deleted again if the transaction
+  fails; the export's provenance (its note id, template name and source) is kept
+  in that object's metadata, never linked, since those ids belong to another
+  deployment.
+- **After the commit**: the audit row (`note:import`, counts and ids only), the
+  source extraction (`note.source.extract`, so a later regeneration with a
+  template reads the text like any document source's), the search index, and
+  `kvox.notes.note_ready`, so a host's graph treats the note as it treats a
+  generated one (automatic or on-demand extraction is the host's choice).
+- **Synchronous** and bounded by the slice option `maxImportBytes` (5 MiB by
+  default; over it is a 413 before the file is buffered): one parse, one object
+  put and one transaction, nothing that outlives the request.
+
 ## 9. Privacy — what leaves this deployment, to whose account
 
 VISION.md requires that users *"understand when their information is being
@@ -2246,7 +2295,7 @@ the list this spec was designed against — the same purpose
 |---|---|
 | `note.generate` declares `profile: { maxAttempts: 1 }` and carries no `nodeResultSchema`/`persistNodeResult`; `note.source.extract` declares both | Unit assertions over each handler's declared members, mirroring `job-handler.registry.spec.ts`'s own pattern |
 | `notes.housekeeping`'s `@Cron` only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended — the existing test this document's job additions must not break |
-| The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against the fake `KvoxAi` (`ai-port/testing/fake-kvox-ai.ts`) |
+| The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against `createFakeKvoxAi` (`@marinoscar/kvox-api/testing`) |
 | The rate-limit throttle key is `ai-provider:<userId>`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the generation's `userId`, unlike transcription's single shared key |
 | `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `ai-token-budget.spec.ts`, including a property test over the two call sites |
 | An over-budget `POST /api/notes` is refused with a 400 naming both the estimated and the allowed token counts, and creates no note, no generation row, and enqueues no job | `apps/api/test/notes/notes-create.e2e.spec.ts` |

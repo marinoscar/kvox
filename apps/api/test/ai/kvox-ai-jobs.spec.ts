@@ -6,7 +6,8 @@ import * as ts from 'typescript';
 import { AiService } from '@marinoscar/platform-api/ai';
 import { JobHandlerRegistry, type Job } from '@marinoscar/platform-api/jobs';
 
-import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
+import { KVOX_AI, type KvoxAiPort } from '@marinoscar/kvox-api/ports';
+import { AiReadinessService } from '../../src/ai-port/ai-readiness.service';
 import { KvoxAiTargetResolver } from '../../src/ai-port/kvox-ai-target-resolver';
 import { KVOX_AI_FEATURES, type KvoxAiFeatureId } from '@marinoscar/kvox-ai';
 import { AdjudicationService, GraphEmbedder } from '@marinoscar/kvox-api/graph-extraction';
@@ -20,17 +21,18 @@ import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 // =============================================================================
 //
 // The platform conformance suites (`test/ai-conformance.spec.ts`) cover the `ai.*` job types the
-// platform registers. This app has ten of its own that spend a user's key through `KvoxAi`, and the
+// platform registers. This app has ten of its own that spend a user's key through `KVOX_AI`, and the
 // three rules those suites prove for `ai.*` must hold for them too:
 //
 //   (a) none is node-eligible. A remote machine must never hold a user's provider key, and no
 //       vendor offers a job-scoped sub-key to broker: no `nodeResultSchema`, no
 //       `persistNodeResult`, and the registry derives the type as server-only.
 //   (b) with `ai.enabled = false`, processing the job makes no model call. The real handler runs
-//       in the real app (real `KvoxAi`, real target resolver, real settings read) over a FAKE
-//       platform `AiService` whose `forUser` and every client method are counted. The user holds a
-//       key and a model is enabled, so the kill switch is the only thing missing. Each case also
-//       proves the handler REACHED the readiness gate (it asked `KvoxAi.readiness` for its feature),
+//       in the real app (the real `KVOX_AI` binding, real task-model source, real settings read)
+//       over a FAKE platform `AiService` whose `forUser` and every client method are counted. The
+//       user holds a key and a model is enabled, so the kill switch is the only thing missing. Each
+//       case also proves the handler REACHED the readiness gate (the binding asked
+//       `AiReadinessService.readiness`, the reader it shares, for its feature),
 //       so a job that returned early for a missing row cannot pass for a job that was gated.
 //       A control run with AI on proves the counters count.
 //   (c) the per-user throttle key (`aiProviderThrottleKey`) is registered before the first call:
@@ -123,7 +125,8 @@ const fakeAi = createFakeAiService();
 describe('kvox AI job types (#477)', () => {
   let context: TestContext;
   let registry: JobHandlerRegistry;
-  let kvoxAi: KvoxAi;
+  let kvoxAi: KvoxAiPort;
+  let readinessReader: AiReadinessService;
 
   beforeAll(async () => {
     context = await createTestApp({
@@ -131,7 +134,8 @@ describe('kvox AI job types (#477)', () => {
       overrideProviders: [{ provide: AiService, useValue: fakeAi.service }],
     });
     registry = context.module.get(JobHandlerRegistry);
-    kvoxAi = context.module.get<KvoxAi>(KVOX_AI);
+    kvoxAi = context.module.get<KvoxAiPort>(KVOX_AI);
+    readinessReader = context.module.get(AiReadinessService);
   });
 
   afterAll(async () => {
@@ -294,7 +298,7 @@ describe('kvox AI job types (#477)', () => {
       '%s asks readiness for its feature and stops: no AiService call',
       async (type, features) => {
         setAi(AI_OFF);
-        const readiness = jest.spyOn(kvoxAi, 'readiness');
+        const readiness = jest.spyOn(readinessReader, 'readiness');
         const handler = registry.get(type);
         const { payload } = SEEDS[type]();
 
@@ -314,7 +318,7 @@ describe('kvox AI job types (#477)', () => {
       '%s: its embedder and adjudicator refuse before any AiService call',
       async (_type, features) => {
         setAi(AI_OFF);
-        const readiness = jest.spyOn(kvoxAi, 'readiness');
+        const readiness = jest.spyOn(readinessReader, 'readiness');
 
         if ((features as readonly string[]).includes('graph_embed')) {
           const embedder = context.module.get(GraphEmbedder, { strict: false });
@@ -337,17 +341,14 @@ describe('kvox AI job types (#477)', () => {
     it('control: with AI on the same port reaches the AiService, so the counters above count', async () => {
       setAi(AI_ON);
 
-      const verdict = await kvoxAi.readiness(USER, 'note_generate', null);
+      const verdict = await readinessReader.readiness(USER, 'note_generate', null);
       expect(verdict).toMatchObject({ ok: true, reason: null, provider: 'openai' });
 
+      const ctx = { userId: USER, orgId: null, feature: 'notes.generate' };
+      const target = await kvoxAi.resolveTask(ctx, 'notes.generate');
       await expect(
         (async () => {
-          for await (const event of kvoxAi.streamText({
-            userId: USER,
-            feature: 'note_generate',
-            system: 's',
-            user: 'u',
-          })) {
+          for await (const event of kvoxAi.generateText(ctx, { target, system: 's', user: 'u' })) {
             void event;
           }
         })(),
@@ -365,7 +366,7 @@ describe('kvox AI job types (#477)', () => {
 
 const SRC = resolve(__dirname, '../../src');
 
-/** Receivers that are the `KvoxAi` port, or the embedder closure that wraps it. */
+/** Receivers that are the `KVOX_AI` port, or the embedder closure that wraps it. */
 const AI_RECEIVER = /(^|\.)(ai|embedder)$/;
 const AI_METHODS = new Set(['generateStructured', 'streamText', 'embed', 'chat']);
 
@@ -374,8 +375,8 @@ const AI_METHODS = new Set(['generateStructured', 'streamText', 'embed', 'chat']
  * where the order is proved instead.
  */
 const EXEMPT: Readonly<Record<string, string>> = {
-  'platform-kvox/ai/platform-kvox-ai.adapter.ts':
-    'the `KVOX_AI` port adapter (#490) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
+  'platform-kvox/ai/traced-kvox-ai-port.ts':
+    'the bound `KVOX_AI` (`createKvoxAi` wrapped for the web spans, #490, #579) is a pass-through for a slice that calls the model; the bucket is registered per job by `PlatformKvoxJobsAdapter` from the job row `provider_key` (set by `enqueue({ throttleKey })`) before the handler runs, proved in test/platform-kvox/platform-kvox-adapters.spec.ts',
 };
 
 function walk(dir: string): string[] {
@@ -424,8 +425,8 @@ describe('(c) the per-user throttle key is registered before the first model cal
     .filter(({ calls }) => calls.length > 0);
 
   it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
-    // Only the `KVOX_AI` adapter: the graph's calls moved into `@marinoscar/kvox-api` (#496) and Ask's (#497), scanned below.
-    expect(files.map(({ rel }) => rel).sort()).toEqual(['platform-kvox/ai/platform-kvox-ai.adapter.ts']);
+    // Only the bound `KVOX_AI` wrapper: the graph's calls moved into `@marinoscar/kvox-api` (#496) and Ask's (#497), scanned below.
+    expect(files.map(({ rel }) => rel).sort()).toEqual(['platform-kvox/ai/traced-kvox-ai-port.ts']);
   });
 
   it('every file that calls the model registers the key above its first call (or is exempt, with a reason)', () => {

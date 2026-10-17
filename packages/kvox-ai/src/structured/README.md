@@ -6,7 +6,7 @@ The strict JSON-schema subset structured output is constrained to, checked local
 
 `assertStrictJsonSchema` (throws `StrictSchemaError` naming the JSON path of the first violation), `zodToStrictJsonSchema`, and the limits `MAX_NESTING_DEPTH` and `MAX_TOTAL_PROPERTIES`. The rules are stricter than the vendor in two places so a schema that passes is portable to another provider.
 
-Status: moved from `apps/api/src/ai-port/strict-json-schema.ts` (issue #579, PR 1).
+Status: moved from `apps/api/src/ai-port/strict-json-schema.ts` (issue #579).
 
 ## Entry point
 

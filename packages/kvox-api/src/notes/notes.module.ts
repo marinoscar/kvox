@@ -40,6 +40,8 @@ import { NoteOriginService } from './note-origin.service.js';
 import { NoteSourceNameService } from './note-source-name.service.js';
 import { NoteSourcesController } from './note-sources.controller.js';
 import { NoteSourcesService } from './note-sources.service.js';
+import { NoteImportController } from './import/note-import.controller.js';
+import { NoteImportService } from './import/note-import.service.js';
 import { NoteTemplatePreviewService } from './note-template-preview.service.js';
 import { NoteTemplatesController } from './note-templates.controller.js';
 import { NoteTemplatesService } from './note-templates.service.js';
@@ -159,6 +161,9 @@ export class NotesModule {
     const resolved = resolveNotesOptions(options);
     const controllers = [
       NotesController,
+      // `POST /api/notes/import` (#585). Its own controller, so its static path is
+      // registered beside the `:id` routes without depending on their order.
+      NoteImportController,
       NoteSourcesController,
       NoteTemplatesController,
       NoteGenerationStreamController,
@@ -195,6 +200,8 @@ export class NotesModule {
       // stores an object, and every object it stores is `managed_by: 'notes'`.
       NoteObjectsService,
       NoteSourcesService,
+      // Note import (#585): a Markdown note export back into a note.
+      NoteImportService,
       NoteSourceExtractHandler,
       // Note templates (#50). `NoteTemplateAccessService` is the ONE place that decides
       // 403-for-a-built-in vs 404-for-somebody-else's.

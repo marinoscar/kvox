@@ -1,36 +1,39 @@
 import { Global, Module } from '@nestjs/common';
 
 import { aiModule } from '../platform/ai/ai.config';
-import { KVOX_AI } from './kvox-ai';
+import { AiReadinessService } from './ai-readiness.service';
 import { KvoxAiSettings } from './kvox-ai-settings';
-import { PlatformKvoxAi } from './platform-kvox-ai';
+import { PlatformAiRuntime } from './platform-ai-runtime';
 
 // =============================================================================
-// KvoxAiModule (issue #475, epic #472)
+// KvoxAiModule (issue #475, epic #472; rebuilt for #579)
 // =============================================================================
 //
-// Provides the one way this app reaches a model. `KVOX_AI` is `PlatformKvoxAi`
-// (over the platform `AiService`); a handler or service injects
-// `@Inject(KVOX_AI) private readonly ai: KvoxAi` and imports no platform AI type.
+// Provides the web edition's half of `@marinoscar/kvox-ai`: the pieces `KVOX_AI`
+// (the port of `@marinoscar/kvox-api/ports`, bound to `createKvoxAi` in
+// `platform-kvox/platform-kvox.module.ts`) is built from, and that host code reads
+// on its own:
 //
-// GLOBAL, so a feature module does not import it. It imports the configured
-// platform `AiModule` (the same object `AppModule` mounts, never a second
-// `forRoot`) to reach `AiService`, and relies on the global `AiHostModule` for
-// `KvoxAiTargetResolver`. `PrismaService` and the settings slice are global.
+//   PlatformAiRuntime   one provider round trip over the platform `AiService.forUser`
+//   AiReadinessService  "may this user run this feature, and on what?" (the onboarding
+//                       checklist's `app.aiReadiness` fact reads it; `KVOX_AI` shares it)
+//   KvoxAiSettings      the typed reader of the fields this app adds to the `ai`
+//                       namespace (`graphEnabled`, `requestTimeoutMs`, limits)
 //
-// `KvoxAiSettings` is exported too: the typed reader of the fields this app adds
-// to the `ai` namespace (`graphEnabled`, limits), replacing the retired
-// `AiSettingsService`.
+// GLOBAL, so the port binding and a feature module inject them without importing this
+// module. It imports the configured platform `AiModule` (the same object `AppModule`
+// mounts, never a second `forRoot`) to reach `AiService`, and relies on the global
+// `AiHostModule` for `PlatformTaskModelSource` and `KvoxAiTargetResolver`.
+// `PrismaService` and the settings slice are global.
+//
+// The retired `KvoxAi` facade and its app token (`ai-port/kvox-ai.ts`) are gone: code
+// reaches a model through `KVOX_AI` of `@marinoscar/kvox-api/ports` only.
 // =============================================================================
 
 @Global()
 @Module({
   imports: [aiModule],
-  providers: [
-    PlatformKvoxAi,
-    KvoxAiSettings,
-    { provide: KVOX_AI, useExisting: PlatformKvoxAi },
-  ],
-  exports: [KVOX_AI, KvoxAiSettings],
+  providers: [PlatformAiRuntime, AiReadinessService, KvoxAiSettings],
+  exports: [PlatformAiRuntime, AiReadinessService, KvoxAiSettings],
 })
 export class KvoxAiModule {}

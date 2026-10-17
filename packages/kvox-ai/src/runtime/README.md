@@ -6,7 +6,7 @@ The interfaces a host supplies: one provider round trip, the task-model state an
 
 `KvoxAiRuntime` (`stream`, `create`, optional `embed`, `readiness`), `KvoxAiRuntimeCall`, `KvoxAiRuntimeRequest`, `KvoxAiRuntimeEmbedRequest`, `KvoxAiRuntimeEmbedResult`, `KvoxAiKeyReadiness`; `KvoxTaskModelSource` (`load`, optional `resolve`), `KvoxAiModelState`, `KvoxAiEnabledModel`, `KvoxTaskModelTarget`; `KvoxModelCatalog` and `KvoxModelInfo`. Where they deviate from the sketch in issue #579 (optional `orgId`, `jobId`, `provider` and `model` on the call; a whole-state `load` on the task source) the TSDoc says why: the web runtime must keep doing exactly what it does today. No key crosses any of them.
 
-Status: interfaces only (issue #579, PR 1). `createKvoxAi`, which implements `KvoxAiPort` over them, and `createDirectRuntime` arrive in PR 2.
+Status: interfaces (issue #579). `createKvoxAi` (`port` slice) implements `KvoxAiPort` over them; `createDirectRuntime` (`direct` slice) is the runtime of a host with no platform AI service; the web runtime is `PlatformAiRuntime` in `apps/api`.
 
 ## Entry point
 
@@ -28,4 +28,4 @@ None.
 
 ### Desktop
 
-Desktop implements `KvoxAiRuntime` with `createDirectRuntime` (PR 2) and `KvoxTaskModelSource` over its settings file.
+Desktop implements `KvoxAiRuntime` with `createDirectRuntime` (`direct` slice) and `KvoxTaskModelSource` over its settings file.

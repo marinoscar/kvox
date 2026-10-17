@@ -11,8 +11,8 @@ import {
   taskDefinition,
   type AiTaskKey,
 } from '@marinoscar/kvox-ai';
+import { computeTokenBudget } from '@marinoscar/kvox-api/core';
 
-import { computeTokenBudget } from './ai-token-budget';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   AiTasksConfig,

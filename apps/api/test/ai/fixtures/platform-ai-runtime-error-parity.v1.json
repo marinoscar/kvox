@@ -1,0 +1,1517 @@
+{
+ "$comment": "FROZEN (#579): what the web edition answered for a HOST error (thrown by AiService or the KvoxAiTargetResolver under it, not an AiError) before createKvoxAi, captured from the old two-hop path. PlatformAiRuntime now translates these. Never regenerate it from the new code.",
+ "rows": [
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_not_configured",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "nc [redacted]",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#graph_disabled",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "not_configured",
+   "retryAfterMs": null,
+   "message": "gd",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_missing",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "key_missing",
+   "retryAfterMs": null,
+   "message": "km",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#ai_key_invalid",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "auth",
+   "retryAfterMs": null,
+   "message": "ki",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiConflict#model_lacks_capability",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_not_permitted",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "np",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "KvoxAiBadRequest#model_lacks_capability",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "capability",
+   "retryAfterMs": null,
+   "message": "lc",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#429",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "slow",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#422",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "refusal",
+   "retryAfterMs": null,
+   "message": "filtered",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#400",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "bad",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "HttpException#503",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "down",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "NotFoundException",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "other",
+   "retryAfterMs": null,
+   "message": "gone",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": 1500,
+   "message": "429 [redacted]",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "text",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "text",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "structured",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "structured",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "structured_ceiling",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "structured_ceiling",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "chat",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "chat",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "embed_search",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "embed_search",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "embed_graph",
+   "inJob": true,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  },
+  {
+   "error": "RateLimitError#no-hint",
+   "kind": "embed_graph",
+   "inJob": false,
+   "errorClass": "rate_limit",
+   "retryAfterMs": null,
+   "message": "429",
+   "usage": null
+  }
+ ]
+}

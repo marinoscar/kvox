@@ -158,6 +158,14 @@ describe('NotesPage', () => {
     return render(<NotesPage />, { wrapperOptions: { user, route: '/notes' } });
   }
 
+  it('renders the host\'s secondary action beside "New note" (#585)', async () => {
+    render(<NotesPage secondaryAction={<button type="button">Import…</button>} />, {
+      wrapperOptions: { user: mockAdminUser, route: '/notes' },
+    });
+
+    expect(await screen.findByRole('button', { name: 'Import…' })).toBeInTheDocument();
+  });
+
   it('lists a note with its title, date, template and status', async () => {
     renderNotes();
 
