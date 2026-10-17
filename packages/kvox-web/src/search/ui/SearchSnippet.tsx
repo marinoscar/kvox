@@ -6,8 +6,7 @@
  * =============================================================================
  *
  * `snippet.html` arrives from `GET /api/search` already HTML-escaped, with
- * `<mark>` and `</mark>` as the ONLY tags in it — `apps/api/src/search/
- * search-snippet.ts` builds it in an order chosen precisely so that every angle
+ * `<mark>` and `</mark>` as the ONLY tags in it — the API's `search-snippet.ts` builds it in an order chosen precisely so that every angle
  * bracket the corpus contained is `&lt;`/`&gt;` text before the one piece of
  * markup this application authors goes in, and the API's own spec asserts that
  * `html.match(/<[^>]+>/g)` is exactly `['<mark>', '</mark>']`.
@@ -85,8 +84,7 @@ export interface SnippetPart {
 }
 
 /**
- * The five entity references `escapeHtml` in `apps/api/src/search/
- * search-snippet.ts` produces, and nothing else.
+ * The five entity references `escapeHtml` in the API's `search-snippet.ts` produces, and nothing else.
  *
  * Deliberately NOT a general HTML entity decoder. The server escapes exactly
  * these five characters, so decoding a wider set here would be this client
