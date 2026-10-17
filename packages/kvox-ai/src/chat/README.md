@@ -6,7 +6,7 @@ The mapping of a chat turn to one provider-adapter request and of its stream eve
 
 `toPlatformTools` and `toPlatformToolChoice` (tool definitions as strict function tools), `toPlatformInput` (messages as instructions plus input items, full history every call), `fromPlatformEvent`, `createChatMappingState`, `missingToolCalls` and `toolCallIdsOf` (events back, each tool call once), `ReasoningReplayCache` and `replayScope` (the opaque reasoning items a stateless provider needs replayed in front of a tool call), and `clearToolCache`. Pure: no network, no key, no logger.
 
-Status: moved from `apps/api/src/ai-port/chat-mapping.ts` (issue #579, PR 1).
+Status: moved from `apps/api/src/ai-port/chat-mapping.ts` (issue #579).
 
 ## Entry point
 

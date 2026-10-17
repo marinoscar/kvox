@@ -6,7 +6,7 @@
 
 ## Context
 
-Both hosts must use the same prompts, pipelines and rules ([ADR-0001](0001-packages-first.md)) while reaching models differently: the web edition through the platform `AiService` with a per-user key, usage rows and traces; Desktop directly with a key from the OS keychain. Today the model mechanics sit in `apps/api/src/ai-port` (web only, about 3,000 lines).
+Both hosts must use the same prompts, pipelines and rules ([ADR-0001](0001-packages-first.md)) while reaching models differently: the web edition through the platform `AiService` with a per-user key, usage rows and traces; Desktop directly with a key from the OS keychain. Before #579 the model mechanics sat in `apps/api/src/ai-port` (web only, about 3,000 lines); they now live in `@marinoscar/kvox-ai`.
 
 ## Decision
 
@@ -16,12 +16,12 @@ Four layers:
 |---|---|---|---|
 | L4 | Orchestration: prompts, note pipeline, `kg.extract` and `kg.resolve`, Ask loop, budgets, sensitivity | `@marinoscar/kvox-api` | Shared today |
 | L3 | The `KVOX_AI` port (`KvoxAiPort`) | `@marinoscar/kvox-api` | Shared today |
-| L2 | Model mechanics: strict JSON schema, chat and tool mapping, structured-output rules, task-to-model resolution, token counting, error mapping | `apps/api/src/ai-port` today; moves to the new package `@marinoscar/kvox-ai` | Moves in #579 |
+| L2 | Model mechanics: strict JSON schema, chat and tool mapping, structured-output rules, task-to-model resolution, token counting, error mapping | `@marinoscar/kvox-ai` (`packages/kvox-ai`) | Implemented by #579 |
 | L1 | Transport: provider adapters implementing `AiProviderAdapter` (OpenAI, OpenAI-compatible, Anthropic, Azure, Gemini) from `@marinoscar/platform-api/ai` | Platform; to be split into a lean provider package upstream (#578) | Shared |
 
-L2 is exposed as `createKvoxAi({ runtime, taskModels, catalog, embedding })` and `createDirectRuntime({ adapters, keys })`.
+L2 is exposed as `createKvoxAi({ runtime, taskModels, readiness?, requestTimeoutMs, graphEnabled, logger, catalog })` (the one `KvoxAiPort` implementation) and `createDirectRuntime({ adapters, keys })`, both from `@marinoscar/kvox-ai`; `@marinoscar/kvox-ai/testing` carries the scripted runtime and `describeKvoxAiConformance`. Implemented by #579.
 
-- Web runtime: the platform `AiService` (gates, user key, usage rows, traces).
+- Web runtime: `PlatformAiRuntime` (`apps/api/src/ai-port/platform-ai-runtime.ts`) over the platform `AiService.forUser` (gates, user key, usage rows, traces).
 - Desktop runtime: adapters called directly with a key from the OS keychain.
 
 Providers: OpenAI first on both. The GitHub Copilot SDK is a Desktop extension implemented as one more `AiProviderAdapter` (#581) with hard requirements:

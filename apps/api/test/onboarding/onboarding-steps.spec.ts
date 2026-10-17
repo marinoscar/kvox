@@ -10,7 +10,7 @@ import { DoctorCheckRegistry, DoctorService } from '@marinoscar/platform-api/doc
 import type { OnboardingResponse, OnboardingStep } from '@marinoscar/platform-contract/onboarding';
 
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
-import { KVOX_AI } from '../../src/ai-port/kvox-ai';
+import { AiReadinessService } from '../../src/ai-port/ai-readiness.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { TranscriptionConfigService } from '@marinoscar/kvox-api/transcription';
 
@@ -75,7 +75,7 @@ function build(world: World = {}) {
   const providers = new Map<unknown, unknown>([
     [TranscriptionConfigService, { getConfig }],
     [PrismaService, { transcript: { count: transcriptCount }, note: { count: noteCount } }],
-    [KVOX_AI, { readiness }],
+    [AiReadinessService, { readiness }],
   ]);
   const moduleRef = { get: (token: unknown) => providers.get(token) } as unknown as ModuleRef;
 

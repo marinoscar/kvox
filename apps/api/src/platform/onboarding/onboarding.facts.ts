@@ -1,6 +1,6 @@
 import type { OnboardingFactDef } from '@marinoscar/platform-api/onboarding';
 
-import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
+import { AiReadinessService } from '../../ai-port/ai-readiness.service';
 
 // =============================================================================
 // This app's onboarding facts (issue #481, epic #478)
@@ -59,14 +59,14 @@ export interface KvoxAiOnboardingReadiness {
 }
 
 /**
- * `KvoxAi.readiness(caller, 'note_generate')` reduced to what the steps read. Never throws
- * (the port's contract), so a broken AI configuration reads as "not available", not as a
- * missing step.
+ * `AiReadinessService.readiness(caller, 'note_generate')` (the same reader the bound
+ * `KVOX_AI` uses, #579) reduced to what the steps read. A not-ready answer is a value, so a
+ * broken AI configuration reads as "not available", not as a missing step.
  */
 export const AI_READINESS_FACT: OnboardingFactDef<KvoxAiOnboardingReadiness> = {
   id: KVOX_ONBOARDING_FACTS.AI_READINESS,
   resolve: async (ctx) => {
-    const readiness = await ctx.get<KvoxAi>(KVOX_AI).readiness(ctx.caller.id, 'note_generate');
+    const readiness = await ctx.get<AiReadinessService>(AiReadinessService).readiness(ctx.caller.id, 'note_generate');
     return {
       available: readiness.ok || readiness.reason === 'ai_key_missing',
       hasKey: readiness.hasKey,

@@ -140,7 +140,7 @@ describe('Notes API (#53)', () => {
       describe: 'transcript at version 3',
     });
 
-    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, and a saved key, so the
+    // The real readiness (`AiReadinessService`): AI on, `gpt-4o` enabled, and a saved key, so the
     // ordinary path is "configured".
     invalidateAiResolverCache(context);
     primeAiReadiness();

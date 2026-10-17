@@ -3,9 +3,10 @@
 // =============================================================================
 //
 // Drives `AskRespondHandler.process()` end to end — real handler, real toolset,
-// real DB, real `HandleRegistry`/citation plumbing, AND the real `PlatformKvoxAi.chat()`
-// mapping — with NO network call and NO real model. What is faked is the layer
-// below the port: `AiService.forUser(...).stream()`, which yields the platform's
+// real DB, real `HandleRegistry`/citation plumbing, AND the real `KVOX_AI` binding
+// (`createWebKvoxAi`: `createKvoxAi` of `@marinoscar/kvox-ai` over the real
+// `PlatformAiRuntime`, #579) — with NO network call and NO real model. What is faked
+// is the layer below the runtime: `AiService.forUser(...).stream()`, which yields the platform's
 // own events (`output_text.delta`, `output_item.done` with a `function_call` or a
 // `reasoning` item, `response.completed`, `error`). So a replay proves the event
 // mapping as well as the loop, the scorer, the seeder's `idMap` and the citation
@@ -15,12 +16,12 @@
 // keep their names, so a script reads the same as it did over the retired provider.
 // =============================================================================
 
-import type { KvoxAiReadiness, KvoxReasoningEffort } from '@marinoscar/kvox-ai';
+import type { KvoxAiModelState, KvoxReasoningEffort } from '@marinoscar/kvox-ai';
+import type { KvoxAiPort } from '@marinoscar/kvox-api/ports';
 import type { AiOutputItem, AiRequest, AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
 
-import { PlatformKvoxAi } from '../../src/ai-port/platform-kvox-ai';
-import type { KvoxAi } from '../../src/ai-port/kvox-ai';
-import { readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
+import { PlatformAiRuntime } from '../../src/ai-port/platform-ai-runtime';
+import { createWebKvoxAi } from '../../src/platform-kvox/ai/web-kvox-ai';
 
 export type ChatScript = AiStreamEvent[];
 
@@ -74,7 +75,7 @@ export class FakeAskStream {
     this.resetRequests();
   }
 
-  /** The `AiService` stand-in: `new PlatformKvoxAi(fake.aiService() as never, ...)`, or `.overrideProvider(AiService).useValue(...)`. */
+  /** The `AiService` stand-in: `new PlatformAiRuntime(fake.aiService() as never, ...)`, or `.overrideProvider(AiService).useValue(...)`. */
   aiService(): { forUser: (userId: string, scope?: Omit<CapturedScope, 'userId'>) => { stream: FakeAskStream['stream'] } } {
     return {
       forUser: (userId, scope) => {
@@ -157,11 +158,18 @@ export const failure = (code: 'AI_RATE_LIMITED' | 'AI_KEY_INVALID' | 'AI_PROVIDE
 });
 
 export interface FakeAskPort {
-  /** The `KvoxAi` the handler injects: scripted readiness, the REAL `PlatformKvoxAi.chat()` over the fake stream. */
-  ai: KvoxAi;
-  /** The settings the handler reads (`get()` and `requestTimeoutMs()`), as the `ai` namespace would answer. */
-  settings: { get: () => Promise<Record<string, unknown>>; requestTimeoutMs: () => Promise<number> };
-  platform: PlatformKvoxAi;
+  /** The `KVOX_AI` the handler injects: the REAL web binding (`createWebKvoxAi`) over the fake stream. */
+  ai: KvoxAiPort;
+  /** The settings the binding reads (`requestTimeoutMs()`, `graphEnabled()`), and `get()` as the `ai` namespace would answer. */
+  settings: {
+    get: () => Promise<Record<string, unknown>>;
+    requestTimeoutMs: () => Promise<number>;
+    graphEnabled: () => Promise<boolean>;
+  };
+  /** The real platform runtime the binding calls, over the fake `AiService`. */
+  runtime: PlatformAiRuntime;
+  /** The task-model state the binding reads (what `PlatformTaskModelSource` would load). */
+  state: KvoxAiModelState;
 }
 
 export interface FakeAskPortOptions {
@@ -169,37 +177,54 @@ export interface FakeAskPortOptions {
   reasoningEffort?: KvoxReasoningEffort;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
-  readiness?: Partial<KvoxAiReadiness>;
 }
 
 /**
- * The port the Ask handler needs, with the real chat mapping over a `FakeAskStream`.
- * Readiness is scripted (it needs the database policy, which a replay does not have);
- * everything from `chat()` down is the production code.
+ * The port the Ask handler needs: the REAL web binding over a `FakeAskStream`.
+ *
+ * The task-model state is scripted (what `PlatformTaskModelSource` would read from the
+ * database policy, which a replay does not have): the graph agent's task model is
+ * `model`, enabled with tool calling and the given numbers, the deployment effort is
+ * `reasoningEffort`, and the user holds a key. Everything from readiness and `chat()`
+ * down to `AiService.forUser(...).stream()` is the production code.
  */
 export function createFakeAskPort(stream: FakeAskStream, options: FakeAskPortOptions = {}): FakeAskPort {
   const policy = { maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 };
   const settings = {
     get: async () => policy,
     requestTimeoutMs: async () => policy.requestTimeoutMs,
+    graphEnabled: async () => true,
   };
-  const platform = new PlatformKvoxAi(stream.aiService() as never, {} as never, {} as never, settings as never);
 
   const model = options.model ?? 'gpt-replay';
-  const readiness = readyReadiness({
-    model,
-    source: 'task',
-    reasoningEffort: options.reasoningEffort ?? 'low',
-    contextWindowTokens: options.contextWindowTokens ?? 128_000,
-    maxOutputTokens: options.maxOutputTokens ?? 16_000,
-    ...(options.readiness ?? {}),
-  });
+  const state: KvoxAiModelState = {
+    provider: 'openai',
+    models: [
+      {
+        id: model,
+        label: model,
+        structuredOutput: true,
+        toolCalling: true,
+        contextWindow: options.contextWindowTokens ?? 128_000,
+        maxOutputTokens: options.maxOutputTokens ?? 16_000,
+      },
+    ],
+    policy: {
+      enabled: true,
+      provider: 'openai',
+      defaultModel: model,
+      graphEnabled: true,
+      taskModels: { 'graph.agent': { model } },
+      reasoningEffort: options.reasoningEffort ?? 'low',
+      maxInputTokens: null,
+      maxOutputTokens: null,
+    },
+  };
 
-  const ai = {
-    readiness: async () => readiness,
-    countTokens: (text: string) => Math.ceil(text.length / 4),
-    chat: (request: Parameters<KvoxAi['chat']>[0]) => platform.chat(request),
-  } as unknown as KvoxAi;
+  // The user holds a key (existence only, as `user_ai_keys` would answer).
+  const prisma = { userAiKey: { findUnique: async () => ({ id: 'replay-key' }) } };
+  const runtime = new PlatformAiRuntime(stream.aiService() as never, prisma as never);
+  const ai = createWebKvoxAi({ runtime, taskModels: { load: async () => state }, settings });
 
-  return { ai, settings, platform };
+  return { ai, settings, runtime, state };
 }

@@ -58,7 +58,7 @@ describe('Onboarding Integration', () => {
     context.prismaMock.note.count.mockResolvedValue(0);
     context.prismaMock.allowedEmail.count.mockResolvedValue(1);
     context.prismaMock.pushSubscription.count.mockResolvedValue(0);
-    // ⚠ EXPLICITLY `null`, not left to `mockDeep`: `KvoxAi.readiness` reads whether the caller has a
+    // ⚠ EXPLICITLY `null`, not left to `mockDeep`: the readiness reader (`AiReadinessService`) reads whether the caller has a
     // key as `row !== null`, and an unconfigured deep mock answers `undefined`, which is `!== null`.
     context.prismaMock.userAiKey.findUnique.mockResolvedValue(null);
     context.prismaMock.aiModel.findMany.mockResolvedValue([]);

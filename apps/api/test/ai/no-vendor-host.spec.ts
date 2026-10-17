@@ -13,7 +13,7 @@ import { join, relative, resolve, sep } from 'node:path';
 // model mechanics that moved out of `apps/api/src/ai-port/` (#579); it reaches a provider only through a
 // host-supplied runtime, so it names no host either.
 //
-// A failure names the file and the host. Do not add an exception: route the call through `KvoxAi`
+// A failure names the file and the host. Do not add an exception: route the call through `KVOX_AI`
 // (`apps/api/src/ai-port/`), and let the administrator configure an endpoint in the AI settings.
 // =============================================================================
 

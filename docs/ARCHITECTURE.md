@@ -287,7 +287,7 @@ All components served from the same base URL via Nginx reverse proxy:
 │   │   │   │   ├── credentials/      # CredentialsModule (+ user/org) and the purpose manifest
 │   │   │   │   └── ai/               # AiModule.forRoot, AiHostModule (binds AI_TARGET_RESOLVER), the ai namespace extension
 │   │   │   ├── app-registrations/    # KVox permissions, user-owned models, ownership, AI features (ai.ts)
-│   │   │   ├── ai-port/              # KvoxAi (KVOX_AI) + PlatformKvoxAi: the only call path to a model; embedding catalog, countTokens, task chooser, KvoxAiTargetResolver, feature map, mapAiError, /api/ai-tasks/*
+│   │   │   ├── ai-port/              # host glue for KVOX_AI: PlatformAiRuntime, PlatformTaskModelSource, AiReadinessService, KvoxAiTargetResolver, KvoxAiSettings, /api/ai-tasks/* (the model mechanics are @marinoscar/kvox-ai)
 │   │   │   ├── allowlist-reminders/  # KVox-owned reminder routes (side table)
 │   │   │   ├── kvox-objects/         # Ownership side table, managed-objects gateway, multipart routes, files list, delete veto, transcript upload processor
 │   │   │   ├── settings/             # registry/ (namespace manifests) only
@@ -964,7 +964,7 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   `noteId` is nullable — `NULL` for a **template preview** (issue #50), which has no note to
   belong to, is never listed in `GET /api/notes`, and is hard-deleted by `notes.housekeeping`
   at its 10-minute TTL. `errorClass` is a proper enum (`auth`/`refusal`/`rate_limit`/`other`)
-  matching `ai-errors.ts`'s taxonomy — the SSE layer's own `NoteStreamErrorClass` adds two
+  matching the `KvoxAiError` taxonomy of `packages/kvox-api/src/ports/ai.port.ts` — the SSE layer's own `NoteStreamErrorClass` adds two
   wire-only values, `timeout` and `gone`, that never exist in this column because neither is a
   property of the generation (see [`specs/notes.md`](specs/notes.md), the streaming contract). `systemPrompt`/
   `userContent`/`sourceVersion`/`contextCapturedAt` (issue #307) snapshot exactly what was sent
@@ -1434,7 +1434,7 @@ registers what is its own and binds two host ports.
 | Encrypted `(purpose, name)` store, the AES-256-GCM cipher, the boot-time `SECRETS_ENCRYPTION_KEY` check | platform credentials slice and `core` | `platform/credentials/credentials.config.ts` (`CredentialsModule`, not global; `UserCredentialsModule`, `OrgCredentialsModule` mounted and unused), `main.ts` calls `verifyEncryptionKeyAtStartup` from `@marinoscar/platform-api/core` |
 | Credential purposes `smtp`, `email_ses`, `push_vapid` | platform definitions (strings equal the ones KVox always stored) | `platform/credentials/credential-purposes.manifest.ts` |
 | Credential purpose `transcription` | KVox | registered in `kvox.manifest.ts` under `[registry:credential-purposes]` (the base-domain-boundary test forbids `platform/credentials` importing `transcription`) |
-| Per-user AI keys | platform AI slice | `user_ai_keys`, written and resolved by the platform (`/api/ai/keys`); never in `credentials`. KVox code never reads one: `KvoxAi` (#475) passes the user id and the platform resolves the key. The former `user_ai_credentials` table was dropped by #477 |
+| Per-user AI keys | platform AI slice | `user_ai_keys`, written and resolved by the platform (`/api/ai/keys`); never in `credentials`. KVox code never reads one: the `KVOX_AI` port (#475, #579) passes the user id and the platform resolves the key. The former `user_ai_credentials` table was dropped by #477 |
 
 A purpose is also the AES-GCM sub-key domain, so a purpose string is permanent. The cipher is byte-compatible with the one
 KVox ran before (verified in both directions on existing ciphertext), which is why adopting the slice needed no data
@@ -1565,17 +1565,17 @@ AI is the platform's slice (`@marinoscar/platform-api/ai`), mounted in `apps/api
 |---------|-------|---------------|
 | Routes `/api/ai/config`, `/api/ai/keys`, `/api/ai/features`, `/api/admin/ai/usage`, the `ai_models` catalogue, usage rows | platform AI slice | `platform/ai/ai.config.ts` |
 | The `ai` namespace; task models, `graphEnabled`, `defaultModel`, limits | platform, extended | `KVOX_AI_SETTINGS_EXTENSION` (`platform/ai/ai-settings.extension.ts`) |
-| Which model a call runs on | KVox, as the `AI_TARGET_RESOLVER` port | `KvoxAiTargetResolver` over the ported pure `chooseTaskModel` (`ai-port/`), bound in `AiHostModule` |
+| Which model a call runs on | KVox, as the `AI_TARGET_RESOLVER` port | `KvoxAiTargetResolver` (`ai-port/`) over `chooseTaskModel` of `@marinoscar/kvox-ai`, bound in `AiHostModule` |
 | Nine registered features (group `kvox`) | KVox | `app-registrations/ai.ts`; ids to task keys in `packages/kvox-ai/src/features/features.ts` |
-| `AiError` to wire reason or job error class | KVox | `ai-port/kvox-ai-errors.ts` (`mapAiError`) |
+| `AiError` to the port's `KvoxAiError` class | KVox, packaged | `toKvoxAiError` in `@marinoscar/kvox-ai` (`errors` slice); the 409/400 route bodies are `ai-port/kvox-ai-errors.ts` |
 | `GET /api/ai-tasks/config`, `GET`/`PUT /api/ai-tasks/settings` | KVox | `ai-port/ai-tasks.controller.ts` |
-| The one way code reaches a model | KVox | `KvoxAi` (`ai-port/kvox-ai.ts`, token `KVOX_AI`), implemented by `PlatformKvoxAi` over `AiService.forUser` (#475) |
+| The one way code reaches a model | KVox | `KVOX_AI` (`KvoxAiPort` of `@marinoscar/kvox-api/ports`), bound to `createKvoxAi` of `@marinoscar/kvox-ai` in `platform-kvox/ai/web-kvox-ai.ts` (wrapped by `TracedKvoxAiPort`) over `PlatformAiRuntime`, which calls `AiService.forUser` (#475, #579) |
 
-**AI call path (#475).** Feature code (notes, transcripts, search, the graph) injects `KVOX_AI` and calls `readiness`, `streamText`, `generateStructured`, `embed` or `countTokens` with a registered feature id; it imports no platform AI type, and a guard spec (`test/ai/ai-port-boundary.spec.ts`) fails on one outside `ai-port/` and `platform/ai/`. `PlatformKvoxAi` calls `AiService.forUser(userId, { orgId, jobId, feature })`, so the platform resolves the user's key from `user_ai_keys`, runs its gates, records one usage row per round trip and traces the call. Failures leave through `mapAiError`. `chat` (the Ask loop) is one platform `stream()` call per turn (#476).
+**AI call path (#475).** Feature code (notes, transcripts, search, the graph) injects `KVOX_AI` and calls `capabilities`, `resolveTask`, `generateText`, `generateStructured`, `chat`, `embed` or `countTokens` with a feature name; it imports no platform AI type, and a guard spec (`test/ai/ai-port-boundary.spec.ts`) fails on one outside the host glue. `createKvoxAi` holds the model mechanics (strict schemas, the chat mapping, task-to-model choice, the error classes); its `PlatformAiRuntime` calls `AiService.forUser(userId, { orgId, jobId, feature })`, so the platform resolves the user's key from `user_ai_keys`, runs its gates, records one usage row per round trip and traces the call. Every failure leaves as a `KvoxAiError`. `chat` (the Ask loop) is one platform `stream()` call per turn (#476).
 
 **AI settings pages (#477).** The web side is the platform's too (`@marinoscar/platform-web/ai/ui`): the admin `AI` card (`/admin/settings/ai`, `ai_config:read`, no `feature` because it is the switch) renders `AiConfigPage` with KVox's task-model, graph and ceiling sections in its `Sections` slot; `AI models` and `AI usage` (`ai_config:read`, `feature: 'ai'`) are the platform's `AiModelsPage` and `AiUsagePage`; the per-user `AI Provider` card (`/settings/ai`, `ai:use`, `feature: 'ai'`) is `UserAiKeysPage`. The web client reads `GET /api/ai-tasks/config` through `useAiTasksConfig` (`keyConfigured`, `available`, `graphEnabled`, the model list), which also gates the `knowledge` destination. Registry rationale: [`specs/settings-ui.md`](specs/settings-ui.md) §8.
 
-Design, the feature table, the mapping table and the `KvoxAi` contract: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice" and "`KvoxAi` call path". Embeddings: [`specs/search.md`](specs/search.md) §11.
+Design, the feature table, the mapping table and the port contract: [`specs/notes.md`](specs/notes.md) §2.8 "Platform AI slice" and "`KvoxAi` call path"; the package: [`packages/kvox-ai/README.md`](../packages/kvox-ai/README.md), [ADR-0005](decisions/0005-ai-architecture-shared-harness.md). Embeddings: [`specs/search.md`](specs/search.md) §11.
 
 ### 7.12 Platform exports slice ("Download your data")
 

@@ -1,9 +1,11 @@
 /**
  * The `extract` kg:eval runner (#363): kg.extract's pure pipeline over one
- * golden fixture, with a `FakeKvoxAi` — no network, no key, no database.
+ * golden fixture, with a scripted `KVOX_AI` (`createFakeKvoxAi` of
+ * `@marinoscar/kvox-api/testing`) — no network, no key, no database.
  */
 
-import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
+import { createFakeKvoxAi } from '@marinoscar/kvox-api/testing';
+
 import { loadGoldenSet, selectFixtures } from '../../scripts/kg-eval/load';
 import { kgEvalPredictionSchema } from '../../scripts/kg-eval/prediction-schema';
 import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
@@ -14,7 +16,7 @@ import { buildExtractionContext } from './package-internals';
 const [m01] = selectFixtures(loadGoldenSet(), ['m01'], null);
 
 function stubAi(answer: unknown) {
-  return new FakeKvoxAi().queueStructured(answer, { usage: { inputTokens: 10, outputTokens: 5 } });
+  return createFakeKvoxAi({ script: { structured: answer } });
 }
 
 describe('kg:eval extract runner (#363)', () => {
@@ -48,12 +50,16 @@ describe('kg:eval extract runner (#363)', () => {
 
     const prediction = kgEvalPredictionSchema.parse(await runner.run(m01, { model: 'gpt-test', apiKey: 'sk-never-logged' }));
 
-    expect(ai.callsOf('generateStructured')).toHaveLength(1);
-    expect(ai.lastCall('generateStructured')).toEqual(
+    const structuredCalls = ai.calls.filter((call) => call.method === 'generateStructured');
+    expect(structuredCalls).toHaveLength(1);
+    expect(structuredCalls[0]).toEqual(
       expect.objectContaining({
-        feature: 'graph_extract',
-        model: 'gpt-test',
-        request: expect.objectContaining({ schemaName: 'kg_extraction', jsonSchema: expect.any(Object) }),
+        ctx: expect.objectContaining({ feature: 'graph.extract' }),
+        req: expect.objectContaining({
+          target: expect.objectContaining({ model: 'gpt-test' }),
+          schemaName: 'kg_extraction',
+          jsonSchema: expect.any(Object),
+        }),
       }),
     );
     expect(JSON.stringify(prediction)).not.toContain('sk-never-logged');

@@ -2,7 +2,8 @@
 // THE AI PORT BOUNDARY (issue #475, epic #472)
 // =============================================================================
 //
-// `KvoxAi` (`src/ai-port/`) is the only way this app's code reaches a model. Three
+// `KVOX_AI` (the port of `@marinoscar/kvox-api/ports`, bound in `src/platform-kvox/` to
+// `createKvoxAi` over the runtime in `src/ai-port/`) is the only way this app's code reaches a model. Three
 // rules keep it that way, and each is invisible from inside the file that breaks
 // it (one import line compiles, passes every test and works), so they are
 // executable:
@@ -20,7 +21,7 @@
 //      this is what stops it coming back by a stray `mkdir`, and it has no allowlist.
 //   4. The model mechanics that left `ai-port/` for `@marinoscar/kvox-ai` (#579:
 //      strict structured output, the chat mapping, the task chooser, token counts, the
-//      embedding catalog) make `packages/kvox-ai/src/` the one other home of the
+//      embedding catalog, the error translation and the port itself, `createKvoxAi`) make `packages/kvox-ai/src/` the one other home of the
 //      platform AI package, on a tighter rule than `ai-port/`: it imports exactly the
 //      public subpath `@marinoscar/platform-api/ai` (no other platform subpath, no
 //      deeper path), and no Nest, no Prisma and no `@app/shared`, because KVox Desktop
@@ -36,8 +37,9 @@
 //
 // WHEN IT FAILS. The message names the file, the line and the specifier. Do not add
 // to an allowlist to make it pass. Call the model through `KVOX_AI`
-// (`@Inject(KVOX_AI) private readonly ai: KvoxAi`); in a spec, provide the
-// `FakeKvoxAi` from `src/ai-port/testing/fake-kvox-ai.ts`.
+// (`@Inject(KVOX_AI) private readonly ai: KvoxAiPort`, `@marinoscar/kvox-api/ports`); in a spec,
+// provide `createFakeKvoxAi` of `@marinoscar/kvox-api/testing`, or drive the real binding over a
+// scripted `AiService` (`test/helpers/web-kvox-ai.helper.ts`).
 // =============================================================================
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';

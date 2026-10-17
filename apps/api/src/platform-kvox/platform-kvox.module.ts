@@ -7,7 +7,11 @@ import { KvoxPortsModule, type KvoxPortBindings } from '@marinoscar/kvox-api/cor
 
 import { PrismaService } from '../prisma/prisma.service';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
-import { PlatformKvoxAiAdapter } from './ai/platform-kvox-ai.adapter';
+import { AiReadinessService } from '../ai-port/ai-readiness.service';
+import { KvoxAiSettings } from '../ai-port/kvox-ai-settings';
+import { PlatformAiRuntime } from '../ai-port/platform-ai-runtime';
+import { PlatformTaskModelSource } from '../ai-port/platform-task-model-source';
+import { createWebKvoxAi } from './ai/web-kvox-ai';
 import { PlatformKvoxAuditAdapter } from './audit/platform-kvox-audit.adapter';
 import { PlatformKvoxEventsAdapter } from './events/platform-kvox-events.adapter';
 import { PlatformKvoxIdentityAdapter } from './identity/platform-kvox-identity.adapter';
@@ -28,7 +32,8 @@ import { PlatformKvoxSettingsAdapter } from './settings/platform-kvox-settings.a
 // of the platform. This folder is the ONLY place in the domain's dependency graph that
 // names `@marinoscar/platform-*` for these ports (the Desktop edition binds its own).
 //
-//   KVOX_AI            -> ai/        the app's `KvoxAi` facade (over `AiService.forUser`)
+//   KVOX_AI            -> ai/        `createKvoxAi` of `@marinoscar/kvox-ai` over `PlatformAiRuntime`
+//                                    (`AiService.forUser`) and `PlatformTaskModelSource` (#579)
 //   KVOX_OBJECT_STORE  -> object-store/  `KvoxManagedObjects`, `ObjectsService`, `ObjectProcessorRegistry`
 //   KVOX_JOBS          -> jobs/      `JobsService`, `JobHandlerRegistry`, the provider throttle
 //   KVOX_IDENTITY      -> identity/  `JwtAuthGuard`, normalised here
@@ -58,7 +63,17 @@ export class PlatformKvoxDepsModule {}
 
 /** The binding of every port to its web-edition adapter. */
 export const platformKvoxPorts: KvoxPortBindings = {
-  ai: { useClass: PlatformKvoxAiAdapter },
+  // The providers come from the global `KvoxAiModule` (runtime, readiness, settings) and
+  // `AiHostModule` (the task-model source the platform's target resolver shares).
+  ai: {
+    useFactory: (
+      runtime: PlatformAiRuntime,
+      taskModels: PlatformTaskModelSource,
+      readiness: AiReadinessService,
+      settings: KvoxAiSettings,
+    ) => createWebKvoxAi({ runtime, taskModels, readiness, settings }),
+    inject: [PlatformAiRuntime, PlatformTaskModelSource, AiReadinessService, KvoxAiSettings],
+  },
   objectStore: { useClass: PlatformKvoxObjectStoreAdapter },
   jobs: { useClass: PlatformKvoxJobsAdapter },
   identity: { useClass: PlatformKvoxIdentityAdapter },

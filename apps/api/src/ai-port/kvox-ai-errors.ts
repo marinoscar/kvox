@@ -1,39 +1,31 @@
-import {
-  BadRequestException,
-  ConflictException,
-  HttpException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import type { KvoxAiFeatureId, KvoxAiReason } from '@marinoscar/kvox-ai';
-import { AiError } from '@marinoscar/platform-api/ai';
-
-import {
-  AiAuthError,
-  AiInputError,
-  AiRefusedError,
-  AiStructuredOutputError,
-  RateLimitError,
-} from './ai-errors';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import type { KvoxAiReason } from '@marinoscar/kvox-ai';
 
 // =============================================================================
-// Platform AiError -> this app's wire codes and job error classes (issue #473)
+// This product's AI 409 / 400 bodies (issue #473; the mapper left with #579)
 // =============================================================================
 //
-// The platform's AI slice throws `AiError` with a platform code
-// (`AI_KEY_REQUIRED`, `AI_MODEL_NOT_ENABLED`, ...). This product's clients and
-// job handlers have always branched on something else: a 409 or 400 with
+// This product's clients have always branched on a 409 or 400 with
 // `details.reason` (`ai_not_configured`, `ai_key_missing`, `model_lacks_capability`,
-// `graph_disabled`, `model_not_permitted`) on a route, and a small set of domain
-// error classes (`AiAuthError`, `AiInputError`, ...) in a job. `mapAiError` is the
-// one place the two vocabularies meet, so a caller never inspects an `AiError`
-// code itself and the wire contract the web and CLI read does not move.
+// `graph_disabled`, `model_not_permitted`) when an AI route cannot run. The
+// platform's target resolver hook (`KvoxAiTargetResolver`) and `/api/ai-tasks/*`
+// answer with the exceptions below, so the wire contract the web and CLI read does
+// not move.
+//
+// WHAT LEFT (#579). `mapAiError` (platform `AiError` code -> these bodies on a route,
+// or a domain error class in a job) and the job classes it produced
+// (`ai-errors.ts`) are gone: a model call now goes through `KVOX_AI`
+// (`createKvoxAi` of `@marinoscar/kvox-ai`), whose one translation
+// (`toKvoxAiError`) answers the port's `KvoxAiError` classes directly, proven equal
+// to the old composition by `packages/kvox-ai/test/fixtures/error-parity.v1.json`.
+// `PlatformAiRuntime` turns these exceptions into that class when the platform
+// raises them under a model call (`translateHostError`).
 //
 // The response BODIES below are byte-for-byte the ones `AiTaskModelResolver`
 // (`ai/ai-task-model-resolver.service.ts`) has always answered with: a message and
 // `details.reason`, plus the task/model/missing detail where it had one.
 //
-// ⚠ Nothing here carries key material or model output. The only free text is the
-// `AiError`'s own message, which the platform keeps free of both.
+// ⚠ Nothing here carries key material or model output.
 // =============================================================================
 
 // The five `details.reason` values the product's AI routes answer with are
@@ -146,114 +138,4 @@ export function notPermittedBadRequest(input: {
     `The model "${input.model ?? 'none'}" is not one this deployment permits. Choose one of: ${input.permitted.join(', ')}.`,
     input.task !== undefined ? { task: input.task, model: input.model } : {},
   );
-}
-
-// ---------------------------------------------------------------------------
-// The mapper
-// ---------------------------------------------------------------------------
-
-export interface MapAiErrorContext {
-  /** The registered feature the failed call was made for. */
-  feature: KvoxAiFeatureId;
-  /** True inside a queue job (a domain error class); false on an HTTP route. */
-  inJob: boolean;
-}
-
-/** The same body the platform built, under the status this product answers with. */
-function sameBody(err: AiError, status: number): HttpException {
-  return err.getStatus() === status ? err : new HttpException(err.toJSON(), status);
-}
-
-function asError(err: unknown): Error {
-  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown AI failure');
-}
-
-/**
- * Translate whatever a platform AI call threw into what this product's callers
- * branch on.
- *
- * On a route (`inJob: false`) the result is an `HttpException`; in a job
- * (`inJob: true`) it is one of the domain error classes in `ai-errors.ts` (or a
- * plain `Error`, which the queue retries, for a transient provider failure). An
- * error that is not an `AiError` comes back unchanged: the mapper only owns the
- * platform's vocabulary.
- *
- * | Platform code | Route | Job |
- * |---|---|---|
- * | `AI_DISABLED`, `AI_PROVIDER_DISABLED` | 409 `ai_not_configured` | `AiInputError` |
- * | `AI_KEY_REQUIRED` | 409 `ai_key_missing` | `AiAuthError` |
- * | `AI_KEY_INVALID` | 409 `ai_key_missing` (`ai_key_invalid` for search) | `AiAuthError` |
- * | `AI_MODEL_NOT_ENABLED`, `AI_MODEL_NOT_REACHABLE` | 400 `model_not_permitted` | `AiInputError` |
- * | `AI_CAPABILITY_UNSUPPORTED` | 409 `model_lacks_capability` | `AiInputError` |
- * | `AI_RATE_LIMITED` | 429 | `RateLimitError` with `retryAfterMs` |
- * | `AI_CONTENT_FILTERED` | 422 | `AiRefusedError` |
- * | `AI_INVALID_REQUEST`, `AI_TOOL_DISABLED` | 400 | `AiInputError` |
- * | `AI_STRUCTURED_OUTPUT_INVALID` | 502 | `AiStructuredOutputError('invalid_json')` |
- * | `AI_PROVIDER_UNAVAILABLE`, `AI_STORAGE_UNAVAILABLE`, any other | 503 | plain `Error` |
- */
-export function mapAiError(err: unknown, ctx: MapAiErrorContext): Error {
-  if (!AiError.isAiError(err)) return asError(err);
-
-  return ctx.inJob ? mapForJob(err) : mapForRoute(err, ctx.feature);
-}
-
-function mapForRoute(err: AiError, feature: KvoxAiFeatureId): Error {
-  switch (err.code) {
-    case 'AI_DISABLED':
-    case 'AI_PROVIDER_DISABLED':
-      return new KvoxAiConflict('ai_not_configured', err.message);
-    case 'AI_KEY_REQUIRED':
-      return new KvoxAiConflict('ai_key_missing', err.message);
-    case 'AI_KEY_INVALID':
-      return new KvoxAiConflict(
-        feature === 'search_embed' ? 'ai_key_invalid' : 'ai_key_missing',
-        err.message,
-      );
-    case 'AI_MODEL_NOT_ENABLED':
-    case 'AI_MODEL_NOT_REACHABLE':
-      return new KvoxAiBadRequest(err.message);
-    case 'AI_CAPABILITY_UNSUPPORTED':
-      return new KvoxAiConflict('model_lacks_capability', err.message);
-    case 'AI_RATE_LIMITED':
-      return sameBody(err, 429);
-    case 'AI_CONTENT_FILTERED':
-      return sameBody(err, 422);
-    case 'AI_INVALID_REQUEST':
-    case 'AI_TOOL_DISABLED':
-      return sameBody(err, 400);
-    case 'AI_STRUCTURED_OUTPUT_INVALID':
-      return sameBody(err, 502);
-    default:
-      // AI_PROVIDER_UNAVAILABLE, AI_STORAGE_UNAVAILABLE and any code a later
-      // platform release adds: a transient or unclassified failure.
-      return err.getStatus() === 503
-        ? err
-        : new ServiceUnavailableException(err.toJSON());
-  }
-}
-
-function mapForJob(err: AiError): Error {
-  switch (err.code) {
-    case 'AI_DISABLED':
-    case 'AI_PROVIDER_DISABLED':
-    case 'AI_MODEL_NOT_ENABLED':
-    case 'AI_MODEL_NOT_REACHABLE':
-    case 'AI_CAPABILITY_UNSUPPORTED':
-    case 'AI_INVALID_REQUEST':
-    case 'AI_TOOL_DISABLED':
-      return new AiInputError(err.message);
-    case 'AI_KEY_REQUIRED':
-    case 'AI_KEY_INVALID':
-      return new AiAuthError(err.message);
-    case 'AI_RATE_LIMITED':
-      return new RateLimitError(err.message, err.retryAfterMs);
-    case 'AI_CONTENT_FILTERED':
-      return new AiRefusedError(err.message);
-    case 'AI_STRUCTURED_OUTPUT_INVALID':
-      return new AiStructuredOutputError(err.message, 'invalid_json');
-    default:
-      // AI_PROVIDER_UNAVAILABLE, AI_STORAGE_UNAVAILABLE, anything else: a plain
-      // Error is not a domain error, so the queue retries it.
-      return new Error(err.message);
-  }
 }

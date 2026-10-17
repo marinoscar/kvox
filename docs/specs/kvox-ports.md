@@ -27,7 +27,7 @@ A token is `Symbol.for('@marinoscar/kvox/<NAME>')`. The description string is pe
 
 `KvoxPortsModule.forRoot({ ports })` (in `core`, because its default `KVOX_EVENTS` is a `core` class and `ports` may not import `core`) is global. Each entry is a Nest custom provider without the token: `useClass`, `useExisting`, `useValue` or `useFactory`. It throws when called, so at start-up, naming every required port left unbound (`no binding for ports KVOX_JOBS (ports.jobs), KVOX_SECRETS (ports.secrets)`). The web edition's call is `apps/api/src/platform-kvox/platform-kvox.module.ts`, imported by `AppModule` before every domain module; a test builds the module with a binding removed and asserts the message.
 
-The existing app token `KVOX_AI` in `apps/api/src/ai-port/kvox-ai.ts` is a different symbol (`Symbol.for('<app slug>/KVOX_AI')`) for a different, wider interface: the app's `KvoxAi` facade. The port adapter wraps that facade, so the app's own services keep injecting the facade and the packaged slices inject the port.
+There is one `KVOX_AI`. Since issue #579 the web edition binds it to `createKvoxAi` of `@marinoscar/kvox-ai` (`apps/api/src/platform-kvox/ai/web-kvox-ai.ts`, wrapped by `TracedKvoxAiPort` for the span names) over `PlatformAiRuntime`, which calls the platform `AiService.forUser`. The former app `KvoxAi` facade, its second token and the `PlatformKvoxAi` adapter are deleted, so app services and packaged slices inject the same port. KVox Desktop binds the same `createKvoxAi` over `createDirectRuntime`.
 
 ## 3. The ports
 
@@ -112,7 +112,7 @@ Not a port to implement but a value a host provides through `KvoxPortsModule.for
 | Helper | Was | Now |
 |---|---|---|
 | `aiProviderThrottleKey`, `TRANSCRIPTION_THROTTLE_KEY` | `notes/job-types.ts`, `transcripts/job-types.ts` | `core/ai/throttle.ts`; both files re-export |
-| `computeTokenBudget`, `outputTokensForPrompt`, `budgetRefusalMessage`, `assertWithinBudget` | `ai-port/ai-token-budget.ts` (moved out of notes in #459) | `core/ai/token-budget.ts` throwing `KvoxAiBudgetError`; the app file re-exports and keeps its `assertWithinBudget` throwing `AiBudgetError` |
+| `computeTokenBudget`, `outputTokensForPrompt`, `budgetRefusalMessage`, `assertWithinBudget` | `ai-port/ai-token-budget.ts` (moved out of notes in #459) | `core/ai/token-budget.ts` throwing `KvoxAiBudgetError`; the app file is deleted (#579) |
 | `StreamFlusher` | `notes/generation/stream-flusher.ts` | `core/stream/stream-flusher.ts`; the file re-exports |
 | `NoteStreamCursor`, `resolveStreamOffset`, `parseLastEventId`, frame builders | `notes/generation/note-stream.ts` | `core/stream/sse-stream.ts` (`KvoxStreamCursor`, with `NoteStreamCursor` as a deprecated alias); the file re-exports under the old names |
 | `versionETag`, `matchesETag` | `transcripts/transcripts.controller.ts` | `core/http/etag.ts`; the controller re-exports |
@@ -128,6 +128,8 @@ The rules: AI errors are `KvoxAiError`s of a known class with no key in the mess
 It runs against the fakes (`packages/kvox-api/test/ports-conformance.spec.ts`) and against the web adapters (`apps/api/test/platform-kvox/ports-conformance.spec.ts`: the real adapters over the real platform registries and `createFakeJobQueue`, with in-memory stand-ins for the services behind them). The adapters' own rules (error translation, the AI-job refusal, rate-limit plumbing, object cleanup, the identity trap, the boot failure) are in `platform-kvox-adapters.spec.ts`, and `kvox-auth.integration.spec.ts` drives `@KvoxAuth` through the real guard stack (401 with no token, 403 for a Viewer without the permission, 200 otherwise, and a permissionless route that still gets a full principal).
 
 ## 6. Desktop mapping notes (the Copilot SDK adapter is documented, not built, here)
+
+Per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md) and issue #579, Desktop does not implement `KvoxAiPort`. It binds `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime({ adapters, keys })`, and the Copilot integration (#581) is one more `AiProviderAdapter` (the provider-adapter interface of `@marinoscar/platform-api/ai`) in `adapters`. The strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are therefore the package's, shared with the web edition. The bullets below describe what the Copilot adapter must do at the adapter level (a `responses.stream`/`create` call returns provider events, not port events); the adapter must also meet the three requirements of ADR-0005 (our system prompt replaces the SDK's, all built-in agent tools disabled, one model step per call).
 
 - `chat` maps to a Copilot session with the tool definitions registered; a session turn is one step, `step_end` marks it.
 - `generateStructured` maps to a prompt plus JSON Schema validation with one repair retry inside the adapter; the port still returns a value validated against the caller's Zod schema or throws `KvoxAiError('other')`.

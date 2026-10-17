@@ -4,10 +4,10 @@
 //
 // `@marinoscar/kvox-api/ask` is built over ports. The real-Postgres suites build the services by
 // hand over a plain `PrismaClient`, and bind each port the way the web edition does where that is
-// cheap: the REAL `PlatformKvoxAiAdapter` over the app's `KvoxAi` facade whose platform stream is
-// scripted (`FakeAskStream`: the model is the only fake, the event mapping and the adapter above it
-// are production code), the real jobs adapter over the real queue, and the real read services and
-// tools over the real rows.
+// cheap: the REAL `KVOX_AI` binding (`createWebKvoxAi`: `createKvoxAi` over the real
+// `PlatformAiRuntime`, #579) whose platform stream is scripted (`FakeAskStream`: the model is the
+// only fake, the event mapping and everything above it are production code), the real jobs adapter
+// over the real queue, and the real read services and tools over the real rows.
 // =============================================================================
 
 import type { PrismaClient } from '@prisma/client';
@@ -27,7 +27,6 @@ import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { KvoxJob } from '@marinoscar/kvox-api/ports';
 
 import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
-import { PlatformKvoxAiAdapter } from '../../src/platform-kvox/ai/platform-kvox-ai.adapter';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { createFakeAskPort, type FakeAskStream } from '../../scripts/ask-eval/fake-provider';
 import { EntityViewService } from '../graph/package-internals';
@@ -100,15 +99,9 @@ export function createAskTurn(
   const p = prisma as unknown as PrismaService;
   const { toolset, visibility } = createAskToolset(prisma);
   const { port: jobs } = createDbJobs(prisma);
-  // Readiness is scripted; `chat()` and everything under it is production code over the fake stream.
-  const fake = createFakeAskPort(stream, { model: options.model ?? 'gpt-test' });
-  const ai = new PlatformKvoxAiAdapter(
-    {
-      ...fake.ai,
-      embeddingCapability: () => ({ model: 'text-embedding-test', dimensions: 1536, maxInputTokens: 8191 }),
-    } as never,
-    { graphEnabled: async () => true } as never,
-  );
+  // The task-model state is scripted; readiness, `chat()` and everything under them is production
+  // code over the fake stream.
+  const { ai } = createFakeAskPort(stream, { model: options.model ?? 'gpt-test' });
   const resolver = new GraphAiRunResolver(ai, createDbSettings(prisma));
   const service = new internals.AskMessagesService(p, new AskAccessService(p), resolver, jobs);
   const handler = new internals.AskRespondHandler(

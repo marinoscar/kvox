@@ -157,7 +157,7 @@ describeWithDb('Semantic search: the `search.index` round trip (real Postgres)',
   }
 
   /**
-   * The handler, with the `KvoxAi` port stubbed and everything else real.
+   * The handler, with the `KVOX_AI` port stubbed and everything else real.
    *
    * The vectors are deterministic and distinct per input, so a wrong-chunk
    * pairing would be visible rather than hidden behind identical numbers.

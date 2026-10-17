@@ -273,6 +273,8 @@
     "embedding": { "peers": [] },
     "runtime": { "peers": ["@marinoscar/platform-api"] },
     "errors": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
-    "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] }
+    "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
+    "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
+    "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] }
   }
 }

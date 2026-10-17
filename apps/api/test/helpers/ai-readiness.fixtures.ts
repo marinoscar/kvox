@@ -1,10 +1,13 @@
+import type { KvoxAiReadiness, KvoxAiReason } from '@marinoscar/kvox-ai';
+
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';
 import { KvoxAiTargetResolver } from '../../src/ai-port/kvox-ai-target-resolver';
 import type { TestContext } from './test-app.helper';
 import { prismaMock } from '../mocks/prisma.mock';
 
 // =============================================================================
-// Mocked-database fixtures for the REAL `KvoxAi.readiness` (issue #475)
+// Mocked-database fixtures for the REAL readiness (`AiReadinessService`, the reader
+// the bound `KVOX_AI` shares; issue #475, #579)
 // =============================================================================
 //
 // An integration spec that drives a route which asks "may this user generate?"
@@ -16,9 +19,43 @@ import { prismaMock } from '../mocks/prisma.mock';
 //   • the enabled `ai_models` rows;
 //   • whether the caller has a `user_ai_keys` row.
 //
-// The resolver reuses what it read for five seconds per process, so a spec that
-// changes the settings between tests must call `invalidateAiResolverCache`.
+// The task-model source reuses what it read for five seconds per process, so a spec
+// that changes the settings between tests must call `invalidateAiResolverCache`.
+//
+// A spec that scripts readiness instead (`jest.spyOn(app.get(AiReadinessService),
+// 'readiness')`) builds the answers with `readyReadiness` / `notReadyReadiness`,
+// shaped the way the real reader reports them (moved from the retired `FakeKvoxAi`).
 // =============================================================================
+
+/** The readiness a configured, keyed deployment answers with (the default). */
+export function readyReadiness(overrides: Partial<KvoxAiReadiness> = {}): KvoxAiReadiness {
+  return {
+    ok: true,
+    reason: null,
+    provider: 'openai',
+    model: 'gpt-4o',
+    source: 'default',
+    contextWindowTokens: 128_000,
+    maxOutputTokens: 16_384,
+    reasoningEffort: 'none',
+    hasKey: true,
+    ...overrides,
+  };
+}
+
+/** A readiness refusing with `reason`, shaped the way the real reader reports it. */
+export function notReadyReadiness(reason: KvoxAiReason, overrides: Partial<KvoxAiReadiness> = {}): KvoxAiReadiness {
+  const noModel = reason === 'ai_not_configured';
+  return readyReadiness({
+    ok: false,
+    reason,
+    hasKey: reason !== 'ai_key_missing' && reason !== 'ai_not_configured',
+    ...(noModel
+      ? { provider: null, model: null, source: 'none' as const, contextWindowTokens: null, maxOutputTokens: null }
+      : {}),
+    ...overrides,
+  });
+}
 
 /** The `ai` block of a deployment that has AI on and `defaultModel` chosen. */
 export function enabledAiBlock(defaultModel = 'gpt-4o'): Record<string, unknown> {
@@ -72,7 +109,7 @@ export function primeAiReadiness(options: { hasKey?: boolean; models?: string[] 
   );
 }
 
-/** Forget the settings and models the resolver cached (it reuses them for 5 seconds). */
+/** Forget the settings and models the task-model source cached (it reuses them for 5 seconds). */
 export function invalidateAiResolverCache(context: TestContext): void {
   context.module.get(KvoxAiTargetResolver, { strict: false }).invalidateCache();
 }

@@ -6,7 +6,7 @@
 // stamps the feature id on the usage row (so `GET /api/admin/ai/usage` groups by
 // it), checks the feature's `needs` against the chosen model's capabilities, and
 // lists it at `GET /api/ai/features`. The target resolver
-// (`ai-port/kvox-ai-target-resolver.ts`) maps a feature to a connected-knowledge
+// (`ai-port/kvox-ai-target-resolver.ts`, over `ai-port/platform-task-model-source.ts`) maps a feature to a connected-knowledge
 // task through `KVOX_FEATURE_TASK`.
 //
 //   id                      call site                              task

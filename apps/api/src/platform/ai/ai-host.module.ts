@@ -13,6 +13,7 @@ import { AppMetricsService } from '@marinoscar/platform-api/host';
 import { StorageProvidersModule } from '@marinoscar/platform-api/storage';
 
 import { KvoxAiTargetResolver } from '../../ai-port/kvox-ai-target-resolver';
+import { PlatformTaskModelSource } from '../../ai-port/platform-task-model-source';
 import { PrismaSystemService } from '../../prisma/prisma-system.service';
 import { AiObjectStoreAdapter } from './ai-object-store.adapter';
 
@@ -26,6 +27,11 @@ import { AiObjectStoreAdapter } from './ai-object-store.adapter';
 //   AI_OBJECT_STORE     -> AiObjectStoreAdapter            (the active STORAGE_PROVIDER)
 //   AI_METRICS          -> AppMetricsService               (the host core's instruments)
 //   AI_TARGET_RESOLVER  -> KvoxAiTargetResolver            (this app's task routing)
+//
+// `PlatformTaskModelSource` (the policy and enabled-model reads, with their
+// 5-second cache, #579) is provided and exported beside the resolver, which
+// delegates to it: the bound `KVOX_AI` (`createKvoxAi`) reads the SAME instance,
+// so one settings write invalidates both.
 //
 // `@Global()` because every sub-module of the AI slice injects the ports. The
 // resolver is exported as well: `/api/ai-tasks/*` (`AiPortModule`) reads it.
@@ -49,6 +55,7 @@ import { AiObjectStoreAdapter } from './ai-object-store.adapter';
     { provide: AI_OBJECT_STORE, useClass: AiObjectStoreAdapter },
     { provide: AI_METRICS, useExisting: AppMetricsService },
     DefaultAiTargetResolver,
+    PlatformTaskModelSource,
     KvoxAiTargetResolver,
     { provide: AI_TARGET_RESOLVER, useExisting: KvoxAiTargetResolver },
   ],
@@ -58,6 +65,7 @@ import { AiObjectStoreAdapter } from './ai-object-store.adapter';
     AI_METRICS,
     AI_TARGET_RESOLVER,
     KvoxAiTargetResolver,
+    PlatformTaskModelSource,
   ],
 })
 export class AiHostModule {}

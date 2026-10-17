@@ -27,9 +27,9 @@ import type { KvoxReasoningEffort } from '../types/index.js';
 //                        structured output, tools), when a host knows more than
 //                        the task source carries.
 //
-// Only the INTERFACES live here today (#579 step 3). `createKvoxAi`, which
-// implements `KvoxAiPort` over them, and the two runtimes arrive with the
-// binding (#579 steps 4 to 8).
+// Only the INTERFACES live here. `createKvoxAi` (the `port` slice) implements
+// `KvoxAiPort` over them; `createDirectRuntime` (the `direct` slice) is the
+// Desktop runtime and the web runtime is `PlatformAiRuntime` in `apps/api`.
 //
 // ⚠ A KEY NEVER CROSSES THESE INTERFACES. A call names a user and a provider;
 // the runtime resolves the key itself, per call, and never returns it.
@@ -43,7 +43,7 @@ import type { KvoxReasoningEffort } from '../types/index.js';
  *
  * @remarks
  * Deviates from the #579 sketch in three ways, each so the web runtime can keep
- * doing exactly what `PlatformKvoxAi` does today:
+ * doing exactly what the retired `PlatformKvoxAi` did:
  *
  * - `orgId` and `jobId` ride along: the web runtime passes them to
  *   `AiService.forUser(userId, { orgId, jobId, feature })`, so the usage row and
@@ -194,8 +194,8 @@ export interface KvoxAiRuntime {
  * candidate flags plus the numbers the token budget takes.
  *
  * @remarks
- * Mirrors `KvoxEnabledModel` of the web resolver (`apps/api/src/ai-port/kvox-ai-target-resolver.ts`)
- * field for field, so the web task source can hand its rows over unchanged.
+ * The web task source (`apps/api/src/ai-port/platform-task-model-source.ts`) aliases it as
+ * `KvoxEnabledModel` and hands its rows over unchanged.
  *
  * @stability experimental
  */
@@ -265,7 +265,7 @@ export interface KvoxTaskModelTarget {
  * any model, capability). So the host only LOADS state with {@link KvoxTaskModelSource.load}, and
  * the pure choosing (`chooseTaskModel` and the reason ordering) runs in the
  * package on it, identically on every host. {@link KvoxTaskModelSource.resolve} is the sketch's
- * convenience, optional: `createKvoxAi` derives it from {@link KvoxTaskModelSource.load} when absent.
+ * convenience, optional, for a host's own use: `createKvoxAi` reads {@link KvoxTaskModelSource.load} only.
  *
  * @extensionPoint
  * @stability experimental

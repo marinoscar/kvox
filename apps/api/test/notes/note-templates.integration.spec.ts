@@ -105,7 +105,7 @@ describe('Note templates (#50)', () => {
       describe: 'transcript at version 3',
     });
 
-    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, no key until a test
+    // The real readiness (`AiReadinessService`): AI on, `gpt-4o` enabled, no key until a test
     // says the caller has one (`readyToPreview`).
     invalidateAiResolverCache(context);
     primeAiReadiness({ hasKey: false });

@@ -846,7 +846,7 @@ about that specific pattern does not apply to this job type at all).
   something it does not, rather than inventing a fresh entity for every
   mention regardless of whether one already exists.
 
-> **Call path since issue #475.** The provider call below is `KvoxAi.generateStructured` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph were the original design and no longer exist (#477 deleted them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
+> **Call path since issue #475.** The provider call below is `generateStructured` of the `KVOX_AI` port (`createKvoxAi` of `@marinoscar/kvox-ai`; [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph were the original design and no longer exist (#477 deleted them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
 
 **One provider call, structured output.** A single request per extraction
 run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
@@ -3103,7 +3103,7 @@ brief's prose is `kg.entity_digest`'s own output, shown as-is (§9.1). A
 
 ### 20.2 Capability flags
 
-> Since issue #476 the Ask loop's `chat()` is `KvoxAi.chat()`, a platform `stream()` call (`apps/api/src/ai-port/platform-kvox-ai.ts`, `chat-mapping.ts`), and since #477 the `AiProvider` interface and its registry no longer exist; see §21.3 "Provider call" and [`notes.md`](notes.md) §2.6 and §2.7. The text below keeps the original design where it explains the capability flags.
+> Since issue #476 the Ask loop's `chat()` is `chat` of the `KVOX_AI` port, a platform `stream()` call (`createKvoxAi` and `chat/chat-mapping.ts` of `@marinoscar/kvox-ai`), and since #477 the `AiProvider` interface and its registry no longer exist; see §21.3 "Provider call" and [`notes.md`](notes.md) §2.6 and §2.7. The text below keeps the original design where it explains the capability flags.
 
 `generateStructured` (§6) and the tool-calling loop `ask.respond` needs
 (§21) are both capabilities of the AI call layer, now the `KvoxAi` methods
@@ -3123,7 +3123,7 @@ unrepresentable rather than merely discouraged.
 
 > Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes the original `AiTaskModelResolver`, which it replaced (deleted by #477).
 >
-> **Graph call path since issue #475.** Every graph model call goes through `KvoxAi` and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
+> **Graph call path since issue #475.** Every graph model call goes through the `KVOX_AI` port and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
 >
 > `GraphAiRunResolver.resolve(userId, task, requested?, { requireKey? })` (`packages/kvox-api/src/graph/graph-ai-run.service.ts`) replaces `AiTaskModelResolver.resolve` for those three tasks. It calls `KvoxAi.readiness(userId, feature, requested)` and either returns a `GraphAiRun` (`providerId`, `model`, `reasoningEffort`, `modelLimits`, the policy caps, a `countTokens` bound to `KvoxAi.countTokens`, `keyConfigured`, `source`) or throws the same 409 or 400 the product always answered with, built from the `ai-port/kvox-ai-errors.ts` sentences: `graph_disabled`, `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`. `requireKey: false` skips only the missing-key refusal, for an estimate that spends nothing. It also owns the one read of `ai.graphEnabled`, so no graph service reads the retired settings service. No key is read or held: `readiness` reports `hasKey`, and the platform resolves the key per call.
 >
@@ -3312,9 +3312,9 @@ of a proposal.
   call is appended to `tool_calls` and written immediately (#379's `step`
   frames). Output is `min(2000, the model's ceiling)` tokens a call, 60 s a
   call (narrowed by `ai.requestTimeoutMs`).
-- *Provider call (#476)*: each `KvoxAi.chat()` is one platform `stream()` call
-  on the asking user's client (`apps/api/src/ai-port/platform-kvox-ai.ts`);
-  the pure mapping is `chat-mapping.ts`. Ask no longer calls `AiProvider.chat`.
+- *Provider call (#476)*: each port `chat()` is one platform `stream()` call
+  on the asking user's client (`createKvoxAi` over `PlatformAiRuntime`);
+  the pure mapping is `chat/chat-mapping.ts` of `@marinoscar/kvox-ai`. Ask no longer calls `AiProvider.chat`.
   - *History*: the whole transcript is replayed on every call, never
     `previousResponseId`; the loop owns its messages and budget, and a provider
     that stores nothing works the same. Leading `system` messages become
@@ -3342,7 +3342,7 @@ of a proposal.
     (an unknown reason reads as `stop`); a response that ends with `error`, or
     a stream that closes without `response.completed`, is an error, never a
     short answer. Usage that is absent is `null`, never 0.
-  - *Errors*: every failure leaves through `mapAiError` (a 429 is
+  - *Errors*: every failure leaves as a `KvoxAiError` (`toKvoxAiError`) (a 429 is
     `RateLimitError`, which the handler defers before any text was flushed and
     files as `rate_limit` after). The call is bounded by the shorter of the
     request's `timeoutMs` and `ai.requestTimeoutMs`; expiry is a
@@ -3659,7 +3659,7 @@ the run's duration only (restored in `teardown()` regardless of outcome —
 leaving it wired in would silently change every other user's Ask
 conversation), and for each question calls the real `AskMessagesService`
 then invokes `AskRespondHandler.process(job)` directly — no queue poll, this
-process is the only claimer. A thin wrapper around the registered `KvoxAi`
+process is the only claimer. A thin wrapper around the registered `KVOX_AI` port
 port's own `chat()` (§21.3, "Provider call") captures every `messages` array
 actually sent, for the leak check.
 

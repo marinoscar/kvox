@@ -14,11 +14,11 @@
 //   `AskRespondHandler.process(job)` DIRECTLY (no queue poll — this process
 //   is the only claimer) → read the finished assistant message back.
 //
-// The run goes through the REAL `KvoxAi` port (`PlatformKvoxAi.chat()` over the
-// platform's `stream()`, on the eval user's own stored key), exactly as a
-// production turn does (#476). Every request the port receives is captured through
-// a thin wrapper around its own `chat()` — never a second implementation — so the
-// scorer's leak check sees exactly what left this deployment.
+// The run goes through the REAL `KVOX_AI` port (`createKvoxAi` of `@marinoscar/kvox-ai`
+// over `PlatformAiRuntime` and the platform's `stream()`, on the eval user's own
+// stored key), exactly as a production turn does (#476, #579). Every request the port
+// receives is captured through a thin wrapper around its own `chat()` — never a second
+// implementation — so the scorer's leak check sees exactly what left this deployment.
 //
 // PRECONDITION (a deployment fact, not something this file creates): the `ai`
 // policy has the OpenAI provider enabled and the eval model enabled in the model
@@ -45,8 +45,7 @@ import { UserAiKeysService } from '@marinoscar/platform-api/ai';
 import { AppModule } from '../../src/app.module';
 import { AiTasksService } from '../../src/ai-port/ai-tasks.service';
 import type { UpdateAiTasksSettings } from '../../src/ai-port/dto/ai-tasks.dto';
-import { KVOX_AI, type KvoxAi } from '../../src/ai-port/kvox-ai';
-import type { KvoxChatRequest } from '@marinoscar/kvox-ai';
+import { KVOX_AI, type KvoxAiPort } from '@marinoscar/kvox-api/ports';
 import type { AskMessageResponse } from '@marinoscar/kvox-contract/ask';
 import { AskConversationsService } from '@marinoscar/kvox-api/ask';
 import { internals } from '@marinoscar/kvox-api/ask/testing';
@@ -86,13 +85,17 @@ function restorePatch(previous: { graphEnabled: boolean; taskModels: UpdateAiTas
   return { graphEnabled: previous.graphEnabled, taskModels: previous.taskModels ?? {} };
 }
 
+/** One `chat()` call as the port received it: the request, and the context without its signal. */
+type CapturedChat = { ctx: Omit<Parameters<KvoxAiPort['chat']>[0], 'signal'>; request: Parameters<KvoxAiPort['chat']>[1] };
+
 /** A request-capturing wrapper around the port's own `chat()`. Mutates the port in place; returns the restorer. */
-function wrapChatForCapture(port: KvoxAi, onRequest: (request: KvoxChatRequest) => void): () => void {
+function wrapChatForCapture(port: KvoxAiPort, onRequest: (captured: CapturedChat) => void): () => void {
   const original = port.chat;
   const bound = original.bind(port);
-  port.chat = (request) => {
-    onRequest(request);
-    return bound(request);
+  port.chat = (ctx, request) => {
+    const { signal: _signal, ...rest } = ctx;
+    onRequest({ ctx: rest, request });
+    return bound(ctx, request);
   };
   return () => {
     port.chat = original;
@@ -132,7 +135,7 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
   const prisma = app.get(PrismaService) as unknown as PrismaClient;
   const userKeys = app.get(UserAiKeysService, { strict: false });
   const aiTasks = app.get(AiTasksService, { strict: false });
-  const port = app.get<KvoxAi>(KVOX_AI, { strict: false });
+  const port = app.get<KvoxAiPort>(KVOX_AI, { strict: false });
   const conversations = app.get(AskConversationsService);
   const messages = app.get(internals.AskMessagesService);
   const handler = app.get(internals.AskRespondHandler);
@@ -146,7 +149,7 @@ export async function runAskEval(options: RunAskEvalOptions): Promise<AskEvalRun
     // Verified against the provider and stored encrypted, like a key a person saves in settings.
     await userKeys.set(seeded.userId, ASK_EVAL_PROVIDER_ID, options.apiKey);
 
-    let captureBucket: KvoxChatRequest[] = [];
+    let captureBucket: CapturedChat[] = [];
     const unwrapChat = wrapChatForCapture(port, (request) => captureBucket.push(request));
 
     const results: QuestionRunResult[] = [];

@@ -35,15 +35,16 @@ Source of truth for every claim below:
   every client (and this runbook) reads to answer "is AI usable, and does
   *this* user have a key", and `GET` / `PUT /api/ai-tasks/settings`, the fields
   this application adds to the `ai` namespace.
-- `apps/api/src/ai-port/ai-errors.ts` — the five-outcome taxonomy
-  (`AiAuthError`, `AiInputError`, `AiRefusedError`, `AiBudgetError`,
-  `RateLimitError`) and `isTerminalAiError`; `kvox-ai-errors.ts` maps the
-  platform's `AiError` codes onto them.
+- `packages/kvox-api/src/ports/ai.port.ts` — the `KvoxAiError` classes every
+  model failure arrives as (`auth`, `refusal`, `rate_limit`, `budget`,
+  `timeout`, ...); `toKvoxAiError` in `packages/kvox-ai/src/errors/` maps the
+  platform's `AiError` codes onto them, and `ai-port/kvox-ai-errors.ts` holds
+  the route 409/400 bodies.
 - `packages/kvox-api/src/notes/handlers/note-generate.handler.ts` — the job that
   actually calls the provider: `profile: { maxAttempts: 1 }`, the
   per-user throttle key, and which failures return normally (terminal)
   versus rethrow (retryable/deferred).
-- `apps/api/src/ai-port/ai-token-budget.ts` — `computeTokenBudget`, and
+- `packages/kvox-api/src/core/ai/token-budget.ts` — `computeTokenBudget`, and
   `assertWithinBudget` in each caller, where a too-large prompt is refused with
   numbers, before any request is sent.
 - `apps/web/src/config/userSettingsSections.tsx`,
@@ -255,12 +256,12 @@ at `/settings/ai`, tests it, then regenerates the note.
 
 **B. A token-ceiling refusal (`errorClass` is not set at all — this is a
 400 at request time, before a job is even queued).** `assertWithinBudget`
-(`ai-port/ai-token-budget.ts`, called by `NoteGenerationRequestService`) runs *before*
+(`core/ai/token-budget.ts` of `@marinoscar/kvox-api`, called by `NoteGenerationRequestService`) runs *before*
 `POST /api/notes` or `POST /api/notes/{id}/regenerate` creates anything, so this
 never shows up as a failed note in the note list — it's a 400 response naming the
 actual numbers: "this source is approximately *N* tokens; this model allows *M*
 for input with this template and output length." **Nothing is silently
-truncated** — see `AiBudgetError`'s header in `ai-port/ai-errors.ts`; this is
+truncated** — see `KvoxAiBudgetError`'s header in `packages/kvox-api/src/ports/ai.port.ts`; this is
 deliberate, because a truncating "fix" would generate a note from *part* of
 the source with nothing telling the user a paragraph vanished. Fix: shorten
 the source, use a shorter template, pick a model with a larger context

@@ -2,7 +2,7 @@
 
 This guide is for the engineers who build KVox Desktop: an offline application with a React renderer, a Node main process, an embedded PostgreSQL and the GitHub Copilot SDK for AI. It takes you from an empty Node + React project to a running KVox domain (transcripts, notes and search; then the graph and Ask) without reading KVox source. It names every port and web host member you implement, sketches the Copilot `KVOX_AI` adapter, states what changes offline feature by feature, and points to the conformance kits that prove an implementation correct.
 
-Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
+Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,ai,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
 
 > Decisions behind this guide: [ADR-0001 to ADR-0006](../decisions/README.md) (packages first, Electron shell, PostgreSQL and PGlite, local-only data, AI layering, Desktop inputs). The Desktop repository starts from [../desktop/README.md](../desktop/README.md).
 
@@ -205,7 +205,7 @@ The bare host's classes are reference code, not a package. "Desktop recommendati
 
 ### KVOX_AI
 
-Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). The Copilot mapping is [the next section](#the-copilot-sdk-kvox_ai-adapter-sketch).
+Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; the Copilot mapping is [the next section](#the-copilot-sdk-kvox_ai-adapter-sketch).
 
 ```ts
 export interface KvoxAiPort {
@@ -235,7 +235,24 @@ Rules:
 - The context carries `userId`, `orgId`, the `feature` (`notes.generate`, `notes.title`, `transcripts.name_check`, `search.embed`, `graph.extract`, `graph.adjudicate`, `graph.digest`, `graph.embed`, `ask.respond`), an optional `AbortSignal` and the queue `jobId`. Honour the signal.
 - `embeddings.dimensions` other than 1536 makes search semantic-off (the index column is `vector(1536)`).
 
-Reference: `createFakeKvoxAi` from `@marinoscar/kvox-api/testing`, scripted to stream a fixed note body and report `embeddings: null` (`examples/bare-host/src/bootstrap.ts`). Desktop: the Copilot SDK adapter.
+Binding sketch (the signatures are in the [package README](../../packages/kvox-ai/README.md#quick-start)):
+
+```ts
+// Illustrative, not compiled
+import { createKvoxAi, createDirectRuntime } from '@marinoscar/kvox-ai';
+
+const runtime = createDirectRuntime({
+  adapters: { openai: openAiAdapter, copilot: copilotAdapter }, // AiProviderAdapter per provider id
+  keys: async (provider) => {                                    // fetched per call, never held
+    const apiKey = await keychain.get(`ai:${provider}`);
+    return apiKey ? { apiKey } : null;                           // null: the user has no key (key_missing)
+  },
+});
+const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, requestTimeoutMs: 600_000, graphEnabled: () => true });
+// bind it: KvoxPortsModule.forRoot({ ports: { ai: { useValue: kvoxAi }, ... } })
+```
+
+Reference: `createFakeKvoxAi` from `@marinoscar/kvox-api/testing`, scripted to stream a fixed note body and report `embeddings: null` (`examples/bare-host/src/bootstrap.ts`); `createScriptedRuntime` from `@marinoscar/kvox-ai/testing` scripts provider events beneath the real `createKvoxAi`.
 
 ### KVOX_OBJECT_STORE
 
@@ -422,7 +439,7 @@ Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appNa
 
 ## The Copilot SDK `KVOX_AI` adapter (sketch)
 
-Note: per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md), the Copilot integration now targets an `AiProviderAdapter` beneath `@marinoscar/kvox-ai` (#579, #581), not `KvoxAiPort` directly. The sketch below is kept for history.
+Note: per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md), the Copilot integration targets an `AiProviderAdapter` plugged into `createDirectRuntime` of `@marinoscar/kvox-ai` (#579, #581), not a `KvoxAiPort` implementation. The sketch below maps the same behaviour at the port level and is kept for history: it shows what the adapter plus the shared mechanics must add up to, not a class to write.
 
 The code below is **illustrative and not compiled**. It maps each port method onto a Copilot session at the level of the port contract. The SDK's API changes; this sketch declares a tiny `CopilotLike` stand-in instead of naming SDK methods, so replace it with calls from the SDK's own documentation. What is fixed is the right-hand side: the port types, the event order and the error classes.
 

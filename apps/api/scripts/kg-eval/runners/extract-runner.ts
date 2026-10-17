@@ -5,7 +5,7 @@
 // Runs `kg.extract`'s own pure pipeline against one golden fixture, with NO
 // database: fixture → `ExtractionInput` → `buildExtractionContext` →
 // `assembleExtractionPrompt` + `buildExtractionOutputSchema` → ONE
-// `KvoxAi.generateStructured` call (a direct client holding the key from
+// `KVOX_AI.generateStructured` call (a direct client holding the key from
 // `KG_EVAL_OPENAI_API_KEY`, or a fake in a test) → `validateExtraction` → the deterministic Meeting
 // and ATTENDED rows → `applyPrecheck` (default preferences) → a prediction.
 //
@@ -38,6 +38,8 @@ import type { KgEvalRunner, KgEvalRunOptions } from '../runner';
 /** The completion ceiling an eval run uses (a production run takes it from policy). */
 export const EVAL_MAX_OUTPUT_TOKENS = 16_000;
 export const EVAL_TIMEOUT_MS = 180_000;
+/** The context window an eval target reports (the direct client never reads it; the port's target carries one). */
+export const EVAL_CONTEXT_WINDOW_TOKENS = 128_000;
 /** The user id an eval call carries (there is no signed-in user). */
 export const EVAL_USER_ID = 'kg-eval';
 
@@ -179,18 +181,24 @@ export async function runExtraction(
   const schema = buildExtractionOutputSchema(ctx, caps);
   // `schema` is the pass-through validator: `validateExtraction` below is the
   // product's own validation, exactly as in the `kg.extract` handler.
-  const result = await ai.generateStructured({
-    userId: EVAL_USER_ID,
-    feature: 'graph_extract',
-    model: opts.model,
-    system: prompt.systemPrompt,
-    user: prompt.userContent,
-    schemaName: EXTRACTION_SCHEMA_NAME,
-    schema: z.unknown(),
-    jsonSchema: schema,
-    maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
-    signal: AbortSignal.timeout(EVAL_TIMEOUT_MS),
-  });
+  const result = await ai.generateStructured(
+    { userId: EVAL_USER_ID, orgId: null, feature: 'graph.extract', signal: AbortSignal.timeout(EVAL_TIMEOUT_MS) },
+    {
+      target: {
+        provider: 'openai',
+        model: opts.model,
+        contextWindowTokens: EVAL_CONTEXT_WINDOW_TOKENS,
+        maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+        source: 'requested',
+      },
+      system: prompt.systemPrompt,
+      user: prompt.userContent,
+      schemaName: EXTRACTION_SCHEMA_NAME,
+      schema: z.unknown(),
+      jsonSchema: schema,
+      maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+    },
+  );
 
   const validated = validateExtraction(result.value, ctx);
   if (!validated.ok) return null;
