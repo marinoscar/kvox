@@ -14,6 +14,9 @@ import { ASK_USER_DATA_CATEGORY, askUserDataModels } from '../../kvox/ask/user-d
 import { NOTES_USER_DATA_CATEGORIES, NOTES_USER_DATA_SCOPE, notesUserDataModels } from '../../kvox/notes/user-data';
 import { OWNER_PURGE_MODE } from '../../common/owner-purge';
 import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
+// Registers this app's factory reset steps (issue #562); before `registerPlatformUserData()`
+// so they run ahead of the platform's own deployment steps.
+import './factory-reset.steps';
 
 // =============================================================================
 // This app's registrations on the platform user-data slice (issue #480, epic #478)
@@ -85,6 +88,18 @@ import { FILES_PURGE_UNMANAGED_JOB_TYPE } from '../../kvox-objects/job-types';
 // `StorageObject` is delegated and does NOT claim `storageObjects: true`, so the
 // platform never collects a user's whole object list. Its media step still deletes
 // the objects named by an INLINE model's `storageObjectColumns`; this app has none.
+//
+// -----------------------------------------------------------------------------
+// THE ADMIN FACTORY RESET (issue #562)
+// -----------------------------------------------------------------------------
+//
+// `admin.factory_reset` reuses these hints but never enqueues a delegate, and its storage
+// step needs a `storageObjects: true` model this app deliberately does not have. The reset's
+// own deletion of this app's data is therefore three registered steps, in
+// `factory-reset.steps.ts` (read its header for the four ways the bare reset is wrong here).
+// What the hints contribute: `StorageObject` says `factoryReset: 'keep'`, so the reset's
+// org-data step does not run `storage_objects.deleteMany({})` (a foreign-key failure with any
+// transcript, and rows without bytes otherwise); the storage step owns the table.
 //
 // Models that have only an actor column (`TranscriptVersion`, `TranscriptExport`, `TranscriptNameCheck`, `NoteVersion`, `NoteExport`, ...) are
 // not owner models and need no hint: they go with their transcript or note when
@@ -206,6 +221,10 @@ registerUserDataModels<Prisma.ModelName>([
   {
     model: 'StorageObject',
     category: 'files',
+    // Not deleted by the reset's org-data step: `kvox.storage-objects` deletes the bytes and
+    // then the rows, outside the surviving prefixes. No `summary`: the platform's built-in
+    // "Every stored file except database backups" line is already true.
+    factoryReset: 'keep',
     delegate: {
       jobType: FILES_PURGE_UNMANAGED_JOB_TYPE,
       payload: (userId: string): Record<string, unknown> => ({ userId }),

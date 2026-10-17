@@ -1419,8 +1419,9 @@ describe('the Observability cards (#471)', () => {
     'utf8',
   );
 
-  it('is APPENDED as the last group, after the three that existed', () => {
-    expect(ADMIN_SECTIONS.at(-1)?.label).toBe('Observability');
+  it('is APPENDED after the three that existed, and is the last group but the pinned-last Danger Zone (#562)', () => {
+    expect(ADMIN_SECTIONS.at(-2)?.label).toBe('Observability');
+    expect(ADMIN_SECTIONS.at(-1)?.label).toBe('Danger Zone');
   });
 
   it('declares the three cards in the package’s order, none inserted into an existing group', () => {
