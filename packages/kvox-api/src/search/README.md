@@ -85,3 +85,7 @@ When the host's AI port cannot embed, search answers with full text only and say
 | `KvoxSearchDb` | The narrowed database client the slice casts `KVOX_PRISMA` to; the host proves its client satisfies it with a compile-time assignment. |
 | `describeSearchConformance`, `SearchConformanceTarget` | The conformance kit and the binding it is run against. |
 | `seedSearchCorpus` | Writes the fixture corpus for a real-database spec. |
+
+### Desktop
+
+Search is full text offline; the semantic arm needs a 1536-dimension embedder behind `KVOX_AI.embed`, and otherwise answers `embeddings_unavailable`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#offline-constraints-feature-by-feature).

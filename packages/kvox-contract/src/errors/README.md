@@ -27,3 +27,7 @@ None. The slice reads no environment variable and takes no option.
 ## Extension-point catalog
 
 None. The slice exposes data shapes, not extension points.
+
+### Desktop
+
+Desktop's main process and renderer both import this slice, so the wire shapes cannot drift between them; install the same version in both. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#who-this-is-for-and-what-you-get).

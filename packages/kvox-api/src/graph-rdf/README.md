@@ -68,3 +68,7 @@ A `sensitive` PersonFact never leaves the deployment: the export filters it and 
 | `GraphRdfModuleOptions` | The options of `GraphRdfModule.forRoot`. |
 | `ShaclEngine` | The validation engine the import uses; a test injects a double. |
 | `describeGraphRdfConformance` | The conformance kit and the binding it is run against. |
+
+### Desktop
+
+RDF export and import work offline; they need the `n3`, `jsonld` and `rdf-validate-shacl` peers, and the housekeeping cron becomes a call to `KgExportExpiryEnqueuer.enqueue()`. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#install).
