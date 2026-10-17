@@ -6,7 +6,7 @@ import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptUploadProcessor } from './transcript-upload.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { sharingModule } from '../platform/sharing/sharing.config';
-import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
+import { SearchIndexingConfig } from '../kvox/search/search.config';
 import { TranscriptionConfig } from '../kvox/transcription/transcription.config';
 import { MediaAudioTranscodeHandler } from './handlers/media-audio-transcode.handler';
 import { TranscriptionIngestHandler } from './handlers/transcription-ingest.handler';
@@ -113,10 +113,10 @@ import { TranscriptsService } from './transcripts.service';
     ObjectProcessingModule,
     // The semantic index (#188, epic #165). ONE-WAY: this module reaches into
     // `SearchIndexService` to queue a re-index after content commits and to
-    // forget a purged transcript's rows; nothing in `search/indexing/` imports
+    // forget a purged transcript's rows; nothing in the search slice imports
     // anything from here — the handler reads `transcripts` through Prisma
     // directly, precisely so this import needs no `forwardRef`.
-    SearchIndexingModule,
+    SearchIndexingConfig,
     // AI name correction (#328/#330, epic #326) reaches a model through `KVOX_AI`
     // (the global `KvoxAiModule`, issue #475), so there is nothing to import.
   ],

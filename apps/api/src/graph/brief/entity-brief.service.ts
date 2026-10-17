@@ -40,7 +40,7 @@ import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 import type { KvoxAiReason } from '../../ai-port/kvox-ai-errors';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SearchService } from '../../search/search.service';
+import { SearchService } from '@marinoscar/kvox-api/search';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
 import { KG_ENTITY_DIGEST_JOB_TYPE, KG_SUBJECT_ENTITY } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
@@ -357,7 +357,8 @@ export class EntityBriefService {
       try {
         const res = await this.search.search(
           { q, types: 'transcript,note', limit: BRIEF_TEXT_ARM_LIMIT },
-          user as RequestUser,
+          // The search slice reads the principal the identity port normalises: an id and a permission set.
+          { userId: user.id, permissions: new Set(user.permissions) },
         );
         for (const r of res.results) {
           const snippet = r.snippets[0];

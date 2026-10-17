@@ -22,7 +22,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { EMBEDDING_DIMENSIONS } from '../../ai-port/embedding-catalog';
 import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
-import { searchReasonFor } from '../../search/indexing/job-types';
+import { searchReasonFor } from '@marinoscar/kvox-api/search';
 
 export type GraphEmbedderResolution =
   | {

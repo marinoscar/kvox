@@ -34,11 +34,22 @@ import {
   KVOX_PERMISSION_KEYS_KEY,
   KvoxAuthGuard,
 } from '@marinoscar/kvox-api/core';
+import {
+  SearchIndexHandler,
+  SearchIndexService,
+  SearchQueryEmbedder,
+  SearchService,
+  type ResolvedSearchOptions,
+} from '@marinoscar/kvox-api/search';
+import { describeSearchConformance } from '@marinoscar/kvox-api/search/testing';
 import { AssemblyAiProvider, TranscriptionProviderRegistry } from '@marinoscar/kvox-api/transcription';
 import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/transcription/testing';
 
 import { AppModule } from '../src/app.module';
+import { SharedTranscriptVisibility } from '../src/kvox/search/shared-transcript-visibility';
 import { TranscriptionConfig } from '../src/kvox/transcription/transcription.config';
+import { KVOX_EMBEDDING } from '../src/ai-port/embedding-catalog';
+import { PERMISSIONS } from '../src/common/constants/roles.constants';
 // The notification and email registries are filled by this import (it is also reached through
 // AppModule); the suites below read them, so name the dependency.
 import '../src/platform/notifications/notification.manifest';
@@ -182,8 +193,6 @@ const RAW_SQL_ALLOWLIST = [
   { file: 'app-sharing/transcript-visibility.ts', why: 'Reads the ids of the transcripts shared with the caller through the platform\'s accessibleWhere EXISTS form, past 1,000 shares (issue #485); the statement is built by the platform and bound to the caller and their organization.' },
   { file: 'platform/onboarding/onboarding-data.adapter.ts', why: 'The onboarding activation metrics (issue #481): the platform builds one aggregate statement over the registered funnel and milestone expressions and this port runs it in a READ ONLY transaction. It returns counts only, every value is a bound parameter, and the expressions are developer-authored (refused at registration if they contain a semicolon).' },
   { file: 'prisma/prisma.service.ts', why: 'Test-only table truncation and connection housekeeping; refused outside the test environment.' },
-  { file: 'search/indexing/search-index.handler.ts', why: 'Writes pgvector embeddings and chunk rows for the owner of the job; owner id bound from the job.' },
-  { file: 'search/search.service.ts', why: 'Full-text, trigram and pgvector search; every statement filters on the authenticated owner_id.' },
   { file: 'transcripts/transcript-editing.service.ts', why: 'Row locks and ordered segment rewrites inside the edit transaction; scoped to a transcript the caller owns.' },
 ] as const;
 
@@ -414,6 +423,54 @@ describeTranscriptionProviderConformance(
   { settings: { region: 'us', speechModel: 'universal-3-5-pro, universal-2' } },
 );
 
+// The search slice's conformance suite (`@marinoscar/kvox-api/search/testing`, #494), over the web
+// edition's binding: the real service and embedder with the sharing-aware visibility rule
+// (`kvox/search/shared-transcript-visibility.ts`) and the permission strings the application
+// configures (`kvox/search/search.config.ts`). The database is the suite's statement-answering
+// double, given the two things the visibility rule asks of the application's client: the default
+// organization and `runInOrg`. The real-database proof (shared transcripts through platform grants,
+// row-level security) is the application's own `test/integration/search.db.spec.ts`.
+describeSearchConformance(
+  'the web edition binding',
+  () => {
+    const jobs = { registerHandler: () => undefined, enqueue: async () => ({ id: 'job', deduplicated: false }), isRegistered: () => false };
+    const unusedDb = {} as never;
+    const indexOptions = { batchSize: KVOX_EMBEDDING.maxBatchSize };
+
+    return {
+      indexHandler: new SearchIndexHandler(
+        jobs,
+        unusedDb,
+        {} as never,
+        new SearchIndexService(unusedDb, jobs),
+        indexOptions,
+      ),
+      serviceFor: ({ ai, db }) => {
+        const options: ResolvedSearchOptions = {
+          semanticEnabled: true,
+          provider: KVOX_EMBEDDING.provider,
+          typePermissions: { transcript: PERMISSIONS.TRANSCRIPTS_READ, note: PERMISSIONS.NOTES_READ },
+        };
+        // What the sharing helpers ask of the client: the default organization and `runInOrg`.
+        const prisma = Object.assign(Object.create(db as object), {
+          $queryRaw: (db as { $queryRaw: unknown }).$queryRaw,
+          organization: { findFirst: async () => ({ id: '33333333-3333-4333-8333-333333333333' }) },
+          runInOrg: async (_scope: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(db),
+        });
+
+        return new SearchService(
+          db,
+          new SearchQueryEmbedder(ai, options),
+          new SharedTranscriptVisibility(prisma as never),
+          options,
+        );
+      },
+    };
+  },
+  { describe, it, expect },
+  { permissions: { transcript: PERMISSIONS.TRANSCRIPTS_READ, note: PERMISSIONS.NOTES_READ } },
+);
+
 // kvox-guarded routes: the identity suite's two route rules, for the controllers it cannot see (see
 // `isKvoxGuarded`). Every route of a controller the `@marinoscar/kvox-api` slices guard is authenticated
 // through `KvoxAuthGuard`, and every permission it enforces (the option names resolved through the
@@ -425,8 +482,10 @@ describe('kvox-guarded routes', () => {
       .map((name) => ({ name, handler: controller.prototype[name] as Function }))
       .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
 
-  it('finds the transcription controllers (a path mistake must not make this vacuous)', () => {
+  it('finds the transcription and search controllers (a path mistake must not make this vacuous)', () => {
     expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
+      'SearchController',
+      'SearchIndexController',
       'TranscriptionConfigController',
       'TranscriptionSettingsController',
     ]);

@@ -1,0 +1,210 @@
+// =============================================================================
+// `search-cursor.ts` — the cursor that refuses (issue #175, epic #164)
+// =============================================================================
+//
+// The behaviour under test is the one that DIVERGES from the rest of this
+// codebase: `decodeCursor` in `transcripts.service.ts` returns `null` for
+// anything it cannot use, so a stale cursor silently restarts a newest-first
+// feed. This one throws, because a silently restarted RELEVANCE list is
+// indistinguishable from a real page 2 and a user would page through the same
+// rows forever. Every `it` below is a case where the forgiving behaviour would
+// have been wrong.
+// =============================================================================
+
+import {
+  decodeSearchCursor,
+  encodeSearchCursor,
+  fingerprintScope,
+  RANKING_MODEL_VERSION,
+  SearchCursorError,
+  type SearchCursorScope,
+} from './search-cursor.js';
+
+const SCOPE: SearchCursorScope = {
+  q: 'quarterly pricing review',
+  types: ['transcript', 'note'],
+  userId: '11111111-1111-4111-8111-111111111111',
+  // The full-text-only window, which is what a caller with no AI key of their
+  // own always gets. `SEMANTIC_SCOPE` below is the fused one.
+  semantic: null,
+};
+
+/** The same search, answered with the semantic arm fused in (#189). */
+const SEMANTIC_SCOPE: SearchCursorScope = {
+  ...SCOPE,
+  semantic: 'openai:text-embedding-3-small',
+};
+
+const OTHER_USER = '22222222-2222-4222-8222-222222222222';
+
+describe('encode/decode round trip', () => {
+  it('returns the offset it was minted with', () => {
+    expect(decodeSearchCursor(encodeSearchCursor(SCOPE, 0), SCOPE)).toBe(0);
+    expect(decodeSearchCursor(encodeSearchCursor(SCOPE, 20), SCOPE)).toBe(20);
+    expect(decodeSearchCursor(encodeSearchCursor(SCOPE, 180), SCOPE)).toBe(180);
+  });
+
+  it('is opaque on the wire — base64url, no padding, URL-safe', () => {
+    const cursor = encodeSearchCursor(SCOPE, 20);
+
+    expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('accepts a cursor whose type filter was spelled in a different order', () => {
+    // `parseTypesParam` normalises order, and the fingerprint sorts again, so
+    // `note,transcript` and `transcript,note` share a cursor. A client that
+    // reorders its filter chips between pages must not get a 400.
+    const reordered: SearchCursorScope = { ...SCOPE, types: ['note', 'transcript'] };
+
+    expect(decodeSearchCursor(encodeSearchCursor(SCOPE, 20), reordered)).toBe(20);
+  });
+
+  it('accepts a cursor whose query text differs only in whitespace', () => {
+    const respaced: SearchCursorScope = { ...SCOPE, q: '  quarterly   pricing review  ' };
+
+    expect(decodeSearchCursor(encodeSearchCursor(SCOPE, 20), respaced)).toBe(20);
+  });
+});
+
+describe('refusal', () => {
+  it('refuses a cursor minted for query A when presented against query B', () => {
+    const cursor = encodeSearchCursor(SCOPE, 20);
+    const otherQuery: SearchCursorScope = { ...SCOPE, q: 'annual budget' };
+
+    expect(() => decodeSearchCursor(cursor, otherQuery)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a cursor minted for a different type filter', () => {
+    const cursor = encodeSearchCursor(SCOPE, 20);
+    const notesOnly: SearchCursorScope = { ...SCOPE, types: ['note'] };
+
+    // Dropping a type removes rows from the MIDDLE of the ranking, so every
+    // offset after the first removed row names a different document.
+    expect(() => decodeSearchCursor(cursor, notesOnly)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a cursor minted for a different user', () => {
+    const cursor = encodeSearchCursor(SCOPE, 20);
+    const otherUser: SearchCursorScope = { ...SCOPE, userId: OTHER_USER };
+
+    // Visibility is applied inside the candidate window, so two users running
+    // the identical query get differently numbered windows.
+    expect(() => decodeSearchCursor(cursor, otherUser)).toThrow(SearchCursorError);
+  });
+
+  it('refuses every cursor across a RANKING_MODEL_VERSION bump', () => {
+    // The mechanism, asserted rather than described: a cursor minted under the
+    // current constant must not verify against a fingerprint computed with a
+    // different one. Simulated by hashing the same scope under the next
+    // version — `fingerprintScope` takes the constant from module scope, so
+    // this reproduces what a bump does to a client's in-flight cursor.
+    const beforeBump = fingerprintScope(SCOPE);
+
+    const afterBump = require('node:crypto')
+      .createHash('sha256')
+      .update(
+        [
+          String(RANKING_MODEL_VERSION + 1),
+          SCOPE.q,
+          [...SCOPE.types].sort().join(','),
+          SCOPE.userId,
+          SCOPE.semantic ?? '',
+        ].join('\n'),
+        'utf8',
+      )
+      .digest('hex')
+      .slice(0, 40);
+
+    expect(afterBump).not.toBe(beforeBump);
+
+    const stale = Buffer.from(JSON.stringify({ f: afterBump, o: 20 }), 'utf8').toString(
+      'base64url',
+    );
+
+    expect(() => decodeSearchCursor(stale, SCOPE)).toThrow(SearchCursorError);
+  });
+
+  // ==========================================================================
+  // The semantic axis (#189)
+  // ==========================================================================
+
+  it('refuses a full-text-only cursor once the semantic arm starts running', () => {
+    // ⚠ THE CASE THE FOUR ORIGINAL INPUTS CANNOT SEE. Whether the vector arm
+    // runs depends on the CALLER'S OWN API KEY and on a vendor being
+    // reachable, neither of which is part of the request - so `q`, the types
+    // and the user are all identical across this pair, and only the axis
+    // differs. A user who pastes a key between page 1 and page 2 must be told
+    // to re-run, not handed an arbitrary slice of a ranking that was rebuilt
+    // underneath them.
+    const ftsOnly = encodeSearchCursor(SCOPE, 20);
+
+    expect(() => decodeSearchCursor(ftsOnly, SEMANTIC_SCOPE)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a fused cursor once the semantic arm stops running', () => {
+    // The same event in the other direction: the vendor started failing, or the
+    // key was revoked, between two pages. `embedding_failed` degrades the
+    // ANSWER to full text; it must not silently degrade the PAGING too.
+    const fused = encodeSearchCursor(SEMANTIC_SCOPE, 20);
+
+    expect(() => decodeSearchCursor(fused, SCOPE)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a cursor minted under a different embedding model', () => {
+    // Two models' vectors are not comparable at all (see
+    // `AiEmbeddingCapability.model`), so switching models re-ranks the whole
+    // corpus. Carrying the model in the axis invalidates every in-flight
+    // cursor for free, with no changelog entry to remember.
+    const cursor = encodeSearchCursor(SEMANTIC_SCOPE, 20);
+    const reEmbedded: SearchCursorScope = { ...SEMANTIC_SCOPE, semantic: 'openai:text-embedding-3-large' };
+
+    expect(() => decodeSearchCursor(cursor, reEmbedded)).toThrow(SearchCursorError);
+  });
+
+  it('round-trips a fused cursor against the identical fused scope', () => {
+    expect(decodeSearchCursor(encodeSearchCursor(SEMANTIC_SCOPE, 40), SEMANTIC_SCOPE)).toBe(40);
+  });
+
+  it('refuses garbage rather than silently restarting at offset 0', () => {
+    // THE DIVERGENCE FROM `transcripts.service.ts`'s `decodeCursor`, which
+    // returns `null` here on purpose. Restarting a relevance list silently
+    // serves page 1 under a "next page" click.
+    for (const garbage of ['not-base64url!!', '', 'eyJub3BlIjoxfQ', 'YWJjZGVm']) {
+      expect(() => decodeSearchCursor(garbage, SCOPE)).toThrow(SearchCursorError);
+    }
+  });
+
+  it('refuses a cursor whose offset is not a non-negative integer', () => {
+    for (const offset of [-1, 1.5, Number.NaN, '20']) {
+      const forged = Buffer.from(
+        JSON.stringify({ f: fingerprintScope(SCOPE), o: offset }),
+        'utf8',
+      ).toString('base64url');
+
+      expect(() => decodeSearchCursor(forged, SCOPE)).toThrow(SearchCursorError);
+    }
+  });
+
+  it('names the reason, so a client can tell a stale cursor from a bug', () => {
+    const cursor = encodeSearchCursor(SCOPE, 20);
+    const otherQuery: SearchCursorScope = { ...SCOPE, q: 'annual budget' };
+
+    expect(() => decodeSearchCursor(cursor, otherQuery)).toThrow(/different search/i);
+  });
+});
+
+describe('fingerprintScope', () => {
+  it('is stable for the same scope', () => {
+    expect(fingerprintScope(SCOPE)).toBe(fingerprintScope({ ...SCOPE }));
+  });
+
+  it('cannot be collided by moving a delimiter between fields', () => {
+    // The inputs are joined with `\n`, which `normalizeQueryText` guarantees
+    // cannot appear inside `q`. Without that, a query containing the delimiter
+    // could impersonate a different (q, types, user) triple.
+    const a = fingerprintScope({ ...SCOPE, q: 'a', userId: 'b\nc' });
+    const b = fingerprintScope({ ...SCOPE, q: 'a\nb', userId: 'c' });
+
+    expect(a).not.toBe(b);
+  });
+});

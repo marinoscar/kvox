@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
-import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotesService } from '../notes.service';

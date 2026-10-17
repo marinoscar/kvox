@@ -265,7 +265,10 @@ describe('EntityBriefService.getBrief — related sources', () => {
   it('includes a text-arm-only hit with inGraph: false (never graph-only)', async () => {
     const { service, search } = setup();
     const res = await service.getBrief(USER, ENTITY, opts());
-    expect(search.search).toHaveBeenCalledWith({ q: 'Acme', types: 'transcript,note', limit: 20 }, USER);
+    expect(search.search).toHaveBeenCalledWith(
+      { q: 'Acme', types: 'transcript,note', limit: 20 },
+      { userId: OWNER, permissions: new Set(['graph:read', 'transcripts:read', 'notes:read']) },
+    );
     expect(res.related).toEqual([
       expect.objectContaining({ kind: 'transcript', id: DOC, inGraph: false, snippetHtml: '<mark>Acme</mark>', startMs: 10 }),
     ]);

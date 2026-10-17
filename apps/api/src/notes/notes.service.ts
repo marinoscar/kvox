@@ -71,8 +71,7 @@ import type { Note, NoteGeneration, NoteVersion } from '@prisma/client';
 
 import { resolveOrgId, type RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
-import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
-import { SearchIndexService } from '../search/indexing/search-index.service';
+import { SEARCH_DOC_NOTE, SearchIndexService } from '@marinoscar/kvox-api/search';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service';

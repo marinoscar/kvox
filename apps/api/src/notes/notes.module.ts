@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { GraphExtractionModule } from '../graph/extraction/extraction.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
+import { SearchIndexingConfig } from '../kvox/search/search.config';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { NoteAccessService } from './access/note-access.service';
@@ -95,7 +95,7 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // commits and forgets a purged note's rows, while `search/indexing/` reads
     // `notes` through Prisma directly and imports nothing from here — which is
     // what keeps both edges out of a `forwardRef`.
-    SearchIndexingModule,
+    SearchIndexingConfig,
     // Graph extraction (#363): `NoteGenerationService.commit()` asks it to
     // queue a `kg.extract` once a note is ready. ONE-WAY: that module provides
     // the two note services it needs itself and never imports this one.

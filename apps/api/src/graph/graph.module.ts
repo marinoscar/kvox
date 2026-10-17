@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
-import { SearchModule } from '../search/search.module';
+import { SearchConfig } from '../kvox/search/search.config';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
@@ -80,7 +80,7 @@ import { GraphWriteService } from './write/graph-write.service';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, TranscriptsModule, SearchModule, KvoxObjectsModule],
+  imports: [PrismaModule, TranscriptsModule, SearchConfig, KvoxObjectsModule],
   providers: [
     GraphAccessService,
     // #475 — the graph's one question to the AI port (model, limits, graph switch).

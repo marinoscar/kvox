@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../../prisma/prisma.module';
-import { SearchModule } from '../../search/search.module';
+import { SearchConfig } from '../../kvox/search/search.config';
 import { GraphExtractionModule } from '../extraction/extraction.module';
 import { GraphModule } from '../graph.module';
 import { KgEmbedHandler } from '../handlers/kg-embed.handler';
@@ -37,7 +37,7 @@ import { ResolutionStage } from './resolution.stage';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, SearchModule, GraphModule, GraphExtractionModule],
+  imports: [PrismaModule, SearchConfig, GraphModule, GraphExtractionModule],
   controllers: [GraphResolutionController],
   providers: [
     GraphEmbedder,

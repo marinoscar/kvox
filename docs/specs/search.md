@@ -19,6 +19,8 @@
 > while only one of them answers real queries today.
 >
 > §11 records how embeddings are produced (`KvoxAi.embed`, issue #475): the one call path the indexer, the query embedder and the graph use.
+>
+> §12 records where the code lives since issue #494 (epic #491): the `@marinoscar/kvox-api/search` slice, its host ports, the transcript-visibility extension point and the `embeddings_unavailable` reason. Wherever a section below names `apps/api/src/search/`, read `packages/kvox-api/src/search/`.
 
 ## 1. What this solves
 
@@ -162,7 +164,7 @@ about X" and nothing finer. So a document is cut into **chunks** — bounded,
 overlapping windows of text — and each chunk is embedded, stored and searched
 independently.
 
-The code is `apps/api/src/search/chunking/`: `chunkTranscript(segments)`,
+The code is `packages/kvox-api/src/search/chunking/` (`@marinoscar/kvox-api/search`, moved from `apps/api/src/search/` by issue #494): `chunkTranscript(segments)`,
 `chunkNote(title, body)`, `contentHash(text)`, `fingerprintDocument(chunks)`,
 and the shared packer both chunkers run on. Nothing consumes it yet; the
 `search.index` job of a later issue is its first caller.
@@ -332,7 +334,7 @@ commutative combiner (XOR, a sorted set) would call that document unchanged.
 
 ### ⚠ The purity rule
 
-**`apps/api/src/search/chunking/` holds pure functions only.** No
+**`packages/kvox-api/src/search/chunking/` holds pure functions only.** No
 `PrismaService`, no `@Injectable`, no NestJS module and no provider, no
 `randomUUID()`, no `Date.now()`, no `process.env`, no reads of mutable module
 state, no locale-dependent operation. Plain exported functions over plain
@@ -360,7 +362,7 @@ file through which a reducer acquires a row. Same rule here: the moment
 something in this directory can read mutable state, the hash stops being a
 function of the text.
 
-`apps/api/src/search/chunking/index.spec.ts` is the executable form of the rule,
+`packages/kvox-api/src/search/chunking/index.spec.ts` is the executable form of the rule,
 in the same spirit as `apps/api/test/jobs/cron-enqueue-only.spec.ts`. It scans
 every non-spec file in the directory for the markers above and enforces an
 import allowlist of exactly `node:crypto` plus the directory's own files —
@@ -738,7 +740,7 @@ read of it would refuse.
 
 ## 11. Embedding call path (issue #475)
 
-Every embedding, for `search.index`, for the query side of `GET /api/search` (`SearchQueryEmbedder`) and for the graph (`kg.embed`), goes through `KvoxAi.embed` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path"). Nothing in `search/` imports a provider or the platform AI package, and nothing holds a key: the platform resolves the owner's key from `user_ai_keys` per call and records one `ai_usage_events` row per round trip under the feature `search_embed` (`graph_embed` for the graph) and the job id.
+Every embedding, for `search.index`, for the query side of `GET /api/search` (`SearchQueryEmbedder`) and for the graph (`kg.embed`), goes through `KvoxAi.embed` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path"). Nothing in the search slice imports a provider or the platform AI package, and nothing holds a key: the platform resolves the owner's key from `user_ai_keys` per call and records one `ai_usage_events` row per round trip under the feature `search_embed` (`graph_embed` for the graph) and the job id.
 
 **The catalog is the contract.** `apps/api/src/ai-port/embedding-catalog.ts` declares `KVOX_EMBEDDING`: provider `openai`, model `text-embedding-3-small`, 1536 dimensions, 8191 input tokens, batch size 128. `EMBEDDING_DIMENSIONS = 1536` is exported from there and search and the graph import it from nowhere else. 1536 is the width of the `vector(1536)` columns, so changing it is a migration and a full re-index, never an edit. The 128 batch is deliberate: the platform `embed()` accepts 256 inputs, and this app keeps 128 so a failed batch, the retry unit, wastes less of the user's quota. The model is not chosen by the admin policy; the catalog picks it.
 
@@ -746,7 +748,7 @@ Every embedding, for `search.index`, for the query side of `GET /api/search` (`S
 
 **Provenance is unchanged.** `search_embeddings` rows record the model, `text-embedding-3-small`, written from `embeddingCapability().model`. The "indexed" short-circuit in `search.index` still compares the content fingerprint **and** the model, so a document embedded under an earlier model falls through and is re-embedded. Vectors from two models are not comparable at any width; the model id is permanent once vectors are stored under it.
 
-**Status reasons.** `search_index_state.reason` and `semanticReason` keep their spellings. They are derived from `KvoxAi.readiness(userId, 'search_embed')` and from the call itself:
+**Status reasons.** `search_index_state.reason` and `semanticReason` keep their spellings. They were derived from `KvoxAi.readiness(userId, 'search_embed')` and from the call itself; since issue #494 the search slice derives them from `KVOX_AI.capabilities()` (§12), and `searchReasonFor` below remains for the graph embedder until it moves:
 
 | Reason | Source |
 |---|---|
@@ -758,4 +760,38 @@ Every embedding, for `search.index`, for the query side of `GET /api/search` (`S
 
 `searchReasonFor(readiness)` (`search/indexing/job-types.ts`) returns `null` when `readiness.ok`, else maps `ai_key_missing` to `ai_key_missing`, `model_lacks_capability` to `embedding_unsupported` and every other reason to `ai_not_configured`. `SearchIndexStatusService`, `SearchQueryEmbedder` and `GraphEmbedder` all call it, so the page, the query path and the job agree. `readiness` makes no vendor call.
 
-**Jobs.** `search.index` registers the per-user throttle key (`aiProviderThrottleKey(ownerId)`) before the call; a 429 is a `RateLimitError` the queue defers without charging an attempt, and nothing is written to `search_index_state` for it. The query path passes an `AbortSignal.timeout` and answers full-text only when the embedding is unusable.
+**Jobs.** `search.index` names the per-user throttle key (`aiProviderThrottleKey(ownerId)`) when a 429 is hit: a `KvoxRateLimitError` the queue defers without charging an attempt (the web job adapter registers the bucket first, §12), and nothing is written to `search_index_state` for it. The query path passes an `AbortSignal.timeout` and answers full-text only when the embedding is unusable.
+
+## 12. Packaging: `@marinoscar/kvox-api/search` (issue #494, epic #491)
+
+The module moved out of the API into the package. Behaviour, routes (`GET /api/search`, `GET /api/search/index-status`, `POST /api/search/index`), the job type (`search.index`), the tables, the ranking, the chunking and the cursor format (`RANKING_MODEL_VERSION` is untouched, so an in-flight cursor survives the deploy) are unchanged. What changed is how the slice reaches its host.
+
+**Two modules, both `forRoot`.** `SearchModule.forRoot({ semantic?, transcriptVisibility?, typePermissions? })` is the query side; `SearchIndexingModule.forRoot({ batchSize? })` is the indexing side. The web edition configures them in `apps/api/src/kvox/search/search.config.ts` (`SearchConfig`, `SearchIndexingConfig`), listed in `KvoxModule`; the transcripts, notes, graph and Ask modules import those constants for `SearchIndexService`, `SearchService` and `SearchQueryEmbedder`. The slice's README (`packages/kvox-api/src/search/README.md`) has the data, option and security detail.
+
+**Ports instead of platform classes.**
+
+| Need | Port |
+|---|---|
+| Tables of the slice (`search_chunks`, `search_embeddings`, `search_index_state`) | `KVOX_PRISMA`, narrowed to `KvoxSearchDb` (`data/search-db.ts`); the application proves its client satisfies it in `apps/api/test/kvox/prisma-shape.typecheck.ts` |
+| Reads of `transcripts`, `transcript_segments`, `transcript_speakers`, `notes` | `KVOX_PRISMA` `$queryRaw`, raw SQL only; no import of the transcripts or notes slices |
+| Query embedding, the capability probe, document embedding | `KVOX_AI`: `capabilities()` then `embed()` under the feature `search.embed` (the web adapter maps it to `search_embed`) |
+| `search.index` | `KVOX_JOBS.registerHandler` / `enqueue`; the handler declares `usesAi` and neither node member, so the web adapter refuses to make it node-eligible |
+| Who is calling and what they may do | `KVOX_IDENTITY` through `@KvoxAuth()` and `@CurrentKvoxPrincipal()` |
+
+**The routes still declare no permission.** `@KvoxAuth()` with no permission string records "authenticated" only; `SearchService` narrows the types from `principal.permissions` (`transcripts:read` to transcripts, `notes:read` to notes, neither to a 403). The permission strings are `SearchModuleOptions.typePermissions`. The permissionless-route trap (a platform guard attaches the normalised user only when the route declares a permission) is closed by the identity port, which normalises the principal whatever the route declares; `apps/api/test/search/search-permissions.integration.spec.ts` proves it through the real guard stack with a Viewer holding only `notes:read`.
+
+**Visibility is a host decision (§6).** A transcript is visible to its owner and, in the web edition, to whoever it is shared with (a platform grant under row-level security, §6). The slice cannot name that, so the rule is `SearchTranscriptVisibility` (`viewerFor`, `transcriptVisibleSql`, `run`), supplied as `SearchModuleOptions.transcriptVisibility`. The default, `OwnerOnlyTranscriptVisibility`, is "mine, not soft-deleted" (a Desktop edition). The web edition's `SharedTranscriptVisibility` (`apps/api/src/kvox/search/shared-transcript-visibility.ts`) is the platform's `accessibleSql` plus `runInOrg`. The condition is still applied inside every candidate query's `LIMIT`, in both arms, and in the snippet query; notes are not shareable and have no extension point.
+
+**Why the semantic arm may be off, and what it says.** The vector arm needs `KVOX_AI.capabilities().embeddings` to report a model of exactly 1536 dimensions (the width of the `vector(1536)` column). In order:
+
+| `semanticReason` | When |
+|---|---|
+| `embeddings_unavailable` (new) | The host has switched the arm off (`semantic.enabled: false`), has no embeddings model (`embeddings: null`, a Desktop on an SDK without an embeddings endpoint), or reports a model whose width is not 1536. In the last case a warning naming the model and the width is logged once. No embedding call is spent and no vector of another length is ever written. |
+| `ai_not_configured` | `capabilities().available` is false for any reason other than the key (AI off, no provider, the embeddings model not usable: the web adapter folds the old `model_lacks_capability` into this), or the probe itself failed |
+| `ai_key_missing` | `capabilities().reason === 'ai_key_missing'`: the searcher has saved no key |
+| `no_indexed_content` | The caller-scoped presence probe found nothing embedded that they could match |
+| `embedding_failed` | The call was allowed to run and failed: any `KvoxAiError` class, a `KvoxRateLimitError`, a timeout, an unusable vector. Never an exception |
+
+`embedding_unsupported` stays published and stays the spelling of `search_index_state.reason` for a document skipped because the host has no usable embeddings model (so the web client's existing sentence for it applies); the query side no longer produces it. `embeddings_unavailable` was added to `SEMANTIC_REASONS` in `@marinoscar/kvox-contract/search` (add, never rename); it is the one difference in `openapi.json`, an extra value of the `semanticReason` enum. The web client's copy for the new value is Epic 7's (7.3). When the arm is off the host is told why through `semantic.onSemanticOff`; the web edition records it as the span attribute `search.semantic_reason` prefixed with the application's slug (a label value, never a metric label).
+
+**Indexing through the ports.** `SearchIndexHandler` asks `capabilities()` for the document OWNER, skips with `ai_key_missing`, `ai_not_configured` or `embedding_unsupported` (the last also for a model of the wrong width, checked before anything is embedded), embeds in batches of `batchSize` (128, the web provider's ceiling) through `embed()`, and keeps the per-vector width check (`dimension_mismatch` is still a bug that throws). A rate limit becomes `KvoxRateLimitError` naming `aiProviderThrottleKey(ownerId)`, which the web job adapter registers before it defers the job; a refused key (`KvoxAiError` class `auth`) is still recorded as `ai_key_invalid` and returned. `SearchIndexService.enqueue` uses `KVOX_JOBS.enqueue` with the same subject, dedup and priority (10) as before; the job's organization is the host's (the web adapter passes the default organization on every enqueue).

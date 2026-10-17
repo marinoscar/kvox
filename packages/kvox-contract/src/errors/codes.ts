@@ -238,6 +238,12 @@ export const KVOX_ERROR_CODES = {
     slice: 'search',
     description: 'The provider refused, timed out, throttled or returned an unusable vector; the lexical ranking answered.',
   },
+  embeddings_unavailable: {
+    code: 'embeddings_unavailable',
+    status: 200,
+    slice: 'search',
+    description: 'The host has no embeddings model, or one whose vectors are not 1536 wide, so the vector arm did not run.',
+  },
   parse_error: {
     code: 'parse_error',
     status: 200,

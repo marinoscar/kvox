@@ -56,10 +56,8 @@ import { GraphDedupModule } from './graph/dedup/dedup.module';
 import { GraphProposalsModule } from './graph/proposals/proposals.module';
 import { GraphImportModule } from './graph/import/graph-import.module';
 import { AskModule } from './ask/ask.module';
-import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { userDataModule } from './platform/user-data/user-data.config';
 import { sharingModule } from './platform/sharing/sharing.config';
-import { SearchModule } from './search/search.module';
 import { onboardingModule } from './platform/onboarding/onboarding.config';
 
 import { NotModifiedInterceptor } from './platform/http/not-modified.interceptor';
@@ -236,8 +234,9 @@ import configuration from './config/configuration';
     // `KVOX_AI`, `KVOX_OBJECT_STORE`, `KVOX_JOBS`, `KVOX_IDENTITY`, `KVOX_NOTIFY`, `KVOX_EVENTS`,
     // `KVOX_PRISMA`, `KVOX_SETTINGS`, `KVOX_SECRETS` and `KVOX_AUDIT`, one adapter per port over a
     // platform slice (`platform-kvox/`; global; a missing binding stops the boot). Then each
-    // slice's configuration, today transcription (#23, epic #19): the provider framework, the
-    // AssemblyAI provider, the admin settings surface and the non-admin capability probe.
+    // slice's configuration, today transcription (#23, epic #19) and search (#175, #188, epic #164/#165):
+    // the provider framework, the AssemblyAI provider, the admin settings surface and the non-admin
+    // capability probe; `GET /api/search`, the hybrid ranking, the `search.index` job and its two routes.
     // After SettingsModule and CredentialsModule: the settings and secrets adapters inject their
     // services, and the slice writes its `transcription` namespace through the settings port
     // rather than touching `system_settings` itself.
@@ -316,18 +315,6 @@ import configuration from './config/configuration';
     // imported by nothing, so the edge runs one way.
     AskModule,
 
-    // Semantic search, indexing half (#188, epic #165): the `search.index` job
-    // and the enqueue/forget surface its callers use. Listed explicitly even
-    // though TranscriptsModule and NotesModule each import it —
-    // a module reached only transitively is one whose handler registration
-    // depends on somebody else's import list, which is exactly the kind of
-    // action-at-a-distance this file exists to make visible.
-    //
-    // It imports JobsModule and PrismaModule (the AI port, `KVOX_AI`, is
-    // global), and NEITHER TranscriptsModule NOR NotesModule — it reads both documents' rows through Prisma directly, so
-    // the dependency edge runs one way and no `forwardRef` is needed anywhere.
-    SearchIndexingModule,
-
     // The platform's user-data slice (#480, epic #478): the Danger Zone. `GET
     // /api/user-data/summary`, `POST /api/user-data/deletions`, the `user.data.purge`
     // job (and the admin factory reset and organization offboarding routes), over the
@@ -337,14 +324,6 @@ import configuration from './config/configuration';
     // `files.purge_unmanaged`) are their handlers: it enqueues them by type string and
     // imports none of them.
     userDataModule,
-
-    // Cross-module search (#175, epic #164): `GET /api/search`, ranked
-    // full-text over transcript and note content. Registered AFTER both
-    // feature modules for readability, but it imports NEITHER — it reads their
-    // tables through raw `SELECT`s and depends only on `PrismaModule`. See
-    // `SearchModule`'s own header for why that independence is deliberate
-    // rather than an oversight.
-    SearchModule,
 
     // First-run onboarding (#481, epic #478): the platform slice. `GET /api/onboarding` (the caller's
     // checklists, and the admin one for a holder of `system_settings:read`) and the activation

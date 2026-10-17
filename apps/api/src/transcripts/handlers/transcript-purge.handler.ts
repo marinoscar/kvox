@@ -73,8 +73,7 @@ import {
   readOwnerPurgePayload,
 } from '../../common/owner-purge';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
-import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { SEARCH_DOC_TRANSCRIPT, SearchIndexService } from '@marinoscar/kvox-api/search';
 import { TRANSCRIPT_PURGE_JOB_TYPE } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { readTranscriptId, TranscriptPipelineService } from '../transcript-pipeline.service';

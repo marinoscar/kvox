@@ -48,6 +48,16 @@ export const SEMANTIC_REASONS = [
    * right.
    */
   'embedding_failed',
+  /**
+   * The host has no embeddings model at all, or one whose vectors this
+   * application cannot store (the index column is `vector(1536)`, so any other
+   * width is refused, never truncated or padded). Added for hosts whose AI
+   * port reports `embeddings: null` (KVox Desktop on a model SDK without an
+   * embeddings endpoint); distinct from `embedding_unsupported`, which says the
+   * ACTIVE provider of a hosted deployment lacks the capability. Append-only:
+   * no value above was renamed.
+   */
+  'embeddings_unavailable',
 ] as const;
 
 /**

@@ -55,6 +55,16 @@
         "nestjs-zod",
         "zod"
       ]
+    },
+    "search": {
+      "peers": [
+        "@marinoscar/kvox-contract",
+        "@nestjs/common",
+        "@nestjs/core",
+        "@nestjs/swagger",
+        "nestjs-zod",
+        "zod"
+      ]
     }
   },
   "kvox-web": {

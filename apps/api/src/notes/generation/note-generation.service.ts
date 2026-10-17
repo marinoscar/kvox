@@ -6,8 +6,7 @@ import type { NoteFailedEmailData } from '../../email-templates/note-failed.emai
 import type { NoteReadyEmailData } from '../../email-templates/note-ready.email';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
-import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { SEARCH_DOC_NOTE, SearchIndexService } from '@marinoscar/kvox-api/search';
 import { GraphExtractionService } from '../../graph/extraction/graph-extraction.service';
 import { NoteTitleService } from './note-title.service';
 

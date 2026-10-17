@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import type { Note } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { SearchIndexService } from '../search/indexing/search-index.service';
+import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteOriginService } from './note-origin.service';

@@ -1,4 +1,4 @@
-import { RRF_K } from '../../search/search-fusion';
+import { RRF_K } from '@marinoscar/kvox-api/search';
 import { fuseRelatedSources, recencyFactor, relatedKey, type RelatedDoc } from './brief-related';
 
 const NOW = new Date('2026-09-26T00:00:00Z');

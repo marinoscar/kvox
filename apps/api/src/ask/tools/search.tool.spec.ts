@@ -67,7 +67,10 @@ describe('SearchTool', () => {
     const args = tool.input.parse({ query: ' Acme ', scope: null, limit: null });
     await tool.run(ctx, args);
     expect(graphRead.listEntities).toHaveBeenCalledWith(ctx.user, { q: 'Acme', sort: 'updated', limit: 5 });
-    expect(search.search).toHaveBeenCalledWith({ q: 'Acme', types: 'transcript,note', limit: 5 }, ctx.user);
+    expect(search.search).toHaveBeenCalledWith(
+      { q: 'Acme', types: 'transcript,note', limit: 5 },
+      { userId: ctx.user.id, permissions: new Set(ctx.user.permissions) },
+    );
   });
 
   it.each([

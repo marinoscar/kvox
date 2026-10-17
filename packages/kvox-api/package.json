@@ -37,6 +37,14 @@
       "types": "./dist/transcription/testing/index.d.ts",
       "default": "./dist/transcription/testing/index.js"
     },
+    "./search": {
+      "types": "./dist/search/index.d.ts",
+      "default": "./dist/search/index.js"
+    },
+    "./search/testing": {
+      "types": "./dist/search/testing/index.d.ts",
+      "default": "./dist/search/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

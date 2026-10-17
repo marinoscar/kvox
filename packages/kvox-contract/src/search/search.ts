@@ -226,7 +226,7 @@ export const searchResponseSchema = z.object({
 });
 
 /**
- * The parsed shape of {@link searchResponseSchema}.
+ * The parsed shape of `searchResponseSchema`.
  *
  * @stability experimental
  */

@@ -38,8 +38,12 @@ import { GraphPreferencesService } from '../../src/graph/preferences/graph-prefe
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import type { SearchQueryEmbedder } from '../../src/search/search-query-embedder.service';
-import { SearchService } from '../../src/search/search.service';
+import {
+  DEFAULT_SEARCH_TYPE_PERMISSIONS,
+  SearchService,
+  type SearchQueryEmbedder,
+} from '@marinoscar/kvox-api/search';
+import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { JobHandlerRegistry, JobsService } from '@marinoscar/platform-api/jobs';
@@ -73,7 +77,12 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     registry.register({ type: KG_ENTITY_DIGEST_JOB_TYPE, process: async () => undefined } as never);
     const enqueuer = new EntityDigestEnqueuer(new JobsService(p), registry, { graphEnabled: async () => true } as never);
     // The semantic arm is off (no key); the full-text arm runs for real.
-    const search = new SearchService(p, { resolve: async () => ({ ok: false, reason: 'ai_key_missing' }) } as unknown as SearchQueryEmbedder);
+    const search = new SearchService(
+      p,
+      { resolve: async () => ({ ok: false, reason: 'ai_key_missing' }) } as unknown as SearchQueryEmbedder,
+      new SharedTranscriptVisibility(p),
+      { semanticEnabled: true, provider: 'test', typePermissions: DEFAULT_SEARCH_TYPE_PERMISSIONS },
+    );
 
     briefs = new EntityBriefService(
       p,

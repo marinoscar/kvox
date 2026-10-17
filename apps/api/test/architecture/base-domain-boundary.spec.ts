@@ -3,8 +3,9 @@
 // =============================================================================
 //
 // KVox is a platform (auth, RBAC, settings, jobs, storage, notifications, AI
-// plumbing, ...) with a product on top (transcription, transcripts, notes, the
-// knowledge graph, Ask, search). The platform half is being replaced by
+// plumbing, ...) with a product on top (transcripts, notes, the knowledge graph,
+// Ask; transcription and search are packaged slices now, `@marinoscar/kvox-api/*`,
+// and no longer directories here). The platform half is being replaced by
 // published packages, one slice at a time, and a published package cannot
 // import `apps/api/src/notes/...`. Every edge from a base module INTO a domain
 // module is therefore a Phase 1 swap that cannot happen until someone removes
@@ -91,7 +92,6 @@ const DOMAIN_DIRS: readonly string[] = [
   'notes',
   'graph',
   'ask',
-  'search',
 ];
 
 /**
