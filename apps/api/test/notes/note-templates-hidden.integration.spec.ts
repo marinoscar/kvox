@@ -1,6 +1,6 @@
 import request from 'supertest';
 
-import { NOTE_TEMPLATE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-template-access.service';
+import { NOTE_TEMPLATE_NOT_FOUND_MESSAGE } from '@marinoscar/kvox-api/notes';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';

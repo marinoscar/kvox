@@ -22,7 +22,6 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 
 import type { PrismaClient } from '@prisma/client';
 
-import type { PrismaService } from '../../src/prisma/prisma.service';
 import { parseSpeakerIdentities } from '@marinoscar/kvox-api/transcripts';
 import type { GoldenFixtureInput } from './fixture-schema';
 
@@ -156,20 +155,15 @@ export async function exportNoteSkeleton(args: ExportNoteArgs): Promise<string> 
         })
       : null;
 
-  // Required lazily: it pulls in Nest's decorators and the Prisma service
-  // module, which a `--predictions` run has no reason to load. Nest is never
-  // booted — the resolver is a plain class over the client it is handed.
+  // Required lazily: it pulls in Nest's decorators, which a `--predictions` run has no reason to
+  // load. Nest is never booted - the resolver is a plain class over the client it is handed. The
+  // eval reads the owner's own notes, so the slice's owner-only sharing is the right answer for the
+  // transcript behind one (a transcript shared with the owner is not part of an eval corpus).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { NoteOriginService } = require('../../src/notes/note-origin.service') as typeof import('../../src/notes/note-origin.service');
-  // The resolver reads a shared transcript's grant in the owner's organization scope (#485),
-  // so it needs `runInOrg` on the client: the platform's own, bound the way `PrismaService` does.
+  const { NoteOriginService } = require('@marinoscar/kvox-api/notes') as typeof import('@marinoscar/kvox-api/notes');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { runInOrg } = require('@marinoscar/platform-api/core') as typeof import('@marinoscar/platform-api/core');
-  const scoped = Object.assign(prisma, {
-    runInOrg: (scope: Parameters<typeof runInOrg>[1], fn: Parameters<typeof runInOrg>[2], options?: Parameters<typeof runInOrg>[3]) =>
-      runInOrg(prisma as never, scope, fn as never, options),
-  });
-  const origin = await new NoteOriginService(scoped as unknown as PrismaService).resolve(note, user.id);
+  const { OwnerOnlyTranscriptSharing } = require('@marinoscar/kvox-api/transcripts') as typeof import('@marinoscar/kvox-api/transcripts');
+  const origin = await new NoteOriginService(prisma as never, new OwnerOnlyTranscriptSharing()).resolve(note, user.id);
 
   let recordedAt = note.createdAt;
   let speakers: GoldenFixtureInput['speakers'] = [];

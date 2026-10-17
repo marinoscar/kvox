@@ -32,14 +32,17 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
-import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
-import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
-import type { NotesService } from '../../src/notes/notes.service';
-import { buildNotesService } from './notes-service-test-factory';
+import {
+  NOTE_PURGE_JOB_TYPE,
+  NOTE_SUBJECT_TYPE,
+  NoteAccessService,
+  NotePurgeHandler,
+  NotesUserDataService,
+  type NotesService,
+} from '@marinoscar/kvox-api/notes';
+import { createNotesServiceTestFactory } from '@marinoscar/kvox-api/notes/testing';
 import { createStorageObject } from '../helpers/storage-object.helper';
-import { JobScope } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
+import { createDbAudit, createDbObjectStore, UNUSED_STORAGE } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
@@ -119,7 +122,8 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
     // `sourceNames`, `templates`, `requests` and `sources` are all stand-ins.
     // Named by role (see `notes-service-test-factory.ts`) so no argument can
     // land in the wrong slot the way #224's did.
-    notes = buildNotesService({
+    notes = createNotesServiceTestFactory({
+      audit: createDbAudit(prisma),
       prisma: prisma as never,
       access,
       sourceNames: null as never, // not on the exercised path
@@ -138,18 +142,18 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
     });
 
     purge = new NotePurgeHandler(
-      { register: jest.fn() } as never,
+      { registerHandler: jest.fn(), enqueue: jobs.enqueue } as never,
       prisma as never,
+      createDbAudit(prisma),
+      createDbObjectStore(prisma, UNUSED_STORAGE),
       objects as never,
       // #188: the purge FORGETS the note's chunks before deleting the row —
       // `search_chunks.document_id` has no foreign key, so nothing else would
       // ever clean them up.
       { forget: jest.fn().mockResolvedValue(undefined) } as never,
-      // `storage_objects` reads run in the job's organization.
-      new JobScope(prisma as never),
-      createDbManagedObjects(prisma, UNUSED_STORAGE),
       // #480: the owner-level payload fans out through the service's own enqueue.
       notes,
+      new NotesUserDataService(prisma as never, jobs as never),
     );
   });
 

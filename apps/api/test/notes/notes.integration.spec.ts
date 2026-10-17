@@ -1,14 +1,14 @@
 import request from 'supertest';
 
-import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service';
-import { NOTE_CONFLICT_REASONS } from '../../src/notes/dto/note.dto';
-import { NoteSourceService } from '../../src/notes/generation/note-source.service';
+import { NOTE_CONFLICT_REASONS } from '@marinoscar/kvox-contract/notes';
 import {
   NOTE_GENERATE_JOB_TYPE,
+  NOTE_NOT_FOUND_MESSAGE,
   NOTE_PURGE_JOB_TYPE,
   NOTE_SUBJECT_TYPE,
-} from '../../src/notes/job-types';
-import { encodeCursor } from '../../src/notes/notes.service';
+  NoteSourceService,
+  encodeCursor,
+} from '@marinoscar/kvox-api/notes';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { invalidateAiResolverCache, primeAiReadiness, storedSystemSettings } from '../helpers/ai-readiness.fixtures';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/settings/registry/default-system-settings';

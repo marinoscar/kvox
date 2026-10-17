@@ -47,7 +47,7 @@ import { CandidateService } from '../../../src/graph/resolution/candidate.servic
 import { ContextFeatureService } from '../../../src/graph/resolution/context-features.service';
 import { ResolutionService } from '../../../src/graph/resolution/resolution.service';
 import { ResolutionStage } from '../../../src/graph/resolution/resolution.stage';
-import { NoteAccessService } from '../../../src/notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { buildServices } from '../kg-proposal-db-support';

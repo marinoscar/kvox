@@ -130,7 +130,7 @@ export interface FeedState<T> {
  *
  * Mirrors `orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }]` in
  * `packages/kvox-api/src/transcripts/transcripts.service.ts` and
- * `apps/api/src/notes/notes.service.ts` — and the keyset predicate their
+ * `packages/kvox-api/src/notes/notes.service.ts` — and the keyset predicate their
  * cursors encode, which uses the same compound `(updatedAt, id)` tie-break
  * because `updatedAt` alone is not unique and two rows sharing a millisecond
  * would otherwise make one of them unreachable.

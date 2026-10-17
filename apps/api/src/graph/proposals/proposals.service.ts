@@ -36,7 +36,7 @@ import { Prisma, type KgProposal } from '@prisma/client';
 import type { EffectiveSchema } from '@app/shared/ontology';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { NoteAccessService } from '../../notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';

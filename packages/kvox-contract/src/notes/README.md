@@ -6,6 +6,8 @@ The notes wire contract: notes and their versions, templates, source documents a
 
 The notes wire contract: notes and their versions, templates, source documents and exports. Plain Zod schemas, `as const` tuples and inferred types only: no Nest, no `nestjs-zod`, no Node built-in, so it loads in the browser too.
 
+- `note-source-extract.ts`: the result schema a worker node posts back for `note.source.extract`, with the extraction reason and encoding tuples.
+- `note-events.ts`: the `kvox.notes.note_ready` event name and its payload type.
 - `note.ts`: create, update, regenerate and restore bodies, the note and version responses, `NOTE_CONFLICT_REASONS`.
 - `note-template.ts`: templates, the preview and the body formats.
 - `note-source.ts`, `note-export.ts`, `document-format.ts`: uploaded source documents, exports and the accepted document MIME types.

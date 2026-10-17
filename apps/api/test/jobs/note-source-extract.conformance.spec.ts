@@ -16,17 +16,13 @@
 // nothing, which is exactly what idempotency means for this type.
 // =============================================================================
 
-import { Test } from '@nestjs/testing';
 import { Readable } from 'node:stream';
 
-import { JobHandlerRegistry, JobScope, type JobHandler } from '@marinoscar/platform-api/jobs';
+import { type JobHandler, JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
 import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/testing';
+import { NoteSourceExtractHandler } from '@marinoscar/kvox-api/notes';
 
-import { NoteSourceExtractHandler } from '../../src/notes/handlers/note-source-extract.handler';
-import { NoteObjectsService } from '../../src/notes/note-objects.service';
-import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
-import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
+import { createKvoxJobsHarness, platformHandlerOf } from '../helpers/kvox-handler.helper';
 
 const OBJECT_ID = 'source-object-1';
 
@@ -49,18 +45,37 @@ async function buildWorld(): Promise<JobHandler> {
   };
   puts = [];
 
-  const prisma = {
-    storageObject: {
-      findUnique: jest.fn(async () => ({ ...row })),
-      update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => Object.assign(row, data)),
-    },
-  };
-
-  const storage = {
-    download:
+  // The object-store port as the slice sees it: `describe` reads the stateful row, `openRead`
+  // serves the bytes (or fails), `setMetadata` lands on the same row.
+  const store = {
+    describe: jest.fn(async (ids: readonly string[]) =>
+      new Map(
+        ids.includes(OBJECT_ID)
+          ? [
+              [
+                OBJECT_ID,
+                {
+                  id: OBJECT_ID,
+                  name: row.name,
+                  mimeType: row.mimeType,
+                  size: Number(row.size),
+                  state: 'ready',
+                  ownerId: row.uploadedById,
+                  managedBy: 'notes',
+                  metadata: row.metadata,
+                },
+              ],
+            ]
+          : [],
+      ),
+    ),
+    openRead:
       mode === 'download-fails'
         ? jest.fn().mockRejectedValue(new Error('bucket unreachable'))
         : jest.fn(async () => Readable.from([Buffer.from('# Brief\n\nThe quarterly plan.', 'utf8')])),
+    setMetadata: jest.fn(async (_id: string, metadata: Record<string, unknown>) => {
+      row.metadata = metadata;
+    }),
   };
 
   const objects = {
@@ -76,31 +91,9 @@ async function buildWorld(): Promise<JobHandler> {
     }),
   };
 
-  // `storage_objects` access runs inside `JobScope.run(job, fn)`; the stub hands
-  // `fn` the same client, so scoped and unscoped handlers behave identically here.
-  const jobScope = { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) };
+  const harness = createKvoxJobsHarness();
 
-  const module = await Test.createTestingModule({
-    providers: [
-      NoteSourceExtractHandler,
-      { provide: JobHandlerRegistry, useValue: new JobHandlerRegistry() },
-      { provide: JobScope, useValue: jobScope },
-      // The ownership gateway (#469): metadata writes land on the same stateful row the stub client holds.
-      {
-        provide: KvoxManagedObjectsService,
-        useValue: {
-          setMetadata: async (_id: string, metadata: Record<string, unknown>) => {
-            row.metadata = metadata;
-          },
-        },
-      },
-      { provide: PrismaService, useValue: prisma },
-      { provide: NoteObjectsService, useValue: objects },
-      { provide: STORAGE_PROVIDER, useValue: storage },
-    ],
-  }).compile();
-
-  return module.get(NoteSourceExtractHandler);
+  return platformHandlerOf(harness, new NoteSourceExtractHandler(harness.adapter, store as never, objects as never));
 }
 
 beforeEach(() => {

@@ -32,7 +32,7 @@ import type { GraphAiRun } from '../graph-ai-run';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { activeUserHoldsPermission } from '../../common/auth/principal-permissions';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService } from '../../notes/access/note-access.service';
+import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService } from '@marinoscar/kvox-api/notes';
 import {
   budgetRefusalMessage,
   computeTokenBudget,

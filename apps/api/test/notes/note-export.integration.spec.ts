@@ -1,8 +1,6 @@
 import request from 'supertest';
 
-import { NOTE_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-access.service';
-import { NOTE_EXPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
-import { NoteSourceService } from '../../src/notes/generation/note-source.service';
+import { NOTE_EXPORT_JOB_TYPE, NOTE_NOT_FOUND_MESSAGE, NOTE_SUBJECT_TYPE, NoteSourceService } from '@marinoscar/kvox-api/notes';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
@@ -380,12 +378,23 @@ describe('Note exports integration (#54)', () => {
       prismaMock.noteExport.findUnique.mockResolvedValue(
         exportRow({ status: 'ready', objectId: 'object-1' }) as never,
       );
-      prismaMock.storageObject.findUnique.mockResolvedValue({
+      // The slice describes the object through the object-store port (one `findMany`), and the
+      // web edition's signed URL reads the row (`findUnique`).
+      const stored = {
         id: 'object-1',
+        name: 'y.md',
+        mimeType: 'text/markdown',
         storageKey: 'notes/x/exports/y.md',
         status: 'ready',
         size: BigInt(4096),
-      } as never);
+        uploadedById: user.id,
+        metadata: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+
+      prismaMock.storageObject.findUnique.mockResolvedValue(stored as never);
+      prismaMock.storageObject.findMany.mockResolvedValue([stored] as never);
 
       const response = await request(context.app.getHttpServer())
         .get(`${NOTES}/exports/${EXPORT_ID}/download`)

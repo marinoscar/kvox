@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { NOTE_TEMPLATES } from '../../prisma/seed-app';
+import { NOTE_BUILTIN_TEMPLATES as NOTE_TEMPLATES } from '@marinoscar/kvox-api/notes/templates';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
 // The jobs slice registers its `retention` namespace when `JobsModule.forRoot` runs (#468); the catalog includes it.
 import '../../src/platform/jobs/jobs.config';
@@ -543,7 +543,7 @@ describe('seed-app viewer grants (#473, #485)', () => {
   /** `permissionNames` are the permissions the platform seed created; any other lookup answers null. */
   function fakePrisma(present: { role: boolean; permissionNames: string[] }) {
     return {
-      noteTemplate: { upsert: jest.fn().mockResolvedValue({}) },
+      noteTemplate: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn().mockResolvedValue({}) },
       role: { findUnique: jest.fn().mockResolvedValue(present.role ? { id: 'role-viewer' } : null) },
       permission: {
         findUnique: jest.fn(async ({ where }: { where: { name: string } }) =>

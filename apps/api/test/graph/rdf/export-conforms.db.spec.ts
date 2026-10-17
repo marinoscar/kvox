@@ -45,7 +45,7 @@ import type { GraphObjectsService } from '../../../src/graph/graph-objects.servi
 import { GraphOntologyService } from '../../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../../src/graph/preferences/graph-preferences.service';
 import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
-import { NoteAccessService } from '../../../src/notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';

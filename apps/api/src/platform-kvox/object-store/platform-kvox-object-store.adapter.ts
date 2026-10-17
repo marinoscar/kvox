@@ -277,9 +277,13 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
     const found = new Map<string, KvoxObjectInfo>();
     if (objectIds.length === 0) return found;
 
-    const rows = await this.managed.findMany({ where: { id: { in: [...new Set(objectIds)] } } });
+    const ids = [...new Set(objectIds)];
+    const rows = await this.managed.findMany({ where: { id: { in: ids } } });
+    const owners = await this.managed.managedBy(ids);
 
     for (const row of rows) {
+      const metadata = row.metadata;
+
       found.set(row.id, {
         id: row.id,
         name: row.name,
@@ -288,10 +292,21 @@ export class PlatformKvoxObjectStoreAdapter implements KvoxObjectStorePort {
         state: stateOf(row.status),
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        ownerId: row.uploadedById,
+        managedBy: asKvoxModule(owners.get(row.id) ?? null),
+        metadata:
+          typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
+            ? (metadata as Record<string, unknown>)
+            : null,
       });
     }
 
     return found;
+  }
+
+  @Trace()
+  async setMetadata(objectId: string, metadata: Record<string, unknown>): Promise<void> {
+    await this.managed.setMetadata(objectId, metadata);
   }
 
   @Trace()

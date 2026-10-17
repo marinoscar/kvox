@@ -22,7 +22,7 @@
 > roles.constants.ts` and `apps/api/prisma/seed-data.ts` (#48; since #465 the permissions are declared in `apps/api/src/app-registrations/permissions.ts`, the grants live in `apps/api/prisma/catalog/permissions.json` and the template rows in `apps/api/prisma/seed-app.ts`), the one-line
 > delete guard the new `Restrict` foreign keys require in `apps/api/src/
 > transcripts/transcripts.service.ts` (#48, landing in the same window as the
-> migration — see §4), `apps/api/src/notes/` for everything else on the API
+> migration — see §4), `packages/kvox-api/src/notes/` for everything else on the API
 > side: `prompt/` (prompt assembly and the token budget, #49),
 > `handlers/note-generate.handler.ts` (#49), `handlers/
 > note-source-extract.handler.ts` and `apps/cli/src/node/executors/
@@ -264,6 +264,10 @@ what `profile.maxRuntimeMs` (§2) is sized against; this is holding a slot for
 the length of the *actual* computation, not for an external wait, so it is
 not the anti-pattern §11 exists to name.
 
+### 1.4 The ready event and where the code lives (issue #495)
+
+The module is `@marinoscar/kvox-api/notes` (`packages/kvox-api/src/notes/`, `NotesModule.forRoot`), written against the host ports, with the transcripts and search slices as peers. When a generation commits a note `ready`, the module publishes `kvox.notes.note_ready` on the events port with `{ noteId, ownerId, version }`, **after** the transaction has committed and never inside it, and it knows nothing about who listens. The web edition's listener (`apps/api/src/graph/extraction/note-ready-auto-extract.listener.ts`, temporary until the graph moves into the package) calls `GraphExtractionService.enqueueForReadyNote`, so the auto-extract hook behaves as before: its gate is inside that method, and a failure there never undoes the note.
+
 ## 2. The AI call contract
 
 > **The AI layer is the platform's.** Since issues #473 to #477 (epic #472) this repository has no `AiProvider` interface, provider registry, hand-written OpenAI client or per-user credentials table: `apps/api/src/ai/` and `user_ai_credentials` were deleted by #477. Code under `apps/api/src` outside `ai-port/` and `platform/ai/` reaches a model through `KvoxAi` (`apps/api/src/ai-port/kvox-ai.ts`, token `KVOX_AI`) and imports no platform AI type. `KvoxAi` is implemented over the platform `AiService.forUser`, which resolves the user's key from the platform `user_ai_keys`; a caller never sees a key. Sections 2.1 to 2.7 keep their numbers because other documents cite them, and each says what replaced its original text. The contract callers use today is "`KvoxAi` call path (issue #475)" under §2.8.
@@ -345,7 +349,7 @@ and replaced, never silently dropped. See
 
 ### 2.3 The rate-limit throttle key is per user, not per deployment
 
-`aiProviderThrottleKey(userId)` (`apps/api/src/notes/job-types.ts`, `ai-provider:${userId}`) is registered with `ProviderThrottleService.registerProviderKey(type, key)` by every AI job handler immediately before its first model call — the exact inverse of transcription's single shared
+`aiProviderThrottleKey(userId)` (`packages/kvox-api/src/notes/job-types.ts`, `ai-provider:${userId}`) is registered with `ProviderThrottleService.registerProviderKey(type, key)` by every AI job handler immediately before its first model call — the exact inverse of transcription's single shared
 `'transcription-provider'` key (`docs/specs/transcription.md` §1.5.2–4). There,
 every user's transcription shares **one** AssemblyAI account and its **one**
 rate-limit bucket, so one throttle key correctly protects it. Here, every user
@@ -1268,7 +1272,7 @@ a note generated from another note names only that note, and the recording
 behind it — if there is one — is one or more hops further up the chain. The
 "play the source recording" affordance on a note's detail page needs that
 recording's id whether the note is one hop away or five, so
-`NoteOriginService.resolve()` (`apps/api/src/notes/note-origin.service.ts`)
+`NoteOriginService.resolve()` (`packages/kvox-api/src/notes/note-origin.service.ts`)
 walks the chain server-side once per request, rather than having a client
 walk `sourceNoteId` with a request per hop.
 
@@ -1309,7 +1313,7 @@ for the transcript — cheap for the single note a caller is looking at, an N+1
 on a page of twenty. `NotesService.shape()` (the detail projection every
 single-note route shares — create, get, update, regenerate, restore, retitle)
 calls `resolve()`; `NotesService.listShape()` never does, and
-`noteListItemSchema` (`apps/api/src/notes/dto/note.dto.ts`) `.omit()`s
+`noteListItemSchema` (`packages/kvox-api/src/notes/dto/note.dto.ts`) `.omit()`s
 `originTranscript` outright rather than leaving list rows to carry `null` by
 convention. See `docs/API.md`'s `### Notes` group for the wire shape.
 
@@ -1365,7 +1369,7 @@ equal to it by §4.1's invariant.
 ### 5.2 The SSE endpoint
 
 `GET /api/note-generations/:id/stream`
-(`apps/api/src/notes/generation/note-generation-stream.controller.ts`, #52).
+(`packages/kvox-api/src/notes/note-generation-stream.controller.ts`, #52).
 Reachable by the generation's owner (the note's owner, for `create`/
 `regenerate`; the caller who requested it, for `preview`) — same access
 discipline as §6, same 404-not-403 posture.
@@ -1486,7 +1490,7 @@ in a way neither of those does.
 
 ### 6.1 Owner-only, and 404 never 403
 
-`apps/api/src/notes/access/note-access.service.ts` — `NoteAccessService
+`packages/kvox-api/src/notes/access/note-access.service.ts` — `NoteAccessService
 .require(userId, noteId, level)` with `level ∈ 'view' | 'edit' | 'own'`,
 deliberately the same three-level shape `TranscriptAccessService` already
 has (`docs/specs/transcription.md` §6.1), even though in this epic every
@@ -1742,7 +1746,7 @@ boot log. The helpers `optionsSchemaFor`, `hashExportRequest`, `writeChunk`,
 calls `failStream` so the destination is destroyed. The `options_hash` values
 are frozen by `apps/api/test/exports/export-hash-compat.spec.ts`.
 
-`apps/api/src/notes/export/` then gets its own `NoteExporterRegistry extends
+`packages/kvox-api/src/notes/export/` then gets its own `NoteExporterRegistry extends
 ExporterRegistry<NoteExportDocument>` and three self-registering exporter
 classes — `markdown.exporter.ts`, `pdf.exporter.ts`, `word.exporter.ts` —
 following the identical "adding a format costs one class" discipline
@@ -1751,7 +1755,7 @@ own rule for the second document type it now applies to.
 
 ### 8.2 `NoteExportDocument`
 
-`apps/api/src/notes/export/note-export-document.ts`, built once by a pure
+`packages/kvox-api/src/notes/export/note-export-document.ts`, built once by a pure
 `buildNoteExportDocument()` from the version being exported — the note's
 counterpart to `buildExportDocument()` — with none of `ExportDocument`'s
 speaker/segment/talk-time shape, because a note has none of those:
@@ -1790,7 +1794,7 @@ Three real differences, not merely a smaller document:
    explicit "A note is markdown" scope line) — so `markdown.exporter.ts`'s
    render is close to a literal passthrough (front matter plus the
    provenance line); `pdf.exporter.ts` and `word.exporter.ts` need an actual
-   markdown parser (`apps/api/src/notes/export/markdown-ast.ts`, wrapping a
+   markdown parser (`packages/kvox-api/src/notes/export/markdown-ast.ts`, wrapping a
    small, audited parsing library — headings, lists, emphasis, code) to lay
    out, a capability `packages/kvox-api/src/transcripts/export/` has never needed,
    because its PDF and Markdown renderers build their own layout directly
@@ -1834,7 +1838,7 @@ restated. Exports expire after 7 days, swept by `notes.housekeeping` (§8.6).
 
 ### 8.5 Job types
 
-Six job types, all under `apps/api/src/notes/handlers/` except
+Six job types, all under `packages/kvox-api/src/notes/handlers/` except
 `note.source.extract`'s node executor counterpart
 (`apps/cli/src/node/executors/note-source-extract.ts`):
 
@@ -1998,7 +2002,7 @@ without writing the other in the same transaction.
 
 §3.1 (item 4) states the mechanism: the trust-boundary sentence stays fixed,
 its syntax clause does not. `PLAIN_TEXT_CLOSING_LINE`
-(`apps/api/src/notes/generation/prompt.ts`) replaces "in Markdown" with an
+(`packages/kvox-api/src/notes/generation/prompt.ts`) replaces "in Markdown" with an
 explicit list of what not to produce (`#`, `*`, `-`, backticks, tables) and
 tells the model to use blank lines for paragraphs and simple numbered lines
 for lists — plain text's only two structural tools. `MARKDOWN_CLOSING_LINE`
@@ -2009,7 +2013,7 @@ markdown template, predating this issue or not.
 ### 10.3 Exports render it literally
 
 §8.3 (point 2) states the mechanism: `parseBody(body, bodyFormat)` in
-`apps/api/src/notes/export/markdown-ast.ts` dispatches to `parseMarkdown`
+`packages/kvox-api/src/notes/export/markdown-ast.ts` dispatches to `parseMarkdown`
 for everything except an exact `'plain_text'` match, which goes to
 `parsePlainText` instead — a parser with the same block shape but no syntax
 recognition at all, so a plain-text note's literal `#`/`*`/`-` characters
@@ -2254,12 +2258,12 @@ the list this spec was designed against — the same purpose
 | `DELETE /api/transcripts/:id` 409s naming the blocking note id(s) when a note still references it as its source | `apps/api/test/transcripts/transcripts-delete.e2e.spec.ts`, extended |
 | The `user_ai_keys` row cascades on user delete; the stored key never appears in a response body, a log line, or an audit `meta` | The platform `ai-secret-egress` and `ai-key-policy` conformance suites (`apps/api/test/ai-conformance.spec.ts`), plus the user-data deletion specs |
 | `TranscriptExporterRegistry`'s existing test suite passes unmodified after the generic `ExporterRegistry<TDoc>` extraction | `transcript-exporter.registry.spec.ts`, run as-is against the refactored class |
-| A note export carries the provenance line, renders markdown syntax correctly in PDF and Word, and reuses an identical prior export by `options_hash` | `apps/api/src/notes/export/markdown.exporter.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts`, and `note-export.service.spec.ts` |
+| A note export carries the provenance line, renders markdown syntax correctly in PDF and Word, and reuses an identical prior export by `options_hash` | `packages/kvox-api/src/notes/export/markdown.exporter.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts`, and `note-export.service.spec.ts` |
 | `note.source.extract` is node-eligible and its extracted-text object is written and referenced exactly as §4.7 describes | `apps/api/src/notes/handlers/note-source-extract.handler.spec.ts`, plus a node-executor integration test mirroring `media-audio-transcode.ffmpeg.spec.ts`'s real-tool-output discipline |
 | `config/destinations.ts`'s `library` entry owns both `/transcripts` and `/notes`, and the bottom bar still shows exactly four destinations | `apps/web/src/__tests__/config/destinations.test.ts`, extended |
 | A note's `bodyFormat` is set at create from the template and, on (re)generation, is written by `NoteGenerationService.commit` in the same transaction as `body` — never at regenerate request time | `apps/api/src/notes/notes.service.spec.ts` and `note-generation.service.spec.ts`, asserting the note's `body_format` is unchanged immediately after `POST /:id/regenerate` is accepted and only updates once the job commits |
-| `assemblePrompt`'s Markdown closing line is byte-for-byte unchanged when `templateBodyFormat` is absent, `'markdown'`, or unrecognised; `'plain_text'` produces `PLAIN_TEXT_CLOSING_LINE` and leaves the user role untouched | `apps/api/src/notes/generation/prompt.spec.ts` |
-| `parseBody`/`parsePlainText` recognise no Markdown syntax at all — a `plain_text` body's `#`/`*`/`-` characters and line breaks reach the PDF and Word output literally — while a `markdown` body renders exactly as before | `apps/api/src/notes/export/markdown-ast.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts` |
+| `assemblePrompt`'s Markdown closing line is byte-for-byte unchanged when `templateBodyFormat` is absent, `'markdown'`, or unrecognised; `'plain_text'` produces `PLAIN_TEXT_CLOSING_LINE` and leaves the user role untouched | `packages/kvox-api/src/notes/generation/prompt.spec.ts` |
+| `parseBody`/`parsePlainText` recognise no Markdown syntax at all — a `plain_text` body's `#`/`*`/`-` characters and line breaks reach the PDF and Word output literally — while a `markdown` body renders exactly as before | `packages/kvox-api/src/notes/export/markdown-ast.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts` |
 | `GET /api/notes/:id/versions/:version` reports each version's *own* `bodyFormat`, fixed when it was written; a generation commit records the template's format, an edit the note's current format, and a restore the *target* version's format — which the same write also copies onto `notes.body_format` (issue #337) | `apps/api/src/notes/notes.service.spec.ts` and `apps/api/test/notes/notes.integration.spec.ts` |
 | A `plain_text` note's copy button offers only its raw text (no format menu); a `markdown` note's default copy carries both `text/html` and `text/plain`, read from the rendered `MarkdownView` element | `apps/web/src/__tests__/components/notes/NoteCopyButton.test.tsx` (or equivalent) |
 | The visual editor is a view over the same draft string the Markdown tab edits — switching views loses no text — and a `plain_text` note shows no view toggle at all | `apps/web/src/__tests__/pages/NotePage.test.tsx`, extended |

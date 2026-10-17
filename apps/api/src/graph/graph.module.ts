@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 
-import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchConfig } from '../kvox/search/search.config';
 import { KvoxObjectsModule } from '../kvox-objects/kvox-objects.module';
+import { NotesConfig } from '../kvox/notes/notes.config';
 import { TranscriptsConfig } from '../kvox/transcripts/transcripts.config';
 import { GraphAccessService } from './access/graph-access.service';
 import { GraphAiRunResolver } from './graph-ai-run.service';
@@ -69,10 +69,10 @@ import { GraphWriteService } from './write/graph-write.service';
 // import is needed for either.
 //
 // `NoteAccessService` (#370) decides whether a citation's note is still
-// readable by the caller. It is provided here rather than imported through
-// `NotesModule`: NotesModule imports GraphExtractionModule (#363), which
-// imports this module, so importing NotesModule back would be a cycle. The
-// service needs only PrismaService — the same choice GraphExtractionModule makes.
+// readable by the caller. It comes from the notes configuration (`NotesConfig`,
+// `@marinoscar/kvox-api/notes`), which exports it: since #495 the notes slice no longer
+// imports the graph (it publishes its ready event instead), so the edge runs
+// one way and nothing here re-provides a notes class.
 //
 // `SearchModule` (#372) supplies `SearchService`, the entity brief's text
 // arm (spec §9.4: a brief is never graph-only). One way as well.
@@ -80,12 +80,11 @@ import { GraphWriteService } from './write/graph-write.service';
 // `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
 // the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, TranscriptsConfig, SearchConfig, KvoxObjectsModule],
+  imports: [PrismaModule, TranscriptsConfig, NotesConfig, SearchConfig, KvoxObjectsModule],
   providers: [
     GraphAccessService,
     // #475 — the graph's one question to the AI port (model, limits, graph switch).
     GraphAiRunResolver,
-    NoteAccessService,
     // #369 — the `graph` user-settings namespace, resolved with defaults.
     GraphPreferencesService,
     // #459 — turns the generic `user-settings.namespace-changed` event for `graph`

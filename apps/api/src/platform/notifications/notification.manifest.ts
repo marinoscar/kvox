@@ -41,7 +41,7 @@ import { KVOX_EMAIL_TEMPLATES, registerKvoxEmailTemplateOverrides } from '../../
 import { ALLOWLIST_REMINDER_NOTIFICATIONS } from '../../notifications-registry/allowlist-reminder.notifications';
 import { DB_BACKUP_NOTIFICATIONS } from '../../notifications-registry/db-backup.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../../notifications-registry/identity.notifications';
-import { NOTES_NOTIFICATIONS } from '../../notifications-registry/notes.notifications';
+import { NOTES_NOTIFICATIONS } from '../../kvox/notes/notification-templates';
 import { SHARING_NOTIFICATIONS } from '../../notifications-registry/sharing.notifications';
 import { TRANSCRIPTS_NOTIFICATIONS } from '../../kvox/transcripts/notification-templates';
 import { EMAIL_MODULE_OPTIONS } from '../email/email.options';

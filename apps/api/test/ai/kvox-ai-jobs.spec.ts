@@ -427,7 +427,10 @@ describe('(c) the per-user throttle key is registered before the first model cal
     .filter(({ calls }) => calls.length > 0);
 
   it('finds the model call sites at all, so a broken scan cannot pass vacuously', () => {
-    expect(files.length).toBeGreaterThanOrEqual(10);
+    // The slices that call the model move to packages/kvox-api one by one (epic #491);
+    // their throttle proofs live in the package handler specs, so this scan only
+    // has to find the call sites that are still app code, and at least one.
+    expect(files.length).toBeGreaterThanOrEqual(1);
   });
 
   it('every file that calls the model registers the key above its first call (or is exempt, with a reason)', () => {

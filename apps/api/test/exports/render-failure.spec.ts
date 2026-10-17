@@ -7,11 +7,8 @@ import {
   TranscriptExporterRegistry,
 } from '@marinoscar/kvox-api/transcripts';
 import { fixtureDocument } from '@marinoscar/kvox-api/transcripts/testing';
-import { MarkdownNoteExporter } from '../../src/notes/export/markdown.exporter';
-import { PdfNoteExporter } from '../../src/notes/export/pdf.exporter';
-import { WordNoteExporter } from '../../src/notes/export/word.exporter';
-import { NoteExporterRegistry } from '../../src/notes/export/note-exporter.registry';
-import { noteDocument } from '../../src/notes/export/__fixtures__/note-document';
+import { MarkdownNoteExporter, NoteExporterRegistry, PdfNoteExporter } from '@marinoscar/kvox-api/notes';
+import { WordNoteExporter, noteDocument } from '@marinoscar/kvox-api/notes/testing';
 
 // =============================================================================
 // A render that fails destroys the output stream (issue #479)

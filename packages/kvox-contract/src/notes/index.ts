@@ -3,3 +3,5 @@ export * from './note.js';
 export * from './note-export.js';
 export * from './note-source.js';
 export * from './note-template.js';
+export * from './note-source-extract.js';
+export * from './note-events.js';
