@@ -192,7 +192,7 @@ export async function installAskApi(page: Page): Promise<void> {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/ai/config') return json(route, AI_CONFIG);
+    if (path === '/ai-tasks/config') return json(route, AI_CONFIG);
     if (path === '/ask/conversations') return json(route, { items: CONVERSATIONS, nextCursor: null });
     if (path === `/ask/conversations/${CONV_ANSWERED_ID}`) return json(route, ANSWERED);
     if (path === `/ask/conversations/${CONV_FAILED_ID}`) return json(route, FAILED);
@@ -254,7 +254,7 @@ const JOE_SCOPED = {
 /**
  * The Ask routes the entity panel makes, layered OVER `installGraphApi(page,
  * { surface: 'pages' })`: install that first, then this. Playwright runs the
- * most recently registered route first, so this answers `/ai/config` and
+ * most recently registered route first, so this answers `/ai-tasks/config` and
  * `/ask/*` and hands every other request (`route.fallback()`) to the graph
  * fixtures the entity page itself reads.
  */
@@ -263,7 +263,7 @@ export async function installEntityAskApi(page: Page): Promise<void> {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/ai/config') return json(route, AI_CONFIG);
+    if (path === '/ai-tasks/config') return json(route, AI_CONFIG);
     if (path === '/ask/conversations') {
       const scope = url.searchParams.get('scopeEntityId');
       const items = CONVERSATIONS.filter((row) => !scope || row.scopeEntity?.id === scope);

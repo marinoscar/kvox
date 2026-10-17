@@ -1,182 +1,128 @@
 /**
- * The onboarding fixture shared by every visual-suite API installer — issue
- * #298, follow-up to epic #271 / PR #286.
+ * The onboarding fixture shared by every visual-suite API installer (issue #298,
+ * follow-up to epic #271; re-aligned with the platform contract by #498).
  *
  * =============================================================================
  * WHY THIS FILE EXISTS AT ALL
  * =============================================================================
  *
- * PR #286 mounts `OnboardingProvider`, `OnboardingBanner`, `FirstRunWelcomeDialog`
- * and `ReturnToSetupBar` in `Layout.tsx` — i.e. on EVERY page this suite
- * screenshots. Before this file, none of `support/homeApi.ts`,
- * `support/notesApi.ts` or `support/transcriptsApi.ts` answered
- * `GET /api/onboarding` / `GET /api/admin/onboarding` at all: each installer's
- * `page.route('**\/api/**', ...)` handler falls through every `if` to a
- * permissive `return json(route, {})` catch-all, so both onboarding routes
- * resolved to `{}`.
+ * `Layout.tsx` mounts the platform's `OnboardingProvider`, `WelcomeDialog`, the
+ * user menu's "Getting started" item and this app's `OnboardingBanner` on EVERY
+ * page this suite screenshots, and the provider reads `GET /api/onboarding`.
+ * Each installer's `page.route('**\/api/**', ...)` handler falls through every
+ * `if` to a permissive `return json(route, {})` catch-all, so a spec that never
+ * answered `/onboarding` handed the provider `{}`: a truthy "state" with no
+ * `settings`, which `WelcomeDialog` and `OnboardingBanner` dereference
+ * (`state.settings.welcomeSeenAt`, `state.settings.adminDismissedAt`). The
+ * `ErrorBoundary` then replaced the WHOLE harness page ("Something went wrong -
+ * Cannot read properties of undefined"), and 125 of 136 specs failed with
+ * `element(s) not found` rather than a pixel diff.
  *
- * `{}` is exactly the shape `services/onboarding.ts`'s `parseOnboardingState`
- * exists to reject — see that file's header. Today that rejection is caught
- * correctly (the provider treats it as a failed read and every consumer
- * renders nothing), which is safe but means the suite asserts NOTHING about
- * four components mounted on every one of its ~67 baselines. Before
- * `parseOnboardingState` existed, the same `{}` was stored, handed to
- * `applySkipOverlay`, and reached `state.steps.map(...)` inside
- * `OnboardingProvider`'s own render — crashing the WHOLE harness into
- * `ErrorBoundary` on every page. This file is what lets the suite move past
- * "safely renders nothing" into "renders the right thing", without
- * reintroducing that crash.
- *
- * =============================================================================
- * A HANDLER, NOT A COMPETING `page.route`
- * =============================================================================
- *
- * The three existing installers each own a single `page.route('**\/api/**', ...)`
- * call with its own big `if`/`return` chain. Playwright lets multiple `route`
- * handlers stack for the same pattern, but that buys nothing here and risks
- * ordering bugs no test would catch — so this file does not call `page.route`
- * itself. It exports a plain function, {@link onboardingResponse}, that each
- * installer calls with the path it already computed, immediately before its
- * own catch-all:
+ * Every installer therefore calls {@link onboardingResponse} with the path it
+ * already computed, immediately before its own catch-all:
  *
  * ```ts
  * const onboarding = onboardingResponse(path, options.onboarding);
  * if (onboarding) return json(route, onboarding);
  * ```
  *
- * `onboardingResponse` returns the BODY to serve (the inner value — see below)
- * for one of the three paths it recognises, or `null` meaning "not mine, keep
- * going". That is the shape that composes with three separately-owned
- * handlers without any of them giving up ownership of their own route.
- *
- * ⚠ `json()` IN EVERY INSTALLER WRAPS IN `{ data }`. This function returns the
- * INNER value only — the same convention every fixture function in
- * `homeApi.ts`/`notesApi.ts`/`transcriptsApi.ts` already follows
- * (`summaryFor`, `noteRow`, `listItem`, …). Do not wrap it again at the call
- * site; the installer's own `json(route, onboarding)` does that once.
+ * It returns the BODY to serve (the inner value; every installer's `json()`
+ * wraps `{ data }`) for the paths it recognises, or `null` meaning "not mine".
+ * It does not call `page.route` itself, so three separately-owned handlers
+ * compose without ordering bugs.
  *
  * =============================================================================
- * ⚠ THE DEFAULT FIXTURE IS SETTLED AND ALREADY SEEN, AND THAT IS NOT DEFENSIVE
+ * THE SHAPE IS THE PLATFORM'S, NOT AN INVENTED ONE
  * =============================================================================
  *
- * ~67 existing baselines were captured with the onboarding chrome adding ZERO
- * DOM. The default answer this file gives for all three paths has to preserve
- * that, or every one of those baselines needs re-recording as a side effect of
- * a file that was supposed to be additive. So, unless a spec opts into
- * something else via `options.onboarding`:
- *
- *   - both checklists (`/onboarding`, `/admin/onboarding`) answer
- *     `steps: []`, `requiredRemaining: 0`, `totalRemaining: 0`,
- *     `allRequiredSatisfied: true` — nothing for `OnboardingBanner` or
- *     `ReturnToSetupBar` to show.
- *   - `/user-settings` answers a document whose `onboarding` namespace has
- *     `welcomeSeenAt`, `dismissedAt` and `adminDismissedAt` ALL set to a fixed
- *     ISO instant, and `skipped: []`.
- *
- * ⚠ THE THIRD PIECE IS REQUIRED, NOT DEFENSIVE, AND IS THE SINGLE MOST
- * IMPORTANT FACT IN THIS FILE. `FirstRunWelcomeDialog`'s `due` gate
- * (`components/onboarding/WelcomeDialog.tsx`) is
- * `!isLoading && !welcomeSeen && onboarding.user` — it reads NO step count at
- * all. So the moment `GET /api/onboarding` starts resolving successfully (which
- * is the whole point of this file), a modal dialog opens over every page-body
- * baseline in the suite UNLESS `welcomeSeenAt` is already present in the
- * `/user-settings` answer. An empty `steps: []` checklist does not prevent
- * this by itself — the two fixtures are independent, and skipping the
- * `/user-settings` seed (or leaving it at the old `{}`) would silently turn
- * this file from a no-op into a suite-wide regression the moment it shipped.
+ * `GET /api/onboarding` answers `OnboardingResponse` from
+ * `@marinoscar/platform-contract/onboarding`: `{ settings, user, admin }` where
+ * `settings` is `{ welcomeSeenAt, checklistDismissedAt, adminDismissedAt,
+ * skipped }` (each `null` when unset), `user`/`admin` are blocks
+ * `{ steps, completed, total, requiredDone, allResolved }` and `admin` is
+ * `null` for a caller without the admin permission. There is no separate
+ * `GET /api/admin/onboarding` any more. The stored namespace is written back
+ * through `PATCH /api/user-settings` with `If-Match: <version>`, so
+ * `/user-settings` still answers a document carrying a numeric `version`.
  *
  * =============================================================================
- * WHAT THE OPTIONS ADD, AND WHY THEY REUSE THE REAL REGISTRY
+ * THE DEFAULT FIXTURE IS SETTLED, ON PURPOSE
  * =============================================================================
  *
- * A future onboarding-chrome spec needs more than "nothing to show", so
- * {@link OnboardingApiOptions} can shift either checklist to `'outstanding'`
- * independently (so a spec can assert `OnboardingBanner`'s admin-wins
- * precedence — `chooseBannerAudience` — by requesting BOTH at once) and can
- * make the `/user-settings` fixture a first-run document.
+ * The committed baselines show the onboarding chrome adding ZERO DOM. Unless a
+ * spec opts into something else via `options.onboarding`:
  *
- * The `'outstanding'` fixtures are not invented copy. They are the real step
- * `key`/`title`/`description`/`actionLabel`/`href`/`tier`/`skippable` values
- * from `apps/api/src/onboarding/onboarding-steps.ts`
- * (`ADMIN_ONBOARDING_STEPS`/`USER_ONBOARDING_STEPS`), with a `status` assigned
- * per a single plausible scenario (a deployment with no transcription
- * provider connected yet, and a user who has not added an AI key). A fixture
- * that invented its own copy would be a baseline asserting text no real user
- * will ever see — the exact failure this task was set up to avoid. Each
- * outstanding checklist below also includes, deliberately:
+ *   - both blocks have `steps: []` (nothing for `OnboardingBanner` to show);
+ *   - `settings.welcomeSeenAt`, `checklistDismissedAt` and `adminDismissedAt`
+ *     are ALL set, because `WelcomeDialog` is open whenever
+ *     `welcomeSeenAt === null` regardless of how many steps there are.
  *
- *   - one `blocked` step with a `blockedReason` (`admin.smoke_test` /
- *     `user.first_transcript`), because a blocked row renders differently
- *     from a pending one (see `OnboardingStepStatus`'s own doc comment), and
- *   - one `skippable: true`, `tier: 'recommended'` step (every recommended
- *     admin step, and `user.first_note`), because that is the other row shape
- *     that renders differently (a skip control).
- *
- * The two checklists' required counts are real too: an outstanding admin
- * checklist has 3 outstanding required steps of 7 total; an outstanding user
- * checklist has 2 of 4. Nothing here recomputes `requiredRemaining`/
- * `totalRemaining`/`allRequiredSatisfied` from `steps` at the CONSUMING end —
- * `services/onboarding.ts`'s header explains why that would be a fourth
- * independent derivation of a number three components already have to agree
- * on — but this FIXTURE file is the one place a hand count is unavoidable,
- * since it is standing in for the server.
+ * The `'outstanding'` blocks use the real step ids, copy and tiers of the API's
+ * registries, under one plausible scenario (no transcription provider yet, no
+ * AI key yet), including one `blocked` step and one skippable one, because those
+ * rows render differently from a plain `todo` one.
  */
 
 /** The instant every fixture timestamp is derived from. Never `Date.now()`. */
 const FIXED_ISO = '2024-03-01T09:00:00.000Z';
 
-/** One checklist row, field for field `OnboardingStepState` (`services/onboarding.ts`). */
+/** One checklist row, field for field the platform's `OnboardingStep`. */
 interface FixtureStep {
-  key: string;
+  id: string;
+  audience: string;
   tier: 'required' | 'recommended' | 'optional';
+  status: 'done' | 'todo' | 'blocked';
   title: string;
   description: string;
   actionLabel: string;
   href: string;
-  status: 'satisfied' | 'pending' | 'blocked';
+  detail: string | null;
   blockedReason: string | null;
   skippable: boolean;
   skipped: boolean;
 }
 
 function step(
-  partial: Omit<FixtureStep, 'blockedReason' | 'skipped'> & { blockedReason?: string },
+  partial: Omit<FixtureStep, 'audience' | 'detail' | 'blockedReason' | 'skipped'> & {
+    blockedReason?: string;
+  },
 ): FixtureStep {
-  return { blockedReason: null, skipped: false, ...partial };
+  const audience = partial.id.split('.')[0] ?? 'user';
+  return { audience, detail: null, blockedReason: null, skipped: false, ...partial };
 }
 
 /**
  * The deployment checklist with outstanding steps — the real seven rows from
  * `ADMIN_ONBOARDING_STEPS`, copy verbatim, under the scenario "no
  * transcription provider connected yet". `admin.smoke_test` is `blocked`
- * rather than `pending` for the identical reason the real handler computes
+ * rather than `todo` for the identical reason the real handler computes
  * that: it cannot be attempted before `admin.transcription` lands.
  */
 const ADMIN_OUTSTANDING_STEPS: FixtureStep[] = [
   step({
-    key: 'admin.transcription',
+    id: 'admin.transcription',
     tier: 'required',
     title: 'Connect a transcription provider',
     description:
       'Choose a speech-to-text provider and store its API key. Until this is done, nobody on this deployment can upload a recording.',
     actionLabel: 'Open transcription settings',
     href: '/admin/settings/transcription',
-    status: 'pending',
+    status: 'todo',
     skippable: false,
   }),
   step({
-    key: 'admin.ai',
+    id: 'admin.ai',
     tier: 'required',
     title: 'Enable AI note generation',
     description:
       'Pick an AI provider and permit at least one model. Users bring their own API keys; this decides which vendor and which models they may use.',
     actionLabel: 'Open AI settings',
     href: '/admin/settings/ai',
-    status: 'pending',
+    status: 'todo',
     skippable: false,
   }),
   step({
-    key: 'admin.smoke_test',
+    id: 'admin.smoke_test',
     tier: 'required',
     title: 'Transcribe a test recording',
     description:
@@ -189,47 +135,47 @@ const ADMIN_OUTSTANDING_STEPS: FixtureStep[] = [
     skippable: false,
   }),
   step({
-    key: 'admin.access',
+    id: 'admin.access',
     tier: 'recommended',
     title: 'Invite somebody',
     description:
       'This deployment restricts access to an email allowlist. Add the people who should be able to sign in.',
     actionLabel: 'Open users & allowlist',
     href: '/admin/settings/users',
-    status: 'pending',
+    status: 'todo',
     skippable: true,
   }),
   step({
-    key: 'admin.email',
+    id: 'admin.email',
     tier: 'recommended',
     title: 'Configure outbound email',
     description:
       'Invitations, welcome messages and notification emails need somewhere to be sent from. Without it, those notifications are only ever visible inside the app.',
     actionLabel: 'Open email settings',
     href: '/admin/settings/email',
-    status: 'pending',
+    status: 'todo',
     skippable: true,
   }),
   step({
-    key: 'admin.push',
+    id: 'admin.push',
     tier: 'recommended',
     title: 'Turn on browser notifications',
     description:
       'Generate a Web Push key pair so this deployment can raise notifications outside the browser tab. Ships disabled by default.',
     actionLabel: 'Open push settings',
     href: '/admin/settings/push',
-    status: 'pending',
+    status: 'todo',
     skippable: true,
   }),
   step({
-    key: 'admin.backup',
+    id: 'admin.backup',
     tier: 'recommended',
     title: 'Schedule database backups',
     description:
       'Turn on the nightly backup so this deployment has a copy of its data to restore from.',
     actionLabel: 'Open backup settings',
     href: '/admin/settings/db-backup',
-    status: 'pending',
+    status: 'todo',
     skippable: true,
   }),
 ];
@@ -243,18 +189,18 @@ const ADMIN_OUTSTANDING_STEPS: FixtureStep[] = [
  */
 const USER_OUTSTANDING_STEPS: FixtureStep[] = [
   step({
-    key: 'user.ai_key',
+    id: 'user.ai_key',
     tier: 'required',
     title: 'Add your AI provider key',
     description:
       'Notes are generated with your own API key, billed to your own account. Nobody else on this deployment can see it.',
     actionLabel: 'Add your key',
     href: '/settings/ai',
-    status: 'pending',
+    status: 'todo',
     skippable: false,
   }),
   step({
-    key: 'user.first_transcript',
+    id: 'user.first_transcript',
     tier: 'required',
     title: 'Transcribe your first recording',
     description:
@@ -267,7 +213,7 @@ const USER_OUTSTANDING_STEPS: FixtureStep[] = [
     skippable: false,
   }),
   step({
-    key: 'user.first_note',
+    id: 'user.first_note',
     tier: 'recommended',
     title: 'Generate your first note',
     description:
@@ -279,76 +225,69 @@ const USER_OUTSTANDING_STEPS: FixtureStep[] = [
     skippable: true,
   }),
   step({
-    key: 'user.profile',
+    id: 'user.profile',
     tier: 'optional',
     title: 'Set your display name',
     description: 'How you appear to the people you share transcripts and notes with.',
     actionLabel: 'Edit your profile',
     href: '/settings/profile',
-    status: 'pending',
+    status: 'todo',
     skippable: true,
   }),
 ];
 
-/** `requiredRemaining`/`totalRemaining`/`allRequiredSatisfied`, hand-counted from a step list. */
-function counts(steps: readonly FixtureStep[]) {
-  const remaining = steps.filter((s) => s.status !== 'satisfied' && !s.skipped);
-  const requiredRemaining = remaining.filter((s) => s.tier === 'required').length;
+/** A block, with the counts DERIVED from its steps so a fixture cannot contradict its own rows. */
+function block(steps: readonly FixtureStep[]) {
   return {
-    requiredRemaining,
-    totalRemaining: remaining.length,
-    allRequiredSatisfied: requiredRemaining === 0,
+    steps,
+    completed: steps.filter((s) => s.status === 'done').length,
+    total: steps.length,
+    requiredDone: steps.filter((s) => s.tier === 'required').every((s) => s.status === 'done'),
+    allResolved: steps.every((s) => s.status === 'done' || s.skipped),
   };
 }
 
-/** Which shape of checklist a path should answer. `'settled'` is the ~67-baseline default. */
+/** Which shape of checklist a path should answer. `'settled'` is the zero-DOM default. */
 export type ChecklistFixture = 'settled' | 'outstanding';
 
-function checklistBody(audience: 'admin' | 'user', fixture: ChecklistFixture): Record<string, unknown> {
-  if (fixture === 'settled') {
-    return { audience, steps: [], requiredRemaining: 0, totalRemaining: 0, allRequiredSatisfied: true };
-  }
-  const steps = audience === 'admin' ? ADMIN_OUTSTANDING_STEPS : USER_OUTSTANDING_STEPS;
-  return { audience, steps, ...counts(steps) };
+function checklistBlock(audience: 'admin' | 'user', fixture: ChecklistFixture) {
+  if (fixture === 'settled') return block([]);
+  return block(audience === 'admin' ? ADMIN_OUTSTANDING_STEPS : USER_OUTSTANDING_STEPS);
 }
 
 export interface OnboardingApiOptions {
-  /** Shape of `GET /api/admin/onboarding`. Default `'settled'` (empty). */
+  /** Shape of the `admin` block of `GET /api/onboarding`. Default `'settled'` (empty). */
   admin?: ChecklistFixture;
-  /** Shape of `GET /api/onboarding`. Default `'settled'` (empty). */
+  /** Shape of the `user` block of `GET /api/onboarding`. Default `'settled'` (empty). */
   user?: ChecklistFixture;
   /**
-   * Whether the `/user-settings` fixture's `onboarding.welcomeSeenAt` is
-   * present. Default `true`.
+   * Whether `settings.welcomeSeenAt` is present. Default `true`.
    *
-   * ⚠ THIS TOGGLES ONLY `welcomeSeenAt`, deliberately — `dismissedAt`/
-   * `adminDismissedAt` stay at their default (set) either way.
-   * `FirstRunWelcomeDialog`'s gate reads `welcomeSeen` alone (see this file's
-   * header), so a fixture for exercising it needs to vary only that one field;
-   * leaving the two dismissal timestamps untouched means turning this option
-   * on cannot also silently change `OnboardingBanner`'s behaviour, which a
-   * spec asking only for the welcome dialog did not ask to change.
+   * THIS TOGGLES ONLY `welcomeSeenAt`, deliberately: `WelcomeDialog` opens on that
+   * field alone, and the two dismissals stay set either way so turning this on
+   * cannot also change `OnboardingBanner`.
    */
   welcomeSeen?: boolean;
 }
 
+/** `settings` of `GET /api/onboarding`: the stored UI state, each unset field `null`. */
+function onboardingSettings(options: OnboardingApiOptions) {
+  const welcomeSeen = options.welcomeSeen ?? true;
+  return {
+    welcomeSeenAt: welcomeSeen ? FIXED_ISO : null,
+    checklistDismissedAt: FIXED_ISO,
+    adminDismissedAt: FIXED_ISO,
+    skipped: [] as string[],
+  };
+}
+
 /**
- * The full `/user-settings` document — a plausible `UserSettings`
- * (`apps/web/src/types/index.ts`), not just the `onboarding` namespace.
- *
- * ⚠ MUST CARRY A NUMERIC `version` — `useUserSettings`'s `write()`
- * (`hooks/useUserSettings.ts`) early-returns with no `settings` loaded, which
- * silently no-ops every PATCH a spec might exercise (`dismiss`/`skip`/
- * `markWelcomeSeen`) if this is missing. The other namespaces
- * (`profile`, `navigation`) are included as the real endpoint would send
- * them, rather than as an `onboarding`-only fragment, so a future spec
- * exercising something else this document also carries — e.g. the
- * navigation rail's collapsed preference — is not seeded with a document
- * missing half its fields.
+ * The full `/user-settings` document, a plausible `UserSettings`. It MUST carry a
+ * numeric `version`: the platform onboarding client reads it to send `If-Match`
+ * before every write (`dismiss`/`skip`/`markWelcomeSeen`).
  */
 function userSettingsBody(options: OnboardingApiOptions): Record<string, unknown> {
-  const welcomeSeen = options.welcomeSeen ?? true;
-
+  const { skipped, ...stored } = onboardingSettings(options);
   return {
     theme: 'system',
     profile: {
@@ -359,10 +298,8 @@ function userSettingsBody(options: OnboardingApiOptions): Record<string, unknown
       railCollapsed: false,
     },
     onboarding: {
-      ...(welcomeSeen ? { welcomeSeenAt: FIXED_ISO } : {}),
-      dismissedAt: FIXED_ISO,
-      adminDismissedAt: FIXED_ISO,
-      skipped: [],
+      ...Object.fromEntries(Object.entries(stored).filter(([, value]) => value !== null)),
+      skipped,
     },
     updatedAt: FIXED_ISO,
     version: 1,
@@ -372,19 +309,20 @@ function userSettingsBody(options: OnboardingApiOptions): Record<string, unknown
 /**
  * The onboarding fixture for one `/api` path, or `null` for "not mine".
  *
- * Call this BEFORE an installer's own catch-all — see the file header. The
- * returned value is the INNER body; the caller's own `json(route, ...)` (or
- * equivalent) supplies the `{ data }` envelope.
+ * Call this BEFORE an installer's own catch-all (see the file header). The
+ * returned value is the INNER body; the caller's own `json(route, ...)` supplies
+ * the `{ data }` envelope.
  */
 export function onboardingResponse(
   path: string,
   options: OnboardingApiOptions = {},
 ): Record<string, unknown> | null {
   if (path === '/onboarding') {
-    return checklistBody('user', options.user ?? 'settled');
-  }
-  if (path === '/admin/onboarding') {
-    return checklistBody('admin', options.admin ?? 'settled');
+    return {
+      settings: onboardingSettings(options),
+      user: checklistBlock('user', options.user ?? 'settled'),
+      admin: checklistBlock('admin', options.admin ?? 'settled'),
+    };
   }
   if (path === '/user-settings') {
     return userSettingsBody(options);
