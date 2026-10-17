@@ -60,17 +60,21 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 import { EMBEDDING_DIMENSIONS } from '../../src/ai-port/embedding-catalog';
-import type { RequestUser } from '@marinoscar/platform-api/identity';
+import {
+  DEFAULT_SEARCH_TYPE_PERMISSIONS,
+  MAX_CANDIDATE_DOCUMENTS,
+  MIN_SEMANTIC_SIMILARITY,
+  RRF_K,
+  SearchService,
+  type ResolvedSearchOptions,
+  type SearchQueryEmbedder,
+  type SemanticQueryPlan,
+  type SemanticReason,
+} from '@marinoscar/kvox-api/search';
+import type { KvoxPrincipal } from '@marinoscar/kvox-api/ports';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { MAX_CANDIDATE_DOCUMENTS } from '../../src/search/dto/search.dto';
-import { RRF_K } from '../../src/search/search-fusion';
-import type { SearchQueryEmbedder } from '../../src/search/search-query-embedder.service';
-import type {
-  SemanticQueryPlan,
-  SemanticReason,
-} from '../../src/search/search-semantic';
-import { MIN_SEMANTIC_SIMILARITY, SearchService } from '../../src/search/search.service';
+import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcript-visibility';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createTranscript as createTranscriptRow, shareTranscript, deleteTranscriptGrants } from '../helpers/transcript.helper';
@@ -317,20 +321,29 @@ describeWithDb('GET /api/search (real Postgres)', () => {
   function requestUser(
     id: string,
     permissions: string[] = [PERMISSIONS.TRANSCRIPTS_READ, PERMISSIONS.NOTES_READ],
-  ): RequestUser {
-    return { id, email: 'x@example.test', roles: ['Viewer'], permissions, isActive: true };
+  ): Pick<KvoxPrincipal, 'userId' | 'permissions'> {
+    return { userId: id, permissions: new Set(permissions) };
   }
 
   const search = (
     q: string,
-    who: RequestUser,
+    who: Pick<KvoxPrincipal, 'userId' | 'permissions'>,
     extra: { limit?: number; types?: string; cursor?: string } = {},
   ) => service.search({ q, limit: extra.limit ?? 20, ...extra }, who);
 
   beforeAll(async () => {
     prisma = createDbClient();
     await prisma.$connect();
-    service = new SearchService(asPrismaService(prisma), embedder);
+    const prismaService = asPrismaService(prisma);
+    const options: ResolvedSearchOptions = {
+      semanticEnabled: true,
+      provider: 'test',
+      typePermissions: DEFAULT_SEARCH_TYPE_PERMISSIONS,
+    };
+
+    // The web edition's binding, as the application wires it (`kvox/search/search.config.ts`):
+    // a transcript shared with the caller is visible, through the platform's grants.
+    service = new SearchService(prismaService, embedder, new SharedTranscriptVisibility(prismaService), options);
 
     alice = await createUser('alice');
     bob = await createUser('bob');

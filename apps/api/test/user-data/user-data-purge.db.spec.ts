@@ -56,7 +56,7 @@ import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
 import { NoteObjectsService } from '../../src/notes/note-objects.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
-import { SearchIndexService } from '../../src/search/indexing/search-index.service';
+import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import { TranscriptPurgeHandler } from '../../src/transcripts/handlers/transcript-purge.handler';
 import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph/graph-read.fixtures';

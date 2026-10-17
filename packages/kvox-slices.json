@@ -4,7 +4,8 @@
     "ports": [],
     "core": ["ports"],
     "testing": ["ports", "core"],
-    "transcription": ["ports", "core"]
+    "transcription": ["ports", "core"],
+    "search": ["ports", "core"]
   },
   "kvox-web": { "core": [] },
   "kvox-contract": {

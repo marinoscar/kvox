@@ -20,7 +20,7 @@ import { Module } from '@nestjs/common';
 
 import { GraphModule } from '../../graph/graph.module';
 import { PrismaModule } from '../../prisma/prisma.module';
-import { SearchModule } from '../../search/search.module';
+import { SearchConfig } from '../../kvox/search/search.config';
 import { AskToolset } from './ask-toolset';
 import { EntityBriefTool } from './entity-brief.tool';
 import { EvidenceTool } from './evidence.tool';
@@ -42,7 +42,7 @@ export const ASK_TOOL_PROVIDERS = [
 ] as const;
 
 @Module({
-  imports: [PrismaModule, GraphModule, SearchModule],
+  imports: [PrismaModule, GraphModule, SearchConfig],
   providers: [...ASK_TOOL_PROVIDERS, AskToolset],
   exports: [AskToolset],
 })

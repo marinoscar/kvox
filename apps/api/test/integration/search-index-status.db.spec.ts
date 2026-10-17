@@ -38,11 +38,11 @@ import { PrismaClient } from '@prisma/client';
 import {
   SEARCH_DOC_NOTE,
   SEARCH_DOC_TRANSCRIPT,
+  SEARCH_INDEX_REQUEST_CAP,
   SEARCH_REASON_KEY_MISSING,
-} from '../../src/search/indexing/job-types';
-import { SearchIndexService } from '../../src/search/indexing/search-index.service';
-import { SearchIndexStatusService } from '../../src/search/indexing/search-index-status.service';
-import { SEARCH_INDEX_REQUEST_CAP } from '../../src/search/indexing/dto/search-index-status.dto';
+  SearchIndexService,
+  SearchIndexStatusService,
+} from '@marinoscar/kvox-api/search';
 import { resolveDbSuite, createDbClient } from '../jobs/db-test-support';
 import { createStorageObject } from '../helpers/storage-object.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
@@ -191,32 +191,23 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
   function buildService(options: { hasKey?: boolean; embedding?: boolean } = {}) {
     const { hasKey = true, embedding = true } = options;
 
-    const reason = !embedding ? 'model_lacks_capability' : hasKey ? null : 'ai_key_missing';
-
+    // What `KVOX_AI.capabilities` answers: a host with no embeddings model, a caller
+    // with no key, or a ready one.
     const ai = {
-      readiness: async () => ({
-        ok: reason === null,
-        reason,
-        provider: 'openai',
-        model: MODEL,
-        source: 'default',
-        contextWindowTokens: null,
-        maxOutputTokens: null,
-        reasoningEffort: 'none',
-        hasKey,
-      }),
-      embeddingCapability: () => ({
-        model: MODEL,
-        dimensions: 1536,
-        maxInputTokens: 8191,
-        maxBatchSize: 128,
+      capabilities: async () => ({
+        available: embedding ? hasKey : true,
+        ...(embedding && !hasKey ? { reason: 'ai_key_missing' as const } : {}),
+        structuredOutput: false,
+        toolCalling: false,
+        embeddings: embedding ? { model: MODEL, dimensions: 1536 } : null,
+        graphEnabled: false,
       }),
     };
 
     // Typed with its real single-argument signature so the assertions below can
     // read `mock.calls[n][0].subjectId` rather than indexing an empty tuple.
     const jobs = {
-      enqueue: jest.fn(async (_input: { subjectId: string }) => ({ id: randomUUID() })),
+      enqueue: jest.fn(async (_input: { subjectId: string }) => ({ id: randomUUID(), deduplicated: false })),
     };
     const index = new SearchIndexService(prisma as never, jobs as never);
 

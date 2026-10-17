@@ -4,7 +4,7 @@ import type { Job } from '@prisma/client';
 import { GrantsService } from '@marinoscar/platform-api/sharing';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
