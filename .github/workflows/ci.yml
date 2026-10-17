@@ -79,6 +79,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-web
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -175,6 +177,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
@@ -286,6 +290,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       # The dump imports AppModule, which imports @prisma/client. Preview mode
       # never instantiates PrismaService, but the generated client still has to
@@ -402,6 +408,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -513,6 +521,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       - run: npx prisma generate
         working-directory: apps/api

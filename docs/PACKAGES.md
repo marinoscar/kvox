@@ -160,7 +160,7 @@ The packages are released together, so a consumer who installs the four from one
 
 ## The host-neutral rule
 
-**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
+**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`; a file under `packages/kvox-ai/src/**` may import exactly `@marinoscar/platform-api/ai` (the provider-adapter types and classes, an interim peer until the lean adapter package of #578) and nothing else of the platform.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
 
 What to do instead: depend on a port from `@marinoscar/kvox-api/ports` (AI, object store, jobs, identity, notifications and so on). The web edition binds each port to a platform slice in one place, `apps/api/src/platform-kvox/` (issue 5.4); Desktop binds its own. The two optional `@marinoscar/platform-*` peers exist for those bindings' helpers, listed in `$hostOnly`, and no slice may list them.
 

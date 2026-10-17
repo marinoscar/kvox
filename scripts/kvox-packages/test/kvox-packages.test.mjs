@@ -83,6 +83,61 @@ test('host-neutral: the same file under kvox-web fails too', () => {
   }
 });
 
+/** Adds a kvox-ai package (one universal `runtime` slice peering on the platform) to a fixture copy. */
+function addKvoxAi(dir) {
+  mkdirSync(join(dir, 'packages/kvox-ai/src/runtime'), { recursive: true });
+  writeFileSync(
+    join(dir, 'packages/kvox-ai/package.json'),
+    JSON.stringify({ name: '@marinoscar/kvox-ai', version: '0.0.0', peerDependencies: { '@marinoscar/platform-api': '0.1.0-next.5' } })
+  );
+  writeFileSync(join(dir, 'packages/kvox-ai/src/runtime/index.ts'), 'export const RUNTIME = 1;\n');
+  const graph = JSON.parse(readFileSync(join(dir, 'packages/kvox-slices.json'), 'utf8'));
+  graph['kvox-ai'] = { runtime: [] };
+  writeFileSync(join(dir, 'packages/kvox-slices.json'), JSON.stringify(graph));
+  const peers = JSON.parse(readFileSync(join(dir, 'packages/kvox-slice-peers.json'), 'utf8'));
+  peers.$universal['kvox-ai'] = '*';
+  peers['kvox-ai'] = { runtime: { peers: ['@marinoscar/platform-api'] } };
+  writeFileSync(join(dir, 'packages/kvox-slice-peers.json'), JSON.stringify(peers));
+}
+
+test('host-neutral: a kvox-ai slice may import exactly @marinoscar/platform-api/ai (value and type)', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir);
+    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-ai/src/runtime/allowed.ts');
+    assert.deepEqual(checkSlicePeers({ root: dir }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: a kvox-ai slice importing any other platform specifier fails, once per specifier', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir);
+    plant(dir, 'host-neutral/kvox-ai-forbidden.ts', 'packages/kvox-ai/src/runtime/forbidden.ts');
+    const hostNeutral = checkSlicePeers({ root: dir }).filter((v) => v.rule === 'host-neutral');
+    assert.equal(hostNeutral.length, 3);
+    for (const v of hostNeutral) assert.match(v.message, /packages\/kvox-ai\/src\/runtime\/forbidden\.ts/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/settings'/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/ai\/core'/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api'\./);
+    assert.match(hostNeutral[0].message, /may import only '@marinoscar\/platform-api\/ai'/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: the kvox-ai exception does not extend to kvox-api', () => {
+  const dir = fixtureCopy();
+  try {
+    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-api/src/core/allowed.ts');
+    assert.ok(rulesOf(checkSlicePeers({ root: dir })).includes('host-neutral'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('host-neutral: other kvox packages are not subject to the rule', () => {
   // kvox-db and kvox-contract are not in HOST_NEUTRAL_PACKAGES: the rule is about
   // the two packages a second host installs next to its own bindings.
