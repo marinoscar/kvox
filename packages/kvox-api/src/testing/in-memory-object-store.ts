@@ -242,9 +242,19 @@ export function createInMemoryKvoxObjectStore(): InMemoryKvoxObjectStore {
           state: object.status === 'ready' ? 'ready' : object.status === 'failed' ? 'failed' : 'uploading',
           createdAt: object.createdAt,
           updatedAt: object.updatedAt,
+          ownerId: object.ownerId,
+          managedBy: object.managedBy,
+          metadata: object.metadata ?? null,
         });
       }
       return found;
+    },
+
+    async setMetadata(objectId, metadata) {
+      const object = objects.get(objectId);
+      if (!object) return;
+      object.metadata = metadata;
+      object.updatedAt = new Date();
     },
 
     async signedDownloadUrl(objectId, opts) {

@@ -1,3 +1,4 @@
+import type { NoteFailedNotificationData } from '@marinoscar/kvox-api/notes';
 import { APP_NAME } from '@app/shared';
 import {
   SafeHtml,
@@ -34,22 +35,8 @@ import {
 // URL — and here it would spend the user's own money when it did.
 // =============================================================================
 
-/** Everything the failure message renders. */
-export interface NoteFailedEmailData {
-  /** The note row's id. Used for the CTA path. */
-  noteId: string;
-  /** The owner's own title. Escaped on the way into the html. */
-  title: string;
-  /** `notes.failure_reason`, verbatim. See the header. */
-  reason: string;
-  /**
-   * What KIND of failure it was, in words a reader recognises ("Your API key",
-   * "Too large", "Declined by the provider"). Not the enum value.
-   */
-  category: string;
-  /** Absolute URL of the application root, for the CTA. Optional. */
-  appUrl?: string;
-}
+/** Everything the failure message renders: the slice's notification data (`@marinoscar/kvox-api/notes`). */
+export type NoteFailedEmailData = NoteFailedNotificationData;
 
 // Typed registration (issue #460): this domain declares its own template key,
 // so the base `EmailTemplateDataMap` names no domain payload.

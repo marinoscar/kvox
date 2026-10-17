@@ -48,6 +48,7 @@ export {
 
 export { TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT, TranscriptSpeakersIdentifiedEvent } from './events/transcript-speakers-identified.event.js';
 
+export { ApiDataResponse } from './api-data-response.js';
 export { TranscriptsService, encodeCursor } from './transcripts.service.js';
 export { TranscriptsController } from './transcripts.controller.js';
 export { TranscriptNameChecksController } from './transcript-name-checks.controller.js';

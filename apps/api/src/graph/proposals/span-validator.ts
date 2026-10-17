@@ -29,7 +29,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
-import { NoteOriginService } from '../../notes/note-origin.service';
+import { NoteOriginService } from '@marinoscar/kvox-api/notes';
 import type { EvidenceInput } from '../dto/graph-evidence.dto';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
 import { PROPOSAL_BAD_REQUEST_REASONS, type EvidenceSpanInput } from './dto/proposal.dto';

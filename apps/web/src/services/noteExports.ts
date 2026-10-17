@@ -52,7 +52,7 @@
 import { api } from './api';
 
 // =============================================================================
-// Types — mirrors of `apps/api/src/notes/dto/note-export.dto.ts`
+// Types — mirrors of `packages/kvox-api/src/notes/dto/note-export.dto.ts`
 // =============================================================================
 
 /** `NOTE_EXPORT_STATUSES` on the API side. */

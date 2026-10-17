@@ -42,26 +42,25 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../../src/common/constants/roles.constants';
-import type { PrismaService } from '../../src/prisma/prisma.service';
 
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
-import { NoteExportService } from '../../src/notes/export/note-export.service';
-import { NoteExporterRegistry } from '../../src/notes/export/note-exporter.registry';
-import { MarkdownNoteExporter } from '../../src/notes/export/markdown.exporter';
-import { PdfNoteExporter } from '../../src/notes/export/pdf.exporter';
-import { WordNoteExporter } from '../../src/notes/export/word.exporter';
-import { docxText } from '../../src/notes/export/__fixtures__/docx-text';
-import { extractPdfText } from '../../src/notes/export/__fixtures__/pdf-text';
-import { NoteExportHandler } from '../../src/notes/handlers/note-export.handler';
-import { NotesHousekeepingHandler } from '../../src/notes/handlers/notes-housekeeping.handler';
-import { NOTE_EXPORT_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
-import { NoteObjectsService } from '../../src/notes/note-objects.service';
+import {
+  MarkdownNoteExporter,
+  NOTE_EXPORT_JOB_TYPE,
+  NOTE_SUBJECT_TYPE,
+  NoteAccessService,
+  NoteExportHandler,
+  NoteExportService,
+  NoteExporterRegistry,
+  NoteObjectsService,
+  NotesHousekeepingHandler,
+  PdfNoteExporter,
+} from '@marinoscar/kvox-api/notes';
+import { docxText, extractPdfText, WordNoteExporter } from '@marinoscar/kvox-api/notes/testing';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createDbAudit, createDbObjectStore } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 
 const { describeWithDb } = resolveDbSuite('note-export.db.spec');
@@ -89,7 +88,6 @@ describeWithDb('Note exports (real Postgres)', () => {
   let storage: StorageProvider;
 
   let objects: NoteObjectsService;
-  let managed: ReturnType<typeof createDbManagedObjects>;
   let registry: NoteExporterRegistry;
   let exportService: NoteExportService;
   let handler: NoteExportHandler;
@@ -123,10 +121,10 @@ describeWithDb('Note exports (real Postgres)', () => {
       getSignedDownloadUrl: async () => 'https://signed.example/export',
     }) as StorageProvider;
 
-    const service = prisma as unknown as PrismaService;
+    const service = prisma as never;
+    const store = createDbObjectStore(prisma, storage);
 
-    managed = createDbManagedObjects(prisma, storage);
-    objects = new NoteObjectsService(managed, storage);
+    objects = new NoteObjectsService(store);
 
     registry = new NoteExporterRegistry();
     renders = 0;
@@ -152,8 +150,8 @@ describeWithDb('Note exports (real Postgres)', () => {
     // A REAL `jobs` row, not a stub id: `note_exports.job_id` is a foreign key,
     // and a fake id would fail the constraint the moment the service links the
     // job back onto the export row.
-    enqueue = jest.fn(async (input: { type: string; subjectId?: string | null }) =>
-      prisma.job.create({
+    enqueue = jest.fn(async (input: { type: string; subjectId?: string | null }) => {
+      const created = await prisma.job.create({
         data: {
           type: input.type,
           reason: 'rerun',
@@ -161,34 +159,29 @@ describeWithDb('Note exports (real Postgres)', () => {
           subjectId: input.subjectId ?? null,
           status: 'pending',
         },
-      }),
-    );
+      });
+
+      return { id: created.id, deduplicated: false };
+    });
+
+    // The jobs port as the slice sees it: a registered handler and an enqueue.
+    const jobs = { registerHandler: jest.fn(), isRegistered: () => true, enqueue };
 
     const access = new NoteAccessService(service);
 
     exportService = new NoteExportService(
       service,
+      createDbAudit(prisma),
+      jobs as never,
+      store,
       access,
       objects,
       registry,
-      { get: () => ({ type: NOTE_EXPORT_JOB_TYPE }) } as unknown as JobHandlerRegistry,
-      { enqueue } as unknown as JobsService,
-      managed,
     );
 
-    handler = new NoteExportHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
-      service,
-      exportService,
-      objects,
-    );
+    handler = new NoteExportHandler(jobs as never, service, exportService, objects);
 
-    housekeeping = new NotesHousekeepingHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
-      service,
-      objects,
-      { enqueuePurge: jest.fn() } as never,
-    );
+    housekeeping = new NotesHousekeepingHandler(jobs as never, service, objects, { enqueuePurge: jest.fn() } as never);
 
     const account = await prisma.user.create({
       data: { email: `${EMAIL_PREFIX}-${randomUUID()}@example.test` },

@@ -1,7 +1,7 @@
 import { firstValueFrom, toArray } from 'rxjs';
 
 import type { PrismaService } from '../../prisma/prisma.service';
-import { STREAM_DURATION_CAP_MARGIN_MS } from '../../notes/generation/note-generation-stream.service';
+import { STREAM_DURATION_CAP_MARGIN_MS } from '@marinoscar/kvox-api/notes';
 import type { AskCitation, AskToolCall } from '../dto/ask.dto';
 import {
   ASK_RESPOND_STREAM_RUNTIME_MS,

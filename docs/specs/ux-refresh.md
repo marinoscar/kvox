@@ -479,7 +479,7 @@ are about to pay for.
 
 `NoteGenerationContext.tsx` — "How this note was generated," collapsed by
 default beneath `NoteProvenance`'s always-visible one-line summary — renders
-one field per input `apps/api/src/notes/generation/prompt.ts`'s
+one field per input `packages/kvox-api/src/notes/generation/prompt.ts`'s
 `assemblePrompt` actually receives (`docs/specs/notes.md` §3.1):
 `templateInstructions`, `templateOutputFormat`, `templateStructure`,
 `templateTone`, `templateLength`, and `contextText`. The one input it

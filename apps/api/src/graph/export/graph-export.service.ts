@@ -27,7 +27,7 @@ import type { KgExport, KgExportFormat } from '@prisma/client';
 import { APP_SLUG } from '@app/shared';
 import { ONTOLOGY_VERSION, kvNamespace } from '@app/shared/ontology';
 
-import { contentDisposition } from '../../notes/export/note-export.service';
+import { contentDisposition } from '@marinoscar/kvox-api/notes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
 import { GraphObjectsService } from '../graph-objects.service';

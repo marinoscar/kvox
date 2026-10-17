@@ -6,7 +6,8 @@
     "testing": ["ports", "core"],
     "transcription": ["ports", "core"],
     "search": ["ports", "core"],
-    "transcripts": ["ports", "core", "testing", "transcription", "search"]
+    "transcripts": ["ports", "core", "testing", "transcription", "search"],
+    "notes": ["ports", "core", "testing", "transcripts", "search"]
   },
   "kvox-web": { "core": [] },
   "kvox-contract": {

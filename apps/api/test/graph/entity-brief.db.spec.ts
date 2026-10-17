@@ -36,7 +36,7 @@ import { KG_ENTITY_DIGEST_JOB_TYPE } from '../../src/graph/job-types';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
 import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
-import { NoteAccessService } from '../../src/notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   DEFAULT_SEARCH_TYPE_PERMISSIONS,

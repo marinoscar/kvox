@@ -230,6 +230,19 @@ export interface KvoxJobsPort {
   enqueue(input: KvoxEnqueueInput): Promise<KvoxEnqueueResult>;
 
   /**
+   * Queues a job INSIDE a database transaction the caller has open, so the row the
+   * job is about and the job commit together or not at all. `tx` is the client a
+   * `KVOX_PRISMA.$transaction(async (tx) => ...)` callback was given; the job exists
+   * for the queue only once that transaction commits. A host whose queue cannot join
+   * the caller's transaction may enqueue after the callback returns instead.
+   *
+   * @param tx - the transaction client of the open transaction.
+   * @param input - what to run.
+   * @returns the job id, and whether this call collapsed into an existing job.
+   */
+  enqueueWithin(tx: unknown, input: KvoxEnqueueInput): Promise<KvoxEnqueueResult>;
+
+  /**
    * Registers the handler for a type. Call once per type, at start-up.
    *
    * @param handler - the handler.

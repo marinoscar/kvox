@@ -30,7 +30,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { UserAttributeDef } from '@app/shared/ontology';
 
-import { NoteAccessService } from '../../notes/access/note-access.service';
+import { NoteAccessService } from '@marinoscar/kvox-api/notes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';

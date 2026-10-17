@@ -23,8 +23,13 @@
 //                      (issue #493; before it, `permissions.ts` declared them. The order
 //                      of the catalog is unchanged: a registered set comes after the
 //                      platform's permissions and before the app's.)
+//   kvox-notes         NOTES_PERMISSIONS, NOTE_TEMPLATES_PERMISSIONS
+//                      notes:read, notes:write, note_templates:read, note_templates:write
+//                      (issue #495; same posture: all three org roles. They follow the
+//                      transcripts and precede the graph's, which are still the app's own.)
 // =============================================================================
 
+import { NOTE_TEMPLATES_PERMISSIONS, NOTES_PERMISSIONS } from '@marinoscar/kvox-api/notes';
 import { TRANSCRIPTS_PERMISSIONS } from '@marinoscar/kvox-api/transcripts';
 import { registerPermissionSet, type PermissionSetRegistration } from '@marinoscar/platform-api/manifest';
 
@@ -33,6 +38,15 @@ export const KVOX_SLICE_PERMISSION_SETS: readonly PermissionSetRegistration[] = 
   {
     slice: 'kvox-transcripts',
     permissions: TRANSCRIPTS_PERMISSIONS.map((permission) => ({
+      id: permission.id,
+      description: permission.description,
+      scope: permission.scope,
+      defaultGrants: [...permission.defaultGrants],
+    })),
+  },
+  {
+    slice: 'kvox-notes',
+    permissions: [...NOTES_PERMISSIONS, ...NOTE_TEMPLATES_PERMISSIONS].map((permission) => ({
       id: permission.id,
       description: permission.description,
       scope: permission.scope,

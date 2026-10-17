@@ -2,10 +2,11 @@
 // This app's own permissions (issue #465, epic #462)
 // =============================================================================
 //
-// The domain permissions the product adds on top of the platform's: six declared
-// here, and `transcripts:read|write`, which the transcripts slice of
-// `@marinoscar/kvox-api` exports as data (`TRANSCRIPTS_PERMISSIONS`) and
-// `kvox-permissions.ts` registers (issue #493).
+// The domain permissions the product adds on top of the platform's: two declared
+// here (`graph:read|write`), and `transcripts:read|write` and the four note permissions,
+// which the transcripts and notes slices of `@marinoscar/kvox-api` export as data
+// (`TRANSCRIPTS_PERMISSIONS`, `NOTES_PERMISSIONS`, `NOTE_TEMPLATES_PERMISSIONS`) and
+// `kvox-permissions.ts` registers (issues #493 and #495).
 // Every one is ORG-SCOPED: a user holds it through the role on their
 // membership of the current organization (`org_admin`, `contributor`,
 // `viewer`), never through `user_roles`. The system `admin` role no longer
@@ -32,31 +33,6 @@ import type { PermissionDeclaration } from '@marinoscar/platform-api/core';
 const ALL_ORG_ROLES = ['org_admin', 'contributor', 'viewer'] as const;
 
 export const KVOX_PERMISSIONS = {
-  NOTES_READ: {
-    id: 'notes:read',
-    description: 'Read own notes (list, get, versions, the generation stream)',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-  NOTES_WRITE: {
-    id: 'notes:write',
-    description:
-      'Create, regenerate, edit and delete own notes; preview a note template',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-  NOTE_TEMPLATES_READ: {
-    id: 'note_templates:read',
-    description: 'Read the built-in and own note templates',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
-  NOTE_TEMPLATES_WRITE: {
-    id: 'note_templates:write',
-    description: 'Create, edit and delete own custom note templates',
-    scope: 'org',
-    defaultGrants: ALL_ORG_ROLES,
-  },
   GRAPH_READ: {
     id: 'graph:read',
     description:

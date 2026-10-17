@@ -1,7 +1,6 @@
 import request from 'supertest';
 
-import { NOTE_GENERATION_NOT_FOUND_MESSAGE } from '../../src/notes/access/note-generation-access.service';
-import { NOTE_STREAM_TUNING } from '../../src/notes/generation/note-generation-stream.service';
+import { NOTE_GENERATION_NOT_FOUND_MESSAGE, NOTE_STREAM_TUNING } from '@marinoscar/kvox-api/notes';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';

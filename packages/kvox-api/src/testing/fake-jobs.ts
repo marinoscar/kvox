@@ -100,6 +100,10 @@ export function createFakeKvoxJobs(): FakeKvoxJobs {
       return [...handlers.values()];
     },
 
+    async enqueueWithin(_tx, input) {
+      return this.enqueue(input);
+    },
+
     async enqueue(input) {
       if (!input.skipDedup) {
         const key = dedupKey(input);

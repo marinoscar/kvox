@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-import { NoteAccessService } from '../../notes/access/note-access.service';
-import { NoteOriginService } from '../../notes/note-origin.service';
+import { NotesConfig } from '../../kvox/notes/notes.config';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GraphModule } from '../graph.module';
 import { KgExtractHandler } from '../handlers/kg-extract.handler';
 import { ExtractionInputLoader } from './extraction-input.loader';
 import { GraphExtractionController } from './graph-extraction.controller';
 import { GraphExtractionService } from './graph-extraction.service';
+import { NoteReadyAutoExtractListener } from './note-ready-auto-extract.listener';
 import { ProposalStageRegistry } from './proposal-stage';
 import { ProposalWriter } from './proposal-writer.service';
 
@@ -19,28 +19,26 @@ import { ProposalWriter } from './proposal-writer.service';
 // (#364 resolution, #365 dedup/closing/rejection memory — they import this
 // module for `ProposalStageRegistry`).
 //
-// A SUB-MODULE, NOT MORE PROVIDERS ON `GraphModule`, because of one edge:
-// `NotesModule` imports this module for the note-ready hook
-// (`GraphExtractionService.enqueueForReadyNote`), and this module needs two
-// note services. Importing `NotesModule` back would be a cycle, so the two it
-// needs — `NoteAccessService` (the one 404 rule for a note) and
-// `NoteOriginService` (the origin transcript across a note chain) — are
-// provided here directly: both are stateless and depend on `PrismaService`
-// alone, so a second instance is the same code, not a second implementation.
-// The dependency therefore runs one way: Notes → GraphExtraction → Graph.
+// A SUB-MODULE, NOT MORE PROVIDERS ON `GraphModule`, because of one edge: the notes slice
+// emits its ready event and the app's `NoteReadyAutoExtractListener`
+// (`./note-ready-auto-extract.listener.ts`, provided here) calls `GraphExtractionService.enqueueForReadyNote`,
+// while this module needs two note services, `NoteAccessService` (the one 404 rule for a note)
+// and `NoteOriginService` (the origin transcript across a note chain), which it reaches by
+// importing the notes configuration (`NotesConfig`) instead of providing them again. The
+// dependency runs one way: GraphExtraction -> Notes; the slice imports no graph.
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, GraphModule],
+  imports: [PrismaModule, NotesConfig, GraphModule],
   controllers: [GraphExtractionController],
   providers: [
-    NoteAccessService,
-    NoteOriginService,
     ExtractionInputLoader,
     ProposalWriter,
     ProposalStageRegistry,
     GraphExtractionService,
     KgExtractHandler,
+    // TEMPORARY (delete in #496): note ready -> `enqueueForReadyNote`.
+    NoteReadyAutoExtractListener,
   ],
   exports: [GraphExtractionService, ProposalStageRegistry],
 })

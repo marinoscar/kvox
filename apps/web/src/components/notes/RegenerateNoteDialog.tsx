@@ -83,7 +83,7 @@ import { REGENERATE_COST_SENTENCE, buildRegenerateInput } from './regenerateInpu
 import { TemplateSummary } from './TemplateSummary';
 
 /**
- * `MAX_CONTEXT_CHARS` in `apps/api/src/notes/dto/note-template.dto.ts`.
+ * `MAX_CONTEXT_CHARS` in `packages/kvox-api/src/notes/dto/note-template.dto.ts`.
  *
  * Mirrored so the field stops accepting characters the API would refuse, which
  * PREVENTS a 400 rather than reporting one. The schema is still the guarantee;

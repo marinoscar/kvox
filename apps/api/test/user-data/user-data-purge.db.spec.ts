@@ -53,8 +53,8 @@ import '../../src/platform/user-data/user-data.manifest';
 import { FilesPurgeUnmanagedHandler } from '../../src/kvox-objects/files-purge-unmanaged.handler';
 import { KgPurgeHandler } from '../../src/graph/handlers/kg-purge.handler';
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
-import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
-import { NoteObjectsService } from '../../src/notes/note-objects.service';
+import { NoteObjectsService, NotePurgeHandler, NotesUserDataService } from '@marinoscar/kvox-api/notes';
+import { createNotesServiceTestFactory } from '@marinoscar/kvox-api/notes/testing';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { SearchIndexService } from '@marinoscar/kvox-api/search';
 import {
@@ -66,7 +66,6 @@ import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } fro
 import { createDbAudit, createDbManagedObjects, createDbObjectStore } from '../helpers/db-managed-objects.helper';
 import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { buildNotesService } from '../notes/notes-service-test-factory';
 import { createTranscript as createTranscriptRow, shareTranscript } from '../helpers/transcript.helper';
 import { createPlatformTranscriptSharing } from '../helpers/sharing-kit.helper';
 
@@ -170,8 +169,9 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
       createPlatformTranscriptSharing(prisma),
     );
 
-    const notes = buildNotesService({
+    const notes = createNotesServiceTestFactory({
       prisma: prisma as never,
+      audit: createDbAudit(prisma),
       access: null as never,
       sourceNames: null as never,
       templates: null as never,
@@ -181,14 +181,17 @@ describeWithDb('user.data.purge on the platform registries (real Postgres)', () 
       searchIndex: searchIndex as never,
     });
 
+    const noteStore = createDbObjectStore(prisma, storage as never);
+
     notePurge = new NotePurgeHandler(
-      registry,
-      prisma as unknown as PrismaService,
-      new NoteObjectsService(managed, storage as never),
+      jobs as never,
+      prisma as never,
+      createDbAudit(prisma),
+      noteStore,
+      new NoteObjectsService(noteStore),
       searchIndex,
-      new JobScope(prisma as never),
-      managed,
       notes,
+      new NotesUserDataService(prisma as never, jobs as never),
     );
 
     kgPurge = new KgPurgeHandler(
