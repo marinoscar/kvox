@@ -9,7 +9,7 @@ import { onboardingResponse } from './onboardingApi';
  *
  *   - `'settings'` (the default) — the Knowledge graph settings page (issue
  *     #369, epic #346): ontology, the user's own attribute definitions and
- *     `GET /api/ai/config`.
+ *     `GET /api/ai-tasks/config`.
  *   - `'pages'` — the `/graph` index and entity page (issue #373, epic #347),
  *     the explorer's `POST /api/graph/explore/expand` (issue #374) and the
  *     whole-graph overview's `GET /api/graph/overview` (issue #375).
@@ -649,7 +649,7 @@ export interface GraphApiOptions {
   surface?: 'settings' | 'pages';
   /** `'pages'`: an empty graph — the index's first-run state. */
   empty?: boolean;
-  /** `'settings'`: answer `GET /api/ai/config` with `graphEnabled: false`. */
+  /** `'settings'`: answer `GET /api/ai-tasks/config` with `graphEnabled: false`. */
   graphDisabled?: boolean;
   /** `'pages'`: every explorer expand answers with a 300-node slice (the cap). */
   explorerCapped?: boolean;
@@ -831,7 +831,7 @@ async function installSettingsApi(page: Page, options: GraphApiOptions): Promise
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/ai/config') {
+    if (path === '/ai-tasks/config') {
       return json(route, {
         available: true,
         provider: 'openai',
@@ -859,7 +859,7 @@ async function installSettingsApi(page: Page, options: GraphApiOptions): Promise
 // =============================================================================
 //
 // Layered OVER `installNotesApi` (Playwright runs the most recently registered
-// matching route first): this installer answers `/ai/config` with the graph
+// matching route first): this installer answers `/ai-tasks/config` with the graph
 // switched on and every `/graph/*` route the sheet reads, and hands every
 // other path back with `route.fallback()` to the notes stubs. Fixed ids,
 // fixed timestamps, one draft covering every group the sheet draws.
@@ -1047,7 +1047,7 @@ export async function installGraphReviewApi(
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/ai/config') {
+    if (path === '/ai-tasks/config') {
       return json(route, {
         available: true,
         provider: 'openai',
@@ -1221,7 +1221,7 @@ export async function installGraphGuideApi(page: Page): Promise<void> {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/ai/config') return json(route, GUIDE_AI_CONFIG);
+    if (path === '/ai-tasks/config') return json(route, GUIDE_AI_CONFIG);
     if (path === '/graph/ontology') return json(route, GUIDE_ONTOLOGY);
     if (path === '/graph/extract/estimate') return json(route, GUIDE_ESTIMATE);
     if (path === '/graph/notes/n1/proposal') return json(route, { proposal: detail });

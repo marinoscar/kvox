@@ -12,7 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { render as rtlRender } from '@testing-library/react';
 
-import type { UseOnboardingReturn } from '@marinoscar/platform-web/onboarding/headless';
+import type { OnboardingResponse, UseOnboardingReturn } from '@marinoscar/platform-web/onboarding/headless';
 import { GETTING_STARTED_PATH, SETUP_GUIDE_PATH } from '@marinoscar/platform-web/onboarding/ui';
 
 vi.mock('@marinoscar/platform-web/onboarding/headless', async (importOriginal) => ({
@@ -68,6 +68,12 @@ describe('OnboardingBanner', () => {
   describe('chooseBannerAudience', () => {
     it('is null without state', () => {
       expect(chooseBannerAudience(null)).toBeNull();
+    });
+
+    it('is null for an answer without settings, rather than throwing', () => {
+      // A catch-all that answers `{}` for a path it does not know yields a truthy "state" that is
+      // not an `OnboardingResponse`; the shell the banner is mounted in must survive it.
+      expect(chooseBannerAudience({} as OnboardingResponse)).toBeNull();
     });
 
     it('prefers the deployment checklist while it has a required step open', () => {
