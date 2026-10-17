@@ -105,6 +105,18 @@ async function succeeded(type: string): Promise<number> {
   return host.prisma.job.count({ where: { type, status: 'succeeded' } });
 }
 
+/** Every `kg.graph_layout` job, whatever its status. */
+async function layoutJobs(): Promise<number> {
+  return host.prisma.job.count({ where: { type: 'kg.graph_layout' } });
+}
+
+/** Polls (the listener is detached from the commit request) until a `kg.graph_layout` job exists. */
+async function expectLayoutJobEnqueued(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while ((await layoutJobs()) === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+  expect(await layoutJobs(), 'a commit enqueues a kg.graph_layout job through graph.changed').toBeGreaterThanOrEqual(1);
+}
+
 /** Upload, transcribe, generate a note, extract, accept everything, commit: HTTP only. */
 async function seedRecording(recording: ScenarioRecording): Promise<Seeded> {
   queueFakeTranscript(recording.transcript);
@@ -147,6 +159,10 @@ async function seedRecording(recording: ScenarioRecording): Promise<Seeded> {
   expect(bulk.skipped).toEqual([]);
   const committed = await json(await api(`/api/graph/proposals/${proposal.id}/commit`, { method: 'POST', json: {} }));
   expect(committed.proposal.status).toBe('committed');
+  // A commit emits `graph.changed` (#591); the layout listener counts detached from the request, so
+  // wait for the delayed `kg.graph_layout` job it enqueues (the first commit has no snapshot yet; a
+  // later one is not a >= 20 % change and joins or adds nothing) before the drain runs it.
+  await expectLayoutJobEnqueued();
   await drain();
   return { transcriptId, noteId, proposalId: proposal.id, itemCount: items.length };
 }
@@ -284,17 +300,26 @@ describe('the graph and Ask on the bare host, end to end', () => {
   });
 
   it('6. lays out the overview (kg.graph_layout, the graphology peers)', async () => {
-    // A commit emits no `graph.changed` (package gap), so the layout's bootstrap trigger is the
-    // way in: the first overview GET on a non-empty graph schedules the job.
+    // The first commit emitted `graph.changed` (#591) and enqueued the delayed layout (seedRecording
+    // waited for it and drained it), so a snapshot exists before this GET: the bootstrap trigger of the
+    // GET is not needed. That snapshot predates the second recording (4 -> 5 readable entities is not
+    // the 20 % material change that would schedule another), so it reads back ready but stale.
+    expect(await succeeded('kg.graph_layout')).toBe(1);
     const before = await json(await api('/api/graph/overview'));
-    expect(before.pending).toBe(true);
+    expect(before.status).toBe('ready');
+    expect(before.stale).toBe(true);
+    expect(before.nodeCount).toBe(4);
+
+    // A manual refresh recomputes over the full graph.
+    await json(await api('/api/graph/overview/refresh', { method: 'POST', json: {} }), 202);
     await drain();
     const after = await json(await api('/api/graph/overview'));
     expect(after.status).toBe('ready');
     expect(after.pending).toBe(false);
+    expect(after.stale).toBe(false);
     expect(after.nodeCount).toBe(5);
     expect(after.edgeCount).toBe(6);
-    expect(await succeeded('kg.graph_layout')).toBe(1);
+    expect(await succeeded('kg.graph_layout')).toBe(2);
   });
 
   it('7. answers "What are the action items from Joe?": search, then list_commitments for his open ones', async () => {
