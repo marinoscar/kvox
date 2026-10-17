@@ -48,12 +48,15 @@ export async function seedDatabase(prisma: PrismaClient): Promise<string> {
 }
 
 /**
- * Turns transcription on and names the fake provider. Runs AFTER the application
- * initialised: the `transcription` namespace and the secret purpose are declared
- * by the slice's `onModuleInit`, and the settings and secrets ports refuse an
- * unknown one.
+ * Turns transcription on and names the fake provider, and turns the graph on
+ * (`ai.graphEnabled`, the switch an administrator flips in the web edition's AI
+ * settings). Runs AFTER the application initialised: the `transcription`
+ * namespace and the secret purpose are declared by the slice's `onModuleInit`,
+ * and the settings and secrets ports refuse an unknown one. (The `ai` namespace
+ * is the host's own, declared in `bootstrap.ts` before the application exists.)
  */
 export async function seedRuntime(settings: KvoxSettingsPort, secrets: KvoxSecretsPort): Promise<void> {
   await settings.patchSystem('transcription', { enabled: true, provider: FAKE_PROVIDER_ID }, { actorUserId: LOCAL_USER_ID });
+  await settings.patchSystem('ai', { graphEnabled: true }, { actorUserId: LOCAL_USER_ID });
   await secrets.set('transcription', FAKE_PROVIDER_ID, 'not-a-real-key', LOCAL_USER_ID, { label: 'Fake provider' });
 }
