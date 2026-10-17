@@ -148,6 +148,7 @@ What a host implements, binds or registers. The per-port table (web adapter path
 | `NotesUserDataService`, `NotesHousekeepingEnqueuer`, `NoteExportHandler`, `NotePurgeHandler`, `NoteRetitleHandler`, `NotesHousekeepingHandler` | notes | What a deletion would remove and how derived notes are unlinked, the housekeeping entry for a host without a scheduler, and the job handlers a host that composes its own module lists. |
 | `describeNotesConformance`, `describeNoteExporterConformance` | notes/testing | The pipeline-invariant kit and the exporter kit. |
 | `GraphModuleOptions`, `GRAPH_PERMISSIONS`, `KvoxGraphDb`, `GraphUserDataService` | graph | The options of `GraphModule.forRoot`, the permission set the host registers, the narrowed database client and what a deletion would remove. |
+| `KgMigrateEnqueuer`, `KG_MIGRATE_OWNERS_PER_TICK` | graph | The `kg.migrate` scheduler without its timer: a host with `schedules: false` resolves the class from the container and calls `enqueue()` on its own timer. |
 | `graphPreferencesSchema`, `mergeGraphPreferences`, `assertGraphPreferenceLimits` | graph | What the host's `graph` per-user settings namespace is built from. |
 | `GraphExtractionModuleOptions`, `ProposalStage`, `ProposalStageRegistry` | graph-extraction | The options of `GraphExtractionModule.forRoot` and the proposal-stage extension point. |
 | `GraphRdfModuleOptions`, `ShaclEngine` | graph-rdf | The options of `GraphRdfModule.forRoot` and the SHACL engine a test replaces. |

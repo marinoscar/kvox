@@ -84,6 +84,7 @@ A `sensitive` PersonFact never leaves the deployment: it is dropped from the bri
 | `KvoxGraphDb` | The narrowed client the slice casts `KVOX_PRISMA` to; the host proves its client satisfies it with a compile-time assignment. |
 | `GraphUserDataService` | What a deletion would remove and the enqueue of `kg.purge`; the host's user-data registry delegates to it. |
 | `graphPreferencesSchema`, `mergeGraphPreferences`, `assertGraphPreferenceLimits` | What the host's `graph` user-settings namespace is built from. |
+| `KgMigrateEnqueuer`, `KG_MIGRATE_OWNERS_PER_TICK` | The `kg.migrate` scheduler without its timer: with `schedules: false` the host resolves the class from the container (`GraphModule` exports it) and calls `enqueue()` on its own timer (hourly is reasonable). It queues one job per owner whose rows a declared migration touches, at most the constant per call, and returns at once while no migration is declared. |
 | `describeGraphConformance` | The conformance kit and the binding it is run against. |
 
 ### Desktop
