@@ -4,6 +4,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Inject,
   Param,
   ParseUUIDPipe,
@@ -47,6 +48,11 @@ import type { GraphActor } from '../../graph/index.js';
 // `NoteSourcesController` rule): `req.file({ limits: { fileSize } })` with
 // `throwFileSizeLimit` makes Fastify stop reading at 20 MiB and answer 413.
 // =============================================================================
+
+/** The 500 a request gets when the host never registered `@fastify/multipart` (a host duty, `$hostPlugins`). */
+const HOST_MULTIPART_MISSING =
+  'This host has not registered @fastify/multipart on its Fastify app, so uploads cannot be read ' +
+  '(a kvox host duty: see docs/guides/kvox-desktop.md and $hostPlugins in packages/kvox-slice-peers.json).';
 
 /** The part of `@fastify/multipart`'s request decoration this controller uses. */
 interface MultipartRequest {
@@ -126,6 +132,8 @@ export class GraphImportController {
     // `@fastify/multipart` decorates the request; its types are the host's, so the slice states
     // the two members it uses.
     const req = request as unknown as MultipartRequest;
+    // A host that skipped the plugin has no decoration: say so instead of a bare TypeError.
+    if (typeof req.isMultipart !== 'function') throw new InternalServerErrorException(HOST_MULTIPART_MISSING);
     if (!req.isMultipart()) throw new BadRequestException('Expected multipart/form-data with a single "file" field.');
     let filename: string;
     let mimeType: string;

@@ -125,7 +125,7 @@ npm install graphology@>=0.26.0 graphology-communities-louvain@>=2.0.2 grapholog
 npm install n3@>=2.7.0 jsonld@>=9.0.0 rdf-validate-shacl@>=0.6.0   # graph-rdf: RDF export and SHACL-validated import
 ```
 
-The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app: `POST /api/graph/imports` and the notes document-source upload read `request.file()`, no slice registers it, and it is in no slice's peers list, so `check-slice-peers` cannot catch its absence (`examples/bare-host/src/bootstrap.ts`). `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
+The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app (`await app.register(multipart, ...)`, `examples/bare-host/src/bootstrap.ts`): `POST /api/graph/imports` and the notes document-source upload read `request.file()`. No slice registers it, so it is not a peer; it is a **host plugin**, listed under `$hostPlugins` in `packages/kvox-slice-peers.json` (`notes` and `graph-rdf`, inherited by `graph`, `graph-extraction` and `ask`), and `check-slice-peers --app` requires the app's `package.json` to list it. Without it the upload routes answer 500 naming the missing plugin. The notes upload needs it too, so install it even without the graph. `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
 
 **Renderer.**
 
@@ -658,7 +658,7 @@ const ask = AskModule.forRoot({ peers: { graph, notes, search } });
 // imports: [..., transcription, search, searchIndexing, transcripts, notes, graph, extraction, rdf, ask]
 ```
 
-Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
+Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (a `$hostPlugins` entry) (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
 
 **Options that matter offline**, per slice (full tables in each slice README):
 
@@ -851,5 +851,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- Package gaps found by the graph run (issue #573): `@fastify/multipart` is missing from the slice peers data. (The other one, a proposal commit not publishing `graph.changed`, is fixed by #591: commits, imports, reverts, merges and merge reversals now publish it after commit.)
+- Package gaps found by the graph run (issue #573), both fixed: a proposal commit now publishes `graph.changed` after commit, as do imports, reverts, merges and merge reversals (#591); `@fastify/multipart` is declared as a host plugin in the slice peers data (`$hostPlugins`) and checked by `check-slice-peers` rule 8 (#592).
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.
