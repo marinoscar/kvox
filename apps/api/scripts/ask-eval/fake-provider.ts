@@ -15,10 +15,11 @@
 // keep their names, so a script reads the same as it did over the retired provider.
 // =============================================================================
 
+import type { KvoxAiReadiness, KvoxReasoningEffort } from '@marinoscar/kvox-ai';
 import type { AiOutputItem, AiRequest, AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
 
 import { PlatformKvoxAi } from '../../src/ai-port/platform-kvox-ai';
-import type { KvoxAi, KvoxAiReadiness, KvoxReasoningEffort } from '../../src/ai-port/kvox-ai';
+import type { KvoxAi } from '../../src/ai-port/kvox-ai';
 import { readyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
 
 export type ChatScript = AiStreamEvent[];

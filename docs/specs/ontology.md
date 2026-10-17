@@ -1053,7 +1053,7 @@ precise at this stage:
   type, organization, role, and top co-mentions concatenated and embedded
   through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`, since #475; the
   search side uses the same port with `search_embed`) —
-  one catalog (`ai-port/embedding-catalog.ts`), because a second embedder for the same
+  one catalog (`packages/kvox-ai/src/embedding/embedding-catalog.ts`), because a second embedder for the same
   model and dimension contract is a second place for those two facts to
   drift apart.
 
@@ -4128,7 +4128,7 @@ serve for their own epics.
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
-| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai-port/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
+| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `packages/kvox-ai/src/tasks/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
 | Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `packages/kvox-api/src/ask/citations.spec.ts` and `packages/kvox-api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 

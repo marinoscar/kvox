@@ -2,7 +2,22 @@
 // NoteSourcesController (issue #51, epic #45)
 // =============================================================================
 //
-// ONE ROUTE: `POST /api/notes/sources/documents`, gated on `notes:write`.
+// TWO ROUTES:
+//
+//   POST /api/notes/sources/documents            upload, gated on `notes:write`
+//   GET  /api/notes/sources/documents/:objectId  extraction status, `notes:read`
+//
+// THE READ (#596) is `notes:read` and OWNER-SCOPED: it answers only for a
+// `managed_by: notes` object the caller uploaded, and every other id — missing,
+// owned by another module, or another user's — is the same 404 (no access is a
+// 404, never a 403; there is no `notes:read_any`). It replaces the notes UI
+// polling the platform's `GET /api/storage/objects/:id` and reading the
+// object's `metadata` in the browser: that route belongs to no kvox-api slice,
+// so every host (the bare host, KVox Desktop) would have had to serve a storage
+// object read just for notes. With the status served here, the notes slice is
+// self-contained and a host needs no storage route for it.
+//
+// THE UPLOAD:
 //
 // ⚠ IT IS `notes:write`, NOT `storage:write`, AND NOT A NEW PAIR. Uploading a
 // document here is the first half of creating a note — the object it produces
@@ -44,9 +59,12 @@
 import {
   BadRequestException,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   InternalServerErrorException,
+  Param,
+  ParseUUIDPipe,
   PayloadTooLargeException,
   Post,
   Req,
@@ -62,10 +80,10 @@ import type { FastifyRequest } from 'fastify';
 
 import { KvoxAuth } from '../core/index.js';
 import { ApiDataResponse } from '../transcripts/index.js';
-import { CurrentActor, type NotesActor } from './notes-actor.js';
-import { NOTES_WRITE_PERMISSION } from './notes.permissions.js';
+import { CurrentActor } from './notes-actor.js';
+import { NOTES_READ_PERMISSION, NOTES_WRITE_PERMISSION } from './notes.permissions.js';
 
-import { NoteSourceDocumentDto } from './dto/note-source.dto.js';
+import { NoteSourceDocumentDto, NoteSourceDocumentStatusDto } from './dto/note-source.dto.js';
 import { acceptedDocumentTypesSentence } from './extraction/document-format.js';
 import { NoteSourcesService } from './note-sources.service.js';
 
@@ -217,5 +235,39 @@ export class NoteSourcesController {
     }
 
     return this.sources.uploadDocument({ filename, mimeType, body }, userId);
+  }
+
+  @Get('documents/:objectId')
+  @KvoxAuth(NOTES_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'Get the extraction status of an uploaded source document',
+    description:
+      'Reports how far the `note.source.extract` job has got with a document uploaded through ' +
+      '`POST /api/notes/sources/documents`. Poll it after an upload: the status starts as ' +
+      '`extracting` and settles on `extracted` (plain text exists, `characters` counts it) or ' +
+      '`unextractable` (no readable text; `message` is the sentence to show the user). Both ' +
+      'settled states are terminal.\n\n' +
+      'Any recorded result this server cannot read is reported as `extracting`, never as an ' +
+      'error.\n\n' +
+      'Owner-scoped: the object must be one the caller uploaded as a note source. A missing ' +
+      'object, an object the notes module does not own and another user\'s document all answer ' +
+      'the same **404**, so the response never reveals whether an id exists.\n\n' +
+      'This is the notes slice\'s own read, so a host needs no storage object route to show ' +
+      'extraction progress.',
+  })
+  @ApiDataResponse(NoteSourceDocumentStatusDto, {
+    status: 200,
+    description: 'The document\'s extraction status',
+  })
+  @ApiResponse({ status: 400, description: '`objectId` is not a UUID' })
+  @ApiResponse({
+    status: 404,
+    description: 'No note source document with this id belongs to the caller',
+  })
+  async documentStatus(
+    @Param('objectId', ParseUUIDPipe) objectId: string,
+    @CurrentActor('id') userId: string,
+  ) {
+    return this.sources.documentStatus(objectId, userId);
   }
 }

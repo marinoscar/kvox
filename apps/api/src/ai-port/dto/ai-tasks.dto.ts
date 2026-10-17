@@ -2,7 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { kvoxAiStoredSchema } from '../../platform/ai/ai-settings.extension';
-import { AI_REASONING_EFFORTS, AI_TASK_KEYS } from '../ai-task-keys';
+import { AI_REASONING_EFFORTS, AI_TASK_KEYS } from '@marinoscar/kvox-ai';
 
 // =============================================================================
 // DTOs of `/api/ai-tasks/*` (issue #473, epic #472)

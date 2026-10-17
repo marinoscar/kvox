@@ -130,20 +130,15 @@ describe('noteConflictReason — the 409 branch', () => {
   });
 });
 
-describe('getNoteDocumentExtraction — total over the metadata bag', () => {
-  function respondWithMetadata(metadata: unknown) {
+describe('getNoteDocumentExtraction — total over the notes answer', () => {
+  function respondWith(data: unknown) {
     server.use(
-      http.get(`${API_BASE}/storage/objects/:id`, () =>
-        HttpResponse.json({ data: { id: 'obj-1', name: 'brief.pdf', metadata } }),
-      ),
+      http.get(`${API_BASE}/notes/sources/documents/:objectId`, () => HttpResponse.json({ data })),
     );
   }
 
-  it('reads the namespaced block the extraction job writes', async () => {
-    respondWithMetadata({
-      extractedObjectId: 'obj-2',
-      noteSourceExtraction: { status: 'extracted', characters: 4200 },
-    });
+  it('reads the extraction outcome from the notes slice', async () => {
+    respondWith({ objectId: 'obj-1', status: 'extracted', message: null, characters: 4200 });
 
     await expect(getNoteDocumentExtraction(host, 'obj-1')).resolves.toEqual({
       status: 'extracted',
@@ -153,12 +148,11 @@ describe('getNoteDocumentExtraction — total over the metadata bag', () => {
   });
 
   it('carries the API’s own stored sentence for an unreadable document', async () => {
-    respondWithMetadata({
-      noteSourceExtraction: {
-        status: 'unextractable',
-        reason: 'encrypted',
-        message: 'This PDF is password-protected.',
-      },
+    respondWith({
+      objectId: 'obj-1',
+      status: 'unextractable',
+      message: 'This PDF is password-protected.',
+      characters: null,
     });
 
     await expect(getNoteDocumentExtraction(host, 'obj-1')).resolves.toEqual({
@@ -169,17 +163,17 @@ describe('getNoteDocumentExtraction — total over the metadata bag', () => {
   });
 
   it.each([
-    ['no metadata at all', null],
-    ['metadata that is not an object', 'nonsense'],
-    ['metadata with no extraction block', { uploadedFilename: 'brief.pdf' }],
-    ['a block with a status this build does not know', { noteSourceExtraction: { status: 'weird' } }],
-    ['a block that is not an object', { noteSourceExtraction: 7 }],
-  ])('reports "extracting" for %s', async (_label, metadata) => {
+    ['no answer at all', null],
+    ['an answer that is not an object', 'nonsense'],
+    ['the API still extracting', { objectId: 'obj-1', status: 'extracting', message: null, characters: null }],
+    ['a status this build does not know', { objectId: 'obj-1', status: 'weird', message: 'x', characters: 3 }],
+    ['an answer with no status', { objectId: 'obj-1' }],
+  ])('reports "extracting" for %s', async (_label, data) => {
     // ⚠ EVERY UNREADABLE SHAPE MEANS "NOT YET", and that direction is the safe
     // one: the caller uses this to decide whether Generate is enabled, and
     // guessing "extracted" would let a user start a generation that fails
     // minutes later on their own provider account.
-    respondWithMetadata(metadata);
+    respondWith(data);
 
     await expect(getNoteDocumentExtraction(host, 'obj-1')).resolves.toEqual({
       status: 'extracting',

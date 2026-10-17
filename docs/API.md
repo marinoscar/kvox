@@ -4965,6 +4965,38 @@ the note UI shows. Optical character recognition is not supported.
 
 ---
 
+#### GET /notes/sources/documents/{objectId}
+Extraction status of an uploaded source document (#596). The notes UI polls
+this after `POST /notes/sources/documents` instead of reading the object
+through `GET /storage/objects/:id`, so a host needs no storage object read for
+notes. Read from the source object's `noteSourceExtraction` metadata block.
+
+**Requires:** `notes:read`. Owner-scoped: a missing object, another user's, or
+one the notes module does not manage answers `404`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "objectId": "…",
+    "status": "extracted",
+    "message": null,
+    "characters": 18423
+  }
+}
+```
+
+`status` is `extracting` until the job records a result (also for a recorded
+shape the server cannot read), then `extracted` or `unextractable` (no
+readable text; `message` carries the reason). `message` and `characters` are
+`null` when the recorded result carries none.
+
+**Error Cases:**
+- `400` - `objectId` is not a UUID
+- `404` - No such object, or no access to it
+
+---
+
 ### Note Templates
 
 CRUD over the reusable "recipe" (instructions, output format, body format,
