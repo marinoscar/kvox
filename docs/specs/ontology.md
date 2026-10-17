@@ -2853,8 +2853,10 @@ server-only, `{ 30 min, 1 attempt }`):
   rejecting drops them. `kv:sensitivity` on an item is lifted out here too,
   never offered.
 - **Validates** the rest against `generateShacl` for this owner with
-  `rdf-validate-shacl` — in a **child `node` process** started with an inline
-  ES module (`shacl-engine.ts`): the engine is ESM-only while the API is
+  `rdf-validate-shacl` — in a **child `node` process** running the plain
+  CommonJS script `runners/shacl-runner.cjs` (`shacl-engine.ts`; a host whose
+  binary cannot run Node, KVox Desktop, passes `shacl.run` and runs the same
+  script's `runShaclValidation` in an isolated process of its own): the engine is ESM-only while the API is
   CommonJS, a child loads it the same way under the compiled build and under
   Jest, the engine's synchronous `validateAll` never blocks the worker's event
   loop (lease renewal keeps running), and a pathological file costs one killed
