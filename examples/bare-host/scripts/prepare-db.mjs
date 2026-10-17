@@ -7,15 +7,16 @@
 // the bare host runs on. It needs no database: composing a schema, installing
 // migration files and generating a client do not connect.
 //
-//   1. `platform db sync`     installs the platform migrations (byte copies).
+//   1. `platform db sync`     installs the platform migrations (byte copies),
+//                             stamped 2024-01-01 so they sort BEFORE the domain's
+//                             September-2026 ids on a fresh database.
 //   2. `platform db compose`  composes the platform schema; the domain installer
 //                             refuses a host without `User`, `StorageObject`, `Job`.
 //   3. `kvox-db sync`         installs the domain fragments and migrations under
-//                             `--names after-host`. A host with no domain history
-//                             would otherwise sort the September-dated domain
-//                             migrations BEFORE the platform tables they
-//                             reference. This is why step 1 comes first: the new
-//                             names are "one second after the newest directory".
+//                             `--names stable`: `<package timestamp>_kvox_<slug>`,
+//                             a pure function of the migration id, never of build
+//                             time or of how many migrations the platform ships
+//                             (a platform upgrade must not rename them).
 //   4. `platform db compose`  again, now with the domain fragments.
 //   5. `prisma generate`      the client lands in node_modules/.prisma/client of
 //                             this (temporary) project.
@@ -59,14 +60,14 @@ const prisma = binOf('prisma', 'prisma');
 
 rmSync(join(projectDir, 'prisma'), { recursive: true, force: true });
 
-run('install the platform migrations', platform, ['db', 'sync', '--root', projectDir]);
+run('install the platform migrations', platform, ['db', 'sync', '--root', projectDir, '--timestamp', '2024-01-01T00:00:00Z']);
 run('compose the platform schema', platform, ['db', 'compose', '--root', projectDir]);
-run('install the domain fragments and migrations (after-host names)', kvoxDb, [
+run('install the domain fragments and migrations (stable names)', kvoxDb, [
   'sync',
   '--root',
   projectDir,
   '--names',
-  'after-host',
+  'stable',
 ]);
 run('compose the platform and domain schema', platform, ['db', 'compose', '--root', projectDir]);
 run('generate the Prisma client', prisma, ['generate', '--config', join(projectDir, 'prisma.config.ts')]);

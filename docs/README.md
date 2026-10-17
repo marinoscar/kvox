@@ -30,9 +30,10 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | Change the schema (fragments, platform migrations, drift allowlist) | [DEVELOPMENT.md](DEVELOPMENT.md#making-database-changes), [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md), the `platform-migration` skill ([../.claude/skills/platform-migration/SKILL.md](../.claude/skills/platform-migration/SKILL.md)), [runbooks/kvox-domain-migration.md](runbooks/kvox-domain-migration.md) for the domain tables |
 | Add a slice to, check or release a `@marinoscar/kvox-*` package | [PACKAGES.md](PACKAGES.md), [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md) |
 | Bind or implement the host ports of the domain packages (AI, object store, jobs, identity, notify, ...), run the conformance suite | [specs/kvox-ports.md](specs/kvox-ports.md), [PACKAGES.md](PACKAGES.md) |
-| Build a host for the domain packages (KVox Desktop): install, embedded database, ports, the Copilot `KVOX_AI` adapter, offline behaviour, conformance | [guides/kvox-desktop.md](guides/kvox-desktop.md), [specs/kvox-ports.md](specs/kvox-ports.md), [../examples/bare-host/README.md](../examples/bare-host/README.md) |
+| Build a host for the domain packages (KVox Desktop): install, embedded database, ports, the Copilot `KVOX_AI` adapter, offline behaviour, conformance | [guides/kvox-desktop.md](guides/kvox-desktop.md), [desktop/README.md](desktop/README.md), [specs/kvox-ports.md](specs/kvox-ports.md), [../examples/bare-host/README.md](../examples/bare-host/README.md) |
 | Baseline a database onto the platform history | [runbooks/application-role.md](runbooks/application-role.md) | You move an existing database to the ordinary application role the API connects as (row-level security), or roll back |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) |
+| Understand why the system is shaped as it is (packages first, Desktop shell, graph store, local-only data, AI layering) | [decisions/README.md](decisions/README.md) |
 | Write or run tests | [TESTING.md](TESTING.md) |
 | Add a job type or any long-running work | the `add-job-type` skill ([../.claude/skills/add-job-type/SKILL.md](../.claude/skills/add-job-type/SKILL.md)), [specs/job-queue.md](specs/job-queue.md); the queue itself is `@marinoscar/platform-api/jobs` (contract in the package README and the `JobHandler` TSDoc) |
 | Make a job type run on a worker node | [specs/worker-nodes.md](specs/worker-nodes.md), [deployment/worker-nodes.md](deployment/worker-nodes.md) |
@@ -69,6 +70,8 @@ Find the right doc without loading the whole index. Read a doc by section (grep 
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture: components, permission catalog, database tables, job types |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | The dev loop, database changes, framework gotchas, repository tooling (platform pin, single-instance check, changesets) |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Integrating a CLI or device with the RFC 8628 device flow |
+| [decisions/README.md](decisions/README.md) | Architecture decisions (ADRs): packages first, the Desktop shell, the graph store, local-only data, AI layering, Desktop inputs |
+| [desktop/README.md](desktop/README.md) | The starting README of the KVox Desktop repository: principle, architecture, stack, privacy, roadmap |
 | [guides/README.md](guides/README.md) | Consumer guides for the published packages: [KVox Desktop](guides/kvox-desktop.md) (the ports to implement, the embedded database, the Copilot `KVOX_AI` adapter, what changes offline) |
 | [PACKAGES.md](PACKAGES.md) | The four publishable `@marinoscar/kvox-*` packages: slices, the README/TSDoc/TypeDoc standard, peers per slice, the `host-neutral` rule, the checks and CI |
 | [platform-adoption/README.md](platform-adoption/README.md) | The platform adoption program: module classification, drift baselines, [local exceptions](platform-adoption/local-exceptions.md) (every shim and deviation, and the issue that removes it) |
