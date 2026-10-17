@@ -1957,6 +1957,7 @@ exception to append-only, so a group added later is inserted before it
 (`/admin/settings/factory-reset`, `system:factory_reset`, Admin only, no `feature`), the packaged
 `factoryResetSettingsPage` of `@marinoscar/platform-web/user-data/ui`. The route is wrapped in
 `RequirePermission permission="system:factory_reset"`; `system_settings:write` does not imply it.
+What the reset deletes and keeps on this app, and why it needs three KVox steps: [user-data-deletion §8](specs/user-data-deletion.md#8-admin-factory-reset-on-kvox).
 
 ---
 

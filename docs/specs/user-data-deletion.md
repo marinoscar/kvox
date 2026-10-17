@@ -222,7 +222,67 @@ run, and a `files` deletion never touches a managed object.
   the platform gates them out of (`saas` mode; offboarding needs multi-organization
   tenancy).
 
-## 8. Testing
+## 8. Admin factory reset on KVox
+
+The platform's `admin.factory_reset` job (`system:factory_reset`, Admin only; page
+`/admin/settings/factory-reset`) wipes inline owner models, every `org` model and every user
+but the actor, then every storage object outside the surviving prefixes. It assumes content
+in inline models and one `storageObjects: true` model. KVox has neither, so the bare reset is
+wrong here in five ways: the content is delegated and the reset never enqueues a delegate;
+the `storage_objects` table is not swept, or fails on a `Restrict` key; the actor is never
+cascaded; the search index has no foreign key; and the built-in note templates are deleted.
+`apps/api/src/platform/user-data/factory-reset.steps.ts` carries the full reasoning in its
+header. This app closes the gaps with three registered steps, the `StorageObject` hint
+`factoryReset: 'keep'` (`user-data.manifest.ts`) and one config line (`user-data.config.ts`).
+
+| Step | Phase | What it does |
+|---|---|---|
+| `kvox.content` | `before-users` | Deletes, for every user and the actor included, the transcripts, notes, custom note templates, search index rows and the knowledge graph, in foreign-key order |
+| `kvox.storage-objects` | `deployment` | Deletes every storage object outside the surviving prefixes: the bytes, then the row (`kvox-objects/factory-reset-storage.step.ts`) |
+| `kvox.note-templates` | `deployment` | Re-seeds the built-in note templates that the platform's owner-less sweep deleted (fixed ids, idempotent) |
+
+### What is kept
+
+- The acting administrator's account, and the roles.
+- Configuration, including the built-in note templates.
+- Database backups: the runs, their archives (the surviving key prefix) and their jobs
+  (`factoryReset.keepJobsReferencedBy` on `DatabaseBackupRun.jobId`).
+- The audit log.
+
+### Result keys
+
+The job result namespaces each step's counts as `step.<id>.<key>`.
+
+| Key | Meaning |
+|---|---|
+| `step.kvox.content.providerCopiesRemaining` | Transcripts whose copy still sits at the transcription provider. The reset does not delete vendor copies; the administrator removes them at the provider |
+| `step.kvox.storage-objects.storageObjectsFailed` | Bucket deletions the provider refused. The row stays so a re-run retries it; the step never throws on one |
+
+The other counts are `transcripts`, `notes`, `noteTemplates`, `graphEntities`,
+`graphRelations`, `graphItems`, `graphExports`, `searchChunks`, `searchIndexState`,
+`storageObjectsDeleted`, `builtInTemplatesRestored` and `builtInTemplatesPresent`.
+
+### Graph erasure
+
+The graph rows are erased directly in one transaction, not through `GraphWriteService`: the
+write rule governs producing and editing graph rows, and erasing them is a different act
+(`kg.purge` and the `owner_id ... ON DELETE CASCADE` of every `kg_*` table already delete
+directly). The deferred `kg_assert_has_evidence` trigger re-reads each subject's current row at
+`COMMIT`, so the step deletes every entity, relation and item and then all evidence in the same
+transaction and the trigger finds nothing to refuse.
+
+### Not fixed: organization offboarding
+
+`orgs:offboard` (multi-organization tenancy only; no page) deletes the organization's rows,
+including `storage_objects`, which transcripts, note sources and exports, version snapshots and
+graph exports reference with `onDelete: Restrict`. It has the same foreign-key defect and no KVox
+step. Closing it needs a follow-up or a platform seam; until then, do not offboard an
+organization that holds transcripts on this app.
+
+Every step is a `deleteMany` by predicate or a page selected from what is still there, so a
+retried job deletes what is left.
+
+## 9. Testing
 
 - `apps/api/test/user-data/user-data-registrations.spec.ts`: the five scopes, their
   phrases and layers, the categories each reaches, the delegates' type strings and
@@ -238,3 +298,7 @@ run, and a `files` deletion never touches a managed object.
   pin the payload shapes.
 - Web: `apps/web/src/__tests__/config/dangerZoneCard.test.ts` (the card is
   declared, ungated, and last).
+- `apps/api/test/user-data/factory-reset-steps.spec.ts` (the three steps over mocks),
+  `factory-reset.db.spec.ts` (the real handler over the real schema, including the evidence
+  trigger forced with `SET CONSTRAINTS ALL IMMEDIATE`) and the factory reset RBAC specs
+  (`factory-reset-rbac.integration.spec.ts`, `factory-reset-permissions.spec.ts`).
