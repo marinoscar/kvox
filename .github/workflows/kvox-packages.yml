@@ -110,7 +110,8 @@ jobs:
           node --input-type=module -e "await import('@marinoscar/kvox-contract')"
           node --input-type=module -e "await import('@marinoscar/kvox-contract/transcripts')"
           node --input-type=module -e "await import('@marinoscar/kvox-contract/errors')"
-          node --input-type=module -e "await import('@marinoscar/kvox-web/core')"
+          node --input-type=module -e "await import('@marinoscar/kvox-web/core/headless')"
+          node --input-type=module -e "await import('@marinoscar/kvox-web/transcription/headless')"
           node packages/kvox-db/bin/kvox-db.js --help
 
   package-docs:

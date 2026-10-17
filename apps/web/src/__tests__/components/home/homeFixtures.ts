@@ -20,7 +20,7 @@ import type { UploadManagerContextValue, ManagedUpload } from '../../../contexts
 import type { NoteListItem, NoteSummary } from '../../../services/notes';
 import type { TranscriptListItem, TranscriptSummary } from '../../../services/transcripts';
 import type { UploadSessionRecord } from '../../../services/uploadSessions';
-import type { TranscriptionConfig } from '../../../services/transcription';
+import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 
 /**
  * A fixed instant, never `Date.now()`.

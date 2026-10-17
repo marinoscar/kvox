@@ -36,11 +36,11 @@ import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
-import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import ModelTrainingOutlinedIcon from '@mui/icons-material/ModelTrainingOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
+import { kvoxTranscriptionAdminSections } from '@marinoscar/kvox-web/transcription/ui';
 // Doctor (#464, epic #462) — the platform's health-check page, declared by the
 // package (title, description, path, `system_settings:read`) and appended below.
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
@@ -178,35 +178,13 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: '/admin/settings/push',
         permission: 'push:read',
       },
-      {
-        // Issue #23, epic #19. `system_settings:read` is the string
-        // `transcription-settings.controller.ts` enforces on its GET — the
-        // registry never invents a permission, it mirrors one. And here it is
-        // literally the same row: this page edits the `transcription`
-        // NAMESPACE of the `global` system_settings row, which
-        // `system-settings.controller.ts` already gates on exactly these
-        // strings, so a permission pair of its own would mean the same bytes
-        // were reachable under two different authorities.
-        //
-        // (Contrast `Web Push` above, which DOES have a pair of its own. That
-        // split was earned by blast radius — rotating a VAPID key knocks every
-        // subscriber offline. Nothing here has that property: the destructive
-        // act is deleting an API key, which stops future jobs and destroys
-        // nothing already stored.)
-        //
-        // Saving, testing and removing the key all need
-        // `system_settings:write`, which the PAGE gates internally by
-        // disabling its controls: the card gate is about REACHABILITY, and "is
-        // transcription configured, with which provider, and is a key stored"
-        // is worth reading for anyone answering "why did my recording never
-        // come back".
-        title: 'Transcription',
-        description:
-          'Choose the speech-to-text provider, hold its API key, and control what happens to audio once it has been transcribed.',
-        Icon: RecordVoiceOverOutlinedIcon,
-        path: '/admin/settings/transcription',
-        permission: 'system_settings:read',
-      },
+      // Transcription (#23, epic #19; the slice's since #499, epic #498): the card
+      // is DATA exported by `@marinoscar/kvox-web/transcription/ui`, spread HERE so
+      // it keeps its position in the General section. Its `permission` is
+      // `system_settings:read`, the exact string `transcription-settings.controller.ts`
+      // enforces on its GET; the comment explaining why it is not a pair of its own
+      // travels with the data, in the slice's `settings.ts`.
+      ...kvoxTranscriptionAdminSections.general,
       {
         // Issue #55, epic #45; the platform's since #477 (epic #472). The page is
         // the platform AI slice's `AiConfigPage` (`@marinoscar/platform-web/ai/ui`),

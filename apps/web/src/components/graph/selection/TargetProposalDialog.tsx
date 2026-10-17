@@ -22,7 +22,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 
 import type { ProposalSummary } from '../../../services/graph';
-import { formatRelativeTime } from '../../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export interface TargetProposalDialogProps {
   open: boolean;

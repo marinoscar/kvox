@@ -39,7 +39,7 @@ import { SourceLine } from '../library/NotesLibraryView';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { isNoteInFlight } from '../../hooks/useNotes';
 import type { NoteListItem } from '../../services/notes';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export interface NoteSummaryCardProps {
   note: NoteListItem;

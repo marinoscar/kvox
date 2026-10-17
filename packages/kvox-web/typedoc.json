@@ -2,7 +2,13 @@
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["../../typedoc.base.json"],
   "tsconfig": "./tsconfig.json",
-  "entryPoints": ["./src/core/index.ts"],
+  "entryPoints": [
+    "./src/core/headless/index.ts",
+    "./src/core/ui/index.ts",
+    "./src/core/testing/index.ts",
+    "./src/transcription/headless/index.ts",
+    "./src/transcription/ui/index.ts"
+  ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",
   "out": "./docs-api/html",

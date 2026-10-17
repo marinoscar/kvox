@@ -25,9 +25,19 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
  * Rule 5 of the Settings UI Pattern (root AGENTS.md): the boundary is `sm`
  * (600px), never `md`. `LibraryPageFrame.tsx` also reads `down('sm')` and is the
  * documented non-gate.
+ *
+ * Since #499 (epic #498) `LibraryPageFrame` lives in `@marinoscar/kvox-web`
+ * (`packages/kvox-web/src/core/ui/library/`), and the library views will follow it
+ * with the domain slices. The scan therefore covers that package's sources too; a
+ * file there is keyed `@marinoscar/kvox-web:<path from its src/>`, so the one
+ * documented non-gate is still named, and still needs its reason, wherever it lives.
  */
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** The domain web package: breakpoint reads that moved there are still scanned. */
+const KVOX_WEB_SRC = resolve(SRC, '../../../packages/kvox-web/src');
+const KVOX_WEB_KEY = '@marinoscar/kvox-web:';
 
 const BREAKPOINT_READ = /\buseMediaQuery\s*\(|\bbreakpoints\.(?:up|down|between|only)\s*\(/;
 
@@ -53,7 +63,7 @@ const WHY = {
  * path from `src/`. NONE of them may be shell chrome (see `CHROME` below).
  */
 const ALLOWED_READS: Readonly<Record<string, string>> = {
-  'components/library/LibraryPageFrame.tsx': WHY.libraryFrame,
+  '@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx': WHY.libraryFrame,
   'components/library/TranscriptsLibraryView.tsx': WHY.libraryView,
   'components/library/NotesLibraryView.tsx': WHY.libraryView,
 
@@ -137,16 +147,24 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-const FILES = sourceFiles(SRC);
+const FILES = [...sourceFiles(SRC), ...sourceFiles(KVOX_WEB_SRC)];
+
+/** `path from src/`, with the package prefix for a file of `@marinoscar/kvox-web`. */
+function keyOf(file: string): string {
+  return file.startsWith(KVOX_WEB_SRC + sep)
+    ? KVOX_WEB_KEY + relative(KVOX_WEB_SRC, file).split(sep).join('/')
+    : relative(SRC, file).split(sep).join('/');
+}
+
 const READERS = FILES.filter((file) =>
   BREAKPOINT_READ.test(stripComments(readFileSync(file, 'utf8'))),
-).map((file) => relative(SRC, file).split(sep).join('/'));
+).map(keyOf);
 
 describe('breakpoint gates — the five are the package\'s (#484)', () => {
   it('scans the source tree (guards the scan itself against matching nothing)', () => {
     expect(FILES.length).toBeGreaterThan(100);
     // The one documented non-gate must be found, or the scan is not reading code.
-    expect(READERS).toContain('components/library/LibraryPageFrame.tsx');
+    expect(READERS).toContain('@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx');
   });
 
   it('every file that reads a breakpoint is listed with a reason', () => {
@@ -172,7 +190,9 @@ describe('breakpoint gates — the five are the package\'s (#484)', () => {
   });
 
   it('keeps LibraryPageFrame the only library-chrome exemption: it is the documented non-gate', () => {
-    expect(ALLOWED_READS['components/library/LibraryPageFrame.tsx']).toBe(WHY.libraryFrame);
+    expect(ALLOWED_READS['@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx']).toBe(
+      WHY.libraryFrame,
+    );
   });
 
   describe('shell chrome and its bindings read no breakpoint', () => {

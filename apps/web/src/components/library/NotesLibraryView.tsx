@@ -10,7 +10,7 @@
  * would make one product feel like two.
  *
  * The `<h1>` ("Notes") and the primary action are
- * `components/library/LibraryPageFrame.tsx`'s, rendered by
+ * `LibraryPageFrame` (`@marinoscar/kvox-web/core/ui`)'s, rendered by
  * `pages/NotesPage.tsx`.
  *
  * =============================================================================
@@ -63,22 +63,24 @@ import { useTheme } from '@mui/material/styles';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
-import { FeedCountLine } from './FeedCountLine';
-import { FeedDateSeparator } from './FeedDateSeparator';
+import {
+  ActiveStatusFilterChip,
+  FeedCountLine,
+  FeedDateSeparator,
+} from '@marinoscar/kvox-web/core/ui';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { SearchResultsView } from '../search/SearchResultsView';
 import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useSearch } from '../../hooks/useSearch';
-import { useScrollRestoration } from '../../hooks/useScrollRestoration';
-import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
-import { feedCacheKey } from '../../utils/feedCache';
+import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
+import { feedCountLabel, groupFeedByDate } from '@marinoscar/kvox-web/core/headless';
+import { feedCacheKey } from '@marinoscar/kvox-web/core/headless';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
 import type { SearchResult, SearchType } from '../../services/search';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import {
   NOTE_STATUS_FILTERS,
   noteStatusFromQuery,

@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getGraphOverview, refreshGraphOverview, type GraphOverview } from '../services/graph';
 import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHookUtils';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 /** How often a pending overview is re-read. */
 export const OVERVIEW_POLL_MS = 10_000;

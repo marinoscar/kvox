@@ -92,6 +92,8 @@ jobs:
       - run: npm ci
       # The web app imports @marinoscar/kvox-contract from its built output (issue #488).
       - run: npm run build --workspace=@marinoscar/kvox-contract
+      # ... and @marinoscar/kvox-web (core, transcription) from its built output (issue #499).
+      - run: npm run build --workspace=@marinoscar/kvox-web
       - run: npm ci
         working-directory: tests/visual
 
