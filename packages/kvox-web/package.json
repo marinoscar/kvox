@@ -74,6 +74,14 @@
       "types": "./dist/graph/testing/index.d.ts",
       "default": "./dist/graph/testing/index.js"
     },
+    "./ask/headless": {
+      "types": "./dist/ask/headless/index.d.ts",
+      "default": "./dist/ask/headless/index.js"
+    },
+    "./ask/ui": {
+      "types": "./dist/ask/ui/index.d.ts",
+      "default": "./dist/ask/ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

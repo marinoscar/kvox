@@ -12,6 +12,7 @@ import {
 } from '@marinoscar/kvox-web/transcripts/ui';
 import { kvoxNotesRoutes } from '@marinoscar/kvox-web/notes/ui';
 import { kvoxGraphRoutes } from '@marinoscar/kvox-web/graph/ui';
+import { kvoxAskRoutes } from '@marinoscar/kvox-web/ask/ui';
 import { appGraphRoutes } from '../../kvox/graphRoutes';
 import { appNotesRoutes } from '../../kvox/notesRoutes';
 import { appTranscriptsRoutes } from '../../kvox/transcriptsRoutes';
@@ -72,6 +73,10 @@ function declaredRoutePaths(): string[] {
   // Knowledge graph settings route.
   if (/renderKvoxRoutes\(appGraphRoutes\)/.test(source)) {
     paths.push(...kvoxGraphRoutes.map((route) => route.path));
+  }
+  // The ask route (#504, epic #498), the same way: `/ask/:conversationId?`.
+  if (/renderKvoxRoutes\(kvoxAskRoutes\)/.test(source)) {
+    paths.push(...kvoxAskRoutes.map((route) => route.path));
   }
   // `*` is the catch-all, which redirects to `/` rather than rendering a page.
   return [...new Set(paths)].filter((path) => path !== '*');
@@ -594,6 +599,11 @@ describe('admin sections — registry against the live routes', () => {
         kvoxGraphRoutes.map((route) => route.path),
       );
       for (const route of kvoxGraphRoutes) gates.set(route.path, route.permission ?? null);
+    }
+    // The ask route (#504, epic #498): `graph:read`, the exact string every
+    // `/api/ask/*` route enforces.
+    if (/renderKvoxRoutes\(kvoxAskRoutes\)/.test(source)) {
+      for (const route of kvoxAskRoutes) gates.set(route.path, route.permission ?? null);
     }
     if (/renderKvoxRoutes\(kvoxSearchRoutes\)/.test(source)) {
       for (const route of kvoxSearchRoutes) gates.set(route.path, route.permission ?? null);

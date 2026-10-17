@@ -31,7 +31,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
-import { useIsMounted } from '../../hooks/useIsMounted';
+import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
 import { formatRelativeTime, useKvoxHost, useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 import { listProposals } from '@marinoscar/kvox-web/graph/headless';
 import type { ProposalSummary } from '@marinoscar/kvox-web/graph/headless';

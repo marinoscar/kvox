@@ -84,7 +84,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:transcripts/ui/components/SegmentActions.tsx': WHY.panel,
   '@marinoscar/kvox-web:transcripts/ui/components/SpeakerActions.tsx': WHY.panel,
   '@marinoscar/kvox-web:transcripts/ui/components/TranscriptPipeline.tsx': WHY.panel,
-  'components/ask/EntityAskPanel.tsx': WHY.panel,
+  '@marinoscar/kvox-web:ask/ui/components/EntityAskPanel.tsx': WHY.panel,
 
   '@marinoscar/kvox-web:graph/ui/components/overview/ClusterSidePanel.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/explorer/ExplorerSidePanel.tsx': WHY.graph,
@@ -100,7 +100,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:graph/ui/pages/GraphIndexPage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphOverviewPage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphExplorerPage.tsx': WHY.page,
-  'pages/AskPage.tsx': WHY.page,
+  '@marinoscar/kvox-web:ask/ui/pages/AskPage.tsx': WHY.page,
   // `up('md')`: whether the transcript page lays its player beside the text.
   '@marinoscar/kvox-web:transcripts/ui/pages/TranscriptPage.tsx': WHY.page,
 };

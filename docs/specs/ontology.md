@@ -3469,7 +3469,7 @@ landing. What it does, and the decisions a neighbouring change could undo:
   created rather than making a second. Every 409 reason and #360's 400
   `model_not_permitted` has its own sentence above the composer, and the
   typed text is kept.
-- **The stream** (`services/askStream.ts`) mirrors the note stream's client
+- **The stream** (`packages/kvox-web/src/ask/headless/clients/askStream.ts`, over `host.sse`) mirrors the note stream's client
   and reuses its offset-addressed `applyDelta`, so a replay never duplicates
   text; a page opened mid-answer seeds the buffer from the row and resumes
   from its length (`?lastEventId=`); `step` frames are de-duplicated by
@@ -3508,7 +3508,7 @@ decisions a neighbouring change could undo:
   absent flag or a failed read hides it: a page-level action is not
   advertised on an unanswered question, unlike `/ask`, which a user reached
   deliberately.
-- **The drawer** (`components/ask/EntityAskPanel.tsx`) is a transient
+- **The drawer** (`packages/kvox-web/src/ask/ui/components/EntityAskPanel.tsx`) is a transient
   surface over the page, not a section of it — the reasoning §13 gives for
   the proposal sheet: ≥ 600 px a right-anchored temporary drawer 440 px wide
   (the entity stays visible beside the answer), < 600 px a bottom sheet at

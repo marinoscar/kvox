@@ -22,8 +22,8 @@ import { AXE_OPTIONS, note, transcript } from './homeFixtures';
  *
  * The component is props-only, so every list it renders is handed to it and
  * nothing here mocks a summary hook. The retry calls are NOT mocked either:
- * they go through `services/transcripts.ts` and `services/notes.ts` to MSW, so
- * these tests assert the real paths (`POST /api/transcripts/:id/retry`, `POST
+ * they go through the transcripts and notes clients of `@marinoscar/kvox-web`
+ * to MSW, so these tests assert the real paths (`POST /api/transcripts/:id/retry`, `POST
  * /api/notes/:id/regenerate`) rather than that some spy was called — the thing
  * most likely to be wrong is which endpoint a button reaches.
  */

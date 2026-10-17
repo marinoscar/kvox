@@ -102,6 +102,7 @@ import { renderKvoxRoutes } from '../src/platform-kvox/renderKvoxRoutes';
 import { appTranscriptsRoutes } from '../src/kvox/transcriptsRoutes';
 import { appNotesRoutes } from '../src/kvox/notesRoutes';
 import { appGraphRoutes } from '../src/kvox/graphRoutes';
+import { kvoxAskRoutes } from '@marinoscar/kvox-web/ask/ui';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
@@ -130,8 +131,6 @@ const UserTokensPage = lazy(() =>
 // it with an empty list, which hides the section, keeping Home's captures
 // identical to what they were before the section existed. The graph pages and
 // the Knowledge graph settings page (#369) are the slice's routes (#503).
-// Ask (#380), mirroring `App.tsx`: one optional-segment route, `graph:read`.
-const AskPage = lazy(() => import('../src/pages/AskPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/identity/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
@@ -319,14 +318,9 @@ function HarnessRoutes() {
               (#369): the slice's routes, rendered by the same `renderKvoxRoutes`
               `App.tsx` uses, so the gates are the app's. */}
           {renderKvoxRoutes(appGraphRoutes)}
-          <Route
-            path="/ask/:conversationId?"
-            element={
-              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
-                <AskPage />
-              </RequirePermission>
-            }
-          />
+          {/* Ask (#380, epic #348; the slice's since #504, epic #498): one
+              optional-segment route, `graph:read`, the slice's data. */}
+          {renderKvoxRoutes(kvoxAskRoutes)}
 
           <Route path="/settings" element={<UserSettingsHubPage />} />
           {/* Issue #279, epic #271 (harness wiring: issue #298). Ungated, exactly

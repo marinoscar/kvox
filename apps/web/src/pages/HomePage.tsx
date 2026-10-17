@@ -145,7 +145,7 @@ import { RecentNotes } from '../components/home/RecentNotes';
 import { RecentTranscripts } from '../components/home/RecentTranscripts';
 import { SharedWithMe } from '../components/home/SharedWithMe';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useIsMounted } from '../hooks/useIsMounted';
+import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
 import { useNoteSummary } from '@marinoscar/kvox-web/notes/headless';
 import { useTranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';

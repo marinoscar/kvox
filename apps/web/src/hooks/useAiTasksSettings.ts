@@ -20,7 +20,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../services/api';
 import { getAiTasksSettings, putAiTasksSettings } from '../services/aiTasks';
 import type { AiTasksSettings, AiTasksSettingsView } from '../services/aiTasks';
-import { useIsMounted } from './useIsMounted';
+import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
 
 /** 403 is named explicitly: it is the one failure an admin can act on themselves. */
 function messageFor(err: unknown, fallback: string): string {
