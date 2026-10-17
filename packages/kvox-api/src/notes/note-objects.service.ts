@@ -40,7 +40,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PassThrough, Readable } from 'node:stream';
 
-import { KVOX_OBJECT_STORE, KvoxObjectMissingError, type KvoxObjectStorePort } from '../ports/index.js';
+import {
+  KVOX_OBJECT_STORE,
+  KvoxObjectMissingError,
+  type KvoxObjectInfo,
+  type KvoxObjectStorePort,
+} from '../ports/index.js';
 import { NOTES_MANAGED_BY } from './job-types.js';
 
 /** A stored object, as the notes pipeline refers to it. @stability experimental */
@@ -211,6 +216,16 @@ export class NoteObjectsService {
       expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
       object: { mimeType: object.mimeType, size: object.size },
     };
+  }
+
+  /**
+   * What the store records about one object, or `null` when it does not exist.
+   *
+   * ⚠ NO OWNERSHIP CHECK — the caller decides what `managedBy` and `ownerId`
+   * must be (see `NoteSourcesService.documentStatus`).
+   */
+  async describe(objectId: string): Promise<KvoxObjectInfo | null> {
+    return (await this.store.describe([objectId])).get(objectId) ?? null;
   }
 
   /** The object's bytes as a stream, or `null` when it does not exist. */

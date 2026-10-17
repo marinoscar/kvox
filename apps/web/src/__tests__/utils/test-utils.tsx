@@ -116,8 +116,9 @@ export const mockAdminUser: MockUser = {
     'notes:write',
     'note_templates:read',
     'note_templates:write',
-    // Seeded to every role. `GET /api/storage/objects/:id` is what resolves a
-    // note row's source name and an uploaded document's extraction progress.
+    // Seeded to every role. Notes no longer need them: a note row carries its
+    // `sourceName` (#192) and extraction progress is read through the notes
+    // slice (#596). Kept because a fixture without them is a user that cannot exist.
     'storage:read',
     'storage:write',
     // Present because the seeded `admin` role grants the platform telemetry
