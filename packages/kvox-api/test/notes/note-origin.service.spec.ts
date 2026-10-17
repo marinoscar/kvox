@@ -108,6 +108,7 @@ describe('NoteOriginService', () => {
       durationMs: 120_000,
       status: 'ready',
       playbackStatus: 'ready',
+      hasAudio: true,
       via: 'direct',
       hops: 0,
     });

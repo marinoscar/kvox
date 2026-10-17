@@ -133,6 +133,7 @@ describe('GraphEvidenceService.resolve', () => {
         endMs: 3000,
         textChanged: true,
         available: true,
+        hasAudio: true,
         href: `/transcripts/${T1}?segment=${SEG}&t=1500`,
       },
     });

@@ -568,6 +568,13 @@ export const noteResponseSchema = z.object({
       playbackStatus: z
         .enum(PLAYBACK_STATUSES)
         .describe('Whether a playable rendition of the recording is ready.'),
+      hasAudio: z
+        .boolean()
+        .describe(
+          'Whether the transcript has a recording to play (#604). False when it was imported ' +
+            'from a kvox.transcript/v1 file (GET /api/transcripts/:id/audio answers 404); true ' +
+            'otherwise. The same value the transcript list and detail report.',
+        ),
       via: z
         .enum(['direct', 'note_chain'])
         .describe(
