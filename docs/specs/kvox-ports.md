@@ -156,16 +156,14 @@ The bare host now mounts all four over the shared transcripts, notes and search 
 
 1. **The `ai` namespace declares `graphEnabled` and `reasoningEffort`**, beside `maxInputTokens`, `maxOutputTokens` and `maxDocumentBytes`. Absent or false, every graph AI route answers 409 `graph_disabled` and digests are never queued. `GraphAiRunResolver` reads `reasoningEffort` (the host uses `'none'`). The host turns `graphEnabled` on in `seedRuntime` (`src/bootstrap.ts`, `src/seed.ts`).
 2. **Settings semantics for `defaults: undefined`** (section 3.8): `src/ports/file-settings.ts`.
-3. **`@fastify/multipart` is the host's plugin.** `POST /api/graph/imports` and the notes document-source upload read `request.file()`. No slice registers it and none lists it as a peer (`packages/kvox-slice-peers.json`), so `check-slice-peers` cannot catch its absence (`src/bootstrap.ts`).
+3. **`@fastify/multipart` is the host's plugin.** `POST /api/graph/imports` and the notes document-source upload read `request.file()`. No slice registers it, so it is a host plugin, not a peer: `$hostPlugins` in `packages/kvox-slice-peers.json` declares it and `check-slice-peers` rule 8 and `--app` check it (`src/bootstrap.ts`). A missing plugin answers 500 naming it.
 4. **The `kg.graph_layout` peers are required in practice**: `graphology`, `graphology-communities-louvain`, `graphology-layout`, `graphology-layout-forceatlas2`. Any `GET /api/graph/overview` on a non-empty graph schedules the layout job (`package.json`).
 5. **RDF peers**: `n3`, `jsonld`, `rdf-validate-shacl`. SHACL validation runs in a child node process (`package.json`).
 6. **Four enqueuers to tick** with `schedules: false` on transcripts, notes, graph and graph-rdf: `TranscriptsHousekeepingEnqueuer`, `NotesHousekeepingEnqueuer`, `KgMigrateEnqueuer` and `KgExportExpiryEnqueuer` (the last exists only while `export` is on). Resolve each with `app.get(T, { strict: false })`. `@nestjs/schedule` stays uninstalled (`src/housekeeping.ts`).
 7. **`KVOX_AI` must answer structured output** under the schema names `kg_extraction`, `kg_adjudication`, `kg_item_adjudication` and `entity_digest`. An entity digest with no surviving citation fails the job. With `embeddings: null`, resolution works by name only and `kg.embed` jobs are no-ops (`src/fake-ai.ts`, `src/graph-scenario.ts`). The Ask loop needs `chat` with tool calling.
 8. **`autoExtract: false`** keeps extraction on the explicit route `POST /api/graph/notes/:noteId/extract`. With it on, every ready note spends the user's AI quota.
 
-Known package gaps (not host duties, open):
-
-- `@fastify/multipart` is missing from the slice peers data (duty 3).
+Known package gaps: none open. The two the graph run found are fixed: `graph.changed` is published after proposal commits, imports, reverts and merges (#591), and `@fastify/multipart` is a declared host plugin (`$hostPlugins`, `check-slice-peers` rule 8, #592).
 
 ## 7. Out of scope
 
