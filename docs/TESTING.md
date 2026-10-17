@@ -174,6 +174,21 @@ npm run ask:eval --workspace=api -- <flags>
 - The API key is `KVOX_EVAL_OPENAI_API_KEY`. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases for one release.
 - Real meetings never enter the repository: `--real-dir`, a real-data `--out` and `KG_EVAL_REAL_DIR` are refused (exit 3) when they resolve inside the git work tree. Quality bar: [specs/ontology.md](specs/ontology.md) (section 6). Package reference: [packages/kvox-eval/README.md](../packages/kvox-eval/README.md).
 
+#### Harness parity
+
+Part 2 of #580 proves that the web edition and a direct binding (the Desktop edition's shape) send a provider the same request. `runParityScenario` of `@marinoscar/kvox-eval/parity` drives the product's own code (notes generation, graph extraction, adjudication and the Ask handler) through a `KvoxAiPort`, with a scripted provider that answers as a pure function of the request, so no key and no network are involved. The committed snapshots `packages/kvox-eval/parity/requests.<fixture>.json` (`m01` to `m10`) and `requests.ask.json` are the single source of truth; each binding is compared with them, so the two are equal to each other by transitivity.
+
+- **Compared**, per provider round trip: the method, the feature, the instructions (system prompt), the input, the strict structured-output schema, the tool definitions, the model, the reasoning effort and the maximum output tokens.
+- **Normalized**: ids (UUIDs), ISO timestamps and `requestId`-like fields (`requestId`, `traceId`, `spanId`, `correlationId`) become numbered placeholders by first appearance (`normalizeRecordedValue` of `@marinoscar/kvox-ai/testing`); nothing else is dropped, and a Zod schema becomes JSON Schema.
+- **Excluded**, because host-specific and never part of what a provider sees: `userId`, `orgId`, `jobId`, the abort `signal` and the API key; and, on the web path, the provider id (the platform's target resolver picks the provider from the model).
+
+| Binding | Spec | Command |
+|---|---|---|
+| Direct: `createKvoxAi` over `createDirectRuntime` over a recording adapter | `packages/kvox-eval/test/parity.spec.ts` | `npm run test:run -w @marinoscar/kvox-eval -- parity` |
+| Web: the real `PlatformAiRuntime` and `PlatformTaskModelSource` over a scripted `AiService` | `apps/api/test/kvox/ai-parity.spec.ts` | `npm test --workspace=api -- ai-parity` |
+
+Both run in CI with no network and no key. When a prompt, schema, tool or limit changes on purpose, regenerate the snapshots with `KVOX_EVAL_UPDATE_PARITY=1 npm run test:run -w @marinoscar/kvox-eval -- parity`, read the diff and commit it. A snapshot change is a harness change: it is what every host now sends to a provider, so the PR must explain it. A failing parity spec without an intended change means a binding (or the web wiring) drifted from the shared harness; fix the binding, never the snapshot. Slice reference: [packages/kvox-eval/src/parity/README.md](../packages/kvox-eval/src/parity/README.md).
+
 ### Frontend Tests
 
 ```bash
