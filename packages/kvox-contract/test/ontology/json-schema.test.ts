@@ -16,7 +16,7 @@ import {
 //     additionalProperties, items, enum, anyOf, description;
 //   - nesting depth <= 5 from the props root.
 //
-// The cross-check with #358's assertStrictJsonSchema (`ai-port/strict-json-schema.ts`)
+// The cross-check with #358's assertStrictJsonSchema (`packages/kvox-ai/src/structured/strict-json-schema.ts`)
 // needs the API's AI port, so it stays in the API:
 // `apps/api/test/ontology/json-schema-strict.spec.ts`.
 // =============================================================================

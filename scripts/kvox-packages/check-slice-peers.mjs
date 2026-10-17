@@ -57,6 +57,13 @@
 //                    A slice that did could not be installed on Desktop, where
 //                    the platform does not exist. The one place that imports
 //                    the platform is the app folder apps/api/src/platform-kvox.
+//                    packages/kvox-ai/src/** may import exactly one platform
+//                    specifier, the public subpath @marinoscar/platform-api/ai
+//                    (the provider-adapter types and classes, an interim peer
+//                    until the lean adapter package of #578); any other
+//                    platform specifier, the bare package or a deeper path
+//                    such as @marinoscar/platform-api/ai/core, is a violation
+//                    (HOST_NEUTRAL_ALLOWED).
 //   7. headless      No file under packages/kvox-web/src/<slice>/headless/**
 //                    imports @mui/*, @emotion/* or a router (react-router*), or
 //                    reaches into a ui/ folder. A headless entry is what a host
@@ -114,7 +121,16 @@ export const SLICES_FILE = 'packages/kvox-slices.json';
 /** Per-slice peers, relative to the root. */
 export const PEERS_FILE = 'packages/kvox-slice-peers.json';
 /** Packages whose `src/` may not import the platform (rule 6). */
-export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web']);
+export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvox-ai']);
+/**
+ * The platform specifiers a host-neutral package may import anyway, matched
+ * EXACTLY (rule 6). `kvox-ai` implements the model port over the provider-adapter
+ * types and classes of `@marinoscar/platform-api/ai` (issue #579) until the lean
+ * adapter package (#578) replaces that peer; nothing else of the platform.
+ */
+export const HOST_NEUTRAL_ALLOWED = Object.freeze({
+  'kvox-ai': Object.freeze(['@marinoscar/platform-api/ai']),
+});
 /** Specifier prefix rule 6 forbids. */
 export const PLATFORM_PREFIX = '@marinoscar/platform-';
 
@@ -545,12 +561,16 @@ function checkImports(root, packages, graph, peers, violations) {
 function checkHostNeutral(root, violations) {
   for (const pkg of HOST_NEUTRAL_PACKAGES) {
     const src = join(root, 'packages', pkg, 'src');
+    const allowed = HOST_NEUTRAL_ALLOWED[pkg] ?? [];
     for (const file of sourceFiles(src)) {
       for (const specifier of importSpecifiers(readFileSync(file, 'utf8'))) {
-        if (specifier.startsWith(PLATFORM_PREFIX)) {
+        if (specifier.startsWith(PLATFORM_PREFIX) && !allowed.includes(specifier)) {
           violations.push({
             rule: 'host-neutral',
-            message: `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice must not import @marinoscar/platform-*: it would not install on Desktop. Bind the platform in apps/api/src/platform-kvox (or the web app) behind a port instead.`,
+            message:
+              allowed.length > 0
+                ? `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice may import only ${allowed.map((a) => `'${a}'`).join(', ')} of @marinoscar/platform-*: anything else would not install on Desktop.`
+                : `${toPosix(relative(root, file))} imports '${specifier}'. A ${pkg} slice must not import @marinoscar/platform-*: it would not install on Desktop. Bind the platform in apps/api/src/platform-kvox (or the web app) behind a port instead.`,
           });
         }
       }

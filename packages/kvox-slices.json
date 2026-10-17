@@ -40,5 +40,17 @@
     "promote": ["lock", "manifest", "sql", "sync"],
     "sql": [],
     "sync": ["lock", "manifest"]
+  },
+  "kvox-ai": {
+    "tasks": [],
+    "features": ["tasks"],
+    "types": ["features"],
+    "tokens": [],
+    "structured": ["types"],
+    "chat": ["types"],
+    "embedding": ["types"],
+    "runtime": ["types", "features", "tasks"],
+    "errors": ["types", "features"],
+    "testing": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors"]
   }
 }

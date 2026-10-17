@@ -385,7 +385,7 @@ valid JSON — the caller gets whatever keys the model felt like — so the port
 dedicated method, `KvoxAi.generateStructured({ userId, feature, jobId, system, user, schemaName, schema, jsonSchema?, maxOutputTokens? })` (§2.8 "`KvoxAi` call path"). `schema` is the caller's Zod validator and is always applied to the parsed value; `jsonSchema`, when given, is the strict schema the vendor is held to (the per-run schema of `graph/extraction/output-schema.ts`, the adjudication and digest schemas). The method returns `{ value, model, usage }` and `value` is the Zod-validated result.
 
 **The schema must be the vendor's strict subset**, checked by
-`apps/api/src/ai-port/strict-json-schema.ts`'s
+`packages/kvox-ai/src/structured/strict-json-schema.ts`'s
 `assertStrictJsonSchema` before any network call — a violation is a
 programming error and throws a plain `Error` naming the JSON path, not a
 provider error. In brief: the root is `type: 'object'`; every object sets
@@ -410,7 +410,7 @@ The connected-knowledge Ask agent (`docs/specs/ontology.md` §21) needs a
 **conversation**, not a prompt: it sends a growing message list, lets the
 model call read-only typed tools (§9.3), and appends each call and its result
 before asking again. `streamText` cannot carry that — it takes exactly one
-system prompt and one user message — so the port has `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. Since #476 `PlatformKvoxAi.chat` is one platform `stream()` call per turn; the pure mapping between the two vocabularies is `ai-port/chat-mapping.ts`.
+system prompt and one user message — so the port has `KvoxAi.chat(req: KvoxChatRequest): AsyncIterable<KvoxChatEvent>` (messages, tools, `toolChoice`, `maxOutputTokens`; events `delta`, `tool_call`, `done` with `finishReason` `stop | length | tool_calls`), with KVox-owned types and no platform type. Since #476 `PlatformKvoxAi.chat` is one platform `stream()` call per turn; the pure mapping between the two vocabularies is `packages/kvox-ai/src/chat/chat-mapping.ts`.
 
 **The port transports; it never executes.** A tool definition goes out
 and a complete tool call comes back as an event — running the tool,
@@ -493,7 +493,7 @@ The application's task routing rides on the platform AI slice. Every caller reac
 
 **The extension.** `KVOX_AI_SETTINGS_EXTENSION` (`apps/api/src/platform/ai/ai-settings.extension.ts`, listed in `APP_SYSTEM_SETTINGS_EXTENSIONS`) is an `extendSystemSettingsNamespace` extension of the platform `ai` namespace, key `ai`, no `path`. It adds `taskModels`, `graphEnabled`, `defaultModel` (`string | null`, the former `providers.openai.defaultModel`, which has no platform home), `maxInputTokens`, `maxOutputTokens`, `requestTimeoutMs`, `reasoningEffort` (`none | low | medium | high | xhigh`) and `maxDocumentBytes`, with the bounds and defaults of §2.5 above and the defaults of `KVOX_AI_EXTENSION_DEFAULTS`. Stored names are unchanged, so the `ai` value of the `global` row is the same row before and after and a saved `taskModels` needs no rewrite. `taskModels` still replaces wholesale on merge. No added field can hold a key (a test asserts no stored key matches `/key|secret|token/i`). A deployment that has not yet run the migration command (`docs/runbooks/ai-platform-migration.md`) still holds the previous `provider` and `providers.openai.allowedModels` in the stored value; the platform `read` salvages them field by field, and the command turns them into `ai_models` rows.
 
-**`chooseTaskModel` is ported, not changed.** `apps/api/src/ai-port/task-models.ts` copies `AI_TASK_DEFINITIONS`, `missingCapabilities` and `chooseTaskModel` and changes only the inputs: `models` are the enabled `ai_models` rows of the active provider mapped to `{ id, structuredOutput, toolCalling }` (from `capabilities.structured_output` and `capabilities.tools`), `defaultModel` is the extension's field, and `policy.provider` is the single enabled provider slot. The rank order above is unchanged.
+**`chooseTaskModel` is ported, not changed.** `packages/kvox-ai/src/tasks/task-models.ts` copies `AI_TASK_DEFINITIONS`, `missingCapabilities` and `chooseTaskModel` and changes only the inputs: `models` are the enabled `ai_models` rows of the active provider mapped to `{ id, structuredOutput, toolCalling }` (from `capabilities.structured_output` and `capabilities.tools`), `defaultModel` is the extension's field, and `policy.provider` is the single enabled provider slot. The rank order above is unchanged.
 
 **`KvoxAiTargetResolver`** (`apps/api/src/ai-port/kvox-ai-target-resolver.ts`) implements the platform `AiTargetResolver`, is bound to `AI_TARGET_RESOLVER` in `AiHostModule` (global), and reads the extended `ai` value plus the enabled `ai_models` rows (one query, cached 5 s). It maps `ctx.feature` through `KVOX_FEATURE_TASK`:
 
@@ -505,7 +505,7 @@ The application's task routing rides on the platform AI slice. Every caller reac
 
 `explain(userId, task, requested?)` returns the same `TaskModelChoice` without throwing, for the admin view and `GET /api/ai-tasks/config`.
 
-**Feature ids to task keys.** Every call site is a registered AI feature (`apps/api/src/app-registrations/ai.ts`, group `kvox`, imported once from `platform/ai/ai.config.ts` so registration runs before bootstrap). `KVOX_FEATURE_TASK` (`ai-port/features.ts`) maps them. Feature ids are permanent (usage rows carry them) and cannot contain dots, which is why they differ from task keys; task keys stay permanent too.
+**Feature ids to task keys.** Every call site is a registered AI feature (`apps/api/src/app-registrations/ai.ts`, group `kvox`, imported once from `platform/ai/ai.config.ts` so registration runs before bootstrap). `KVOX_FEATURE_TASK` (`packages/kvox-ai/src/features/features.ts`) maps them. Feature ids are permanent (usage rows carry them) and cannot contain dots, which is why they differ from task keys; task keys stay permanent too.
 
 | Feature id | Call site | `needs` | Task key |
 |---|---|---|---|
@@ -551,7 +551,7 @@ The application's task routing rides on the platform AI slice. Every caller reac
 | `generateStructured(req)` | `{ value, model, usage }`. Over `respondStructured` with `strict: true`. `jsonSchema` is converted with `z.fromJSONSchema` and checked to round-trip through `z.toJSONSchema`; a schema that does not round-trip falls back to the caller's Zod `schema` with `strict` kept. The parsed value is validated again with the caller's `schema`, so KVox's own validation is unchanged. |
 | `embed(req)` | `{ vectors, promptTokens, model }`. Refuses locally an empty batch or one above 128 texts (`AiInputError`). Asserts one vector per text, in order, each exactly 1536 finite numbers (`EmbeddingShapeError` otherwise). See [search.md](search.md) §11. |
 | `embeddingCapability()` | The static catalog entry: `text-embedding-3-small`, 1536 dimensions, 8191 input tokens, batch 128. |
-| `countTokens(text, model)` | A local estimator (`ai-port/count-tokens.ts`): the larger of `ceil(chars / 4)` and the whitespace word count, rounded up on purpose. No network call and no model lookup; `model` is accepted for the contract and unused. Budgets are checked against it because the platform does not count tokens. |
+| `countTokens(text, model)` | A local estimator (`packages/kvox-ai/src/tokens/count-tokens.ts`): the larger of `ceil(chars / 4)` and the whitespace word count, rounded up on purpose. No network call and no model lookup; `model` is accepted for the contract and unused. Budgets are checked against it because the platform does not count tokens. |
 | `chat(req)` | One Ask-loop turn over the platform `stream()` call, §2.7. |
 
 **What stays the caller's.** `assertWithinBudget` and the token budget (§3.3) run before the call, fed `contextWindowTokens` and `maxOutputTokens` from `readiness()` and `countTokens`; over-budget stays a 400 with the required and available numbers. The per-user throttle key (`aiProviderThrottleKey(userId)`) is still registered by the handler immediately before the call. Job types, `maxAttempts: 1` profiles and the node-ineligible posture of AI jobs are unchanged. No ported file holds an `apiKey`.

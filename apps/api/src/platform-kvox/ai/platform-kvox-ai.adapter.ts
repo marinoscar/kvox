@@ -16,18 +16,18 @@ import {
   type KvoxTextEvent,
   type KvoxToolDef,
 } from '@marinoscar/kvox-api/ports';
-import type { z } from 'zod';
-
-import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai-port/ai-errors';
-import { isKvoxAiFeature, type KvoxAiFeatureId } from '../../ai-port/features';
 import {
-  KVOX_AI as KVOX_AI_FACADE,
-  type KvoxAi,
+  isKvoxAiFeature,
   type KvoxAiCallBase,
+  type KvoxAiFeatureId,
   type KvoxAiReadiness,
   type KvoxChatMessage as FacadeChatMessage,
   type KvoxToolDefinition,
-} from '../../ai-port/kvox-ai';
+} from '@marinoscar/kvox-ai';
+import type { z } from 'zod';
+
+import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai-port/ai-errors';
+import { KVOX_AI as KVOX_AI_FACADE, type KvoxAi } from '../../ai-port/kvox-ai';
 import { KvoxAiConflict, KvoxAiBadRequest } from '../../ai-port/kvox-ai-errors';
 import { KvoxAiSettings } from '../../ai-port/kvox-ai-settings';
 

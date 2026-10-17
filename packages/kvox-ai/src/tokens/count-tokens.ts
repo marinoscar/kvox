@@ -23,10 +23,16 @@
 /**
  * Average characters per token. FOUR is the well-known rule of thumb for English
  * prose under a BPE tokenizer.
+  *
+  * @stability experimental
  */
 export const CHARS_PER_TOKEN = 4;
 
-/** An approximate token count for `text`. Zero for the empty string. */
+/**
+ * An approximate token count for `text`. Zero for the empty string.
+ *
+ * @stability experimental
+ */
 export function countTokens(text: string, _model?: string): number {
   if (text.length === 0) return 0;
 

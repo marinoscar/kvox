@@ -10,8 +10,7 @@ import {
   AiStructuredOutputError,
   RateLimitError,
 } from './ai-errors';
-import { EMBEDDING_DIMENSIONS, EmbeddingShapeError, KVOX_EMBEDDING } from './embedding-catalog';
-import type { KvoxAiFeatureId } from './features';
+import { EMBEDDING_DIMENSIONS, EmbeddingShapeError, KVOX_EMBEDDING, type KvoxAiFeatureId } from '@marinoscar/kvox-ai';
 import { KvoxAiConflict } from './kvox-ai-errors';
 import { KVOX_EMBEDDING_MODEL, type KvoxAiResolverState } from './kvox-ai-target-resolver';
 import { PlatformKvoxAi } from './platform-kvox-ai';

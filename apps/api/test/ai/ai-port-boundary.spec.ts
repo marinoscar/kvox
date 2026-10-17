@@ -18,6 +18,15 @@
 //      deleted it, and the platform AI slice replaced it.
 //   3. Nothing in `src/` or `test/` imports from a `src/ai/` path. With the folder gone
 //      this is what stops it coming back by a stray `mkdir`, and it has no allowlist.
+//   4. The model mechanics that left `ai-port/` for `@marinoscar/kvox-ai` (#579:
+//      strict structured output, the chat mapping, the task chooser, token counts, the
+//      embedding catalog) make `packages/kvox-ai/src/` the one other home of the
+//      platform AI package, on a tighter rule than `ai-port/`: it imports exactly the
+//      public subpath `@marinoscar/platform-api/ai` (no other platform subpath, no
+//      deeper path), and no Nest, no Prisma and no `@app/shared`, because KVox Desktop
+//      installs it without the platform's runtime. `npm run check:kvox-slice-peers`
+//      (rule `host-neutral`) enforces the platform half for the package; this spec
+//      states it from the app's side, next to the rule it extends.
 //
 // "Imports" is read with the TypeScript compiler API, not a regular expression, so
 // a specifier inside a comment or a string is not an edge and no spelling of a real
@@ -44,6 +53,12 @@ const PLATFORM_AI = '@marinoscar/platform-api/ai';
 
 /** Directories (under `src/`) that may import the platform AI package. */
 const PLATFORM_AI_HOMES = ['ai-port/', 'platform/ai/'];
+
+/** The package the model mechanics moved to (#579): the other home of the platform AI package (rule 4). */
+const KVOX_AI_PACKAGE_SRC = resolve(__dirname, '../../../../packages/kvox-ai/src');
+
+/** What `packages/kvox-ai/src/` may never import (rule 4), besides any platform specifier but {@link PLATFORM_AI}. */
+const KVOX_AI_PACKAGE_FORBIDDEN = [/^@nestjs\//, /^@prisma\//, /^prisma$/, /^@app\/shared(\/|$)/];
 
 /**
  * Files that import the platform AI package for a reason that is not a call:
@@ -229,6 +244,36 @@ describe('the AI port boundary (#475)', () => {
 
     const stale = Object.keys(PLATFORM_AI_REGISTRATIONS).filter((file) => !importing.has(file));
     expect(stale).toEqual([]);
+  });
+
+  describe('the @marinoscar/kvox-ai package (#579)', () => {
+    const packageEdges = walk(KVOX_AI_PACKAGE_SRC).flatMap((full) =>
+      findSpecifiers(full, readFileSync(full, 'utf8')).map((found) => ({
+        file: `packages/kvox-ai/src/${posix(relative(KVOX_AI_PACKAGE_SRC, full))}`,
+        ...found,
+      })),
+    );
+
+    it('is scanned at all, and does import the platform AI package (so the rule below is not vacuous)', () => {
+      expect(packageEdges.length).toBeGreaterThan(0);
+      expect(packageEdges.some(({ specifier }) => specifier === PLATFORM_AI)).toBe(true);
+    });
+
+    it('imports the platform only through exactly @marinoscar/platform-api/ai', () => {
+      const violations = packageEdges
+        .filter(({ specifier }) => specifier.startsWith('@marinoscar/platform-') && specifier !== PLATFORM_AI)
+        .map(({ file, line, specifier }) => `${file}:${line} imports "${specifier}"`);
+
+      expect(violations).toEqual([]);
+    });
+
+    it('imports no Nest, no Prisma and no @app/shared', () => {
+      const violations = packageEdges
+        .filter(({ specifier }) => KVOX_AI_PACKAGE_FORBIDDEN.some((pattern) => pattern.test(specifier)))
+        .map(({ file, line, specifier }) => `${file}:${line} imports "${specifier}"`);
+
+      expect(violations).toEqual([]);
+    });
   });
 
   describe('the import reader', () => {

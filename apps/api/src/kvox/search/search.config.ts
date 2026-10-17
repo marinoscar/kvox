@@ -6,7 +6,7 @@ import { APP_SLUG } from '@app/shared';
 import { trace } from '@opentelemetry/api';
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { KVOX_EMBEDDING } from '../../ai-port/embedding-catalog';
+import { KVOX_EMBEDDING } from '@marinoscar/kvox-ai';
 import { SharedTranscriptVisibility } from './shared-transcript-visibility';
 
 // =============================================================================
@@ -18,7 +18,7 @@ import { SharedTranscriptVisibility } from './shared-transcript-visibility';
 // (database, AI, jobs, identity).
 //
 //   semantic.provider        `openai`, the provider that serves the embeddings model
-//                            (`ai-port/embedding-catalog.ts`). It names the semantic axis
+//                            (`embedding-catalog.ts`, `@marinoscar/kvox-ai`). It names the semantic axis
 //                            of a cursor's fingerprint with the model the port reports,
 //                            exactly as before the slice moved, so a cursor minted before
 //                            a deploy stays valid across it.
