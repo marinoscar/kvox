@@ -59,7 +59,7 @@ export class NeighborsTool implements AskTool<NeighborsToolInput> {
     types: jsonNullableStringArray(
       'Keep only these node types, e.g. ["Person", "Organization"] or item kinds ["commitment", "decision"]. Default: all.',
     ),
-    relationTypes: jsonNullableStringArray('Walk only these relation types, e.g. ["WORKS_AT", "REPORTS_TO"]. Default: all.'),
+    relationTypes: jsonNullableStringArray('Walk only these relation types, e.g. ["WORKS_FOR", "REPORTS_TO"]. Default: all.'),
     asOf: jsonNullableString('Evaluate the graph as of this date (YYYY-MM-DD). Default: today.'),
     limit: jsonNullableInteger(`Most nodes to return, 1–${NEIGHBORS_MAX_LIMIT}. Default ${NEIGHBORS_DEFAULT_LIMIT}.`),
   });

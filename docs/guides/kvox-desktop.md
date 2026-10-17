@@ -4,6 +4,8 @@ This guide is for the engineers who build KVox Desktop: an offline application w
 
 Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
 
+> Decisions behind this guide: [ADR-0001 to ADR-0006](../decisions/README.md) (packages first, Electron shell, PostgreSQL and PGlite, local-only data, AI layering, Desktop inputs). The Desktop repository starts from [../desktop/README.md](../desktop/README.md).
+
 ## Who this is for and what you get
 
 **The four packages.** One Changesets `fixed` group: they always share one version.
@@ -34,7 +36,7 @@ All six web slices are merged. `packages/kvox-web/README.md` and each slice's ow
 
 - The ten ports ([Ports to implement](#ports-to-implement)) and the web host ([Wiring the web](#wiring-the-web)).
 - The four host tables `users`, `organizations`, `storage_objects`, `jobs`, and the seed rows ([Database](#database)).
-- Four duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings)): declare the system `ai` settings namespace; install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies.
+- Duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings) and [section 6.1](../specs/kvox-ports.md#61-what-the-bare-host-and-the-desktop-guide-added-issues-505-506)): declare the system `ai` settings namespace (with `graphEnabled` and `reasoningEffort` once the graph is mounted); install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies; with the graph, register `@fastify/multipart`, read an unwritten `defaults: undefined` setting as `undefined`, tick four housekeeping enqueuers, and answer the graph's structured-output schemas from `KVOX_AI`.
 - The renderer's shell: router, theme, navigation, settings hub. Slices export cards, destinations and routes as data; you place them.
 - The transcription provider, ffmpeg, fonts for PDF export.
 
@@ -109,7 +111,7 @@ Add your embedded database (`@electric-sql/pglite` 0.5.10, `@electric-sql/pglite
 
 | Feature | Peer | Switch it off with |
 |---|---|---|
-| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
+| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`; four enqueuers) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
 | Transcript PDF export | `pdfkit@>=0.17.0` | `exporters: { pdf: false }` |
 | Note PDF export | `pdfkit` | `exporters: { pdf: false }` |
 | Note Word export | `docx@>=9.0.0` | `exporters: { docx: false }` |
@@ -123,7 +125,7 @@ npm install graphology@>=0.26.0 graphology-communities-louvain@>=2.0.2 grapholog
 npm install n3@>=2.7.0 jsonld@>=9.0.0 rdf-validate-shacl@>=0.6.0   # graph-rdf: RDF export and SHACL-validated import
 ```
 
-`rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
+The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app: `POST /api/graph/imports` and the notes document-source upload read `request.file()`, no slice registers it, and it is in no slice's peers list, so `check-slice-peers` cannot catch its absence (`examples/bare-host/src/bootstrap.ts`). `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
 
 **Renderer.**
 
@@ -144,7 +146,7 @@ Singletons (Nest, Zod, the contract, Prisma, React, MUI) must exist once. A seco
 
 | | PGlite | A bundled PostgreSQL server |
 |---|---|---|
-| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
+| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test; the graph, graph-extraction, graph-rdf and Ask slices run over the same host (extraction, review and commit, the overview, RDF export and import, the Ask tool loop) against a scripted model. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
 | Cost | One session only (see below); the socket quirk. | You ship, start, stop and upgrade a server, and a `vector` build per platform. |
 | Recommendation | Start here. | Choose it if any migration fails on PGlite, or when you need more than one connection. |
 
@@ -169,9 +171,9 @@ Seed before the first request (`examples/bare-host/src/seed.ts`): the one `users
 This is `examples/bare-host/scripts/prepare-db.mjs`. It needs no database: composing a schema and installing migrations only write files under `prisma/`, which is generated and git-ignored.
 
 ```bash
-npx platform db sync    --root .                          # 1. install the platform migrations (byte copies)
+npx platform db sync    --root . --timestamp 2024-01-01T00:00:00Z   # 1. install the platform migrations (byte copies), pinned before the domain ids
 npx platform db compose --root .                          # 2. compose the platform schema; kvox-db refuses a host without User, StorageObject, Job
-npx kvox-db sync        --root . --names after-host       # 3. install the domain fragments and migrations
+npx kvox-db sync        --root . --names stable           # 3. install the domain fragments and migrations
 npx platform db compose --root .                          # 4. compose again, now with the domain fragments
 npx prisma generate --config prisma.config.ts             # 5. generate the client
 ```
@@ -183,14 +185,14 @@ npx prisma migrate deploy --config prisma.config.ts       # platform history, th
 npx kvox-db check --root . --database                     # exit 1 if an extension or a raw-SQL object is missing
 ```
 
-Why `--names after-host`: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. `after-host` names each one `<ts>_kvox_<slug>`, one second after the newest directory in `prisma/migrations` (which is why step 1 comes before step 3). A host that already ran the migrations under the original names (the web edition) keeps `original`. (The issue text lists `platform db sync` last; the working order is the one above.)
+Why `--names stable` and the pinned timestamp: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. The pin `--timestamp 2024-01-01T00:00:00Z` dates the platform migrations before them, so the platform tables come first and the platform names are deterministic. `stable` names each domain migration `<the id's timestamp>_kvox_<slug>`, a pure function of the package migration id, never of build time or other packages' migration counts. `after-host` is deprecated: its names are the newest host directory plus one second, so a platform upgrade on a host that builds `prisma/` from scratch shifts every domain name and breaks databases that recorded the old ones. A host that already ran the migrations under the original names (the web edition) keeps `original`; a host with a lock keeps the policy the lock records. Upstream gap: `platform db sync` still derives names from the clock or `--timestamp` and the newest directory; see [marinoscar/EnterpriseAppBase#992](https://github.com/marinoscar/EnterpriseAppBase/issues/992). Rule: [migration folder names](../runbooks/kvox-domain-migration.md#migration-folder-names). (The issue text lists `platform db sync` last; the working order is the one above.)
 
 `prisma.config.ts` points `schema` at `prisma/schema` and `migrations.path` at `prisma/migrations`, and reads `DATABASE_URL`; copy it from the bare host.
 
 ### Upgrades
 
 1. Bump the four packages together, and `@marinoscar/platform-db` to the version `@marinoscar/kvox-db` was tested with.
-2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names after-host` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
+2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names stable` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
 3. `npx prisma migrate deploy`, then `npx kvox-db check --root . --database`.
 
 Never edit, rename or reformat an installed migration or a generated `prisma/fragments/kvox.*.prisma`: `kvox-db check` fails with `INSTALLED_MODIFIED` or `FRAGMENT_MODIFIED`, and comments count toward the hash. Exclude `**/migration.sql` from any formatter. A fix is a new migration released in a package, never an edit. Details: [kvox-db README](../../packages/kvox-db/README.md#upgrade-notes).
@@ -224,6 +226,7 @@ export interface KvoxAiPort {
 
 Rules:
 
+- **Graph schemas.** Extraction calls `generateStructured` under the schema names `kg_extraction`, `kg_adjudication`, `kg_item_adjudication` and `entity_digest`; an entity digest with no surviving citation fails its job. With `embeddings: null`, resolution works by name only and `kg.embed` jobs are no-ops. Ask needs `chat` with tool calling. The bare host's scripted model is `examples/bare-host/src/fake-ai.ts`.
 - `capabilities()` never throws. It reports `available`, `structuredOutput`, `toolCalling`, `embeddings` (`{ model, dimensions }` or `null`) and `graphEnabled`.
 - `resolveTask` throws `KvoxAiError` of class `not_configured`, `key_missing` or `capability`; `requireKey: false` names the model without needing a key (a token estimate).
 - A text stream is `delta*` then exactly one `done`. A chat call is one model step: `delta` or `tool_call` events, then `step_end`, then exactly one `done`; **no text of a step after one of its `tool_call`s**. `done.finishReason` is `stop`, `length` or (chat only) `content_filter`.
@@ -364,7 +367,7 @@ Rules: the slices declare two namespaces themselves (system `transcription` in `
 Reference: [`src/ports/file-settings.ts`](../../examples/bare-host/src/ports/file-settings.ts) (one JSON file, atomic rewrite, versions for the system scope) and the `ai` declaration in `src/bootstrap.ts`, copied here:
 
 ```ts
-// Copied from examples/bare-host/src/bootstrap.ts (the bare host declares the three caps; add graphEnabled to run the graph).
+// Copied from examples/bare-host/src/bootstrap.ts (comments trimmed).
 settings.registerNamespace({
   scope: 'system',
   name: 'ai',
@@ -372,10 +375,16 @@ settings.registerNamespace({
     maxInputTokens: z.number().int().positive().nullable().default(null),
     maxOutputTokens: z.number().int().positive().nullable().default(null),
     maxDocumentBytes: z.number().int().positive().default(10 * 1024 * 1024),
+    graphEnabled: z.boolean().default(false),
+    reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).default('none'),
   }),
-  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024 },
+  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024, graphEnabled: false, reasoningEffort: 'none' },
 });
 ```
+
+Turn `graphEnabled` on once at start-up (`settings.patchSystem('ai', { graphEnabled: true }, ...)`, as `seedRuntime` does in `examples/bare-host/src/seed.ts`), or the graph answers 409 `graph_disabled` and no digest is queued.
+
+**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit does not test this yet.
 
 Desktop: the same file in the user's application-data folder, or a table.
 
@@ -412,6 +421,8 @@ Optional; the default records nothing (`NOOP_KVOX_AUDIT`). Settings changes and 
 Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appName, appSlug } })` (`KvoxBrand`, token `KVOX_BRAND`, both from `@marinoscar/kvox-api/core`). It is the product name a document carries (the PDF export footer) and the slug names are built from. Omitted, `DEFAULT_KVOX_BRAND` (`KVox` / `kvox`) applies.
 
 ## The Copilot SDK `KVOX_AI` adapter (sketch)
+
+Note: per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md), the Copilot integration now targets an `AiProviderAdapter` beneath `@marinoscar/kvox-ai` (#579, #581), not `KvoxAiPort` directly. The sketch below is kept for history.
 
 The code below is **illustrative and not compiled**. It maps each port method onto a Copilot session at the level of the port contract. The SDK's API changes; this sketch declares a tiny `CopilotLike` stand-in instead of naming SDK methods, so replace it with calls from the SDK's own documentation. What is fixed is the right-hand side: the port types, the event order and the error classes.
 
@@ -551,7 +562,7 @@ Points the sketch must keep, because the slices depend on them:
 - **Claiming** is one statement (`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING`), outside any transaction, so no handler runs inside one (essential on PGlite). It honours `scheduled_for`; the runner settles a job `succeeded` or `failed`, retries up to the handler's `profile.maxAttempts` (default 3 when absent) and fires `onSettled` after the write.
 - **Rate limits.** A handler throws `KvoxRateLimitError(throttleKey, retryAfterMs)`; the runner reschedules the job (`retryAfterMs`, or 5 s) without spending an attempt. `runNow(jobId)` asks for a pending job to run at once (`false` when it already settled).
 - **`enqueueWithin(tx, input)`** inserts inside the caller's open `$transaction`, so a row and its job commit together or not at all.
-- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`). The graph adds `KgMigrateEnqueuer.enqueue()` (`/graph`, `@stability experimental`): it queues one `kg.migrate` per owner whose rows a declared ontology migration would touch, returns at once without a query while no migration is declared (a fresh database, every build so far), and drains a backlog of more than 200 owners over successive ticks. Resolve it from the container (`app.get(KgMigrateEnqueuer)`; `GraphModule` exports it) and call it on the same timer. A cron only decides whether work is due and enqueues it.
+- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`; it exists only while `export` is on). Four enqueuers in all; the bare host ticks them hourly from `examples/bare-host/src/housekeeping.ts`, each resolved with `app.get(T, { strict: false })` because it lives in a slice module, not the root. The graph adds `KgMigrateEnqueuer.enqueue()` (`/graph`, `@stability experimental`): it queues one `kg.migrate` per owner whose rows a declared ontology migration would touch, returns at once without a query while no migration is declared (a fresh database, every build so far), and drains a backlog of more than 200 owners over successive ticks. Resolve it from the container (`app.get(KgMigrateEnqueuer)`; `GraphModule` exports it) and call it on the same timer. A cron only decides whether work is due and enqueues it.
 - **Why everything is still a job:** a job is a row, so work interrupted by quitting the application is still there on the next start. The 200 ms loop (`jobs.start()`) resumes it; tests call `drain()` instead.
 
 What the bare host's runner does **not** do, and Desktop must decide: it does not enforce `maxRuntimeMs` (a hung handler hangs the drain); a failed attempt retries at once instead of with a back-off; and a crash leaves a `running` row that nothing resets (the platform queue has a lease and a reaper). A Desktop runner should, on start, return `running` rows to `pending` (this process is the only runner), and enforce a timeout derived from `profile.maxRuntimeMs`.
@@ -635,18 +646,19 @@ app.getHttpAdapter().getInstance().addContentTypeParser('*', { parseAs: 'buffer'
 await app.listen(options.port ?? 0, '127.0.0.1');
 ```
 
-**Adding the graph and Ask** is more of the same; this block is illustrative (the bare host does not include these slices, so it is not compiled in CI). Each slice takes its peers' module objects:
+**Adding the graph and Ask.** The bare host mounts them (`examples/bare-host/src/app.module.ts`, copied here). Each slice takes its peers' module objects:
 
 ```ts
-// Illustrative — not compiled (the bare host runs transcription, search, transcripts and notes only)
+// Copied from examples/bare-host/src/app.module.ts
+const search = SearchModule.forRoot();
 const graph = GraphModule.forRoot({ schedules: false, peers: { transcripts, notes, search } });
 const extraction = GraphExtractionModule.forRoot({ autoExtract: false, peers: { graph, notes } });
 const rdf = GraphRdfModule.forRoot({ schedules: false, peers: { graph, extraction, transcripts, notes } });
 const ask = AskModule.forRoot({ peers: { graph, notes, search } });
-// where `search = SearchModule.forRoot()` is the instance you import, and each is added to `imports` after its peers.
+// imports: [..., transcription, search, searchIndexing, transcripts, notes, graph, extraction, rdf, ask]
 ```
 
-`autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; Desktop may prefer to keep it explicit. Remember the `ai.graphEnabled` setting.
+Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
 
 **Options that matter offline**, per slice (full tables in each slice README):
 
@@ -815,7 +827,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 **`Unknown transcription provider "x". Known providers: ...` (a provider id rejected).** The settings only accept an id some registered class declares. Register it through `TranscriptionModule.forRoot({ extraProviders: [YourProvider] })` (a class the container builds, not an instance), keep `id` lowercase `[a-z][a-z0-9_-]*`, and store a key for it under the `transcription` secret purpose. A settings row that names a provider this build lacks reads as unavailable.
 
-**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `kvox-db sync --names after-host` after `platform db sync`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`.
+**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `platform db sync --timestamp 2024-01-01T00:00:00Z`, then `kvox-db sync --names stable`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`; one that recorded `after-host` names keeps the policy its lock records.
 
 **`kvox-db check`: `INSTALLED_MODIFIED`, `FRAGMENT_MODIFIED`, `NOT_INSTALLED`, `LOCK_MISSING`.** Someone edited, formatted or lost an installed file. Restore it from version control, or run `kvox-db sync`; edit nothing under `prisma/migrations` or `prisma/fragments/kvox.*`.
 
@@ -839,5 +851,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- The graph, graph-extraction, graph-rdf and Ask slices are described from their READMEs and conformance kits; they have not been run in the bare host. Expect to find host duties the way the bare host found the `ai` namespace and the `org_id` column.
+- Package gaps found by the graph run (issue #573): `@fastify/multipart` is missing from the slice peers data. (The other one, a proposal commit not publishing `graph.changed`, is fixed by #591: commits, imports, reverts, merges and merge reversals now publish it after commit.)
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.

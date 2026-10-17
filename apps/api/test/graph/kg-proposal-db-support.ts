@@ -48,6 +48,7 @@ export function buildServices(prisma: PrismaClient) {
     { enqueue: jest.fn(), isRegistered: () => false } as never,
     { enqueueFollowUps: jest.fn(async () => undefined) } as never,
     audit,
+    { emit: jest.fn(), subscribe: jest.fn() } as never,
   );
   const commits = new ProposalCommitService(
     db,
@@ -61,8 +62,9 @@ export function buildServices(prisma: PrismaClient) {
     {} as never,
     proposals,
     audit,
+    { emit: jest.fn(), subscribe: jest.fn() } as never,
   );
-  const reverts = new ProposalRevertService(db, access, merges, commits, proposals, audit);
+  const reverts = new ProposalRevertService(db, access, merges, commits, proposals, audit, { emit: jest.fn(), subscribe: jest.fn() } as never);
   return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, createDbGraphObjects(prisma)) };
 }
 

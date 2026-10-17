@@ -544,7 +544,7 @@ jobs:
           NODE_ENV: test
 
       # The kvox-db package applies the platform history and then the domain
-      # history (installed `after-host`) to a database of its own, then runs
+      # history (installed under `stable` names) to a database of its own, then runs
       # `kvox-db check --database` (issue #489). It creates and drops that
       # database next to the one named here, so it runs on one shard only.
       - if: matrix.shard == 1
@@ -553,7 +553,7 @@ jobs:
           DATABASE_URL: ${{ format('postgres://postgres:ci-{0}-{1}-{2}@127.0.0.1:5432/postgres', github.run_id, github.run_attempt, matrix.shard) }}
 
       # The kvox-api real-database tier (issue #492): the test host composes the
-      # platform and domain schema (`kvox-db sync --names after-host`), generates
+      # platform and domain schema (`kvox-db sync --names stable`), generates
       # its own client and migrates a database of its own per spec file next to
       # the one named here, so it too runs on one shard only. `test:host:prepare`
       # needs the `kvox-db` bin, which runs from its built output.

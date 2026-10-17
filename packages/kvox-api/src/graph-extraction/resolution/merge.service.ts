@@ -46,10 +46,10 @@
 
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 
-import { GRAPH_NOT_FOUND_MESSAGES, GRAPH_CONFLICT_REASONS, GraphEntitiesService, KG_RESOLVE_JOB_TYPE, KG_SUBJECT_ENTITY, KG_SUBJECT_USER, GraphValidationError, GraphWriteService, stableStringify } from '../../graph/index.js';
+import { GRAPH_CHANGED_EVENT, type GraphChangedEvent, type GraphChangedReason, GRAPH_NOT_FOUND_MESSAGES, GRAPH_CONFLICT_REASONS, GraphEntitiesService, KG_RESOLVE_JOB_TYPE, KG_SUBJECT_ENTITY, KG_SUBJECT_USER, GraphValidationError, GraphWriteService, stableStringify } from '../../graph/index.js';
 import { orderPair } from './distinct-pair.service.js';
 import { asProps, planRelationFolds, type FoldGroup } from './merge-fold.js';
-import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, KVOX_AUDIT, type KvoxAuditPort } from '../../ports/index.js';
+import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, KVOX_AUDIT, type KvoxAuditPort, KVOX_EVENTS, type KvoxEventsPort } from '../../ports/index.js';
 import type { KvoxGraphDb, KvoxGraphTx, KgAliasSourceValue as KgAliasSource, InputJsonValue } from '../../graph/index.js';
 
 type Tx = KvoxGraphTx;
@@ -166,6 +166,7 @@ export class MergeService {
     @Inject(KVOX_JOBS) private readonly jobs: KvoxJobsPort,
     private readonly entities: GraphEntitiesService,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
+    @Inject(KVOX_EVENTS) private readonly events: KvoxEventsPort,
   ) {}
 
   // ===========================================================================
@@ -181,7 +182,14 @@ export class MergeService {
     }
     if (tx) return this.mergeIn(tx, input);
     const result = await this.prisma.$transaction((t) => this.mergeIn(t, input), { timeout: 60_000 });
-    await this.afterMerge(input, result);
+    // After OUR transaction committed (#591); with a caller's `tx` the commit
+    // emits its own reason instead. `finally`: a failed audit or enqueue must
+    // not hide a merge that already happened from the layout listener.
+    try {
+      await this.afterMerge(input, result);
+    } finally {
+      this.emitChanged(input.ownerId, 'merge');
+    }
     return result;
   }
 
@@ -395,7 +403,13 @@ export class MergeService {
   async reverse(input: ReverseInput, tx?: Tx): Promise<ReverseResult> {
     if (tx) return this.reverseIn(tx, input);
     const result = await this.prisma.$transaction((t) => this.reverseIn(t, input), { timeout: 60_000 });
-    await this.afterReverse(input, result);
+    // After OUR transaction committed (#591); with a caller's `tx` the revert
+    // emits its own reason instead.
+    try {
+      await this.afterReverse(input, result);
+    } finally {
+      this.emitChanged(input.ownerId, 'merge_reversed');
+    }
     return result;
   }
 
@@ -424,6 +438,20 @@ export class MergeService {
       }
     } catch (err) {
       this.logger.warn(`Could not enqueue ${KG_RESOLVE_JOB_TYPE} after reversing merge ${result.merge.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
+   * `graph.changed` (#371, #591), only after a transaction THIS service
+   * opened has committed. The layout listener only counts and, at most,
+   * enqueues; a listener failure must never fail a merge that already
+   * happened, hence the catch.
+   */
+  private emitChanged(ownerId: string, reason: GraphChangedReason): void {
+    try {
+      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId, reason } satisfies GraphChangedEvent);
+    } catch (err) {
+      this.logger.warn(`Could not emit graph.changed for user ${ownerId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

@@ -346,6 +346,10 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // can be reworded without republishing under another name.
   // ---------------------------------------------------------------------
   '.changeset/kvox-packages-scaffold.md',
+  // `.changeset/pre.json`: Changesets' pre-mode state; `changeset version` writes the
+  // consumed changeset names (`kvox-*`, exempt above by prefix) into it. Generated, not
+  // a rebrand target.
+  '.changeset/pre.json',
   '.github/workflows/kvox-packages.yml',
   '.github/workflows/kvox-release.yml',
   '.gitignore',
@@ -359,6 +363,17 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // (KVox Desktop) by name, on the same standing as PACKAGES.md and kvox-ports.md above.
   'docs/guides/kvox-desktop.md',
   'docs/guides/README.md',
+  // Added by epic #574: the architecture decision records and the seed README of the KVox Desktop
+  // repository. They name the published `@marinoscar/kvox-*` packages, this repository and
+  // `marinoscar/kvox-desktop`, on the same standing as kvox-desktop.md above.
+  'docs/decisions/README.md',
+  'docs/decisions/0001-packages-first.md',
+  'docs/decisions/0002-desktop-shell-electron.md',
+  'docs/decisions/0003-graph-store-postgresql-everywhere.md',
+  'docs/decisions/0004-desktop-data-local-only.md',
+  'docs/decisions/0005-ai-architecture-shared-harness.md',
+  'docs/decisions/0006-desktop-inputs-no-transcription.md',
+  'docs/desktop/README.md',
   'LICENSE',
 
   // ---------------------------------------------------------------------

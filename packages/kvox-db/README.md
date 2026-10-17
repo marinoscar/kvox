@@ -39,7 +39,7 @@ DATABASE_URL=postgres://... npx kvox-db check --database
 
 | Command | Options |
 |---|---|
-| `kvox-db sync` | `--root <dir>` the app folder that holds `prisma/` (default: the current directory); `--fragments <dir>` and `--migrations <dir>` the package folders to install from (default: the package's `schema/` and `migrations/`); `--names original\|after-host`; `--dry-run` |
+| `kvox-db sync` | `--root <dir>` the app folder that holds `prisma/` (default: the current directory); `--fragments <dir>` and `--migrations <dir>` the package folders to install from (default: the package's `schema/` and `migrations/`); `--names original\|stable\|after-host` (`after-host` is deprecated); `--dry-run` |
 | `kvox-db check` | `--root <dir>`; `--database` also checks the database named by `DATABASE_URL` |
 | `kvox-db promote <localDir>` | `--id <slug>` (required), `--slice <slice>` (required), `--root <dir>` |
 
@@ -124,7 +124,10 @@ None. The command prints one line per action and one `CODE  message` line per pr
 Naming policy, chosen per host by `--names` or by the rule below:
 
 - `original` keeps the package directory name (`20260914130000_add_transcripts`). It is for a host whose databases already ran the migrations under those names, such as the web app: production databases have the original names in `_prisma_migrations`, so an installed migration is never renamed. Default when `prisma/kvox.lock` records original names, or when the app's `prisma/migrations` already holds a manifest migration under its original name.
-- `after-host` names a migration `<ts>_kvox_<slug>`, where `<ts>` is one second after the newest directory in `prisma/migrations` (then one second apart). It is for a host with no domain history (KVox Desktop, the bare host): the domain migrations are dated September 2026, so under their original names they would sort before the platform migrations a fresh host installs later and run before `users` exists. Default on a host with no kvox history. `platform db sync` later installs platform migrations with a timestamp after everything, the domain ones included.
+- `stable` names a migration `<the id's 14-digit timestamp>_kvox_<slug>` (`20260914130000_add_transcripts` becomes `20260914130000_kvox_add_transcripts`), a pure function of the package migration id, never of build time or other packages' migration counts. Default on a host with no kvox history (KVox Desktop, the bare host). The domain ids are dated September 2026, so such a host pins `platform db sync --timestamp 2024-01-01T00:00:00Z` to put the platform tables first and make the platform names deterministic.
+- `after-host` (deprecated) names a migration `<ts>_kvox_<slug>`, where `<ts>` is one second after the newest directory in `prisma/migrations`. Its names shift when a platform upgrade adds a migration to a host that builds `prisma/` from scratch, which breaks databases that recorded the old names in `_prisma_migrations`. A host with a lock keeps the policy the lock records.
+
+Rule: an installed migration's folder name is a pure function of the migration; upgrades only append names, never rename one. Upstream gap: `platform db sync` still derives names from the clock or `--timestamp` and the newest directory, so see [marinoscar/EnterpriseAppBase#992](https://github.com/marinoscar/EnterpriseAppBase/issues/992). Details: [the runbook](../../docs/runbooks/kvox-domain-migration.md#migration-folder-names).
 
 Adopting an existing app: run `kvox-db sync`. Every directory already exists under its original name, so no migration is written; the command creates `prisma/kvox.lock`, the generated fragments and the `platform.lock` entries. A new package release adds migrations to `migrations/`; `sync` installs only the ones the lock does not record. A migration already in the lock is never changed: a fix is a new migration (see [the runbook](../../docs/runbooks/kvox-domain-migration.md)).
 
@@ -149,4 +152,4 @@ Fragment copies carry no version in their header, so a package version bump chan
 
 ### Desktop
 
-Desktop builds its embedded database with this package: `kvox-db sync --names after-host`, PGlite or a bundled PostgreSQL, the required extensions, and upgrades. The guide gives the exact prepare sequence. See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#database).
+Desktop builds its embedded database with this package: `platform db sync --timestamp 2024-01-01T00:00:00Z` then `kvox-db sync --names stable`, PGlite or a bundled PostgreSQL, the required extensions, and upgrades. The guide gives the exact prepare sequence. See [the KVox Desktop guide](../../docs/guides/kvox-desktop.md#database).
