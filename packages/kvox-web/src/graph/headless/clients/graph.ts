@@ -82,65 +82,63 @@ import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvo
 // =============================================================================
 
 /**
- * The graph ontology.
+ * The caller's effective ontology (`GET /api/graph/ontology`): the shipped schema merged with their own attribute definitions, from which every graph form is generated.
  *
  * @stability experimental
  */
 export type GraphOntology = EffectiveSchemaPayload;
 /**
- * The graph attribute def.
+ * One attribute of an entity or relation type in the effective ontology: key, label, kind, requiredness, choices and sensitivity.
  *
  * @stability experimental
  */
 export type GraphAttributeDef = EffectiveAttributePayload;
 /**
- * The graph entity type def.
+ * One entity type of the effective ontology, with its attributes, icon key and domain.
  *
  * @stability experimental
  */
 export type GraphEntityTypeDef = EffectiveEntityTypePayload;
 /**
- * The graph relation type def.
+ * One relation type of the effective ontology: its allowed source and target types and its own `props`.
  *
  * @stability experimental
  */
 export type GraphRelationTypeDef = EffectiveRelationTypePayload;
 /**
- * #369's names for the same payload's parts (the settings card uses these).
+ * One element of the ontology's `entityTypes`; the name the Knowledge graph settings card (#369) uses for it.
  *
  * @stability experimental
  */
 export type GraphEntityType = EffectiveSchemaPayload['entityTypes'][number];
 /**
- * The graph attribute.
+ * One attribute of a {@link GraphEntityType}.
  *
  * @stability experimental
  */
 export type GraphAttribute = GraphEntityType['attributes'][number];
 /**
- * The graph domain.
+ * One domain (a named group of entity types) of the effective ontology.
  *
  * @stability experimental
  */
 export type GraphDomain = EffectiveSchemaPayload['domains'][number];
 
 /**
- * The attribute kind the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Value type of an attribute: `text`, `number`, `date`, `boolean`, `select`, `multi_select`, `url` or `entity_ref`. Alias of the contract's `AttributeKind`.
  *
  * @stability experimental
  */
 export type AttributeKind = ContractAttributeKind;
 /**
- * The sensitivity the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * How private an attribute's values are: `business`, `personal` or `sensitive`. Alias of the contract's `Sensitivity`.
  *
  * @stability experimental
  */
 export type Sensitivity = ContractSensitivity;
 
 /**
- * Gets graph ontology.
+ * Fetches the caller's effective ontology (`GET /api/graph/ontology`).
  *
  * @stability experimental
  */
@@ -153,13 +151,13 @@ export function getGraphOntology(host: KvoxWebHost, signal?: AbortSignal): Promi
 // =============================================================================
 
 /**
- * The date precision.
+ * How precisely a temporal bound is known: to the day, the month, the year, or not at all (`unknown`).
  *
  * @stability experimental
  */
 export type DatePrecision = 'day' | 'month' | 'year' | 'unknown';
 /**
- * The graph item kind.
+ * The kind of a knowledge item hanging off entities: a commitment, a decision, a claim or a fact about a person.
  *
  * @stability experimental
  */
@@ -167,8 +165,7 @@ export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact';
 
 /** `entityRef` in both #370 and #372. */
 /**
- * The graph entity ref the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A compact `{ id, label, type }` reference to an entity, as read responses embed it. Alias of the contract's `GraphEntityRef`.
  *
  * @stability experimental
  */
@@ -179,109 +176,109 @@ export type GraphEntityRef = ContractGraphEntityRef;
 // =============================================================================
 
 /**
- * The graph entity summary.
+ * One row of the entity index (`GET /api/graph/entities`).
  *
  * @stability experimental
  */
 export interface GraphEntitySummary {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The type. */
+  /** Entity type key from the effective ontology, e.g. `Person`. */
   type: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** At most five. */
+  /** Up to five other names, oldest first; the label itself is not repeated. */
   aliases: string[];
-  /** The mention count. */
+  /** Number of notes and transcripts linked to this entity. */
   mentionCount: number;
-  /** Max `occurred_at` of Meetings this entity has evidence in. */
+  /** ISO 8601 date of the latest Meeting this entity has evidence in, or `null` when it has none. */
   lastSeenAt: string | null;
-  /** Present only with `?transcriptId`. */
+  /** The speaker ids identified as this Person in the requested transcript. Present only when the list was filtered with `transcriptId`. */
   speakerIds?: string[];
 }
 
 /**
- * The graph entity list params of the call.
+ * Filters and paging for {@link listGraphEntities}.
  *
  * @stability experimental
  */
 export interface GraphEntityListParams {
-  /** The type. */
+  /** Entity type keys to keep (comma-joined on the wire). Omitted means every type. */
   type?: readonly string[];
-  /** The q. */
+  /** Fuzzy search over labels and aliases. Returns the top `limit` by similarity and no further pages. */
   q?: string;
-  /** The id of the transcript. */
+  /** Only the Persons identified as a speaker in this transcript. */
   transcriptId?: string;
-  /** The sort. */
+  /** `updated` orders by most recent change, `viewed` by the entities the caller viewed last; ignored when `q` is set. */
   sort?: 'updated' | 'viewed';
-  /** The cursor. */
+  /** The `nextCursor` of the previous page. */
   cursor?: string;
-  /** The limit. */
+  /** Page size (the API allows 1 to 50, default 25). */
   limit?: number;
 }
 
 /**
- * The graph entity list response the API answers.
+ * One page of the entity index.
  *
  * @stability experimental
  */
 export interface GraphEntityListResponse {
-  /** The items. */
+  /** The entities on this page. */
   items: GraphEntitySummary[];
   /** Always `null` when `q` is set (top-`limit` by similarity). */
   nextCursor: string | null;
 }
 
 /**
- * The graph alias source.
+ * Where an entity alias came from: typed by the user, found by extraction, set by naming a speaker, or imported.
  *
  * @stability experimental
  */
 export type GraphAliasSource = 'user' | 'extraction' | 'speaker_naming' | 'import';
 
 /**
- * The graph entity alias.
+ * One alternative name of an entity.
  *
  * @stability experimental
  */
 export interface GraphEntityAlias {
-  /** The id. */
+  /** Alias id (UUID), used to remove it through {@link GraphEntityPatch}. */
   id: string;
-  /** The alias. */
+  /** The name as written. */
   alias: string;
-  /** The source. */
+  /** How the alias came to exist. */
   source: GraphAliasSource;
 }
 
 /**
- * The graph entity counts.
+ * How much hangs off an entity; the numbers behind the tabs of its page.
  *
  * @stability experimental
  */
 export interface GraphEntityCounts {
-  /** The relations. */
+  /** Relations the entity takes part in. */
   relations: number;
-  /** The mentions. */
+  /** Notes and transcripts that mention the entity. */
   mentions: number;
-  /** The evidence. */
+  /** Evidence links (quoted source spans) attached to the entity. */
   evidence: number;
-  /** The items. */
+  /** Knowledge items attached to the entity, counted per kind. */
   items: {
-    /** The commitment. */
+    /** Commitments about or owned by the entity. */
     commitment: number;
-    /** The decision. */
+    /** Decisions about the entity. */
     decision: number;
-    /** The claim. */
+    /** Claims about the entity. */
     claim: number;
-    /** The person fact. */
+    /** Facts about a person. */
     person_fact: number;
   };
-  /** Whether open commitments applies. */
+  /** How many of the commitments are still open. */
   openCommitments: number;
 }
 
 /**
- * The graph entity detail the API sends; a documented alias of the contract's type, so the
+ * One entity of the caller's graph with counts for its page (`GET /api/graph/entities/:id`).
  * wire shape has one definition.
  *
  * @stability experimental
@@ -293,7 +290,7 @@ export type GraphEntityDetail = ContractGraphEntityDetail;
 // =============================================================================
 
 /**
- * The graph node the API sends; a documented alias of the contract's type, so the
+ * One node of a graph slice: an entity or a knowledge item, with its degree for sizing.
  * wire shape has one definition.
  *
  * @stability experimental
@@ -301,39 +298,39 @@ export type GraphEntityDetail = ContractGraphEntityDetail;
 export type GraphNode = ContractGraphNode;
 
 /**
- * The graph valid range.
+ * The period an edge is valid, as a half-open range.
  *
  * @stability experimental
  */
 export interface GraphValidRange {
-  /** The from. */
+  /** Inclusive start as an ISO 8601 instant, or `null` when unbounded. */
   from: string | null;
-  /** The to. */
+  /** Exclusive end as an ISO 8601 instant, or `null` when unbounded. */
   to: string | null;
-  /** The precision. */
+  /** How precisely the bounds are known. */
   precision: DatePrecision;
 }
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The graph edge.
+ * One edge of a graph slice: a stored relation, or a `virtual` one derived from an item column.
  *
  * @stability experimental
  */
 export interface GraphEdge {
   /** `kg_relations.id`, or `virt:<itemId>:<TYPE>` for column-derived edges. */
   id: string;
-  /** The type. */
+  /** Relation type key, e.g. `WORKS_FOR`. */
   type: string;
   /** Stored direction, never inverted. */
   source: string;
-  /** The target. */
+  /** Id of the node the edge points to. */
   target: string;
-  /** The valid. */
+  /** When the relation holds, or `null` for a non-temporal relation. */
   valid: GraphValidRange | null;
-  /** The confidence. */
+  /** Extraction confidence from 0 to 1, or `null` when the relation was not extracted (manual or imported). */
   confidence: number | null;
-  /** Whether virtual applies. */
+  /** `true` for an edge derived from an item column rather than a stored relation. */
   virtual: boolean;
   /**
    * The relation's own attribute values, keyed by prop key — e.g. `HAS_ROLE`
@@ -346,40 +343,40 @@ export interface GraphEdge {
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The graph slice.
+ * The subgraph the API returns for a neighbourhood or an expand call: nodes, edges and whether it was cut off.
  *
  * @stability experimental
  */
 export interface GraphSlice {
-  /** The seed ids. */
+  /** Ids of the nodes the slice was grown from, in request order. */
   seedIds: string[];
-  /** The as of. */
+  /** The instant the slice was evaluated at, as an ISO 8601 string. */
   asOf: string;
-  /** The nodes. */
+  /** Entities and items in the slice, seeds included. */
   nodes: GraphNode[];
-  /** The edges. */
+  /** Relations between the slice's nodes, in their stored direction. */
   edges: GraphEdge[];
-  /** Whether truncated applies. */
+  /** `true` when more nodes were reachable than `cap`; the slice is then partial. */
   truncated: boolean;
-  /** The cap. */
+  /** The node cap the API applied to this slice. */
   cap: number;
 }
 
 /**
- * The graph neighborhood params of the call.
+ * Options for {@link getEntityNeighborhood}.
  *
  * @stability experimental
  */
 export interface GraphNeighborhoodParams {
-  /** The hops. */
+  /** How many relation hops to walk from the seed: 1 (default) or 2. */
   hops?: 1 | 2;
-  /** The types. */
+  /** Entity types or item kinds to keep. The seed itself is always kept. */
   types?: readonly string[];
-  /** The relation types. */
+  /** Relation types to walk along. Omitted means all. */
   relationTypes?: readonly string[];
-  /** The as of. */
+  /** Evaluate the graph as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
   asOf?: string;
-  /** The limit. */
+  /** Maximum nodes to return (the API default is 150). */
   limit?: number;
 }
 
@@ -388,114 +385,112 @@ export interface GraphNeighborhoodParams {
 // =============================================================================
 
 /**
- * The timeline item.
+ * The knowledge item (commitment, decision, claim or person fact) behind an item timeline row.
  *
  * @stability experimental
  */
 export interface TimelineItem {
-  /** The id. */
+  /** Item id (UUID). */
   id: string;
-  /** The kind. */
+  /** Which kind of item this is. */
   kind: GraphItemKind;
-  /** The title. */
+  /** Short title, or `null` when the item has only a statement. */
   title: string | null;
-  /** The statement. */
+  /** The item's full statement. */
   statement: string;
-  /** The status. */
+  /** Item status (e.g. `open`), or `null` for kinds without a status. */
   status: string | null;
-  /** When the due happened, as an ISO timestamp. */
+  /** ISO 8601 due date of a commitment, or `null` when it has none. */
   dueAt: string | null;
-  /** The owner person. */
+  /** The person who owns a commitment, or `null` when unknown or not applicable. */
   ownerPerson: GraphEntityRef | null;
-  /** The counterparty. */
+  /** The other party of a commitment, or `null` when none was recorded. */
   counterparty: GraphEntityRef | null;
-  /** The sensitivity. */
+  /** Sensitivity of a person fact; `null` for other kinds. `sensitive` items are only returned on request. */
   sensitivity: 'business' | 'personal' | 'sensitive' | null;
-  /** Whether superseded applies. */
+  /** `true` when a newer item replaced this one. */
   superseded: boolean;
-  /** The id of the superseded by. */
+  /** Id of the item that replaced this one, or `null` when it is current. */
   supersededById: string | null;
 }
 
 /**
- * The timeline relation.
+ * The relation behind a relation-started or relation-ended timeline row, seen from the page's entity.
  *
  * @stability experimental
  */
 export interface TimelineRelation {
-  /** The id. */
+  /** Relation id (UUID). */
   id: string;
-  /** The type. */
+  /** Relation type key. */
   type: string;
-  /** The direction. */
+  /** `out` when the page's entity is the source of the relation, `in` when it is the target. */
   direction: 'out' | 'in';
-  /** The other. */
+  /** The entity at the other end. */
   other: GraphEntityRef;
-  /** The valid. */
+  /** When the relation holds, or `null` when it is not temporal. */
   valid: GraphValidRange | null;
 }
 
 /**
- * The timeline event the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One row of an entity's timeline: an item, a relation starting or ending, or a meeting, with its citations. Alias of the contract's `TimelineEvent`.
  *
  * @stability experimental
  */
 export type TimelineEvent = ContractTimelineEvent;
 
 /**
- * The timeline params of the call.
+ * Options for {@link getEntityTimeline}.
  *
  * @stability experimental
  */
 export interface TimelineParams {
-  /** The as of. */
+  /** Evaluate the timeline as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
   asOf?: string;
-  /** The kinds. */
+  /** Subset of timeline kinds to keep (`commitment`, `decision`, `claim`, `person_fact`, `relation`, `meeting`). */
   kinds?: readonly string[];
-  /** Whether include sensitive applies. */
+  /** Include `sensitive` person facts; the API default is `false`. */
   includeSensitive?: boolean;
-  /** The cursor. */
+  /** The `nextCursor` of the previous page. */
   cursor?: string;
-  /** The limit. */
+  /** Page size (the API allows 1 to 50, default 25). */
   limit?: number;
 }
 
 /**
- * The timeline response the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One page of an entity's timeline with the instant it was evaluated at. Alias of the contract's `TimelineResponse`.
  *
  * @stability experimental
  */
 export type TimelineResponse = ContractTimelineResponse;
 
 /**
- * The entity mention.
+ * One note or transcript that mentions an entity.
  *
  * @stability experimental
  */
 export interface EntityMention {
-  /** The kind. */
+  /** Whether the mentioning document is a note or a transcript. */
   kind: 'note' | 'transcript';
-  /** The id. */
+  /** Note or transcript id (UUID). */
   id: string;
-  /** The title. */
+  /** Title, or `null` when the document is no longer available to the caller. */
   title: string | null;
-  /** When the occurred happened, as an ISO timestamp. */
+  /** ISO 8601 date the document is about (e.g. a meeting date), or `null` when unknown. */
   occurredAt: string | null;
-  /** Whether available applies. */
+  /** `false` when the document was deleted or the caller can no longer view it. */
   available: boolean;
 }
 
 /**
- * The entity mentions response the API answers.
+ * One page of the documents that mention an entity.
  *
  * @stability experimental
  */
 export interface EntityMentionsResponse {
-  /** The items. */
+  /** The mentions on this page. */
   items: EntityMention[];
-  /** The next cursor. */
+  /** Cursor for the next page, or `null` on the last one. */
   nextCursor: string | null;
 }
 
@@ -504,98 +499,97 @@ export interface EntityMentionsResponse {
 // =============================================================================
 
 /**
- * The segment evidence source.
+ * A citation anchored in a transcript segment.
  *
  * @stability experimental
  */
 export interface SegmentEvidenceSource {
-  /** The kind. */
+  /** Discriminator for the transcript-segment source. */
   kind: 'segment';
-  /** The id of the transcript. */
+  /** Transcript id, or `null` when the anchor no longer carries one. */
   transcriptId: string | null;
-  /** The transcript title. */
+  /** Transcript title, or `null` when the transcript is unavailable to the caller. */
   transcriptTitle: string | null;
-  /** The id of the segment. */
+  /** Id of the anchored segment, or `null` when none. */
   segmentId: string | null;
-  /** The segment rev. */
+  /** Revision of the segment at the moment the quote was anchored. */
   segmentRev: number | null;
-  /** The current segment rev. */
+  /** The segment's revision now, or `null` when it cannot be looked up. */
   currentSegmentRev: number | null;
-  /** The start ms. */
+  /** Start of the quoted moment, in milliseconds from the start of the recording. */
   startMs: number | null;
-  /** The end ms. */
+  /** End of the quoted moment, in milliseconds from the start of the recording. */
   endMs: number | null;
-  /** Whether text changed applies. */
+  /** `true` when the segment was edited since the quote was anchored (`currentSegmentRev` differs from `segmentRev`). Always `false` when unavailable. */
   textChanged: boolean;
-  /** Whether available applies. */
+  /** `false` when the transcript was deleted or the caller can no longer view it; there is then no link, but the quote is still returned. */
   available: boolean;
-  /** The href. */
+  /** App link that opens the transcript at the quoted moment, or `null` when unavailable. */
   href: string | null;
 }
 
 /**
- * The note evidence source.
+ * A citation anchored in a note version.
  *
  * @stability experimental
  */
 export interface NoteEvidenceSource {
-  /** The kind. */
+  /** Discriminator for the note source. */
   kind: 'note';
-  /** The id of the note. */
+  /** Note id, or `null` when the anchor no longer carries one. */
   noteId: string | null;
-  /** The note title. */
+  /** Note title, or `null` when the note is unavailable to the caller. */
   noteTitle: string | null;
-  /** The note version. */
+  /** Note version the quote was drawn from. */
   noteVersion: number | null;
-  /** The current note version. */
+  /** The note's current version, or `null` when it cannot be looked up. */
   currentNoteVersion: number | null;
-  /** The char start. */
+  /** Offset of the first quoted character in that version's text. */
   charStart: number | null;
-  /** The char end. */
+  /** Offset just past the last quoted character in that version's text. */
   charEnd: number | null;
-  /** Whether version changed applies. */
+  /** `true` when the note has a newer version than the one quoted. Always `false` when unavailable. */
   versionChanged: boolean;
-  /** Whether available applies. */
+  /** `false` when the note was deleted or the caller can no longer view it; there is then no link, but the quote is still returned. */
   available: boolean;
-  /** The href. */
+  /** App link that opens the exact note version, or `null` when unavailable. */
   href: string | null;
 }
 
 /**
- * The import evidence source.
+ * A citation that came from an imported graph file.
  *
  * @stability experimental
  */
 export interface ImportEvidenceSource {
-  /** The kind. */
+  /** Discriminator for the import source. */
   kind: 'import';
-  /** The id of the import object. */
+  /** Id of the uploaded import object, or `null` when the anchor no longer carries one. */
   importObjectId: string | null;
-  /** The source iri. */
+  /** IRI of the source record in the imported file, when it had one. */
   sourceIri: string | null;
-  /** Whether available applies. */
+  /** `true` only while the caller still owns the uploaded import object. */
   available: boolean;
-  /** The href. */
+  /** Always `null`: an import has no page to open. */
   href: null;
 }
 
 /**
- * The evidence source.
+ * Where a citation comes from, discriminated by `kind`: a transcript segment, a note version or an import.
  *
  * @stability experimental
  */
 export type EvidenceSource = SegmentEvidenceSource | NoteEvidenceSource | ImportEvidenceSource;
 
 /**
- * The evidence link the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One citation resolved to a link: the quote, its source and whether the source is still available. Alias of the contract's `EvidenceLink`.
  *
  * @stability experimental
  */
 export type EvidenceLink = ContractEvidenceLink;
 
 /**
- * The API's cap on one `GET /api/graph/evidence?ids=` call.
+ * The API's cap on one `GET /api/graph/evidence?ids=` call: ids beyond it are rejected.
  *
  * @stability experimental
  */
@@ -606,121 +600,116 @@ export const EVIDENCE_BATCH_MAX = 50;
 // =============================================================================
 
 /**
- * The cited statement the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One sentence of an entity digest with the ids of the evidence that supports it. Alias of the contract's `CitedStatement`.
  *
  * @stability experimental
  */
 export type CitedStatement = ContractCitedStatement;
 
 /**
- * The brief entry the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One item (commitment, decision, claim or person fact) listed in a brief section, with its citations. Alias of the contract's `BriefEntry`.
  *
  * @stability experimental
  */
 export type BriefEntry = ContractBriefEntry;
 
 /**
- * The people change the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A relation between people that started or ended inside the brief window. Alias of the contract's `PeopleChange`.
  *
  * @stability experimental
  */
 export type PeopleChange = ContractPeopleChange;
 
 /**
- * The related source the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A note or transcript related to the entity, with a search snippet. Alias of the contract's `RelatedSource`.
  *
  * @stability experimental
  */
 export type RelatedSource = ContractRelatedSource;
 
 /**
- * The digest unavailable reason the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Why a stale digest is not being refreshed: `graph_disabled`, `ai_not_configured`, `ai_key_missing` or `model_lacks_capability`. Alias of the contract's `DigestUnavailableReason`.
  *
  * @stability experimental
  */
 export type DigestUnavailableReason = ContractDigestUnavailableReason;
 
 /**
- * The entity digest.
+ * The AI-written summary of an entity, as stored by the `kg.entity_digest` job.
  *
  * @stability experimental
  */
 export interface EntityDigest {
-  /** The statements. */
+  /** The summary, one cited statement at a time. */
   statements: CitedStatement[];
-  /** The covers until. */
+  /** ISO 8601 instant up to which the digest covers changes, or `null` when unknown. */
   coversUntil: string | null;
-  /** When the generated happened, as an ISO timestamp. */
+  /** ISO 8601 instant the job produced the digest. */
   generatedAt: string;
-  /** The model. */
+  /** Model that wrote the digest. */
   model: string;
 }
 
 /**
- * The entity brief.
+ * An entity's brief (`GET /api/graph/entities/:id/brief`): what changed, open commitments and related sources, plus the cached AI digest. Reading it never calls a model.
  *
  * @stability experimental
  */
 export interface EntityBrief {
-  /** The entity. */
+  /** The entity the brief is about. */
   entity: GraphEntityRef;
-  /** The window. */
+  /** The time window the "what changed" sections cover. */
   window: {
-    /** The since. */
+    /** Start of the window, or `null` when none could be determined. */
     since: string | null;
-    /** The since source. */
+    /** Where `since` came from: the request (`query`), the caller's last visit (`last_viewed`), the digest's coverage (`digest`) or the default of 30 days (`default`). */
     sinceSource: 'query' | 'last_viewed' | 'digest' | 'default';
-    /** The as of. */
+    /** The instant the brief was evaluated at, as an ISO 8601 string. */
     asOf: string;
-    /** When the last viewed happened, as an ISO timestamp. */
+    /** ISO 8601 instant the caller last opened this brief, or `null` if never. */
     lastViewedAt: string | null;
   };
-  /** The digest. */
+  /** The latest stored digest; `null` when none exists yet, or when the brief was requested with `asOf`. */
   digest: EntityDigest | null;
-  /** Whether digest stale applies. */
+  /** `true` when there is something to summarize but no digest, or the digest predates the newest change. */
   digestStale: boolean;
-  /** Whether digest pending applies. */
+  /** `true` while a `kg.entity_digest` job for this entity is queued or running. */
   digestPending: boolean;
-  /** The digest unavailable. */
+  /** Why a stale digest is not being refreshed (missing AI configuration or key, graph disabled, model without the capability), or `null`. */
   digestUnavailable: DigestUnavailableReason | null;
-  /** The sections. */
+  /** The brief's lists, each already capped by the API. */
   sections: {
-    /** The what changed. */
+    /** Changes inside the window. */
     whatChanged: BriefEntry[];
-    /** The decisions. */
+    /** Decisions about the entity. */
     decisions: BriefEntry[];
-    /** Whether open commitments applies. */
+    /** Commitments that are still open, split by who owes them. */
     openCommitments: {
-      /** The theirs. */
+      /** Commitments owed by the other party. */
       theirs: BriefEntry[];
-      /** The yours. */
+      /** Commitments owed by the caller. */
       yours: BriefEntry[];
     };
-    /** The risks claims. */
+    /** Claims and risks recorded for the entity. */
     risksClaims: BriefEntry[];
-    /** The people changes. */
+    /** Relations between people and others (for example a role) that started or ended. */
     peopleChanges: PeopleChange[];
   };
-  /** The related. */
+  /** Notes and transcripts related to the entity, found by search. */
   related: RelatedSource[];
 }
 
 /**
- * The entity brief params of the call.
+ * Options for {@link getEntityBrief}.
  *
  * @stability experimental
  */
 export interface EntityBriefParams {
-  /** The since. */
+  /** Start of the "what changed" window (`YYYY-MM-DD` or ISO 8601). Omitted means the caller's last visit, else the digest's coverage, else 30 days before `asOf`. */
   since?: string;
-  /** The as of. */
+  /** Evaluate the brief as of this date or instant. With it, `digest` is `null`, nothing is enqueued and the last-viewed time is not moved. */
   asOf?: string;
-  /** Whether mark viewed applies. */
+  /** Record this visit as "last looked". The API default is `true`; ignored with `asOf`. */
   markViewed?: boolean;
 }
 
@@ -729,66 +718,65 @@ export interface EntityBriefParams {
 // =============================================================================
 
 /**
- * #355's request shape. `type` is deliberately absent — a type changes only through a proposal.
+ * Body of the manual entity edit (`PATCH /api/graph/entities/:id`). `type` is deliberately absent: a type changes only through a proposal.
  *
  * @stability experimental
  */
 export interface GraphEntityPatch {
-  /** The label. */
+  /** New display name; the old one is kept as an alias. */
   label?: string;
   /** Merge: `key → value` sets, `key → null` clears, absent keys unchanged. */
   props?: Record<string, unknown>;
-  /** The add aliases. */
+  /** Other names to add. One that normalizes to an existing alias is ignored. */
   addAliases?: string[];
-  /** The remove alias ids. */
+  /** Ids of aliases to remove. */
   removeAliasIds?: string[];
 }
 
 /**
- * #355's response projection (`graphEntitySchema`), which is NOT the #370 detail.
+ * The entity as `PATCH /api/graph/entities/:id` returns it (`graphEntitySchema`); not the same shape as {@link GraphEntityDetail}, it has no counts.
  *
  * @stability experimental
  */
 export interface GraphEntityRecord {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The type. */
+  /** Entity type key. */
   type: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** The props. */
+  /** Attribute values, keyed by attribute key. */
   props: Record<string, unknown>;
-  /** The review status. */
+  /** Review state of the entity (e.g. `accepted` or `edited`). */
   reviewStatus: string;
-  /** The id of the merged into. */
+  /** Id of the entity this one was merged into, or `null` when it is live. */
   mergedIntoId: string | null;
-  /** When the occurred happened, as an ISO timestamp. */
+  /** ISO 8601 instant for an event-like entity (a Meeting), or `null`. */
   occurredAt: string | null;
-  /** The ontology version. */
+  /** Version of the ontology the entity was written under. */
   ontologyVersion: string;
-  /** The aliases. */
+  /** Every alias of the entity, with its normalized form. */
   aliases: Array<GraphEntityAlias & {
-    /** The normalized. */
+    /** The comparison form every exact-match lookup reads. */
     normalized: string;
-    /** When the created happened, as an ISO timestamp. */
+    /** ISO 8601 instant the alias was created. */
     createdAt: string;
   }>;
-  /** When the created happened, as an ISO timestamp. */
+  /** ISO 8601 instant the entity was created. */
   createdAt: string;
-  /** When the updated happened, as an ISO timestamp. */
+  /** ISO 8601 instant the entity was last changed. */
   updatedAt: string;
 }
 
 /**
- * The FORGET CONFIRMATION.
+ * The exact text a caller must send to confirm forgetting an entity (`POST /api/graph/entities/:id/forget`).
  *
  * @stability experimental
  */
 export const FORGET_CONFIRMATION = 'FORGET';
 
 /**
- * The forget entity response the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * The queued deletion of a forgotten person: the `kg.purge` job id, the entity id and `pending` or `running`. Alias of the contract's `ForgetEntityResponse`.
  *
  * @stability experimental
  */
@@ -799,7 +787,7 @@ export type ForgetEntityResponse = ContractForgetEntityResponse;
 // =============================================================================
 
 /**
- * The query value.
+ * A query-string value {@link buildGraphQuery} accepts; arrays are comma-joined and `undefined`, `null` and empty values are dropped.
  *
  * @stability experimental
  */
@@ -832,7 +820,7 @@ const enc = encodeURIComponent;
 // =============================================================================
 
 /**
- * Lists graph entities.
+ * Lists graph entities (`GET /api/graph/entities`), one page at a time.
  *
  * @stability experimental
  */
@@ -864,7 +852,7 @@ export function listGraphEntities(
  * into `ErrorBoundary` rather than just the section. Rejecting here turns it
  * into an ordinary failed request, which every caller already handles (Home's
  * Knowledge section hides; the index page shows its error).
-  *
+ *
  * @stability experimental
  */
 export function parseGraphEntityListResponse(body: unknown): GraphEntityListResponse {
@@ -881,7 +869,7 @@ export function parseGraphEntityListResponse(body: unknown): GraphEntityListResp
 }
 
 /**
- * Gets graph entity.
+ * Fetches one entity with its counts (`GET /api/graph/entities/:id`).
  *
  * @stability experimental
  */
@@ -890,7 +878,7 @@ export function getGraphEntity(host: KvoxWebHost, id: string, signal?: AbortSign
 }
 
 /**
- * Gets entity timeline.
+ * Fetches a page of an entity's timeline (`GET /api/graph/entities/:id/timeline`).
  *
  * @stability experimental
  */
@@ -911,7 +899,7 @@ export function getEntityTimeline(
 }
 
 /**
- * Gets entity mentions.
+ * Fetches a page of the notes and transcripts that mention an entity (`GET /api/graph/entities/:id/mentions`).
  *
  * @stability experimental
  */
@@ -928,7 +916,7 @@ export function getEntityMentions(
 }
 
 /**
- * Gets entity neighborhood.
+ * Fetches the subgraph around an entity (`GET /api/graph/entities/:id/neighborhood`), up to two hops out.
  *
  * @stability experimental
  */
@@ -949,42 +937,42 @@ export function getEntityNeighborhood(
 }
 
 /**
- * #370's cap on one slice, and on the explorer (§22.2).
+ * The most nodes one slice or the explorer may hold (§22.2); the API refuses a larger `limit` or `cap`.
  *
  * @stability experimental
  */
 export const GRAPH_NODE_CAP = 300;
 /**
- * #370's cap on `nodeIds` in one expand.
+ * The most seed ids one {@link expandGraph} call accepts.
  *
  * @stability experimental
  */
 export const GRAPH_EXPAND_MAX_SEEDS = 50;
 
 /**
- * The graph expand params of the call.
+ * Request for {@link expandGraph}.
  *
  * @stability experimental
  */
 export interface GraphExpandParams {
-  /** 1–50 readable entity or item ids. Any unreadable one → 404 for the whole call. */
+  /** 1 to 50 entity or item ids to expand from. One the caller cannot read fails the whole call with a 404. */
   nodeIds: readonly string[];
-  /** Entity type keys / item kinds expansion may ADD (seeds are always kept). */
+  /** Entity types and item kinds expansion may add; the seeds are always kept. Omitted means no restriction. */
   types?: readonly string[];
-  /** Relation types expansion may walk along. */
+  /** Relation types expansion may walk along. Omitted means all. */
   relationTypes?: readonly string[];
-  /** `YYYY-MM-DD` or an ISO datetime with offset. */
+  /** Evaluate the graph as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
   asOf?: string;
-  /** 1–300. */
+  /** Most nodes the returned slice may hold, 1 to {@link GRAPH_NODE_CAP}. */
   cap: number;
 }
 
 /**
- * `POST /api/graph/explore/expand` (#370) — one hop out from each node, as one
+ * Expands one hop out from each seed node into a single slice (`POST /api/graph/explore/expand`).
  * slice. A read, even though it is a POST. `asOf` is sent as the API's
  * `as_of`; an absent filter is omitted rather than sent empty, because an
  * empty list would mean "nothing" rather than "everything".
-  *
+ *
  * @stability experimental
  */
 export function expandGraph(host: KvoxWebHost, params: GraphExpandParams, signal?: AbortSignal): Promise<GraphSlice> {
@@ -996,7 +984,7 @@ export function expandGraph(host: KvoxWebHost, params: GraphExpandParams, signal
 }
 
 /**
- * Gets evidence.
+ * Fetches one citation resolved to a link (`GET /api/graph/evidence/:id`).
  *
  * @stability experimental
  */
@@ -1008,7 +996,7 @@ export function getEvidence(host: KvoxWebHost, id: string, signal?: AbortSignal)
  * Batch evidence read. Chunked at `EVIDENCE_BATCH_MAX` per call — the API caps
  * `ids` at 50 and silently omits unknown ids, so a caller must not assume the
  * result has one row per id.
-  *
+ *
  * @stability experimental
  */
 export async function getEvidenceBatch(host: KvoxWebHost, ids: readonly string[]): Promise<EvidenceLink[]> {
@@ -1027,7 +1015,7 @@ export async function getEvidenceBatch(host: KvoxWebHost, ids: readonly string[]
 }
 
 /**
- * #372 — sections + stored digest. Never an AI call, never a 409.
+ * Fetches an entity's brief (`GET /api/graph/entities/:id/brief`): its sections and stored digest. Never calls a model and never answers 409.
  *
  * @stability experimental
  */
@@ -1050,7 +1038,7 @@ export function getEntityBrief(
 // =============================================================================
 
 /**
- * Updates graph entity.
+ * Edits an entity manually (`PATCH /api/graph/entities/:id`): label, attribute values and aliases. A type change is not possible here.
  *
  * @stability experimental
  */
@@ -1059,7 +1047,7 @@ export function updateGraphEntity(host: KvoxWebHost, id: string, body: GraphEnti
 }
 
 /**
- * Forgets graph entity.
+ * Asks for a person to be forgotten (`POST /api/graph/entities/:id/forget`), sending the required {@link FORGET_CONFIRMATION}. Queues a `kg.purge` job; the person stays visible until it completes.
  *
  * @stability experimental
  */
@@ -1074,7 +1062,7 @@ export function forgetGraphEntity(host: KvoxWebHost, id: string): Promise<Forget
 // =============================================================================
 
 /**
- * The attribute choice the API sends; a documented alias of the contract's type, so the
+ * One permitted value of a `select` or `multi_select` attribute: a permanent stored `value` and a renameable `label`.
  * wire shape has one definition.
  *
  * @stability experimental
@@ -1082,72 +1070,72 @@ export function forgetGraphEntity(host: KvoxWebHost, id: string): Promise<Forget
 export type AttributeChoice = ContractAttributeChoice;
 
 /**
- * The attribute def options of the call.
+ * Kind-specific options of an attribute definition; sent only for `select`, `multi_select` and `entity_ref` kinds.
  *
  * @stability experimental
  */
 export interface AttributeDefOptions {
-  /** The choices. */
+  /** `select` and `multi_select` only: the permitted values, in display order. Choices may be added or relabelled, never removed. */
   choices?: AttributeChoice[];
-  /** The target types. */
+  /** `entity_ref` only: the entity type keys a reference may point at. */
   targetTypes?: string[];
 }
 
 /**
- * One of the caller's own attribute definitions — #355's `GraphAttributeDefDto`, field for field.
+ * One of the caller's own attribute definitions (`GraphAttributeDefDto`), field for field.
  *
  * @stability experimental
  */
 export interface AttributeDef {
-  /** The id. */
+  /** Definition id (UUID), used to patch or deprecate it. */
   id: string;
-  /** The entity type. */
+  /** Entity type key the attribute belongs to. Immutable. */
   entityType: string;
   /** `u_` + ten lowercase alphanumerics; server-generated and permanent. */
   key: string;
-  /** The label. */
+  /** Name shown for the attribute in forms and on the graph. */
   label: string;
-  /** The kind. */
+  /** Value type of the attribute. Immutable. */
   kind: AttributeKind;
-  /** The options. */
+  /** Kind-specific options, or `null` for kinds that take none. */
   options: AttributeDefOptions | null;
-  /** Whether extractable applies. */
+  /** Whether extraction may ask the model for this value. */
   extractable: boolean;
-  /** The extraction hint. */
+  /** Prompt copy telling the model what to look for. Required when `extractable` is true; `null` otherwise. */
   extractionHint: string | null;
-  /** The sensitivity. */
+  /** How private values are; `null` inherits the entity type's default. */
   sensitivity: Sensitivity | null;
-  /** The sort order. */
+  /** Position among the entity type's attributes; lower comes first. */
   sortOrder: number;
-  /** When the deprecated happened, as an ISO timestamp. */
+  /** ISO 8601 instant the definition was deprecated, or `null` while it is live. */
   deprecatedAt: string | null;
-  /** When the created happened, as an ISO timestamp. */
+  /** ISO 8601 instant the definition was created. */
   createdAt: string;
-  /** When the updated happened, as an ISO timestamp. */
+  /** ISO 8601 instant the definition was last changed. */
   updatedAt: string;
 }
 
 /**
- * The create attribute def input of the call.
+ * Body for {@link createAttributeDef}.
  *
  * @stability experimental
  */
 export interface CreateAttributeDefInput {
-  /** The entity type. */
+  /** Entity type key to add the attribute to. */
   entityType: string;
-  /** The label. */
+  /** Display name, at most {@link ATTRIBUTE_LABEL_MAX_LENGTH} characters. */
   label: string;
-  /** The kind. */
+  /** Value type. Cannot be changed afterwards. */
   kind: AttributeKind;
-  /** The options. */
+  /** Choices for `select` and `multi_select`, target types for `entity_ref`; omit for other kinds. */
   options?: AttributeDefOptions;
-  /** Whether extractable applies. */
+  /** Whether extraction may ask the model for this value. Defaults to `false`. */
   extractable?: boolean;
-  /** The extraction hint. */
+  /** Prompt copy for the model; required when `extractable` is true, at most {@link EXTRACTION_HINT_MAX_LENGTH} characters. */
   extractionHint?: string | null;
-  /** The sensitivity. */
+  /** Privacy of the values; `null` or omitted inherits the entity type's default. */
   sensitivity?: Sensitivity | null;
-  /** The sort order. */
+  /** Position among the entity type's attributes. */
   sortOrder?: number;
 }
 
@@ -1157,30 +1145,30 @@ export interface CreateAttributeDefInput {
  * @stability experimental
  */
 export interface PatchAttributeDefInput {
-  /** The label. */
+  /** New display name. */
   label?: string;
-  /** The options. */
+  /** New options. Choices may be added or relabelled, never removed. */
   options?: AttributeDefOptions;
-  /** Whether extractable applies. */
+  /** Whether extraction may ask the model for this value. */
   extractable?: boolean;
-  /** The extraction hint. */
+  /** New extraction hint, or `null` to clear it. */
   extractionHint?: string | null;
-  /** The sensitivity. */
+  /** New privacy level, or `null` to inherit the entity type's default. */
   sensitivity?: Sensitivity | null;
-  /** The sort order. */
+  /** New position among the entity type's attributes. */
   sortOrder?: number;
-  /** Whether deprecated applies. */
+  /** `true` deprecates the definition (hidden from forms and extraction, values kept); `false` restores it. */
   deprecated?: boolean;
 }
 
 /**
- * #355's limit on `extractionHint`.
+ * Longest allowed `extractionHint`, in characters.
  *
  * @stability experimental
  */
 export const EXTRACTION_HINT_MAX_LENGTH = 500;
 /**
- * #355's limit on `label`.
+ * Longest allowed attribute `label`, in characters.
  *
  * @stability experimental
  */
@@ -1203,7 +1191,7 @@ export const ATTRIBUTE_KIND_LABELS: Record<AttributeKind, string> = {
 };
 
 /**
- * The SENSITIVITY LABELS.
+ * Human labels for each sensitivity level, as the UI shows them.
  *
  * @stability experimental
  */
@@ -1214,7 +1202,7 @@ export const SENSITIVITY_LABELS: Record<Sensitivity, string> = {
 };
 
 /**
- * `GET /api/graph/attribute-defs?includeDeprecated=true` — every own definition.
+ * Lists the caller's own attribute definitions, deprecated ones included (`GET /api/graph/attribute-defs`), optionally for one entity type.
  *
  * @stability experimental
  */
@@ -1228,7 +1216,7 @@ export async function listAttributeDefs(host: KvoxWebHost, entityType?: string):
 }
 
 /**
- * Creates attribute def.
+ * Creates an attribute definition (`POST /api/graph/attribute-defs`).
  *
  * @stability experimental
  */
@@ -1237,7 +1225,7 @@ export async function createAttributeDef(host: KvoxWebHost, input: CreateAttribu
 }
 
 /**
- * Patches attribute def.
+ * Changes a definition (`PATCH /api/graph/attribute-defs/:id`); `kind`, `entityType` and `key` are immutable.
  *
  * @stability experimental
  */
@@ -1250,7 +1238,7 @@ export async function patchAttributeDef(
 }
 
 /**
- * `DELETE` DEPRECATES — the row and every stored value are kept (§17.3).
+ * Deprecates a definition (`DELETE /api/graph/attribute-defs/:id`): the row and every stored value are kept (§17.3).
  *
  * @stability experimental
  */
@@ -1279,7 +1267,7 @@ export type AttributeDefField =
  * #355 answers with a sentence (and sometimes `details`), not a field path, so
  * this reads the `details` keys first and the sentence second. A refusal no
  * rule recognises stays form-level — shown, never swallowed.
-  *
+ *
  * @stability experimental
  */
 export function attributeDefErrorField(err: unknown): AttributeDefField | null {
@@ -1311,27 +1299,25 @@ export function attributeDefErrorField(err: unknown): AttributeDefField | null {
 // these types and functions; none of them learns a URL.
 
 /**
- * The proposal status the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Lifecycle state of a proposal: `extracting`, `draft`, `committed`, `discarded`, `failed` or `reverted`. Alias of the contract's `ProposalStatus`.
  *
  * @stability experimental
  */
 export type ProposalStatus = ContractProposalStatus;
 /**
- * The proposal kind.
+ * What a proposal was produced from: an AI extraction of a note, an RDF import, or an entity resolution.
  *
  * @stability experimental
  */
 export type ProposalKind = 'extraction' | 'import' | 'resolution';
 /**
- * The proposal decision the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A reviewer's decision on a proposal row: `pending`, `accept`, `edit`, `reject` or `merge_into`. Alias of the contract's `ProposalDecision`.
  *
  * @stability experimental
  */
 export type ProposalDecision = ContractProposalDecision;
 /**
- * The proposal group key.
+ * The review group a proposal row belongs to: one per shipped entity type, `Other` for any further type, then `relations` and `closings`.
  *
  * @stability experimental
  */
@@ -1349,7 +1335,7 @@ export type ProposalGroupKey =
   | 'closings';
 
 /**
- * #366's `groupKeySchema` order — the order the sheet renders groups in.
+ * The order the review sheet renders its groups in (#366's `groupKeySchema`).
  *
  * @stability experimental
  */
@@ -1371,7 +1357,7 @@ export const PROPOSAL_GROUP_ORDER: readonly ProposalGroupKey[] = [
  * #363's `PROPOSAL_ITEM_FLAGS` (`graph/proposals/proposal-payload.schema.ts`),
  * copied verbatim — the web cannot import from the API. `review/flagCopy.ts`
  * is a `Record` over this union, so a flag added here without copy fails `tsc`.
-  *
+ *
  * @stability experimental
  */
 export const PROPOSAL_ITEM_FLAGS = [
@@ -1391,15 +1377,14 @@ export const PROPOSAL_ITEM_FLAGS = [
   'imported',
 ] as const;
 /**
- * The proposal item flag the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A reason a proposal row needs attention, such as `known` or `possible_duplicate`; the values of {@link PROPOSAL_ITEM_FLAGS}. Alias of the contract's `ProposalItemFlag`.
  *
  * @stability experimental
  */
 export type ProposalItemFlag = ContractProposalItemFlag;
 
 /**
- * The valid precision value.
+ * How precisely a date bound is known; same values as {@link DatePrecision}.
  *
  * @stability experimental
  */
@@ -1407,8 +1392,7 @@ export type ValidPrecisionValue = 'day' | 'month' | 'year' | 'unknown';
 
 /** `{ entityId }` — an existing committed entity; `{ ref }` — an entity row of this proposal. */
 /**
- * The endpoint ref the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One end of a relation in a proposal: `{ entityId }` for an existing entity or `{ ref }` for an entity row of the same proposal. Alias of the contract's `EndpointRef`.
  *
  * @stability experimental
  */
@@ -1416,38 +1400,38 @@ export type EndpointRef = ContractEndpointRef;
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The proposal counts.
+ * Row counts of a proposal, by decision and by review group.
  *
  * @stability experimental
  */
 export interface ProposalCounts {
-  /** The total. */
+  /** All rows of the proposal. */
   total: number;
-  /** The pending. */
+  /** Rows still undecided. */
   pending: number;
-  /** The accepted. */
+  /** Rows decided `accept`, `edit` or `merge_into`. */
   accepted: number;
-  /** The rejected. */
+  /** Rows decided `reject`. */
   rejected: number;
-  /** The known. */
+  /** Rows flagged `known`: already in the graph, so committing only adds evidence. */
   known: number;
-  /** The by group. */
+  /** Rows per review group; a group with no rows may be absent. */
   byGroup: Partial<Record<ProposalGroupKey, number>>;
 }
 
 /**
- * #363's `userGuidanceSchema`.
+ * Guidance the user gave for an extraction (#363's `userGuidanceSchema`).
  *
  * @stability experimental
  */
 export interface ProposalUserGuidance {
-  /** The pinned entity ids. */
+  /** Entities of the caller's to focus on; each must be a live entity they own. */
   pinnedEntityIds: string[];
-  /** The entity types. */
+  /** Ontology type keys to propose; omitted means every type in the effective ontology. */
   entityTypes?: string[];
-  /** The relation types. */
+  /** Relation type keys to propose; omitted means every extractable relation. */
   relationTypes?: string[];
-  /** The instructions. */
+  /** Free-text instructions for the model. */
   instructions: string;
 }
 
@@ -1458,7 +1442,7 @@ export interface ProposalUserGuidance {
  * the run re-asked once for a smaller answer (`stats.truncationRetry`).
  * Distinct from `'invalid_output'`, a malformed answer. Open-ended: a class a
  * later API adds still arrives as a string and renders its server message.
-  *
+ *
  * @stability experimental
  */
 // TODO(web-domain): align with @marinoscar/kvox-contract
@@ -1474,137 +1458,137 @@ export type ExtractionFailureClass =
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The proposal summary.
+ * A proposal without its rows: identity, source note, model, counts, outcome and timestamps.
  *
  * @stability experimental
  */
 export interface ProposalSummary {
-  /** The id. */
+  /** Proposal id (UUID). */
   id: string;
-  /** The kind. */
+  /** What the proposal was produced from. */
   kind: ProposalKind;
-  /** The status. */
+  /** Lifecycle state: `extracting`, `draft`, `committed`, `discarded`, `failed` or `reverted`. */
   status: ProposalStatus;
-  /** The id of the note. */
+  /** Source note, or `null` for a proposal not tied to a note. */
   noteId: string | null;
-  /** The note title. */
+  /** Title of the source note, or `null` when there is none. */
   noteTitle: string | null;
-  /** The note version. */
+  /** Version of the note the proposal was extracted from. */
   noteVersion: number | null;
-  /** The note current version. */
+  /** The note's current version; greater than `noteVersion` means the note changed since. */
   noteCurrentVersion: number | null;
-  /** The model. */
+  /** Model that produced the proposal, or `null` when none ran. */
   model: string | null;
-  /** The id of the provider. */
+  /** Id of the AI provider the model was run on, or `null`. */
   providerId: string | null;
-  /** The user guidance. */
+  /** The guidance the extraction was run with, or `null` when none was given. */
   userGuidance: ProposalUserGuidance | null;
-  /** The counts. */
+  /** Row counts by decision and group. */
   counts: ProposalCounts;
   /**
-   * Stage stats, loosely typed. Known keys include `usage`, `proposed`, and
+   * Stage statistics, loosely typed and passed through from the pipeline. Known keys include `usage`, `proposed`, and (#435) the optional `truncationRetry` flag: the first answer was cut off and the run re-asked once with halved row caps.
    * (#435) the optional `truncationRetry: boolean` — the first answer was cut
    * off and the run re-asked once with halved row caps.
    */
   stats: Record<string, unknown> & {
-    /** Whether truncation retry applies. */
+    /** `true` when the first answer was cut off and the run re-asked with smaller row caps. */
     truncationRetry?: boolean;
   };
-  /** The failure. */
+  /** Why the proposal failed; `null` unless its status is `failed`. */
   failure: {
-    /** The error class. */
+    /** Machine-readable failure class. */
     errorClass: ExtractionFailureClass;
-    /** The message. */
+    /** The server's message, shown to the user. */
     message: string;
   } | null;
-  /** When the created happened, as an ISO timestamp. */
+  /** ISO 8601 instant the proposal was created. */
   createdAt: string;
-  /** When the committed happened, as an ISO timestamp. */
+  /** ISO 8601 instant the proposal was committed, or `null` while it has not been. */
   committedAt: string | null;
-  /** When the reverted happened, as an ISO timestamp. */
+  /** ISO 8601 instant the proposal was reverted, or `null` if it never was. */
   revertedAt: string | null;
 }
 
 /**
- * The proposal evidence.
+ * One citation attached to a proposal row, with enough of the anchor to open and highlight the source.
  *
  * @stability experimental
  */
 export interface ProposalEvidence {
-  /** The id. */
+  /** Evidence id (UUID). */
   id: string;
-  /** `import` (#387): cited to the uploaded RDF file itself — nothing to play or highlight. */
+  /** Where the quote comes from. `import` means it is cited to the uploaded RDF file itself, with nothing to play or highlight. */
   source: 'segment' | 'note' | 'import';
-  /** The id of the transcript. */
+  /** Transcript the quote is in; segment evidence only. */
   transcriptId: string | null;
-  /** The id of the segment. */
+  /** Transcript segment the quote is in; segment evidence only. */
   segmentId: string | null;
-  /** The segment rev. */
+  /** Revision of the segment when the quote was anchored. */
   segmentRev: number | null;
-  /** The start ms. */
+  /** Start of the quoted moment, in milliseconds from the start of the recording. */
   startMs: number | null;
-  /** The end ms. */
+  /** End of the quoted moment, in milliseconds from the start of the recording. */
   endMs: number | null;
-  /** The id of the note. */
+  /** Note the quote is in; note evidence only. */
   noteId: string | null;
-  /** The note version. */
+  /** Note version the quote was drawn from. */
   noteVersion: number | null;
-  /** The char start. */
+  /** Offset of the first quoted character in that text. */
   charStart: number | null;
-  /** The char end. */
+  /** Offset just past the last quoted character. */
   charEnd: number | null;
-  /** The quote. */
+  /** The exact quoted text. */
   quote: string;
-  /** Import evidence (#387): the stored file and the node's IRI in it. */
+  /** Import evidence: the stored file the row was imported from. */
   importObjectId?: string | null;
-  /** The source iri. */
+  /** Import evidence: the node's IRI in that file. */
   sourceIri?: string | null;
-  /** The speaker name. */
+  /** Segment evidence: the speaker's display name at read time, or `null` when unknown. */
   speakerName: string | null;
-  /** Whether stale applies. */
+  /** `true` when the cited text changed since (the segment revision or note version moved on) or its source is gone. */
   stale: boolean;
 }
 
 /**
- * The proposal resolution candidate.
+ * An existing entity the resolver considers a possible match for a proposed one.
  *
  * @stability experimental
  */
 export interface ProposalResolutionCandidate {
-  /** The id of the entity. */
+  /** Id of the existing entity. */
   entityId: string;
-  /** The label. */
+  /** Its display name. */
   label: string;
-  /** The type. */
+  /** Its entity type key. */
   type: string;
-  /** The score. */
+  /** Similarity score of the match; higher is closer. */
   score: number;
-  /** The signals. */
+  /** Names of the resolver signals that contributed to the score. */
   signals: string[];
 }
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The proposal resolution.
+ * How a proposed entity was matched against the existing graph.
  *
  * @stability experimental
  */
 export interface ProposalResolution {
-  /** The linked existing entity id; null = new. */
+  /** Id of the existing entity it was linked to; `null` means it is treated as new. */
   ref: string | null;
-  /** The score. */
+  /** Score of the link, or `null` when it was not matched by score. */
   score: number | null;
-  /** The source. */
+  /** What decided the link, or `null` when nothing did. */
   source: string | null;
-  /** The candidates. */
+  /** Other existing entities considered, best first. */
   candidates: ProposalResolutionCandidate[];
-  /** The adjudication. */
+  /** The model's verdict when the resolver asked it to adjudicate, or `null` when it did not. */
   adjudication: {
-    /** The verdict. */
+    /** Whether the model judged the candidate the same entity, a different one, or could not tell. */
     verdict: 'same' | 'different' | 'uncertain';
-    /** The rationale. */
+    /** The model's reasoning for the verdict. */
     rationale: string;
-    /** The model. */
+    /** Model that gave the verdict. */
     model: string;
   } | null;
   /** Label of `ref` / the `mergeIntoId` target. */
@@ -1612,47 +1596,47 @@ export interface ProposalResolution {
 }
 
 /**
- * The proposal item.
+ * One reviewable row of a proposal: an entity, a relation, a knowledge item or a closing of an earlier relation.
  *
  * @stability experimental
  */
 export interface ProposalItem {
-  /** The id. */
+  /** Row id (UUID). */
   id: string;
-  /** The kind. */
+  /** What the row proposes to write. */
   kind: 'entity' | 'relation' | 'item' | 'closing';
-  /** The origin. */
+  /** Whether the model proposed the row (`ai`) or the user added it by hand (`user`). */
   origin: 'ai' | 'user';
-  /** The group key. */
+  /** The review group the row is listed under. */
   groupKey: ProposalGroupKey;
-  /** The decision. */
+  /** The reviewer's decision so far; `pending` until they decide. */
   decision: ProposalDecision;
-  /** The payload. */
+  /** The row as proposed, in the shape of its kind. */
   payload: Record<string, unknown>;
-  /** The edited payload. */
+  /** The reviewer's edited version, or `null` when unedited. */
   editedPayload: Record<string, unknown> | null;
-  /** The effective payload. */
+  /** `editedPayload ?? payload`, with relinks applied; what committing would write. */
   effectivePayload: Record<string, unknown>;
-  /** The display. */
+  /** Title and subtitle the sheet shows for the row. */
   display: {
-    /** The title. */
+    /** Primary line. */
     title: string;
-    /** The subtitle. */
+    /** Secondary line, or `null`. */
     subtitle: string | null;
   };
-  /** The resolution. */
+  /** How the row was matched to the existing graph, or `null` for rows that are not entities. */
   resolution: ProposalResolution | null;
-  /** The id of the merge into. */
+  /** Entity the reviewer chose to merge this row into, or `null`. */
   mergeIntoId: string | null;
-  /** The distinct from. */
+  /** Ids of candidates the reviewer marked "not the same as". */
   distinctFrom: string[];
   /** Values of {@link PROPOSAL_ITEM_FLAGS}; typed `string` because the wire may carry a newer one. */
   flags: string[];
-  /** Whether prechecked applies. */
+  /** Whether the extraction pre-ticked this row. */
   prechecked: boolean;
-  /** The evidence. */
+  /** Citations supporting the row. */
   evidence: ProposalEvidence[];
-  /** The id of the committed ref. */
+  /** Id of the entity, relation or item this row created once committed, or `null` before that. */
   committedRefId: string | null;
   /**
    * #444, a `known` relation row only: the props committing it adds to the
@@ -1664,279 +1648,273 @@ export interface ProposalItem {
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The proposal detail.
+ * A proposal with all its rows (`GET /api/graph/proposals/:id`).
  *
  * @stability experimental
  */
 export interface ProposalDetail {
-  /** The proposal. */
+  /** The proposal itself. */
   proposal: ProposalSummary;
-  /** The items. */
+  /** Its rows, ordered by review group then `display.title`. */
   items: ProposalItem[];
-  /** The context. */
+  /** The exact prompt the extraction sent; only present when requested with `include=context`, `null` otherwise. */
   context: {
-    /** The system prompt. */
+    /** System prompt sent to the model. */
     systemPrompt: string;
-    /** The user content. */
+    /** User message sent to the model. */
     userContent: string;
   } | null;
 }
 
 /**
- * The evidence span input the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A citation to attach to a proposal row, anchored in a note version or a transcript segment. Alias of the contract's `EvidenceSpanInput`.
  *
  * @stability experimental
  */
 export type EvidenceSpanInput = ContractEvidenceSpanInput;
 
 /**
- * The relink field the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * An endpoint of a proposal row that can be re-pointed: `from`, `to`, `subject`, `owner`, `counterparty` or `meeting`. Alias of the contract's `RelinkField`.
  *
  * @stability experimental
  */
 export type RelinkField = ContractRelinkField;
 
 /**
- * #366's `patchItemSchema`.
+ * Body of a decision on one proposal row (`PATCH /api/graph/proposals/:id/items/:itemId`).
  *
  * @stability experimental
  */
 export interface PatchProposalItemInput {
-  /** The decision. */
+  /** The new decision. */
   decision: ProposalDecision;
-  /** The edited payload. */
+  /** The full payload of the row's kind; required when `decision` is `edit`. */
   editedPayload?: Record<string, unknown>;
-  /** The id of the merge into. */
+  /** Existing entity the row is the same as; required when `decision` is `merge_into` (entity rows only). */
   mergeIntoId?: string;
-  /** The relink to. */
+  /** Re-points one endpoint of a relation or item row. */
   relinkTo?: {
-    /** The field. */
+    /** Which endpoint to re-point. */
     field: RelinkField;
-    /** The target. */
+    /** The new endpoint; `null` only for owner, counterparty and meeting. */
     target: EndpointRef | null;
   };
-  /** The distinct from. */
+  /** Entity rows: candidates the row is "not the same as". */
   distinctFrom?: string[];
-  /** The evidence. */
+  /** Citations to add to or remove from the row. */
   evidence?: {
-    /** The add. */
+    /** Evidence spans to add. */
     add?: EvidenceSpanInput[];
-    /** The remove. */
+    /** Ids of evidence rows to remove. */
     remove?: string[];
   };
 }
 
 /**
- * The patch proposal item result the API answers.
+ * What a single row decision returns: the updated row and the proposal's new counts.
  *
  * @stability experimental
  */
 export interface PatchProposalItemResult {
-  /** The item. */
+  /** The row after the decision. */
   item: ProposalItem;
-  /** The counts. */
+  /** The proposal's counts after the decision. */
   counts: ProposalCounts;
 }
 
 /**
- * The bulk decision.
+ * A decision that can be applied to many rows at once.
  *
  * @stability experimental
  */
 export type BulkDecision = 'accept' | 'reject' | 'pending';
 
 /**
- * The bulk skip reason the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Why a bulk decision skipped a row: `not_found`, or a sensitive or closing row that needs an individual accept. Alias of the contract's `BulkSkipReason`.
  *
  * @stability experimental
  */
 export type BulkSkipReason = ContractBulkSkipReason;
 
 /**
- * The bulk decide result the API answers.
+ * Outcome of a bulk decision.
  *
  * @stability experimental
  */
 export interface BulkDecideResult {
-  /** The updated. */
+  /** How many rows were changed. */
   updated: number;
-  /** The skipped. */
+  /** Rows left unchanged, each with the reason. */
   skipped: Array<{
-    /** The id of the item. */
+    /** Id of the skipped row. */
     itemId: string;
-    /** The reason. */
+    /** Why it was skipped (not found, or a sensitive or closing row that must be accepted individually). */
     reason: BulkSkipReason;
   }>;
-  /** The counts. */
+  /** The proposal's counts after the decision. */
   counts: ProposalCounts;
 }
 
 /**
- * #366's `addItemSchema` (used by #368's "Add to graph").
+ * Body for adding a row by hand to a draft proposal (#366's `addItemSchema`, used by "Add to graph").
  *
  * @stability experimental
  */
 export interface AddProposalItemInput {
-  /** The kind. */
+  /** Which kind of row to add. */
   kind: 'entity' | 'relation' | 'item';
-  /** The payload. */
+  /** The row's payload; the server assigns `ref` and computes an item's `statementHash`. */
   payload: Record<string, unknown>;
-  /** The id of the existing entity. */
+  /** Entity rows only: the row is this existing entity, which records the decision `merge_into`. */
   existingEntityId?: string;
-  /** The evidence. */
+  /** One to ten citations for the row. */
   evidence: EvidenceSpanInput[];
 }
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The commit result the API answers.
+ * What a commit wrote to the graph.
  *
  * @stability experimental
  */
 export interface CommitResult {
-  /** The created. */
+  /** Rows newly created. */
   created: {
-    /** The entities. */
+    /** Entities created. */
     entities: number;
-    /** The relations. */
+    /** Relations created. */
     relations: number;
-    /** The items. */
+    /** Knowledge items created. */
     items: number;
   };
-  /** The linked. */
+  /** Rows linked to an existing entity instead of created. */
   linked: number;
-  /** The evidence added. */
+  /** Evidence rows written, including appends to rows that already existed. */
   evidenceAdded: number;
-  /** The closings applied. */
+  /** Closings of earlier relations that took effect. */
   closingsApplied: number;
-  /** The closings skipped. */
+  /** Closings that could not be applied. */
   closingsSkipped: number;
-  /** The superseded. */
+  /** Existing items replaced by a newer one. */
   superseded: number;
-  /** The aliases added. */
+  /** Aliases added to existing entities. */
   aliasesAdded: number;
-  /** The distinct pairs recorded. */
+  /** "Not the same as" pairs recorded. */
   distinctPairsRecorded: number;
-  /** The skipped pending. */
+  /** Rows still `pending`: neither committed nor remembered as rejected. */
   skippedPending: number;
-  /** #444: props `known` relation rows added to the live relations they matched. */
+  /** Props that `known` relation rows added to the live relations they matched (#444); only keys the relation did not hold, never an overwrite. */
   propsFilled?: number;
 }
 
 /**
- * The revert kept why.
+ * Why a row was kept when a proposal was reverted: it was edited, referenced, merged or given new evidence after the commit.
  *
  * @stability experimental
  */
 export type RevertKeptWhy = 'edited_since' | 'referenced_since' | 'merged_since' | 'evidence_since';
 
 /**
- * The revert kept the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * A row a revert kept, with the reason it was kept. Alias of the contract's `RevertKept`.
  *
  * @stability experimental
  */
 export type RevertKept = ContractRevertKept;
 
 /**
- * The revert result the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Outcome of a revert: how many rows were reverted and which were kept. Alias of the contract's `RevertResult`.
  *
  * @stability experimental
  */
 export type RevertResult = ContractRevertResult;
 
 /**
- * The list proposals params of the call.
+ * Filters and paging for {@link listProposals}.
  *
  * @stability experimental
  */
 export interface ListProposalsParams {
-  /** The status. */
+  /** Only proposals in this state (the API defaults to `draft`). */
   status?: ProposalStatus;
-  /** The kind. */
+  /** Only proposals of this kind. */
   kind?: ProposalKind;
-  /** The id of the note. */
+  /** Only proposals extracted from this note. */
   noteId?: string;
-  /** The id of the transcript. */
+  /** Only proposals whose note derives, directly or through a chain of notes, from this transcript. */
   transcriptId?: string;
-  /** The cursor. */
+  /** The `nextCursor` of the previous page. */
   cursor?: string;
-  /** The limit. */
+  /** Page size (the API allows 1 to 50, default 20). */
   limit?: number;
 }
 
 /**
- * #363's `requestExtractionSchema`.
+ * Body for {@link requestExtraction} (#363's `requestExtractionSchema`).
  *
  * @stability experimental
  */
 export interface RequestExtractionInput {
-  /** The model. */
+  /** Model to run the extraction with; omitted means the deployment's `graph.extract` task model. */
   model?: string;
-  /** The user guidance. */
+  /** Guidance to steer the extraction. */
   userGuidance?: Partial<ProposalUserGuidance>;
 }
 
 /** #363's `extractionEstimateSchema`. */
 /**
- * The extraction estimate the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * What an extraction of a note would cost without running it: model, token counts, whether the prompt fits and whether the caller has a key. Alias of the contract's `ExtractionEstimate`.
  *
  * @stability experimental
  */
 export type ExtractionEstimate = ContractExtractionEstimate;
 
 /**
- * #363's `requestExtractionResponseSchema` (202).
+ * The accepted extraction request (#363's `requestExtractionResponseSchema`, HTTP 202).
  *
  * @stability experimental
  */
 export interface RequestExtractionResult {
-  /** The proposal. */
+  /** The new proposal, still `extracting`. */
   proposal: {
-    /** The id. */
+    /** Proposal id (UUID). */
     id: string;
-    /** The id of the note. */
+    /** Note being extracted. */
     noteId: string;
-    /** The note version. */
+    /** Version of the note being extracted. */
     noteVersion: number;
-    /** The status. */
+    /** Always `extracting` at this point. */
     status: 'extracting';
-    /** The model. */
+    /** Model the job will use. */
     model: string;
-    /** The id of the provider. */
+    /** Provider of that model. */
     providerId: string;
-    /** When the created happened, as an ISO timestamp. */
+    /** ISO 8601 instant the proposal was created. */
     createdAt: string;
   };
-  /** The estimate. */
+  /** Token and cost estimate for the run. */
   estimate: ExtractionEstimate;
 }
 
 /**
- * #370's entity search row.
+ * One row of the entity search used by pickers (#370).
  *
  * @stability experimental
  */
 export interface GraphEntitySearchResult {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The type. */
+  /** Entity type key. */
   type: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** The aliases. */
+  /** Other names that matched. */
   aliases: string[];
 }
 
 const proposalPath = (id: string) => `/graph/proposals/${encodeURIComponent(id)}`;
 
 /**
- * `GET /api/graph/notes/:noteId/proposal` — the newest non-discarded proposal, or null.
+ * Fetches the newest non-discarded proposal of a note (`GET /api/graph/notes/:noteId/proposal`), or `null` when there is none.
  *
  * @stability experimental
  */
@@ -1948,7 +1926,7 @@ export async function getNoteProposal(host: KvoxWebHost, noteId: string): Promis
 }
 
 /**
- * `GET /api/graph/proposals/:id[?include=context]`.
+ * Fetches one proposal (`GET /api/graph/proposals/:id`), optionally with the prompt that produced it.
  *
  * @stability experimental
  */
@@ -1956,7 +1934,7 @@ export async function getProposal(
   host: KvoxWebHost,
   id: string,
   options: {
-    /** Whether include context applies. */
+    /** Also return the exact prompt the extraction sent (`include=context`); off by default. */
     includeContext?: boolean;
   } = {},
 ): Promise<ProposalDetail> {
@@ -1965,7 +1943,7 @@ export async function getProposal(
 }
 
 /**
- * `GET /api/graph/proposals?status&kind&noteId&transcriptId&cursor&limit`.
+ * Lists proposals, newest first (`GET /api/graph/proposals`), filtered by status, kind, note or transcript.
  *
  * @stability experimental
  */
@@ -1973,9 +1951,9 @@ export async function listProposals(
   host: KvoxWebHost,
   params: ListProposalsParams = {},
 ): Promise<{
-  /** The items. */
+  /** The proposals on this page. */
   items: ProposalSummary[];
-  /** The next cursor. */
+  /** Cursor for the next page, or `null` on the last one. */
   nextCursor: string | null;
 }> {
   const query = new URLSearchParams();
@@ -1987,7 +1965,7 @@ export async function listProposals(
 }
 
 /**
- * Patches proposal item.
+ * Records a decision on one proposal row (`PATCH /api/graph/proposals/:id/items/:itemId`): accept, edit, reject, merge, relink and evidence changes.
  *
  * @stability experimental
  */
@@ -2004,7 +1982,7 @@ export async function patchProposalItem(
 }
 
 /**
- * Applies in bulk decide proposal items.
+ * Applies one decision to many rows of a proposal at once (`POST /api/graph/proposals/:id/items/bulk`); rows that need an individual decision are skipped and reported.
  *
  * @stability experimental
  */
@@ -2012,9 +1990,9 @@ export async function bulkDecideProposalItems(
   host: KvoxWebHost,
   proposalId: string,
   body: {
-    /** The item ids. */
+    /** Ids of the rows to decide, 1 to 500. */
     itemIds: string[];
-    /** The decision. */
+    /** The decision to apply to every row. */
     decision: BulkDecision;
   },
 ): Promise<BulkDecideResult> {
@@ -2022,7 +2000,7 @@ export async function bulkDecideProposalItems(
 }
 
 /**
- * Adds proposal item.
+ * Adds a row by hand to a draft proposal (`POST /api/graph/proposals/:id/items`), for "Add to graph".
  *
  * @stability experimental
  */
@@ -2035,7 +2013,7 @@ export async function addProposalItem(
 }
 
 /**
- * Commits proposal.
+ * Commits a draft proposal into the graph (`POST /api/graph/proposals/:id/commit`).
  *
  * @stability experimental
  */
@@ -2043,28 +2021,28 @@ export async function commitProposal(
   host: KvoxWebHost,
   id: string,
 ): Promise<{
-  /** The proposal. */
+  /** The proposal, now committed. */
   proposal: ProposalSummary;
-  /** The result. */
+  /** What the commit wrote. */
   result: CommitResult;
 }> {
   return kvoxPost(host, `${proposalPath(id)}/commit`, {});
 }
 
 /**
- * Discards proposal.
+ * Discards a draft proposal (`POST /api/graph/proposals/:id/discard`) without writing anything.
  *
  * @stability experimental
  */
 export async function discardProposal(host: KvoxWebHost, id: string): Promise<{
-  /** The proposal. */
+  /** The proposal, now discarded. */
   proposal: ProposalSummary;
 }> {
   return kvoxPost(host, `${proposalPath(id)}/discard`, {});
 }
 
 /**
- * Reverts proposal.
+ * Reverts a committed proposal (`POST /api/graph/proposals/:id/revert`). Rows changed since the commit are kept and listed.
  *
  * @stability experimental
  */
@@ -2072,20 +2050,20 @@ export async function revertProposal(
   host: KvoxWebHost,
   id: string,
   options: {
-    /** Whether confirm partial applies. */
+    /** Revert what can be reverted even when some rows changed since the commit; they are kept and listed in the result. */
     confirmPartial: boolean;
   },
 ): Promise<{
-  /** The proposal. */
+  /** The proposal, now reverted. */
   proposal: ProposalSummary;
-  /** The result. */
+  /** How many rows were reverted and which were kept. */
   result: RevertResult;
 }> {
   return kvoxPost(host, `${proposalPath(id)}/revert`, { confirmPartial: options.confirmPartial });
 }
 
 /**
- * `POST /api/graph/notes/:noteId/extract` — 202 with the extracting proposal.
+ * Starts an extraction for a note (`POST /api/graph/notes/:noteId/extract`); answers 202 with the proposal in `extracting` state.
  *
  * @stability experimental
  */
@@ -2101,18 +2079,18 @@ export async function requestExtraction(
 }
 
 /**
- * `GET /api/graph/entities?type&q&limit` (#370) — the re-link search.
+ * Searches entities by label for the re-link and merge pickers (`GET /api/graph/entities?type&q&limit`) and returns the matching rows.
  *
  * @stability experimental
  */
 export async function searchGraphEntities(
   host: KvoxWebHost,
   params: {
-    /** The type. */
+    /** Restrict the search to one entity type key. */
     type?: string;
-    /** The q. */
+    /** Text to match against labels and aliases. */
     q: string;
-    /** The limit. */
+    /** Most rows to return; defaults to 10. */
     limit?: number;
   },
 ): Promise<GraphEntitySearchResult[]> {
@@ -2131,15 +2109,14 @@ export async function searchGraphEntities(
  * send a reason this build does not know, and that must not be coerced.
  */
 /**
- * The graph conflict reason the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Value of `details.reason` on a graph 409, such as `graph_empty` or `offer_decided`. Alias of the contract's `GraphConflictReason`.
  *
  * @stability experimental
  */
 export type GraphConflictReason = ContractGraphConflictReason;
 
 /**
- * `details.reason` of a graph 409, like `noteConflictReason`.
+ * Reads `details.reason` of a graph 409, or `null` when the error is not a recognised conflict.
  *
  * @stability experimental
  */
@@ -2152,16 +2129,16 @@ export function graphConflictReason(err: unknown): GraphConflictReason | null {
 }
 
 /**
- * `details.conflicts` of a 409 `revert_conflict`.
+ * Reads `details.conflicts` of a 409 `revert_conflict`, or `null` for any other error.
  *
  * @stability experimental
  */
 export function revertConflictDetails(
   err: unknown,
 ): {
-  /** The conflicts. */
+  /** The rows a revert would keep because they changed since the commit. */
   conflicts: RevertKept[];
-  /** The revertible. */
+  /** How many rows a revert could still undo. */
   revertible: number;
 } | null {
   if (graphConflictReason(err) !== 'revert_conflict') return null;
@@ -2173,16 +2150,16 @@ export function revertConflictDetails(
 }
 
 /**
- * `details.issues` of a 400 — Zod issues, each with a `path`.
+ * Reads `details.issues` of a 400 (Zod issues, each with a `path`), or `null` for any other error.
  *
  * @stability experimental
  */
 export function graphValidationIssues(
   err: unknown,
 ): Array<{
-  /** The path. */
+  /** Path to the offending field in the request body. */
   path: Array<string | number>;
-  /** The message. */
+  /** What is wrong with it. */
   message: string;
 }> {
   if (!(err instanceof KvoxApiError) || err.status !== 400) return [];
@@ -2202,28 +2179,27 @@ export function graphValidationIssues(
 
 /** #363's `userGuidanceSchema`, as the extract dialog holds it. */
 /**
- * The user guidance the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * The guidance for an extraction as the extract dialog holds it: pinned entities, type filters and instructions. Alias of the contract's `UserGuidance`.
  *
  * @stability experimental
  */
 export type UserGuidance = ContractUserGuidance;
 
 /**
- * #363's `userGuidanceSchema` limits.
+ * Most entities one extraction may pin (#363's `userGuidanceSchema` limit).
  *
  * @stability experimental
  */
 export const GUIDANCE_MAX_PINNED = 50;
 /**
- * The GUIDANCE MAX INSTRUCTIONS.
+ * Longest `instructions` text one extraction accepts, in characters.
  *
  * @stability experimental
  */
 export const GUIDANCE_MAX_INSTRUCTIONS = 2000;
 
 /**
- * `GET /api/graph/extract/estimate?noteId&model` — what a run would cost; needs no key.
+ * Fetches what an extraction of a note would cost (`GET /api/graph/extract/estimate`); needs no AI key.
  *
  * @stability experimental
  */
@@ -2237,29 +2213,29 @@ export async function getExtractEstimate(host: KvoxWebHost, noteId: string, mode
  * What a 400 from `POST …/extract` (or the estimate) names, read off
  * `details`: unknown guidance types, pins that are not live entities, an
  * unpermitted model (#360's `details.reason`), or the token budget.
-  *
+ *
  * @stability experimental
  */
 export interface ExtractBadRequest {
-  /** The unknown types. */
+  /** Guidance entity type keys the API does not know. */
   unknownTypes: string[];
-  /** The invalid pinned ids. */
+  /** Pinned ids that are not live entities the caller owns. */
   invalidPinnedIds: string[];
-  /** Whether model not permitted applies. */
+  /** `true` when the chosen model is not one the deployment permits. */
   modelNotPermitted: boolean;
-  /** The budget. */
+  /** Set when the note does not fit the model's input budget; `null` otherwise. */
   budget: {
-    /** The prompt tokens. */
+    /** Tokens the prompt needs. */
     promptTokens: number;
-    /** The available input tokens. */
+    /** Input tokens the model can take. */
     availableInputTokens: number;
-    /** The model. */
+    /** The model the budget was measured against, when the API named one. */
     model: string | null;
   } | null;
 }
 
 /**
- * Extracts bad request.
+ * Reads the `details` of a 400 from the extract call or its estimate into an {@link ExtractBadRequest}, or `null` when the error is not a 400.
  *
  * @stability experimental
  */
@@ -2298,130 +2274,129 @@ export function extractBadRequest(err: unknown): ExtractBadRequest | null {
 // never persist one beyond the URL of the current view.
 
 /**
- * #371's cap on `nodes` (the top N by degree).
+ * The most nodes an overview carries (the top by degree).
  *
  * @stability experimental
  */
 export const OVERVIEW_MAX_NODES = 5000;
 
 /**
- * The graph overview member.
+ * One of the highest-degree entities sampled from a cluster.
  *
  * @stability experimental
  */
 export interface GraphOverviewMember {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** The type. */
+  /** Entity type key. */
   type: string;
-  /** The degree. */
+  /** Readable edges the entity has in the whole graph. */
   degree: number;
 }
 
 /**
- * The graph overview cluster.
+ * One cluster of the whole-graph layout snapshot.
  *
  * @stability experimental
  */
 export interface GraphOverviewCluster {
-  /** `-1` is "Unconnected": every isolated entity, pooled. */
+  /** Cluster id, stable within one snapshot only. `-1` is "Unconnected": every isolated entity, pooled. */
   id: number;
   /** Live label of `labelEntityId`; else `Cluster <id + 1>`; `Unconnected` for `-1`. */
   label: string;
-  /** The id of the label entity. */
+  /** The entity the cluster is named after, when it is still readable. */
   labelEntityId: string | null;
   /** Members at the time of the snapshot. */
   size: number;
-  /** The x. */
+  /** Horizontal centre of the cluster in layout space. */
   x: number;
-  /** The y. */
+  /** Vertical centre of the cluster in layout space. */
   y: number;
-  /** The radius. */
+  /** Radius of the cluster in layout space. */
   radius: number;
-  /** The type counts. */
+  /** Number of members per entity type key. */
   typeCounts: Record<string, number>;
   /** Up to 8 members by degree. */
   memberSample: GraphOverviewMember[];
 }
 
 /**
- * The graph overview cluster edge.
+ * A weighted link between two clusters.
  *
  * @stability experimental
  */
 export interface GraphOverviewClusterEdge {
-  /** The a. */
+  /** Id of one cluster. */
   a: number;
-  /** The b. */
+  /** Id of the other cluster. */
   b: number;
-  /** The weight. */
+  /** How strongly the two clusters are connected; larger means more relations between them. */
   weight: number;
 }
 
 /**
- * The graph overview node.
+ * One positioned entity of the overview, in the nodes layer.
  *
  * @stability experimental
  */
 export interface GraphOverviewNode {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** The type. */
+  /** Entity type key. */
   type: string;
-  /** The x. */
+  /** Horizontal position in layout space. */
   x: number;
-  /** The y. */
+  /** Vertical position in layout space. */
   y: number;
-  /** The id of the cluster. */
+  /** Id of the cluster the entity belongs to. */
   clusterId: number;
-  /** The degree. */
+  /** Readable edges the entity has in the whole graph. */
   degree: number;
 }
 
 /**
- * The graph overview.
+ * The latest whole-graph layout snapshot (`GET /api/graph/overview`), with labels read live.
  *
  * @stability experimental
  */
 export interface GraphOverview {
-  /** `none`: no snapshot yet. */
+  /** `ready` when a snapshot exists, `none` when none has been computed yet. */
   status: 'ready' | 'none';
   /** A `kg.graph_layout` job is pending or running for the caller. */
   pending: boolean;
-  /** When the computed happened, as an ISO timestamp. */
+  /** ISO 8601 instant the snapshot was computed, or `null` when there is none. */
   computedAt: string | null;
   /** The graph changed after the snapshot read it. Reported, never auto-refreshed. */
   stale: boolean;
-  /** Past the layout ceiling: no clusters or positions. */
+  /** The graph exceeded the layout ceiling; no clusters or positions are returned. */
   tooLarge: boolean;
-  /** The node count. */
+  /** Entities in the snapshot. */
   nodeCount: number;
-  /** The edge count. */
+  /** Relations in the snapshot. */
   edgeCount: number;
-  /** The clusters. */
+  /** Clusters, with their centre, radius and a member sample. */
   clusters: GraphOverviewCluster[];
-  /** The cluster edges. */
+  /** Weighted links between clusters (the API caps them at 500). */
   clusterEdges: GraphOverviewClusterEdge[];
-  /** The nodes. */
+  /** Positioned entities, the top {@link OVERVIEW_MAX_NODES} by degree. */
   nodes: GraphOverviewNode[];
-  /** Whether nodes truncated applies. */
+  /** `true` when more positioned nodes exist than `nodes` carries. */
   nodesTruncated: boolean;
 }
 
 /**
- * The graph overview refresh response the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Answer to a layout refresh: the `kg.graph_layout` job id and whether one was already queued. Alias of the contract's `GraphOverviewRefreshResponse`.
  *
  * @stability experimental
  */
 export type GraphOverviewRefreshResponse = ContractGraphOverviewRefreshResponse;
 
 /**
- * `GET /api/graph/overview` (`graph:read`) — never recomputes.
+ * Fetches the stored layout snapshot (`GET /api/graph/overview`, `graph:read`). Never recomputes.
  *
  * @stability experimental
  */
@@ -2430,7 +2405,7 @@ export function getGraphOverview(host: KvoxWebHost, signal?: AbortSignal): Promi
 }
 
 /**
- * `POST /api/graph/overview/refresh` (`graph:write`) — 202, deduplicated.
+ * Queues a fresh layout (`POST /api/graph/overview/refresh`, `graph:write`); answers 202 and reuses a layout job already pending.
  *
  * @stability experimental
  */
@@ -2443,77 +2418,75 @@ export function refreshGraphOverview(host: KvoxWebHost): Promise<GraphOverviewRe
 // =============================================================================
 
 /**
- * The graph export format the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * File format of a graph export: `jsonld`, `turtle` or `nquads`. Alias of the contract's `GraphExportFormat`.
  *
  * @stability experimental
  */
 export type GraphExportFormat = ContractGraphExportFormat;
 /**
- * The graph export status.
+ * Lifecycle of a graph export: `pending` or `running` while the `kg.export` job works, then `ready` or `failed`.
  *
  * @stability experimental
  */
 export type GraphExportStatus = 'pending' | 'running' | 'ready' | 'failed';
 
 /**
- * The graph export stats.
+ * Counts of what an export contains; empty until it is `ready`.
  *
  * @stability experimental
  */
 export interface GraphExportStats {
-  /** The entities. */
+  /** Entities exported. */
   entities?: number;
-  /** The relations. */
+  /** Relations exported. */
   relations?: number;
-  /** The items. */
+  /** Knowledge items exported. */
   items?: number;
-  /** The evidence. */
+  /** Evidence links exported. */
   evidence?: number;
-  /** Sensitive person facts and attribute values left out — they never leave the deployment. */
+  /** Sensitive person facts and attribute values left out; they never leave the deployment. */
   excludedSensitive?: number;
-  /** The bytes. */
+  /** Size of the file in bytes. */
   bytes?: number;
 }
 
 /**
- * The graph export.
+ * One graph export and the file it produced.
  *
  * @stability experimental
  */
 export interface GraphExport {
-  /** The id. */
+  /** Export id (UUID). */
   id: string;
-  /** The format. */
+  /** File format: JSON-LD, Turtle or N-Quads. */
   format: GraphExportFormat;
-  /** The status. */
+  /** Where the export is in its lifecycle. */
   status: GraphExportStatus;
-  /** The ontology version. */
+  /** The ontology version the export was requested against. */
   ontologyVersion: string;
-  /** The stats. */
+  /** What the file contains; empty until ready. */
   stats: GraphExportStats;
-  /** The error message. */
+  /** Why the export failed, or `null`. Never row data. */
   errorMessage: string | null;
-  /** When the created happened, as an ISO timestamp. */
+  /** ISO 8601 instant the export was requested. */
   createdAt: string;
   /** When the export and its file are deleted (7 days after the request). */
   expiresAt: string;
-  /** A short-lived signed URL (the filename is signed in). Null unless ready. */
+  /** A short-lived signed URL serving the file as an attachment. `null` unless the export is `ready`. */
   downloadUrl: string | null;
-  /** The filename. */
+  /** Name of the downloaded file. */
   filename: string;
 }
 
 /**
- * The create graph export response the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Answer to an export request: the export, and whether an unchanged one was reused. Alias of the contract's `CreateGraphExportResponse`.
  *
  * @stability experimental
  */
 export type CreateGraphExportResponse = ContractCreateGraphExportResponse;
 
 /**
- * `POST /api/graph/exports` (`graph:read`) — 202 queued, 200 reused, 409 `graph_empty`.
+ * Requests an export (`POST /api/graph/exports`, `graph:read`): 202 when queued, 200 when an unchanged export already existed, 409 `graph_empty` for an empty graph.
  *
  * @stability experimental
  */
@@ -2522,7 +2495,7 @@ export function exportGraph(host: KvoxWebHost, format: GraphExportFormat): Promi
 }
 
 /**
- * `GET /api/graph/exports/:id` (`graph:read`) — 404 for a foreign or expired export.
+ * Fetches one export (`GET /api/graph/exports/:id`, `graph:read`); 404 for a foreign or expired one.
  *
  * @stability experimental
  */
@@ -2531,7 +2504,7 @@ export function getGraphExport(host: KvoxWebHost, id: string, signal?: AbortSign
 }
 
 /**
- * `GET /api/graph/exports` (`graph:read`) — the caller's unexpired exports, newest first.
+ * Lists the caller's unexpired exports, newest first (`GET /api/graph/exports`, `graph:read`).
  *
  * @stability experimental
  */
@@ -2545,38 +2518,35 @@ export async function listGraphExports(host: KvoxWebHost, signal?: AbortSignal):
 // -----------------------------------------------------------------------------
 
 /**
- * The graph import format the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * File format of a graph import: `turtle`, `jsonld` or `nquads`. Alias of the contract's `GraphImportFormat`.
  *
  * @stability experimental
  */
 export type GraphImportFormat = ContractGraphImportFormat;
 
 /**
- * The graph import failure reason the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Why an import failed: `parse_error`, `too_large`, `ontology_version_newer`, `migration_pending`, `shacl_violations` or `empty`. Alias of the contract's `GraphImportFailureReason`.
  *
  * @stability experimental
  */
 export type GraphImportFailureReason = ContractGraphImportFailureReason;
 
 /**
- * What the file picker accepts — the extensions `POST /api/graph/imports` reads.
+ * Extensions the import file picker accepts; the ones `POST /api/graph/imports` reads.
  *
  * @stability experimental
  */
 export const GRAPH_IMPORT_ACCEPT = '.ttl,.jsonld,.json,.nq';
 
 /**
- * The largest file an import accepts (20 MiB), checked client-side before the upload too.
+ * The largest file an import accepts (20 MiB), checked in the browser before the upload too.
  *
  * @stability experimental
  */
 export const GRAPH_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 
 /**
- * The graph import violation the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * One validation failure found in an imported file: the node and property it is about. Alias of the contract's `GraphImportViolation`.
  *
  * @stability experimental
  */
@@ -2584,76 +2554,76 @@ export type GraphImportViolation = ContractGraphImportViolation;
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
 /**
- * The graph import offer.
+ * A property in an imported file the ontology does not know, which the user may adopt as an attribute.
  *
  * @stability experimental
  */
 export interface GraphImportOffer {
-  /** The id of the offer. */
+  /** Identifies the offer within its proposal; names it in the accept and reject routes. */
   offerId: string;
-  /** The iri. */
+  /** The property IRI the file used. */
   iri: string;
-  /** The label. */
+  /** The file's own `rdfs:label` for the property, or `null` when it states none. */
   label: string | null;
-  /** The count. */
+  /** How many values of the property the file carried. */
   count: number;
-  /** Entity/item type keys; `Assertion` when it sat on a relation (never acceptable). */
+  /** Entity or item type keys carrying the property. `Assertion` means it sat on a relation, which can never become an attribute. */
   subjectTypes: string[];
-  /** The sample values. */
+  /** Up to three example values, each at most 80 characters. */
   sampleValues: string[];
-  /** The suggested kind. */
+  /** Attribute kind suggested from the values' datatypes. */
   suggestedKind: string;
-  /** The status. */
+  /** Whether the offer is still open, was adopted as an attribute, or was turned down. */
   status: 'offered' | 'accepted' | 'rejected';
 }
 
 /**
- * `proposal.stats` of a `kind: import` proposal. Only filename/format/bytes exist while extracting.
+ * `proposal.stats` of a `kind: import` proposal. Only `filename`, `format` and `bytes` exist while the import is extracting.
  *
  * @stability experimental
  */
 // TODO(web-domain): align with @marinoscar/kvox-contract
 export interface GraphImportStats {
-  /** The filename. */
+  /** Name of the uploaded file. */
   filename?: string;
-  /** The format. */
+  /** Detected file format. */
   format?: GraphImportFormat;
-  /** The bytes. */
+  /** Size of the file in bytes. */
   bytes?: number;
-  /** The triples. */
+  /** Number of RDF triples read. */
   triples?: number;
-  /** The source ontology version. */
+  /** The file's `owl:versionInfo`, or its most common `kv:ontologyVersion`. */
   sourceOntologyVersion?: string | null;
-  /** The migrated from. */
+  /** Set when the file was older and declared migrations reshaped it in memory. */
   migratedFrom?: string | null;
-  /** The validation. */
+  /** Result of validating the file against the ontology. */
   validation?: {
-    /** Whether conforms applies. */
+    /** `true` when the file has no violations. */
     conforms: boolean;
-    /** The violations. */
+    /** The violations found, capped by the API; `violationCount` has the total. */
     violations: GraphImportViolation[];
-    /** The violation count. */
+    /** Total number of violations, which may exceed `violations`. */
     violationCount: number;
   };
-  /** The unknown properties. */
+  /** Properties the ontology does not know, offered for adoption as attributes. */
   unknownProperties?: GraphImportOffer[];
-  /** The counts. */
+  /** What the import produced. */
   counts?: {
-    /** The entities. */
+    /** Entities read from the file. */
     entities: number;
-    /** The relations. */
+    /** Relations read from the file. */
     relations: number;
-    /** The items. */
+    /** Knowledge items read from the file. */
     items: number;
-    /** The skipped sensitive. */
+    /** Sensitive person facts and attribute values the file carried; never imported in bulk. */
     skippedSensitive: number;
   };
-  /** The failure reason. */
+  /** Why the import failed, when it did. */
   failureReason?: GraphImportFailureReason | null;
 }
 
 /**
- * The import facts of a proposal summary (never throws; absent fields stay absent).
+ * Reads the import facts of a proposal summary into {@link GraphImportStats}. Never throws; absent fields stay absent.
  *
  * @stability experimental
  */
@@ -2662,15 +2632,14 @@ export function importStatsOf(summary: ProposalSummary | null | undefined): Grap
 }
 
 /**
- * The create graph import response the API sends; a documented alias of the contract's type, so the
- * wire shape has one definition.
+ * Answer to an upload: the `kind: import` proposal id and the `kg.import` job id. Alias of the contract's `CreateGraphImportResponse`.
  *
  * @stability experimental
  */
 export type CreateGraphImportResponse = ContractCreateGraphImportResponse;
 
 /**
- * `POST /api/graph/imports` (`graph:write`, multipart) — 202; 400/409/413 as `ApiError`.
+ * Uploads a graph file (`POST /api/graph/imports`, `graph:write`, multipart); answers 202 and failures surface as `KvoxApiError` (400, 409, 413).
  *
  * @stability experimental
  */
@@ -2681,18 +2650,18 @@ export function uploadGraphImport(host: KvoxWebHost, file: File): Promise<Create
 }
 
 /**
- * The attribute offer result the API answers.
+ * What accepting or rejecting an attribute offer changed.
  *
  * @stability experimental
  */
 export interface AttributeOfferResult {
-  /** The offer. */
+  /** The offer, with its new status. */
   offer: GraphImportOffer;
-  /** The attribute defs. */
+  /** The attribute definitions created, one per entity type carrying the property; empty on reject. */
   attributeDefs: AttributeDef[];
-  /** The rows updated. */
+  /** Proposal rows whose `props` now carry the values. */
   rowsUpdated: number;
-  /** The values dropped. */
+  /** Values that could not be kept, for example a reference to a row not linked to an existing entity. */
   valuesDropped: number;
 }
 
@@ -2700,7 +2669,7 @@ const offerPath = (proposalId: string, offerId: string, action: 'accept' | 'reje
   `${proposalPath(proposalId)}/attribute-offers/${encodeURIComponent(offerId)}/${action}`;
 
 /**
- * `POST /api/graph/proposals/:id/attribute-offers/:offerId/accept` (`graph:write`).
+ * Adopts an unknown imported property as an attribute (`POST /api/graph/proposals/:id/attribute-offers/:offerId/accept`, `graph:write`), optionally with a label.
  *
  * @stability experimental
  */
@@ -2709,7 +2678,7 @@ export function acceptAttributeOffer(host: KvoxWebHost, proposalId: string, offe
 }
 
 /**
- * `POST /api/graph/proposals/:id/attribute-offers/:offerId/reject` (`graph:write`).
+ * Turns down an unknown imported property (`POST /api/graph/proposals/:id/attribute-offers/:offerId/reject`, `graph:write`).
  *
  * @stability experimental
  */
@@ -2759,7 +2728,7 @@ export interface GraphAiConfig {
   defaultModel: string | null;
   /** What each connected-knowledge task would run on for the viewer, keyed by task (`graph.extract`, ...). */
   taskModels?: Record<string, {
-    /** The model. */
+    /** The model the task would run on, or `null` when none is resolved. */
     model: string | null;
   }>;
 }
@@ -2767,7 +2736,7 @@ export interface GraphAiConfig {
 /**
  * `GET /api/ai-tasks/config` — requires `notes:read`, which every seeded role holds.
  *
- * @param host - The host.
+ * @param host - The host whose HTTP port performs the request.
  * @param signal - Aborts the request.
  * @returns The viewer's AI availability.
  *

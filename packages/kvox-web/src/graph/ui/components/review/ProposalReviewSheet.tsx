@@ -76,12 +76,12 @@ import { RevertDialog } from './RevertDialog.js';
 
 import { KvoxApiError, useHasPermission, useKvoxHost } from '../../../../core/headless/index.js';
 /**
- * The props of proposal review sheet.
+ * Props of {@link ProposalReviewSheet}.
  *
  * @stability experimental
  */
 export interface ProposalReviewSheetProps {
-  /** Whether open applies. */
+  /** Whether the sheet is shown. */
   open: boolean;
   /** Absent for `variant="inline"`, which has no close. */
   onClose?: () => void;
@@ -91,12 +91,12 @@ export interface ProposalReviewSheetProps {
    * its own has no note to sit beside.
    */
   variant?: 'sheet' | 'inline';
-  /** The source. */
+  /** Where the proposal comes from: the newest proposal of a note, or one proposal opened by id. */
   source: {
-    /** The id of the note. */
+    /** Note whose newest non-discarded proposal to review. */
     noteId: string;
   } | {
-    /** The id of the proposal. */
+    /** Proposal to review directly. */
     proposalId: string;
   };
   /** The rendered note body, for jump-to-span highlighting. Absent off the note page. */
@@ -192,7 +192,7 @@ function ContextDialog({ proposalId, onClose }: { proposalId: string; onClose: (
 }
 
 /**
- * Proposal review sheet.
+ * The proposal review sheet: a drawer over a note, or inline on a page, listing a proposal's rows by group with decisions, edits, evidence and the commit, discard and revert actions.
  *
  * @stability experimental
  */

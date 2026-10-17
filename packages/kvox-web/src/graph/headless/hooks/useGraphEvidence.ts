@@ -25,7 +25,7 @@ import type { EvidenceLink } from '../clients/graph.js';
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 import type { KvoxWebHost } from '../../../core/headless/index.js';
 /**
- * The settled.
+ * A resolved citation: the link, or `null` when the source is gone or unknown.
  *
  * @stability experimental
  */
@@ -37,7 +37,7 @@ const failing = new Map<string, Array<(err: unknown) => void>>();
 let queued: Set<string> | null = null;
 
 /**
- * Test seam — forget everything.
+ * Forgets every cached and queued evidence lookup. For tests.
  *
  * @stability experimental
  */
@@ -101,21 +101,21 @@ export function requestEvidence(host: KvoxWebHost, id: string): Promise<Settled>
 }
 
 /**
- * What use graph evidence returns.
+ * What {@link useGraphEvidence} returns.
  *
  * @stability experimental
  */
 export interface UseGraphEvidenceResult {
   /** `undefined` while loading; `null` when the source is gone or unknown. */
   data: EvidenceLink | null | undefined;
-  /** Whether it is loading. */
+  /** The citation is being resolved. */
   isLoading: boolean;
-  /** Whether error applies. */
+  /** `true` when resolving the citation failed. */
   error: boolean;
 }
 
 /**
- * Hook: reads graph evidence.
+ * Resolves one citation to a link. Lookups in the same tick are batched into one request and answers are cached for the session.
  *
  * @stability experimental
  */

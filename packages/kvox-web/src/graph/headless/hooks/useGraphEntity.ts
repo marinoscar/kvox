@@ -15,25 +15,25 @@ import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHoo
 
 import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * What use graph entity returns.
+ * What {@link useGraphEntity} returns.
  *
  * @stability experimental
  */
 export interface UseGraphEntityResult {
-  /** The data. */
+  /** The entity with its counts, or `null` until it loads or when it cannot be read. */
   data: GraphEntityDetail | null;
-  /** Whether it is loading. */
+  /** The entity is loading. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when loading failed with anything other than a 404, else `null`. */
   error: string | null;
-  /** Whether not found applies. */
+  /** `true` when the API answered 404: the entity does not exist or the caller has no access. Retrying cannot change that. */
   notFound: boolean;
-  /** The refresh. */
+  /** Reads the entity again. */
   refresh: () => Promise<void>;
 }
 
 /**
- * Hook: reads graph entity.
+ * Loads one entity's detail. Does nothing while `id` is undefined.
  *
  * @stability experimental
  */

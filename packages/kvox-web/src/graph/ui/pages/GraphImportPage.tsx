@@ -53,7 +53,7 @@ function errorText(err: unknown, fallback: string): string {
 }
 
 /**
- * Graph import page.
+ * The `/graph/imports/:proposalId` page: follows one RDF import while it is checked, reports why a failed one failed, and lets a draft be reviewed and sent to the graph.
  *
  * @stability experimental
  */

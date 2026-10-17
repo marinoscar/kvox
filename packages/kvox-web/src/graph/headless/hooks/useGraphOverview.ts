@@ -37,16 +37,16 @@ export const OVERVIEW_POLL_MS = 10_000;
 export const OVERVIEW_POLL_MAX_MS = 15 * 60_000;
 
 /**
- * What use graph overview returns.
+ * What {@link useGraphOverview} returns.
  *
  * @stability experimental
  */
 export interface UseGraphOverviewResult {
-  /** The overview. */
+  /** The latest layout snapshot, or `null` until the first read settles. */
   overview: GraphOverview | null;
-  /** Whether it is loading. */
+  /** The first read is in flight. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when the last read failed, else `null`. */
   error: string | null;
   /** Re-read the snapshot without the loading state. */
   refresh: () => Promise<void>;
@@ -61,7 +61,7 @@ export interface UseGraphOverviewResult {
 }
 
 /**
- * Hook: reads graph overview.
+ * Reads the stored whole-graph layout snapshot, polls while a layout job is pending, and can queue a new layout. Never recomputes by itself.
  *
  * @stability experimental
  */

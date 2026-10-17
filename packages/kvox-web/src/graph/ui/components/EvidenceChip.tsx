@@ -36,12 +36,12 @@ import type { EvidenceLink } from '../../headless/clients/graph.js';
 import { formatTimestamp } from '../../../transcripts/headless/index.js';
 
 /**
- * The props of evidence chip.
+ * Props of {@link EvidenceChip}.
  *
  * @stability experimental
  */
 export interface EvidenceChipProps {
-  /** The id of the evidence. */
+  /** Id of the evidence link to resolve and show. */
   evidenceId: string;
   /** 1-based number printed on the chip. */
   index: number;
@@ -159,7 +159,7 @@ function EvidenceBody({
 }
 
 /**
- * Evidence chip.
+ * A numbered citation chip. Opening it shows the quote, the source title and one action to play or open the source, or says the source is no longer available.
  *
  * @stability experimental
  */
@@ -232,12 +232,12 @@ export function EvidenceChip({ evidenceId, index }: EvidenceChipProps) {
 }
 
 /**
- * A row of numbered chips for one statement's evidence ids.
+ * A row of numbered {@link EvidenceChip}s, one per evidence id, numbered from 1.
  *
  * @stability experimental
  */
 export function EvidenceChips({ ids }: {
-  /** The ids. */
+  /** Evidence ids, in the order they are numbered. */
   ids: readonly string[];
 }) {
   if (ids.length === 0) return null;

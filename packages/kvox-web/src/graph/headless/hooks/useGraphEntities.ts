@@ -20,27 +20,27 @@ import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHoo
 
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * The GRAPH SEARCH DEBOUNCE MS.
+ * Milliseconds the search text is held back before a request is made, so typing does not issue one request per keystroke.
  *
  * @stability experimental
  */
 export const GRAPH_SEARCH_DEBOUNCE_MS = 250;
 
 /**
- * The use graph entities options of the call.
+ * Options for {@link useGraphEntities}.
  *
  * @stability experimental
  */
 export interface UseGraphEntitiesOptions {
-  /** The type. */
+  /** Entity type keys to keep; omitted means every type. */
   type?: readonly string[];
-  /** The q. */
+  /** Search text over labels and aliases; debounced and trimmed. With it the API returns only the top matches and no further pages. */
   q?: string;
-  /** The sort. */
+  /** `updated` orders by most recent change, `viewed` by the entities the caller viewed last. */
   sort?: 'updated' | 'viewed';
-  /** The limit. */
+  /** Page size. */
   limit?: number;
-  /** The id of the transcript. */
+  /** Only the Persons identified as a speaker in this transcript. */
   transcriptId?: string;
   /** `false` issues no request at all (no permission, or nothing to ask). */
   enabled?: boolean;
@@ -49,24 +49,24 @@ export interface UseGraphEntitiesOptions {
 }
 
 /**
- * What use graph entities returns.
+ * What {@link useGraphEntities} returns.
  *
  * @stability experimental
  */
 export interface UseGraphEntitiesResult {
-  /** The data. */
+  /** The entities loaded so far, across all pages. */
   data: GraphEntitySummary[];
-  /** The next cursor. */
+  /** Cursor for the next page, or `null` when there is none (always `null` while searching). */
   nextCursor: string | null;
-  /** Whether it is loading. */
+  /** The first page is loading. */
   isLoading: boolean;
-  /** Whether it is loading more. */
+  /** A further page is loading. */
   isLoadingMore: boolean;
-  /** The error. */
+  /** A message when the last request failed, else `null`. */
   error: string | null;
-  /** The load more. */
+  /** Appends the next page; does nothing without a cursor. */
   loadMore: () => Promise<void>;
-  /** The refresh. */
+  /** Reloads the first page. */
   refresh: () => Promise<void>;
 }
 
@@ -89,7 +89,7 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 /**
- * Hook: reads graph entities.
+ * Lists the caller's entities, paged, with a debounced search. A new question (type, search or sort) resets the list.
  *
  * @stability experimental
  */

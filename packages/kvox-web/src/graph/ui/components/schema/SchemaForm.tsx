@@ -23,20 +23,20 @@ import type { GraphAttribute } from '../../../headless/clients/graph.js';
 import { AttributeField } from './AttributeField.js';
 
 /**
- * The props of schema form.
+ * Props of {@link SchemaForm}.
  *
  * @stability experimental
  */
 export interface SchemaFormProps {
-  /** The attributes. */
+  /** The attributes to render: live ones, plus retired ones that carry a value (see `visibleAttributes`). */
   attributes: readonly GraphAttribute[];
-  /** The value. */
+  /** Current values, keyed by attribute key. */
   value: Record<string, unknown>;
-  /** Called when change. */
+  /** Called with the whole next value object after any field changes or a retired value is cleared. */
   onChange: (next: Record<string, unknown>) => void;
-  /** Keyed by attribute key. */
+  /** Validation messages keyed by attribute key. */
   errors?: Record<string, string>;
-  /** Whether read only applies. */
+  /** Render every field read-only. */
   readOnly?: boolean;
 }
 
@@ -56,7 +56,7 @@ export function visibleAttributes(
 }
 
 /**
- * Schema form.
+ * A form generated from the effective ontology's attributes, with a field per kind. A retired attribute shows only when it carries a value, read-only, with a button to clear it.
  *
  * @stability experimental
  */

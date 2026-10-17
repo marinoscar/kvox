@@ -73,7 +73,7 @@ import { useHasPermission } from '../../../core/headless/index.js';
  * @stability experimental
  */
 export interface GraphIndexLocationState {
-  /** The snackbar. */
+  /** Message the entity page hands over to show in a snackbar, such as "Forgetting…". */
   snackbar?: string;
 }
 
@@ -128,7 +128,7 @@ export function typesFromQuery(value: string | null): string[] {
 }
 
 /**
- * Graph index page.
+ * The `/graph` page: the caller's entities, filtered by type and search text held in the URL, with export and import actions in the header.
  *
  * @stability experimental
  */

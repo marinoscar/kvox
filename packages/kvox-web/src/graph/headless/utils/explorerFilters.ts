@@ -13,32 +13,32 @@ import type { GraphOntology } from '../clients/graph.js';
 import { humanizeKey } from './graphDisplay.js';
 
 /**
- * The filter option.
+ * One chip in the explorer's node-type or relation-type filter.
  *
  * @stability experimental
  */
 export interface FilterOption {
-  /** The key. */
+  /** Type key sent to the API: an entity type key (`Person`) or an item kind (`commitment`) for nodes, a relation type key for relations. */
   key: string;
-  /** The label. */
+  /** Text the chip shows. */
   label: string;
-  /** The domain. */
+  /** Key of the ontology domain the type belongs to. */
   domain: string;
 }
 
 /**
- * The domain option.
+ * One chip that switches a whole ontology domain on or off in the explorer.
  *
  * @stability experimental
  */
 export interface DomainOption {
-  /** The key. */
+  /** Domain key. */
   key: string;
-  /** The label. */
+  /** Text the chip shows. */
   label: string;
-  /** The node types. */
+  /** Node type keys the domain contributes. */
   nodeTypes: string[];
-  /** The relation types. */
+  /** Relation type keys the domain contributes. */
   relationTypes: string[];
 }
 
@@ -54,7 +54,7 @@ const FALLBACK_NODE_TYPES: FilterOption[] = [
 ];
 
 /**
- * Node type options.
+ * The node-type chips for an ontology: one per non-deprecated entity type or item kind, without person facts. Falls back to the shipped types when the ontology has not loaded.
  *
  * @stability experimental
  */
@@ -75,7 +75,7 @@ export function nodeTypeOptions(ontology: GraphOntology | null): FilterOption[] 
 }
 
 /**
- * Relation type options.
+ * The relation-type chips for an ontology: one per non-deprecated relation type.
  *
  * @stability experimental
  */
@@ -90,7 +90,7 @@ export function relationTypeOptions(ontology: GraphOntology | null): FilterOptio
  * Chips for the caller's ENABLED domains other than the always-on core — hiding
  * `core` would hide People and Organizations, which the type chips already do
  * one by one.
-  *
+ *
  * @stability experimental
  */
 export function domainOptions(ontology: GraphOntology | null): DomainOption[] {
