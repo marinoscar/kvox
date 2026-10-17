@@ -20,26 +20,26 @@ import {
 } from './explorerModel.js';
 
 /**
- * The props of neighborhood canvas.
+ * Props of `NeighborhoodCanvas`, an entity's neighbourhood slice drawn on the shared canvas.
  *
  * @stability experimental
  */
 export interface NeighborhoodCanvasProps {
-  /** The slice. */
+  /** The neighbourhood to draw. */
   slice: GraphSlice;
-  /** The id of the selected. */
+  /** Id of the selected node, or `null` for none. */
   selectedId: string | null;
-  /** The layout. */
+  /** `forceatlas` settles the layout; `static` keeps the deterministic ring placement. */
   layout: 'forceatlas' | 'static';
-  /** Whether interactive applies. */
+  /** `false` turns off pan, zoom, drag and clicks, so the canvas does not trap scrolling on a phone. */
   interactive: boolean;
-  /** The height. */
+  /** Height of the canvas, as a CSS length or a number of pixels. */
   height: number | string;
-  /** Called when node click. */
+  /** Called when a node is clicked, with its id, label, type key and whether it is an entity or an item. */
   onNodeClick: (id: string, label: string, type: string, nodeKind: 'entity' | 'item') => void;
-  /** Called when stage click. */
+  /** Called when empty space is clicked. */
   onStageClick: () => void;
-  /** The aria label. */
+  /** Accessible name of the drawing surface. */
   ariaLabel: string;
 }
 

@@ -35,13 +35,13 @@ function messageFor(err: unknown, fallback: string): string {
  * @stability experimental
  */
 export interface UseGraphEffectiveOntologyReturn {
-  /** The ontology. */
+  /** The effective ontology, or `null` until it loads. */
   ontology: GraphOntology | null;
-  /** Whether it is loading. */
+  /** The ontology is loading. */
   isLoading: boolean;
-  /** The load error. */
+  /** A message when loading failed, else `null`. */
   loadError: string | null;
-  /** The refresh. */
+  /** Reads the ontology again. */
   refresh: () => Promise<void>;
 }
 
@@ -81,29 +81,29 @@ export function useGraphEffectiveOntology(): UseGraphEffectiveOntologyReturn {
 }
 
 /**
- * What use graph attribute defs returns.
+ * What {@link useGraphAttributeDefs} returns.
  *
  * @stability experimental
  */
 export interface UseGraphAttributeDefsReturn {
-  /** The defs. */
+  /** The caller's own attribute definitions, deprecated ones included. */
   defs: AttributeDef[];
-  /** Whether it is loading. */
+  /** The definitions are loading. */
   isLoading: boolean;
-  /** The load error. */
+  /** A message when loading failed, else `null`. */
   loadError: string | null;
-  /** The refresh. */
+  /** Reads the definitions again. */
   refresh: () => Promise<void>;
-  /** Throws the `KvoxApiError` so the dialog can map it to a field. */
+  /** Creates a definition and reloads the list. Rejects with the `KvoxApiError` so the dialog can map it to a field. */
   create: (input: CreateAttributeDefInput) => Promise<AttributeDef>;
-  /** The update. */
+  /** Changes a definition and reloads the list. Rejects with the `KvoxApiError` so the dialog can map it to a field. */
   update: (id: string, input: PatchAttributeDefInput) => Promise<AttributeDef>;
-  /** The deprecate. */
+  /** Deprecates a definition (it is hidden, its values are kept) and reloads the list. */
   deprecate: (id: string) => Promise<AttributeDef>;
 }
 
 /**
- * Hook: reads graph attribute defs.
+ * Loads the caller's own attribute definitions and exposes create, update and deprecate.
  *
  * @stability experimental
  */

@@ -19,7 +19,7 @@ import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 const EMPTY: Readonly<Record<string, string>> = Object.freeze({});
 
 /**
- * Speaker entity map.
+ * Builds a map from transcript speaker id to the id of the Person entity identified as that speaker. When two entities claim one speaker, the first wins.
  *
  * @stability experimental
  */
@@ -38,7 +38,7 @@ export function speakerEntityMap(
 }
 
 /**
- * Hook: reads graph transcript people.
+ * Maps the speakers of one transcript to the Person entities identified as them; empty while disabled or on failure.
  *
  * @stability experimental
  */

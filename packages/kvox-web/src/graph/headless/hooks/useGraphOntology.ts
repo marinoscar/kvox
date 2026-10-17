@@ -48,26 +48,26 @@ function load(host: KvoxWebHost): Promise<GraphOntology> {
 }
 
 /**
- * What use graph ontology returns.
+ * What {@link useGraphOntology} returns.
  *
  * @stability experimental
  */
 export interface UseGraphOntologyReturn {
-  /** The ontology. */
+  /** The effective ontology, or `null` until it loads. */
   ontology: GraphOntology | null;
-  /** Whether it is loading. */
+  /** The ontology is loading. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when loading failed, else `null`. */
   error: string | null;
 }
 
 /**
- * Hook: reads graph ontology.
+ * Reads the effective ontology once per session and shares the cached payload between consumers.
  *
  * @stability experimental
  */
 export function useGraphOntology(options: {
-  /** Whether enabled applies. */
+  /** Set `false` to skip reading (default `true`). */
   enabled?: boolean;
 } = {}): UseGraphOntologyReturn {
   const host = useKvoxHost();

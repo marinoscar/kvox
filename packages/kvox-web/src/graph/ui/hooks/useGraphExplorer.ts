@@ -46,7 +46,7 @@ import { graphErrorMessage, isAbortError } from '../../headless/hooks/graphHookU
 
 import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * The use graph explorer options of the call.
+ * Options for {@link useGraphExplorer}.
  *
  * @stability experimental
  */
@@ -55,25 +55,25 @@ export interface UseGraphExplorerOptions {
   nodeTypes: readonly string[];
   /** Every relation type key the caller's ontology knows. */
   relationTypes: readonly string[];
-  /** The palette. */
+  /** Colour tokens for nodes and edges; defaults to MUI's light palette. Pass the theme to restyle on a mode change. */
   palette?: ExplorerPalette;
 }
 
 /**
- * What use graph explorer returns.
+ * What {@link useGraphExplorer} returns.
  *
  * @stability experimental
  */
 export interface UseGraphExplorerResult {
-  /** The state. */
+  /** The explorer's state. Its graph is mutated in place; re-read it when `version` changes. */
   state: ExplorerState;
-  /** The version. */
+  /** Increments on every mutation of the graph so React and the canvas know to re-sync. */
   version: number;
   /** A load or an `as_of` rebuild is in flight. */
   isLoading: boolean;
   /** The node an expand is in flight for. */
   expandingId: string | null;
-  /** The error. */
+  /** A message when the last request failed, else `null`. */
   error: string | null;
   /** The seed(s) are not (or no longer) in the caller's graph — #370's one 404. */
   notFound: boolean;
@@ -81,27 +81,27 @@ export interface UseGraphExplorerResult {
   capped: boolean;
   /** The last slice had more than it returned. */
   truncated: boolean;
-  /** The load. */
+  /** Replaces the exploration with a one-hop view of these seed ids (at most 50), keeping the current filters and `as of` date. */
   load: (seedIds: readonly string[]) => Promise<void>;
-  /** The load handoff. */
+  /** Starts from the overview's hand-off: draws its nodes at once, then expands them to add their edges and neighbours. */
   loadHandoff: (handoff: ExplorerHandoff) => Promise<void>;
-  /** The expand. */
+  /** Adds a node's one-hop neighbourhood. At the node cap it sends nothing and sets `capped`. */
   expand: (nodeId: string) => Promise<void>;
-  /** The set as of. */
+  /** Re-evaluates the graph as of a date (`YYYY-MM-DD`) or now (`null`), rebuilding from the seeds and expanded nodes while keeping positions. */
   setAsOf: (date: string | null) => Promise<void>;
-  /** The set hidden types. */
+  /** Hides these node types; filters are sent to the server, and seeds are never removed. */
   setHiddenTypes: (types: Iterable<string>) => void;
-  /** The set hidden relation types. */
+  /** Hides these relation types. */
   setHiddenRelationTypes: (types: Iterable<string>) => void;
-  /** The hide. */
+  /** Removes a non-seed node from this session's view. */
   hide: (nodeId: string) => void;
-  /** The make seed. */
+  /** Promotes a node to a seed so it survives filters and anchors the next `as of` rebuild. */
   makeSeed: (nodeId: string) => void;
   /** Dismiss the cap warning (it returns on the next refusal). */
   dismissCap: () => void;
-  /** The retry. */
+  /** Repeats the last load or rebuild after a failure. */
   retry: () => Promise<void>;
-  /** The reset. */
+  /** Aborts anything in flight and clears the graph, keeping the filters and `as of` date. */
   reset: () => void;
 }
 
@@ -111,7 +111,7 @@ function allowedList(universe: readonly string[], hidden: ReadonlySet<string>): 
 }
 
 /**
- * Hook: reads graph explorer.
+ * Holds the explorer's graph and requests: loading seeds, expanding nodes at the cap, server-side filters and `as of` rebuilds. A newer request aborts the one in flight.
  *
  * @stability experimental
  */

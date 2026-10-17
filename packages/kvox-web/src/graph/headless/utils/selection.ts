@@ -3,39 +3,39 @@
  * where it sits in its source, and the rectangle a floating action anchors to.
  * Pure types and one guard; the hook that watches the browser selection
  * (`useTextSelection`) lives in the `ui` entry because it follows the route.
-  *
+ *
  * @stability experimental
  */
 
 export interface GraphSelection {
-  /** The quote. */
+  /** The selected text. */
   quote: string;
-  /** The source. */
+  /** Where the quote sits: a note version or a transcript segment. */
   source:
     | {
-      /** The kind. */
+      /** Discriminator for a note selection. */
       kind: 'note';
-      /** The id of the note. */
+      /** The note's id. */
       noteId: string;
-      /** The note version. */
+      /** Note version the offsets refer to. */
       noteVersion: number;
-      /** The char start. */
+      /** Offset of the first character in that version's markdown. */
       charStart: number;
-      /** The char end. */
+      /** Offset just past the last character. */
       charEnd: number;
     }
     | {
-        /** The kind. */
+        /** Discriminator for a transcript-segment selection. */
         kind: 'segment';
-        /** The id of the transcript. */
+        /** The transcript's id. */
         transcriptId: string;
-        /** The id of the segment. */
+        /** The segment's id. */
         segmentId: string;
-        /** The segment rev. */
+        /** Segment revision the offsets refer to. */
         segmentRev: number;
-        /** The char start. */
+        /** Offset of the first character in the segment text. */
         charStart: number;
-        /** The char end. */
+        /** Offset just past the last character. */
         charEnd: number;
       };
   /** For anchoring the floating button. */
@@ -43,26 +43,26 @@ export interface GraphSelection {
 }
 
 /**
- * The selection refusal.
+ * A selection that cannot become evidence, with the reason and where to show it.
  *
  * @stability experimental
  */
 export interface SelectionRefusal {
-  /** The refused. */
+  /** The reason, ready to show the user. */
   refused: string;
-  /** The rect. */
+  /** Where to anchor the message. */
   rect: DOMRect;
 }
 
 /**
- * The selection resolution.
+ * What a selection resolves to: a usable selection, a refusal with a reason, or nothing.
  *
  * @stability experimental
  */
 export type SelectionResolution = GraphSelection | SelectionRefusal | null;
 
 /**
- * Tells whether refusal.
+ * Tells whether a resolution is a refusal rather than a usable selection.
  *
  * @stability experimental
  */

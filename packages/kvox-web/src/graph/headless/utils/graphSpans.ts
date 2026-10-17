@@ -21,21 +21,21 @@
  */
 
 /**
- * Max quote length `evidenceSpanInputSchema` accepts.
+ * The longest quote an evidence span accepts, in characters (`evidenceSpanInputSchema`).
  *
  * @stability experimental
  */
 export const MAX_QUOTE_LENGTH = 2000;
 
 /**
- * The char span.
+ * A half-open range of characters in a source text.
  *
  * @stability experimental
  */
 export interface CharSpan {
-  /** The char start. */
+  /** Offset of the first character. */
   charStart: number;
-  /** The char end. */
+  /** Offset just past the last character. */
   charEnd: number;
 }
 
@@ -82,7 +82,7 @@ function exactMatches(haystack: string, needle: string): Array<{ start: number; 
  *
  * `hintRatio` is the selection's character offset within the rendered text
  * divided by the rendered text's length (0…1).
-  *
+ *
  * @stability experimental
  */
 export function locateQuoteInMarkdown(markdown: string, quote: string, hintRatio: number): CharSpan | null {

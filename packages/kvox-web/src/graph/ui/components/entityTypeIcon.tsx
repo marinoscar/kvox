@@ -8,11 +8,11 @@ import type { SvgIconProps } from '@mui/material/SvgIcon';
 /**
  * One icon per shipped entity type, and a neutral graph glyph for anything
  * else — a type added to the ontology renders with no change here (§13).
-  *
+ *
  * @stability experimental
  */
 export function EntityTypeIcon({ type, ...props }: {
-  /** The type. */
+  /** Entity type key; an unknown type gets the neutral graph icon. */
   type: string;
 } & SvgIconProps) {
   switch (type) {

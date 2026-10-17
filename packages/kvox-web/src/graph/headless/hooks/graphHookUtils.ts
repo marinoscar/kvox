@@ -13,14 +13,14 @@ import { KvoxApiError } from '../../../core/headless/index.js';
  * The graph API answers "not yours", "doesn't exist", "not reviewed" and
  * "merged away" with one identical 404 (#370). The copy must cover all four
  * without implying which.
-  *
+ *
  * @stability experimental
  */
 export const GRAPH_NOT_FOUND_MESSAGE =
   'This page does not exist, or you no longer have access to it';
 
 /**
- * Graph error message.
+ * Turns a failed graph request into the sentence a page renders: the not-found copy for a 404, a permission message for a 403, otherwise the API's message or the fallback.
  *
  * @stability experimental
  */
@@ -34,7 +34,7 @@ export function graphErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
- * Tells whether abort error.
+ * Tells whether an error is an `AbortError`, which hooks ignore because it comes from their own cancelled request.
  *
  * @stability experimental
  */
@@ -51,7 +51,7 @@ export function isAbortError(err: unknown): boolean {
  * One `AbortController` per request, the previous one aborted when a new one
  * starts and the last one aborted on unmount — so a slow answer for the
  * previous entity can never land on the next one's page.
-  *
+ *
  * @stability experimental
  */
 export function useAbortControllers(): () => AbortController {

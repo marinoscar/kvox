@@ -16,14 +16,14 @@ import {
 } from './graphSpans.js';
 
 /**
- * The note selection context.
+ * What resolving a selection in a rendered note body needs to know.
  *
  * @stability experimental
  */
 export interface NoteSelectionContext {
-  /** The id of the note. */
+  /** The note's id. */
   noteId: string;
-  /** The note version. */
+  /** The note version the body was rendered from. */
   noteVersion: number;
   /** The markdown the rendered body came from — `note.body` at `noteVersion`. */
   markdown: string;
@@ -63,12 +63,12 @@ export function resolveNoteSelection(
 }
 
 /**
- * The segment selection context.
+ * What resolving a selection in a transcript line needs to know.
  *
  * @stability experimental
  */
 export interface SegmentSelectionContext {
-  /** The id of the transcript. */
+  /** The transcript's id. */
   transcriptId: string;
   /** The segment's own text (what the server slices), by id. */
   segmentText: (segmentId: string) => string | undefined;

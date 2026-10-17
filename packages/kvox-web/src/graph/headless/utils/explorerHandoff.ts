@@ -8,36 +8,36 @@
  * is persisted — a reload has no hand-off, and the explorer says so.
  *
  * ⚠ A STABLE INTERFACE: #375 builds against these two functions.
-  *
+ *
  * @stability experimental
  */
 
 export interface ExplorerHandoffNode {
-  /** The id. */
+  /** Entity id (UUID). */
   id: string;
-  /** The label. */
+  /** Display name. */
   label: string;
-  /** The type. */
+  /** Entity type key. */
   type: string;
-  /** The x. */
+  /** Horizontal position the node had in the overview. */
   x: number;
-  /** The y. */
+  /** Vertical position the node had in the overview. */
   y: number;
-  /** The degree. */
+  /** Number of relations the entity has in the whole graph, used for its size. */
   degree: number;
 }
 
 /**
- * The explorer handoff.
+ * What the overview passes to the explorer: the cluster's seeds and its already-loaded nodes.
  *
  * @stability experimental
  */
 export interface ExplorerHandoff {
   /** At most 50 — #370's cap on one expand's `nodeIds`. */
   seedIds: string[];
-  /** The title. */
+  /** Heading the explorer shows for the hand-off, such as the cluster's label. */
   title?: string;
-  /** The nodes. */
+  /** The cluster's nodes, at their overview positions. */
   nodes: ExplorerHandoffNode[];
 }
 
@@ -46,7 +46,7 @@ const MAX_SEEDS = 50;
 let pending: ExplorerHandoff | null = null;
 
 /**
- * Sets explorer handoff.
+ * Stores the hand-off for the explorer to take, replacing any earlier one.
  *
  * @stability experimental
  */

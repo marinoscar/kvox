@@ -22,19 +22,19 @@ import { formatRelativeTime } from '../../../core/headless/index.js';
 import { EntityTypeIcon } from './entityTypeIcon.js';
 
 /**
- * The props of entity list row.
+ * Props of {@link EntityListRow}.
  *
  * @stability experimental
  */
 export interface EntityListRowProps {
-  /** The entity. */
+  /** The entity to show. */
   entity: GraphEntitySummary;
   /** The type's singular label from the ontology. */
   typeLabel: string;
 }
 
 /**
- * The entity path.
+ * The app path of an entity's page, `/graph/entities/:id`, with the id encoded.
  *
  * @stability experimental
  */
@@ -43,7 +43,7 @@ export function entityPath(id: string): string {
 }
 
 /**
- * The entity list row.
+ * One row of the entity index: type icon or initials, label, aliases, mention count and last-seen date, linking to the entity page.
  *
  * @stability experimental
  */

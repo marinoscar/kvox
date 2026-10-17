@@ -114,7 +114,7 @@ function Section({ title, id, children }: { title: string; id: string; children:
 }
 
 /**
- * User knowledge graph page.
+ * Settings, Knowledge graph (`/settings/knowledge-graph`): the caller's automatic-extraction, entity-resolution and domain preferences, and their own attribute definitions. Preferences save on change.
  *
  * @stability experimental
  */

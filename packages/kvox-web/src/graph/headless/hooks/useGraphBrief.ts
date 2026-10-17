@@ -33,20 +33,20 @@ import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHoo
 import { useIsMounted, useKvoxHost, useVisiblePolling } from '../../../core/headless/index.js';
 
 /**
- * The BRIEF DIGEST POLL MS.
+ * Milliseconds between re-reads while a digest is being written.
  *
  * @stability experimental
  */
 export const BRIEF_DIGEST_POLL_MS = 5_000;
 /**
- * The BRIEF DIGEST POLL MAX MS.
+ * Milliseconds after which the digest poll gives up, so a stuck job cannot keep a tab polling forever.
  *
  * @stability experimental
  */
 export const BRIEF_DIGEST_POLL_MAX_MS = 2 * 60_000;
 
 /**
- * The use graph brief options of the call.
+ * Options for {@link useGraphBrief}; mainly for tests.
  *
  * @stability experimental
  */
@@ -60,16 +60,16 @@ export interface UseGraphBriefOptions {
 }
 
 /**
- * What use graph brief returns.
+ * What {@link useGraphBrief} returns.
  *
  * @stability experimental
  */
 export interface UseGraphBriefResult {
-  /** The data. */
+  /** The brief, or `null` until it loads. */
   data: EntityBrief | null;
-  /** Whether it is loading. */
+  /** The first read is in flight. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when the last read failed, else `null`. */
   error: string | null;
   /** Re-read with `markViewed: false`, restarting the digest poll window. */
   refresh: () => Promise<void>;
@@ -78,7 +78,7 @@ export interface UseGraphBriefResult {
 }
 
 /**
- * Hook: reads graph brief.
+ * Reads one entity's cited brief. Only the first read marks the visit as viewed, and it polls for a short while when a digest is pending.
  *
  * @stability experimental
  */

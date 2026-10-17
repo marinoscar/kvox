@@ -102,7 +102,7 @@ export function overviewCaption(overview: GraphOverview, now: Date = new Date())
 }
 
 /**
- * Graph overview page.
+ * The `/graph/overview` page: the shape of the caller's whole graph, drawn from a stored layout snapshot as clusters or as individual nodes, with a hand-off to the explorer.
  *
  * @stability experimental
  */

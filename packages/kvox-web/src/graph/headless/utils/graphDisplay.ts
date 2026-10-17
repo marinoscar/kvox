@@ -14,7 +14,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * "4 Mar 2026". READ IN UTC — a month-precision date is stored as the first
  * instant of the month in UTC, and a viewer west of Greenwich would otherwise
  * see "Feb 2026" for a fact recorded as March.
-  *
+ *
  * @stability experimental
  */
 export function formatPrecisionDate(iso: string | null, precision: DatePrecision): string {
@@ -62,11 +62,11 @@ export function relationTypeLabel(key: string, ontology: GraphOntology | null): 
  * @stability experimental
  */
 export interface RelationPropDisplay {
-  /** The key. */
+  /** The prop key. */
   key: string;
-  /** The label. */
+  /** The prop's label from the ontology, else the humanized key. */
   label: string;
-  /** The value. */
+  /** The formatted value. */
   value: string;
 }
 
@@ -78,7 +78,7 @@ export interface RelationPropDisplay {
  * the API's order and its key humanized. Only primitive values render (an
  * object or array is skipped); a `date` prop is written as a date, a `select`
  * value as its choice label, a boolean as Yes/No. Empty or absent → `[]`.
-  *
+ *
  * @stability experimental
  */
 export function relationPropsDisplay(
@@ -163,11 +163,11 @@ export const DEFAULT_INDEX_TYPES = ['Person', 'Organization'] as const;
  * @stability experimental
  */
 export function indexableEntityTypes(ontology: GraphOntology | null): {
-  /** The key. */
+  /** Entity type key. */
   key: string;
-  /** The label. */
+  /** Singular label from the ontology. */
   label: string;
-  /** The plural label. */
+  /** Plural label from the ontology. */
   pluralLabel: string;
 }[] {
   if (!ontology) {

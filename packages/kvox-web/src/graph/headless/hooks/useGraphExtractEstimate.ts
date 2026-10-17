@@ -19,21 +19,21 @@ import type { ExtractionEstimate, GraphConflictReason } from '../clients/graph.j
 
 import { KvoxApiError, useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * The EXTRACT ESTIMATE DEBOUNCE MS.
+ * Milliseconds the model choice is held back before the estimate is requested again.
  *
  * @stability experimental
  */
 export const EXTRACT_ESTIMATE_DEBOUNCE_MS = 300;
 
 /**
- * What use graph extract estimate returns.
+ * What {@link useGraphExtractEstimate} returns.
  *
  * @stability experimental
  */
 export interface UseGraphExtractEstimateReturn {
-  /** The estimate. */
+  /** The token and cost estimate, or `null` until it loads or after a failed read. */
   estimate: ExtractionEstimate | null;
-  /** Whether it is loading. */
+  /** An estimate is being fetched. */
   isLoading: boolean;
   /** A sentence for the dialog, or null. */
   error: string | null;
@@ -44,7 +44,7 @@ export interface UseGraphExtractEstimateReturn {
 }
 
 /**
- * Hook: reads graph extract estimate.
+ * Estimates what extracting a note with the chosen model would cost (`GET /api/graph/extract/estimate`), debounced; only the latest answer lands.
  *
  * @stability experimental
  */
@@ -52,7 +52,7 @@ export function useGraphExtractEstimate(
   noteId: string,
   model: string | null,
   options: {
-    /** Whether enabled applies. */
+    /** Set `false` to skip reading (default `true`). */
     enabled?: boolean;
   } = {},
 ): UseGraphExtractEstimateReturn {

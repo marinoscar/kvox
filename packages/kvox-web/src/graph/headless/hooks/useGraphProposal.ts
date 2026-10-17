@@ -44,65 +44,65 @@ import type {
 import { KvoxApiError, useIsMounted, useKvoxHost, useVisiblePolling } from '../../../core/headless/index.js';
 
 /**
- * The PROPOSAL POLL MS.
+ * How often a proposal that is still `extracting` is re-read, in milliseconds.
  *
  * @stability experimental
  */
 export const PROPOSAL_POLL_MS = 2_000;
 
 /**
- * The graph proposal source.
+ * Where a proposal is read from: the newest one of a note, or one opened directly by id.
  *
  * @stability experimental
  */
 export type GraphProposalSource = {
-  /** The id of the note. */
+  /** Note whose newest non-discarded proposal to read; it resolves to `null` when nothing was ever extracted. */
   noteId: string;
 } | {
-  /** The id of the proposal. */
+  /** Proposal to open directly. */
   proposalId: string;
 };
 
 /**
- * What use graph proposal returns.
+ * What {@link useGraphProposal} returns.
  *
  * @stability experimental
  */
 export interface UseGraphProposalReturn {
-  /** The detail. */
+  /** The proposal with its rows: `undefined` until the first answer, `null` when the note has no proposal. */
   detail: ProposalDetail | null | undefined;
-  /** Whether it is loading. */
+  /** The first read has not settled yet. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when the last read failed, else `null`. */
   error: string | null;
-  /** The refresh. */
+  /** Reads the proposal again. */
   refresh: () => Promise<void>;
-  /** The decide. */
+  /** Records a decision on one row. Optimistic: the row changes at once and changes back if the request is refused, in which case the error is re-thrown. */
   decide: (itemId: string, body: PatchProposalItemInput) => Promise<PatchProposalItemResult>;
-  /** The bulk. */
+  /** Applies one decision to many rows, then re-reads the proposal because the server decides which rows it skipped. */
   bulk: (itemIds: string[], decision: BulkDecision) => Promise<BulkDecideResult>;
-  /** The commit. */
+  /** Commits the proposal into the graph and stores the updated summary. */
   commit: () => Promise<{
-    /** The proposal. */
+    /** The proposal, now committed. */
     proposal: ProposalSummary;
-    /** The result. */
+    /** What the commit wrote. */
     result: CommitResult;
   }>;
-  /** The discard. */
+  /** Discards the proposal and stores the updated summary. */
   discard: () => Promise<{
-    /** The proposal. */
+    /** The proposal, now discarded. */
     proposal: ProposalSummary;
   }>;
-  /** The revert. */
+  /** Reverts a committed proposal; `confirmPartial` lets it revert what it can when some rows changed since. */
   revert: (confirmPartial: boolean) => Promise<{
-    /** The proposal. */
+    /** The proposal, now reverted. */
     proposal: ProposalSummary;
-    /** The result. */
+    /** How many rows were reverted and which were kept. */
     result: RevertResult;
   }>;
-  /** The request extract. */
+  /** Starts an extraction for the note and re-reads the proposal. Rejects when there is no note to extract from. */
   requestExtract: (body?: RequestExtractionInput) => Promise<RequestExtractionResult>;
-  /** The pending item ids. */
+  /** Ids of the rows with a write in flight. */
   pendingItemIds: Set<string>;
 }
 
@@ -121,16 +121,16 @@ function optimistic(item: ProposalItem, body: PatchProposalItemInput): ProposalI
 }
 
 /**
- * Hook: reads graph proposal.
+ * Reads one proposal, polls it while it is extracting, and exposes the review mutations (decide, bulk, commit, discard, revert, request extraction).
  *
  * @stability experimental
  */
 export function useGraphProposal(
   source: GraphProposalSource,
   options: {
-    /** Whether enabled applies. */
+    /** Set `false` to skip reading (default `true`). */
     enabled?: boolean;
-    /** The poll ms. */
+    /** Poll interval while the proposal is `extracting`, in milliseconds; defaults to {@link PROPOSAL_POLL_MS}. Polling pauses in a hidden tab. */
     pollMs?: number;
   } = {},
 ): UseGraphProposalReturn {

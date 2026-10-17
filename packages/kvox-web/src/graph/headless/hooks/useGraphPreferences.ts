@@ -43,7 +43,7 @@ export type GraphAdjudication = 'llm' | 'off';
 export interface GraphPreferencesSettings {
   /** Extraction preferences. */
   extraction?: {
-    /** Whether auto extract applies. */
+    /** Extract automatically when a note is ready, without waiting for the user to ask. */
     autoExtract: boolean;
   };
   /** Entity-resolution preferences. */
@@ -59,9 +59,9 @@ export interface GraphPreferencesSettings {
   };
   /** `core` is always on and never stored. `personal` is off by default (#383). */
   domains?: {
-    /** Whether work applies. */
+    /** Whether the `work` domain (people, organizations, projects, meetings, commitments) is on. */
     work: boolean;
-    /** Whether personal applies. */
+    /** Whether the `personal` domain is on; off by default. */
     personal: boolean;
   };
 }
@@ -75,7 +75,7 @@ export interface GraphPreferencesSettings {
 export interface GraphPreferencesPatch {
   /** Extraction preferences, or `null` to reset them. */
   extraction?: {
-    /** The auto extract. */
+    /** Extract automatically when a note is ready; `null` resets it to the default. */
     autoExtract?: boolean | null;
   } | null;
   /** Entity-resolution preferences, or `null` to reset them. */
@@ -91,42 +91,42 @@ export interface GraphPreferencesPatch {
   } | null;
   /** Domain switches, or `null` to reset them. */
   domains?: {
-    /** The work. */
+    /** Whether the `work` domain is on; `null` resets it. */
     work?: boolean | null;
-    /** The personal. */
+    /** Whether the `personal` domain is on; `null` resets it. */
     personal?: boolean | null;
   } | null;
 }
 
 /**
- * The resolved graph preferences.
+ * The `graph` user-settings namespace with every default filled in; what the settings page renders.
  *
  * @stability experimental
  */
 export interface ResolvedGraphPreferences {
-  /** The extraction. */
+  /** Extraction preferences. */
   extraction: {
-    /** Whether auto extract applies. */
+    /** Extract automatically when a note is ready. */
     autoExtract: boolean;
   };
-  /** The resolution. */
+  /** Entity-resolution preferences. */
   resolution: {
-    /** The mode. */
+    /** How confident links are handled. */
     mode: GraphResolutionMode;
-    /** The auto link threshold. */
+    /** Score at or above which a candidate is linked automatically. */
     autoLinkThreshold: number;
-    /** The new threshold. */
+    /** Score below which a candidate is treated as a new entity. */
     newThreshold: number;
-    /** The adjudication. */
+    /** Whether an AI step adjudicates ambiguous candidates. */
     adjudication: GraphAdjudication;
   };
-  /** The domains. */
+  /** Which ontology domains are enabled. */
   domains: {
-    /** The core. */
+    /** Always on; never stored. */
     core: true;
-    /** Whether work applies. */
+    /** Whether the `work` domain is on. */
     work: boolean;
-    /** Whether personal applies. */
+    /** Whether the `personal` domain is on. */
     personal: boolean;
   };
 }
@@ -154,25 +154,25 @@ export const GRAPH_PREFERENCE_DEFAULTS: ResolvedGraphPreferences = {
  */
 export const AUTO_LINK_MIN = 0.8;
 /**
- * The AUTO LINK MAX.
+ * Highest automatic-link threshold the API accepts.
  *
  * @stability experimental
  */
 export const AUTO_LINK_MAX = 0.99;
 /**
- * The NEW MIN.
+ * Lowest new-entity threshold the API accepts.
  *
  * @stability experimental
  */
 export const NEW_MIN = 0.3;
 /**
- * The NEW MAX.
+ * Highest new-entity threshold the API accepts.
  *
  * @stability experimental
  */
 export const NEW_MAX = 0.94;
 /**
- * The THRESHOLD MIN GAP.
+ * Smallest gap the API requires between the automatic-link and the new-entity thresholds.
  *
  * @stability experimental
  */
@@ -194,7 +194,7 @@ export function maxNewThreshold(autoLinkThreshold: number): number {
 }
 
 /**
- * Resolves graph preferences.
+ * Fills every missing field of the stored `graph` namespace with its default.
  *
  * @stability experimental
  */
