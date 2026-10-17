@@ -20,6 +20,7 @@
     "./src/graph-extraction/index.ts",
     "./src/graph-extraction/testing/index.ts",
     "./src/graph-rdf/index.ts",
+    "./src/graph-rdf/shacl-runner/index.ts",
     "./src/graph-rdf/testing/index.ts",
     "./src/ask/index.ts",
     "./src/ask/testing/index.ts"

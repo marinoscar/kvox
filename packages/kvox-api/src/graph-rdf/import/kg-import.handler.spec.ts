@@ -11,6 +11,7 @@ import { DEFAULT_KVOX_BRAND } from '../../core/index.js';
 import { jobsMock } from '../__fixtures__/jobs-mock.js';
 import { KvoxRateLimitError } from '../../ports/index.js';
 import { resolveGraphRdfOptions } from '../graph-rdf.options.js';
+import type { ShaclRun } from '../shacl-runner/index.js';
 
 // =============================================================================
 // kg.import — the pipeline with every collaborator faked (#387)
@@ -31,7 +32,7 @@ const OBJECT = '33333333-3333-4333-8333-333333333333';
 
 const CONFORMS: ShaclEngineReport = { conforms: true, violationCount: 0, warningCount: 0, results: [] };
 
-function setup(options: { fixture?: ImportFixture; text?: string; format?: 'turtle' | 'jsonld'; report?: ShaclEngineReport; definition?: KgMigrateDefinition; pending?: boolean } = {}) {
+function setup(options: { fixture?: ImportFixture; text?: string; format?: 'turtle' | 'jsonld'; report?: ShaclEngineReport; definition?: KgMigrateDefinition; pending?: boolean; shaclRun?: ShaclRun } = {}) {
   const fixture = options.fixture ?? 'import-valid.ttl';
   let status = 'extracting';
   let stats: Record<string, unknown> = { filename: fixture, format: options.format ?? 'turtle', bytes: 100 };
@@ -95,9 +96,10 @@ function setup(options: { fixture?: ImportFixture; text?: string; format?: 'turt
     { ordered: () => stages } as never,
     migrations as never,
     DEFAULT_KVOX_BRAND,
-    resolveGraphRdfOptions({}),
+    resolveGraphRdfOptions(options.shaclRun ? { shacl: { run: options.shaclRun } } : {}),
     options.definition,
-    engine,
+    // A host runner goes through the real engine (no engine override), as forRoot wires it.
+    options.shaclRun ? undefined : engine,
   );
   const run = () => handler.process({ id: 'job-1', payload: { proposalId: PROPOSAL, ownerId: OWNER, objectId: OBJECT, format: options.format ?? 'turtle' } } as never);
   return { handler, prisma: prisma as Record<string, Record<string, jest.Mock>>, engine, stages, stageCalls, jobs, run, writes, state: () => ({ status, stats }) };
@@ -148,6 +150,27 @@ describe('KgImportHandler', () => {
     });
     expectNothingWritten(t);
     expect(t.stages[0].run).not.toHaveBeenCalled();
+  });
+
+  it('validates through the host runner of shacl.run when forRoot passes one', async () => {
+    const report: ShaclEngineReport = {
+      conforms: false,
+      violationCount: 1,
+      warningCount: 0,
+      results: [{ focusNode: 'https://s.example/x', path: null, message: 'From the host', severity: 'Violation' }],
+    };
+    const shaclRun = jest.fn<ReturnType<ShaclRun>, Parameters<ShaclRun>>(async () => JSON.stringify(report));
+    const t = setup({ shaclRun });
+    await t.run();
+    expect(shaclRun).toHaveBeenCalledTimes(1);
+    const [input, { signal }] = shaclRun.mock.calls[0];
+    expect(JSON.parse(input)).toMatchObject({ moduleUrl: expect.stringMatching(/^file:/), maxResults: expect.any(Number) });
+    expect(signal.aborted).toBe(false);
+    expect(t.state().stats).toMatchObject({
+      failureReason: 'shacl_violations',
+      validation: { violations: [expect.objectContaining({ message: 'From the host' })] },
+    });
+    expectNothingWritten(t);
   });
 
   it('ontology_version_newer: refused before validation', async () => {

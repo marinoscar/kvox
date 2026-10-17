@@ -71,7 +71,7 @@ import type { ImportQuad } from './import-dataset.js';
 import { buildImportVocabulary } from './import-vocabulary.js';
 import { RdfParseError, parseRdf, parseTurtleText } from './rdf-parse.js';
 import { mapImportToProposal, type ImportRow } from './rdf-to-proposal.js';
-import { ChildProcessShaclEngine, type ShaclEngine } from './shacl-engine.js';
+import { ChildProcessShaclEngine, DEFAULT_SHACL_OPTIONS, type ShaclEngine } from './shacl-engine.js';
 import { splitUnknownProperties } from './unknown-properties.js';
 import { migrateQuads, negotiateVersion, readSourceVersion } from './version-negotiation.js';
 import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, type KvoxJobHandler, type KvoxJobProfile, type KvoxJob, type KvoxSql } from '../../ports/index.js';
@@ -158,7 +158,7 @@ export class KgImportHandler implements KvoxJobHandler, OnModuleInit {
   ) {
     this.ns = kvNamespace(brand.appSlug);
     this.definition = definition ?? DEFAULT_KG_MIGRATE_DEFINITION;
-    this.engine = engine ?? new ChildProcessShaclEngine();
+    this.engine = engine ?? new ChildProcessShaclEngine({ ...DEFAULT_SHACL_OPTIONS, run: options.shaclRun });
   }
 
   /**
