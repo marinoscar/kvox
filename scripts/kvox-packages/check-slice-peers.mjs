@@ -45,6 +45,11 @@
 //                    @marinoscar/kvox-<pkg>/<slice> lists the package and every
 //                    peer that slice (and the slices it depends on) needs in
 //                    its own package.json, or in the root package.json.
+//                    A peer named with --without is exempt: the app leaves it
+//                    out on purpose because the feature that needs it is switched
+//                    off in the slice's forRoot (examples/bare-host leaves out
+//                    @nestjs/schedule, pdfkit, docx and unpdf). The exemption is
+//                    for rule 5 only; the app must then really not install it.
 //
 //   6. host-neutral  No file under packages/kvox-api/src/** or
 //                    packages/kvox-web/src/** imports @marinoscar/platform-*.
@@ -66,11 +71,14 @@
 // (rule 5) follow the entry the app imports (`@marinoscar/kvox-web/core/ui`).
 //
 // Usage: node scripts/kvox-packages/check-slice-peers.mjs [--root <dir>]
-//          [--app <dir>]... [--table] [--json]
+//          [--app <dir>]... [--without <package>]... [--table] [--json]
 //   --root <dir>   Repository root (default: this script's grandparent).
 //   --app <dir>    Also run rule 5 for this app folder (repeatable), relative
 //                  to the root, e.g. --app apps/api --app apps/web. Without
 //                  --app only rules 1 to 4 and 6 run.
+//   --without <package>
+//                  Rule 5 does not require this peer of the --app folders
+//                  (repeatable). See rule 5.
 //   --table        Print the required and optional peers per slice and exit.
 //   --json         Print the violations as JSON.
 // Exit: 0 clean, 1 violations, 2 usage error.
@@ -485,7 +493,7 @@ function checkHeadless(root, violations) {
 }
 
 /** Rule 5. */
-function checkApps(root, apps, packages, graph, peers, violations) {
+function checkApps(root, apps, packages, graph, peers, violations, without = new Set()) {
   const rootManifest = existsSync(join(root, 'package.json')) ? readJson(join(root, 'package.json')) : {};
   const depNames = (manifest) =>
     new Set(
@@ -525,6 +533,7 @@ function checkApps(root, apps, packages, graph, peers, violations) {
       }
     }
     for (const [name, why] of needed) {
+      if (without.has(name)) continue;
       if (!installed.has(name)) violations.push({ rule: 'app-installs', message: `${app}/package.json does not list '${name}' (${why})` });
     }
   }
@@ -533,10 +542,11 @@ function checkApps(root, apps, packages, graph, peers, violations) {
 /**
  * Runs the rules.
  *
- * @param {{ root: string, apps?: string[] }} options Repository root and the app folders for rule 5.
+ * @param {{ root: string, apps?: string[], without?: string[] }} options Repository root, the app folders for rule 5 and
+ *   the peers rule 5 does not require of them (features the app switched off).
  * @returns {{ rule: string, message: string }[]} The violations (empty when clean).
  */
-export function checkSlicePeers({ root, apps = [] }) {
+export function checkSlicePeers({ root, apps = [], without = [] }) {
   const violations = [];
   const packages = listPackages(root);
   const graph = readGraph(root);
@@ -546,7 +556,7 @@ export function checkSlicePeers({ root, apps = [] }) {
   checkImports(root, packages, graph, peers, violations);
   checkHostNeutral(root, violations);
   checkHeadless(root, violations);
-  if (apps.length > 0) checkApps(root, apps, packages, graph, peers, violations);
+  if (apps.length > 0) checkApps(root, apps, packages, graph, peers, violations, new Set(without));
   return violations;
 }
 
@@ -579,18 +589,19 @@ export function peersTable(root) {
 // -----------------------------------------------------------------------------
 
 const USAGE =
-  'Usage: node scripts/kvox-packages/check-slice-peers.mjs [--root <dir>] [--app <dir>]... [--table] [--json]';
+  'Usage: node scripts/kvox-packages/check-slice-peers.mjs [--root <dir>] [--app <dir>]... [--without <package>]... [--table] [--json]';
 
 function parseArgs(argv) {
-  const opts = { root: null, apps: [], table: false, json: false };
+  const opts = { root: null, apps: [], without: [], table: false, json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--table') opts.table = true;
     else if (arg === '--json') opts.json = true;
-    else if (arg === '--root' || arg === '--app') {
+    else if (arg === '--root' || arg === '--app' || arg === '--without') {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new Error(`${arg} needs a value`);
       if (arg === '--app') opts.apps.push(value);
+      else if (arg === '--without') opts.without.push(value);
       else opts.root = value;
       i += 1;
     } else throw new Error(`unknown argument '${arg}'`);
@@ -615,7 +626,7 @@ function main() {
     console.log(peersTable(root));
     return;
   }
-  const violations = checkSlicePeers({ root, apps: opts.apps });
+  const violations = checkSlicePeers({ root, apps: opts.apps, without: opts.without });
   if (opts.json) console.log(JSON.stringify({ ok: violations.length === 0, violations }, null, 2));
   else if (violations.length === 0) {
     const scope = opts.apps.length > 0 ? `, apps ${opts.apps.join(', ')}` : '';

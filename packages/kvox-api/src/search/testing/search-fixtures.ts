@@ -189,11 +189,11 @@ async function insertTranscript(
   `);
 
   await db.$executeRaw(Prisma.sql`
-    INSERT INTO transcripts (id, owner_id, title, source_object_id, provider, status, current_version, updated_at)
-    VALUES (
+    INSERT INTO transcripts (id, owner_id, title, source_object_id, provider, status, current_version, updated_at, org_id)
+    SELECT
       ${transcriptId}::uuid, ${ownerId}::uuid, ${title}, ${objectId}::uuid, 'fake',
-      'ready'::"TranscriptStatus", 1, now()
-    )
+      'ready'::"TranscriptStatus", 1, now(),
+      (SELECT id FROM organizations WHERE is_default LIMIT 1)
   `);
 
   await db.$executeRaw(Prisma.sql`

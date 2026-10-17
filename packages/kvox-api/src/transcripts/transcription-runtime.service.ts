@@ -177,7 +177,11 @@ export class TranscriptionRuntimeService {
     // than trusted from the namespace. The stored row is validated on write,
     // but a row written by an older build with a different schema is exactly
     // the case a parse here catches before the vendor call rather than after.
-    const raw = (policy.providers as Record<string, unknown> | undefined)?.[provider.id];
+    // `?? {}`: a provider a host registers through `extraProviders` has no block in
+    // `transcriptionProvidersSchema` (the built-in ids are its only keys), so its block is
+    // absent by construction and its own `settingsSchema` decides whether an empty one is
+    // acceptable. This is what `TranscriptionSettingsService.testConnection` already does.
+    const raw = (policy.providers as Record<string, unknown> | undefined)?.[provider.id] ?? {};
     const parsed = provider.settingsSchema.safeParse(raw);
 
     if (!parsed.success) {

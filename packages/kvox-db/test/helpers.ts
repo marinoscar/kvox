@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-/** The fixture host app: a prisma/ folder with the three host models and two host migrations. */
+/** The fixture host app: a prisma/ folder with the four host models and two host migrations. */
 export const FIXTURE_HOST = resolve(__dirname, 'fixtures', 'host-app');
 
 /** The package folder under test. */

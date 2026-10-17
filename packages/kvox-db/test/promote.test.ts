@@ -63,8 +63,8 @@ describe('promote', () => {
 
   it('refuses a foreign key to a table that is neither a domain nor a host table', () => {
     const { root, packageDir } = setup();
-    draft(root, '20270301120000_fk', 'ALTER TABLE "kg_exports" ADD CONSTRAINT "x_fkey" FOREIGN KEY ("created_by") REFERENCES "organizations"("id");\n');
-    expect(() => promoteKvoxMigration({ root, localDir: '20270301120000_fk', id: 'fk', slice: 'graph', packageDir })).toThrow(/organizations/);
+    draft(root, '20270301120000_fk', 'ALTER TABLE "kg_exports" ADD CONSTRAINT "x_fkey" FOREIGN KEY ("created_by") REFERENCES "grants"("id");\n');
+    expect(() => promoteKvoxMigration({ root, localDir: '20270301120000_fk', id: 'fk', slice: 'graph', packageDir })).toThrow(/grants/);
   });
 
   it('refuses an id that sorts before the newest package migration, an unknown slice and a bad slug', () => {

@@ -112,6 +112,28 @@ describe('TranscriptionRuntimeService', () => {
 
       await expect(service.resolve()).rejects.toThrow(/not\s+valid: region/);
     });
+
+    it('hands a provider with no stored block an empty one (a host-registered provider has none)', async () => {
+      // `providers` holds blocks for the built-in ids only. A provider a host adds through
+      // `TranscriptionModule.forRoot({ extraProviders })` has no key there, and resolving it
+      // used to parse `undefined` against `z.object({})` and fail with "(root)". The settings
+      // service's connection test already defaulted the block; this is the same rule.
+      const seen: unknown[] = [];
+      const hostProvider = createFakeProvider();
+      (hostProvider as unknown as { settingsSchema: unknown }).settingsSchema = {
+        safeParse: (raw: unknown) => {
+          seen.push(raw);
+          return { success: true, data: raw };
+        },
+      };
+      registry.get.mockReturnValue(hostProvider);
+      settings.get.mockResolvedValue(policy({ providers: {} }));
+
+      const resolved = await service.resolve();
+
+      expect(seen).toEqual([{}]);
+      expect(resolved.provider).toBe(hostProvider);
+    });
   });
 
   describe('activeProvider', () => {
