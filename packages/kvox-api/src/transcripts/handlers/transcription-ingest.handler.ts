@@ -46,7 +46,6 @@ import {
   type KvoxJobProfile,
   type KvoxJobsPort,
 } from '../../ports/index.js';
-import type { InputJsonValue } from '../data/prisma.js';
 import type { KvoxTranscriptsDb } from '../data/transcripts-db.js';
 import {
   isTerminalProviderError,
@@ -59,6 +58,7 @@ import {
   TRANSCRIPTION_INGEST_JOB_TYPE,
   TRANSCRIPTION_THROTTLE_KEY,
 } from '../job-types.js';
+import { countSegmentWords, writeOriginalVersion } from '../original-version.js';
 import { TranscriptObjectsService } from '../transcript-objects.service.js';
 import { TranscriptPipelineService } from '../transcript-pipeline.service.js';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service.js';
@@ -251,30 +251,13 @@ export class TranscriptionIngestHandler implements KvoxJobHandler, OnModuleInit 
     const wordCount = countWords(normalized);
 
     await this.prisma.$transaction(async (tx) => {
-      const speakerIds = new Map<string, string>();
-
-      for (const speaker of speakerRows) {
-        const created = await tx.transcriptSpeaker.create({
-          data: {
-            transcriptId: transcript.id,
-            label: speaker.label,
-            displayName: speaker.displayName,
-            colorIndex: speaker.colorIndex,
-          },
-          select: { id: true },
-        });
-
-        speakerIds.set(speaker.label, created.id);
-      }
-
-      // `createMany` rather than a create per segment: a six-hour recording is
-      // thousands of rows, and one statement is the difference between a
-      // transaction measured in milliseconds and one measured in minutes —
-      // which matters because everything else waits behind it.
-      const segments = normalized.segments.map(
-        (segment, index) => ({
-          transcriptId: transcript.id,
-          speakerId: speakerIds.get(segment.speakerLabel) as string,
+      // The speakers, the segments and the v1 row: the one shape both ingest and
+      // the JSON import write (`original-version.ts`).
+      await writeOriginalVersion(tx, {
+        transcriptId: transcript.id,
+        speakers: speakerRows.map((speaker) => ({ key: speaker.label, ...speaker })),
+        segments: normalized.segments.map((segment, index) => ({
+          speakerKey: segment.speakerLabel,
           startMs: Math.max(0, Math.round(segment.startMs)),
           endMs: Math.max(0, Math.round(segment.endMs)),
           ordinal: (index + 1) * ORDINAL_GAP,
@@ -284,31 +267,14 @@ export class TranscriptionIngestHandler implements KvoxJobHandler, OnModuleInit 
             s: Math.round(word.startMs),
             e: Math.round(word.endMs),
             c: word.confidence,
-          })) as unknown as InputJsonValue,
+          })),
           // A freshly ingested segment's timings are the provider's own,
           // untouched — which is what `exact` means (spec §3.5).
           wordsAlignment: 'exact',
           confidence: segment.confidence,
           origin: 'ai',
-        }),
-      );
-
-      if (segments.length > 0) {
-        await tx.transcriptSegment.createMany({ data: segments });
-      }
-
-      await tx.transcriptVersion.create({
-        data: {
-          transcriptId: transcript.id,
-          version: 1,
-          kind: 'ai_original',
-          // ⚠ `authorId: null` MEANS "THE AI", and that is the schema's own
-          // convention (spec §4.5) rather than a missing value. A version
-          // attributed to a user is one a user made.
-          authorId: null,
-          summary: `Transcribed by ${provider.label}`,
-          ops: [] as unknown as InputJsonValue,
-        },
+        })),
+        summary: `Transcribed by ${provider.label}`,
       });
 
       await tx.transcript.update({
@@ -430,11 +396,5 @@ export function buildSpeakers(
  * a list view puts in front of everybody.
  */
 export function countWords(normalized: NormalizedTranscript): number {
-  return normalized.segments.reduce((total, segment) => {
-    if (segment.words.length > 0) return total + segment.words.length;
-
-    const tokens = segment.text.trim().split(/\s+/).filter(Boolean);
-
-    return total + tokens.length;
-  }, 0);
+  return countSegmentWords(normalized.segments);
 }

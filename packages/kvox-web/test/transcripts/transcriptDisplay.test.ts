@@ -63,3 +63,23 @@ describe('hasPlayableAudio — the cases the header calls out by name', () => {
     }
   });
 });
+
+describe('hasPlayableAudio — hasAudio (#571)', () => {
+  it('is never playable when hasAudio is false, whatever the statuses say', () => {
+    for (const status of TRANSCRIPT_STATUSES) {
+      for (const playbackStatus of PLAYBACK_STATUSES) {
+        expect(hasPlayableAudio({ status, playbackStatus, hasAudio: false })).toBe(false);
+      }
+    }
+  });
+
+  it('withholds the control from an imported transcript (ready, not_needed, no audio)', () => {
+    expect(hasPlayableAudio({ status: 'ready', playbackStatus: 'not_needed', hasAudio: false })).toBe(false);
+  });
+
+  it('leaves the status decision alone when hasAudio is true or absent', () => {
+    expect(hasPlayableAudio({ status: 'ready', playbackStatus: 'not_needed', hasAudio: true })).toBe(true);
+    expect(hasPlayableAudio({ status: 'ready', playbackStatus: 'not_needed' })).toBe(true);
+    expect(hasPlayableAudio({ status: 'ready', playbackStatus: 'pending', hasAudio: true })).toBe(false);
+  });
+});

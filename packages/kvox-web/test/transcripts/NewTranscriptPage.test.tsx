@@ -519,3 +519,20 @@ describe('NewTranscriptPage — accessibility', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+describe('NewTranscriptPage — importing a transcript (#571)', () => {
+  it('offers the import under the stepper', async () => {
+    render(<NewTranscriptPage />, { wrapperOptions: { user: mockAdminUser } });
+
+    expect(await screen.findByRole('heading', { name: 'Already have a transcript?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import transcript (JSON)' })).toBeInTheDocument();
+  });
+
+  it('still offers it when transcription is not configured, since an import needs no provider', async () => {
+    mockGetConfig.mockResolvedValue({ ...CONFIG, available: false, providerLabel: null });
+    render(<NewTranscriptPage />, { wrapperOptions: { user: mockAdminUser } });
+
+    await screen.findByText('Transcription is not set up yet');
+    expect(screen.getByRole('button', { name: 'Import transcript (JSON)' })).toBeInTheDocument();
+  });
+});

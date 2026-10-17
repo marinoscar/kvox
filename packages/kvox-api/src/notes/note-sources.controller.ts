@@ -62,6 +62,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Param,
   ParseUUIDPipe,
   PayloadTooLargeException,
@@ -85,6 +86,11 @@ import { NOTES_READ_PERMISSION, NOTES_WRITE_PERMISSION } from './notes.permissio
 import { NoteSourceDocumentDto, NoteSourceDocumentStatusDto } from './dto/note-source.dto.js';
 import { acceptedDocumentTypesSentence } from './extraction/document-format.js';
 import { NoteSourcesService } from './note-sources.service.js';
+
+/** The 500 a request gets when the host never registered `@fastify/multipart` (a host duty, `$hostPlugins`). */
+const HOST_MULTIPART_MISSING =
+  'This host has not registered @fastify/multipart on its Fastify app, so uploads cannot be read ' +
+  '(a kvox host duty: see docs/guides/kvox-desktop.md and $hostPlugins in packages/kvox-slice-peers.json).';
 
 /**
  * Turn Fastify's multipart failures into the status they mean.
@@ -181,6 +187,11 @@ export class NoteSourcesController {
     // `@fastify/multipart` decorates the request; its types are the host's, so the slice states
     // the two members it uses.
     const req = request as unknown as MultipartRequest;
+
+    // A host that skipped the plugin has no decoration: say so instead of a bare TypeError.
+    if (typeof req.isMultipart !== 'function') {
+      throw new InternalServerErrorException(HOST_MULTIPART_MISSING);
+    }
 
     if (!req.isMultipart()) {
       throw new BadRequestException(

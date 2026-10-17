@@ -1,5 +1,20 @@
-import { createFakeKvoxJobs } from '../../testing/index.js';
-import type { KvoxJobHandler, KvoxJobsPort } from '../../ports/index.js';
+import {
+  createFakeKvoxJobs,
+  createInMemoryKvoxEvents,
+  createInMemoryKvoxObjectStore,
+  createRecordingKvoxAudit,
+} from '../../testing/index.js';
+import type {
+  KvoxAuditPort,
+  KvoxEventsPort,
+  KvoxJobHandler,
+  KvoxJobsPort,
+  KvoxObjectStorePort,
+} from '../../ports/index.js';
+import type { KvoxTranscriptsDb } from '../data/transcripts-db.js';
+import type { TranscriptImportParseResult } from '../import/transcript-import.js';
+import type { TranscriptsActor } from '../transcripts-actor.js';
+import { createImportRecordingDb, importFixtureDocument } from './import-fixtures.js';
 
 // =============================================================================
 // The transcripts slice's conformance suite (issue #493, epic #491)
@@ -27,6 +42,12 @@ import type { KvoxJobHandler, KvoxJobsPort } from '../../ports/index.js';
 //      an export's renderers live in the API, a purge and a sweep write as they go.
 //   5. EVERY JOB TYPE STRING IS THE PINNED ONE. A type string is permanent once jobs of it
 //      exist; this list is written out here, not imported, so a rename fails this test.
+//   6. THE JSON IMPORT (#571) REFUSES WHAT IS NOT OURS WITH A TYPED REASON, AND STARTS NO
+//      TRANSCRIPTION. A foreign file is `unsupported_schema` and an extra property
+//      `invalid_document` (never a 500); a valid file becomes a `ready` transcript with a
+//      version-1 `ai_original` row and no audio, and enqueues no `transcription.*` or
+//      `media.audio.transcode` job: there is nothing to transcribe, and a provider job
+//      would bill the deployment for a file that holds no audio.
 // =============================================================================
 
 /**
@@ -59,6 +80,56 @@ export interface TranscriptsConformancePipeline {
 }
 
 /**
+ * The ports the kit hands {@link TranscriptsConformanceImport.serviceFor}: an in-memory
+ * database and object store, the fake queue, events and audit.
+ *
+ * @stability experimental
+ */
+export interface TranscriptsImportConformancePorts {
+  /** The job port to enqueue on. */
+  jobs: KvoxJobsPort;
+  /** The narrowed database client (an in-memory recording one). */
+  prisma: KvoxTranscriptsDb;
+  /** The object store to keep the file in. */
+  objectStore: KvoxObjectStorePort;
+  /** The events port. */
+  events: KvoxEventsPort;
+  /** The audit port. */
+  audit: KvoxAuditPort;
+}
+
+/**
+ * The import path of the binding under test.
+ *
+ * @stability experimental
+ */
+export interface TranscriptsConformanceImport {
+  /**
+   * The slice's import parser, as the route runs it.
+   *
+   * @param body - the file.
+   * @param options - the clock reading.
+   */
+  parse(body: Uint8Array | string, options: { now: Date }): TranscriptImportParseResult;
+
+  /**
+   * The slice's import service built over the given ports.
+   *
+   * @param ports - what the kit supplies.
+   */
+  serviceFor(ports: TranscriptsImportConformancePorts): {
+    /** Imports a file for a caller; resolves with the new transcript's id. */
+    importFile(
+      user: TranscriptsActor,
+      file: { filename: string; body: Buffer },
+    ): Promise<{
+      /** The new transcript. */
+      transcriptId: string;
+    }>;
+  };
+}
+
+/**
  * What the kit needs from the binding under test.
  *
  * @stability experimental
@@ -73,6 +144,9 @@ export interface TranscriptsConformanceTarget {
    * @param jobs - the port to enqueue on.
    */
   pipelineFor(jobs: KvoxJobsPort): TranscriptsConformancePipeline;
+
+  /** The JSON import (#571): its parser, and its service over the kit's ports. */
+  importer: TranscriptsConformanceImport;
 }
 
 /** The nine job types the slice owns. Written out on purpose; see the header. */
@@ -184,6 +258,80 @@ export function describeTranscriptsConformance(
           node: false,
         });
       }
+    });
+
+    it('refuses a foreign file, a later version and an extra property with typed reasons', async () => {
+      const { importer } = await targetOf();
+      const now = new Date('2026-10-01T00:00:00.000Z');
+      const reasonOf = (body: string): string | undefined => {
+        const result = importer.parse(body, { now });
+
+        return result.ok ? undefined : result.reason;
+      };
+
+      const later = importFixtureDocument() as unknown as Record<string, unknown>;
+      later.schema = 'kvox.transcript/v2';
+
+      const extra = importFixtureDocument() as unknown as { transcript: Record<string, unknown> };
+      extra.transcript.colorIndex = 1;
+
+      expect(reasonOf('not json at all')).toBe('not_json');
+      expect(reasonOf(JSON.stringify({ nodes: [], edges: [] }))).toBe('unsupported_schema');
+      expect(reasonOf(JSON.stringify(later))).toBe('unsupported_schema');
+      expect(reasonOf(JSON.stringify(extra))).toBe('invalid_document');
+      expect(importer.parse(JSON.stringify(importFixtureDocument()), { now }).ok).toBe(true);
+    });
+
+    it('imports a file as a ready version-1 transcript and enqueues no transcription job', async () => {
+      const { importer } = await targetOf();
+      const jobs = createFakeKvoxJobs();
+      const recording = createImportRecordingDb();
+      const objectStore = createInMemoryKvoxObjectStore();
+      const user: TranscriptsActor = {
+        id: '11111111-1111-4111-8111-111111111111',
+        permissions: ['transcripts:write'],
+        activeOrgId: '22222222-2222-4222-8222-222222222222',
+      };
+
+      const { transcriptId } = await importer
+        .serviceFor({
+          jobs,
+          prisma: recording.db,
+          objectStore,
+          events: createInMemoryKvoxEvents(),
+          audit: createRecordingKvoxAudit(),
+        })
+        .importFile(user, { filename: 'sync.json', body: Buffer.from(JSON.stringify(importFixtureDocument())) });
+
+      const providerFacing = jobs.jobs
+        .map((job) => job.input.type)
+        .filter((type) => type.startsWith('transcription.') || type === NODE_ELIGIBLE);
+
+      expect(providerFacing).toEqual([]);
+
+      const row = recording.transcripts.get(transcriptId);
+
+      expect(row).toMatchObject({
+        ownerId: user.id,
+        orgId: user.activeOrgId,
+        status: 'ready',
+        transcriptionStatus: 'completed',
+        playbackStatus: 'not_needed',
+        currentVersion: 1,
+      });
+      expect(row?.providerJobId ?? null).toBe(null);
+      expect(
+        recording.versions.map(({ transcriptId: id, version, kind, authorId, ops }) => ({ id, version, kind, authorId, ops })),
+      ).toEqual([{ id: transcriptId, version: 1, kind: 'ai_original', authorId: null, ops: [] }]);
+      expect(recording.segments.length).toBe(3);
+
+      // The file is the source object, owned by the transcripts slice, under the
+      // transcript's own prefix (so its purge frees it).
+      const source = objectStore.objects.get(String(row?.sourceObjectId));
+
+      expect(source?.managedBy).toBe('transcripts');
+      expect(source?.mimeType).toBe('application/json');
+      expect(source?.key.startsWith(`transcripts/${transcriptId}/`)).toBe(true);
     });
 
     it('puts the three provider-facing types on the one transcription bucket', async () => {

@@ -1,5 +1,5 @@
 {
-  "$comment": "Peer dependencies per slice of @marinoscar/kvox-* (Epic 5). Append-only: Epic 6 and Epic 7 add slices, never rename or remove one. A slice lists every package its own files import (besides Node built-ins and relative paths); it also needs what the slices it depends on (packages/kvox-slices.json) need. Enforced by scripts/kvox-packages/check-slice-peers.mjs; the rules are in docs/PACKAGES.md#peer-dependencies-per-slice.",
+  "$comment": "Peer dependencies per slice of @marinoscar/kvox-* (Epic 5). Append-only: Epic 6 and Epic 7 add slices, never rename or remove one. A slice lists every package its own files import (besides Node built-ins and relative paths); it also needs what the slices it depends on (packages/kvox-slices.json) need. $hostPlugins lists, per slice, the Fastify plugins the HOST must install and register because the slice uses the request decoration they add without importing them (a host duty no import scanner can see; rule 8). Enforced by scripts/kvox-packages/check-slice-peers.mjs; the rules are in docs/PACKAGES.md#peer-dependencies-per-slice.",
   "$universal": {
     "kvox-api": ["ports", "core"],
     "kvox-web": ["core"],
@@ -29,6 +29,31 @@
   "$hostOnly": {
     "kvox-api": ["@marinoscar/platform-api"],
     "kvox-web": ["@marinoscar/platform-web"]
+  },
+  "$hostPlugins": {
+    "kvox-api": {
+      "notes": [
+        {
+          "name": "@fastify/multipart",
+          "range": "^10.0.0",
+          "why": "POST /api/notes/sources/documents reads the upload with request.isMultipart() and request.file(); the host registers the plugin on its Fastify app"
+        }
+      ],
+      "graph-rdf": [
+        {
+          "name": "@fastify/multipart",
+          "range": "^10.0.0",
+          "why": "POST /api/graph/imports reads the RDF file with request.isMultipart() and request.file(); the host registers the plugin on its Fastify app"
+        }
+      ],
+      "transcripts": [
+        {
+          "name": "@fastify/multipart",
+          "range": "^10.0.0",
+          "why": "POST /api/transcripts/imports reads the transcript export JSON with request.isMultipart() and request.file(); the host registers the plugin on its Fastify app"
+        }
+      ]
+    }
   },
   "kvox-api": {
     "ports": {

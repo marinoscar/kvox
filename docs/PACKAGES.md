@@ -129,12 +129,13 @@ Data lives in two files (both append-only):
 | File | Content |
 |---|---|
 | `packages/kvox-slices.json` | slice -> slices it may import |
-| `packages/kvox-slice-peers.json` | per package and slice, `{ "peers": [...] }`: every package its own files import; plus `$universal`, `$implies`, `$reserved` and `$hostOnly` |
+| `packages/kvox-slice-peers.json` | per package and slice, `{ "peers": [...] }`: every package its own files import; plus `$universal`, `$implies`, `$reserved`, `$hostOnly` and `$hostPlugins` |
 
 - `$universal`: the slices every consumer of the package gets (`"*"` for all). The peers of these slices, with the slices they depend on, are the package's **required** peers. Any other peer must be `optional` in `peerDependenciesMeta`.
 - `$implies`: `{ "react-dom": ["react"] }`. Installing the key brings the values with it, so a slice that lists `react-dom` may also import `react`.
 - `$reserved`: optional peers declared ahead of the slice that will import them (Epic 6 and 7). Move the entry into the slice when it arrives.
 - `$hostOnly`: optional peers no slice may import (`@marinoscar/platform-api` and `@marinoscar/platform-web`, used by host wiring only).
+- `$hostPlugins`: `{ "kvox-api": { "notes": [{ "name", "range", "why" }] } }`. Fastify plugins the **host** must install and register on its app because a slice uses the request decoration they add (`request.file()`) without importing them, so rule 4 cannot see them. Not peers of the package. Today `@fastify/multipart@^10.0.0` for `transcripts`, `notes` and `graph-rdf`; a slice that depends on one of those (`graph`, `graph-extraction`, `ask`) inherits it. `--table` prints a "host plugins (register on the Fastify app)" line.
 - `entries` (per slice, web only): `{ "peers": [...], "entries": { "ui": ["@mui/material"] } }`. A web slice is split into the entry folders `headless/`, `ui/` and `testing/`; the slice's own `peers` are what every file of it may import, and an entry's list adds the peers only the files of that entry (and the same entry of the slices it depends on) may import. An entry's peers are never required, even when the slice is universal, so a host that uses only the `headless` entries installs no MUI. `app-installs` follows the entry the app imports (`@marinoscar/kvox-web/core/ui`).
 
 The rules (each violation prints as `[rule] message`):
@@ -146,6 +147,7 @@ The rules (each violation prints as `[rule] message`):
 5. **app-installs** - with `--app <dir>` (CI passes `apps/api` and `apps/web`): an app that imports `@marinoscar/kvox-<pkg>/<slice>` lists the package and every peer of that slice in its own `package.json` or the root one. `--without <package>` (repeatable) exempts a peer the app leaves out on purpose because the feature that needs it is switched off in `forRoot`: the bare host passes `@nestjs/schedule`, `pdfkit`, `docx` and `unpdf`, and its runner asserts they are not installed.
 6. **host-neutral** - see below.
 7. **headless** - no file under `packages/kvox-web/src/<slice>/headless/**` imports `@mui/*`, `@emotion/*`, a router (`react-router*`) or a `ui/` folder. A headless entry is what a host with another design system builds its own UI on.
+8. **host-plugins** - a slice file that calls `isMultipart()`, `saveRequestFiles()`, `req.file()`, `files()` or `parts()` needs a `$hostPlugins` declaration for the slice or a slice it depends on. With `--app`, rule 5 also requires the app's `package.json` (or the root one) to list each plugin the imported slices declare. The upload controllers answer 500 naming the missing plugin when the host did not register it.
 
 A `@marinoscar/platform-*` peer is pinned to one exact version (`check:platform-pin` requires it of every entry in the repository), so these two optional peers move with the platform pin.
 
@@ -179,7 +181,7 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 | `npm run test:kvox-scripts` | `node --test scripts/kvox-packages/test/`: the check scripts against fixtures, including `host-neutral`. |
 | `npm run lint:packages` | ESLint over `packages/kvox-*/src` (deep imports, slice direction, TSDoc, contract imports). |
 | `npm run docs:kvox-packages` | TypeDoc for the four packages. |
-| `npm run check:kvox-slice-peers` | The seven rules above, for the packages and then for `apps/api` and `apps/web`. |
+| `npm run check:kvox-slice-peers` | The eight rules above, for the packages and then for `apps/api` and `apps/web`. |
 | `npm run check:kvox-package-docs` | `docs:kvox-packages`, then the README, TSDoc and TypeDoc standard. |
 | `npm run check:kvox-pack` | `npm pack --dry-run` of each package against its manifest. Run after the build. |
 | `node scripts/kvox-packages/check-single-instance.mjs --root . --guard '@marinoscar/platform-*' --guard '@marinoscar/kvox-*'` | One copy of every singleton library and package. |

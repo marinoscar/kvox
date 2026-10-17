@@ -125,7 +125,7 @@ npm install graphology@>=0.26.0 graphology-communities-louvain@>=2.0.2 grapholog
 npm install n3@>=2.7.0 jsonld@>=9.0.0 rdf-validate-shacl@>=0.6.0   # graph-rdf: RDF export and SHACL-validated import
 ```
 
-The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app: `POST /api/graph/imports` and the notes document-source upload read `request.file()`, no slice registers it, and it is in no slice's peers list, so `check-slice-peers` cannot catch its absence (`examples/bare-host/src/bootstrap.ts`). `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
+The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app (`await app.register(multipart, ...)`, `examples/bare-host/src/bootstrap.ts`): `POST /api/graph/imports`, `POST /api/transcripts/imports` and the notes document-source upload read `request.file()`. No slice registers it, so it is not a peer; it is a **host plugin**, listed under `$hostPlugins` in `packages/kvox-slice-peers.json` (`transcripts`, `notes` and `graph-rdf`, inherited by `graph`, `graph-extraction` and `ask`), and `check-slice-peers --app` requires the app's `package.json` to list it. Without it the upload routes answer 500 naming the missing plugin. The transcript import and the notes upload need it too, so install it even without the graph. `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
 
 **Renderer.**
 
@@ -384,7 +384,7 @@ settings.registerNamespace({
 
 Turn `graphEnabled` on once at start-up (`settings.patchSystem('ai', { graphEnabled: true }, ...)`, as `seedRuntime` does in `examples/bare-host/src/seed.ts`), or the graph answers 409 `graph_disabled` and no digest is queued.
 
-**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit does not test this yet.
+**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit tests it when the factory supplies the opt-in `settings.noDefaults` fixture (`{ name, schema, userId, patch }`, a user-scope namespace registered with `defaults: undefined`; issue #593).
 
 Desktop: the same file in the user's application-data folder, or a table.
 
@@ -658,7 +658,7 @@ const ask = AskModule.forRoot({ peers: { graph, notes, search } });
 // imports: [..., transcription, search, searchIndexing, transcripts, notes, graph, extraction, rdf, ask]
 ```
 
-Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
+Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (a `$hostPlugins` entry) (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
 
 **Options that matter offline**, per slice (full tables in each slice README):
 
@@ -774,7 +774,7 @@ A card's `permission` is the exact string the API enforces, so the Desktop setti
 | **Search** | Full text over transcripts and notes (generated `tsvector` columns, GIN). | Semantic search only with a local 1536-dimension embedder behind `KVOX_AI.embed`. Plainly: if you have none, there is no semantic search. | Results carry `semanticReason: embeddings_unavailable` and the UI says "Results match your words exactly." `search.index` records why it embedded nothing. |
 | **Graph** | Reading the graph, entity pages, the overview layout (`kg.graph_layout`, `graphology*`), editing and merging entities, proposals already extracted, RDF export and import (`n3`, `jsonld`, `rdf-validate-shacl`). | Extraction, resolution (`kg.extract`, `kg.resolve`, `kg.embed`) and entity briefs (`kg.entity_digest`) call `KVOX_AI` (structured output; embeddings for the vector candidate source). Needs the `ai.graphEnabled` setting. | Extraction answers 409 `graph_disabled` / `ai_*`; resolution skips the vector candidates when `embeddings` is `null`. |
 | **Ask** | Reading saved conversations. | A turn calls `KVOX_AI.chat` with tool calling, repeatedly (up to 8 steps, 4 calls per step, 240 s). | A new question cannot be answered; saved conversations and the answers already stored stay readable. |
-| **Exports** | Transcript JSON and Markdown; note Markdown; graph RDF (Turtle, JSON-LD). | Transcript PDF and note PDF need `pdfkit` and the font directory (`pdf.fontDir`); note Word needs `docx`. | The format is simply not offered when its exporter is switched off. |
+| **Exports** | Transcript JSON and Markdown; note Markdown; graph RDF (Turtle, JSON-LD). Desktop imports the transcript JSON back through `POST /api/transcripts/imports` (the slice's `TranscriptImportService`, no audio, no provider call, so it works offline). | Transcript PDF and note PDF need `pdfkit` and the font directory (`pdf.fontDir`); note Word needs `docx`. | The format is simply not offered when its exporter is switched off. |
 | **Sharing** | Not applicable: single user, the default `OwnerOnlyTranscriptSharing`. | | |
 | **Notifications** | OS notifications from your `KVOX_NOTIFY` adapter. | An event def may name an email channel and template; a Desktop adapter ignores it or maps it to a local notification. | |
 
@@ -797,7 +797,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
      jobs: { port: pgTableJobs, drain: () => pgTableJobs.drain().then(() => undefined) },
      identity: { port: identity, anonymous: anonymousContext(), authenticated: tokenContext(), permissions: { granted: 'transcripts:read', notGranted: 'nope:read' } },
      notify: { port: osNotify },
-     settings: { port: fileSettings },
+     settings: { port: fileSettings /*, noDefaults: { name, schema, userId, patch } */ },
      secrets: { port: keychain, purpose: 'conformance', name: 'k', actorUserId: LOCAL_USER_ID },
      dispose: async () => { /* stop timers */ },
    }), { describe, it, expect });
@@ -851,5 +851,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- Package gaps found by the graph run (issue #573): `@fastify/multipart` is missing from the slice peers data. (The other one, a proposal commit not publishing `graph.changed`, is fixed by #591: commits, imports, reverts, merges and merge reversals now publish it after commit.)
+- Package gaps found by the graph run (issue #573), both fixed: a proposal commit now publishes `graph.changed` after commit, as do imports, reverts, merges and merge reversals (#591); `@fastify/multipart` is declared as a host plugin in the slice peers data (`$hostPlugins`) and checked by `check-slice-peers` rule 8 (#592).
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.
