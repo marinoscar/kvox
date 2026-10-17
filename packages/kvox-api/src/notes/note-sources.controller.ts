@@ -90,6 +90,7 @@ interface MultipartRequest {
         filename: string;
         mimetype: string;
         toBuffer(): Promise<Buffer>;
+        file?: { truncated?: boolean };
       }
     | undefined
   >;
@@ -204,10 +205,13 @@ export class NoteSourcesController {
 
       filename = part.filename;
       mimeType = part.mimetype;
-      // Bounded by `fileSize` above. `toBuffer` rejects with
-      // FST_REQ_FILE_TOO_LARGE rather than returning a truncated file, which is
-      // the difference between a 413 and a corrupt document stored as valid.
+      // Bounded by `fileSize` above. Over it must be a 413, never a truncated
+      // file: that is the difference between a 413 and a corrupt document stored
+      // as valid (the check below covers the case `toBuffer` does not throw).
       body = await part.toBuffer();
+      // ⚠ `toBuffer` can return the first `fileSize` bytes WITHOUT throwing when the limit is
+      // hit as the last chunk is read (#585); a truncated file is over the limit, never valid.
+      if (part.file?.truncated) throw Object.assign(new Error('File too large'), { code: 'FST_REQ_FILE_TOO_LARGE' });
     } catch (error) {
       throw toClientError(error, maxBytes);
     }
