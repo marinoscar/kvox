@@ -140,7 +140,7 @@ The rules (each violation prints as `[rule] message`):
 2. **peers-data** - every declared slice has a peers entry and every entry is a declared slice.
 3. **manifest** - `package.json` `peerDependencies` match the data (required versus optional, none missing, none unaccounted for, no host-only peer in a slice).
 4. **imports** - every external import of a slice's files is a peer of that slice or of a slice it depends on (directly or through `$implies`), or a dependency of the package. Comments are ignored. Files at the root of `src/` may use any peer of the package.
-5. **app-installs** - with `--app <dir>` (CI passes `apps/api` and `apps/web`): an app that imports `@marinoscar/kvox-<pkg>/<slice>` lists the package and every peer of that slice in its own `package.json` or the root one.
+5. **app-installs** - with `--app <dir>` (CI passes `apps/api` and `apps/web`): an app that imports `@marinoscar/kvox-<pkg>/<slice>` lists the package and every peer of that slice in its own `package.json` or the root one. `--without <package>` (repeatable) exempts a peer the app leaves out on purpose because the feature that needs it is switched off in `forRoot`: the bare host passes `@nestjs/schedule`, `pdfkit`, `docx` and `unpdf`, and its runner asserts they are not installed.
 6. **host-neutral** - see below.
 
 A `@marinoscar/platform-*` peer is pinned to one exact version (`check:platform-pin` requires it of every entry in the repository), so these two optional peers move with the platform pin.
@@ -160,7 +160,7 @@ The packages are released together, so a consumer who installs the four from one
 
 What to do instead: depend on a port from `@marinoscar/kvox-api/ports` (AI, object store, jobs, identity, notifications and so on). The web edition binds each port to a platform slice in one place, `apps/api/src/platform-kvox/` (issue 5.4); Desktop binds its own. The two optional `@marinoscar/platform-*` peers exist for those bindings' helpers, listed in `$hostOnly`, and no slice may list them.
 
-The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutral]` naming the file and the specifier, and the fixtures in `scripts/kvox-packages/test/fixtures/` pin both outcomes (`npm run test:kvox-scripts`). It complements ESLint's deep-import rule, which bans `@marinoscar/platform-*/src`, `/dist` and `/internal` paths everywhere.
+The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutral]` naming the file and the specifier, and the fixtures in `scripts/kvox-packages/test/fixtures/` pin both outcomes (`npm run test:kvox-scripts`). It complements ESLint's deep-import rule, which bans `@marinoscar/platform-*/src`, `/dist` and `/internal` paths everywhere. The rule keeps the sources clean; what proves a host can really run without the platform is [examples/bare-host](../examples/bare-host/README.md), which installs the packed packages with no `@marinoscar/platform-api` and passes the domain end to end in CI.
 
 ## Checks and commands
 
@@ -171,6 +171,7 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 | `npm run test:kvox-packages` | Vitest (contract, db, web) and Jest (api, project `unit`); `test:packages` also runs the script tests. |
 | `npm run test:host:prepare -w @marinoscar/kvox-api` | Builds the real-database test host (`packages/kvox-api/test/host/`: platform and domain schema and migrations, a test-only Prisma client). Needs no database. |
 | `npm run test:db -w @marinoscar/kvox-api` | The `db` Jest project: `test/**/*.db.spec.ts` against PostgreSQL 16 with pgvector, a throwaway database per spec file ([host README](../packages/kvox-api/test/host/README.md)). |
+| `node examples/bare-host/run.mjs --from pack --db pglite` | The bare-host smoke app: installs the packed tarballs outside the repository and runs the domain end to end on PGlite (`--db service` with `DATABASE_URL` for a PostgreSQL with pgvector). Build first. [README](../examples/bare-host/README.md). |
 | `npm run test:kvox-scripts` | `node --test scripts/kvox-packages/test/`: the check scripts against fixtures, including `host-neutral`. |
 | `npm run lint:packages` | ESLint over `packages/kvox-*/src` (deep imports, slice direction, TSDoc, contract imports). |
 | `npm run docs:kvox-packages` | TypeDoc for the four packages. |
@@ -185,12 +186,13 @@ The scripts live in `scripts/kvox-packages/` and are modelled on the EnterpriseA
 
 ## CI
 
-`.github/workflows/kvox-packages.yml` runs on pull requests and pushes that touch `packages/kvox-*/**`, `packages/kvox-*.json`, `scripts/kvox-packages/**`, `.changeset/**` or the workflow itself:
+`.github/workflows/kvox-packages.yml` runs on pull requests and pushes that touch `packages/kvox-*/**`, `packages/kvox-*.json`, `scripts/kvox-packages/**`, `.changeset/**`, `examples/bare-host/**` or the workflow itself:
 
 - **build**: `npm ci`, build, typecheck, lint, the slice-peers check, the script tests, package tests, the pack check, and a smoke import of the built package from both module systems (`require('@marinoscar/kvox-api/core')`, `await import('@marinoscar/kvox-contract')`).
 - **package-docs**: TypeDoc, the docs check, and the `kvox-api-reference` artifact.
 - **single-instance**: the single-instance check over the platform and KVox packages.
 - **changeset-status**: fails a pull request that changes package sources without a changeset.
+- **bare-host** (`db: [service, pglite]`): installs the packed `kvox-contract`, `kvox-db` and `kvox-api` tarballs into a project outside the repository, with no `@marinoscar/platform-api` and none of the optional peers a host can switch off, migrates a `pgvector/pgvector:pg16` container and PGlite, drives the transcripts, notes and search slices end to end and runs the single-instance and `check-slice-peers --app` checks on the result. It also runs for changes under `examples/bare-host/**`. What it proves and how to run it locally: [examples/bare-host/README.md](../examples/bare-host/README.md).
 
 `.github/workflows/kvox-release.yml` versions and publishes; see the runbook. The application images keep their own `deploy.yml` flow.
 

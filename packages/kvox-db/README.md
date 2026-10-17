@@ -4,11 +4,11 @@ The database side of the KVox domain: the Prisma schema fragments, the SQL migra
 
 ## Purpose and scope
 
-The domain Prisma fragments (`schema/kvox.<slice>.prisma` for `transcripts`, `notes`, `search`, `graph` and `ask`), the 18 domain migrations byte for byte (`migrations/<original-directory-name>/migration.sql` plus `migrations/manifest.json`), the inventories (`raw-sql-indexes.json`, `extensions.json`, `schema-objects.json`) and the `kvox-db` command: `sync` copies fragments and migrations into a host app and writes `prisma/kvox.lock`, `check` proves every copy byte-identical (`check --database` also checks a live database), `promote` moves a migration authored in the app into the package. It does not own the platform tables (`users`, `storage_objects`, `jobs`, ...), which are `@marinoscar/platform-db`'s, and it changes no table: this is a move.
+The domain Prisma fragments (`schema/kvox.<slice>.prisma` for `transcripts`, `notes`, `search`, `graph` and `ask`), the 19 domain migrations byte for byte (`migrations/<original-directory-name>/migration.sql` plus `migrations/manifest.json`), the inventories (`raw-sql-indexes.json`, `extensions.json`, `schema-objects.json`) and the `kvox-db` command: `sync` copies fragments and migrations into a host app and writes `prisma/kvox.lock`, `check` proves every copy byte-identical (`check --database` also checks a live database), `promote` moves a migration authored in the app into the package. It does not own the platform tables (`users`, `organizations`, `storage_objects`, `jobs`, ...), which are `@marinoscar/platform-db`'s, and it changes no table: this is a move.
 
 Why a command and not a plain import: `platform db compose` reads exactly one app fragment folder and `platform db sync` installs migrations only from the platform package, so a second fragment and migration source needs a bridge. `kvox-db sync` copies the fragments into the app's `prisma/fragments` and the migrations into `prisma/migrations`; the platform then sees them as app fragments and app migrations, which is what they were before.
 
-Status: complete for the 18 migrations and 5 fragments of issue 5.3 (Epic 5). Migrations authored later by the platform retrofit (`transcripts.org_id`, the share-to-grants conversion and similar) are the web app's and are not in this package.
+Status: complete for the 19 migrations and 5 fragments of issues 5.3 (Epic 5) and 7.7 (#505). `20261016120000_transcripts_org_id` is the one migration the platform retrofit authored in the web app that the package now owns: the fragment declares `transcripts.org_id` (a NOT NULL foreign key to `organizations`), so a host with no domain history must get the column from the package or no transcript could be created. The web app already ran it under the same name and bytes, so `kvox-db sync` adopts it. The share-to-grants conversion (`20261016120100_transcript_shares_to_grants`) stays the web app's: it moves rows into the platform's `grants` table, which a host without the sharing slice has no use for. A host that never ran it keeps an empty, unused `transcript_shares` table (and its enum) from the first transcripts migration; nothing reads it.
 
 - `@marinoscar/kvox-db`: the package root, which re-exports every slice (the `kvox-db` bin runs the `bin` slice). Slice READMEs: [bin](src/bin/README.md), [sync](src/sync/README.md), [check](src/check/README.md), [promote](src/promote/README.md), [lock](src/lock/README.md), [manifest](src/manifest/README.md), [sql](src/sql/README.md).
 
@@ -59,7 +59,7 @@ None. The package has no host-implemented interface; a host consumes its files.
 
 ## Data
 
-Tables the fragments declare (the migrations create them; the host provides `users`, `storage_objects` and `jobs`, which the foreign keys reference):
+Tables the fragments declare (the migrations create them; the host provides `users`, `organizations`, `storage_objects` and `jobs`, which the foreign keys reference, and `organizations` must hold at least the one row `transcripts.org_id` points at):
 
 | Slice | Tables |
 |---|---|
@@ -84,7 +84,14 @@ Raw-SQL objects (`raw-sql-indexes.json`: 17 indexes with the `pg_indexes.indexde
 | CHECK constraints | the twelve `kg_*_chk` constraints | plain PostgreSQL |
 | Deferred constraint triggers | function `kg_assert_has_evidence` and triggers `kg_entities_evidence_trg`, `kg_relations_evidence_trg`, `kg_items_evidence_trg`, `kg_evidence_delete_trg` | PL/pgSQL, deferrable constraint triggers |
 
-PGlite (KVox Desktop) loads `vector` and `pg_trgm` as extensions but does not offer every server feature; the table above says which objects need what, and the Desktop issue proves the set on a real embedded database.
+**PGlite (KVox Desktop) runs the whole history.** The bare-host smoke app (`examples/bare-host`, issue #505) applies the 37 platform and 19 domain migrations to PGlite 0.5.10 (PostgreSQL 18, `vector` 0.8.7, `pg_trgm` 1.6) in about three seconds, `kvox-db check --database` passes against it (2 extensions, 17 indexes and 4 triggers compared: the partial unique indexes, GiST, HNSW and trigram indexes, the generated `tsvector` columns and the deferred constraint triggers all exist), and the transcripts, notes and search end-to-end test passes on it. What a PGlite host must know:
+
+- Load `vector`, `pg_trgm` **and `uuid_ossp`** when creating the database: the platform's first migration runs `CREATE EXTENSION "uuid-ossp"`, which PGlite only has when the extension is loaded.
+- PGlite is one session. Give the client a pool of one connection (`@prisma/adapter-pg` with `max: 1`) and never await a query on the pool while a transaction holds it.
+- Served on a socket (`@electric-sql/pglite-socket` 0.2.13, which `prisma migrate deploy` and this command need), the server closes a connection after any SQL error, so the NEXT query on that connection fails once with `Connection terminated unexpectedly` and the pool recovers on the one after. A host that runs the application in the same process as PGlite should use an in-process driver adapter instead of the socket.
+- PGlite's own type declarations use the global Emscripten types without depending on them: with `skipLibCheck: false` add `@types/emscripten`.
+
+The table above says which objects need what.
 
 Files in the app: `prisma/fragments/kvox.<slice>.prisma` (generated copies), the installed migration directories, `prisma/kvox.lock`, and the merged entries of `prisma/platform.lock`.
 
@@ -130,7 +137,7 @@ Fragment copies carry no version in their header, so a package version bump chan
 - `INSTALLED_MODIFIED`: an installed `migration.sql` differs from `kvox.lock`, comments included. Restore it from version control; never edit an installed migration.
 - `NOT_INSTALLED` or `LOCK_MISSING`: run `kvox-db sync`.
 - `EXTENSION_MISSING`: ask a database superuser to run the `CREATE EXTENSION IF NOT EXISTS` statement the message prints.
-- `the host schema does not declare model User`: run `platform db sync` and `platform db compose` first; the domain references `users`, `storage_objects` and `jobs`.
+- `the host schema does not declare model User`: run `platform db sync` and `platform db compose` first; the domain references `users`, `organizations`, `storage_objects` and `jobs`.
 - `platform.lock rawSqlIndexes already lists <name> with a different definition`: the app listed an index of that name itself; reconcile the lock with the package's `raw-sql-indexes.json`.
 
 ## Links

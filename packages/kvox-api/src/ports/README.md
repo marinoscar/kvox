@@ -40,7 +40,7 @@ The host's Prisma client, seen through `KvoxPrismaClientLike`. A slice narrows i
 
 ### KVOX_SETTINGS
 
-`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware; `readSystem(name, { withUpdatedBy: true })` also returns who last changed the row and when, for an admin screen) and `readUser` / `patchUser` for the namespaces the domain owns. Never a secret.
+`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware; `readSystem(name, { withUpdatedBy: true })` also returns who last changed the row and when, for an admin screen) and `readUser` / `patchUser` for the namespaces the domain owns. Never a secret. The slices also READ one system namespace they do not declare: `ai` (`maxInputTokens`, `maxOutputTokens`, `maxDocumentBytes`, each optional and `null` for "the model's own limit"), the deployment's AI spend caps, which the notes, transcripts (name check) and graph slices pass through the token budget. The host declares it (the web edition's is the platform AI slice's); a host that does not makes `POST /api/notes` fail with `Unknown system settings namespace "ai"`.
 
 ### KVOX_SECRETS
 

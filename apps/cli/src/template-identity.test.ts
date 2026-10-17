@@ -509,6 +509,11 @@ const EXEMPT_PREFIXES: readonly string[] = [
   '.changeset/kvox-',
   'apps/api/prisma/fragments/kvox.',
   'apps/api/prisma/schema/app.kvox.',
+  // The bare-host smoke app (issue #505): a consumer of the published `@marinoscar/kvox-*`
+  // packages, run by CI from their packed tarballs. It names the packages (an npm registry
+  // namespace), their folders and the `kvox-db` command in imports, scripts and docs, and a
+  // test host is not a rebrand target.
+  'examples/bare-host/',
 ];
 const BINARY_EXT_RE = /\.(png|ico|jpg|jpeg|gif|woff2?|ttf|pdf|zip)$/i;
 const EXTRA_EXEMPT: ReadonlySet<string> = new Set([

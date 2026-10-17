@@ -57,6 +57,7 @@ import {
   defaultPdfFontDir,
   registerPdfFonts,
   type KvoxBrand,
+  type KvoxPdfDocument,
 } from '../../core/index.js';
 import {
   failStream,
@@ -204,7 +205,8 @@ export class PdfNoteExporter implements NoteExporter, OnModuleInit {
 type Pdf = InstanceType<typeof PDFDocumentType>;
 
 /** The note's name, then the provenance table, then a rule. */
-export function drawTitleBlock(pdf: Pdf, doc: NoteExportDocument): void {
+export function drawTitleBlock(target: KvoxPdfDocument, doc: NoteExportDocument): void {
+  const pdf = target as Pdf;
   const width = contentWidth(pdf);
 
   pdf.font(PDF_FONTS.bold).fontSize(22).fillColor(INK).text(doc.title, { width });
@@ -244,7 +246,8 @@ export function drawTitleBlock(pdf: Pdf, doc: NoteExportDocument): void {
  * Recursive, because a list item holds blocks — a nested list, a paragraph
  * under a bullet, a fenced code sample inside a numbered step.
  */
-export function drawBlocks(pdf: Pdf, blocks: readonly MdBlock[], left: number, width: number): void {
+export function drawBlocks(target: KvoxPdfDocument, blocks: readonly MdBlock[], left: number, width: number): void {
+  const pdf = target as Pdf;
   for (const block of blocks) {
     ensureRoom(pdf);
 
@@ -406,11 +409,12 @@ function drawSpans(
  * 8pt above itself looks like a mistake.
  */
 export function decoratePages(
-  pdf: Pdf,
+  target: KvoxPdfDocument,
   doc: NoteExportDocument,
   pageNumbers: boolean,
   appName: string = DEFAULT_KVOX_BRAND.appName,
 ): void {
+  const pdf = target as Pdf;
   const range = pdf.bufferedPageRange();
   const total = range.count;
 

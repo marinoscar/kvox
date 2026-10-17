@@ -120,6 +120,18 @@ export function assertFontsPresent(fontDir: string = defaultPdfFontDir()): void 
 }
 
 /**
+ * A pdfkit document, as the PDF exporters' exported drawing helpers take it.
+ *
+ * Declared as `object` on purpose: pdfkit is an OPTIONAL peer, and a declaration
+ * that named its types would make `skipLibCheck: false` fail in every host that
+ * left pdfkit out (TS2307 in `export/pdf.exporter.d.ts`). The helpers narrow it
+ * to pdfkit's own type inside the implementation, where `import type` is erased.
+ *
+ * @stability experimental
+ */
+export type KvoxPdfDocument = object;
+
+/**
  * Registers the three faces with a pdfkit document under {@link PDF_FONTS}.
  *
  * @param pdf - a pdfkit document (anything with `registerFont`).

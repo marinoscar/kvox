@@ -1,0 +1,50 @@
+{
+  "name": "kvox-bare-host-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A bare host of the KVox domain packages: stub ports, an embedded PostgreSQL and no platform-api. Not an npm workspace; run.mjs copies it to a temporary directory and installs the packed tarballs.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare:db": "node scripts/prepare-db.mjs",
+    "start": "node dist/main.js",
+    "test": "node scripts/test.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "@electric-sql/pglite-pgvector": "0.0.11",
+    "@electric-sql/pglite-socket": "0.2.13",
+    "@marinoscar/kvox-api": "*",
+    "@marinoscar/kvox-contract": "*",
+    "@marinoscar/kvox-db": "*",
+    "@marinoscar/platform-db": "0.1.0-next.5",
+    "@nestjs/common": "^11.1.12",
+    "@nestjs/core": "^11.1.12",
+    "@nestjs/platform-fastify": "^11.1.12",
+    "@nestjs/swagger": "^11.2.5",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@prisma/client-runtime-utils": "^7.8.0",
+    "fastify": "^5.0.0",
+    "nestjs-zod": "^5.4.0",
+    "pg": "^8.23.0",
+    "prisma": "^7.8.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/emscripten": "^1.41.5",
+    "@types/node": "^22.15.32",
+    "@types/pg": "^8.15.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "fastify": "$fastify"
+  }
+}

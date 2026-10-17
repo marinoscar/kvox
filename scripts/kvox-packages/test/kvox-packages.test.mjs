@@ -169,6 +169,23 @@ test('app-installs: an app importing a slice must list its peers', () => {
   }
 });
 
+test('app-installs: a peer named in `without` is not required of the app', () => {
+  const dir = fixtureCopy();
+  try {
+    mkdirSync(join(dir, 'apps/api/src'), { recursive: true });
+    writeFileSync(join(dir, 'apps/api/package.json'), JSON.stringify({ name: 'api', dependencies: { '@marinoscar/kvox-api': '*' } }));
+    writeFileSync(join(dir, 'apps/api/src/main.ts'), "import { NAME } from '@marinoscar/kvox-api/core';\n");
+    // Naming another package exempts nothing: zod is still missing.
+    const stillFailing = checkSlicePeers({ root: dir, apps: ['apps/api'], without: ['pdfkit'] });
+    assert.deepEqual(rulesOf(stillFailing), ['app-installs']);
+    assert.match(stillFailing[0].message, /'zod'/);
+    // Naming zod leaves the app clean without listing it.
+    assert.deepEqual(checkSlicePeers({ root: dir, apps: ['apps/api'], without: ['zod'] }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the real repository satisfies every rule, for the packages and for both apps', () => {
   assert.deepEqual(checkSlicePeers({ root: REPO, apps: ['apps/api', 'apps/web'] }), []);
 });

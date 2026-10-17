@@ -25,7 +25,7 @@ import { TranscriptionModule } from '@marinoscar/kvox-api/transcription';
 export class KvoxModule {}
 ```
 
-The host binds the settings, secrets and identity ports first (`KvoxPortsModule.forRoot`, optionally audit); nothing else is needed. A test uses `createKvoxTestingModule` from `@marinoscar/kvox-api/testing`.
+The host binds the settings, secrets and identity ports first (`KvoxPortsModule.forRoot`, optionally audit) and registers a global `ZodValidationPipe` from `nestjs-zod` (`{ provide: APP_PIPE, useClass: ZodValidationPipe }`): the settings controller takes its body as a DTO class and relies on it. Nothing else is needed. A test uses `createKvoxTestingModule` from `@marinoscar/kvox-api/testing`.
 
 ### Permissions and settings
 
