@@ -2332,6 +2332,8 @@ Forty-two type strings are pinned. A type string is permanent once rows exist.
 | `db.backup.sweep`, `db.restore.old-db-drop` | db-backup | Housekeeping; server-only |
 | `db.restore.run` | db-backup | Server-only permanently |
 | `sharing.grants.prune` | platform sharing | Housekeeping; server-only (reads every resource type's `loadOwners`); registered through `SHARING_JOBS` (`platform/sharing/sharing-jobs.adapter.ts`, issue #485); `orgId` null |
+| `export.run` | platform exports | "Download your data" (issue #532); server-only: it reads through the bypass client, so no node holds that privilege; one per request, the export id is the job id; `orgId` is the requester's active organization (the file is a `storage_objects` row) |
+| `export.purge` | platform exports | Housekeeping; server-only; enqueued by the slice's daily cron through `enqueueHousekeepingJob`; deletes expired export files; `orgId` null |
 | `auth.token.cleanup`, `device-auth.code.cleanup` | platform identity | Registered through `IDENTITY_JOBS` (`identity-jobs.adapter.ts`), strings unchanged |
 | `example.echo`, `example.checksum` | retired | Handler deleted; label kept |
 
