@@ -3,6 +3,7 @@ import { isValidElement } from 'react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import {
   isDestinationVisible,
@@ -541,6 +542,9 @@ describe('admin sections — registry against the live routes', () => {
     // path, the same `permission` the guard is built from.
     if (/renderKvoxRoutes\(kvoxTranscriptionRoutes\)/.test(source)) {
       for (const route of kvoxTranscriptionRoutes) gates.set(route.path, route.permission ?? null);
+    }
+    if (/renderKvoxRoutes\(kvoxSearchRoutes\)/.test(source)) {
+      for (const route of kvoxSearchRoutes) gates.set(route.path, route.permission ?? null);
     }
     return gates;
   }

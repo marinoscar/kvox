@@ -47,7 +47,7 @@ import type {
 } from '../../services/graph';
 import { formatPrecisionDate, relationTypeLabel } from '../../utils/graphDisplay';
 import type { GraphOntology } from '../../services/graph';
-import { SearchSnippet } from '../search/SearchSnippet';
+import { SearchSnippet } from '@marinoscar/kvox-web/search/ui';
 import { EvidenceChips } from './EvidenceChip';
 import { entityPath } from './EntityListRow';
 

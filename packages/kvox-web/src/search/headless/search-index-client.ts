@@ -2,9 +2,8 @@
  * The semantic-index status API, as the web app sees it — issue #191,
  * epic #165.
  *
- * Shaped after `services/userData.ts`: `services/api.ts` stays the transport
- * (the `ApiService` instance, the refresh dance, the maintenance recogniser),
- * and this module holds the two `/search` indexing calls next to the types they
+ * The transport is the host's (`KvoxWebHost.http`: the bearer token, the
+ * refresh dance, any maintenance recogniser), and this module holds the two `/search` indexing calls next to the types they
  * produce and the plain-language strings the page renders.
  *
  * =============================================================================
@@ -16,8 +15,8 @@
  * `user-data.controller.ts` and `ai-credentials.controller.ts` do: the resource
  * is the CALLER'S OWN content and the CALLER'S OWN vendor account, scoped by
  * `ownerId` in the query itself. Nothing in this module, the hook above it, or
- * the page above that consults `usePermissions` — see
- * `config/userSettingsSections.tsx`'s card comment.
+ * the page above that consults a permission — see
+ * `ui/settings.ts`'s card comment.
  *
  * =============================================================================
  * THE REASON STRINGS ARE TRANSLATED HERE, ONCE
@@ -36,19 +35,32 @@
  *     importing its sibling page would be the wrong direction.
  */
 
-import { api } from './api';
+import { kvoxGet, kvoxPost } from '../../core/headless/index.js';
+import type { KvoxWebHost } from '../../core/headless/index.js';
 import type { SearchIndexRequestResult } from '@marinoscar/kvox-contract/search';
 
-/** The document kinds this build can index. Mirrors the API's own union. */
+/**
+ * The document kinds this build can index. Mirrors the API's own union.
+ *
+ * @stability experimental
+ */
 export type SearchIndexDocumentType = 'transcript' | 'note';
 
-/** One document type's five numbers. */
+/**
+ * One document type's five numbers.
+ *
+ * @stability experimental
+ */
 export interface SearchIndexTypeCounts {
+  /** The document type. */
   type: SearchIndexDocumentType;
+  /** Documents indexed. */
   indexed: number;
   /** Queued **or** being indexed right now — the API reports the two as one. */
   pending: number;
+  /** Documents whose indexing failed. */
   failed: number;
+  /** Documents skipped. */
   skipped: number;
   /**
    * Documents with NO indexing record at all.
@@ -59,21 +71,35 @@ export interface SearchIndexTypeCounts {
    * empty state rather than as the degradation it is.
    */
   unindexed: number;
+  /** All documents of the type. */
   total: number;
 }
 
-/** One document whose indexing did not succeed. */
+/**
+ * One document whose indexing did not succeed.
+ *
+ * @stability experimental
+ */
 export interface SearchIndexFailure {
+  /** The document type. */
   type: SearchIndexDocumentType;
+  /** The document id. */
   id: string;
+  /** The document title. */
   title: string;
   /** A diagnostic token, NOT an enum — render an unknown value as itself. */
   reason: string | null;
+  /** The last error text, or `null`. */
   lastError: string | null;
 }
 
-/** `GET /api/search/index-status`. */
+/**
+ * `GET /api/search/index-status`.
+ *
+ * @stability experimental
+ */
 export interface SearchIndexStatus {
+  /** Per-type counts. */
   types: SearchIndexTypeCounts[];
   /** The embedding model the active provider would use, or null. */
   model: string | null;
@@ -83,17 +109,26 @@ export interface SearchIndexStatus {
   available: boolean;
   /** Which of the two is missing, when one is. */
   reason: string | null;
+  /** Documents whose indexing failed. */
   failures: SearchIndexFailure[];
 }
 
-/** `POST /api/search/index` — the 202 body. */
+/**
+ * `POST /api/search/index` — the 202 body.
+ *
+ * @stability experimental
+ */
 export type { SearchIndexRequestResult };
 
 const BASE = '/search';
 
-/** `GET /api/search/index-status` — `@Auth()`, no permission. */
-export async function getSearchIndexStatus(): Promise<SearchIndexStatus> {
-  return api.get<SearchIndexStatus>(`${BASE}/index-status`);
+/**
+ * `GET /api/search/index-status` — `@Auth()`, no permission.
+ *
+ * @stability experimental
+ */
+export async function getSearchIndexStatus(host: KvoxWebHost): Promise<SearchIndexStatus> {
+  return kvoxGet<SearchIndexStatus>(host, `${BASE}/index-status`);
 }
 
 /**
@@ -109,9 +144,11 @@ export async function getSearchIndexStatus(): Promise<SearchIndexStatus> {
  *
  * There is no body: the caller is the JWT's subject and nothing else can be
  * named.
+ *
+ * @stability experimental
  */
-export async function requestSearchIndex(): Promise<SearchIndexRequestResult> {
-  return api.post<SearchIndexRequestResult>(`${BASE}/index`, {});
+export async function requestSearchIndex(host: KvoxWebHost): Promise<SearchIndexRequestResult> {
+  return kvoxPost<SearchIndexRequestResult>(host, `${BASE}/index`, {});
 }
 
 // =============================================================================
@@ -137,7 +174,11 @@ const REASON_TEXT: Record<string, string> = {
     'The provider returned an embedding of an unexpected size. This is a bug rather than a problem with your document — please report it.',
 };
 
-/** One document's failure, in a sentence, with the raw token as the fallback. */
+/**
+ * One document's failure, in a sentence, with the raw token as the fallback.
+ *
+ * @stability experimental
+ */
 export function describeIndexReason(reason: string | null): string {
   if (!reason) return 'Indexing failed without reporting a reason.';
 
@@ -151,6 +192,8 @@ export function describeIndexReason(reason: string | null): string {
  * WHOSE account is involved and links nowhere on its own — the page adds the
  * link to `/settings/ai`, because a string that carries markup is a string that
  * cannot be asserted on.
+ *
+ * @stability experimental
  */
 export function describeUnavailableReason(status: SearchIndexStatus): string | null {
   if (status.available && status.hasKey) return null;
@@ -164,16 +207,33 @@ export function describeUnavailableReason(status: SearchIndexStatus): string | n
   return 'You have not saved an AI provider key. Indexing your library runs on your own provider account, so it needs your key.';
 }
 
-/** The label for one document type, singular and plural. */
-export const DOCUMENT_TYPE_LABELS: Record<
-  SearchIndexDocumentType,
-  { singular: string; plural: string }
-> = {
+/**
+ * The label for one document type, singular and plural.
+ *
+ * @stability experimental
+ */
+export interface DocumentTypeLabel {
+  /** The singular label. */
+  singular: string;
+  /** The plural label. */
+  plural: string;
+}
+
+/**
+ * The label for each document type, singular and plural.
+ *
+ * @stability experimental
+ */
+export const DOCUMENT_TYPE_LABELS: Record<SearchIndexDocumentType, DocumentTypeLabel> = {
   transcript: { singular: 'Recording', plural: 'Recordings' },
   note: { singular: 'Note', plural: 'Notes' },
 };
 
-/** How many of this caller's documents indexing would act on right now. */
+/**
+ * How many of this caller's documents indexing would act on right now.
+ *
+ * @stability experimental
+ */
 export function countNeedingIndex(status: SearchIndexStatus | null): number {
   if (!status) return 0;
 
@@ -186,7 +246,11 @@ export function countNeedingIndex(status: SearchIndexStatus | null): number {
   );
 }
 
-/** Is anything actually in flight? Drives the poll — see `useSearchIndex`. */
+/**
+ * Is anything actually in flight? Drives the poll — see `useSearchIndex`.
+ *
+ * @stability experimental
+ */
 export function hasPendingIndexing(status: SearchIndexStatus | null): boolean {
   if (!status) return false;
 

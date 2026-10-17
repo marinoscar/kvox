@@ -21,13 +21,15 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { render } from '../../utils/test-utils';
+import { renderWithKvoxHost, createFakeKvoxWebHost } from '../../src/core/testing/index.js';
 import {
   SearchSnippet,
   parseSnippetHtml,
   unescapeSnippetText,
-} from '../../../components/search/SearchSnippet';
-import type { SearchSnippet as SearchSnippetData } from '../../../services/search';
+} from '../../src/search/ui/index.js';
+import type { SearchSnippet as SearchSnippetData } from '../../src/search/headless/index.js';
+
+const render = (ui: React.ReactElement) => renderWithKvoxHost(ui, createFakeKvoxWebHost());
 
 function snippet(html: string, overrides: Partial<SearchSnippetData> = {}): SearchSnippetData {
   return { html, startMs: null, field: 'segment', ...overrides };

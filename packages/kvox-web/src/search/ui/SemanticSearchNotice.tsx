@@ -30,7 +30,7 @@
  * `semantic`, `semanticReason` and `unindexedCount` are fields of
  * `GET /api/search` (`apps/api/src/search/dto/search.dto.ts`) and of nothing
  * else. They were briefly wired to the LIST endpoints as a placeholder, before
- * `services/search.ts` existed; that guess is corrected here. The list feeds
+ * `headless/search-client.ts` existed; that guess is corrected here. The list feeds
  * never carried these fields and never will — a list is not a ranking, so
  * there is no semantic arm for it to have skipped.
  *
@@ -46,8 +46,8 @@ import { useState } from 'react';
 import { Alert, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { describeIndexReason } from '../../services/searchIndex';
-import type { SemanticReason } from '../../services/search';
+import { describeIndexReason } from '../headless/index.js';
+import type { SemanticReason } from '../headless/index.js';
 
 /**
  * The two reasons `GET /api/search` can report that INDEXING never can, so
@@ -63,6 +63,13 @@ const SEARCH_ONLY_REASON_TEXT: Partial<Record<SemanticReason, string>> = {
     'Nothing in your library has been indexed for semantic search yet, so there was nothing to compare your search against.',
   embedding_failed:
     'Your AI provider could not turn this search into an embedding just now, so these results fall back to keyword matching. Trying again may work.',
+  // The host has no embeddings model at all (or one whose vectors cannot be
+  // stored), so no key, provider or index can fix it: say so, and do not send
+  // the reader to a page that cannot help. `describeIndexReason` has no
+  // sentence for it either, so without this line the caption would read
+  // "Indexing reported: embeddings_unavailable".
+  embeddings_unavailable:
+    "Search by meaning isn't available on this installation. Results match your words exactly.",
 };
 
 /** One `semanticReason`, in a sentence. */
@@ -70,6 +77,11 @@ function describeSemanticReason(reason: SemanticReason): string {
   return SEARCH_ONLY_REASON_TEXT[reason] ?? describeIndexReason(reason);
 }
 
+/**
+ * What {@link SemanticSearchNotice} takes.
+ *
+ * @stability experimental
+ */
 export interface SemanticSearchNoticeProps {
   /**
    * Whether the semantic arm ran. `null` is `useSearch`'s "no answer yet" and
@@ -118,6 +130,11 @@ function writeDismissed(key: string): void {
   }
 }
 
+/**
+ * A quiet, dismissible line saying the results are keyword-only, with the reason.
+ *
+ * @stability experimental
+ */
 export function SemanticSearchNotice({
   semantic,
   semanticReason,

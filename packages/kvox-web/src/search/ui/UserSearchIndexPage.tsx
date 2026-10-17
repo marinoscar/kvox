@@ -2,7 +2,7 @@
  * Settings → Search Indexing (`/settings/search-index`).
  *
  * Issue #191, epic #165 — the last issue in the epic, and the one that makes
- * the rest of it visible. A card in `config/userSettingsSections.tsx`'s
+ * the rest of it visible. A card (`ui/settings.ts`, spread into the app's `userSettingsSections`) in the
  * `Account` group and a route in `App.tsx` — a registry destination, never a
  * free route (CLAUDE.md's "MANDATORY: Settings UI Pattern" rule 1), which is
  * also what gives this page its AppBar drill-down title and its position in the
@@ -101,15 +101,15 @@ import {
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { useSearchIndex } from '../hooks/useSearchIndex';
+import { KvoxLoadingSpinner } from '../../core/ui/index.js';
 import {
   countNeedingIndex,
   describeIndexReason,
   describeUnavailableReason,
   DOCUMENT_TYPE_LABELS,
-} from '../services/searchIndex';
-import type { SearchIndexTypeCounts } from '../services/searchIndex';
+  useSearchIndex,
+} from '../headless/index.js';
+import type { SearchIndexTypeCounts } from '../headless/index.js';
 
 /**
  * The five columns, declared as data so the row markup — and therefore the
@@ -133,7 +133,12 @@ const COLUMNS: Array<{
   { key: 'unindexed', label: 'Not indexed', emphasise: true },
 ];
 
-export default function UserSearchIndexPage() {
+/**
+ * Settings, Search Indexing (`/settings/search-index`): what of the library is searchable by meaning, and the button that indexes the rest.
+ *
+ * @stability experimental
+ */
+export function UserSearchIndexPage() {
   const {
     status,
     isLoading,
@@ -147,7 +152,7 @@ export default function UserSearchIndexPage() {
   } = useSearchIndex();
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return <KvoxLoadingSpinner />;
   }
 
   const unavailableReason = status ? describeUnavailableReason(status) : null;
