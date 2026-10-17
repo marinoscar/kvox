@@ -33,6 +33,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -47,9 +48,14 @@ import {
   normalizeDocumentMimeType,
   type NoteDocumentMimeType,
 } from './extraction/document-format.js';
-import { NOTE_SOURCE_EXTRACT_JOB_TYPE } from './job-types.js';
+import { NOTE_SOURCE_EXTRACT_JOB_TYPE, NOTES_MANAGED_BY } from './job-types.js';
 import { NoteObjectsService } from './note-objects.service.js';
-import { documentExtension, sourceDocumentStorageKey } from './source-metadata.js';
+import {
+  documentExtension,
+  readDocumentExtractionStatus,
+  sourceDocumentStorageKey,
+  type DocumentExtractionStatus,
+} from './source-metadata.js';
 
 /** What the controller hands over once it has a complete multipart part. */
 /**
@@ -79,6 +85,17 @@ export interface NoteSourceDocument {
   size: number;
   jobId: string;
   status: 'extracting';
+}
+
+/** What `GET /api/notes/sources/documents/:objectId` answers (#596). */
+/**
+ * NoteSourceDocumentStatus: a shape the slice passes between its own services.
+ *
+ * @internal
+ * @stability experimental
+ */
+export interface NoteSourceDocumentStatus extends DocumentExtractionStatus {
+  objectId: string;
 }
 
 /** Longest filename this endpoint will echo back and store as a display name. */
@@ -211,6 +228,27 @@ export class NoteSourcesService {
       jobId: job.id,
       status: 'extracting',
     };
+  }
+
+  /**
+   * The extraction status of one of the caller's source documents (#596).
+   *
+   * ⚠ 404 FOR EVERY "NO": a missing object, an object another module (or no
+   * module) owns, and a notes object another user uploaded all answer the SAME
+   * 404 with the SAME sentence, so the response never reveals that an id exists.
+   * There is no `notes:read_any`; no access is a 404, never a 403.
+   *
+   * The status itself is the pure `readDocumentExtractionStatus` over the
+   * object's `metadata`: anything it cannot read is `extracting`.
+   */
+  async documentStatus(objectId: string, userId: string): Promise<NoteSourceDocumentStatus> {
+    const object = await this.objects.describe(objectId);
+
+    if (!object || object.managedBy !== NOTES_MANAGED_BY || object.ownerId !== userId) {
+      throw new NotFoundException('Source document not found');
+    }
+
+    return { objectId: object.id, ...readDocumentExtractionStatus(object.metadata) };
   }
 
   /**

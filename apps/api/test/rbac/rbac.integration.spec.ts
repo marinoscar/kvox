@@ -400,6 +400,27 @@ describe('RBAC System (Integration)', () => {
         .expect(403);
     });
 
+    it('refuses notes:read on GET /api/notes/sources/documents/:objectId to a user with no membership (403, not 404)', async () => {
+      const stranger = await createMembershipUser(context, { orgRole: null });
+
+      await request(context.app.getHttpServer())
+        .get('/api/notes/sources/documents/11111111-2222-4333-8444-555555555555')
+        .set(authHeader(stranger.accessToken))
+        .expect(403);
+    });
+
+    it('lets a Viewer past the notes:read gate on the source status route (an unknown object is then 404)', async () => {
+      const viewer = await createMembershipViewer(context);
+
+      context.prismaMock.storageObject.findMany.mockResolvedValue([]);
+      context.prismaMock.kvoxObjectOwnership.findMany.mockResolvedValue([]);
+
+      await request(context.app.getHttpServer())
+        .get('/api/notes/sources/documents/11111111-2222-4333-8444-555555555555')
+        .set(authHeader(viewer.accessToken))
+        .expect(404);
+    });
+
     it('lets a Viewer write transcripts, as the seed grants (transcripts:write is a viewer permission)', async () => {
       const viewer = await createMembershipViewer(context);
 

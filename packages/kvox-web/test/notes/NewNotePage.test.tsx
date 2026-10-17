@@ -491,11 +491,11 @@ describe('NewNotePage — the optional title', () => {
 });
 
 describe('NewNotePage — the document source', () => {
-  /** Whatever `GET /api/storage/objects/:id` should answer with next. */
-  let extractionMetadata: Record<string, unknown> | null;
+  /** Whatever `GET /api/notes/sources/documents/:objectId` should answer with next. */
+  let extraction: Record<string, unknown>;
 
   beforeEach(() => {
-    extractionMetadata = null;
+    extraction = { status: 'extracting', message: null, characters: null };
     server.use(
       http.post(`${API_BASE}/notes/sources/documents`, () =>
         HttpResponse.json(
@@ -512,8 +512,8 @@ describe('NewNotePage — the document source', () => {
           { status: 201 },
         ),
       ),
-      http.get(`${API_BASE}/storage/objects/:id`, () =>
-        HttpResponse.json({ data: { id: 'obj-1', name: 'brief.pdf', metadata: extractionMetadata } }),
+      http.get(`${API_BASE}/notes/sources/documents/:objectId`, () =>
+        HttpResponse.json({ data: { objectId: 'obj-1', ...extraction } }),
       ),
     );
   });
@@ -538,10 +538,7 @@ describe('NewNotePage — the document source', () => {
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
 
     // The extraction job finishes.
-    extractionMetadata = {
-      extractedObjectId: 'obj-2',
-      noteSourceExtraction: { status: 'extracted', characters: 4200, extractedAt: new Date().toISOString() },
-    };
+    extraction = { status: 'extracted', message: null, characters: 4200 };
 
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled(),
@@ -556,9 +553,7 @@ describe('NewNotePage — the document source', () => {
     await waitForForm();
 
     await uploadDocument(user);
-    extractionMetadata = {
-      noteSourceExtraction: { status: 'extracted', characters: 10, extractedAt: new Date().toISOString() },
-    };
+    extraction = { status: 'extracted', message: null, characters: 10 };
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled(),
       { timeout: 6000 },
@@ -579,13 +574,10 @@ describe('NewNotePage — the document source', () => {
     await waitForForm();
 
     await uploadDocument(user);
-    extractionMetadata = {
-      noteSourceExtraction: {
-        status: 'unextractable',
-        reason: 'encrypted',
-        message: 'This PDF is password-protected, so its text cannot be read.',
-        extractedAt: new Date().toISOString(),
-      },
+    extraction = {
+      status: 'unextractable',
+      message: 'This PDF is password-protected, so its text cannot be read.',
+      characters: null,
     };
 
     expect(
