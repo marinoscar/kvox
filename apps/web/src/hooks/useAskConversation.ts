@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getAskConversation, isAskNotFound, postAskMessage } from '../services/ask';
 import type { AskConversationDetail, AskMessage, PostAskMessageResponse } from '../services/ask';
 import { ApiError } from '../services/api';
-import { isAbortError, useAbortControllers } from './graphHookUtils';
+import { isAbortError, useAbortControllers } from '@marinoscar/kvox-web/graph/headless';
 import { isRunningAssistantMessage, useAskStream } from './useAskStream';
 import type { AskStreamState } from './useAskStream';
 import { useIsMounted } from './useIsMounted';

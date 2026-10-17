@@ -32,11 +32,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useIsMounted } from '../../hooks/useIsMounted';
-import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
-import { listProposals } from '../../services/graph';
-import type { ProposalSummary } from '../../services/graph';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
-import { ProposalReviewSheet } from '../graph/review/ProposalReviewSheet';
+import { formatRelativeTime, useKvoxHost, useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
+import { listProposals } from '@marinoscar/kvox-web/graph/headless';
+import type { ProposalSummary } from '@marinoscar/kvox-web/graph/headless';
+import { ProposalReviewSheet } from '@marinoscar/kvox-web/graph/ui';
 
 export const GRAPH_REVIEW_POLL_MS = 60_000;
 export const GRAPH_REVIEW_LIMIT = 5;
@@ -50,6 +49,7 @@ export function GraphReviewCard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMounted = useIsMounted();
+  const host = useKvoxHost();
   const { config } = useAiTasksConfig();
   const graphOn = config?.graphEnabled === true;
 
@@ -59,7 +59,7 @@ export function GraphReviewCard() {
 
   const load = useCallback(async () => {
     try {
-      const result = await listProposals({ status: 'draft', limit: GRAPH_REVIEW_LIMIT });
+      const result = await listProposals(host, { status: 'draft', limit: GRAPH_REVIEW_LIMIT });
       if (!isMounted()) return;
       setDrafts(result.items);
       setMore(result.nextCursor !== null);
@@ -69,7 +69,7 @@ export function GraphReviewCard() {
       setFailed(true);
       if (import.meta.env.DEV) console.warn('Waiting for review: the drafts could not be read', err);
     }
-  }, [isMounted]);
+  }, [host, isMounted]);
 
   useEffect(() => {
     if (graphOn) void load();

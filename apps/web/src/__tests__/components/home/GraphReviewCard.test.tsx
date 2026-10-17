@@ -12,7 +12,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { GraphReviewCard } from '../../../components/home/GraphReviewCard';
-import { invalidateGraphOntology } from '../../../hooks/useGraphOntology';
+import { invalidateGraphOntology } from '@marinoscar/kvox-web/graph/headless';
 import {
   mockGraphAiConfig,
   mockProposalDetail,

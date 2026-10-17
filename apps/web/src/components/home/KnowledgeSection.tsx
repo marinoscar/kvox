@@ -38,12 +38,10 @@ import Typography from '@mui/material/Typography';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { EntityTypeIcon } from '../graph/entityTypeIcon';
-import { entityPath } from '../graph/EntityListRow';
+import { EntityTypeIcon, entityPath } from '@marinoscar/kvox-web/graph/ui';
 import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
-import { useGraphEntities } from '../../hooks/useGraphEntities';
+import { initials, useGraphEntities } from '@marinoscar/kvox-web/graph/headless';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { initials } from '../../utils/graphDisplay';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export const KNOWLEDGE_TYPES = ['Person', 'Organization'] as const;

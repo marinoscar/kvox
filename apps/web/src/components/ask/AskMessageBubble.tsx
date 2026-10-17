@@ -32,7 +32,7 @@ import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 
-import { EvidenceChip } from '../graph/EvidenceChip';
+import { EvidenceChip } from '@marinoscar/kvox-web/graph/ui';
 import { MarkdownView } from '@marinoscar/kvox-web/notes/ui';
 import type { AskCitation, AskMessage, AskToolCall } from '../../services/ask';
 import type { AskStreamState } from '../../hooks/useAskStream';

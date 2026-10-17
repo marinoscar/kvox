@@ -108,11 +108,22 @@ vi.mock('@marinoscar/platform-web/notifications/ui', async (importOriginal) => (
   NotificationSettingsPage: () => <h1>Admin Notifications</h1>,
 }));
 
-// Issue #369. The one GATED `/settings/*` route; its own suite
-// (`UserKnowledgeGraphPage.test.tsx`) covers the page itself.
-vi.mock('../pages/UserKnowledgeGraphPage', () => ({
-  default: () => <h1>User Knowledge Graph Page</h1>,
-}));
+// Issue #369, now the graph slice's route data (#503, epic #498). The one GATED
+// `/settings/*` route; the slice's own suite (`UserKnowledgeGraphPage.test.tsx`)
+// covers the page itself. The page is replaced inside the slice's route list,
+// keeping the route's path, permission and `redirectTo`, so the guard below is
+// the real one.
+vi.mock('@marinoscar/kvox-web/graph/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/graph/ui')>();
+  return {
+    ...actual,
+    kvoxGraphRoutes: actual.kvoxGraphRoutes.map((route) =>
+      route.path === '/settings/knowledge-graph'
+        ? { ...route, Component: () => <h1>User Knowledge Graph Page</h1> }
+        : route,
+    ),
+  };
+});
 
 /**
  * The four transcript routes from issue #30, epic #19, and the four note

@@ -14,7 +14,7 @@ import { onboardingResponse } from './onboardingApi';
  *     the explorer's `POST /api/graph/explore/expand` (issue #374) and the
  *     whole-graph overview's `GET /api/graph/overview` (issue #375).
  *     Shapes mirror #370's read API and #372's brief (and
- *     `apps/web/src/services/graph.ts`, which mirrors those field for field).
+ *     `packages/kvox-web/src/graph/headless/clients/graph.ts`, which mirrors those field for field).
  *
  * Self-contained on purpose, like `notesApi.ts`: this project never imports
  * app source or workspace packages at runtime, so the effective ontology is a

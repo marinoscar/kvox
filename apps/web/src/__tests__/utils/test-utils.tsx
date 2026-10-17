@@ -16,6 +16,10 @@ import { AppPlatformHostProvider } from '../../platform/platformHost';
 // Issue #499: the host the `@marinoscar/kvox-web` slices (and the app pages that
 // call their clients) read, bound over the same `api` client MSW answers.
 import { AppKvoxHostProvider } from '../../platform-kvox/KvoxHostBinding';
+// The connected-knowledge switch the host's `features()` reads. Opt-in per render
+// (`wrapperOptions.graphFeature`): it reads `GET /api/ai-tasks/config`, which
+// only the suites about connected knowledge answer.
+import { AppGraphFeatureProvider } from '../../platform/GraphFeatureBinding';
 
 interface WrapperOptions {
   route?: string;
@@ -24,6 +28,8 @@ interface WrapperOptions {
   user?: MockUser | null;
   isLoading?: boolean;
   providers?: AuthProviderType[];
+  /** Mount `AppGraphFeatureProvider`, so the host reports `graphEnabled` from the mocked AI config. */
+  graphFeature?: boolean;
 }
 
 export interface MockUser {
@@ -188,6 +194,7 @@ function createWrapper(options: WrapperOptions = {}) {
     user = mockUser,
     isLoading = false,
     providers = defaultMockProviders,
+    graphFeature = false,
   } = options;
 
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -200,9 +207,17 @@ function createWrapper(options: WrapperOptions = {}) {
             isLoading={isLoading}
             providers={providers}
           >
-            <AppPlatformHostProvider>
-              <AppKvoxHostProvider>{children}</AppKvoxHostProvider>
-            </AppPlatformHostProvider>
+            {graphFeature ? (
+              <AppGraphFeatureProvider>
+                <AppPlatformHostProvider>
+                  <AppKvoxHostProvider>{children}</AppKvoxHostProvider>
+                </AppPlatformHostProvider>
+              </AppGraphFeatureProvider>
+            ) : (
+              <AppPlatformHostProvider>
+                <AppKvoxHostProvider>{children}</AppKvoxHostProvider>
+              </AppPlatformHostProvider>
+            )}
           </MockAuthProvider>
         </ShellRoot>
       </MemoryRouter>
