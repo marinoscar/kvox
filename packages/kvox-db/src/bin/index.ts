@@ -72,7 +72,7 @@ function buildProgram(io: KvoxDbIo, context: KvoxDbContext, setExit: (code: numb
     .option('--root <dir>', 'the app folder that holds prisma/ (default: the current directory)')
     .option('--fragments <dir>', "the package's fragment folder to install from (default: the package's schema/)")
     .option('--migrations <dir>', "the package's migrations folder to install from (default: the package's migrations/)")
-    .addOption(new Option('--names <policy>', 'directory names for newly installed migrations: original, or after-host (default: original when the app already has kvox history, else after-host)').choices(['original', 'after-host']))
+    .addOption(new Option('--names <policy>', 'directory names for newly installed migrations: original, stable (the package timestamp, kvox_ and the slug), or after-host (deprecated) (default: original when the app already has kvox history under original names, the lock\'s policy when it has a lock, else stable)').choices(['original', 'stable', 'after-host']))
     .option('--dry-run', 'print what would change; write nothing')
     .action((options: { root?: string; fragments?: string; migrations?: string; names?: KvoxNamePolicy; dryRun?: boolean }) =>
       guarded(() => {

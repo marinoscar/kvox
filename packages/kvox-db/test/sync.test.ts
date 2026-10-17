@@ -13,9 +13,10 @@ import {
   readInventories,
   readManifest,
   sha256Hex,
+  stableName,
   type KvoxSyncOptions,
 } from '../src/index.js';
-import { PACKAGE_DIR, cleanup, freshHost } from './helpers.js';
+import { PACKAGE_DIR, cleanup, freshHost, freshPackage } from './helpers.js';
 
 afterEach(cleanup);
 
@@ -46,7 +47,7 @@ describe('afterHostNames', () => {
 describe('sync into a host with no kvox history (after-host)', () => {
   it('installs after the host migrations, writes the lock and merges platform.lock', () => {
     const root = freshHost();
-    const plan = sync(root);
+    const plan = sync(root, { names: 'after-host' });
     expect(plan.names).toBe('after-host');
 
     const dirs = migrationDirs(root);
@@ -153,7 +154,7 @@ describe('sync with original names', () => {
     const root = freshHost();
     const plan = sync(root, { names: 'original' });
     expect(migrationDirs(root).slice(0, ids.length)).toEqual(ids);
-    expect(plan.messages.some((line) => line.startsWith('note:') && line.includes('--names after-host'))).toBe(true);
+    expect(plan.messages.some((line) => line.startsWith('note:') && line.includes('--names stable'))).toBe(true);
   });
 
   it('adopts directories that already exist byte-identical (the web app case) and chooses original names for the rest', () => {
@@ -180,7 +181,7 @@ describe('sync with original names', () => {
 
   it('keeps the policy the lock was written with', () => {
     const root = freshHost();
-    sync(root);
+    sync(root, { names: 'after-host' });
     const lock = JSON.parse(readFileSync(join(root, 'prisma', 'kvox.lock'), 'utf8'));
     expect(planKvoxSync({ root, platformSchemaDir: null }).names).toBe('after-host');
     expect(lock.migrations[0].installedDir).toMatch(/_kvox_/);
@@ -223,5 +224,114 @@ describe('sync refusals', () => {
     const lock = JSON.parse(readFileSync(join(root, 'prisma', 'kvox.lock'), 'utf8'));
     rmSync(join(root, 'prisma', 'migrations', lock.migrations[2].installedDir), { recursive: true });
     expect(() => planKvoxSync({ root, platformSchemaDir: null })).toThrow(/does not exist/);
+  });
+});
+
+describe('stableName', () => {
+  it('inserts kvox_ after the id timestamp', () => {
+    expect(stableName('20260914130000_add_transcripts')).toBe('20260914130000_kvox_add_transcripts');
+  });
+
+  it('refuses an id without a 14-digit timestamp prefix', () => {
+    expect(() => stableName('add_transcripts')).toThrow(KvoxSyncError);
+    expect(() => stableName('2026091413_add_transcripts')).toThrow(KvoxSyncError);
+  });
+});
+
+describe('stable names (#595)', () => {
+  const lockDirs = (root: string): string[] =>
+    JSON.parse(readFileSync(join(root, 'prisma', 'kvox.lock'), 'utf8')).migrations.map((m: { installedDir: string }) => m.installedDir);
+
+  /** A host built from scratch: platform migrations stamped from a pinned clock, all before the domain. */
+  function platformHost(platformDirs: string[]): string {
+    const root = freshHost();
+    const migrations = join(root, 'prisma', 'migrations');
+    rmSync(migrations, { recursive: true, force: true });
+    for (const dir of platformDirs) {
+      mkdirSync(join(migrations, dir), { recursive: true });
+      writeFileSync(join(migrations, dir, 'migration.sql'), `-- ${dir}\nSELECT 1;\n`);
+    }
+    expect(findMissingHostModels(join(root, 'prisma'), null)).toEqual([]);
+    return root;
+  }
+
+  const domainDirs = (root: string, platformDirs: string[]) => migrationDirs(root).filter((dir) => !platformDirs.includes(dir));
+
+  it('is the default on a fresh host: every dir is stableName(id), the lock records it, a second sync is a no-op', () => {
+    const root = freshHost();
+    const plan = sync(root);
+    expect(plan.names).toBe('stable');
+    const expected = ids.map(stableName);
+    expect(lockDirs(root)).toEqual(expected);
+    for (const dir of expected) expect(migrationDirs(root)).toContain(dir);
+
+    const again = sync(root);
+    expect(again.names).toBe('stable');
+    expect(again.installs).toEqual([]);
+    expect(again.kvoxLockChanged).toBe(false);
+  });
+
+  it('keeps the domain names across a platform upgrade, persisted or rebuilt from scratch (regression)', () => {
+    const base = ['20240101000000_initial', '20240101000001_more'];
+    const upgraded = [...base, '20240101000002_platform_added'];
+
+    const first = platformHost(base);
+    sync(first);
+    const names = lockDirs(first);
+    const installedFirst = domainDirs(first, base);
+    expect(installedFirst).toEqual([...names].sort());
+    expect(names.every((dir) => dir > base[1]!)).toBe(true);
+
+    // (i) persisted prisma/: the platform upgrade adds a migration, the domain names do not move.
+    mkdirSync(join(first, 'prisma', 'migrations', upgraded[2]!), { recursive: true });
+    writeFileSync(join(first, 'prisma', 'migrations', upgraded[2]!, 'migration.sql'), 'SELECT 1;\n');
+    const plan = sync(first);
+    expect(plan.names).toBe('stable');
+    expect(plan.installs).toEqual([]);
+    expect(lockDirs(first)).toEqual(names);
+    expect(domainDirs(first, upgraded)).toEqual(installedFirst);
+    expect(names.every((dir) => dir > upgraded[2]!)).toBe(true);
+
+    // (ii) rebuilt from scratch with the three platform dirs and no lock: identical names.
+    const rebuilt = platformHost(upgraded);
+    sync(rebuilt);
+    expect(lockDirs(rebuilt)).toEqual(names);
+    expect(domainDirs(rebuilt, upgraded)).toEqual(installedFirst);
+    expect(lockDirs(rebuilt).every((dir) => dir > upgraded[2]!)).toBe(true);
+
+    // The deprecated policy shifts, which is why `stable` replaced it.
+    const legacyBefore = platformHost(base);
+    sync(legacyBefore, { names: 'after-host' });
+    const legacyAfter = platformHost(upgraded);
+    sync(legacyAfter, { names: 'after-host' });
+    expect(lockDirs(legacyAfter)).not.toEqual(lockDirs(legacyBefore));
+  });
+
+  it('keeps stable when a new package migration appears, and names it stableName(newId)', () => {
+    const root = platformHost(['20240101000000_initial']);
+    const packageDir = freshPackage();
+    sync(root, { packageDir });
+    const before = lockDirs(root);
+
+    const newId = '20270401090000_add_probe';
+    const sql = 'ALTER TABLE "transcripts" ADD COLUMN "probe" TEXT;\n';
+    mkdirSync(join(packageDir, 'migrations', newId), { recursive: true });
+    writeFileSync(join(packageDir, 'migrations', newId, 'migration.sql'), sql);
+    const manifestFile = join(packageDir, 'migrations', 'manifest.json');
+    const document = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    document.migrations.push({ id: newId, slice: 'transcripts', sha256: sha256Hex(Buffer.from(sql)), requiresHostTables: ['users'] });
+    writeFileSync(manifestFile, JSON.stringify(document, null, 2) + '\n');
+
+    const plan = sync(root, { packageDir });
+    expect(plan.names).toBe('stable');
+    expect(plan.installs.map((i) => i.installedDir)).toEqual([stableName(newId)]);
+    expect(lockDirs(root)).toEqual([...before, stableName(newId)]);
+  });
+
+  it('notes `--timestamp` when installing stable names into a host dated after the domain', () => {
+    const root = freshHost();
+    const plan = sync(root);
+    expect(plan.names).toBe('stable');
+    expect(plan.messages.some((line) => line.startsWith('note:') && line.includes('--timestamp'))).toBe(true);
   });
 });

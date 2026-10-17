@@ -168,7 +168,7 @@ PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6) applies the whole
 ```
 examples/bare-host/
   package.json  tsconfig.json  prisma.config.ts  vitest.config.mts  run.mjs  .gitignore
-  scripts/prepare-db.mjs   platform db sync/compose, kvox-db sync --names after-host, compose, prisma generate
+  scripts/prepare-db.mjs   platform db sync --timestamp 2024-01-01T00:00:00Z/compose, kvox-db sync --names stable, compose, prisma generate
   scripts/test.mjs         npm test -- --db <leg>
   src/main.ts  bootstrap.ts  app.module.ts  db.ts  seed.ts  permissions.ts  local-store.controller.ts
   src/fake-provider.ts     the transcription provider, with a per-upload transcript queue

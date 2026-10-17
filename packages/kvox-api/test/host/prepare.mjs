@@ -5,13 +5,15 @@
 //
 // Builds, from scratch, the Prisma host the real-database specs run against:
 //
-//   1. `platform db sync`     installs the platform migrations (byte copies).
+//   1. `platform db sync`     installs the platform migrations (byte copies),
+//                             stamped 2024-01-01 so they sort before the domain's
+//                             September-2026 ids on a fresh database.
 //   2. `platform db compose`  composes the platform schema (the domain installer
 //                             refuses a host without `User`, `StorageObject`, `Job`).
 //   3. `kvox-db sync`         installs the domain fragments and migrations under
-//                             `--names after-host`: a host with no domain history
-//                             would otherwise sort the September-dated domain
-//                             migrations before the platform tables they reference.
+//                             `--names stable`: `<package timestamp>_kvox_<slug>`,
+//                             a pure function of the migration id, never of build
+//                             time or of how many migrations the platform ships.
 //   4. `platform db compose`  again, now with the domain fragments.
 //   5. the generator output is pointed at `generated/`, so this client never
 //      overwrites the application's own in `node_modules/.prisma/client`.
@@ -59,9 +61,9 @@ const prisma = binOf('prisma', 'prisma');
 rmSync(join(hostDir, 'prisma'), { recursive: true, force: true });
 rmSync(join(hostDir, 'generated'), { recursive: true, force: true });
 
-run('install platform migrations', platform, ['db', 'sync', '--root', hostDir]);
+run('install platform migrations', platform, ['db', 'sync', '--root', hostDir, '--timestamp', '2024-01-01T00:00:00Z']);
 run('compose the platform schema', platform, ['db', 'compose', '--root', hostDir]);
-run('install the domain fragments and migrations', kvoxDb, ['sync', '--root', hostDir, '--names', 'after-host']);
+run('install the domain fragments and migrations', kvoxDb, ['sync', '--root', hostDir, '--names', 'stable']);
 run('compose the platform and domain schema', platform, ['db', 'compose', '--root', hostDir]);
 
 const basePath = join(hostDir, 'prisma', 'schema', 'platform.base.prisma');

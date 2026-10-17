@@ -52,13 +52,19 @@ export class KvoxSyncError extends Error {
  * The directory naming policy for migrations installed by `sync`.
  *
  * `original` keeps the package id as the directory name (an app that already ran
- * the migrations under that name, such as the web app). `after-host` names it
- * `<ts>_kvox_<slug>` with a timestamp after everything already in
- * `prisma/migrations`, so a fresh host's own tables exist first.
+ * the migrations under that name, such as the web app). `stable` names it
+ * `<package timestamp>_kvox_<slug>`, a pure function of the package id (see
+ * {@link stableName}); it is the default for a host with no domain history.
+ * `after-host` names it `<ts>_kvox_<slug>` with a timestamp after everything
+ * already in `prisma/migrations`.
+ *
+ * `after-host` is deprecated: its names depend on how many migrations other
+ * packages ship, so a platform upgrade shifts them. Use `stable`. It remains
+ * for hosts whose lock already records those names.
  *
  * @stability experimental
  */
-export type KvoxNamePolicy = 'original' | 'after-host';
+export type KvoxNamePolicy = 'original' | 'stable' | 'after-host';
 
 /**
  * Options of {@link planKvoxSync}.
@@ -219,8 +225,30 @@ function formatTimestamp(ms: number): string {
 const EMPTY_HOST_TIMESTAMP = '20240101000000';
 
 /**
+ * The directory name `stable` gives to a package migration id: the id's own
+ * 14-digit timestamp, then `kvox_` and the slug. A pure function of the id, so
+ * it never depends on build time or on other packages' migrations.
+ *
+ * @param id - A package migration id, for example `20260914130000_add_transcripts`.
+ * @returns The directory name, for example `20260914130000_kvox_add_transcripts`.
+ * @throws KvoxSyncError when the id does not start with a 14-digit timestamp and `_`.
+ * @stability experimental
+ */
+export function stableName(id: string): string {
+  if (!/^\d{14}_/.test(id)) {
+    throw new KvoxSyncError(`the package migration id "${id}" does not start with a 14-digit timestamp and "_"; cannot derive a stable name`);
+  }
+  return `${id.slice(0, 15)}kvox_${id.slice(15)}`;
+}
+
+/**
  * The directory names `after-host` gives to `ids`, in order: one second after
  * the newest timestamped directory in `existingDirs`, then one second apart.
+ *
+ * @deprecated The names shift by a second whenever another package adds a
+ * migration before the domain's (a platform upgrade on a host built from
+ * scratch), which breaks databases that recorded the old names. Use
+ * {@link stableName} (the `stable` policy).
  *
  * @param ids - Package migration ids, in run order.
  * @param existingDirs - Directory names already under the host's `prisma/migrations`.
@@ -291,10 +319,12 @@ function chooseNames(
   if (requested !== undefined) return requested;
   if (lock !== undefined && lock.migrations.length > 0) {
     const first = lock.migrations[0]!;
-    return first.installedDir === first.originId.slice('kvox:'.length) ? 'original' : 'after-host';
+    const id = first.originId.slice('kvox:'.length);
+    if (first.installedDir === id) return 'original';
+    return /^\d{14}_/.test(id) && first.installedDir === stableName(id) ? 'stable' : 'after-host';
   }
   const present = new Set(dirs);
-  return manifest.migrations.some((entry) => present.has(entry.id)) ? 'original' : 'after-host';
+  return manifest.migrations.some((entry) => present.has(entry.id)) ? 'original' : 'stable';
 }
 
 /**
@@ -378,8 +408,9 @@ export function planKvoxSync(opts: KvoxSyncOptions): KvoxSyncPlan {
     }
   }
   if (pending.length > 0) {
+    const pendingIds = pending.map((entry) => entry.id);
     const targetNames =
-      names === 'original' ? pending.map((entry) => entry.id) : afterHostNames(pending.map((entry) => entry.id), dirs);
+      names === 'original' ? pendingIds : names === 'stable' ? pendingIds.map(stableName) : afterHostNames(pendingIds, dirs);
     pending.forEach((entry, index) => {
       const installedDir = targetNames[index]!;
       if (dirs.includes(installedDir)) {
@@ -388,11 +419,17 @@ export function planKvoxSync(opts: KvoxSyncOptions): KvoxSyncPlan {
       entries.push({ originId: `kvox:${entry.id}`, installedDir, sha256: entry.sha256 });
       installs.push({ id: entry.id, installedDir, sourceFile: join(migrationsSource, entry.id, 'migration.sql'), sha256: entry.sha256, action: 'copy' });
     });
-    if (names === 'original') {
-      const newest = dirs.filter((dir) => TIMESTAMP.test(dir)).pop();
-      const oldest = pending[0]!.id;
+    if (names !== 'after-host') {
+      const planned = new Set(installs.map((install) => install.installedDir));
+      const locked = new Set((lock?.migrations ?? []).map((entry) => entry.installedDir));
+      const newest = dirs.filter((dir) => TIMESTAMP.test(dir) && !locked.has(dir) && !planned.has(dir)).pop();
+      const oldest = targetNames[0]!;
       if (newest !== undefined && oldest < newest) {
-        messages.push(`note: ${oldest} sorts before the newest host migration ${newest}; on a fresh database it would run before it. Use --names after-host on a host without kvox history`);
+        messages.push(
+          names === 'original'
+            ? `note: ${oldest} sorts before the newest host migration ${newest}; on a fresh database it would run before it. Use --names stable on a host without kvox history`
+            : `note: ${oldest} sorts before the newest host migration ${newest}; on a fresh database it would run before it. A fresh host should pin \`platform db sync --timestamp\` to a date before the oldest domain migration (for example --timestamp 2024-01-01T00:00:00Z). --names original keeps the package ids instead`,
+        );
       }
     }
   }
