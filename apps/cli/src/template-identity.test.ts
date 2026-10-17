@@ -647,12 +647,13 @@ function stripRegistryScopes(lineText: string): string {
  * application's `kvox/` binding folder (`apps/api/src/kvox/`, `test/kvox/`), `app-registrations/kvox-permissions.ts`
  * the `packages/kvox-*` folders other files point at and (#493) the `kvox-transcripts` permission-set slice id
  * (a registry key, persisted by `registerPermissionSet`) and (#495) its sibling `kvox-notes` and (#496) `kvox-graph` and (#532) the
- * `kvox-content` export source id (a registry key, persisted in the payload of every `export.run` job). They are stripped per
+ * `kvox-content` export source id (a registry key, persisted in the payload of every `export.run` job) and (#580) the
+ * `kvox-eval` package and bin and the `*:kvox-packages` root script names. They are stripped per
  * token, like the registry scopes above, so any other mention of the product name on the same line is
  * still flagged. A rename of the product renames these with the module directory.
  */
 const STORAGE_ADOPTION_TOKEN_RE =
-  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bplatform-kvox[\w./-]*|(?<!marinoscar\/)\bkvox\/[\w./-]*|\bkvox-permissions\b|\bkvox-transcripts\b|\bkvox-notes\b|\bkvox-graph\b|\bkvox-content\b|\bpackages\/kvox-[\w./-]*/g;
+  /\bKvox(?:ManagedObjects|ObjectOwnership|Objects|Files|Multipart|S3PartLister)\w*|\bkvox(?:-objects|-managed-objects|-object-ownership|-s3-part-lister|-files|-multipart)[\w./-]*|\bkvox_object_ownership\b|\bkvoxOwnership\b|\/api\/kvox\/files|\bkvox:storage-managed-by-part-size\b|\bkvox\.transcripts\.source\b|\b20-kvox-extensions(?:\.sh)?\b|\bkvox\.extensions\b|\bkvox-ai[\w.-]*|\bkvox-eval[\w.-]*|\bkvox-packages\b|\bplatform-kvox[\w./-]*|(?<!marinoscar\/)\bkvox\/[\w./-]*|\bkvox-permissions\b|\bkvox-transcripts\b|\bkvox-notes\b|\bkvox-graph\b|\bkvox-content\b|\bpackages\/kvox-[\w./-]*/g;
 
 function stripStorageAdoptionTokens(lineText: string): string {
   return lineText.replace(STORAGE_ADOPTION_TOKEN_RE, '');
