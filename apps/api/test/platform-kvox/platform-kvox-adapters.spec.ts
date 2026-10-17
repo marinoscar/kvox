@@ -3,8 +3,11 @@
 // =============================================================================
 //
 // `ports-conformance.spec.ts` proves each adapter satisfies the shared kit. This file
-// pins what only the web edition has to get right: the translation of the app's AI
-// errors, the refusal of a node-eligible AI job, the rate-limit and throttle plumbing,
+// pins what only the web edition has to get right: how `KVOX_AI` is bound (the
+// translation of the host's AI errors and the runtime's call shape are
+// `test/ai/platform-ai-runtime.spec.ts`; the port's own rules moved to
+// `packages/kvox-ai` with `createKvoxAi`, #579), the refusal of a node-eligible AI job,
+// the rate-limit and throttle plumbing,
 // the object-store cleanup rules, the identity trap, the detached notify, and the boot
 // failure when a port is left unbound.
 // =============================================================================
@@ -16,20 +19,21 @@ import '../../src/platform/notifications/notification.manifest';
 
 import { Readable } from 'node:stream';
 
-import { BadRequestException, ForbiddenException, HttpException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { z } from 'zod';
 
 import { credentialPurposeRegistry } from '@marinoscar/platform-api/credentials';
 import { RateLimitError } from '@marinoscar/platform-api/jobs';
 import { createFakeJobQueue } from '@marinoscar/platform-api/jobs/testing';
 import { findEvent } from '@marinoscar/platform-api/notifications';
-import { KVOX_AI, KVOX_AUDIT, KVOX_EVENTS, KVOX_IDENTITY, KVOX_JOBS, KVOX_NOTIFY, KVOX_OBJECT_STORE, KVOX_PRISMA, KVOX_SECRETS, KVOX_SETTINGS, KvoxAiBudgetError, KvoxAiError, KvoxRateLimitError } from '@marinoscar/kvox-api/ports';
+import { KVOX_AI, KVOX_AUDIT, KVOX_EVENTS, KVOX_IDENTITY, KVOX_JOBS, KVOX_NOTIFY, KVOX_OBJECT_STORE, KVOX_PRISMA, KVOX_SECRETS, KVOX_SETTINGS, KvoxRateLimitError } from '@marinoscar/kvox-api/ports';
 import { createFakeKvoxExecutionContext } from '@marinoscar/kvox-api/testing';
 
-import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../src/ai-port/ai-errors';
-import { KvoxAiBadRequest, keyMissingConflict, lacksCapabilityConflict, notConfiguredConflict, graphDisabledConflict } from '../../src/ai-port/kvox-ai-errors';
-import { FakeKvoxAi, notReadyReadiness } from '../../src/ai-port/testing/fake-kvox-ai';
-import { PlatformKvoxAiAdapter, featureOf, scrub, toKvoxAiError } from '../../src/platform-kvox/ai/platform-kvox-ai.adapter';
+import { AiReadinessService } from '../../src/ai-port/ai-readiness.service';
+import { KvoxAiSettings } from '../../src/ai-port/kvox-ai-settings';
+import { PlatformAiRuntime } from '../../src/ai-port/platform-ai-runtime';
+import { PlatformTaskModelSource } from '../../src/ai-port/platform-task-model-source';
+import { TracedKvoxAiPort } from '../../src/platform-kvox/ai/traced-kvox-ai-port';
 import { PlatformKvoxAuditAdapter } from '../../src/platform-kvox/audit/platform-kvox-audit.adapter';
 import { PlatformKvoxEventsAdapter } from '../../src/platform-kvox/events/platform-kvox-events.adapter';
 import { PlatformKvoxIdentityAdapter } from '../../src/platform-kvox/identity/platform-kvox-identity.adapter';
@@ -42,186 +46,48 @@ import { PlatformKvoxSettingsAdapter } from '../../src/platform-kvox/settings/pl
 
 const CTX = { userId: 'user-1', orgId: null, feature: 'notes.generate' as const };
 
-async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const item of iterable) out.push(item);
-  return out;
-}
-
 // -----------------------------------------------------------------------------
-describe('AI adapter', () => {
-  describe('toKvoxAiError', () => {
-    const cases: Array<[string, unknown, string]> = [
-      ['AiAuthError', new AiAuthError('rejected'), 'auth'],
-      ['AiRefusedError', new AiRefusedError('declined'), 'refusal'],
-      ['platform RateLimitError', new RateLimitError('429', 2000), 'rate_limit'],
-      ['AiBudgetError', new AiBudgetError('big', 10, 5, 'openai'), 'budget'],
-      ['AiInputError', new AiInputError('bad request'), 'other'],
-      ['AiStructuredOutputError (not JSON)', new AiStructuredOutputError('bad json', 'invalid_json'), 'invalid_output'],
-      ['AiStructuredOutputError (cut off)', new AiStructuredOutputError('cut off', 'truncated'), 'truncated'],
-      ['ai_not_configured conflict', notConfiguredConflict(), 'not_configured'],
-      ['graph_disabled conflict', graphDisabledConflict(), 'not_configured'],
-      ['ai_key_missing conflict', keyMissingConflict(), 'key_missing'],
-      ['model_lacks_capability conflict', lacksCapabilityConflict({ task: 't', model: 'm', missing: ['x'] }), 'capability'],
-      ['model_not_permitted bad request', new KvoxAiBadRequest('no'), 'capability'],
-      ['HTTP 429', new HttpException('slow down', 429), 'rate_limit'],
-      ['HTTP 422', new HttpException('filtered', 422), 'refusal'],
-      ['HTTP 503', new HttpException('down', 503), 'other'],
-      ['a DOMException TimeoutError', new DOMException('too slow', 'TimeoutError'), 'timeout'],
-      ['the facade timeout sentence', new Error('The AI request timed out after 600000 ms.'), 'timeout'],
-      ['a plain Error', new Error('boom'), 'other'],
-      ['a thrown string', 'oops', 'other'],
-    ];
+describe('AI binding', () => {
+  // The rules the retired `PlatformKvoxAiAdapter` pinned here (the feature vocabulary, the
+  // refusal of an unknown feature, resolveTask's reasons and numbers, capabilities() never
+  // throwing, the chat step rule, the embeddings width) moved to
+  // `packages/kvox-ai/src/port/create-kvox-ai.port.spec.ts` with the code; the translation of
+  // the host's own errors is `test/ai/platform-ai-runtime.spec.ts`.
 
-    it.each(cases)('maps %s to %s', (_name, error, errorClass) => {
-      expect(toKvoxAiError(error).errorClass).toBe(errorClass);
-    });
+  it('binds KVOX_AI with a factory over the runtime, the shared task-model source, the readiness reader and the settings', () => {
+    const binding = platformKvoxPorts.ai as { useFactory: (...deps: unknown[]) => unknown; inject: unknown[] };
 
-    it('keeps the numbers of a budget refusal and the retry hint of a rate limit', () => {
-      const budget = toKvoxAiError(new AiBudgetError('big', 14_200, 11_500)) as KvoxAiBudgetError;
-      expect(budget).toBeInstanceOf(KvoxAiBudgetError);
-      expect([budget.required, budget.available]).toEqual([14_200, 11_500]);
-      expect(toKvoxAiError(new RateLimitError('429', 2000)).retryAfterMs).toBe(2000);
-    });
+    expect(binding.inject).toEqual([PlatformAiRuntime, PlatformTaskModelSource, AiReadinessService, KvoxAiSettings]);
 
-    it('returns a KvoxAiError unchanged', () => {
-      const own = new KvoxAiError('capability', 'x');
-      expect(toKvoxAiError(own)).toBe(own);
-    });
-
-    it('never lets a key-shaped string through', () => {
-      const message = toKvoxAiError(
-        new AiAuthError('Rejected sk-abcdefghij1234567890 and ghp_abcdefghijklmnop and github_pat_11ABCDEFG0123456789'),
-      ).message;
-      expect(message).not.toMatch(/sk-[A-Za-z0-9]{10,}/);
-      expect(message).not.toMatch(/ghp_|gho_|github_pat_/);
-      expect(scrub('plain text')).toBe('plain text');
-    });
+    const port = binding.useFactory(
+      { stream: jest.fn(), create: jest.fn(), readiness: jest.fn() },
+      { load: jest.fn() },
+      { readiness: jest.fn() },
+      { requestTimeoutMs: jest.fn(), graphEnabled: jest.fn() },
+    );
+    expect(port).toBeInstanceOf(TracedKvoxAiPort);
   });
 
-  describe('features and tasks', () => {
-    it('maps the port vocabulary to the registered feature ids', () => {
-      expect(featureOf('notes.generate')).toBe('note_generate');
-      expect(featureOf('notes.title')).toBe('note_retitle');
-      expect(featureOf('transcripts.name_check')).toBe('transcript_name_check');
-      expect(featureOf('ask.respond')).toBe('graph_agent');
-      expect(featureOf('graph.agent')).toBe('graph_agent');
-      expect(featureOf('graph_extract')).toBe('graph_extract');
-      expect(featureOf('nonsense')).toBeUndefined();
-    });
+  it('keeps the spans of the retired adapter under their former names, and leaves the generators untraced', async () => {
+    const inner = {
+      capabilities: jest.fn(async () => ({ available: true })),
+      resolveTask: jest.fn(async () => ({ model: 'm' })),
+      generateStructured: jest.fn(async () => ({ value: 1 })),
+      embed: jest.fn(async () => ({ vectors: [] })),
+      generateText: jest.fn(() => 'text-iterable'),
+      chat: jest.fn(() => 'chat-iterable'),
+      countTokens: jest.fn(() => 7),
+    };
+    const port = new TracedKvoxAiPort(inner as never);
 
-    it('refuses an unknown feature with a capability error', async () => {
-      const adapter = new PlatformKvoxAiAdapter(new FakeKvoxAi(), { graphEnabled: async () => true } as never);
-
-      await expect(adapter.resolveTask({ ...CTX, feature: 'nonsense' }, 'nonsense')).rejects.toMatchObject({ errorClass: 'capability' });
-      await expect(
-        collect(adapter.generateText({ ...CTX, feature: 'nonsense' }, { target: {} as never, system: '', user: '' })),
-      ).rejects.toMatchObject({ errorClass: 'capability' });
-    });
-
-    it.each([
-      ['ai_key_missing', 'key_missing'],
-      ['ai_not_configured', 'not_configured'],
-      ['graph_disabled', 'not_configured'],
-      ['model_lacks_capability', 'capability'],
-      ['model_not_permitted', 'capability'],
-    ] as const)('resolveTask maps the readiness reason %s to %s', async (reason, errorClass) => {
-      const facade = new FakeKvoxAi().setReadiness(notReadyReadiness(reason));
-      const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
-
-      await expect(adapter.resolveTask(CTX, 'notes.generate')).rejects.toMatchObject({ errorClass });
-    });
-
-    it('resolveTask hands back the model numbers and asks the facade for the mapped feature', async () => {
-      const facade = new FakeKvoxAi();
-      const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
-
-      const target = await adapter.resolveTask({ ...CTX, orgId: 'org-1' }, 'ask.respond', { model: 'gpt-4o' });
-
-      expect(target).toMatchObject({ provider: 'openai', model: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_384 });
-      expect(facade.lastCall('readiness')).toMatchObject({ feature: 'graph_agent', userId: 'user-1' });
-    });
-
-    it('capabilities reports the reason, the embeddings and never throws', async () => {
-      const facade = new FakeKvoxAi().setReadiness(notReadyReadiness('ai_key_missing'));
-      const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => false } as never);
-
-      expect(await adapter.capabilities(CTX)).toMatchObject({
-        available: false,
-        reason: 'ai_key_missing',
-        graphEnabled: false,
-        embeddings: { dimensions: 1536 },
-      });
-
-      const broken = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => Promise.reject(new Error('db down')) } as never);
-      expect(await broken.capabilities(CTX)).toMatchObject({ available: false, reason: 'ai_not_configured', embeddings: null });
-    });
-  });
-
-  describe('chat', () => {
-    it('drops text after a tool call, parses the arguments and ends with step_end then done', async () => {
-      const facade = new FakeKvoxAi();
-      facade.queueChat([
-        { kind: 'tool_call', id: 'c1', name: 'lookup', argumentsJson: '{"q":"acme"}' },
-        { kind: 'delta', text: 'ignored' },
-        { kind: 'tool_call', id: 'c2', name: 'lookup', argumentsJson: 'not json' },
-        { kind: 'done', finishReason: 'tool_calls', model: 'm', usage: { inputTokens: 3, outputTokens: 4 } },
-      ]);
-      const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
-      const target = await adapter.resolveTask(CTX, 'notes.generate');
-
-      const events = await collect(
-        adapter.chat(CTX, { target, messages: [{ role: 'user', content: 'hi' }], tools: [], toolChoice: 'auto' }),
-      );
-
-      expect(events).toEqual([
-        { type: 'tool_call', id: 'c1', name: 'lookup', arguments: { q: 'acme' } },
-        { type: 'tool_call', id: 'c2', name: 'lookup', arguments: 'not json' },
-        { type: 'step_end' },
-        { type: 'done', usage: { inputTokens: 3, outputTokens: 4 }, finishReason: 'stop' },
-      ]);
-    });
-
-    it('sends the history to the facade with the tool calls as JSON, and the model ceiling', async () => {
-      const facade = new FakeKvoxAi();
-      const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
-      const target = await adapter.resolveTask(CTX, 'notes.generate');
-
-      await collect(
-        adapter.chat(CTX, {
-          target,
-          messages: [
-            { role: 'user', content: 'hi' },
-            { role: 'assistant', content: null, toolCalls: [{ id: 'c1', name: 'lookup', arguments: { q: 1 } }] },
-            { role: 'tool', toolCallId: 'c1', content: 'result' },
-          ],
-          tools: [{ name: 'lookup', description: 'd', parameters: { type: 'object' } }],
-          toolChoice: 'auto',
-        }),
-      );
-
-      expect(facade.lastCall('chat')?.request).toMatchObject({
-        maxOutputTokens: 16_384,
-        toolChoice: 'auto',
-        tools: [{ name: 'lookup' }],
-        messages: [
-          { role: 'user' },
-          { role: 'assistant', toolCalls: [{ id: 'c1', argumentsJson: '{"q":1}' }] },
-          { role: 'tool', toolCallId: 'c1' },
-        ],
-      });
-    });
-  });
-
-  it('embed reports the catalog width and calls the facade as the search embed feature', async () => {
-    const facade = new FakeKvoxAi();
-    const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
-
-    const result = await adapter.embed({ ...CTX, feature: 'search.embed' }, { inputs: ['a', 'b'] });
-
-    expect(result.dimensions).toBe(1536);
-    expect(result.vectors).toHaveLength(2);
-    expect(facade.lastCall('embed')?.feature).toBe('search_embed');
+    await expect(port.capabilities(CTX)).resolves.toEqual({ available: true });
+    await expect(port.resolveTask(CTX, 'notes.generate')).resolves.toEqual({ model: 'm' });
+    await expect(port.generateStructured(CTX, {} as never)).resolves.toEqual({ value: 1 });
+    await expect(port.embed(CTX, { inputs: [] })).resolves.toEqual({ vectors: [] });
+    // Returned as they are: a Promise here would break `for await`.
+    expect(port.generateText(CTX, {} as never)).toBe('text-iterable');
+    expect(port.chat(CTX, {} as never)).toBe('chat-iterable');
+    expect(port.countTokens({} as never, 'x')).toBe(7);
   });
 });
 

@@ -103,7 +103,7 @@ describe('AI name correction Integration', () => {
     setupBaseMocks();
     jest.clearAllMocks();
 
-    // The real `KvoxAi.readiness`: AI on, `gpt-4o` enabled, and a saved key, so
+    // The real readiness (`AiReadinessService`): AI on, `gpt-4o` enabled, and a saved key, so
     // create() gets past the ai_key_missing 409.
     invalidateAiResolverCache(context);
     primeAiReadiness();

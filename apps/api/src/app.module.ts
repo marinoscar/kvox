@@ -256,8 +256,9 @@ import configuration from './config/configuration';
     // This app's side of the AI slice: `/api/ai-tasks/config` (the capability probe that
     // used to be `GET /api/ai/config`) and `/api/ai-tasks/settings` (task models).
     AiPortModule,
-    // The `KvoxAi` port (`KVOX_AI`, #475): the one way a feature reaches a model, over
-    // the platform `AiService`. Global; BEFORE the features that inject it.
+    // The web half of `@marinoscar/kvox-ai` (#475, #579): the platform runtime, the readiness
+    // reader and the `ai` settings reader that `KVOX_AI` is built from. Global; BEFORE the
+    // features that inject them.
     KvoxAiModule,
 
     // Notes (#49, epic #45) are `@marinoscar/kvox-api/notes`, configured in `kvox/notes/notes.config.ts`

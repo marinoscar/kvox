@@ -6,7 +6,6 @@ import {
   type AiTargetContext,
   type AiTargetResolver,
 } from '@marinoscar/platform-api/ai';
-import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import {
   KVOX_EMBEDDING_FEATURES,
   KVOX_FEATURE_TASK,
@@ -14,19 +13,20 @@ import {
   isKvoxAiFeature,
   taskDefinition,
   type AiTaskKey,
-  type TaskModelCandidate,
   type TaskModelChoice,
-  type TaskModelPolicy,
 } from '@marinoscar/kvox-ai';
 
-import { PrismaService } from '../prisma/prisma.service';
 import {
   graphDisabledConflict,
   lacksCapabilityConflict,
   notConfiguredConflict,
   notPermittedBadRequest,
 } from './kvox-ai-errors';
-import { KVOX_AI_POLICY } from './ai-policy';
+import {
+  KVOX_AI_PROVIDER,
+  PlatformTaskModelSource,
+  type KvoxAiResolverState,
+} from './platform-task-model-source';
 
 // =============================================================================
 // KvoxAiTargetResolver (issue #473, epic #472)
@@ -55,117 +55,45 @@ import { KVOX_AI_POLICY } from './ai-policy';
 //
 // THE KEY IS NOT CHECKED HERE. Whose key pays, and whether it can reach the model,
 // is the platform's gate (`AI_KEY_REQUIRED`, `AI_MODEL_NOT_REACHABLE`), which
-// `mapAiError` turns into the product's wire codes.
+// `toKvoxAiError` (`@marinoscar/kvox-ai`) turns into the port's error classes.
+//
+// THE READS ARE NOT HERE EITHER (#579): the policy and the enabled models come from
+// `PlatformTaskModelSource` (the 5-second cache lives there), which the bound
+// `KVOX_AI` reads too. What stays is the platform-facing half: answering
+// `AI_TARGET_RESOLVER` with this product's 409/400 bodies.
 // =============================================================================
 
-/** How long the policy and model rows are reused, like the platform's policy cache. */
-export const KVOX_AI_RESOLVER_CACHE_MS = 5_000;
-
-/** The one provider this product runs today. */
-export const KVOX_AI_PROVIDER = 'openai';
+// The cache window, the provider id and the state types moved to
+// `platform-task-model-source.ts` with the reads (#579); re-exported here, where
+// the resolver's callers have always imported them.
+export { KVOX_AI_PROVIDER, KVOX_AI_RESOLVER_CACHE_MS } from './platform-task-model-source';
+export type { KvoxAiResolverState, KvoxEnabledModel } from './platform-task-model-source';
 
 /** The embeddings model the catalog offers, which the embedding features use. */
 export const KVOX_EMBEDDING_MODEL = 'text-embedding-3-small';
 
-/** One enabled model, as the resolver and `/api/ai-tasks/config` read it. */
-export interface KvoxEnabledModel extends TaskModelCandidate {
-  label: string;
-  contextWindow: number | null;
-  maxOutputTokens: number | null;
-}
-
-/** The policy and the enabled models, read once. */
-export interface KvoxAiResolverState {
-  policy: TaskModelPolicy & {
-    enabled: boolean;
-    maxInputTokens: number | null;
-    maxOutputTokens: number | null;
-  };
-  /** The active provider slot, or null while AI or the slot is off. */
-  provider: string | null;
-  /** Enabled `ai_models` rows of the active provider; empty when there is none. */
-  models: KvoxEnabledModel[];
-}
-
-function flagsOf(capabilities: unknown): { structuredOutput: boolean; toolCalling: boolean } {
-  const list =
-    typeof capabilities === 'object' && capabilities !== null
-      ? (capabilities as { capabilities?: unknown }).capabilities
-      : undefined;
-  const ids = Array.isArray(list) ? list : [];
-  return {
-    structuredOutput: ids.includes('structured_output'),
-    toolCalling: ids.includes('tools'),
-  };
-}
-
 @Injectable()
 export class KvoxAiTargetResolver implements AiTargetResolver {
   private readonly logger = new Logger(KvoxAiTargetResolver.name);
-  private cache: { at: number; state: KvoxAiResolverState } | null = null;
   private staleWarned = false;
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly settings: SystemSettingsService,
+    private readonly source: PlatformTaskModelSource,
     private readonly fallback: DefaultAiTargetResolver,
   ) {}
 
-  /** Drops the cached policy and models (a settings or catalog write). */
+  /** Drops the cached policy and models (a settings or catalog write). Delegates to the source. */
   invalidateCache(): void {
-    this.cache = null;
+    this.source.invalidateCache();
   }
 
   /**
    * The extended `ai` namespace and the enabled models, in one read, reused for
-   * {@link KVOX_AI_RESOLVER_CACHE_MS}.
+   * {@link KVOX_AI_RESOLVER_CACHE_MS}. Delegates to {@link PlatformTaskModelSource}, which
+   * `createKvoxAi` reads too, so the run-time port and this resolver share one cache.
    */
-  async loadState(options: { fresh?: boolean } = {}): Promise<KvoxAiResolverState> {
-    const now = Date.now();
-    if (!options.fresh && this.cache && now - this.cache.at < KVOX_AI_RESOLVER_CACHE_MS) {
-      return this.cache.state;
-    }
-
-    const ai = await this.settings.getNamespace(KVOX_AI_POLICY);
-    const provider = ai.enabled && ai.providers[KVOX_AI_PROVIDER]?.enabled === true ? KVOX_AI_PROVIDER : null;
-
-    const rows = provider
-      ? await this.prisma.aiModel.findMany({
-          where: { provider, enabled: true },
-          orderBy: { modelId: 'asc' },
-          select: {
-            modelId: true,
-            displayName: true,
-            capabilities: true,
-            contextWindow: true,
-            maxOutputTokens: true,
-          },
-        })
-      : [];
-
-    const state: KvoxAiResolverState = {
-      policy: {
-        enabled: ai.enabled,
-        provider,
-        defaultModel: ai.defaultModel,
-        graphEnabled: ai.graphEnabled,
-        taskModels: ai.taskModels,
-        reasoningEffort: ai.reasoningEffort,
-        maxInputTokens: ai.maxInputTokens,
-        maxOutputTokens: ai.maxOutputTokens,
-      },
-      provider,
-      models: rows.map((row) => ({
-        id: row.modelId,
-        label: row.displayName ?? row.modelId,
-        contextWindow: row.contextWindow,
-        maxOutputTokens: row.maxOutputTokens,
-        ...flagsOf(row.capabilities),
-      })),
-    };
-
-    this.cache = { at: now, state };
-    return state;
+  loadState(options: { fresh?: boolean } = {}): Promise<KvoxAiResolverState> {
+    return this.source.loadState(options);
   }
 
   async resolve(ctx: AiTargetContext): Promise<AiTarget | null> {
