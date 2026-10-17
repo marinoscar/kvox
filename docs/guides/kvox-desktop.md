@@ -384,7 +384,7 @@ settings.registerNamespace({
 
 Turn `graphEnabled` on once at start-up (`settings.patchSystem('ai', { graphEnabled: true }, ...)`, as `seedRuntime` does in `examples/bare-host/src/seed.ts`), or the graph answers 409 `graph_disabled` and no digest is queued.
 
-**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit does not test this yet.
+**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit tests it when the factory supplies the opt-in `settings.noDefaults` fixture (`{ name, schema, userId, patch }`, a user-scope namespace registered with `defaults: undefined`; issue #593).
 
 Desktop: the same file in the user's application-data folder, or a table.
 
@@ -797,7 +797,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
      jobs: { port: pgTableJobs, drain: () => pgTableJobs.drain().then(() => undefined) },
      identity: { port: identity, anonymous: anonymousContext(), authenticated: tokenContext(), permissions: { granted: 'transcripts:read', notGranted: 'nope:read' } },
      notify: { port: osNotify },
-     settings: { port: fileSettings },
+     settings: { port: fileSettings /*, noDefaults: { name, schema, userId, patch } */ },
      secrets: { port: keychain, purpose: 'conformance', name: 'k', actorUserId: LOCAL_USER_ID },
      dispose: async () => { /* stop timers */ },
    }), { describe, it, expect });
