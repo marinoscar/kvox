@@ -16,7 +16,7 @@ import { render } from '../../utils/test-utils';
 import { TranscriptStatusChip } from '../../../components/transcripts/TranscriptStatusChip';
 import { UploadManagerContext } from '../../../contexts/UploadManagerContext';
 import type { ManagedUpload } from '../../../contexts/UploadManagerContext';
-import type { UploadPhase } from '../../../services/resumableUpload';
+import type { UploadPhase } from '@marinoscar/kvox-web/core/headless';
 import { manager, upload } from '../home/homeFixtures';
 
 const UPLOADING = {

@@ -29,7 +29,7 @@ import type {
   LatestNameCheck,
 } from '../services/transcriptNameChecks';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 export const NAME_CHECK_POLL_MS = 3_000;
 

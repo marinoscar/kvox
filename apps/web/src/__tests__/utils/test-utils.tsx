@@ -13,6 +13,9 @@ import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
 import { darkTheme, lightTheme } from '../../theme';
 // Issue #466: the host the packaged settings pages and headless hooks read.
 import { AppPlatformHostProvider } from '../../platform/platformHost';
+// Issue #499: the host the `@marinoscar/kvox-web` slices (and the app pages that
+// call their clients) read, bound over the same `api` client MSW answers.
+import { AppKvoxHostProvider } from '../../platform-kvox/KvoxHostBinding';
 
 interface WrapperOptions {
   route?: string;
@@ -197,7 +200,9 @@ function createWrapper(options: WrapperOptions = {}) {
             isLoading={isLoading}
             providers={providers}
           >
-            <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
+            <AppPlatformHostProvider>
+              <AppKvoxHostProvider>{children}</AppKvoxHostProvider>
+            </AppPlatformHostProvider>
           </MockAuthProvider>
         </ShellRoot>
       </MemoryRouter>

@@ -31,7 +31,7 @@ import { getEntityBrief } from '../services/graph';
 import type { EntityBrief } from '../services/graph';
 import { graphErrorMessage, isAbortError, useAbortControllers } from './graphHookUtils';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 export const BRIEF_DIGEST_POLL_MS = 5_000;
 export const BRIEF_DIGEST_POLL_MAX_MS = 2 * 60_000;

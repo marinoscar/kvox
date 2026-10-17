@@ -3,6 +3,7 @@ import { isValidElement } from 'react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import {
   isDestinationVisible,
   owns,
@@ -533,6 +534,13 @@ describe('admin sections — registry against the live routes', () => {
       const path = /^\s*path="([^"]+)"/.exec(chunk)?.[1];
       if (!path) continue;
       gates.set(path, /permission="([^"]+)"/.exec(chunk)?.[1] ?? null);
+    }
+    // Routes a `@marinoscar/kvox-web` slice exports as DATA (#499, epic #498) are
+    // rendered by `renderKvoxRoutes(...)` in `App.tsx`, not written out as
+    // `<Route>` elements, so they are read from the slice's own list: the same
+    // path, the same `permission` the guard is built from.
+    if (/renderKvoxRoutes\(kvoxTranscriptionRoutes\)/.test(source)) {
+      for (const route of kvoxTranscriptionRoutes) gates.set(route.path, route.permission ?? null);
     }
     return gates;
   }

@@ -44,7 +44,7 @@ import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useGraphEntities } from '../../hooks/useGraphEntities';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { initials } from '../../utils/graphDisplay';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export const KNOWLEDGE_TYPES = ['Person', 'Organization'] as const;
 export const KNOWLEDGE_LIMIT = 6;

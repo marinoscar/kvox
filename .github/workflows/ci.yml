@@ -75,6 +75,8 @@ jobs:
       # The API and the web import @marinoscar/kvox-contract from its built
       # output (dist/, git-ignored): build it right after the install (issue #488).
       - run: npm run build --workspace=@marinoscar/kvox-contract
+      # The web also imports @marinoscar/kvox-web (core, transcription) from its built output (issue #499).
+      - run: npm run build --workspace=@marinoscar/kvox-web
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
 
@@ -259,6 +261,8 @@ jobs:
       # The API and the web import @marinoscar/kvox-contract from its built
       # output (dist/, git-ignored): build it right after the install (issue #488).
       - run: npm run build --workspace=@marinoscar/kvox-contract
+      # The web also imports @marinoscar/kvox-web (core, transcription) from its built output (issue #499).
+      - run: npm run build --workspace=@marinoscar/kvox-web
 
       - run: npm run test:run --workspace=web -- --shard=${{ matrix.shard }}/4
 

@@ -26,7 +26,7 @@ import {
   useTranscripts,
 } from '../../hooks/useTranscripts';
 import type { TranscriptDetail, TranscriptListItem } from '../../services/transcripts';
-import { clearFeedCache } from '../../utils/feedCache';
+import { clearFeedCache } from '@marinoscar/kvox-web/core/headless';
 
 const mockGetTranscripts = vi.mocked(getTranscripts);
 const mockGetTranscript = vi.mocked(getTranscript);

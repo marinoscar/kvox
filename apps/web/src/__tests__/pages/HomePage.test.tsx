@@ -21,7 +21,7 @@ import HomePage from '../../pages/HomePage';
 import { useUploadManager } from '../../hooks/useUploadManager';
 import type { NoteSummary } from '../../services/notes';
 import type { TranscriptSummary } from '../../services/transcripts';
-import type { TranscriptionConfig } from '../../services/transcription';
+import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 import {
   AXE_OPTIONS,
   TRANSCRIPTION_AVAILABLE,

@@ -73,7 +73,7 @@ import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { useGraphOverview } from '../hooks/useGraphOverview';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import type { GraphOverview } from '../services/graph';
-import { formatRelativeTime } from '../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 const GraphCanvas = lazy(() => import('../components/graph/explorer/GraphCanvas'));
 

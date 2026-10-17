@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * The generation stream client — issue #56, epic #45.
  *
- * `services/sse.ts` is MOCKED, `services/noteGenerationStream.ts` is not: the
+ * `connectSse` (`@marinoscar/kvox-web/core/headless`) is MOCKED, `services/noteGenerationStream.ts` is not: the
  * SSE framing already has its own suite (`sse.test.ts`), and what is worth
  * proving here is the layer above it — that a `delta` frame is written at its
  * OFFSET rather than appended, that a terminal frame closes the connection
@@ -17,8 +17,8 @@ const connections: Array<{
   close: ReturnType<typeof vi.fn>;
 }> = [];
 
-vi.mock('../../services/sse', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/sse')>();
+vi.mock('@marinoscar/kvox-web/core/headless', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/core/headless')>();
   return {
     ...actual,
     connectSse: vi.fn((options: Parameters<typeof actual.connectSse>[0]) => {
@@ -99,7 +99,7 @@ describe('noteGenerationStream — applyDelta', () => {
     buffer = applyDelta(buffer, { delta: ' world', offset: 11 });
     expect(buffer).toBe('Hello world');
 
-    // The reconnect case: `services/sse.ts` sends no `Last-Event-ID`, so the
+    // The reconnect case: `connectSse` (`@marinoscar/kvox-web/core/headless`) sends no `Last-Event-ID`, so the
     // server replays from zero. Appending would double the text.
     buffer = applyDelta(buffer, { delta: 'Hello', offset: 5 });
     buffer = applyDelta(buffer, { delta: ' world', offset: 11 });

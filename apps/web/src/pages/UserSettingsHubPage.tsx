@@ -25,7 +25,7 @@ import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless'
 import { SettingsHub } from '@marinoscar/platform-web/settings/ui';
 import { USER_SETTINGS_SECTIONS, USER_HUB_TITLE } from '../config/userSettingsSections';
 import { AppVersionLine } from '../components/settings/AppVersionLine';
-import { useScrollRestoration } from '../hooks/useScrollRestoration';
+import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
 
 export default function UserSettingsHubPage() {
   const { hasPermission } = usePermissions();

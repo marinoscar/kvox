@@ -41,8 +41,9 @@ COPY packages ./packages/
 # The root postinstall (patch-react-transition-group.js) runs during npm ci
 COPY scripts ./scripts
 # `@marinoscar/kvox-contract` is selected too, so its devDependencies (TypeScript,
-# Zod, @types/node) exist for the contract build below (issue #488).
-RUN npm ci --workspace=web --workspace=@marinoscar/kvox-contract --include-workspace-root
+# Zod, @types/node) exist for the contract build below (issue #488), and so is
+# `@marinoscar/kvox-web` (the domain UI the app imports, issue #499).
+RUN npm ci --workspace=web --workspace=@marinoscar/kvox-contract --workspace=@marinoscar/kvox-web --include-workspace-root
 
 # -----------------------------------------------------------------------------
 # Development stage
@@ -54,6 +55,8 @@ COPY --from=deps /app ./
 # .dockerignore drops, so it is built inside the image (issue #488).
 COPY tsconfig.base.json ./
 RUN npm run build --workspace=@marinoscar/kvox-contract
+# ... and the web package, which imports the contract's built output (issue #499).
+RUN npm run build --workspace=@marinoscar/kvox-web
 COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 EXPOSE 5173
@@ -67,6 +70,8 @@ COPY --from=deps /app ./
 COPY tsconfig.base.json ./
 # Build the contract BEFORE the app: Vite resolves it from `dist/esm` (issue #488).
 RUN npm run build --workspace=@marinoscar/kvox-contract
+# The web package next, for the same reason: Vite resolves it from `dist/` (issue #499).
+RUN npm run build --workspace=@marinoscar/kvox-web
 COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 RUN npm run build

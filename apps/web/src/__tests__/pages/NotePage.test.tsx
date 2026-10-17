@@ -26,7 +26,7 @@ import type { NoteGenerationStreamHandlers } from '../../services/noteGeneration
  * `connectNoteStream` is replaced with a recorder that hands back a `close`
  * spy, for two reasons. The first is practical: a real SSE connection needs a
  * `ReadableStream` body, a decoder and a reconnect loop, none of which this
- * page owns — `services/sse.ts` has its own suite for all three. The second is
+ * page owns — `connectSse` (`@marinoscar/kvox-web/core/headless`) has its own suite for all three. The second is
  * the point: a connection LEAK is invisible to any assertion about rendered
  * output, so the only way to catch "navigating away mid-generation leaves a
  * socket open" is to hold the handle the component was given and check it was

@@ -65,7 +65,7 @@ import { ApiError } from '../../services/api';
 import { postAskMessage } from '../../services/ask';
 import type { AiTasksConfig } from '../../services/aiTasks';
 import type { AskConversationDetail, AskConversationSummary } from '../../services/ask';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /** At most this many of the entity's conversations in the picker (#381). */
 export const ENTITY_ASK_CONVERSATION_LIMIT = 10;

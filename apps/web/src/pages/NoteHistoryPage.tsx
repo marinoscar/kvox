@@ -80,7 +80,7 @@ import {
   restoreNoteVersion,
 } from '../services/notes';
 import type { NoteVersion, NoteVersionDetail } from '../services/notes';
-import { formatRelativeTime } from '../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /** The three `kind`s a version row can have, as words a reader recognises. */
 const KIND_LABELS: Record<NoteVersion['kind'], string> = {

@@ -13,7 +13,7 @@
     "graph-rdf": ["ports", "core", "testing", "graph", "graph-extraction", "transcripts", "notes"],
     "ask": ["ports", "core", "testing", "graph", "notes", "search", "transcripts"]
   },
-  "kvox-web": { "core": [] },
+  "kvox-web": { "core": [], "transcription": ["core"] },
   "kvox-contract": {
     "errors": [],
     "ontology": [],

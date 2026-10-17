@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import type { TranscriptAccessRole, TranscriptListItem } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /**
  * A summary row as this page renders it.

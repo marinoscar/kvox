@@ -7,7 +7,7 @@
  * =============================================================================
  *
  * The `<h1>` and the primary action live in
- * `components/library/LibraryPageFrame.tsx`, which `pages/TranscriptsPage.tsx`
+ * `LibraryPageFrame` (`@marinoscar/kvox-web/core/ui`), which `pages/TranscriptsPage.tsx`
  * wraps this in — the frame is shared with `NotesPage` because the header
  * genuinely is the same header. Everything else about this view is what #30
  * shipped: the scope tabs, the debounced search, the status filter, the three
@@ -63,9 +63,11 @@ import visuallyHidden from '@mui/utils/visuallyHidden';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
-import { FeedCountLine } from './FeedCountLine';
-import { FeedDateSeparator } from './FeedDateSeparator';
+import {
+  ActiveStatusFilterChip,
+  FeedCountLine,
+  FeedDateSeparator,
+} from '@marinoscar/kvox-web/core/ui';
 import { TranscriptRowActions } from './TranscriptRowActions';
 import { SearchResultsView } from '../search/SearchResultsView';
 import { EntitySearchHits } from '../graph/EntitySearchHits';
@@ -75,13 +77,13 @@ import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSearch } from '../../hooks/useSearch';
 import { useTranscripts } from '../../hooks/useTranscripts';
-import { useScrollRestoration } from '../../hooks/useScrollRestoration';
-import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
-import { feedCacheKey } from '../../utils/feedCache';
+import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
+import { feedCountLabel, groupFeedByDate } from '@marinoscar/kvox-web/core/headless';
+import { feedCacheKey } from '@marinoscar/kvox-web/core/headless';
 import type { SearchResult, SearchType } from '../../services/search';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import {
   TRANSCRIPT_STATUS_FILTERS,
   searchFromQuery,

@@ -58,7 +58,7 @@ import { SearchSnippet } from './SearchSnippet';
 import { SemanticSearchNotice } from './SemanticSearchNotice';
 import type { UseSearchResult } from '../../hooks/useSearch';
 import type { SearchResult, SearchType } from '../../services/search';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /** Wording for the one type a view asked about. */
 const TYPE_NOUNS: Record<SearchType, { singular: string; plural: string }> = {

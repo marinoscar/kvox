@@ -12,6 +12,7 @@
  */
 
 import { act, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -31,9 +32,15 @@ import {
   type UploadSessionRecord,
 } from '../../services/uploadSessions';
 import { KeepScreenAwakeToggle } from '../../components/upload/KeepScreenAwakeToggle';
-import { createFakeXhrFactory, type FakeXhrController } from '../utils/fakeXhr';
+import {
+  createFakeKvoxWebHost,
+  createFakeXhrFactory,
+  type FakeXhrController,
+} from '@marinoscar/kvox-web/core/testing';
+import { KvoxWebHostProvider } from '@marinoscar/kvox-web/core/headless';
+import { appKvoxHttp } from '../../platform-kvox/KvoxHostBinding';
 import { installFakeIndexedDB, type FakeIndexedDbControl } from '../utils/fakeIndexedDB';
-import type { UploadRuntime } from '../../services/resumableUpload';
+import type { UploadRuntime } from '@marinoscar/kvox-web/core/headless';
 
 const API = '*/api';
 const OBJECT_ID = 'obj-1';
@@ -76,6 +83,17 @@ async function flushUi() {
   await act(async () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
+}
+
+/**
+ * The domain web host the provider reads (issue #499): the app's own HTTP port, so
+ * the control plane still reaches MSW through the one `api` client, and no upload
+ * port, so the engine sends parts with the fake `XMLHttpRequest` below.
+ */
+const host = { ...createFakeKvoxWebHost({ upload: false }), http: appKvoxHttp };
+
+function renderWithHost(ui: ReactElement) {
+  return render(<KvoxWebHostProvider host={host}>{ui}</KvoxWebHostProvider>);
 }
 
 describe('UploadManagerProvider', () => {
@@ -166,7 +184,7 @@ describe('UploadManagerProvider', () => {
       );
     }
 
-    render(
+    renderWithHost(
       <MemoryRouter initialEntries={['/new']}>
         <UploadManagerProvider>
           <Capture />
@@ -198,7 +216,7 @@ describe('UploadManagerProvider', () => {
 
   describe('the list issues #30 and #32 render', () => {
     async function renderManager() {
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />
@@ -302,7 +320,7 @@ describe('UploadManagerProvider', () => {
 
   describe('resuming after a reload', () => {
     async function renderWithStoredSession() {
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />
@@ -401,7 +419,7 @@ describe('UploadManagerProvider', () => {
     async function renderWithSession() {
       // Persisted by a "previous visit", before the provider ever mounts.
       await saveUploadSession(storedSession);
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />
@@ -473,7 +491,7 @@ describe('UploadManagerProvider', () => {
     it('never asks about a session with no transcript attached', async () => {
       transcriptAnswers(() => HttpResponse.json({ message: 'Not found' }, { status: 404 }));
       await saveUploadSession({ ...storedSession, transcriptId: null });
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />
@@ -533,7 +551,7 @@ describe('UploadManagerProvider', () => {
 
   describe('keep screen on', () => {
     it('defaults on, persists the user turning it off, and hides where unsupported', async () => {
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />
@@ -562,7 +580,7 @@ describe('UploadManagerProvider', () => {
         value: { request: async () => ({ release: async () => {}, addEventListener: () => {} }) },
       });
 
-      render(
+      renderWithHost(
         <MemoryRouter>
           <UploadManagerProvider>
             <Capture />

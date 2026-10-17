@@ -10,14 +10,14 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock('../../services/transcription', () => ({ getTranscriptionConfig: vi.fn() }));
+vi.mock('@marinoscar/kvox-web/transcription/headless', () => ({ getTranscriptionConfig: vi.fn() }));
 vi.mock('../../services/transcripts', () => ({ createTranscript: vi.fn() }));
 vi.mock('../../hooks/useUploadManager', () => ({ useUploadManager: vi.fn() }));
 
 import { render, mockAdminUser, mockUser } from '../utils/test-utils';
 import { ApiError } from '../../services/api';
 import NewTranscriptPage from '../../pages/NewTranscriptPage';
-import { getTranscriptionConfig } from '../../services/transcription';
+import { getTranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 import { createTranscript } from '../../services/transcripts';
 import { useUploadManager } from '../../hooks/useUploadManager';
 import type { ManagedUpload } from '../../contexts/UploadManagerContext';

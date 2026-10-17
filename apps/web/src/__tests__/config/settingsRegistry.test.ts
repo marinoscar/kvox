@@ -12,6 +12,7 @@ import {
 } from '../../config/adminSections';
 import type { SettingsSectionDef } from '../../config/adminSections';
 import { registeredSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
+import { kvoxTranscriptionAdminSections } from '@marinoscar/kvox-web/transcription/ui';
 import '../../config/settingsFeatures';
 import {
   USER_SETTINGS_SECTIONS,
@@ -844,6 +845,21 @@ describe('the Transcription card (#23)', () => {
 
   it('is not an alwaysShow escape hatch — the gate must be able to deny it', () => {
     expect(card?.alwaysShow).toBeUndefined();
+  });
+
+  it('is the transcription slice\'s own data, spread in at its old position (#499)', () => {
+    // The card is exported as DATA by `@marinoscar/kvox-web/transcription/ui` and
+    // spread into General where the literal entry used to be: after Web Push,
+    // before AI. The hub, the Console rail and the AppBar title resolver read
+    // this one array, so the order here is the order every surface shows.
+    expect(card).toBe(kvoxTranscriptionAdminSections.general[0]);
+    const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+    const titles = general?.cards.map((entry) => entry.title) ?? [];
+    const at = titles.indexOf('Transcription');
+    expect(at).toBeGreaterThan(-1);
+    expect(titles[at - 1]).toBe('Web Push');
+    expect(titles[at + 1]).toBe('AI');
+    expect(card?.permission).toBe('system_settings:read');
   });
 
   it('appears for an admin holding system_settings:read', () => {

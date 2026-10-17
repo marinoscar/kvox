@@ -14,7 +14,7 @@
  * and the assertion. A mocked hook would let this suite pass over a page that
  * previewed the last saved row.
  *
- * `services/sse.ts` is mocked one level lower still, with a FAKE CONNECTION
+ * `connectSse` (`@marinoscar/kvox-web/core/headless`) is mocked one level lower still, with a FAKE CONNECTION
  * whose `close` is a spy. That is what makes two otherwise untestable claims
  * testable: frames can be delivered one at a time (so "streams in
  * incrementally" is an assertion rather than a hope), and the teardown on
@@ -40,8 +40,8 @@ interface FakeConnection {
 
 const connections: FakeConnection[] = [];
 
-vi.mock('../../services/sse', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/sse')>();
+vi.mock('@marinoscar/kvox-web/core/headless', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/core/headless')>();
   return {
     ...actual,
     connectSse: vi.fn((options: Parameters<typeof actual.connectSse>[0]) => {

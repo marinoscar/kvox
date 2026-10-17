@@ -43,7 +43,7 @@ import type {
   RevertResult,
 } from '../services/graph';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 export const PROPOSAL_POLL_MS = 2_000;
 

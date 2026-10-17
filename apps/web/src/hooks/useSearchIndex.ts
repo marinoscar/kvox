@@ -57,7 +57,7 @@ import {
 } from '../services/searchIndex';
 import type { SearchIndexRequestResult, SearchIndexStatus } from '../services/searchIndex';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 /**
  * How often the status is re-read while anything is pending.

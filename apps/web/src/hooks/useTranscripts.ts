@@ -72,11 +72,11 @@ import type {
   TranscriptSummary,
 } from '../services/transcripts';
 import { isTranscriptInFlight } from '../utils/transcriptDisplay';
-import { reconcileFeed } from '../utils/feedReconcile';
-import { useCachedFeedState } from '../utils/feedCache';
+import { reconcileFeed } from '@marinoscar/kvox-web/core/headless';
+import { useCachedFeedState } from '@marinoscar/kvox-web/core/headless';
 import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 /** Re-exported so a page takes its polling from the module it already imports. */
 export { useVisiblePolling };

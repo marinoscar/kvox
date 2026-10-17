@@ -56,6 +56,11 @@ import { darkTheme, lightTheme } from './theme';
 // Issue #22, epic #19 — the app-wide upload manager. Mounted around the
 // authenticated shell (see the route element below), never per-page.
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
+// Issue #499, epic #498. The domain web host binding, and the transcription slice's
+// routes (data, spread where the literal route used to be).
+import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
+import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
+import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 // Issue #258, epic #254; the platform's since #464. Eagerly imported, not lazy:
@@ -194,9 +199,6 @@ const PushConfigPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({
     default: m.PushConfigPage,
   })),
-);
-const TranscriptionSettingsPage = lazy(
-  () => import('./pages/Admin/TranscriptionSettingsPage'),
 );
 // Issue #55, epic #45; the platform's since #477 (epic #472) — the deployment's
 // AI policy: this app's thin binding over the packaged `AiConfigPage`, with the
@@ -905,27 +907,16 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Issue #23, epic #19. Same permission string the
-                      `Transcription` card declares in
-                      `config/adminSections.tsx`, which is the same string the
-                      API's transcription-settings controller enforces on its
-                      GET — the invariant `destinations.test.ts` asserts for
-                      every card. `system_settings:read` and not `:write`:
-                      saving, testing the credential and removing it all need
-                      write, which the page disables without it, but the
-                      configuration is worth READING for anyone diagnosing why
-                      a recording never came back. */}
-                  <Route
-                    path="/admin/settings/transcription"
-                    element={
-                      <RequirePermission
-                        permission="system_settings:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <TranscriptionSettingsPage />
-                      </RequirePermission>
-                    }
-                  />
+                  {/* Transcription settings (#23, epic #19; the slice's since
+                      #499, epic #498). The route is DATA exported by
+                      `@marinoscar/kvox-web/transcription/ui`: its path, its lazy
+                      page and the `system_settings:read` string the
+                      `Transcription` card declares, which is the string the API's
+                      transcription-settings controller enforces on its GET — the
+                      invariant `destinations.test.ts` asserts for every card.
+                      The slice's own header says why `:read` and not `:write`.
+                      This app supplies the guard (`renderKvoxRoutes`). */}
+                  {renderKvoxRoutes(kvoxTranscriptionRoutes)}
                   {/* Issue #55, epic #45; the platform's since #477 (epic #472).
                       Same permission string the `AI` card declares in
                       `config/adminSections.tsx`, which is the string the
@@ -1290,7 +1281,14 @@ export default function App() {
                     <DbBackupWebAdaptersProvider adapters={appDbBackupAdapters}>
                       <TelemetryWebAdaptersProvider adapters={appTelemetryAdapters}>
                         <AiWebAdaptersProvider adapters={appAiAdapters}>
-                          <AppRoutes />
+                          {/* The domain web host (#499, epic #498): the one port the
+                              `@marinoscar/kvox-web` slices read their transport, viewer
+                              and links from. Inside the identity providers, the graph
+                              feature provider and the platform host (it reads all
+                              three), above the router outlet. */}
+                          <AppKvoxHostProvider>
+                            <AppRoutes />
+                          </AppKvoxHostProvider>
                         </AiWebAdaptersProvider>
                       </TelemetryWebAdaptersProvider>
                     </DbBackupWebAdaptersProvider>

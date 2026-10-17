@@ -14,7 +14,7 @@
  * product produces, and the navigation now says so.
  */
 
-import { LibraryPageFrame } from '../components/library/LibraryPageFrame';
+import { LibraryPageFrame } from '@marinoscar/kvox-web/core/ui';
 import { NotesLibraryView } from '../components/library/NotesLibraryView';
 
 export function NotesPage() {

@@ -23,7 +23,7 @@ import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless'
 import { SettingsHub } from '@marinoscar/platform-web/settings/ui';
 import { ADMIN_SECTIONS, ADMIN_HUB_TITLE } from '../../config/adminSections';
 import { AppVersionLine } from '../../components/settings/AppVersionLine';
-import { useScrollRestoration } from '../../hooks/useScrollRestoration';
+import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
 
 export default function SettingsHubPage() {
   const { hasPermission } = usePermissions();

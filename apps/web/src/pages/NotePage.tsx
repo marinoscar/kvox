@@ -146,7 +146,7 @@ import { useGraphProposal } from '../hooks/useGraphProposal';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../hooks/useNotes';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+import { useUnsavedChangesWarning } from '@marinoscar/kvox-web/core/headless';
 import { ApiError } from '../services/api';
 import { connectNoteStream, describeStreamError } from '../services/noteGenerationStream';
 import type { SseConnection } from '../services/noteGenerationStream';

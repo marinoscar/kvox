@@ -50,7 +50,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import type { Note } from '../../services/notes';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
-import { formatShortDate } from '../../utils/relativeTime';
+import { formatShortDate } from '@marinoscar/kvox-web/core/headless';
 
 export interface NoteProvenanceProps {
   note: Note;

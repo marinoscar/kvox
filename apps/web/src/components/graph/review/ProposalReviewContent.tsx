@@ -25,7 +25,7 @@ import Typography from '@mui/material/Typography';
 import { useMemo } from 'react';
 
 import type { BulkDecision, ProposalDetail } from '../../../services/graph';
-import { formatRelativeTime } from '../../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import { ProposalGroup } from './ProposalGroup';
 import type { ProposalRowHandlers } from './ProposalItemRow';
 import { groupProposalItems } from './proposalGrouping';

@@ -20,8 +20,8 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback } from 'react';
 
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import type { CopyState } from '../../hooks/useCopyToClipboard';
+import { useCopyToClipboard } from '@marinoscar/kvox-web/core/headless';
+import type { CopyState } from '@marinoscar/kvox-web/core/headless';
 
 export const COPY_FAILED_MESSAGE = 'Copy failed — select the text and copy manually';
 

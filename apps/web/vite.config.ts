@@ -105,6 +105,18 @@ export default defineConfig({
   // `./ontology` subpath. Listing the package and that subpath makes the
   // optimizer build both entries together, so the ontology is one instance.
   // Each entry is listed because pre-bundling is per entry, not per package.
+  //
+  // `@marinoscar/kvox-web` (issue #499, epic #498) is deliberately NOT listed. It
+  // is a linked workspace package like the two above, but it is pure ESM
+  // (`"type": "module"`, built by `tsc` to ESM), so the dev server can serve its
+  // `dist/` as it is, which keeps ONE instance of the host context across the
+  // `core/*` and `transcription/*` entries. Pre-bundling it entry by entry would
+  // be the failure to avoid: if the optimizer ever gave `core/headless` and
+  // `transcription/ui` separate copies of the core, the provider and the hooks
+  // would hold different React contexts and every slice would throw
+  // `KvoxHostMissingError`. If a dev-server import of the package ever fails,
+  // list ALL its entries here together (one optimizer run shares the chunks)
+  // rather than aliasing its source paths.
   optimizeDeps: {
     include: [
       '@app/shared',

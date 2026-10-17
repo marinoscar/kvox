@@ -22,7 +22,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { EntityTypeIcon } from '../graph/entityTypeIcon';
 import type { AskConversationSummary } from '../../services/ask';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export const UNTITLED_CONVERSATION = 'New conversation';
 

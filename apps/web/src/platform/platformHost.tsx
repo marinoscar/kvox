@@ -43,14 +43,14 @@ import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless'
 import { useShellTheme } from '@marinoscar/platform-web/shell/headless';
 import { API_BASE_URL, api } from '../services/api';
 import { noticeMaintenance } from '../services/maintenance';
-import { formatRelativeTime } from '../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 /**
  * The packaged `postSse` over this app's client: the same `Authorization`
  * header, the same one refresh-and-retry on a 401 and the same maintenance
  * recogniser as every JSON call. Paths are relative to the API base.
  */
-function appPostSse(path: string, body: unknown, options: PlatformSseOptions): Promise<void> {
+export function appPostSse(path: string, body: unknown, options: PlatformSseOptions): Promise<void> {
   return postSse<unknown>({
     url: `${API_BASE_URL}${path}`,
     body,
