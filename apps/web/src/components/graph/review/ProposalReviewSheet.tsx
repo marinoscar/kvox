@@ -49,7 +49,7 @@ import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
-import { CopyButton } from '../../common/CopyButton';
+import { KvoxCopyButton as CopyButton } from '@marinoscar/kvox-web/core/ui';
 import { useAiTasksConfig } from '../../../hooks/useAiTasksConfig';
 import { useGraphOntology } from '../../../hooks/useGraphOntology';
 import { useGraphProposal } from '../../../hooks/useGraphProposal';

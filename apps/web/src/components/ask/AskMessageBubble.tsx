@@ -33,7 +33,7 @@ import type { ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 
 import { EvidenceChip } from '../graph/EvidenceChip';
-import { MarkdownView } from '../notes/MarkdownView';
+import { MarkdownView } from '@marinoscar/kvox-web/notes/ui';
 import type { AskCitation, AskMessage, AskToolCall } from '../../services/ask';
 import type { AskStreamState } from '../../hooks/useAskStream';
 import { AskToolSteps } from './AskToolSteps';

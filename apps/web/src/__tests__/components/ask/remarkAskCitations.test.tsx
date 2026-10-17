@@ -7,7 +7,7 @@ import remarkAskCitations, {
   stripTrailingPartialMarker,
   summarizeAskCitations,
 } from '../../../components/ask/remarkAskCitations';
-import { MarkdownView } from '../../../components/notes/MarkdownView';
+import { MarkdownView } from '@marinoscar/kvox-web/notes/ui';
 import type { AskCitation } from '../../../services/ask';
 
 /**

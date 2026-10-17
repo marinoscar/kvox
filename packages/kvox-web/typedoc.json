@@ -11,7 +11,9 @@
     "./src/search/headless/index.ts",
     "./src/search/ui/index.ts",
     "./src/transcripts/headless/index.ts",
-    "./src/transcripts/ui/index.ts"
+    "./src/transcripts/ui/index.ts",
+    "./src/notes/headless/index.ts",
+    "./src/notes/ui/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

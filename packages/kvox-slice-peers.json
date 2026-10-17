@@ -178,6 +178,24 @@
           "react-router-dom"
         ]
       }
+    },
+    "notes": {
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": [
+          "@mui/icons-material",
+          "@mui/material",
+          "@tiptap/core",
+          "@tiptap/extension-table",
+          "@tiptap/markdown",
+          "@tiptap/pm",
+          "@tiptap/react",
+          "@tiptap/starter-kit",
+          "react-markdown",
+          "react-router-dom",
+          "remark-gfm"
+        ]
+      }
     }
   },
   "kvox-contract": {

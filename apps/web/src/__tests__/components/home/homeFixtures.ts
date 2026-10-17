@@ -16,7 +16,7 @@ import { vi } from 'vitest';
 
 import { mockUser, type MockUser } from '../../utils/test-utils';
 
-import type { NoteListItem, NoteSummary } from '../../../services/notes';
+import type { NoteListItem, NoteSummary } from '@marinoscar/kvox-web/notes/headless';
 import type {
   ManagedUpload,
   TranscriptListItem,
