@@ -6,3 +6,4 @@ export * from './recording-ports.js';
 export * from './testing-module.js';
 export * from './conformance.js';
 export * from './fake-ports-under-test.js';
+export * from './scenario-ai.js';
