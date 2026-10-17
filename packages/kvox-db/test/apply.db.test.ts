@@ -13,7 +13,7 @@ const require = createRequire(__filename);
 
 /**
  * Applies the platform's migrations and then the domain's, installed with
- * `after-host`, to an empty database and checks it with `check --database`.
+ * `stable` names, to an empty database and checks it with `check --database`.
  * Runs only when DATABASE_URL points at a PostgreSQL 16 server with the
  * pgvector and pg_trgm extensions available and a role allowed to create a
  * database and the extensions (the test creates and drops its own database).
@@ -38,10 +38,10 @@ describe.skipIf(!adminUrl)('kvox-db against a fresh database', () => {
     await admin.end();
     url = withDatabase(name);
 
-    // The host: an empty app folder that receives the platform's own migrations from the platform command.
+    // The host: an empty app folder that receives the platform's own migrations from the platform command, stamped from a pinned clock so they sort before the domain.
     root = mkdtempSync(join(tmpdir(), 'kvox-db-apply-'));
     const platformBin = join(require.resolve('@marinoscar/platform-db/package.json'), '..', 'bin', 'platform.js');
-    const installed = spawnSync(process.execPath, [platformBin, 'db', 'sync', '--root', root], { encoding: 'utf8' });
+    const installed = spawnSync(process.execPath, [platformBin, 'db', 'sync', '--root', root, '--timestamp', '2024-01-01T00:00:00Z'], { encoding: 'utf8' });
     expect(installed.status, installed.stderr).toBe(0);
   });
 
@@ -53,13 +53,13 @@ describe.skipIf(!adminUrl)('kvox-db against a fresh database', () => {
     await admin.end();
   });
 
-  it('applies the platform history, then the domain history installed after-host, then passes check --database', async () => {
+  it('applies the platform history, then the domain history installed with stable names, then passes check --database', async () => {
     const dirs = () => readdirSync(join(root, 'prisma', 'migrations')).filter((d) => /^\d{14}_/.test(d)).sort();
     const platformDirs = dirs();
 
     // The temp host sits outside the repository, so name the platform schema folder instead of resolving it from the host.
     const platformSchemaDir = join(require.resolve('@marinoscar/platform-db/package.json'), '..', 'schema');
-    const plan = planKvoxSync({ root, names: 'after-host', platformSchemaDir });
+    const plan = planKvoxSync({ root, names: 'stable', platformSchemaDir });
     applyKvoxSync(plan);
     const all = dirs();
     const kvoxDirs = all.filter((d) => !platformDirs.includes(d));

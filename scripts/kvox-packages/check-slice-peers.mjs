@@ -16,8 +16,9 @@
 //
 //   packages/kvox-slices.json       slice -> the slices it may import
 //   packages/kvox-slice-peers.json  slice -> the packages its files import,
-//                                   plus $universal, $implies, $reserved and
-//                                   $hostOnly (see docs/PACKAGES.md)
+//                                   plus $universal, $implies, $reserved,
+//                                   $hostOnly and $hostPlugins (see
+//                                   docs/PACKAGES.md)
 //
 // THE RULES (each violation is printed as `[rule] message`)
 // -----------------------------------------------------------------------------
@@ -67,6 +68,19 @@
 //                    imports @mui/*, @emotion/* or a router (react-router*), or
 //                    reaches into a ui/ folder. A headless entry is what a host
 //                    with another design system builds its own UI on.
+//   8. host-plugins  A slice whose code uses the request decoration of a Fastify
+//                    plugin (HOST_PLUGIN_USES below) declares that plugin in
+//                    $hostPlugins, itself or through a slice it depends on.
+//                    Such a slice does NOT import the plugin: the host registers
+//                    it on its Fastify app and the slice calls what it adds to
+//                    the request (`request.isMultipart()`, `request.file()`),
+//                    typed by a local interface. Rule 4 scans imports and so
+//                    cannot see this duty; rule 8 scans for the calls. The data
+//                    is validated too (rule 2): a $hostPlugins key is a package,
+//                    each of its keys a declared slice, each entry a
+//                    `{ name, range, why }` of non-empty strings, no name twice
+//                    in one slice. With --app, rule 5 also requires the app to
+//                    install every host plugin of the slices it imports.
 //
 // ENTRIES. A web slice is split into entries, the folders headless/, ui/ and
 // testing/ directly under the slice. A slice entry in kvox-slice-peers.json may
@@ -82,7 +96,7 @@
 //   --root <dir>   Repository root (default: this script's grandparent).
 //   --app <dir>    Also run rule 5 for this app folder (repeatable), relative
 //                  to the root, e.g. --app apps/api --app apps/web. Without
-//                  --app only rules 1 to 4 and 6 run.
+//                  --app only rules 1 to 4 and 6 to 8 run.
 //   --without <package>
 //                  Rule 5 does not require this peer of the --app folders
 //                  (repeatable). See rule 5.
@@ -119,6 +133,24 @@ export const HOST_NEUTRAL_ALLOWED = Object.freeze({
 });
 /** Specifier prefix rule 6 forbids. */
 export const PLATFORM_PREFIX = '@marinoscar/platform-';
+
+/**
+ * Rule 8: plugin name -> the pattern that shows a file uses its request
+ * decoration. Matched against the source with comments stripped, so a header
+ * that merely talks about `req.file()` is not a use.
+ *
+ * `@fastify/multipart` adds `isMultipart()`, `file()`, `files()`, `parts()` and
+ * `saveRequestFiles()` to the request. `isMultipart(` and `saveRequestFiles(`
+ * are distinctive anywhere; `file(`, `files(` and `parts(` are common words, so
+ * they count only when called on a receiver named `req` or `request` (how every
+ * controller in the packages names the Fastify request). Deliberately simple:
+ * a slice that renames the request still trips on `isMultipart(`, which a
+ * well-behaved upload route calls first.
+ */
+export const HOST_PLUGIN_USES = Object.freeze({
+  '@fastify/multipart':
+    /\.\s*(?:isMultipart|saveRequestFiles)\s*\(|\b(?:req|request)\s*\.\s*(?:file|files|parts)\s*\(/,
+});
 
 const SOURCE_EXTENSIONS = /\.(?:[cm]?ts|tsx)$/;
 const BUILTINS = new Set(builtinModules);
@@ -232,7 +264,7 @@ export function readGraph(root) {
   return Object.fromEntries(Object.entries(raw).filter(([key]) => !isMeta(key)));
 }
 
-/** The peers file: `{ universal, implies, reserved, hostOnly, slices }`. */
+/** The peers file: `{ universal, implies, reserved, hostOnly, hostPlugins, slices }`. */
 export function readPeers(root) {
   const raw = readJson(join(root, PEERS_FILE));
   return {
@@ -240,6 +272,7 @@ export function readPeers(root) {
     implies: raw.$implies ?? {},
     reserved: raw.$reserved ?? {},
     hostOnly: raw.$hostOnly ?? {},
+    hostPlugins: raw.$hostPlugins ?? {},
     slices: Object.fromEntries(Object.entries(raw).filter(([key]) => !isMeta(key))),
   };
 }
@@ -280,6 +313,26 @@ export function closurePeers(graph, peers, pkg, slice, entry = null) {
   for (const name of sliceClosure(graph, pkg, slice)) {
     for (const peer of ownPeers(peers, pkg, name)) out.add(peer);
     if (entry !== null) for (const peer of entryPeers(peers, pkg, name, entry)) out.add(peer);
+  }
+  return out;
+}
+
+/** The `{ name, range, why }` host plugins a slice's own `$hostPlugins` entry lists. */
+function ownHostPlugins(peers, pkg, slice) {
+  const list = peers.hostPlugins?.[pkg]?.[slice];
+  return Array.isArray(list) ? list : [];
+}
+
+/**
+ * The host plugins a slice needs: its own and those of the slices it depends
+ * on, as a Map name -> `{ name, range, why, slice }` (the first declaring slice wins).
+ */
+export function closureHostPlugins(graph, peers, pkg, slice) {
+  const out = new Map();
+  for (const name of sliceClosure(graph, pkg, slice)) {
+    for (const plugin of ownHostPlugins(peers, pkg, name)) {
+      if (plugin && typeof plugin.name === 'string' && !out.has(plugin.name)) out.set(plugin.name, { ...plugin, slice: name });
+    }
   }
   return out;
 }
@@ -393,9 +446,45 @@ function checkData(root, packages, graph, peers, violations) {
       }
     }
   }
-  for (const key of ['universal', 'reserved', 'hostOnly']) {
+  for (const key of ['universal', 'reserved', 'hostOnly', 'hostPlugins']) {
     for (const pkg of Object.keys(peers[key])) {
       if (!dirs.has(pkg)) add('peers-data', `$${key} names '${pkg}', which is not a package`);
+    }
+  }
+  checkHostPluginsData(graph, peers, add);
+}
+
+/** Rule 2, the `$hostPlugins` part: declared slices, well-formed entries. */
+function checkHostPluginsData(graph, peers, add) {
+  const isText = (value) => typeof value === 'string' && value.trim() !== '';
+  for (const [pkg, slices] of Object.entries(peers.hostPlugins)) {
+    if (slices === null || typeof slices !== 'object' || Array.isArray(slices)) {
+      add('peers-data', `$hostPlugins.${pkg} must be an object of slice -> list of { name, range, why }`);
+      continue;
+    }
+    for (const [slice, list] of Object.entries(slices)) {
+      const where = `$hostPlugins.${pkg}.${slice}`;
+      if (graph[pkg] && !(slice in graph[pkg])) add('peers-data', `${where} names '${slice}', which ${SLICES_FILE} does not declare for ${pkg}`);
+      if (!Array.isArray(list)) {
+        add('peers-data', `${where} must be a list of { name, range, why }`);
+        continue;
+      }
+      const seen = new Set();
+      list.forEach((entry, i) => {
+        if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+          add('peers-data', `${where}[${i}] must be an object { name, range, why }`);
+          return;
+        }
+        for (const field of ['name', 'range', 'why']) {
+          if (!isText(entry[field])) add('peers-data', `${where}[${i}] needs a non-empty string '${field}'`);
+        }
+        const extra = Object.keys(entry).filter((k) => !['name', 'range', 'why'].includes(k));
+        if (extra.length > 0) add('peers-data', `${where}[${i}] has unknown field(s) ${extra.map((k) => `'${k}'`).join(', ')}`);
+        if (isText(entry.name)) {
+          if (seen.has(entry.name)) add('peers-data', `${where} lists '${entry.name}' twice`);
+          seen.add(entry.name);
+        }
+      });
     }
   }
 }
@@ -512,6 +601,30 @@ function checkHeadless(root, violations) {
   }
 }
 
+/** Rule 8. */
+function checkHostPlugins(root, packages, graph, peers, violations) {
+  for (const { dir } of packages) {
+    if (!graph[dir]) continue;
+    const src = join(root, 'packages', dir, 'src');
+    for (const file of sourceFiles(src)) {
+      const rel = toPosix(relative(src, file));
+      // Files at the root of src/ are barrels; the slices are what a host picks.
+      if (!rel.includes('/')) continue;
+      const slice = rel.split('/')[0];
+      if (!(slice in graph[dir])) continue; // rule 1 already reports an undeclared folder
+      const code = stripComments(readFileSync(file, 'utf8'));
+      const declared = closureHostPlugins(graph, peers, dir, slice);
+      for (const [plugin, pattern] of Object.entries(HOST_PLUGIN_USES)) {
+        if (!pattern.test(code) || declared.has(plugin)) continue;
+        violations.push({
+          rule: 'host-plugins',
+          message: `packages/${dir}/src/${rel} uses the request decoration of '${plugin}', but slice '${slice}' (and the slices it depends on) declare no host plugin '${plugin}' in $hostPlugins of ${PEERS_FILE}. The host registers that plugin; declare it so a host installing the slice knows to.`,
+        });
+      }
+    }
+  }
+}
+
 /** Rule 5. */
 function checkApps(root, apps, packages, graph, peers, violations, without = new Set()) {
   const rootManifest = existsSync(join(root, 'package.json')) ? readJson(join(root, 'package.json')) : {};
@@ -549,6 +662,9 @@ function checkApps(root, apps, packages, graph, peers, violations, without = new
           for (const peer of closurePeers(graph, peers, pkg.dir, slice, entry)) {
             need(peer, `needed by ${name}/${slice} (imported by ${toPosix(relative(root, file))})`);
           }
+          for (const plugin of closureHostPlugins(graph, peers, pkg.dir, slice).values()) {
+            need(plugin.name, `host plugin (${plugin.range}) the app must register for ${name}/${slice} (imported by ${toPosix(relative(root, file))})`);
+          }
         }
       }
     }
@@ -576,6 +692,7 @@ export function checkSlicePeers({ root, apps = [], without = [] }) {
   checkImports(root, packages, graph, peers, violations);
   checkHostNeutral(root, violations);
   checkHeadless(root, violations);
+  checkHostPlugins(root, packages, graph, peers, violations);
   if (apps.length > 0) checkApps(root, apps, packages, graph, peers, violations, new Set(without));
   return violations;
 }
@@ -592,12 +709,27 @@ export function peersTable(root) {
     lines.push(`${name}`);
     lines.push(`  required: ${[...required].sort().join(', ') || '(none)'}`);
     lines.push(`  optional: ${[...optional].sort().join(', ') || '(none)'}`);
+    const hostPlugins = new Map();
+    for (const slice of Object.keys(graph[dir])) {
+      for (const plugin of ownHostPlugins(peers, dir, slice)) {
+        const key = `${plugin.name}@${plugin.range}`;
+        hostPlugins.set(key, [...(hostPlugins.get(key) ?? []), slice]);
+      }
+    }
+    if (hostPlugins.size > 0) {
+      const text = [...hostPlugins].sort().map(([key, slices]) => `${key} (${slices.join(', ')})`).join(', ');
+      lines.push(`  host plugins (register on the Fastify app): ${text}`);
+    }
     for (const slice of Object.keys(graph[dir])) {
       const all = [...closurePeers(graph, peers, dir, slice)].sort();
       lines.push(`  ${slice}: ${all.join(', ') || '(none)'}`);
       for (const entry of entryNames(peers, dir, slice)) {
         const extra = [...closurePeers(graph, peers, dir, slice, entry)].filter((p) => !all.includes(p)).sort();
         lines.push(`  ${slice}/${entry}: + ${extra.join(', ') || '(none)'}`);
+      }
+      const plugins = [...closureHostPlugins(graph, peers, dir, slice).values()];
+      if (plugins.length > 0) {
+        lines.push(`  ${slice} host plugins: ${plugins.map((p) => `${p.name}@${p.range}`).sort().join(', ')}`);
       }
     }
   }

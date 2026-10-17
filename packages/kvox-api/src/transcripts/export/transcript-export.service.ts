@@ -304,6 +304,7 @@ export class TranscriptExportService {
         title: true,
         language: true,
         durationMs: true,
+        recordedAt: true,
         provider: true,
         providerOptions: true,
         deletedAt: true,
@@ -341,6 +342,7 @@ export class TranscriptExportService {
       // in the document nothing depends on being exact.
       createdAt: version?.createdAt ?? new Date(),
       exportedAt: new Date(),
+      recordedAt: transcript.recordedAt,
       author: author ? { displayName: author.displayName ?? author.email, email: author.email } : null,
       provider: { id: transcript.provider, model: readModel(transcript.providerOptions) },
       state: materialized.state,

@@ -76,6 +76,12 @@ export function createFakeKvoxPortsUnderTest(): KvoxPortsUnderTest {
       ],
       system: { name: 'conformance_system', patch: { enabled: true, label: 'x' }, actorUserId: 'user-conformance' },
       user: { name: 'conformance_user', userId: 'user-conformance', patch: { theme: 'dark' } },
+      noDefaults: {
+        name: 'kvox_conformance_no_defaults',
+        schema: z.object({ mode: z.string() }),
+        userId: 'user-conformance',
+        patch: { mode: 'dark' },
+      },
     },
     secrets: {
       port: createInMemoryKvoxSecrets(),

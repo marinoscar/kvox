@@ -103,6 +103,7 @@ async function bareHostPorts(): Promise<KvoxPortsUnderTest> {
       ],
       system: { name: 'conformance_system', patch: { enabled: true, label: 'x' }, actorUserId: LOCAL_USER_ID },
       user: { name: 'conformance_user', userId: LOCAL_USER_ID, patch: { theme: 'dark' } },
+      noDefaults: { name: 'kvox_conformance_no_defaults', schema: z.object({ mode: z.string() }), userId: LOCAL_USER_ID, patch: { mode: 'dark' } },
     },
     secrets: { port: new MemorySecrets(), purpose: 'conformance', name: 'default', actorUserId: LOCAL_USER_ID },
   };

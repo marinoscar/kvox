@@ -31,7 +31,7 @@ describe('kvox-db command', () => {
     expect((await run(['frobnicate'], '.')).code).toBe(2);
     const bad = await run(['sync', '--names', 'bogus'], '.');
     expect(bad.code).toBe(2);
-    expect(bad.err).toContain('original, after-host');
+    expect(bad.err).toContain('original, stable, after-host');
   });
 
   it('syncs, checks and fails a check with exit codes 0 and 1', async () => {
