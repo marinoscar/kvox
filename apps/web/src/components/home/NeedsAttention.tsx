@@ -99,7 +99,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useIsMounted } from '../../hooks/useIsMounted';
+import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
 import { ApiError } from '../../services/api';
 import { regenerateNote } from '@marinoscar/kvox-web/notes/headless';
 import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';

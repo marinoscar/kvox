@@ -210,6 +210,12 @@
           "sigma"
         ]
       }
+    },
+    "ask": {
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": ["@mui/icons-material", "@mui/material", "react-markdown", "react-router-dom"]
+      }
     }
   },
   "kvox-contract": {

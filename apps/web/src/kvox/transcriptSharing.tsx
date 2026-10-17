@@ -2,7 +2,7 @@
  * The web edition's sharing for the transcripts slice (issue #500, epic #498).
  *
  * A share is a platform `grants` row, so the dialog is the packaged `ShareDialog`
- * (`@marinoscar/platform-web/sharing/ui`) and "leave" is `services/transcriptSharing.ts`.
+ * (`@marinoscar/platform-web/sharing/ui`) and "leave" is `kvox/transcriptSharingClient.ts`.
  * The slice cannot import either, so this adapter hands it both through the
  * `sharing` prop of its pages.
  */
@@ -17,7 +17,7 @@ import {
   TRANSCRIPT_SHARE_ROLES,
   leaveTranscript,
   transcriptResource,
-} from '../services/transcriptSharing';
+} from './transcriptSharingClient';
 
 function TranscriptShareDialog({ open, onClose, transcriptId, title }: TranscriptShareDialogProps) {
   return (
