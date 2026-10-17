@@ -36,7 +36,7 @@ All six web slices are merged. `packages/kvox-web/README.md` and each slice's ow
 
 - The ten ports ([Ports to implement](#ports-to-implement)) and the web host ([Wiring the web](#wiring-the-web)).
 - The four host tables `users`, `organizations`, `storage_objects`, `jobs`, and the seed rows ([Database](#database)).
-- Four duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings)): declare the system `ai` settings namespace; install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies.
+- Duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings) and [section 6.1](../specs/kvox-ports.md#61-what-the-bare-host-and-the-desktop-guide-added-issues-505-506)): declare the system `ai` settings namespace (with `graphEnabled` and `reasoningEffort` once the graph is mounted); install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies; with the graph, register `@fastify/multipart`, read an unwritten `defaults: undefined` setting as `undefined`, tick four housekeeping enqueuers, and answer the graph's structured-output schemas from `KVOX_AI`.
 - The renderer's shell: router, theme, navigation, settings hub. Slices export cards, destinations and routes as data; you place them.
 - The transcription provider, ffmpeg, fonts for PDF export.
 
@@ -111,7 +111,7 @@ Add your embedded database (`@electric-sql/pglite` 0.5.10, `@electric-sql/pglite
 
 | Feature | Peer | Switch it off with |
 |---|---|---|
-| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
+| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`; four enqueuers) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
 | Transcript PDF export | `pdfkit@>=0.17.0` | `exporters: { pdf: false }` |
 | Note PDF export | `pdfkit` | `exporters: { pdf: false }` |
 | Note Word export | `docx@>=9.0.0` | `exporters: { docx: false }` |
@@ -125,7 +125,7 @@ npm install graphology@>=0.26.0 graphology-communities-louvain@>=2.0.2 grapholog
 npm install n3@>=2.7.0 jsonld@>=9.0.0 rdf-validate-shacl@>=0.6.0   # graph-rdf: RDF export and SHACL-validated import
 ```
 
-`rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
+The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app: `POST /api/graph/imports` and the notes document-source upload read `request.file()`, no slice registers it, and it is in no slice's peers list, so `check-slice-peers` cannot catch its absence (`examples/bare-host/src/bootstrap.ts`). `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
 
 **Renderer.**
 
@@ -146,7 +146,7 @@ Singletons (Nest, Zod, the contract, Prisma, React, MUI) must exist once. A seco
 
 | | PGlite | A bundled PostgreSQL server |
 |---|---|---|
-| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
+| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test; the graph, graph-extraction, graph-rdf and Ask slices run over the same host (extraction, review and commit, the overview, RDF export and import, the Ask tool loop) against a scripted model. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
 | Cost | One session only (see below); the socket quirk. | You ship, start, stop and upgrade a server, and a `vector` build per platform. |
 | Recommendation | Start here. | Choose it if any migration fails on PGlite, or when you need more than one connection. |
 
@@ -226,6 +226,7 @@ export interface KvoxAiPort {
 
 Rules:
 
+- **Graph schemas.** Extraction calls `generateStructured` under the schema names `kg_extraction`, `kg_adjudication`, `kg_item_adjudication` and `entity_digest`; an entity digest with no surviving citation fails its job. With `embeddings: null`, resolution works by name only and `kg.embed` jobs are no-ops. Ask needs `chat` with tool calling. The bare host's scripted model is `examples/bare-host/src/fake-ai.ts`.
 - `capabilities()` never throws. It reports `available`, `structuredOutput`, `toolCalling`, `embeddings` (`{ model, dimensions }` or `null`) and `graphEnabled`.
 - `resolveTask` throws `KvoxAiError` of class `not_configured`, `key_missing` or `capability`; `requireKey: false` names the model without needing a key (a token estimate).
 - A text stream is `delta*` then exactly one `done`. A chat call is one model step: `delta` or `tool_call` events, then `step_end`, then exactly one `done`; **no text of a step after one of its `tool_call`s**. `done.finishReason` is `stop`, `length` or (chat only) `content_filter`.
@@ -366,7 +367,7 @@ Rules: the slices declare two namespaces themselves (system `transcription` in `
 Reference: [`src/ports/file-settings.ts`](../../examples/bare-host/src/ports/file-settings.ts) (one JSON file, atomic rewrite, versions for the system scope) and the `ai` declaration in `src/bootstrap.ts`, copied here:
 
 ```ts
-// Copied from examples/bare-host/src/bootstrap.ts (the bare host declares the three caps; add graphEnabled to run the graph).
+// Copied from examples/bare-host/src/bootstrap.ts (comments trimmed).
 settings.registerNamespace({
   scope: 'system',
   name: 'ai',
@@ -374,10 +375,16 @@ settings.registerNamespace({
     maxInputTokens: z.number().int().positive().nullable().default(null),
     maxOutputTokens: z.number().int().positive().nullable().default(null),
     maxDocumentBytes: z.number().int().positive().default(10 * 1024 * 1024),
+    graphEnabled: z.boolean().default(false),
+    reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).default('none'),
   }),
-  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024 },
+  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024, graphEnabled: false, reasoningEffort: 'none' },
 });
 ```
+
+Turn `graphEnabled` on once at start-up (`settings.patchSystem('ai', { graphEnabled: true }, ...)`, as `seedRuntime` does in `examples/bare-host/src/seed.ts`), or the graph answers 409 `graph_disabled` and no digest is queued.
+
+**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit does not test this yet.
 
 Desktop: the same file in the user's application-data folder, or a table.
 
@@ -555,7 +562,7 @@ Points the sketch must keep, because the slices depend on them:
 - **Claiming** is one statement (`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING`), outside any transaction, so no handler runs inside one (essential on PGlite). It honours `scheduled_for`; the runner settles a job `succeeded` or `failed`, retries up to the handler's `profile.maxAttempts` (default 3 when absent) and fires `onSettled` after the write.
 - **Rate limits.** A handler throws `KvoxRateLimitError(throttleKey, retryAfterMs)`; the runner reschedules the job (`retryAfterMs`, or 5 s) without spending an attempt. `runNow(jobId)` asks for a pending job to run at once (`false` when it already settled).
 - **`enqueueWithin(tx, input)`** inserts inside the caller's open `$transaction`, so a row and its job commit together or not at all.
-- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`). The graph adds `KgMigrateEnqueuer.enqueue()` (`/graph`, `@stability experimental`): it queues one `kg.migrate` per owner whose rows a declared ontology migration would touch, returns at once without a query while no migration is declared (a fresh database, every build so far), and drains a backlog of more than 200 owners over successive ticks. Resolve it from the container (`app.get(KgMigrateEnqueuer)`; `GraphModule` exports it) and call it on the same timer. A cron only decides whether work is due and enqueues it.
+- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`; it exists only while `export` is on). Four enqueuers in all; the bare host ticks them hourly from `examples/bare-host/src/housekeeping.ts`, each resolved with `app.get(T, { strict: false })` because it lives in a slice module, not the root. The graph adds `KgMigrateEnqueuer.enqueue()` (`/graph`, `@stability experimental`): it queues one `kg.migrate` per owner whose rows a declared ontology migration would touch, returns at once without a query while no migration is declared (a fresh database, every build so far), and drains a backlog of more than 200 owners over successive ticks. Resolve it from the container (`app.get(KgMigrateEnqueuer)`; `GraphModule` exports it) and call it on the same timer. A cron only decides whether work is due and enqueues it.
 - **Why everything is still a job:** a job is a row, so work interrupted by quitting the application is still there on the next start. The 200 ms loop (`jobs.start()`) resumes it; tests call `drain()` instead.
 
 What the bare host's runner does **not** do, and Desktop must decide: it does not enforce `maxRuntimeMs` (a hung handler hangs the drain); a failed attempt retries at once instead of with a back-off; and a crash leaves a `running` row that nothing resets (the platform queue has a lease and a reaper). A Desktop runner should, on start, return `running` rows to `pending` (this process is the only runner), and enforce a timeout derived from `profile.maxRuntimeMs`.
@@ -639,18 +646,19 @@ app.getHttpAdapter().getInstance().addContentTypeParser('*', { parseAs: 'buffer'
 await app.listen(options.port ?? 0, '127.0.0.1');
 ```
 
-**Adding the graph and Ask** is more of the same; this block is illustrative (the bare host does not include these slices, so it is not compiled in CI). Each slice takes its peers' module objects:
+**Adding the graph and Ask.** The bare host mounts them (`examples/bare-host/src/app.module.ts`, copied here). Each slice takes its peers' module objects:
 
 ```ts
-// Illustrative — not compiled (the bare host runs transcription, search, transcripts and notes only)
+// Copied from examples/bare-host/src/app.module.ts
+const search = SearchModule.forRoot();
 const graph = GraphModule.forRoot({ schedules: false, peers: { transcripts, notes, search } });
 const extraction = GraphExtractionModule.forRoot({ autoExtract: false, peers: { graph, notes } });
 const rdf = GraphRdfModule.forRoot({ schedules: false, peers: { graph, extraction, transcripts, notes } });
 const ask = AskModule.forRoot({ peers: { graph, notes, search } });
-// where `search = SearchModule.forRoot()` is the instance you import, and each is added to `imports` after its peers.
+// imports: [..., transcription, search, searchIndexing, transcripts, notes, graph, extraction, rdf, ask]
 ```
 
-`autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; Desktop may prefer to keep it explicit. Remember the `ai.graphEnabled` setting.
+Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
 
 **Options that matter offline**, per slice (full tables in each slice README):
 
@@ -843,5 +851,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- The graph, graph-extraction, graph-rdf and Ask slices are described from their READMEs and conformance kits; they have not been run in the bare host. Expect to find host duties the way the bare host found the `ai` namespace and the `org_id` column.
+- Package gaps found by the graph run (issue #573): a proposal commit does not publish `graph.changed` (only `kg.purge` and manual entity edits do), so the material-change re-layout never fires after a commit; `@fastify/multipart` is missing from the slice peers data.
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.

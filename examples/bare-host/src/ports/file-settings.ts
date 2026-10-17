@@ -19,7 +19,11 @@ import type {
 // scope, a version that a patch can be made conditional on (`ifMatchVersion`).
 //
 //   - A namespace nobody has written reads as its defaults at version 0 (the web
-//     edition's behaviour: a read never creates a row).
+//     edition's behaviour: a read never creates a row). A namespace declared with
+//     `defaults: undefined` ("absent means defaults", as the graph slice's per-user
+//     `graph` preferences are: the slice fills them in itself) reads as `undefined`;
+//     only a value that exists is run through the schema, so an absent object is
+//     never refused as "expected object, received undefined".
 //   - A patch is a JSON Merge Patch over the stored value (objects merge,
 //     everything else replaces), and the result must pass the namespace's schema
 //     before anything is written.
@@ -53,6 +57,12 @@ function mergePatch(target: unknown, patch: unknown): unknown {
     base[key] = mergePatch(base[key], value);
   }
   return base;
+}
+
+/** A stored value, or the namespace's defaults; `undefined` defaults stay `undefined`. */
+function parsedOrDefaults<T>(def: KvoxSettingsNamespaceDef, stored: unknown): T {
+  const value = stored ?? def.defaults;
+  return (value === undefined ? undefined : def.schema.parse(value)) as T;
 }
 
 /** KVOX_SETTINGS over a JSON file. */
@@ -92,7 +102,7 @@ export class FileSettings implements KvoxSettingsPort {
     const def = this.declared('system', name);
     const entry = this.load().system[name];
     // A host that keeps no record of who changed a row ignores `withUpdatedBy`.
-    if (!entry) return { value: def.schema.parse(def.defaults) as T, version: 0 };
+    if (!entry) return { value: parsedOrDefaults<T>(def, undefined), version: 0 };
     return { value: def.schema.parse(entry.value) as T, version: entry.version, updatedAt: entry.updatedAt, updatedBy: null };
   }
 
@@ -117,7 +127,7 @@ export class FileSettings implements KvoxSettingsPort {
 
   async readUser<T>(userId: string, name: string): Promise<T> {
     const def = this.declared('user', name);
-    return def.schema.parse(this.load().user[`${userId}:${name}`] ?? def.defaults) as T;
+    return parsedOrDefaults<T>(def, this.load().user[`${userId}:${name}`]);
   }
 
   async patchUser<T>(userId: string, name: string, patch: Partial<T>): Promise<T> {
