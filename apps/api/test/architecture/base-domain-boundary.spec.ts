@@ -87,7 +87,6 @@ const SRC = resolve(__dirname, '..', '..', 'src');
  * it, so it is argued in a pull request, not done to silence a failure.
  */
 const DOMAIN_DIRS: readonly string[] = [
-  'transcription',
   'transcripts',
   'notes',
   'graph',
@@ -445,7 +444,7 @@ describe('domain registrations are imported by the composition roots only (issue
   it.each([
     ['notes/notifications/notes.notifications', true],
     ['transcripts/transcripts.onboarding', true],
-    ['transcription/transcription.system-settings', true],
+    ['kvox/transcription/transcription.system-settings', true],
     ['graph/preferences/graph.user-settings', true],
     ['notes/job-type-labels', true],
     ['notes/notes.service', false],

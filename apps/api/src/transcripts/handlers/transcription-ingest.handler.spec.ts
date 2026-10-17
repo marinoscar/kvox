@@ -3,7 +3,7 @@ import type { Job } from '@prisma/client';
 import { gunzipSync } from 'node:zlib';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProviderInputError } from '../../transcription/errors';
+import { ProviderInputError } from '@marinoscar/kvox-api/transcription';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';

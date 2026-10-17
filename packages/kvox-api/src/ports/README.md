@@ -20,7 +20,7 @@ Resumable upload (`initUpload`, `signParts`, `completeUpload`, `abortUpload`), `
 
 ### KVOX_JOBS
 
-`enqueue` returns `{ id, deduplicated }`; two pending or running jobs of the same `type` and subject collapse unless `skipDedup`. `registerHandler` takes a `KvoxJobHandler` with exactly the platform handler's fields (`type`, `profile` with `maxRuntimeMs` and `maxAttempts` only, `nodeResultSchema` and `persistNodeResult`). A handler throws `KvoxRateLimitError` with a per-user throttle key to defer a job. A job `type` string is permanent. AI handlers stay server-only.
+`enqueue` returns `{ id, deduplicated }`; two pending or running jobs of the same `type` and subject collapse unless `skipDedup`. `registerHandler` takes a `KvoxJobHandler` with exactly the platform handler's fields (`type`, `profile` with `maxRuntimeMs` and `maxAttempts` only, `nodeResultSchema` and `persistNodeResult`). A handler throws `KvoxRateLimitError` with a per-user throttle key to defer a job (the transcription provider's key is the deployment's one shared bucket); the error also answers a queue's `jobs.classifyRateLimit` question itself, for handlers a host registers without this port. A job `type` string is permanent. AI handlers stay server-only.
 
 ### KVOX_IDENTITY
 
@@ -40,11 +40,11 @@ The host's Prisma client, seen through `KvoxPrismaClientLike`. A slice narrows i
 
 ### KVOX_SETTINGS
 
-`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware) and `readUser` / `patchUser` for the namespaces the domain owns. Never a secret.
+`registerNamespace`, `readSystem` / `patchSystem` (versioned, `If-Match` aware; `readSystem(name, { withUpdatedBy: true })` also returns who last changed the row and when, for an admin screen) and `readUser` / `patchUser` for the namespaces the domain owns. Never a secret.
 
 ### KVOX_SECRETS
 
-`registerPurpose`, `get`, `set`, `delete`, and `status`, which never returns material. A purpose is also its encryption domain: never rename one.
+`registerPurpose`, `get`, `set` (with an optional non-secret `label`), `delete`, and `status`, which never returns material (it may name who last changed the secret). A purpose is also its encryption domain: never rename one.
 
 ### KVOX_AUDIT
 

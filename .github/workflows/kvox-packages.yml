@@ -86,6 +86,8 @@ jobs:
           node -e "require('@marinoscar/kvox-api/core')"
           node -e "require('@marinoscar/kvox-api/ports')"
           node -e "require('@marinoscar/kvox-api/testing')"
+          node -e "require('@marinoscar/kvox-api/transcription')"
+          node -e "require('@marinoscar/kvox-api/transcription/testing')"
           node -e "require('@marinoscar/kvox-db')"
           node -e "require('@marinoscar/kvox-contract')"
           node -e "require('@marinoscar/kvox-contract/graph')"

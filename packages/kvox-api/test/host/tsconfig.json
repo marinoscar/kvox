@@ -1,0 +1,9 @@
+{
+  // The test host and the real-database specs. Separate from the package's own
+  // tsconfig because the Prisma client in `./generated` exists only after
+  // `npm run test:host:prepare -w @marinoscar/kvox-api`.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "rootDir": "../..", "allowJs": false },
+  "include": ["./*.ts", "../**/*.db.spec.ts", "./generated/**/*.ts"],
+  "exclude": ["node_modules"]
+}

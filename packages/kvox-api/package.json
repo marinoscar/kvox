@@ -29,6 +29,14 @@
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
     },
+    "./transcription": {
+      "types": "./dist/transcription/index.d.ts",
+      "default": "./dist/transcription/index.js"
+    },
+    "./transcription/testing": {
+      "types": "./dist/transcription/testing/index.d.ts",
+      "default": "./dist/transcription/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -44,8 +52,10 @@
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
     "docs": "typedoc --options typedoc.json",
-    "test": "jest --config ./test/jest.config.js",
-    "test:run": "jest --config ./test/jest.config.js --ci"
+    "test": "jest -c test/jest.config.js --selectProjects unit",
+    "test:run": "jest -c test/jest.config.js --selectProjects unit --ci",
+    "test:db": "jest -c test/jest.config.js --selectProjects db --runInBand",
+    "test:host:prepare": "node test/host/prepare.mjs"
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
@@ -82,12 +92,21 @@
     }
   },
   "devDependencies": {
+    "@marinoscar/kvox-db": "*",
+    "@marinoscar/platform-db": "0.1.0-next.5",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
+    "@nestjs/testing": "^11.1.12",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@prisma/client-runtime-utils": "^7.8.0",
+    "@prisma/config": "^7.8.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.32",
+    "@types/pg": "^8.23.1",
     "jest": "^30.4.2",
+    "pg": "^8.23.0",
+    "prisma": "^7.8.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "ts-jest": "^29.4.12",

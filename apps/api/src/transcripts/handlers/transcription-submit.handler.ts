@@ -46,12 +46,13 @@ import { runInJobOrg } from '../../common/job-org-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER, type StorageProvider } from '@marinoscar/platform-api/storage';
 import { KvoxManagedObjectsService } from '../../kvox-objects/kvox-managed-objects.service';
-import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import {
+  isTerminalProviderError,
+  ProviderAuthError,
   clampKeytermsToCapability,
   readKeyterms,
-} from '../../transcription/keyterms';
-import type { TranscriptionAudioSource } from '../../transcription/providers/transcription-provider.interface';
+  type TranscriptionAudioSource,
+} from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCRIPTION_SUBMIT_JOB_TYPE,
   TRANSCRIPTION_THROTTLE_KEY,

@@ -39,7 +39,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
-import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
+import type { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
 import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';

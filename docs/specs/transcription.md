@@ -11,13 +11,29 @@
 > reference the way `job-queue.md`'s header treats "on what is merged today",
 > inverted — this is "on what is committed to being built, and where".
 >
-> Planned locations: `apps/api/src/transcription/` (#23 — the provider
-> framework, AssemblyAI, admin settings), `apps/api/src/transcripts/` (#24–#29
+> Planned locations: `packages/kvox-api/src/transcription/` (#23 — the provider
+> framework, AssemblyAI, admin settings; moved out of `apps/api/src/` by #492), `apps/api/src/transcripts/` (#24–#29
 > — data model, pipeline, corrections, export, sharing), the `media.audio
 > .transcode` handler under `apps/api/src/transcripts/handlers/` (#26, built),
 > `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
 > /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
 > schema companion, `docs/specs/transcript-export.v1.schema.json` (source of truth since issue #488: `packages/kvox-contract/schemas/transcript-export.v1.schema.json`).
+>
+> **Packaged (issue #492, epic #491).** The provider framework, AssemblyAI,
+> the `transcription` settings namespace, the credential purpose and the two
+> controllers are `@marinoscar/kvox-api/transcription`
+> (`packages/kvox-api/src/transcription/`, [README](../../packages/kvox-api/src/transcription/README.md)),
+> a module a host configures with `TranscriptionModule.forRoot`. It reaches
+> settings, secrets, identity and audit through the host ports and imports no
+> platform class; this application binds it in
+> `apps/api/src/kvox/transcription/transcription.config.ts`. The provider id
+> vocabulary is **open**: `provider` is any non-empty string on the wire and is
+> checked against the registry's ids when it is written (a 400 naming them),
+> so a provider registered through `extraProviders` can be selected. Routes,
+> permission strings, settings keys and the stored data are unchanged. What
+> uses the platform stays in the application's `kvox/transcription/` folder:
+> the system-settings declaration, the credential purpose, the onboarding
+> step and facts, and the Doctor check.
 >
 > **Suggested build order** (from the epic): #20 (this document) →
 > (#21 storage hardening, #23 provider framework, #24 data model, all three
@@ -71,7 +87,7 @@ invented for this epic:
    interface: one small contract, one `NormalizedTranscript` on the way in,
    and a provider-neutral `ExportDocument` (§8) on the way out. Nothing in
    `apps/api/src/transcripts/` imports an AssemblyAI type, and nothing in
-   `apps/api/src/transcription/providers/assemblyai.provider.ts` imports a
+   `packages/kvox-api/src/transcription/providers/assemblyai.provider.ts` imports a
    Prisma model.
 4. **Versioning is a normalized current state plus an operation log, not a
    JSONB snapshot per save.** A 10-hour recording is roughly 90,000 words;
@@ -215,7 +231,7 @@ meant to answer "is this transcript usable yet."
 ### 1.5 The job types
 
 Eight job types, all under `apps/api/src/transcripts/` except the provider
-calls themselves, which live behind `apps/api/src/transcription/`'s registry
+calls themselves, which live behind `packages/kvox-api/src/transcription/`'s registry
 and are called *from* the job handlers rather than duplicated into them.
 
 | Job type | Profile | Node-eligible? | AGENTS.md rule cited |
@@ -589,7 +605,7 @@ provider specifically can say:
 | **`RateLimitError` (429)** | The provider's own rate limit | Deferred through the shared `'transcription-provider'` throttle key (§1.5.2–4); does not spend an attempt (`docs/specs/job-queue.md` §5.3); the transcript's own status does not change — from the user's point of view this is invisible backoff, not a failure. |
 
 The dividing line between the first two is drawn once, in
-`apps/api/src/transcription/providers/errors.ts`, and every provider
+`packages/kvox-api/src/transcription/errors.ts`, and every provider
 implementation is required to map into it rather than let a caller
 downstream guess from an HTTP status. This is the same posture
 `docs/specs/job-queue.md` §5.2 takes for `classifyRateLimit`: a total,
@@ -634,7 +650,7 @@ never something that could affect the job's own terminal row.
 
 ### 2.1 `TranscriptionProvider`
 
-`apps/api/src/transcription/providers/transcription-provider.interface.ts`.
+`packages/kvox-api/src/transcription/providers/transcription-provider.interface.ts`.
 Each provider declares an `id`, a `label`, a `capabilities` object, and a
 `settingsSchema` (Zod) for its own provider-specific configuration fields
 (AssemblyAI's is `{ region, speechModel }`):
@@ -710,8 +726,10 @@ routine speech (a sentence, a short exchange) is rarely split mid-thought.
 `ProviderInputError` (the provider rejects this specific input — an
 unsupported codec it did not actually support despite matching
 `acceptedMimeTypes`, a corrupt file, an unreadable stream) and
-`RateLimitError` (`@marinoscar/platform-api/jobs`, reused verbatim —
-see §1.6) are the three named classes; **everything else is retryable by
+`RateLimitError` (a `KvoxRateLimitError` from `@marinoscar/kvox-api/ports`,
+which the jobs port's adapter turns into the queue's deferral and which
+classifies itself for a queue that sees it directly — see §1.6) are the three
+named classes; **everything else is retryable by
 default**, following the identical "positively identify, otherwise assume
 retryable" posture `classifyRateLimit` takes for HTTP status codes
 (`docs/specs/job-queue.md` §5.2) — a provider error this application does not
@@ -790,7 +808,7 @@ work assumes it.
 ### 2.7 AssemblyAI as the reference implementation
 
 The first (and, at epic completion, only) registered provider,
-`apps/api/src/transcription/providers/assemblyai.provider.ts`. Built on
+`packages/kvox-api/src/transcription/providers/assemblyai.provider.ts`. Built on
 Node's built-in `fetch` (injected, so tests substitute it) rather than an SDK
 — the same "a thin client is easier to mock and adds no dependency" reasoning
 already applied to every other outbound HTTP call in this repository.

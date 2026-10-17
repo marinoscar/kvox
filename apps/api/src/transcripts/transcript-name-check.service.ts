@@ -43,7 +43,7 @@ import { createHash } from 'node:crypto';
 import { KVOX_AI, type KvoxAi } from '../ai-port/kvox-ai';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
 import { PrismaService } from '../prisma/prisma.service';
-import { readKeyterms } from '../transcription/keyterms';
+import { readKeyterms } from '@marinoscar/kvox-api/transcription';
 import {
   NAME_CHECK_CONFLICT_REASONS,
   type CreateNameCheckDto,

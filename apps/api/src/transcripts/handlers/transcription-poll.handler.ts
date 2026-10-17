@@ -43,7 +43,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
+import { isTerminalProviderError, ProviderAuthError } from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCRIPTION_POLL_JOB_TYPE,
   TRANSCRIPTION_THROTTLE_KEY,

@@ -41,7 +41,7 @@ import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
-import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
+import { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import {
   TRANSCODE_JOB_TYPE,
   TRANSCRIPT_PURGE_JOB_TYPE,

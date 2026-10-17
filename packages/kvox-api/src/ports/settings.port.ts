@@ -47,6 +47,40 @@ export interface KvoxVersionedSettings<T> {
   value: T;
   /** The version; it rises by one on every write. */
   version: number;
+  /**
+   * When the namespace's row last changed (ISO 8601). Present only when the
+   * read asked for it ({@link KvoxReadSystemOptions.withUpdatedBy}) and the host
+   * records it.
+   */
+  updatedAt?: string | null;
+  /** Who last changed it; present under the same conditions as `updatedAt`. */
+  updatedBy?: KvoxSettingsActor | null;
+}
+
+/**
+ * The user who last changed a settings namespace.
+ *
+ * @stability experimental
+ */
+export interface KvoxSettingsActor {
+  /** The user's id. */
+  id: string;
+  /** The user's email address. */
+  email: string;
+}
+
+/**
+ * Options of {@link KvoxSettingsPort.readSystem}.
+ *
+ * @stability experimental
+ */
+export interface KvoxReadSystemOptions {
+  /**
+   * Also return who last changed the namespace and when. A host that keeps no
+   * such record ignores it. Off by default: it can cost a second query, and only
+   * an admin screen shows the answer.
+   */
+  withUpdatedBy?: boolean;
 }
 
 /**
@@ -68,8 +102,9 @@ export interface KvoxSettingsPort {
    * Reads a system namespace with its version.
    *
    * @param name - the namespace key.
+   * @param options - extra facts to return with the value.
    */
-  readSystem<T>(name: string): Promise<KvoxVersionedSettings<T>>;
+  readSystem<T>(name: string, options?: KvoxReadSystemOptions): Promise<KvoxVersionedSettings<T>>;
 
   /**
    * Merges a patch into a system namespace.

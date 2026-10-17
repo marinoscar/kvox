@@ -14,7 +14,7 @@
 > ~2391), `TranscriptSegment`, `TranscriptNameSuggestion`, `NoteGeneration`
 > and `SearchEmbedding` models; `apps/api/src/search/search-fusion.ts`
 > (`reciprocalRankFusion`, `RRF_K = 60`); `apps/api/src/notes/job-types.ts`
-> (`aiProviderThrottleKey`); `apps/api/src/transcription/keyterms.ts`
+> (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
 > (the four-tab ceiling). Everything under `apps/api/src/graph/`,
 > `apps/web/src/pages/graph/` (or wherever §13 lands it), and every `kg_*`

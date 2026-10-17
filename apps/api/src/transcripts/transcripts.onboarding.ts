@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 //
 // The account step "transcribe your first recording" and the two facts about the caller's own
 // transcripts: how many exist (the user checklist) and how many reached `ready` (the
-// administrator's `admin.smoke_test`, declared in `transcription/transcription.onboarding.ts`).
+// administrator's `admin.smoke_test`, declared in `kvox/transcription/transcription.onboarding.ts`).
 // Registered by `apps/api/src/kvox.manifest.ts`.
 //
 // STEP IDS ARE PERMANENT (a user's `onboarding.skipped` stores them).

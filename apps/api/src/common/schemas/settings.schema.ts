@@ -11,7 +11,7 @@
 // `@marinoscar/platform-api/host`).
 //
 // Only this app's own namespaces keep schemas in this repo:
-//   transcription  transcription/transcription-settings.schema.ts
+//   transcription  @marinoscar/kvox-api/transcription (transcription-settings.schema.ts)
 //   ai             platform/ai/ai-settings.extension.ts
 //   graph          graph/preferences/graph-preferences.schema.ts
 //   onboarding     the platform's (`@marinoscar/platform-api/onboarding`, #481)

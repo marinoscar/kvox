@@ -136,6 +136,18 @@ npm run test:debug
 npm run test:ci
 ```
 
+### Package Tests (`@marinoscar/kvox-api`)
+
+The domain slices that moved into `packages/kvox-api` (issue #492, epic #491) have their own Jest config with two projects, `unit` and `db` (`packages/kvox-api/test/jest.config.js`):
+
+```bash
+npm run test:run -w @marinoscar/kvox-api          # unit: src/**/*.spec.ts and test/**/*.spec.ts, no database
+npm run test:host:prepare -w @marinoscar/kvox-api # once: compose the test host and generate its client (no database needed)
+npm run test:db -w @marinoscar/kvox-api           # db: test/**/*.db.spec.ts against PostgreSQL 16 with pgvector
+```
+
+A unit spec moves with its code. A real-database spec (`*.db.spec.ts`) uses `createTestDb()` and `createTestKvoxModule({ db })` from `packages/kvox-api/test/host/db.ts` ([README](../packages/kvox-api/test/host/README.md)). A spec that boots the whole application through the real guards (`apps/api/test/<slice>/*.integration.spec.ts`) stays in the app: it is the proof the binding in `apps/api/src/kvox/` is right. A slice's conformance suite is exported from its `/testing` entry (`describeTranscriptionProviderConformance`) and run both in the package and in `apps/api/test/conformance.spec.ts`.
+
 ### Frontend Tests
 
 ```bash

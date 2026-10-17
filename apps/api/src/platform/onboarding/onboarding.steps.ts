@@ -23,7 +23,7 @@ import { KVOX_ONBOARDING_FACTS, type KvoxAiOnboardingReadiness } from './onboard
 // The other five steps this app adds are declared beside their domain (base code may not
 // import domain code) and registered by `kvox.manifest.ts`:
 //
-//   admin.transcription, admin.smoke_test   transcription/transcription.onboarding.ts
+//   admin.transcription, admin.smoke_test   kvox/transcription/transcription.onboarding.ts
 //   user.first_transcript                   transcripts/transcripts.onboarding.ts
 //   user.first_note                         notes/notes.onboarding.ts
 //

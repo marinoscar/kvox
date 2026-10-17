@@ -1,9 +1,11 @@
 import { Test } from '@nestjs/testing';
 
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
-import { ProviderAuthError } from '../transcription/errors';
-import { TranscriptionProviderRegistry } from '../transcription/transcription-provider.registry';
-import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
+import {
+  ProviderAuthError,
+  TranscriptionProviderRegistry,
+  TranscriptionSettingsService,
+} from '@marinoscar/kvox-api/transcription';
 import { createFakeProvider, type FakeProvider } from './handlers/__fixtures__/fake-provider';
 import { TranscriptionRuntimeService } from './transcription-runtime.service';
 
