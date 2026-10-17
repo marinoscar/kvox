@@ -273,6 +273,106 @@ describe('Note source documents (#51)', () => {
   });
 
   // ==========================================================================
+  // Extraction status (#596)
+  // ==========================================================================
+
+  describe('GET /api/notes/sources/documents/:objectId', () => {
+    const statusUrl = (id = OBJECT_ID) => `${DOCUMENTS}/${id}`;
+
+    const stage = (row: Record<string, unknown> | null, managedBy: string | null = 'notes') => {
+      prismaMock.storageObject.findMany.mockResolvedValue(row ? [row] : []);
+      prismaMock.kvoxObjectOwnership.findMany.mockResolvedValue(
+        row && managedBy ? [{ objectId: OBJECT_ID, managedBy }] : [],
+      );
+    };
+
+    it('is 401 without auth', async () => {
+      await request(context.app.getHttpServer()).get(statusUrl()).expect(401);
+    });
+
+    it('is 400 for an id that is not a UUID, without touching the store', async () => {
+      const user = await createMockTestUser(context);
+
+      await request(context.app.getHttpServer())
+        .get(statusUrl('not-a-uuid'))
+        .set(authHeader(user.accessToken))
+        .expect(400);
+
+      expect(prismaMock.storageObject.findMany).not.toHaveBeenCalled();
+    });
+
+    it('reports the recorded extraction result to the owner', async () => {
+      const user = await createMockTestUser(context);
+
+      stage(
+        managedObject({
+          uploadedById: user.id,
+          metadata: { noteSourceExtraction: { status: 'extracted', message: 'Read 2 pages.', characters: 812 } },
+        }),
+      );
+
+      const response = await request(context.app.getHttpServer())
+        .get(statusUrl())
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data).toEqual({
+        objectId: OBJECT_ID,
+        status: 'extracted',
+        message: 'Read 2 pages.',
+        characters: 812,
+      });
+    });
+
+    it('reports `extracting` while no result is recorded', async () => {
+      const user = await createMockTestUser(context);
+
+      stage(managedObject({ uploadedById: user.id, metadata: {} }));
+
+      const response = await request(context.app.getHttpServer())
+        .get(statusUrl())
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data).toEqual({
+        objectId: OBJECT_ID,
+        status: 'extracting',
+        message: null,
+        characters: null,
+      });
+    });
+
+    it('is reachable by a Viewer — `notes:read` is seeded to every role', async () => {
+      const viewer = await createMockViewerUser(context);
+
+      stage(managedObject({ uploadedById: viewer.id }));
+
+      await request(context.app.getHttpServer())
+        .get(statusUrl())
+        .set(authHeader(viewer.accessToken))
+        .expect(200);
+    });
+
+    it.each([
+      ['missing', (_me: string) => stage(null)],
+      ['uploaded by another user', (_me: string) => stage(managedObject({ uploadedById: 'someone-else' }))],
+      ['owned by another module', (me: string) => stage(managedObject({ uploadedById: me }), 'transcripts')],
+      ['owned by no module', (me: string) => stage(managedObject({ uploadedById: me }), null)],
+    ])('is the same 404 for an object that is %s', async (_label, arrange) => {
+      const user = await createMockTestUser(context);
+
+      arrange(user.id);
+
+      const response = await request(context.app.getHttpServer())
+        .get(statusUrl())
+        .set(authHeader(user.accessToken))
+        .expect(404);
+
+      expect(JSON.stringify(response.body)).toContain('Source document not found');
+    });
+  });
+
+  // ==========================================================================
   // What notes ownership actually buys, through the REAL routes
   // ==========================================================================
 
