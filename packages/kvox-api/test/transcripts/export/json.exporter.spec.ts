@@ -190,4 +190,25 @@ describe('JsonTranscriptExporter', () => {
     expect(parsed.transcript.createdAt).toBe('2026-09-10T15:04:22.000Z');
     expect(parsed.transcript.exportedAt).toBe('2026-09-14T12:00:00.000Z');
   });
+
+  // #571: `recordedAt` is published in the schema first, then emitted.
+  it('emits recordedAt when the document has one, and still validates', async () => {
+    const validate = validator();
+    const parsed = JSON.parse(await renderToString(exporter(), fixtureDocument())) as {
+      transcript: { recordedAt?: string };
+    };
+
+    expect(parsed.transcript.recordedAt).toBe('2026-09-10T14:30:00.000Z');
+    expect(validate(parsed)).toBe(true);
+  });
+
+  it('omits recordedAt when the document has none, and still validates', async () => {
+    const validate = validator();
+    const parsed = JSON.parse(
+      await renderToString(exporter(), fixtureDocument({ recordedAt: null })),
+    ) as { transcript: Record<string, unknown> };
+
+    expect('recordedAt' in parsed.transcript).toBe(false);
+    expect(validate(parsed)).toBe(true);
+  });
 });

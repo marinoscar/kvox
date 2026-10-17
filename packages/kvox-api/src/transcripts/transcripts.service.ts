@@ -74,6 +74,7 @@ import {
   TranscriptAccessService,
   type TranscriptAccessRole,
 } from './transcript-access.service.js';
+import { transcriptHasAudio } from './import/transcript-import.js';
 import { TranscriptObjectsService } from './transcript-objects.service.js';
 import { TranscriptPipelineService } from './transcript-pipeline.service.js';
 import { TranscriptionRuntimeService } from './transcription-runtime.service.js';
@@ -134,6 +135,8 @@ export interface TranscriptListItem {
   access: TranscriptAccessRole;
   /** The owner's display name (#29), falling back to their address. */
   ownerName: string;
+  /** Whether there is a recording to play: false for an import (#571). */
+  hasAudio: boolean;
   createdAt: string;
   /** When the recording was made (#352); defaults to the upload instant. */
   recordedAt: string;
@@ -582,6 +585,12 @@ export class TranscriptsService {
   async audio(id: string, user: TranscriptsActor) {
     const { transcript } = await this.access.require(user.id, id, 'view');
 
+    // #571: an imported transcript's source object is the JSON file it was made from,
+    // not audio. Signing it for an `<audio>` element would hand the player a document.
+    if (!transcriptHasAudio(transcript.provider)) {
+      throw new NotFoundException('This transcript was imported from a file and has no audio');
+    }
+
     const ttl = this.transcriptObjects.playbackUrlTtlSeconds();
 
     if (transcript.playbackStatus === 'ready' && transcript.playbackObjectId) {
@@ -940,6 +949,7 @@ export class TranscriptsService {
       failureReason: transcript.failureReason,
       access,
       ownerName,
+      hasAudio: transcriptHasAudio(transcript.provider),
       createdAt: transcript.createdAt.toISOString(),
       recordedAt: transcript.recordedAt.toISOString(),
       updatedAt: transcript.updatedAt.toISOString(),

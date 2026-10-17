@@ -8,7 +8,8 @@
 // (`GRAPH_CONFLICT_REASONS`, `NOTE_CONFLICT_REASONS`, `NAME_CHECK_CONFLICT_REASONS`,
 // `ASK_CONFLICT_REASONS`, `ASK_FINISH_REASONS`, `PROPOSAL_BAD_REQUEST_REASONS`,
 // `DIGEST_UNAVAILABLE_REASONS`, `GRAPH_IMPORT_FAILURE_REASONS`,
-// `SEMANTIC_REASONS`). This catalogue is the merged, de-duplicated view of them
+// `SEMANTIC_REASONS`, and since #571 `TRANSCRIPT_IMPORT_FAILURE_REASONS`). This
+// catalogue is the merged, de-duplicated view of them
 // (`ai_not_configured` is named by five of those lists and appears here once),
 // with the HTTP status the API answers each with. A spec
 // (`test/errors-catalogue.test.ts`) asserts that every alias value is in the
@@ -217,6 +218,44 @@ export const KVOX_ERROR_CODES = {
     status: 400,
     slice: 'graph',
     description: 'The change would leave an accepted row with no evidence.',
+  },
+  not_json: {
+    code: 'not_json',
+    status: 400,
+    slice: 'transcripts',
+    description: 'A transcript import: the uploaded file is not UTF-8 JSON.',
+  },
+  unsupported_schema: {
+    code: 'unsupported_schema',
+    status: 400,
+    slice: 'transcripts',
+    description:
+      'A transcript import: the file is JSON but not a `kvox.transcript/v1` document (a foreign file, or a later version).',
+  },
+  invalid_document: {
+    code: 'invalid_document',
+    status: 400,
+    slice: 'transcripts',
+    description:
+      'A transcript import: the document fails the published schema, or holds a value a transcript cannot store; `details.issues` lists where.',
+  },
+  unknown_speaker: {
+    code: 'unknown_speaker',
+    status: 400,
+    slice: 'transcripts',
+    description: 'A transcript import: a segment names a speaker the file does not declare.',
+  },
+  duplicate_id: {
+    code: 'duplicate_id',
+    status: 400,
+    slice: 'transcripts',
+    description: 'A transcript import: two speakers, or two segments, share an id.',
+  },
+  empty_transcript: {
+    code: 'empty_transcript',
+    status: 400,
+    slice: 'transcripts',
+    description: 'A transcript import: the document holds no segments.',
   },
 
   // --- 200: reasons carried inside a successful response body ---------------

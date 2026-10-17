@@ -1681,6 +1681,12 @@ exporter currently emits, described in prose": automation and other AI
 systems (the epic's own stated audience for this format) can validate
 against it and pin to it without reading this application's source.
 
+**`transcript.recordedAt` (issue #571) is the first field added under that
+rule.** It is optional: the meeting date (`transcripts.recorded_at`), which the
+JSON exporter now emits beside `createdAt`. A file exported before the field
+existed lacks it, still validates, and an importer falls back to `createdAt`
+(§8.6). Nothing was removed or repurposed, so the `$id` stays `v1`.
+
 ### 8.3 Markdown layout
 
 YAML front matter (`title`, `date`, `duration`, `speakers`, `version`)
@@ -1767,6 +1773,78 @@ retention window for what is, after all, a byte-for-byte reproducible
 artifact of a specific version and a specific set of options: nothing is
 lost by expiring it, because requesting the identical export again produces
 the identical file.
+
+### 8.6 Importing a `kvox.transcript/v1` file
+
+`POST /api/transcripts/imports` (issue #571) turns the file §8.2 describes back
+into a transcript: a multipart request with one `file` part, `transcripts:write`,
+answering **201** with the same detail body as `GET /api/transcripts/{id}`. It
+exists so a transcript can move between deployments (and into KVox Desktop)
+without its audio.
+
+**What the new transcript is.** A row that is already `status: ready`,
+`transcriptionStatus: completed` and `playbackStatus: not_needed`, with
+`provider: 'import'` and `providerOptions.importedFrom` recording where it came
+from. Its segments, speakers and (when the file has them) word timings are
+stored as exported. `recordedAt` is the file's `transcript.recordedAt`, else
+`transcript.createdAt`. A speaker the file names, meaning anything that is not a
+`Speaker A` placeholder, gets a `speaker_identities` entry, and
+`TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT` is emitted after the commit exactly as
+naming a speaker by hand would: its listener enqueues `kg.speaker_link`.
+`ATTENDED` relations are not created here; they come from `kg.extract` on a note
+made from the transcript. The snapshot job and the search index job are
+enqueued. **No transcription, transcode or ready-notification job is created**:
+there is nothing to transcribe, and a provider job would bill the deployment
+for a file with no audio. `GET /:id/audio` answers 404 for an import.
+
+**Version 1 is the same row transcription writes.** `original-version.ts`
+(`writeOriginalVersion`) writes version 1 for both `transcription.ingest` and the
+import: `source: ai_original`, `authorId: null`, `current_version = 1`. One
+writer means an imported transcript replays through `materialize()` and the
+editing core like any other, and the two paths cannot drift.
+
+**Why synchronous.** The work is a bounded parse and one transaction, not
+long-running work. The bound is the size limit: the multipart read stops at
+`maxImportBytes` (default 25 MiB, a slice option) and answers **413**, so the
+request cannot outlive a normal HTTP timeout and rule 1 of
+[`job-queue.md` §7.10](job-queue.md#710-all-long-running-work-is-a-job--the-rule-the-exemptions-the-limit)
+is not engaged. Raising the limit is the line to watch: a file big enough to
+need a job is a different design, not a bigger option.
+
+**Why the file is the source object.** The uploaded JSON is stored as the
+transcript's managed source object (`application/json`, `managed_by:
+transcripts`, key under `transcripts/<id>/`) and `transcript.purge` frees it
+with the rest of the prefix. The alternative, a nullable
+`transcripts.source_object_id`, would be a schema change on a column every
+pipeline stage assumes is set, for a row that has one anyway. Keeping the
+original file also makes the import auditable.
+
+**Refusals are typed.** A 400 carries `details.reason` (in `details`, not the
+top-level `code`, which the host derives from the status):
+
+| `details.reason` | Meaning |
+|---|---|
+| `not_json` | Not UTF-8 JSON (an empty file lands here). |
+| `unsupported_schema` | JSON, but not `kvox.transcript/v1`: a foreign file or a later version. `details.schema` echoes the value it names. |
+| `invalid_document` | Fails the published schema, or holds a value a transcript cannot store. `details.issues` lists at most 20 `{ path, message }`. |
+| `duplicate_id` | Two speakers, or two segments, share an id. |
+| `unknown_speaker` | A segment names a speaker the file does not declare. |
+| `empty_transcript` | No segments. |
+
+A foreign or extra-property file is therefore never a 500. The reasons are in
+`TRANSCRIPT_IMPORT_FAILURE_REASONS` (`@marinoscar/kvox-contract/transcripts`)
+and append-only. The parser (`import/transcript-import.ts`) is pure: bytes in,
+a plan or a failure out, so the same function backs the route, the conformance
+kit and Desktop.
+
+**Round trip.** Export then import reproduces the transcript's content: text,
+segment boundaries, speaker names, and the recording date. It does not
+reproduce identity or history: ids (transcript, segment, speaker) are new, the
+version number restarts at 1 (the exported version's content becomes version 1,
+the history is not carried), `provider` becomes `import`, and the author of
+edits is not preserved (`authorId: null`). Word timings survive only if the file
+was exported with `includeWords`; without them the import has segment timings
+only, and so does everything built on it.
 
 ## 9. Large uploads and CSP
 

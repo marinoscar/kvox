@@ -48,7 +48,9 @@ import {
   MediaAudioTranscodeHandler,
   TRANSCRIPTS_MODULE_OPTIONS,
   TranscriptExportHandler,
+  TranscriptImportService,
   TranscriptNameCheckHandler,
+  TranscriptObjectsService,
   TranscriptPipelineService,
   TranscriptPurgeHandler,
   TranscriptSnapshotHandler,
@@ -60,6 +62,7 @@ import {
   MarkdownTranscriptExporter,
   PdfTranscriptExporter,
   TranscriptExporterRegistry,
+  parseTranscriptImport,
   type ResolvedTranscriptsOptions,
 } from '@marinoscar/kvox-api/transcripts';
 import {
@@ -528,6 +531,27 @@ describeTranscriptsConformance(
       // The slice's service over the given queue and the application's own resolved options.
       pipelineFor: (jobs) =>
         new TranscriptPipelineService({} as never, jobs, {} as never, options, {} as never, {} as never),
+      // The JSON import (#571): the slice's parser, and its service over the kit's in-memory
+      // ports with the application's own resolved options.
+      importer: {
+        parse: parseTranscriptImport,
+        serviceFor: (ports) =>
+          new TranscriptImportService(
+            ports.prisma,
+            ports.events,
+            ports.audit,
+            new TranscriptObjectsService(ports.objectStore, options),
+            new TranscriptPipelineService(
+              {} as never,
+              ports.jobs,
+              {} as never,
+              options,
+              {} as never,
+              // The search index is a peer slice's; the kit asserts on the job port only.
+              { enqueue: async () => undefined } as never,
+            ),
+          ),
+      },
     };
   },
   { describe, it, expect },
