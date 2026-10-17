@@ -15,7 +15,8 @@
     "@nestjs/swagger": ["@nestjs/common"],
     "nestjs-zod": ["@nestjs/common", "zod"],
     "react-dom": ["react"],
-    "react-router-dom": ["react", "react-dom"]
+    "react-router-dom": ["react", "react-dom"],
+    "@testing-library/react": ["react", "react-dom"]
   },
   "$reserved": {
     "kvox-api": [
@@ -23,7 +24,7 @@
       "@nestjs/schedule",
       "@prisma/client-runtime-utils"
     ],
-    "kvox-web": ["@mui/icons-material", "@mui/material", "react-router-dom"]
+    "kvox-web": []
   },
   "$hostOnly": {
     "kvox-api": ["@marinoscar/platform-api"],
@@ -149,7 +150,17 @@
   },
   "kvox-web": {
     "core": {
-      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"]
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": ["@mui/icons-material", "@mui/material", "react-router-dom"],
+        "testing": ["@mui/material", "@testing-library/react", "react-router-dom"]
+      }
+    },
+    "transcription": {
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": ["@mui/icons-material", "@mui/material", "react-router-dom"]
+      }
     }
   },
   "kvox-contract": {

@@ -60,11 +60,11 @@ import type {
   NoteStatus,
   NoteSummary,
 } from '../services/notes';
-import { reconcileFeed } from '../utils/feedReconcile';
-import { useCachedFeedState } from '../utils/feedCache';
+import { reconcileFeed } from '@marinoscar/kvox-web/core/headless';
+import { useCachedFeedState } from '@marinoscar/kvox-web/core/headless';
 import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from './useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 
 /** While a generation is running. Fast enough that a status chip looks alive. */
 export const NOTE_ACTIVE_POLL_MS = 5_000;

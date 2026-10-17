@@ -55,8 +55,9 @@ import { useIsMounted } from '../hooks/useIsMounted';
 import { useUploadManager } from '../hooks/useUploadManager';
 import { ApiError } from '../services/api';
 import { createTranscript } from '../services/transcripts';
-import { getTranscriptionConfig } from '../services/transcription';
-import type { TranscriptionConfig } from '../services/transcription';
+import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';
+import { getTranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
+import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 import {
   AUDIO_ACCEPT_ATTRIBUTE,
   SPEAKER_COUNT_OPTIONS,
@@ -73,6 +74,7 @@ import {
 export function NewTranscriptPage() {
   const navigate = useNavigate();
   const isMounted = useIsMounted();
+  const kvoxHost = useKvoxHost();
   const { hasPermission } = usePermissions();
   const { uploads, startUpload, pauseUpload, resumeUpload, cancelUpload } =
     useUploadManager();
@@ -97,7 +99,7 @@ export function NewTranscriptPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void getTranscriptionConfig()
+    void getTranscriptionConfig(kvoxHost)
       .then((value) => {
         if (!cancelled && isMounted()) setConfig(value);
       })
@@ -113,7 +115,7 @@ export function NewTranscriptPage() {
     return () => {
       cancelled = true;
     };
-  }, [isMounted]);
+  }, [isMounted, kvoxHost]);
 
   const upload = uploadId ? uploads.find((item) => item.id === uploadId) : undefined;
 

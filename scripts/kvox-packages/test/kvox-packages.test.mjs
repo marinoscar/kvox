@@ -169,6 +169,86 @@ test('app-installs: an app importing a slice must list its peers', () => {
   }
 });
 
+/** The clean fixture with a `ui` entry on kvox-web/core that may import MUI (optional peer). */
+function withUiEntry(dir) {
+  const peers = JSON.parse(readFileSync(join(dir, 'packages/kvox-slice-peers.json'), 'utf8'));
+  peers['kvox-web'].core.entries = { ui: ['@mui/material'] };
+  peers.$implies['@mui/material'] = ['react', 'react-dom'];
+  writeFileSync(join(dir, 'packages/kvox-slice-peers.json'), JSON.stringify(peers));
+  const manifest = JSON.parse(readFileSync(join(dir, 'packages/kvox-web/package.json'), 'utf8'));
+  manifest.peerDependencies['@mui/material'] = '^9.1.0';
+  manifest.peerDependenciesMeta = { '@mui/material': { optional: true } };
+  writeFileSync(join(dir, 'packages/kvox-web/package.json'), JSON.stringify(manifest));
+}
+
+test('entries: a ui entry may import its extra peer, which stays optional although the slice is universal', () => {
+  const dir = fixtureCopy();
+  try {
+    withUiEntry(dir);
+    plant(dir, 'imports/ui-uses-mui.ts', 'packages/kvox-web/src/core/ui/uses-mui.ts');
+    assert.deepEqual(checkSlicePeers({ root: dir }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('entries: the same import in the headless entry fails twice (imports, headless)', () => {
+  const dir = fixtureCopy();
+  try {
+    withUiEntry(dir);
+    plant(dir, 'imports/ui-uses-mui.ts', 'packages/kvox-web/src/core/headless/uses-mui.ts');
+    const violations = checkSlicePeers({ root: dir });
+    assert.deepEqual(rulesOf(violations).sort(), ['headless', 'imports']);
+    assert.ok(violations.every((v) => /headless\/uses-mui\.ts/.test(v.message)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('entries: an extra peer made required in the manifest fails the manifest rule', () => {
+  const dir = fixtureCopy();
+  try {
+    withUiEntry(dir);
+    const manifest = JSON.parse(readFileSync(join(dir, 'packages/kvox-web/package.json'), 'utf8'));
+    delete manifest.peerDependenciesMeta;
+    writeFileSync(join(dir, 'packages/kvox-web/package.json'), JSON.stringify(manifest));
+    assert.ok(rulesOf(checkSlicePeers({ root: dir })).includes('manifest'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('headless: a headless file reaching into a ui folder fails', () => {
+  const dir = fixtureCopy();
+  try {
+    mkdirSync(join(dir, 'packages/kvox-web/src/core/headless'), { recursive: true });
+    mkdirSync(join(dir, 'packages/kvox-web/src/core/ui'), { recursive: true });
+    writeFileSync(join(dir, 'packages/kvox-web/src/core/ui/index.ts'), 'export const UI = 1;\n');
+    writeFileSync(join(dir, 'packages/kvox-web/src/core/headless/x.ts'), "export { UI } from '../ui/index.js';\n");
+    assert.deepEqual(rulesOf(checkSlicePeers({ root: dir })), ['headless']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('app-installs: importing a web slice entry needs the entry peers, the headless entry does not', () => {
+  const dir = fixtureCopy();
+  try {
+    withUiEntry(dir);
+    mkdirSync(join(dir, 'apps/web/src'), { recursive: true });
+    const manifest = { name: 'web', dependencies: { '@marinoscar/kvox-web': '*', react: '^19.2.7', 'react-dom': '^19.2.7' } };
+    writeFileSync(join(dir, 'apps/web/package.json'), JSON.stringify(manifest));
+    writeFileSync(join(dir, 'apps/web/src/main.ts'), "import { NAME } from '@marinoscar/kvox-web/core/headless';\n");
+    assert.deepEqual(checkSlicePeers({ root: dir, apps: ['apps/web'] }), []);
+    writeFileSync(join(dir, 'apps/web/src/main.ts'), "import { UI } from '@marinoscar/kvox-web/core/ui';\n");
+    const failing = checkSlicePeers({ root: dir, apps: ['apps/web'] });
+    assert.deepEqual(rulesOf(failing), ['app-installs']);
+    assert.match(failing[0].message, /@mui\/material/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the real repository satisfies every rule, for the packages and for both apps', () => {
   assert.deepEqual(checkSlicePeers({ root: REPO, apps: ['apps/api', 'apps/web'] }), []);
 });

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
-import { clearFeedCache } from '../utils/feedCache';
+import { clearFeedCache } from '@marinoscar/kvox-web/core/headless';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';

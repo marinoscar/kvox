@@ -62,7 +62,7 @@ import { getNote, getNoteSummary, getNotes } from '../../services/notes';
 import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import { NOTE_ACTIVE_POLL_MS, useNotes } from '../../hooks/useNotes';
 import type { NoteListItem } from '../../services/notes';
-import { clearFeedCache } from '../../utils/feedCache';
+import { clearFeedCache } from '@marinoscar/kvox-web/core/headless';
 
 const mockGetNotes = vi.mocked(getNotes);
 const mockGetNote = vi.mocked(getNote);

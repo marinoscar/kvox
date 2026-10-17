@@ -46,15 +46,17 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  KvoxApiError,
   createTranscriptUpload,
   fetchUploadResumeState,
   resumeUpload as resumeUploadEngine,
   startUpload as startUploadEngine,
+  useKvoxHost,
   type ResumableUpload,
   type ResumableUploadOptions,
   type UploadInitResponse,
   type UploadProgress,
-} from '../services/resumableUpload';
+} from '@marinoscar/kvox-web/core/headless';
 import {
   assertUploadSessionMatches,
   deleteUploadSession,
@@ -65,7 +67,7 @@ import {
 } from '../services/uploadSessions';
 import { ApiError } from '../services/api';
 import { getTranscript } from '../services/transcripts';
-import { useScreenWakeLock } from '../hooks/useScreenWakeLock';
+import { useScreenWakeLock } from '@marinoscar/kvox-web/core/headless';
 import { useIsMounted } from '../hooks/useIsMounted';
 
 /** One upload the manager knows about. `id` is the storage object id. */
@@ -209,6 +211,7 @@ function readKeepScreenAwake(): boolean {
 
 export function UploadManagerProvider({ children }: { children: ReactNode }) {
   const isMounted = useIsMounted();
+  const host = useKvoxHost();
   const [uploads, setUploads] = useState<ManagedUpload[]>([]);
   const [sessions, setSessions] = useState<UploadSessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -392,8 +395,8 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // Two paths to the same engine: adopt an init the caller already has
       // (#30's `POST /api/transcripts`), or ask the generic endpoint for one.
       const { upload, init } = providedInit
-        ? { upload: startUploadEngine(file, providedInit, engineOptions), init: providedInit }
-        : await createTranscriptUpload(file, engineOptions);
+        ? { upload: startUploadEngine(host, file, providedInit, engineOptions), init: providedInit }
+        : await createTranscriptUpload(host, file, engineOptions);
 
       const record: ManagedUpload = {
         id: init.objectId,
@@ -422,7 +425,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       register(upload, record);
       return record;
     },
-    [refreshSessions, register],
+    [host, refreshSessions, register],
   );
 
   const resumeFromSession = useCallback(
@@ -441,7 +444,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // stopped being able to observe anything.
       let state;
       try {
-        state = await fetchUploadResumeState(session.objectId, {
+        state = await fetchUploadResumeState(host, session.objectId, {
           partSize: session.partSize,
           size: session.size,
         });
@@ -449,13 +452,13 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
         // The object is gone (#339): the purge removed the transcript and its
         // upload together. Forget the session so its card disappears, and
         // tell the caller there is nothing to report rather than an error.
-        if (err instanceof ApiError && err.status === 404) {
+        if (err instanceof KvoxApiError && err.status === 404) {
           await discardSession(session.objectId);
           throw new UploadSessionGoneError(session);
         }
         throw err;
       }
-      const upload = resumeUploadEngine(file, session.objectId, state, engineOptions);
+      const upload = resumeUploadEngine(host, file, session.objectId, state, engineOptions);
 
       const record: ManagedUpload = {
         id: session.objectId,
@@ -471,7 +474,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       register(upload, record);
       return record;
     },
-    [discardSession, register],
+    [discardSession, host, register],
   );
 
   const pauseUpload = useCallback((id: string) => {

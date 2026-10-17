@@ -33,7 +33,7 @@ import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useState } from 'react';
 
 import { COPY_FAILED_MESSAGE } from '../common/CopyButton';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { useCopyToClipboard } from '@marinoscar/kvox-web/core/headless';
 import type { NoteBodyFormat } from '../../services/noteTemplates';
 
 export interface NoteCopyButtonProps {

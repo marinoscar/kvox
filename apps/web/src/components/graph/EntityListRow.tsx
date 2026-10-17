@@ -18,7 +18,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import type { GraphEntitySummary } from '../../services/graph';
 import { initials } from '../../utils/graphDisplay';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import { EntityTypeIcon } from './entityTypeIcon';
 
 export interface EntityListRowProps {

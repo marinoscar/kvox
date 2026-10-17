@@ -106,7 +106,7 @@ import type { NoteListItem } from '../../services/notes';
 import { retryTranscript } from '../../services/transcripts';
 import type { TranscriptListItem } from '../../services/transcripts';
 import { failureMessage } from '../../utils/transcriptDisplay';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export interface NeedsAttentionProps {
   /** `GET /api/transcripts/summary`'s `failed` list — owner-scoped, max eight. */

@@ -73,7 +73,7 @@ import {
   groupVersionsIntoSessions,
   sessionSummary,
 } from '../utils/versionSessions';
-import { formatRelativeTime } from '../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 
 export function TranscriptHistoryPage() {
   const { id } = useParams<{ id: string }>();

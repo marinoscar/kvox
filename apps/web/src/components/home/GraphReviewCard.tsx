@@ -32,10 +32,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
 import { useIsMounted } from '../../hooks/useIsMounted';
-import { useVisiblePolling } from '../../hooks/useVisiblePolling';
+import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
 import { listProposals } from '../../services/graph';
 import type { ProposalSummary } from '../../services/graph';
-import { formatRelativeTime } from '../../utils/relativeTime';
+import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import { ProposalReviewSheet } from '../graph/review/ProposalReviewSheet';
 
 export const GRAPH_REVIEW_POLL_MS = 60_000;

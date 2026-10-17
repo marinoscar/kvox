@@ -5,7 +5,7 @@ import 'vitest-axe/extend-expect';
 
 import { render } from '../../utils/test-utils';
 import { NoteProvenance } from '../../../components/notes/NoteProvenance';
-import { formatShortDate } from '../../../utils/relativeTime';
+import { formatShortDate } from '@marinoscar/kvox-web/core/headless';
 import type { Note } from '../../../services/notes';
 
 /**

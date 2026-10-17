@@ -279,6 +279,7 @@ cannot edit them and binds them without reading a breakpoint of its own
 
 What this repository enforces is the absence of a sixth.
 `apps/web/src/__tests__/config/breakpointGates.test.ts` scans `apps/web/src`
+and `packages/kvox-web/src` (where `LibraryPageFrame` lives since #499)
 for `useMediaQuery(` and `theme.breakpoints.up|down(` and fails on any file
 not listed with a reason (the page-level reads, headed by
 `LibraryPageFrame.tsx`, the documented non-gate), and it asserts that the shell
@@ -366,7 +367,7 @@ Two things moved near these gates without becoming one:
   and an abbreviation would misdescribe the row. A *width* is not a gate —
   `showRail`'s breakpoint is untouched. (Since #484 the rail is the package's
   and its collapsed width is the package's 56px; see `ux-refresh.md` §1.)
-- **`components/library/LibraryPageFrame.tsx` reads `down('sm')`**, and it is
+- **`LibraryPageFrame` (`@marinoscar/kvox-web/core/ui`, moved from `components/library/` by #499) reads `down('sm')`**, and it is
   the page-level read `LibraryPage` always had, relocated when #106 split that
   page into `TranscriptsPage` and `NotesPage`. It decides where one page puts
   its create action — a header button at `sm` and up, a FAB below it — never

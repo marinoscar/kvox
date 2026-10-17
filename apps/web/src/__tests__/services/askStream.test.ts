@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * The Ask answer stream client (#380, #379's frames).
  *
- * `services/sse.ts` is MOCKED (it has its own suite); what is proven here is
+ * `connectSse` (`@marinoscar/kvox-web/core/headless`) is MOCKED (it has its own suite); what is proven here is
  * the layer above it: frames parsed and validated, deltas written at their
  * OFFSET (so a reconnect's replay never duplicates text), steps de-duplicated
  * by `index`, and a terminal frame closing the connection before its callback.
@@ -16,8 +16,8 @@ const connections: Array<{
   close: ReturnType<typeof vi.fn>;
 }> = [];
 
-vi.mock('../../services/sse', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/sse')>();
+vi.mock('@marinoscar/kvox-web/core/headless', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/kvox-web/core/headless')>();
   return {
     ...actual,
     connectSse: vi.fn((options: Parameters<typeof actual.connectSse>[0]) => {
