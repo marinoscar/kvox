@@ -1266,6 +1266,12 @@ exactly as `job-handler.interface.ts` requires, following
 extracted text is a durable, externally-referenced artifact, not scratch
 output nothing outside the job will ever name again.
 
+The client reads extraction progress from the notes route
+`GET /api/notes/sources/documents/:objectId` (`notes:read`, owner-scoped, 404
+otherwise; #596), which answers `{ objectId, status, message, characters }`
+from the source object's `noteSourceExtraction` metadata block, not from
+`GET /api/storage/objects/:id`. The storage layout above is unchanged.
+
 ### 4.8 Resolving the ultimate origin transcript (issue #309)
 
 `source_transcript_id`/`source_note_id`/`source_object_id` (§4.1) record only
