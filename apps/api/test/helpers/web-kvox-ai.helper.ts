@@ -60,43 +60,56 @@ export interface WebAiUnderTest {
   findUnique: jest.Mock;
   /** Makes the NEXT client call (stream, respond or embed) fail with `error`. */
   arm(error: unknown): void;
+  /** Makes the NEXT client call (stream, respond or embed) never answer until its signal aborts. */
+  hang(): void;
   /** Queues the events of the next stream call (one array per call). */
   script(events: AiStreamEvent[]): void;
   /** The value the next structured answer parses to. */
-  structured: { value: unknown };
+  structured: { value: unknown; finishReason?: 'stop' | 'length' | 'content_filter' };
 }
 
 /** The real web binding over a scripted `AiService`. */
 export function createWebAiUnderTest(options: { state?: KvoxAiModelState; hasKey?: boolean; timeoutMs?: number } = {}): WebAiUnderTest {
-  let armed: { error: unknown } | null = null;
-  const take = (): { error: unknown } | null => {
+  let armed: { error: unknown } | { hang: true } | null = null;
+  const take = (): { error: unknown } | { hang: true } | null => {
     const next = armed;
     armed = null;
     return next;
   };
+  /** Settles only when the platform call's signal aborts, with the signal's reason, as an adapter does. */
+  const hangUntilAborted = (signal: AbortSignal | undefined): Promise<never> =>
+    new Promise((_resolve, reject) => {
+      if (signal === undefined) return;
+      const fail = (): void => reject(signal.reason);
+      if (signal.aborted) fail();
+      else signal.addEventListener('abort', fail, { once: true });
+    });
   const scripts: AiStreamEvent[][] = [];
-  const structured = { value: { ok: true } as unknown };
+  const structured: WebAiUnderTest['structured'] = { value: { ok: true } as unknown };
 
   const client = {
-    stream: jest.fn(() => {
+    stream: jest.fn((_req: unknown, opts?: { signal?: AbortSignal }) => {
       const failure = take();
       const events = scripts.shift() ?? [
         { type: 'output_text.delta', delta: 'Hello' },
         { type: 'response.completed', response: RESPONSE },
       ];
       return (async function* () {
-        if (failure !== null) throw failure.error;
+        if (failure !== null && 'hang' in failure) await hangUntilAborted(opts?.signal);
+        if (failure !== null && 'error' in failure) throw failure.error;
         for (const event of events) yield event;
       })();
     }),
-    respond: jest.fn(async () => {
+    respond: jest.fn(async (_req: unknown, opts?: { signal?: AbortSignal }) => {
       const failure = take();
-      if (failure !== null) throw failure.error;
-      return { ...RESPONSE, parsed: structured.value };
+      if (failure !== null && 'hang' in failure) await hangUntilAborted(opts?.signal);
+      if (failure !== null && 'error' in failure) throw failure.error;
+      return { ...RESPONSE, parsed: structured.value, finishReason: structured.finishReason ?? RESPONSE.finishReason };
     }),
-    embed: jest.fn(async (req: { input: string[]; model: string }) => {
+    embed: jest.fn(async (req: { input: string[]; model: string }, opts?: { signal?: AbortSignal }) => {
       const failure = take();
-      if (failure !== null) throw failure.error;
+      if (failure !== null && 'hang' in failure) await hangUntilAborted(opts?.signal);
+      if (failure !== null && 'error' in failure) throw failure.error;
       return {
         provider: 'openai',
         model: req.model,
@@ -129,6 +142,9 @@ export function createWebAiUnderTest(options: { state?: KvoxAiModelState; hasKey
     findUnique,
     arm: (error) => {
       armed = { error };
+    },
+    hang: () => {
+      armed = { hang: true };
     },
     script: (events) => {
       scripts.push(events);

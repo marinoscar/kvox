@@ -3,6 +3,7 @@ import type { KvoxAiContext, KvoxAiTarget, KvoxChatEvent, KvoxChatMessage, KvoxT
 
 import { clearToolCache } from '../chat/index.js';
 import type { KvoxAiModelState } from '../runtime/index.js';
+import { SCRIPTED_RESPONSE as RESPONSE, collect, completedEvent as completed, eventStream as events } from '../testing/index.js';
 import { createKvoxAi } from './create-kvox-ai.js';
 
 // =============================================================================
@@ -33,16 +34,6 @@ const SEARCH: KvoxToolDef = {
   },
 };
 
-const RESPONSE: AiResponse = {
-  id: 'resp-1',
-  provider: 'openai',
-  model: 'gpt-5.4-mini',
-  output: [],
-  outputText: '',
-  usage: { inputTokens: 12, outputTokens: 7 },
-  finishReason: 'stop',
-};
-
 const TARGET: KvoxAiTarget = {
   provider: 'openai',
   model: 'gpt-5.4-mini',
@@ -51,23 +42,6 @@ const TARGET: KvoxAiTarget = {
   maxOutputTokens: 2000,
   source: 'task',
 };
-
-function completed(overrides: Partial<AiResponse> = {}): AiStreamEvent {
-  return { type: 'response.completed', response: { ...RESPONSE, ...overrides } };
-}
-
-async function* events(...list: Array<AiStreamEvent | Error>): AsyncGenerator<AiStreamEvent> {
-  for (const event of list) {
-    if (event instanceof Error) throw event;
-    yield event;
-  }
-}
-
-async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const item of iterable) out.push(item);
-  return out;
-}
 
 function build(opts: { timeoutMs?: number } = {}) {
   const runtime = { stream: jest.fn(), create: jest.fn(), readiness: jest.fn() };

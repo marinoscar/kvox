@@ -6,6 +6,7 @@ import { KvoxAiError, type KvoxAiContext, type KvoxAiTarget } from '@marinoscar/
 import { EMBEDDING_DIMENSIONS, KVOX_EMBEDDING } from '../embedding/index.js';
 import type { KvoxAiFeatureId } from '../features/index.js';
 import type { KvoxAiModelState } from '../runtime/index.js';
+import { SCRIPTED_RESPONSE as RESPONSE, collect, completedEvent as completed, eventStream as events } from '../testing/index.js';
 import { createKvoxAi } from './create-kvox-ai.js';
 import { createKvoxAiReadiness } from './readiness.js';
 
@@ -65,30 +66,6 @@ function state(overrides: {
 
 function aiError(code: AiErrorCode, extra: ConstructorParameters<typeof AiError>[2] = {}): AiError {
   return new AiError(code, `platform ${code}`, extra);
-}
-
-const RESPONSE = {
-  id: 'resp-1',
-  provider: 'openai',
-  model: 'gpt-5.4-mini',
-  output: [],
-  outputText: '',
-  usage: { inputTokens: 12, outputTokens: 7 },
-  finishReason: 'stop' as const,
-};
-
-async function* events(...list: AiStreamEvent[]): AsyncGenerator<AiStreamEvent> {
-  for (const event of list) yield event;
-}
-
-function completed(overrides: Partial<typeof RESPONSE> = {}): AiStreamEvent {
-  return { type: 'response.completed', response: { ...RESPONSE, ...overrides } };
-}
-
-async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const item of iterable) out.push(item);
-  return out;
 }
 
 function vector(width = EMBEDDING_DIMENSIONS, fill = 0.5): number[] {

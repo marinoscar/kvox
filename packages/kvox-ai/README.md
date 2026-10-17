@@ -14,7 +14,7 @@ Entry point:
 
 - `@marinoscar/kvox-ai`: the package root, which re-exports every slice. Slice READMEs: [types](src/types/README.md), [features](src/features/README.md), [tasks](src/tasks/README.md), [structured](src/structured/README.md), [chat](src/chat/README.md), [tokens](src/tokens/README.md), [embedding](src/embedding/README.md), [runtime](src/runtime/README.md).
 
-The slice graph (`packages/kvox-slices.json`) also declares `errors` and `testing` for PR 2; neither folder exists yet.
+- `@marinoscar/kvox-ai/testing`: `createScriptedRuntime` and `describeKvoxAiConformance` (not re-exported by the root). Slice README: [testing](src/testing/README.md).
 
 ## Install and peer dependencies
 
@@ -104,7 +104,7 @@ None of its own: the package logs nothing, emits no metric and opens no span. Us
 
 ## Conformance suite
 
-None yet. PR 2 adds `@marinoscar/kvox-ai/testing` with a scripted runtime and `describeKvoxAiConformance(name, build)`, and runs the existing kits (`describeKvoxPortsConformance`, `describeAskConformance`) against `createKvoxAi`. Today the moved unit specs (`src/**/*.spec.ts`, `npm run test:run -w @marinoscar/kvox-ai`) pin the structured-schema rules, the chat mapping, the chooser, the token estimate and the embedding contract.
+`@marinoscar/kvox-ai/testing` exports `createScriptedRuntime` (a runtime that replays scripted provider events, responses, errors and hangs, and records each call) and `describeKvoxAiConformance(name, build, harness?, options?)`: the rules of a `KvoxAiPort` (strict structured output validated twice, `truncated`, `invalid_output`, the tool-call event mapping, `rate_limit` with `retryAfterMs` in a job, `auth`, `refusal`, `timeout`, no key-shaped string in any error or event, deterministic `countTokens`). A case a host cannot produce is a reasoned `optOut`, never a silent skip. The package runs it with `createKvoxAi` over the scripted runtime (`test/kvox-ai-conformance.spec.ts`), together with the host-port kit `describeKvoxPortsConformance` and the Ask kit `describeAskConformance` from `@marinoscar/kvox-api` bound to the same port; the web edition runs the same three over its platform binding (`apps/api/test/platform-kvox/`). The moved unit specs (`src/**/*.spec.ts`, `npm run test:run -w @marinoscar/kvox-ai`) pin the structured-schema rules, the chat mapping, the chooser, the token estimate and the embedding contract.
 
 ## Upgrade notes
 
