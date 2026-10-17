@@ -387,6 +387,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       endMs: 4000,
       textChanged: false,
       available: true,
+      hasAudio: true,
       href: `/transcripts/${transcript.id}?segment=${segment.id}&t=1500`,
     });
     expect(noteLink.source).toMatchObject({
@@ -414,6 +415,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
       transcriptTitle: null,
       currentSegmentRev: null,
       textChanged: false,
+      hasAudio: false,
     });
     const afterRevoke = await reads.mentions({ id: bob.id }, person, { limit: 25 } as never);
     expect(afterRevoke.items.find((m) => m.kind === 'transcript')).toEqual({
