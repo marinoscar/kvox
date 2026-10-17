@@ -38,12 +38,12 @@
 > (#55; since #477 these are the platform's `UserAiKeysPage` and `AiConfigPage`,
 > with this application's task-model, graph and ceiling sections in
 > `apps/web/src/pages/Admin/AiSettingsPage.tsx`);
-> `apps/web/src/pages/NoteTemplatesPage.tsx` (#56); the `config/
-> destinations.ts` rename to `library`, `apps/web/src/pages/
-> NotesLibraryPage.tsx`, `LibraryTabs.tsx`, `NewNotePage.tsx` and the
-> streaming generation view (#57); `apps/web/src/pages/NotePage.tsx`,
-> `NoteHistoryPage.tsx` and `apps/web/src/components/notes/` (#58); and the
-> extension to the existing `apps/web/src/pages/TranscriptPage.tsx` (#59).
+> `packages/kvox-web/src/notes/ui/pages/UserNoteTemplatesPage.tsx` (#56); the `config/
+> destinations.ts` rename to `library`, `packages/kvox-web/src/notes/ui/pages/NotesPage.tsx`,
+> `NewNotePage.tsx` and the
+> streaming generation view (#57); `packages/kvox-web/src/notes/ui/pages/NotePage.tsx`,
+> `NoteHistoryPage.tsx` and `packages/kvox-web/src/notes/ui/components/` (#58); and the
+> extension to the existing `packages/kvox-web/src/transcripts/ui/pages/TranscriptPage.tsx` (#59).
 > Documentation lands last: `docs/API.md`'s `### Notes` group, the Notes rules in
 > `apps/api/AGENTS.md`, a runbook, and the changelog entry (#60).
 >
@@ -1176,8 +1176,8 @@ the source may have been corrected and the template edited since. See
 
 **The web client's "View full context sent to the AI" dialog (issue #308)**
 is the long form of the "How this note was generated" panel
-(`apps/web/src/components/notes/NoteGenerationContext.tsx`): opening it mounts
-`apps/web/src/components/notes/NoteContextDialog.tsx`, which is what actually
+(`packages/kvox-web/src/notes/ui/components/NoteGenerationContext.tsx`): opening it mounts
+`packages/kvox-web/src/notes/ui/components/NoteContextDialog.tsx`, which is what actually
 calls `GET /api/notes/{id}/context` /
 `GET /api/notes/{id}/generations/{generationId}/context` — the fetch is gated
 on the dialog being open, never on the note loading, because the recorded
@@ -1320,7 +1320,7 @@ convention. See `docs/API.md`'s `### Notes` group for the wire shape.
 **The lazy-audio rationale.** Resolving `originTranscript` never signs
 anything — it is a `transcripts` row read, not a call to
 `GET /api/transcripts/:id/audio`. Opening a note page is far more common than
-playing its source recording, so `apps/web/src/hooks/useSourceAudio.ts`
+playing its source recording, so `packages/kvox-web/src/transcripts/headless/hooks/useSourceAudio.ts`
 fetches the signed audio URL **lazily, on the first Play press**, never on
 render: a signed URL per note-page view would be a signature minted for audio
 nobody asked to hear. The hook also re-signs near the URL's `expiresAt` (a
@@ -1708,15 +1708,15 @@ and no shared column.
   archives it for the entire deployment.
 
 **Web (issue #311).** The template manager
-(`apps/web/src/pages/UserNoteTemplatesPage.tsx`,
-`apps/web/src/components/notes/NoteTemplateList.tsx`) exposes this API
+(`packages/kvox-web/src/notes/ui/pages/UserNoteTemplatesPage.tsx`,
+`packages/kvox-web/src/notes/ui/components/NoteTemplateList.tsx`) exposes this API
 through a per-row eye toggle (own templates and built-ins alike), a "Hidden"
 chip, and an All/Shown/Hidden filter whose counts and last-selected tab are
 remembered per browser in `localStorage` — a viewer preference about a
 viewer preference, not server state. Toggling shows a snackbar with an Undo
 action, and hiding every template surfaces a standing warning rather than
 letting the list go silently empty. The picker in
-`apps/web/src/pages/NewNotePage.tsx` reads
+`packages/kvox-web/src/notes/ui/pages/NewNotePage.tsx` reads
 `useNoteTemplates({ includeHidden })` (which applies `setHidden` optimistically,
 rolling back the one affected row on failure) and, matching the API's
 listing-not-access-control posture above, simply excludes hidden templates
@@ -2027,7 +2027,7 @@ happens to be written in.
 Two more surfaces exist only because of #334, both `apps/web`:
 
 - **Copying a note respects its format.** `NoteCopyButton`
-  (`apps/web/src/components/notes/NoteCopyButton.tsx`) reads the format off
+  (`packages/kvox-web/src/notes/ui/components/NoteCopyButton.tsx`) reads the format off
   the note and behaves differently by it: a `plain_text` note's one "Copy"
   action copies its raw text — there is no second representation worth
   offering, so the split-button menu (Markdown / plain text) does not even
@@ -2252,9 +2252,9 @@ the list this spec was designed against — the same purpose
 | `notes:read`/`write` and `note_templates:read`/`write` are seeded for Admin, Contributor and Viewer; no `notes:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | `POST /api/note-templates/:id/preview` is gated on `notes:write`, not `note_templates:write` | An RBAC e2e asserting a caller with only `note_templates:read` gets 403 from preview |
 | `@@unique([owner_id, name])` on `note_templates` rejects two of one owner's templates sharing a name, but two `owner_id IS NULL` built-ins may share a name | `apps/api/test/prisma/note-templates.constraints.spec.ts` |
-| A saved template's `output_format`/`structure`/`tone`/`length`/`model` round-trip through save and reload unchanged — the editor never has to parse them back out of `instructions` | `apps/web/src/__tests__/pages/NoteTemplatesPage.test.tsx`, per issue #56's own acceptance criteria |
+| A saved template's `output_format`/`structure`/`tone`/`length`/`model` round-trip through save and reload unchanged — the editor never has to parse them back out of `instructions` | `packages/kvox-web/test/notes/UserNoteTemplatesPage.test.tsx`, per issue #56's own acceptance criteria |
 | `note_generations.job_id` survives `job.history.purge` deleting the underlying `jobs` row (`SetNull`, not cascade) | `apps/api/test/jobs/job-history-purge.task.spec.ts`, extended to assert a `note_generations` row with a purged `job_id` |
-| `note_versions.summary` is set on save and read by the version history list without a `body` fetch | `apps/api/src/notes/notes.service.spec.ts` and `apps/web/src/__tests__/pages/NoteHistoryPage.test.tsx` |
+| `note_versions.summary` is set on save and read by the version history list without a `body` fetch | `apps/api/src/notes/notes.service.spec.ts` and `packages/kvox-web/test/notes/NoteHistoryPage.test.tsx` |
 | `DELETE /api/transcripts/:id` 409s naming the blocking note id(s) when a note still references it as its source | `apps/api/test/transcripts/transcripts-delete.e2e.spec.ts`, extended |
 | The `user_ai_keys` row cascades on user delete; the stored key never appears in a response body, a log line, or an audit `meta` | The platform `ai-secret-egress` and `ai-key-policy` conformance suites (`apps/api/test/ai-conformance.spec.ts`), plus the user-data deletion specs |
 | `TranscriptExporterRegistry`'s existing test suite passes unmodified after the generic `ExporterRegistry<TDoc>` extraction | `transcript-exporter.registry.spec.ts`, run as-is against the refactored class |
@@ -2265,5 +2265,5 @@ the list this spec was designed against — the same purpose
 | `assemblePrompt`'s Markdown closing line is byte-for-byte unchanged when `templateBodyFormat` is absent, `'markdown'`, or unrecognised; `'plain_text'` produces `PLAIN_TEXT_CLOSING_LINE` and leaves the user role untouched | `packages/kvox-api/src/notes/generation/prompt.spec.ts` |
 | `parseBody`/`parsePlainText` recognise no Markdown syntax at all — a `plain_text` body's `#`/`*`/`-` characters and line breaks reach the PDF and Word output literally — while a `markdown` body renders exactly as before | `packages/kvox-api/src/notes/export/markdown-ast.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts` |
 | `GET /api/notes/:id/versions/:version` reports each version's *own* `bodyFormat`, fixed when it was written; a generation commit records the template's format, an edit the note's current format, and a restore the *target* version's format — which the same write also copies onto `notes.body_format` (issue #337) | `apps/api/src/notes/notes.service.spec.ts` and `apps/api/test/notes/notes.integration.spec.ts` |
-| A `plain_text` note's copy button offers only its raw text (no format menu); a `markdown` note's default copy carries both `text/html` and `text/plain`, read from the rendered `MarkdownView` element | `apps/web/src/__tests__/components/notes/NoteCopyButton.test.tsx` (or equivalent) |
-| The visual editor is a view over the same draft string the Markdown tab edits — switching views loses no text — and a `plain_text` note shows no view toggle at all | `apps/web/src/__tests__/pages/NotePage.test.tsx`, extended |
+| A `plain_text` note's copy button offers only its raw text (no format menu); a `markdown` note's default copy carries both `text/html` and `text/plain`, read from the rendered `MarkdownView` element | `packages/kvox-web/test/notes/NoteCopyButton.test.tsx` (or equivalent) |
+| The visual editor is a view over the same draft string the Markdown tab edits — switching views loses no text — and a `plain_text` note shows no view toggle at all | `packages/kvox-web/test/notes/NotePage.test.tsx`, extended |

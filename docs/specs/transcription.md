@@ -15,8 +15,7 @@
 > framework, AssemblyAI, admin settings; moved out of `apps/api/src/` by #492), `packages/kvox-api/src/transcripts/` (#24–#29
 > — data model, pipeline, corrections, export, sharing; moved out of `apps/api/src/` by #493), the `media.audio
 > .transcode` handler under `packages/kvox-api/src/transcripts/handlers/` (#26, built),
-> `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
-> /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
+> `packages/kvox-web/src/transcripts/ui/pages/` and `packages/kvox-web/src/transcription/ui/TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
 > schema companion, `docs/specs/transcript-export.v1.schema.json` (source of truth since issue #488: `packages/kvox-contract/schemas/transcript-export.v1.schema.json`).
 >
 > **Packaged (issue #492, epic #491).** The provider framework, AssemblyAI,
@@ -1581,7 +1580,7 @@ at its end, from a 40px control in each segment row. The engine exposes
 had.
 
 Three properties of this are load-bearing, and all three are pinned by tests
-in `apps/web/src/__tests__/hooks/usePlaybackEngine.test.tsx`:
+in `packages/kvox-web/test/transcripts/usePlaybackEngine.test.tsx`:
 
 1. **It bypasses the speaker filter.** `playSegment` writes `currentTime`
    directly rather than going through `seekToMs`, which snaps to the
@@ -2298,4 +2297,4 @@ check the built code against the same list this spec was designed against.
 | An identical export request reuses the existing row by `options_hash`; an expired one is cleaned up by housekeeping | `export.service.spec.ts` plus `transcripts-housekeeping.task.spec.ts` |
 | A 5 GB simulated upload gets presigned URLs past part 10, resumes correctly after a simulated reload, and stale cleanup never removes an upload active within the stale-upload age (72 hours since issue #469; formerly `STORAGE_STALE_UPLOAD_HOURS`) | Per issue #21's own acceptance criteria, against a mocked S3 provider |
 | The CSP changes permit a real part `PUT` and `<audio src=signed-url>` in the dev stack, and nothing broader than the configured storage origin | A dev-stack integration check, plus a static assertion that `csp.conf`/`csp.dev.conf` name the storage origin explicitly rather than a wildcard |
-| `usePlaybackEngine`'s per-speaker interval logic: gap merging, snapping into the next interval, and the documented backgrounded-tab overshoot | `apps/web/src/__tests__/hooks/usePlaybackEngine.spec.ts`, against a fake `HTMLMediaElement`, per issue #30's own acceptance criteria |
+| `usePlaybackEngine`'s per-speaker interval logic: gap merging, snapping into the next interval, and the documented backgrounded-tab overshoot | `packages/kvox-web/test/transcripts/usePlaybackEngine.test.tsx`, against a fake `HTMLMediaElement`, per issue #30's own acceptance criteria |
