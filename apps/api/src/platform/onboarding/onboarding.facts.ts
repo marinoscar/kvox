@@ -24,7 +24,7 @@ import { KVOX_AI, type KvoxAi } from '../../ai-port/kvox-ai';
 // beside their domain and registered by `kvox.manifest.ts`, because base code may not import
 // domain code (`test/architecture/base-domain-boundary.spec.ts`):
 //
-//   app.transcriptionAvailable        transcription/transcription.onboarding.ts
+//   app.transcriptionAvailable        kvox/transcription/transcription.onboarding.ts
 //   app.ownTranscriptCount            transcripts/transcripts.onboarding.ts
 //   app.ownReadyTranscriptCount       transcripts/transcripts.onboarding.ts
 //   app.ownNoteCount                  notes/notes.onboarding.ts

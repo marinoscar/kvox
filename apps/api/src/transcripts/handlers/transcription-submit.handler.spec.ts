@@ -5,7 +5,7 @@ import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
-import { ProviderAuthError, ProviderInputError } from '../../transcription/errors';
+import { ProviderAuthError, ProviderInputError } from '@marinoscar/kvox-api/transcription';
 import { TRANSCRIPTION_THROTTLE_KEY } from '../job-types';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';

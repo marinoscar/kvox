@@ -40,8 +40,11 @@ import type { Job, Prisma } from '@prisma/client';
 import { gzipSync } from 'node:zlib';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
-import type { NormalizedTranscript } from '../../transcription/normalized-transcript';
+import {
+  isTerminalProviderError,
+  ProviderAuthError,
+  type NormalizedTranscript,
+} from '@marinoscar/kvox-api/transcription';
 import { ORDINAL_GAP } from '../editing/ordinals';
 import { defaultSpeakerName } from '../editing/speaker-identity';
 import {

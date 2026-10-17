@@ -4,6 +4,7 @@
 import '../src/kvox.manifest';
 import '../src/app-registrations/registrations';
 
+import { Module } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -24,9 +25,20 @@ import '@marinoscar/platform-api/storage/testing';
 import '@marinoscar/platform-api/telemetry/testing';
 import '@marinoscar/platform-api/user-data/testing';
 import type { DoctorConformanceFixture } from '@marinoscar/platform-api/doctor/testing';
+import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
+import {
+  KVOX_AUTH_PERMISSIONS,
+  KVOX_PERMISSIONS_KEY,
+  KVOX_PERMISSION_KEYS_KEY,
+  KvoxAuthGuard,
+} from '@marinoscar/kvox-api/core';
+import { AssemblyAiProvider, TranscriptionProviderRegistry } from '@marinoscar/kvox-api/transcription';
+import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/transcription/testing';
+
 import { AppModule } from '../src/app.module';
+import { TranscriptionConfig } from '../src/kvox/transcription/transcription.config';
 // The notification and email registries are filled by this import (it is also reached through
 // AppModule); the suites below read them, so name the dependency.
 import '../src/platform/notifications/notification.manifest';
@@ -39,6 +51,34 @@ import '../src/platform/user-data/user-data.manifest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaSystemService } from '../src/prisma/prisma-system.service';
 import { closeTestApp, createTestApp, type TestContext } from './helpers/test-app.helper';
+
+/** Nest's metadata key for the guards a controller or handler declares. */
+const GUARDS_METADATA = '__guards__';
+
+/**
+ * The root the platform's identity suite walks: every controller reachable from `AppModule` EXCEPT the
+ * ones the `@marinoscar/kvox-api` slices guard with `KvoxAuth` / `KvoxAuthFromOptions`.
+ *
+ * The suite's route-access rule asks for the platform's `JwtAuthGuard` on the route, and a packaged
+ * slice cannot name that class (the host-neutral rule): its guard authenticates through the identity
+ * port, whose web-edition adapter delegates to `JwtAuthGuard`. Those routes are held to the same two
+ * rules by `kvox-guarded routes` below instead, so no route leaves the identity checks unproven.
+ */
+function isKvoxGuarded(controller: Function): boolean {
+  const handlers = Object.getOwnPropertyNames(controller.prototype)
+    .filter((name) => name !== 'constructor')
+    .map((name) => controller.prototype[name] as unknown)
+    .filter((handler): handler is Function => typeof handler === 'function');
+
+  return [controller, ...handlers].some((target) =>
+    ((Reflect.getMetadata(GUARDS_METADATA, target) ?? []) as unknown[]).includes(KvoxAuthGuard),
+  );
+}
+
+const IDENTITY_CONTROLLERS = discoverControllers(AppModule).filter((controller) => !isKvoxGuarded(controller));
+const KVOX_CONTROLLERS = discoverControllers(AppModule).filter(isKvoxGuarded);
+@Module({ controllers: IDENTITY_CONTROLLERS })
+class IdentityConformanceRoot {}
 
 const API_DIR = join(__dirname, '..');
 const REPO_DIR = join(API_DIR, '..', '..');
@@ -250,7 +290,7 @@ runPlatformConformance({
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },
     identity: {
-      rootModule: AppModule,
+      rootModule: IdentityConformanceRoot,
       permissions: permissionRegistry.list(),
       roles: roleRegistry.list(),
       grants: catalogGrants(buildPermissionCatalog()),
@@ -361,4 +401,58 @@ runPlatformConformance({
       resourceTypeIds: ['transcript'],
     },
   },
+});
+
+// The transcription slice's provider conformance suite (`@marinoscar/kvox-api/transcription/testing`,
+// #492): the built-in provider the application registers, held to the same contract an extra provider
+// is. Static rules only here (identity, capabilities, the admin form carries no secret, the context
+// never serialises its key); the upstream-failure rules run in the package against a fake transport.
+describeTranscriptionProviderConformance(
+  'assemblyai as the application registers it',
+  () => new AssemblyAiProvider(new TranscriptionProviderRegistry()),
+  { describe, it, expect },
+  { settings: { region: 'us', speechModel: 'universal-3-5-pro, universal-2' } },
+);
+
+// kvox-guarded routes: the identity suite's two route rules, for the controllers it cannot see (see
+// `isKvoxGuarded`). Every route of a controller the `@marinoscar/kvox-api` slices guard is authenticated
+// through `KvoxAuthGuard`, and every permission it enforces (the option names resolved through the
+// slice's configured map) is a registered permission.
+describe('kvox-guarded routes', () => {
+  const handlers = (controller: Function) =>
+    Object.getOwnPropertyNames(controller.prototype)
+      .filter((name) => name !== 'constructor')
+      .map((name) => ({ name, handler: controller.prototype[name] as Function }))
+      .filter(({ handler }) => typeof handler === 'function' && Reflect.getMetadata('path', handler) !== undefined);
+
+  it('finds the transcription controllers (a path mistake must not make this vacuous)', () => {
+    expect(KVOX_CONTROLLERS.map((controller) => controller.name).sort()).toEqual([
+      'TranscriptionConfigController',
+      'TranscriptionSettingsController',
+    ]);
+  });
+
+  it.each(KVOX_CONTROLLERS.map((controller) => [controller.name, controller] as const))(
+    '%s: every route is behind KvoxAuthGuard and names only registered permissions',
+    (_name, controller) => {
+      const registered = new Set(permissionRegistry.list().map((entry: { id: string }) => entry.id));
+      const map = TranscriptionConfig.providers
+        ?.map((provider) => provider as { provide?: unknown; useValue?: Record<string, string> })
+        .find((provider) => provider.provide === KVOX_AUTH_PERMISSIONS)?.useValue as Record<string, string>;
+      const problems: string[] = [];
+
+      for (const { name, handler } of handlers(controller)) {
+        const guards = [...(Reflect.getMetadata(GUARDS_METADATA, controller) ?? []), ...(Reflect.getMetadata(GUARDS_METADATA, handler) ?? [])];
+        if (!guards.includes(KvoxAuthGuard)) problems.push(`${controller.name}#${name} is not behind KvoxAuthGuard`);
+
+        const keys = (Reflect.getMetadata(KVOX_PERMISSION_KEYS_KEY, handler) ?? []) as string[];
+        const direct = (Reflect.getMetadata(KVOX_PERMISSIONS_KEY, handler) ?? []) as string[];
+        for (const permission of [...direct, ...keys.map((key) => map[key])]) {
+          if (!registered.has(permission)) problems.push(`${controller.name}#${name} names the unregistered permission "${permission}"`);
+        }
+      }
+
+      expect(problems).toEqual([]);
+    },
+  );
 });

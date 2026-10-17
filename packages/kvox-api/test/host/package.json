@@ -1,0 +1,6 @@
+{
+  "name": "@marinoscar/kvox-api-test-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Prisma host the real-database specs of @marinoscar/kvox-api run against. Never published; everything under prisma/ and generated/ is produced by `npm run test:host:prepare -w @marinoscar/kvox-api`."
+}

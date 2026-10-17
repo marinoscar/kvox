@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { Job } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
+import { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
 import {

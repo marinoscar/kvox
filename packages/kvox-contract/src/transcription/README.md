@@ -9,7 +9,7 @@ The transcription wire contract: the system settings blob and its patch, the pro
 - `transcription-settings.ts` and `transcription-settings.schema.ts`: the `transcription` settings namespace (system value, patch, response, the no-secret compile-time checks).
 - `keyterms.ts`: the keyterm limits and the pure normalisation helpers (`MAX_TRANSCRIPT_KEYTERMS`, `keytermWordCount`, `normalizeKeyterms`).
 
-Server-only helpers stay in the API: `readKeyterms`, `clampKeytermsToCapability` and `maxKeytermsFor` read the provider capability and live in `apps/api/src/transcription/keyterms.ts`.
+Server-only helpers stay in the API: `readKeyterms`, `clampKeytermsToCapability` and `maxKeytermsFor` read the provider capability and live in `packages/kvox-api/src/transcription/keyterms.ts`.
 
 Status: experimental. Moved out of the API DTO files by issue 5.2 (marinoscar/kvox#488) with no change to a field name or a value; every wire shape here is permanent (add, never rename).
 

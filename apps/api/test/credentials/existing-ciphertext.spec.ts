@@ -22,7 +22,7 @@ import { decryptSecret } from '@marinoscar/platform-api/core';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 import { SMTP_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/notifications';
-import { TRANSCRIPTION_CREDENTIAL_PURPOSE } from '../../src/transcription/transcription-credential.constants';
+import { TRANSCRIPTION_CREDENTIAL_PURPOSE } from '@marinoscar/kvox-api/transcription';
 import '../../src/kvox.manifest';
 import '../../src/app-registrations/registrations';
 import fixture from '../fixtures/credentials/legacy-kvox-ciphertext.json';

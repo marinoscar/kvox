@@ -50,7 +50,7 @@ import { NOTES_ONBOARDING_FACTS, NOTES_ONBOARDING_STEPS } from './notes/notes.on
 import {
   TRANSCRIPTION_ONBOARDING_FACTS,
   TRANSCRIPTION_ONBOARDING_STEPS,
-} from './transcription/transcription.onboarding';
+} from './kvox/transcription/transcription.onboarding';
 import {
   TRANSCRIPTS_ONBOARDING_FACTS,
   TRANSCRIPTS_ONBOARDING_STEPS,
@@ -58,7 +58,7 @@ import {
 
 import { registerCredentialPurpose } from '@marinoscar/platform-api/credentials';
 
-import { TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF } from './transcription/transcription-credential.constants';
+import { TRANSCRIPTION_CREDENTIAL_PURPOSE_DEF } from './kvox/transcription/transcription.credential-purpose';
 
 let registered = false;
 

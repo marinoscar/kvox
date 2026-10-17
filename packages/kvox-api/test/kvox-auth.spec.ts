@@ -5,7 +5,9 @@ import {
   CurrentKvoxPrincipal,
   KVOX_PERMISSIONS_KEY,
   KVOX_PRINCIPAL_REQUEST_KEY,
+  KVOX_PERMISSION_KEYS_KEY,
   KvoxAuth,
+  KvoxAuthFromOptions,
   KvoxAuthGuard,
 } from '../src/core/index.js';
 import type { KvoxIdentityPort } from '../src/ports/index.js';
@@ -22,9 +24,15 @@ class Controller {
 
   @KvoxAuth()
   anyone(): void {}
+
+  @KvoxAuthFromOptions('read', 'write')
+  configured(): void {}
+
+  @KvoxAuthFromOptions('missing')
+  unmapped(): void {}
 }
 
-function contextFor(method: 'both' | 'anyone', headers: Record<string, string>) {
+function contextFor(method: 'both' | 'anyone' | 'configured' | 'unmapped', headers: Record<string, string>) {
   const context = createFakeKvoxExecutionContext(headers);
   (context as unknown as { getHandler: () => unknown }).getHandler = () => Controller.prototype[method];
   (context as unknown as { getClass: () => unknown }).getClass = () => Controller;
@@ -82,5 +90,42 @@ describe('KvoxAuthGuard', () => {
 describe('CurrentKvoxPrincipal', () => {
   it('is a parameter decorator factory', () => {
     expect(typeof CurrentKvoxPrincipal()).toBe('function');
+  });
+});
+
+describe('KvoxAuthFromOptions', () => {
+  const map = { read: 'host:read', write: 'host:write' };
+  const guardWith = (identity: KvoxIdentityPort, permissions: Record<string, string> = map) =>
+    new KvoxAuthGuard(identity, new Reflector(), permissions);
+
+  it('records option names, not permission strings', () => {
+    expect(Reflect.getMetadata(KVOX_PERMISSION_KEYS_KEY, Controller.prototype.configured)).toEqual(['read', 'write']);
+    expect(Reflect.getMetadata(KVOX_PERMISSIONS_KEY, Controller.prototype.configured)).toBeUndefined();
+  });
+
+  it('requires the strings the host mapped, and names the missing one', async () => {
+    const guard = guardWith(createFakeKvoxIdentity({ principal: kvoxPrincipal({ permissions: ['host:read'] }) }));
+    const error = await guard.canActivate(contextFor('configured', { authorization: 'Bearer x' })).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as Error).message).toContain('host:write');
+  });
+
+  it('admits a principal that holds every mapped permission', async () => {
+    const principal = kvoxPrincipal({ permissions: ['host:read', 'host:write'] });
+    const guard = guardWith(createFakeKvoxIdentity({ principal }));
+    await expect(guard.canActivate(contextFor('configured', { authorization: 'Bearer x' }))).resolves.toBe(true);
+  });
+
+  it('is unaffected by the map on a route that uses KvoxAuth', async () => {
+    const guard = guardWith(createFakeKvoxIdentity({ principal: kvoxPrincipal({ permissions: ['things:read', 'things:write'] }) }));
+    await expect(guard.canActivate(contextFor('both', { authorization: 'Bearer x' }))).resolves.toBe(true);
+  });
+
+  it('fails closed when an option has no permission, instead of admitting the caller', async () => {
+    const guard = guardWith(createFakeKvoxIdentity({ principal: kvoxPrincipal({ permissions: ['host:read', 'host:write'] }) }));
+    await expect(guard.canActivate(contextFor('unmapped', { authorization: 'Bearer x' }))).rejects.toThrow(/No permission is configured/);
+
+    const bare = new KvoxAuthGuard(createFakeKvoxIdentity({ principal: kvoxPrincipal() }), new Reflector());
+    await expect(bare.canActivate(contextFor('configured', { authorization: 'Bearer x' }))).rejects.toThrow(/No permission is configured/);
   });
 });
