@@ -914,7 +914,7 @@ itself.
 afterthought — per the research summary above.** A golden set of 30
 **synthetic**, hand-authored meeting transcripts — invented conversations,
 never real recordings or real customer data — kept under
-`apps/api/test/fixtures/kg-golden/` (planned) and committed to the
+`packages/kvox-eval/fixtures/kg-golden/` and committed to the
 repository like any other fixture, specifically because a real transcript
 can never be checked into a repository or run inside CI's shared
 environment without becoming exactly the third-party-consent problem §15
@@ -941,9 +941,9 @@ ships regardless of where the numbers land, and the numbers are what
 determine how much the panel can safely pre-check versus leave for a human.
 
 **Measuring extraction (issue #362).** The golden set lives at
-`apps/api/test/fixtures/kg-golden/` (format, the synthetic-only rule and the
-coverage list are in its `README.md`), and the harness is `npm run kg:eval
---workspace=api`: `--predictions gold` is the self-test that must print 1.000
+`packages/kvox-eval/fixtures/kg-golden/` (format, the synthetic-only rule and the
+coverage list are in its `README.md`), and the harness is the published package `@marinoscar/kvox-eval` (`kvox-eval kg`, #580;
+`npm run kg:eval --workspace=api` is a thin wrapper): `--predictions gold` is the self-test that must print 1.000
 everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
 runs a registered `KgEvalRunner` (`extract`, issue #363, below),
 `--enforce` fails on a missed target for local use (CI reports only), and
@@ -969,8 +969,10 @@ Between persisting the rows and pre-checking them, the job runs every stage
 registered with `ProposalStageRegistry`, in order — #364's `resolution`,
 #365's `work-item-dedup`, `temporal-closing`, `rejection-memory`. The payload
 shapes every later issue imports are `graph/proposals/proposal-payload.schema.ts`.
-`npm run kg:eval -- --run extract --model <id>` runs this same pure pipeline
-against the golden set with `KG_EVAL_OPENAI_API_KEY` and no database.
+`npm run kg:eval -- --run extract --model <id>` (or `kvox-eval kg --runner extract`)
+runs this same pure pipeline against the golden set with `KVOX_EVAL_OPENAI_API_KEY`
+(`KG_EVAL_OPENAI_API_KEY` is a deprecated alias) and no database, through
+`createKvoxAi` over `createDirectRuntime`.
 
 **Sizing the answer, and recovering from truncation (issue #435).** A note
 can hold more rows than one structured-output answer can carry, and before
@@ -3638,22 +3640,22 @@ truncated, ms }`, never its arguments or result.
 
 The agent promises two things a unit test cannot prove: that every citation
 it shows points at something a tool really returned, and that its answers are
-right often enough to trust. `apps/api/scripts/ask-eval/` builds that
+right often enough to trust. `apps/api/scripts/ask-eval/` (the runner; schema, scorer and report are in `@marinoscar/kvox-eval`) builds that
 evaluation on top of #362's synthetic golden meetings, isolating the agent
 from extraction quality by seeding the meetings' **hand labels** as the
 graph — never a model's own extraction — under one throwaway user
 (`seed-graph.ts`; refuses to run against a database whose name doesn't end
 `_test`/`_eval`, per `--allow-db`).
 
-`apps/api/test/fixtures/kg-golden/ask-questions.json` is a second golden set
-over the same meetings: ≥ 40 questions (`question-schema.ts`), each with
+`packages/kvox-eval/fixtures/kg-golden/ask-questions.json` is a second golden set
+over the same meetings: ≥ 40 questions (`question-schema.ts` in `@marinoscar/kvox-eval`), each with
 `expected.{entities, answerAll, answerNone, citeFrom, notFound}` — substring
 groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
 
 The runner (`run.ts`) boots a real `NestFactory.createApplicationContext`
-(`JOBS_WORKER_MODE=off`), stores the key from `ASK_EVAL_OPENAI_API_KEY` on
+(`JOBS_WORKER_MODE=off`), stores the key from `KVOX_EVAL_OPENAI_API_KEY` (`ASK_EVAL_OPENAI_API_KEY` is a deprecated alias) on
 the eval user, points this deployment's `ai` policy at the eval model for
 the run's duration only (restored in `teardown()` regardless of outcome —
 leaving it wired in would silently change every other user's Ask
@@ -3663,7 +3665,7 @@ process is the only claimer. A thin wrapper around the registered `KVOX_AI` port
 port's own `chat()` (§21.3, "Provider call") captures every `messages` array
 actually sent, for the leak check.
 
-`scorer.ts` (pure) computes, per question: `citationValidity` (valid
+`scorer.ts` (pure, in `@marinoscar/kvox-eval`) computes, per question: `citationValidity` (valid
 citations ÷ all markers — **gate: must be 1.0**), `citeFromHit` (a valid
 `evidence`-kind citation resolves, via the seeder's evidence-source map, to a
 listed segment/note — `itm`/`rel` markers resolve through their evidence row
@@ -4108,7 +4110,7 @@ serve for their own epics.
 | All eight job types (`kg.extract`, `kg.resolve`, `kg.entity_digest`, `kg.embed`, `kg.purge`, `kg.migrate`, `kg.export`, `kg.import`) declare no `nodeResultSchema`/`persistNodeResult`, and each declares exactly the `{ maxRuntimeMs, maxAttempts }` profile §11's table states | Unit assertions over each handler's declared members, mirroring `job-handler.registry.spec.ts`'s existing pattern |
 | Every graph-touching `@Cron` (if any is added, e.g. a `graph.housekeeping` sweep) only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended |
 | An `accepted`/`edited` entity, relation, or proposal item always has ≥ 1 `kg_evidence` row after a commit — the no-orphans invariant (§3.3, §8) | A dedicated integration test committing a proposal and asserting every resulting row's evidence count, plus a negative test asserting the commit transaction refuses to write an evidence-less row |
-| The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `apps/api/scripts/kg-eval.ts` run in CI against `apps/api/test/fixtures/kg-golden/`, gating the targets stated in §6 |
+| The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `kvox-eval kg` (`@marinoscar/kvox-eval`; `apps/api/scripts/kg-eval.ts` is a wrapper) run in CI against `packages/kvox-eval/fixtures/kg-golden/`, gating the targets stated in §6 |
 | The rate-limit throttle key for `kg.extract`/`kg.resolve`/`kg.entity_digest` is `aiProviderThrottleKey(userId)`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the run's `userId`, mirroring `note-generate.handler.spec.ts`'s existing pattern |
 | Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `packages/kvox-api/src/graph-extraction/resolution/resolution.service.spec.ts` |
 | A merge is fully reversible: `POST .../merges/:id/reverse` restores the tombstoned entity, its reassigned relations/evidence/aliases, and re-queues the pair for review | An integration test performing a merge, reversing it, and asserting the graph state is byte-for-byte the pre-merge state |

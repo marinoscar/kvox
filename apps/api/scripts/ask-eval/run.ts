@@ -6,7 +6,7 @@
 // else claims the `ask.respond` jobs this run creates), seeds #362's gold
 // graph under one throwaway user, temporarily points the graph agent task at the
 // eval model (the graph switch on, `taskModels['graph.agent']`), stores the API
-// key from `ASK_EVAL_OPENAI_API_KEY` on that user through the platform's key
+// key from `KVOX_EVAL_OPENAI_API_KEY` (read by `ask-eval.ts`) on that user through the platform's key
 // service, then for every selected question:
 //
 //   create a conversation → POST it through the REAL `AskMessagesService`
@@ -50,11 +50,10 @@ import type { AskMessageResponse } from '@marinoscar/kvox-contract/ask';
 import { AskConversationsService } from '@marinoscar/kvox-api/ask';
 import { internals } from '@marinoscar/kvox-api/ask/testing';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { loadGoldenSet } from '../kg-eval/load';
-import type { AskEvalQuestion } from './question-schema';
+import type { AskEvalQuestion } from '@marinoscar/kvox-eval';
+import { loadGoldenSet } from '@marinoscar/kvox-eval/fixtures';
 import { assertSafeDatabase, seedGraph, teardownSeededGraph, type AskEvalIdMap } from './seed-graph';
 
-export const ASK_EVAL_API_KEY_ENV = 'ASK_EVAL_OPENAI_API_KEY';
 export const ASK_EVAL_PROVIDER_ID = 'openai';
 export const DEFAULT_ASK_EVAL_MODEL = 'gpt-4o-mini';
 
