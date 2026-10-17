@@ -68,7 +68,7 @@ Every token and its port interface are `@extensionPoint`s: a host implements the
 
 | Token | Port interface | Web adapter (`apps/api/src/platform-kvox/`) | Desktop |
 |---|---|---|---|
-| `KVOX_AI` | `KvoxAiPort` | `ai/platform-kvox-ai.adapter.ts` over the app's `KvoxAi` facade (platform `AiService.forUser`) | Copilot SDK session; no embeddings means `capabilities().embeddings` is `null` |
+| `KVOX_AI` | `KvoxAiPort` | `createKvoxAi` of `@marinoscar/kvox-ai` (`ai/web-kvox-ai.ts`) over `PlatformAiRuntime` (platform `AiService.forUser`) | `createKvoxAi` over `createDirectRuntime`, with the Copilot SDK as an `AiProviderAdapter`; no embeddings means `capabilities().embeddings` is `null` |
 | `KVOX_OBJECT_STORE` | `KvoxObjectStorePort` | `object-store/platform-kvox-object-store.adapter.ts` over `KvoxManagedObjects`, `ObjectsService`, `ObjectProcessorRegistry` | local filesystem |
 | `KVOX_JOBS` | `KvoxJobsPort`, `KvoxJobHandler` | `jobs/platform-kvox-jobs.adapter.ts` over `JobsService`, `JobHandlerRegistry`, the provider throttle | in-process queue on a table |
 | `KVOX_IDENTITY` | `KvoxIdentityPort` | `identity/platform-kvox-identity.adapter.ts` over `JwtAuthGuard` | one local user |

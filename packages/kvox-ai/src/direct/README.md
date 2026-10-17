@@ -6,7 +6,7 @@
 
 `createDirectRuntime({ adapters, keys })` for a host with no platform AI service under it (KVox Desktop, a plain Node script, a test). Per call it asks `keys(provider)`, builds an `AiCallContext` (`apiKey`, `baseUrl`, the provider's non-secret settings, the signal, a fresh `requestId`), calls `responses.stream`, `responses.create` or `embeddings.embed`, and drops the context when the call settles. A call must name its provider and model; a missing key is `key_missing`, a provider with no adapter `not_configured`, an adapter without the port a call needs `capability`. `KvoxAiProviderKey` and `CreateDirectRuntimeOptions` are the option types.
 
-Status: issue #579, PR 2. It records no usage and traces nothing: a host that wants either wraps it.
+Status: issue #579. It records no usage and traces nothing: a host that wants either wraps it.
 
 ## Entry point
 

@@ -12,7 +12,7 @@ Job or route: the same platform code lands on a different class inside a queue j
 
 A case a host cannot produce is named in `options.optOut` with a reason. It is never skipped silently: the case runs as a test that prints the reason, and a case that is neither run nor opted out fails.
 
-Status: issue #579, PR 2.
+Status: issue #579.
 
 ## Entry point
 
