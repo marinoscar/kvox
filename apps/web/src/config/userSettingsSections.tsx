@@ -29,6 +29,7 @@ import { kvoxGraphUserSettingsSections } from '@marinoscar/kvox-web/graph/ui';
 import { kvoxNotesUserSettingsSections } from '@marinoscar/kvox-web/notes/ui';
 import { kvoxSearchUserSettingsSections } from '@marinoscar/kvox-web/search/ui';
 import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
+import { dataExportSettingsPage } from '@marinoscar/platform-web/exports/ui';
 // Getting Started (#279, epic #271) — the same icon the admin `Setup` card
 // carries, on purpose: the two are the same idea on two axes (this deployment
 // vs. this account), and a user who has seen one recognises the other.
@@ -184,6 +185,23 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // registry entry (`/settings/tokens`, no permission), spread where the
     // literal card was.
     cards: [...identityUserSettingsSections.security],
+  },
+  {
+    // Issue #532, Part B of #479: "Download your data", the platform's exports slice
+    // (`dataExportSettingsPage` of `@marinoscar/platform-web/exports/ui`; the route is `card.path`,
+    // `/settings/data-export`, the page the `export.ready` notification links to). A GROUP OF ITS
+    // OWN, directly above `Danger Zone`: the two are the pair of things a user can do with the data
+    // held about them (take a copy, delete it), but the `Danger Zone` group stays alone and last
+    // (`dangerZoneLastViolations`), so the export cannot join it, and it is a copy, not a
+    // credential or an account fact, so it joins neither `Security` nor `Account`.
+    //
+    // NO `permission`, like every card in this registry: the platform's `/api/exports` routes are
+    // `@Auth()`, the permission is the SOURCE's, and both sources the page offers every role
+    // (`user-data` and this app's `kvox-content`) require `user_settings:read`, held by Admin,
+    // Contributor and Viewer. A source an administrator may additionally use (`org-data`) appears
+    // on the same page only for the holder of its own permission, decided by the API.
+    label: 'Your data',
+    cards: [{ ...dataExportSettingsPage.card, Icon: dataExportSettingsPage.Icon }],
   },
   {
     // Issue #80. A THIRD GROUP, LAST, AND ON ITS OWN — not a fourth card under

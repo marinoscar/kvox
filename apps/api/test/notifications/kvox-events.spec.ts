@@ -59,6 +59,8 @@ const EXPECTED: ExpectedEvent[] = [
   { key: 'sharing.shared_with_you', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'shared-with-you' },
   { key: 'notes.note_ready', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-ready' },
   { key: 'notes.note_failed', channels: ['email', 'browser'], mandatory: false, defaultEnabled: true, emailTemplate: 'note-failed' },
+  { key: 'export.ready', channels: ['browser', 'push'], mandatory: false, defaultEnabled: true },
+  { key: 'export.failed', channels: ['browser', 'push'], mandatory: false, defaultEnabled: true },
 ];
 
 type BrowserRender = (data: unknown) => { title: string; body: string; link?: string };
@@ -68,7 +70,7 @@ function browserRender(key: string): BrowserRender | undefined {
 }
 
 describe('the events the application ships', () => {
-  it('registers exactly the fifteen events, in the preferences matrix order', () => {
+  it('registers exactly the seventeen events, in the preferences matrix order', () => {
     expect(listNotificationEvents().map((event) => event.key)).toEqual(EXPECTED.map((event) => event.key));
   });
 
@@ -209,5 +211,25 @@ describe('the transcript events', () => {
       expect(row.link?.startsWith('/')).toBe(true);
       expect(row.link?.startsWith('//')).toBe(false);
     }
+  });
+});
+
+describe('the export events (platform exports slice, issue #532)', () => {
+  const data = { exportId: 'ex-1', source: 'kvox-content', sourceLabel: 'Transcript, note and Ask content', format: 'json' };
+
+  it('link their bell rows to the Download your data page, root-relative, and carry no download URL', () => {
+    const ready = browserRender('export.ready')!(data);
+    const failed = browserRender('export.failed')!(data);
+
+    for (const row of [ready, failed]) {
+      expect(row.link).toBe('/settings/data-export');
+      expect(row.link?.startsWith('//')).toBe(false);
+      expect(JSON.stringify(row)).not.toMatch(/https?:/);
+    }
+  });
+
+  it('have no email: a download link must not sit in a mailbox', () => {
+    expect(eventEmailTemplateRegistry.get('export.ready')).toBeUndefined();
+    expect(eventEmailTemplateRegistry.get('export.failed')).toBeUndefined();
   });
 });

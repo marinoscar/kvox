@@ -40,6 +40,7 @@ import {
 import { KVOX_EMAIL_TEMPLATES, registerKvoxEmailTemplateOverrides } from '../../email-templates';
 import { ALLOWLIST_REMINDER_NOTIFICATIONS } from '../../notifications-registry/allowlist-reminder.notifications';
 import { DB_BACKUP_NOTIFICATIONS } from '../../notifications-registry/db-backup.notifications';
+import { EXPORTS_NOTIFICATIONS } from '../../notifications-registry/exports.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../../notifications-registry/identity.notifications';
 import { NOTES_NOTIFICATIONS } from '../../kvox/notes/notification-templates';
 import { SHARING_NOTIFICATIONS } from '../../notifications-registry/sharing.notifications';
@@ -68,5 +69,6 @@ if (!registered) {
     ...TRANSCRIPTS_NOTIFICATIONS,
     ...SHARING_NOTIFICATIONS,
     ...NOTES_NOTIFICATIONS,
+    ...EXPORTS_NOTIFICATIONS,
   ]);
 }

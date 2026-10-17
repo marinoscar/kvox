@@ -137,6 +137,12 @@ const UserTokensPage = lazy(() =>
 const UserDangerZonePage = lazy(() =>
   import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.UserDangerZonePage })),
 );
+// Issue #532, Part B of #479 — "Download your data" (`@marinoscar/platform-web/exports/ui`), the
+// page the `export.ready` notification links to. A registry card in `userSettingsSections.tsx`
+// (its own `Your data` group above `Danger Zone`) and ungated here like every sibling.
+const DataExportPage = lazy(() =>
+  import('@marinoscar/platform-web/exports/ui').then((m) => ({ default: m.DataExportPage })),
+);
 // Issue #55, epic #45; the platform's since #477 (epic #472) — the user's OWN
 // AI provider key (`UserAiKeysPage`). Every AI surface in that epic is
 // unreachable until this page has been used once.
@@ -493,6 +499,10 @@ function AppRoutes() {
                       dialog, which is a deliberate act rather than an
                       authorization. */}
                   <Route path="/settings/danger-zone" element={<UserDangerZonePage />} />
+                  {/* Issue #532. Ungated like every `/settings/*` sibling: `/api/exports` is
+                      `@Auth()` and each source carries its own permission, `user_settings:read`
+                      for the two the page offers every role. */}
+                  <Route path="/settings/data-export" element={<DataExportPage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `RequireAuth` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`
