@@ -10,10 +10,12 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock('../../../hooks/useUploadManager', () => ({ useUploadManager: vi.fn() }));
+vi.mock('@marinoscar/kvox-web/transcripts/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/kvox-web/transcripts/headless')>()),
+  useUploadManager: vi.fn(),
+}));
 
 import { render } from '../../utils/test-utils';
-import { useUploadManager } from '../../../hooks/useUploadManager';
 import {
   InProgressSection,
   dedupeServerItems,
@@ -21,7 +23,8 @@ import {
 import {
   UploadSessionGoneError,
   UploadSessionMismatchError,
-} from '../../../services/uploadSessions';
+  useUploadManager,
+} from '@marinoscar/kvox-web/transcripts/headless';
 import { AXE_OPTIONS, manager, note, session, transcript, upload } from './homeFixtures';
 
 /**

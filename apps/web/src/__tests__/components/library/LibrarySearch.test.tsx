@@ -22,11 +22,13 @@ import 'vitest-axe/extend-expect';
 
 import { server } from '../../mocks/server';
 import { render, mockAdminUser } from '../../utils/test-utils';
-import TranscriptsLibraryView from '../../../components/library/TranscriptsLibraryView';
+import { TranscriptsLibraryView } from '@marinoscar/kvox-web/transcripts/ui';
+import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
+import { appTranscriptSharing } from '../../../kvox/transcriptSharing';
+import { appTranscriptsLibrarySlots } from '../../../kvox/transcriptSlots';
 import NotesLibraryView from '../../../components/library/NotesLibraryView';
 import type { SearchResponse, SearchResult } from '@marinoscar/kvox-web/search/headless';
 import type { NoteListItem } from '../../../services/notes';
-import type { TranscriptListItem } from '../../../services/transcripts';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -149,7 +151,10 @@ beforeEach(() => {
 });
 
 function renderTranscripts() {
-  return render(<TranscriptsLibraryView />, { wrapperOptions: { user: mockAdminUser } });
+  return render(
+    <TranscriptsLibraryView slots={appTranscriptsLibrarySlots} sharing={appTranscriptSharing} />,
+    { wrapperOptions: { user: mockAdminUser } },
+  );
 }
 
 function renderNotes() {

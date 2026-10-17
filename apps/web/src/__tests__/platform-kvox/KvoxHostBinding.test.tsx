@@ -7,7 +7,7 @@
  * connected-knowledge switch are this app's.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { useEffect } from 'react';
 
@@ -199,6 +199,55 @@ describe('the HTTP port', () => {
       status: 404,
       message: 'gone',
     });
+  });
+
+  it('sends the bearer token on a conditional GET, like every other call', async () => {
+    let authorization: string | null = null;
+    server.use(
+      http.get('*/api/probe/poll', ({ request }) => {
+        authorization = request.headers.get('authorization');
+        return HttpResponse.json({ data: { n: 1 } }, { headers: { etag: '"v1"' } });
+      }),
+    );
+    const kvox = await mountHost();
+
+    await kvoxGetWithMeta(kvox, '/probe/poll');
+
+    expect(authorization).toBe('Bearer test-token');
+  });
+
+  it('refreshes ONCE on a 401 and retries, rather than reimplementing the dance', async () => {
+    // The client dedupes concurrent refreshes behind one promise; a second
+    // implementation here would race it and burn the rotating refresh token.
+    const refresh = vi.spyOn(api, 'refreshToken').mockResolvedValue(true);
+    let calls = 0;
+    server.use(
+      http.get('*/api/probe/poll', () => {
+        calls += 1;
+        if (calls === 1) return new HttpResponse(null, { status: 401 });
+        return HttpResponse.json({ data: { n: 1 } }, { headers: { etag: '"v1"' } });
+      }),
+    );
+    const kvox = await mountHost();
+
+    const result = await kvoxGetWithMeta<{ n: number }>(kvox, '/probe/poll');
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(calls).toBe(2);
+    expect(result.status).toBe(200);
+    refresh.mockRestore();
+  });
+
+  it('rejects with a 401 KvoxApiError when the refresh itself fails', async () => {
+    const refresh = vi.spyOn(api, 'refreshToken').mockResolvedValue(false);
+    server.use(http.get('*/api/probe/poll', () => new HttpResponse(null, { status: 401 })));
+    const kvox = await mountHost();
+
+    const error = await kvoxGetWithMeta(kvox, '/probe/poll').catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(KvoxApiError);
+    expect(error).toMatchObject({ status: 401 });
+    refresh.mockRestore();
   });
 });
 

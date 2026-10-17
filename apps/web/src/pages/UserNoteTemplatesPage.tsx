@@ -65,9 +65,10 @@ import { TemplatePreviewPanel } from '../components/notes/TemplatePreviewPanel';
 import type { PreviewSourceOption } from '../components/notes/TemplatePreviewPanel';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useIsMounted } from '../hooks/useIsMounted';
+import { useKvoxHost } from '@marinoscar/kvox-web/core/headless';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
 import { useTemplatePreview } from '../hooks/useTemplatePreview';
-import { getTranscripts } from '../services/transcripts';
+import { getTranscripts } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   draftFromTemplate,
   emptyDraft,
@@ -143,6 +144,7 @@ export default function UserNoteTemplatesPage() {
 
   const preview = useTemplatePreview();
   const isMounted = useIsMounted();
+  const host = useKvoxHost();
 
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
   const [draft, setDraft] = useState<NoteTemplateDraft>(emptyDraft);
@@ -210,7 +212,7 @@ export default function UserNoteTemplatesPage() {
     try {
       setIsLoadingSources(true);
       setSourcesError(null);
-      const page = await getTranscripts({ scope: 'owned', limit: SOURCE_PAGE_SIZE });
+      const page = await getTranscripts(host, { scope: 'owned', limit: SOURCE_PAGE_SIZE });
       if (!isMounted()) return;
       const options = page.items.map((item) => ({
         id: item.id,
@@ -232,7 +234,7 @@ export default function UserNoteTemplatesPage() {
     } finally {
       if (isMounted()) setIsLoadingSources(false);
     }
-  }, [isMounted]);
+  }, [host, isMounted]);
 
   // ⚠ GATED ON `keyConfigured`. The `AiKeyRequired` branch must issue no
   // generation request, and the source list exists only to feed one — so it is

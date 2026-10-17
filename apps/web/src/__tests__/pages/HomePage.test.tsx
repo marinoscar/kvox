@@ -12,15 +12,18 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock('../../hooks/useUploadManager', () => ({ useUploadManager: vi.fn() }));
+vi.mock('@marinoscar/kvox-web/transcripts/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/kvox-web/transcripts/headless')>()),
+  useUploadManager: vi.fn(),
+}));
 
 import { server } from '../mocks/server';
 import { mockGraphAiConfig, proposalSummaryRow } from '../mocks/graphData';
 import { render, mockAdminUser, mockUser, type MockUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
-import { useUploadManager } from '../../hooks/useUploadManager';
+import { useUploadManager } from '@marinoscar/kvox-web/transcripts/headless';
 import type { NoteSummary } from '../../services/notes';
-import type { TranscriptSummary } from '../../services/transcripts';
+import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
 import type { TranscriptionConfig } from '@marinoscar/kvox-web/transcription/headless';
 import {
   AXE_OPTIONS,

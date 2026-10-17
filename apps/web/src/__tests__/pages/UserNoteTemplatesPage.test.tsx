@@ -54,7 +54,11 @@ vi.mock('@marinoscar/kvox-web/core/headless', async (importOriginal) => {
 
 vi.mock('../../services/aiTasks', () => ({ getAiTasksConfig: vi.fn() }));
 
-vi.mock('../../services/transcripts', () => ({ getTranscripts: vi.fn() }));
+// Only the CALL is replaced (`importOriginal`): the slice's other exports are real.
+vi.mock('@marinoscar/kvox-web/transcripts/headless', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@marinoscar/kvox-web/transcripts/headless')>()),
+  getTranscripts: vi.fn(),
+}));
 
 // ⚠ `importOriginal` rather than a bare factory: `toInlineTemplate`,
 // `toCreateInput` and `draftFromTemplate` are the functions this suite is
@@ -77,7 +81,7 @@ vi.mock('../../services/noteTemplates', async (importOriginal) => {
 import { render } from '../utils/test-utils';
 import UserNoteTemplatesPage from '../../pages/UserNoteTemplatesPage';
 import { getAiTasksConfig } from '../../services/aiTasks';
-import { getTranscripts } from '../../services/transcripts';
+import { getTranscripts } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   createNoteTemplate,
   duplicateNoteTemplate,
@@ -89,7 +93,7 @@ import {
 } from '../../services/noteTemplates';
 import type { AiTasksConfig } from '../../services/aiTasks';
 import type { NoteTemplate, NoteTemplatePreview } from '../../services/noteTemplates';
-import type { TranscriptListItem } from '../../services/transcripts';
+import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
 
 const mockGetAiTasksConfig = vi.mocked(getAiTasksConfig);
 const mockGetTranscripts = vi.mocked(getTranscripts);

@@ -55,7 +55,7 @@ import { useGraphOntology } from '../../../hooks/useGraphOntology';
 import { useGraphProposal } from '../../../hooks/useGraphProposal';
 import type { GraphProposalSource, UseGraphProposalReturn } from '../../../hooks/useGraphProposal';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useSourceAudio } from '../../../hooks/useSourceAudio';
+import { formatTimestamp, useSourceAudio } from '@marinoscar/kvox-web/transcripts/headless';
 import { ApiError } from '../../../services/api';
 import { getProposal, graphConflictReason } from '../../../services/graph';
 import type {
@@ -66,7 +66,6 @@ import type {
   ProposalItem,
   RelinkField,
 } from '../../../services/graph';
-import { formatTimestamp } from '../../../utils/playbackIntervals';
 import { CommitBar } from './CommitBar';
 import { EVIDENCE_HIGHLIGHT_NAME, highlightQuoteInElement } from './noteSpanHighlight';
 import { ProposalHeader } from './ProposalHeader';

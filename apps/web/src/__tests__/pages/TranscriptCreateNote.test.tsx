@@ -6,16 +6,6 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
-vi.mock('../../services/transcripts', () => ({
-  getTranscript: vi.fn(),
-  getTranscripts: vi.fn(),
-  getTranscriptSegments: vi.fn(),
-  getTranscriptAudio: vi.fn(),
-  getTranscriptWords: vi.fn(),
-  retryTranscript: vi.fn(),
-  deleteTranscript: vi.fn(),
-}));
-
 vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@marinoscar/platform-web/notifications/headless')>()),
   useNotifications: () => null,
@@ -25,20 +15,16 @@ import { server } from '../mocks/server';
 import { render, mockAdminUser } from '../utils/test-utils';
 import type { MockUser } from '../utils/test-utils';
 import { setViewportWidth } from '../setup';
-import TranscriptPage, { CREATE_NOTE_NOT_READY_REASON } from '../../pages/TranscriptPage';
-import NewNotePage from '../../pages/NewNotePage';
-import {
-  getTranscript,
-  getTranscripts,
-  getTranscriptAudio,
-  getTranscriptSegments,
-  getTranscriptWords,
-} from '../../services/transcripts';
+import { CREATE_NOTE_NOT_READY_REASON, TranscriptPage } from '@marinoscar/kvox-web/transcripts/ui';
 import type {
   TranscriptDetail,
   TranscriptSegment,
   TranscriptSpeaker,
-} from '../../services/transcripts';
+} from '@marinoscar/kvox-web/transcripts/headless';
+import NewNotePage from '../../pages/NewNotePage';
+import { appTranscriptAiAccess } from '../../kvox/transcriptAiAccess';
+import { appTranscriptSharing } from '../../kvox/transcriptSharing';
+import { appTranscriptPageSlots } from '../../kvox/transcriptSlots';
 
 /**
  * The create-note entry point on the transcript viewer — issue #59, epic #45.
@@ -59,8 +45,9 @@ import type {
  * actually reads it. A test asserting the URL alone would keep passing on the
  * day that contract broke.
  *
- * `services/transcripts` is mocked and everything else runs over MSW, matching
- * `TranscriptPage.test.tsx` and `NewNotePage.test.tsx` respectively.
+ * The page is the slice's (`@marinoscar/kvox-web/transcripts/ui`) rendered with
+ * this app's slots, and everything runs over MSW through the app's host binding;
+ * the page's own behaviour is covered by the slice's tests.
  */
 
 const API_BASE = 'http://localhost:3000/api';
@@ -68,11 +55,14 @@ const API_BASE = 'http://localhost:3000/api';
 /** jsdom performs no layout, so `color-contrast` is a false-negative trap here. */
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
-const mockGetTranscript = vi.mocked(getTranscript);
-const mockGetTranscripts = vi.mocked(getTranscripts);
-const mockGetSegments = vi.mocked(getTranscriptSegments);
-const mockGetAudio = vi.mocked(getTranscriptAudio);
-const mockGetWords = vi.mocked(getTranscriptWords);
+/** `GET /api/transcripts/t1`, with the ETag the polling hook revalidates against. */
+function serveTranscript(value: TranscriptDetail) {
+  server.use(
+    http.get(`${API_BASE}/transcripts/t1`, () =>
+      HttpResponse.json({ data: value }, { headers: { ETag: 'W/"v1"' } }),
+    ),
+  );
+}
 
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
@@ -239,47 +229,60 @@ beforeEach(() => {
   localStorage.setItem('theme_mode', 'light');
   setViewportWidth(1440);
 
-  mockGetTranscript.mockResolvedValue({ status: 'ok', data: detail(), etag: 'W/"v1"' });
-  mockGetSegments.mockResolvedValue({
-    status: 'ok',
-    data: { currentVersion: 1, segments: SEGMENTS },
-    etag: 'W/"v1"',
-  });
-  mockGetAudio.mockResolvedValue({
-    url: 'https://storage.example/signed',
-    kind: 'playback',
-    mimeType: 'audio/mp4',
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-  });
-  mockGetWords.mockResolvedValue({
-    currentVersion: 1,
-    fromMs: 0,
-    toMs: 300_000,
-    segments: [],
-  });
-  mockGetTranscripts.mockResolvedValue({
-    items: [
-      {
-        id: 't1',
-        title: 'Weekly standup',
-        status: 'ready',
-        transcriptionStatus: 'completed',
-        playbackStatus: 'ready',
-        language: 'en',
-        durationMs: 600_000,
-        speakerCount: 1,
-        wordCount: 1200,
-        currentVersion: 1,
-        failureReason: null,
-        access: 'owner',
-        ownerName: 'Admin User',
-        recordedAt: '2026-01-01T00:00:00.000Z',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-    ],
-    nextCursor: null,
-  } as Awaited<ReturnType<typeof getTranscripts>>);
+  server.use(
+    http.get(`${API_BASE}/transcripts/t1`, () =>
+      HttpResponse.json({ data: detail() }, { headers: { ETag: 'W/"v1"' } }),
+    ),
+    http.get(`${API_BASE}/transcripts/t1/segments`, () =>
+      HttpResponse.json(
+        { data: { currentVersion: 1, segments: SEGMENTS } },
+        { headers: { ETag: 'W/"v1"' } },
+      ),
+    ),
+    http.get(`${API_BASE}/transcripts/t1/audio`, () =>
+      HttpResponse.json({
+        data: {
+          url: 'https://storage.example/signed',
+          kind: 'playback',
+          mimeType: 'audio/mp4',
+          expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        },
+      }),
+    ),
+    http.get(`${API_BASE}/transcripts/t1/words`, () =>
+      HttpResponse.json({
+        data: { currentVersion: 1, fromMs: 0, toMs: 300_000, segments: [] },
+      }),
+    ),
+    http.get(`${API_BASE}/transcripts`, () =>
+      HttpResponse.json({
+        data: {
+          items: [
+            {
+              id: 't1',
+              title: 'Weekly standup',
+              status: 'ready',
+              transcriptionStatus: 'completed',
+              playbackStatus: 'ready',
+              language: 'en',
+              durationMs: 600_000,
+              speakerCount: 1,
+              wordCount: 1200,
+              currentVersion: 1,
+              failureReason: null,
+              access: 'owner',
+              ownerName: 'Admin User',
+              recordedAt: '2026-01-01T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          nextCursor: null,
+          total: 1,
+        },
+      }),
+    ),
+  );
 
   server.use(
     http.get(`${API_BASE}/notes`, () =>
@@ -304,7 +307,11 @@ function Probe() {
 function renderViewer(user: MockUser = mockAdminUser) {
   return render(
     <Routes>
-      <Route path="/transcripts/:id" element={<TranscriptPage />} />
+      <Route path="/transcripts/:id" element={<TranscriptPage
+            slots={appTranscriptPageSlots}
+            sharing={appTranscriptSharing}
+            ai={appTranscriptAiAccess}
+          />} />
     </Routes>,
     { wrapperOptions: { user, route: '/transcripts/t1' } },
   );
@@ -315,7 +322,11 @@ function renderFlow(user: MockUser = mockAdminUser) {
   return render(
     <>
       <Routes>
-        <Route path="/transcripts/:id" element={<TranscriptPage />} />
+        <Route path="/transcripts/:id" element={<TranscriptPage
+            slots={appTranscriptPageSlots}
+            sharing={appTranscriptSharing}
+            ai={appTranscriptAiAccess}
+          />} />
         <Route path="/notes/new" element={<NewNotePage />} />
       </Routes>
       <Probe />
@@ -406,11 +417,7 @@ describe('TranscriptPage — where the create-note action goes', () => {
 
 describe('TranscriptPage — the create-note action before the transcript is ready', () => {
   beforeEach(() => {
-    mockGetTranscript.mockResolvedValue({
-      status: 'ok',
-      data: detail({ status: 'processing', transcriptionStatus: 'processing' }),
-      etag: 'W/"v1"',
-    });
+    serveTranscript(detail({ status: 'processing', transcriptionStatus: 'processing' }));
   });
 
   it('disables it and says why, in text rather than in grey', async () => {
@@ -545,11 +552,7 @@ describe('TranscriptPage — accessibility of the new surface', () => {
   });
 
   it('has no axe violations while the action is disabled', async () => {
-    mockGetTranscript.mockResolvedValue({
-      status: 'ok',
-      data: detail({ status: 'processing', transcriptionStatus: 'processing' }),
-      etag: 'W/"v1"',
-    });
+    serveTranscript(detail({ status: 'processing', transcriptionStatus: 'processing' }));
     const { container } = renderViewer();
 
     await screen.findByRole('button', { name: 'Create note' });

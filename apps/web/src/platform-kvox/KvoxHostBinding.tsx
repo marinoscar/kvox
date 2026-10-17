@@ -20,6 +20,8 @@
  *     permission set, the same one every route guard reads.
  *   - `links`: this app's routes.
  *   - `features`: the connected-knowledge switch (`AppGraphFeatureProvider`).
+ *   - `useLatestEventId`: the platform's notification centre, so a transcript list
+ *     re-reads itself the moment a `transcripts.*` event arrives.
  *
  * Mount `AppKvoxHostProvider` once, inside the identity providers, the graph
  * feature provider and the platform host, above the router outlet.
@@ -33,6 +35,7 @@ import type {
   PlatformHttpRequestOptions,
 } from '@marinoscar/platform-web/core';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { useNotifications } from '@marinoscar/platform-web/notifications/headless';
 import {
   KvoxWebHostProvider,
   buildKvoxUrl,
@@ -172,6 +175,28 @@ const kvoxLinks: KvoxLinks = {
 };
 
 /**
+ * The id of the most recent notification whose event key starts with `prefix`
+ * (`KvoxWebHost.useLatestEventId`): the notification stream as the fast path of a
+ * list's polling.
+ *
+ * A STRING, not a counter: the notification centre re-renders for reasons of its
+ * own (a read receipt, an unrelated event), and a hook that refetched on every
+ * one of those would turn the bell into a second, unthrottled poll. An id
+ * changes exactly when a NEW event arrives. `null` when no `NotificationProvider`
+ * is mounted (`useNotifications` is tolerant), so the pages work in a test and
+ * on any surface that has no bell.
+ */
+function useLatestAppEventId(prefix: string): string | null {
+  const notifications = useNotifications();
+  return useMemo(() => {
+    const match = notifications?.notifications.find((notification) =>
+      notification.eventKey.startsWith(prefix),
+    );
+    return match?.id ?? null;
+  }, [notifications?.notifications, prefix]);
+}
+
+/**
  * This app's {@link KvoxWebHost}, memoised on the signed-in user, their
  * permissions and the connected-knowledge switch. Must run inside the identity
  * providers and `AppGraphFeatureProvider`.
@@ -191,6 +216,7 @@ export function useAppKvoxHost(): KvoxWebHost {
       viewer: () => viewer,
       links: kvoxLinks,
       features: () => features,
+      useLatestEventId: useLatestAppEventId,
     };
   }, [userId, permissions, graph]);
 }

@@ -103,10 +103,9 @@ import { useIsMounted } from '../../hooks/useIsMounted';
 import { ApiError } from '../../services/api';
 import { regenerateNote } from '../../services/notes';
 import type { NoteListItem } from '../../services/notes';
-import { retryTranscript } from '../../services/transcripts';
-import type { TranscriptListItem } from '../../services/transcripts';
-import { failureMessage } from '../../utils/transcriptDisplay';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
+import { failureMessage, retryTranscript } from '@marinoscar/kvox-web/transcripts/headless';
+import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
+import { KvoxApiError, formatRelativeTime, useKvoxHost } from '@marinoscar/kvox-web/core/headless';
 
 export interface NeedsAttentionProps {
   /** `GET /api/transcripts/summary`'s `failed` list — owner-scoped, max eight. */
@@ -258,6 +257,7 @@ export function NeedsAttention({
   onNoteRetried,
 }: NeedsAttentionProps) {
   const isMounted = useIsMounted();
+  const host = useKvoxHost();
   const [busyKey, setBusyKey] = useState<RowKey | null>(null);
   const [errors, setErrors] = useState<Partial<Record<RowKey, string>>>({});
 
@@ -274,7 +274,7 @@ export function NeedsAttention({
       action: canRetryTranscripts
         ? {
             verb: 'Retry',
-            run: () => retryTranscript(item.id),
+            run: () => retryTranscript(host, item.id),
             onDone: onTranscriptRetried,
           }
         : null,
@@ -314,7 +314,10 @@ export function NeedsAttention({
         setErrors((current) => ({
           ...current,
           [row.key]:
-            err instanceof ApiError
+            // A transcript retry goes through the slice's client, whose helpers
+            // raise `KvoxApiError`; a note retry is this app's own service and
+            // raises `ApiError`. Both carry the API's sentence.
+            err instanceof ApiError || err instanceof KvoxApiError
               ? err.message || 'That could not be started again.'
               : 'That could not be started again.',
         }));

@@ -64,11 +64,11 @@ const WHY = {
  */
 const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:core/ui/library/LibraryPageFrame.tsx': WHY.libraryFrame,
-  'components/library/TranscriptsLibraryView.tsx': WHY.libraryView,
+  '@marinoscar/kvox-web:transcripts/ui/components/TranscriptsLibraryView.tsx': WHY.libraryView,
   'components/library/NotesLibraryView.tsx': WHY.libraryView,
 
-  'components/transcripts/ExportDialog.tsx': WHY.dialog,
-  'components/transcripts/NameCheckDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:transcripts/ui/components/ExportDialog.tsx': WHY.dialog,
+  '@marinoscar/kvox-web:transcripts/ui/components/NameCheckDialog.tsx': WHY.dialog,
   'components/notes/NoteContextDialog.tsx': WHY.dialog,
   'components/notes/NoteExportDialog.tsx': WHY.dialog,
   'components/notes/NoteConflictDialog.tsx': WHY.dialog,
@@ -79,11 +79,11 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   'components/graph/guide/ExtractDialog.tsx': WHY.dialog,
   'components/graph/review/ProposalReviewSheet.tsx': WHY.dialog,
 
-  'components/transcripts/NameSuggestionsPanel.tsx': WHY.panel,
-  'components/transcripts/FindReplacePanel.tsx': WHY.panel,
-  'components/transcripts/SegmentActions.tsx': WHY.panel,
-  'components/transcripts/SpeakerActions.tsx': WHY.panel,
-  'components/transcripts/TranscriptPipeline.tsx': WHY.panel,
+  '@marinoscar/kvox-web:transcripts/ui/components/NameSuggestionsPanel.tsx': WHY.panel,
+  '@marinoscar/kvox-web:transcripts/ui/components/FindReplacePanel.tsx': WHY.panel,
+  '@marinoscar/kvox-web:transcripts/ui/components/SegmentActions.tsx': WHY.panel,
+  '@marinoscar/kvox-web:transcripts/ui/components/SpeakerActions.tsx': WHY.panel,
+  '@marinoscar/kvox-web:transcripts/ui/components/TranscriptPipeline.tsx': WHY.panel,
   'components/ask/EntityAskPanel.tsx': WHY.panel,
 
   'components/graph/overview/ClusterSidePanel.tsx': WHY.graph,
@@ -102,7 +102,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   'pages/GraphExplorerPage.tsx': WHY.page,
   'pages/AskPage.tsx': WHY.page,
   // `up('md')`: whether the transcript page lays its player beside the text.
-  'pages/TranscriptPage.tsx': WHY.page,
+  '@marinoscar/kvox-web:transcripts/ui/pages/TranscriptPage.tsx': WHY.page,
 };
 
 /**
