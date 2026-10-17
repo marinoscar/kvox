@@ -60,6 +60,7 @@ import { UploadManagerProvider } from './contexts/UploadManagerContext';
 // routes (data, spread where the literal route used to be).
 import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
 import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
+import { kvoxSearchRoutes } from '@marinoscar/kvox-web/search/ui';
 import { kvoxTranscriptionRoutes } from '@marinoscar/kvox-web/transcription/ui';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -166,11 +167,6 @@ const UserAiKeysPage = lazy(() =>
 // renders `AiKeyRequired` and nothing else until `UserAiKeysPage` above has been
 // used, so the two are ordered here the way the setup actually happens.
 const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage'));
-// Issue #191, epic #165 — what of the user's own library is semantically
-// searchable, and the one explicit action that changes the answer. Indexing
-// spends the USER'S own AI provider account, which is why this is a per-user
-// destination and why there is no admin equivalent and no backfill cron.
-const UserSearchIndexPage = lazy(() => import('./pages/UserSearchIndexPage'));
 const UserKnowledgeGraphPage = lazy(() => import('./pages/UserKnowledgeGraphPage'));
 // Issue #279, epic #271; the platform's Get started page since #481 — the caller's own activation
 // checklist, and the place the shell banner (#277) leads. A registry card in
@@ -694,16 +690,13 @@ function AppRoutes() {
                       `keyConfigured`, which is a capability rather than an
                       authorization and is therefore checked in the page. */}
                   <Route path="/settings/note-templates" element={<UserNoteTemplatesPage />} />
-                  {/* Issue #191, epic #165. Ungated like every `/settings/*`
-                      sibling, and with the same reason `/settings/ai` carries:
-                      `search-index.controller.ts` gates both of its routes on
-                      `@Auth()` and NO permission, because the resource is the
-                      caller's own content and the caller's own vendor account,
-                      scoped by `ownerId` in the query itself. The page's real
-                      gate is a CAPABILITY — does this deployment embed, and has
-                      this user saved a key — which is checked in the page and
-                      is not an authorization. */}
-                  <Route path="/settings/search-index" element={<UserSearchIndexPage />} />
+                  {/* Search Indexing (#191, epic #165; the slice's since #501, epic
+                      #498). The route is DATA exported by
+                      `@marinoscar/kvox-web/search/ui`: its path and its lazy page.
+                      Ungated like every `/settings/*` sibling, because the API's
+                      `search-index.controller.ts` gates both routes on `@Auth()`
+                      and no permission; the slice's own header says why. */}
+                  {renderKvoxRoutes(kvoxSearchRoutes)}
                   {/* Issue #369, epic #346. The ONE gated `/settings/*` route,
                       and the gate is the exact string the API enforces:
                       `graph:write` on the attribute-definition write routes

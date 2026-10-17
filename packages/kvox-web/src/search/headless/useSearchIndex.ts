@@ -49,15 +49,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { ApiError } from '../services/api';
+import {
+  KvoxApiError,
+  useIsMounted,
+  useKvoxHost,
+  useVisiblePolling,
+} from '../../core/headless/index.js';
 import {
   getSearchIndexStatus,
   hasPendingIndexing,
   requestSearchIndex,
-} from '../services/searchIndex';
-import type { SearchIndexRequestResult, SearchIndexStatus } from '../services/searchIndex';
-import { useIsMounted } from './useIsMounted';
-import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
+} from './search-index-client.js';
+import type { SearchIndexRequestResult, SearchIndexStatus } from './search-index-client.js';
 
 /**
  * How often the status is re-read while anything is pending.
@@ -67,23 +70,32 @@ import { useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
  * the counters visibly lag the work, faster and the page is asking about a
  * number that cannot have moved. Exported so a test asserts the interval it
  * advances a fake clock by rather than re-typing it.
+ *
+ * @stability experimental
  */
 export const SEARCH_INDEX_POLL_INTERVAL_MS = 5000;
 
 function messageFor(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
+  if (err instanceof KvoxApiError) {
     return err.message || fallback;
   }
   return fallback;
 }
 
+/**
+ * What {@link useSearchIndex} returns.
+ *
+ * @stability experimental
+ */
 export interface UseSearchIndexReturn {
   /** `null` until the first read lands, or when it failed. */
   status: SearchIndexStatus | null;
+  /** True while the first read is in flight. */
   isLoading: boolean;
   /** Failure to LOAD — "nothing to show", as distinct from "indexing did not start". */
   loadError: string | null;
 
+  /** True while an index request is in flight. */
   isIndexing: boolean;
   /** The last refused request, including the API's own 409 message. */
   indexError: string | null;
@@ -91,14 +103,21 @@ export interface UseSearchIndexReturn {
   lastResult: SearchIndexRequestResult | null;
   /** Resolves `true` when the request was accepted, `false` when it was not — never throws. */
   requestIndex: () => Promise<boolean>;
+  /** Dismisses the last refused request. */
   clearIndexError: () => void;
 
   /** True while the server reports documents queued or being indexed. */
   isRunning: boolean;
 
+  /** Re-reads the status, showing the loading state. */
   refresh: () => Promise<void>;
 }
 
+/**
+ * The caller's semantic indexing status, the request to index, and a poll that runs only while documents are pending.
+ *
+ * @stability experimental
+ */
 export function useSearchIndex(): UseSearchIndexReturn {
   const [status, setStatus] = useState<SearchIndexStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +126,7 @@ export function useSearchIndex(): UseSearchIndexReturn {
   const [indexError, setIndexError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SearchIndexRequestResult | null>(null);
 
+  const host = useKvoxHost();
   const isMounted = useIsMounted();
 
   /**
@@ -118,7 +138,7 @@ export function useSearchIndex(): UseSearchIndexReturn {
    */
   const readStatus = useCallback(async () => {
     try {
-      const next = await getSearchIndexStatus();
+      const next = await getSearchIndexStatus(host);
       if (isMounted()) {
         setStatus(next);
         setLoadError(null);
@@ -128,7 +148,7 @@ export function useSearchIndex(): UseSearchIndexReturn {
         setLoadError(messageFor(err, 'Failed to load your indexing status'));
       }
     }
-  }, [isMounted]);
+  }, [host, isMounted]);
 
   /** The visible read: the first load, and anything the user asked for by hand. */
   const refresh = useCallback(async () => {
@@ -167,7 +187,7 @@ export function useSearchIndex(): UseSearchIndexReturn {
     try {
       setIsIndexing(true);
       setIndexError(null);
-      const result = await requestSearchIndex();
+      const result = await requestSearchIndex(host);
       if (isMounted()) setLastResult(result);
       void readStatus();
       return true;
@@ -180,7 +200,7 @@ export function useSearchIndex(): UseSearchIndexReturn {
     } finally {
       if (isMounted()) setIsIndexing(false);
     }
-  }, [isMounted, readStatus]);
+  }, [host, isMounted, readStatus]);
 
   const clearIndexError = useCallback(() => setIndexError(null), []);
 

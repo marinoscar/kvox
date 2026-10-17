@@ -14,10 +14,12 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { userEvent } from '@testing-library/user-event';
 
-import { render } from '../../utils/test-utils';
-import { SemanticSearchNotice } from '../../../components/search/SemanticSearchNotice';
+import { renderWithKvoxHost, createFakeKvoxWebHost } from '../../src/core/testing/index.js';
+import { SemanticSearchNotice } from '../../src/search/ui/index.js';
+
+const render = (ui: React.ReactElement) => renderWithKvoxHost(ui, createFakeKvoxWebHost());
 
 describe('SemanticSearchNotice', () => {
   beforeEach(() => {

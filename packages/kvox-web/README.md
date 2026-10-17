@@ -6,13 +6,15 @@ The React side of the KVox domain: pages, components and hooks built on MUI, exp
 
 The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, theme, shell or settings hub. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop).
 
-Status: in progress (Epic 7, issue 7.1). `core` and `transcription` are filled; `transcripts`, `search`, `notes`, `graph` and `ask` arrive in issues 7.2 to 7.6 as `./<slice>/headless` and `./<slice>/ui`.
+Status: in progress (Epic 7, issues 7.1 and 7.3). `core`, `transcription` and `search` are filled; `transcripts`, `notes`, `graph` and `ask` arrive in issues 7.2, 7.4, 7.5 and 7.6 as `./<slice>/headless` and `./<slice>/ui`.
 
 - `@marinoscar/kvox-web/core/headless`: the host port and its provider, the viewer and permission hooks, the HTTP, event-stream and upload transports, `KvoxApiError`, polling and the domain-neutral helpers. No MUI. [README](src/core/README.md).
 - `@marinoscar/kvox-web/core/ui`: the library chrome and the types of the data a slice exports (`KvoxSettingsCard`, `KvoxDestination`, `KvoxRouteDef`). Needs MUI and `react-router-dom`.
 - `@marinoscar/kvox-web/core/testing`: `createFakeKvoxWebHost`, `renderWithKvoxHost`, a query-aware `matchMedia`, a fake `XMLHttpRequest` and the conformance suites. Test code only.
 - `@marinoscar/kvox-web/transcription/headless`: the admin client of `/api/transcription-settings` and `/api/transcription/config`, and `useTranscriptionSettings`. [README](src/transcription/README.md).
 - `@marinoscar/kvox-web/transcription/ui`: `TranscriptionSettingsPage`, `kvoxTranscriptionAdminSections` and `kvoxTranscriptionRoutes`.
+- `@marinoscar/kvox-web/search/headless`: the clients of `GET /api/search`, `GET /api/search/index-status` and `POST /api/search/index`, and the `useSearch` and `useSearchIndex` hooks. [README](src/search/README.md).
+- `@marinoscar/kvox-web/search/ui`: `SearchResultsView`, `SearchSnippet`, `SemanticSearchNotice`, `UserSearchIndexPage`, `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes`.
 
 ## Install and peer dependencies
 
@@ -34,9 +36,9 @@ Optional peers, installed for the entries that need them. A host that uses only 
 
 | Package | Range | Needed by |
 |---|---|---|
-| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui` |
-| `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui` |
-| `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui` |
+| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui` |
+| `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui`, `search/ui` |
+| `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui` |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
 | `@marinoscar/platform-web` | `0.1.0-next.5` | no entry: host wiring in the app only |
 
@@ -79,6 +81,7 @@ None at the package level. The host object is the whole configuration; the optio
 - `KvoxHttpPort`, `KvoxSsePort`, `KvoxUploadPort`: the transports a host implements.
 - `KvoxSettingsCard`, `KvoxDestination`, `KvoxRouteDef` (`core/ui`): the types of the data a slice exports and the app spreads into `ADMIN_SECTIONS`, `USER_SETTINGS_SECTIONS`, `DESTINATIONS` and its routes.
 - `kvoxTranscriptionAdminSections`, `kvoxTranscriptionRoutes` and the `renderSecretField` slot of `TranscriptionSettingsPage` (`transcription/ui`).
+- `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`search/ui`): the Search Indexing card (no permission, by design) and its route.
 
 ## Data
 
@@ -86,7 +89,7 @@ None. The browser holds no data model; it reads and writes through the API. The 
 
 ## Permissions and settings
 
-Packaged pages check no permission themselves except where a slice README says so: the app's route gate does, from the `permission` the slice's route data declares. `useHasPermission(permission)` reads the host's viewer. The transcription card and route are gated on `system_settings:read`; saving, testing and removing the key need `system_settings:write`, checked inside the page.
+Packaged pages check no permission themselves except where a slice README says so: the app's route gate does, from the `permission` the slice's route data declares. `useHasPermission(permission)` reads the host's viewer. The transcription card and route are gated on `system_settings:read`; saving, testing and removing the key need `system_settings:write`, checked inside the page. The Search Indexing card and route declare no permission: the API gates `/api/search/index-status` and `/api/search/index` on authentication alone.
 
 ## UI
 

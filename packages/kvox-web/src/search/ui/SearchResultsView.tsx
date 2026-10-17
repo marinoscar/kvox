@@ -54,11 +54,10 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
-import { SearchSnippet } from './SearchSnippet';
-import { SemanticSearchNotice } from './SemanticSearchNotice';
-import type { UseSearchResult } from '../../hooks/useSearch';
-import type { SearchResult, SearchType } from '../../services/search';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
+import { formatRelativeTime } from '../../core/headless/index.js';
+import type { SearchResult, SearchType, UseSearchResult } from '../headless/index.js';
+import { SearchSnippet } from './SearchSnippet.js';
+import { SemanticSearchNotice } from './SemanticSearchNotice.js';
 
 /** Wording for the one type a view asked about. */
 const TYPE_NOUNS: Record<SearchType, { singular: string; plural: string }> = {
@@ -72,7 +71,9 @@ function SearchResultRow({
   onOpen,
 }: {
   result: SearchResult;
+  /** Use the compact row layout. */
   dense: boolean;
+  /** Called with the result the reader chose. */
   onOpen: () => void;
 }) {
   return (
@@ -107,6 +108,11 @@ function SearchResultRow({
   );
 }
 
+/**
+ * What {@link SearchResultsView} takes.
+ *
+ * @stability experimental
+ */
 export interface SearchResultsViewProps {
   /** The one type this view asked the endpoint for. */
   type: SearchType;
@@ -114,7 +120,9 @@ export interface SearchResultsViewProps {
   query: string;
   /** Everything `useSearch` returned, passed through whole. */
   search: UseSearchResult;
+  /** Use the compact row layout. */
   dense: boolean;
+  /** Called with the result the reader chose. */
   onOpen: (result: SearchResult) => void;
   /**
    * The status filter the view is showing but cannot apply, if any.
@@ -129,6 +137,11 @@ export interface SearchResultsViewProps {
   unappliedStatusFilter?: boolean;
 }
 
+/**
+ * The ranked results of one library search, with its states and the keyword-only notice.
+ *
+ * @stability experimental
+ */
 export function SearchResultsView({
   type,
   query,
@@ -277,5 +290,3 @@ export function SearchResultsView({
     </Box>
   );
 }
-
-export default SearchResultsView;

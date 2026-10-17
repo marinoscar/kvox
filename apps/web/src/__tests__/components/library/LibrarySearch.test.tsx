@@ -24,7 +24,7 @@ import { server } from '../../mocks/server';
 import { render, mockAdminUser } from '../../utils/test-utils';
 import TranscriptsLibraryView from '../../../components/library/TranscriptsLibraryView';
 import NotesLibraryView from '../../../components/library/NotesLibraryView';
-import type { SearchResponse, SearchResult } from '../../../services/search';
+import type { SearchResponse, SearchResult } from '@marinoscar/kvox-web/search/headless';
 import type { NoteListItem } from '../../../services/notes';
 import type { TranscriptListItem } from '../../../services/transcripts';
 

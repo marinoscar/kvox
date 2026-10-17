@@ -4,8 +4,8 @@
  * The backend half is `apps/api/src/search/search.controller.ts` and
  * `dto/search.dto.ts`; every type below is a hand-written mirror of a Zod
  * schema in that file, named identically so the two can be diffed by eye —
- * the same arrangement `services/notes.ts` and `services/transcripts.ts`
- * already have with their own controllers.
+ * the same arrangement the notes and transcripts clients have with their own
+ * controllers.
  *
  * =============================================================================
  * THERE IS NO `total`, AND THIS CLIENT MUST NOT INVENT ONE
@@ -38,28 +38,48 @@
  * instead of putting a red alert on screen — see the hook for the handling.
  */
 
-import { api, ApiError } from './api';
-import type { SearchType, SemanticReason, SearchResponse } from '@marinoscar/kvox-contract/search';
+import { KvoxApiError, kvoxGet } from '../../core/headless/index.js';
+import type { KvoxWebHost } from '../../core/headless/index.js';
+import type {
+  SearchType,
+  SemanticReason as ContractSemanticReason,
+  SearchResponse,
+} from '@marinoscar/kvox-contract/search';
 
 // =============================================================================
 // The shapes (mirrors of `dto/search.dto.ts`)
 // =============================================================================
 
-/** The document types this endpoint can search. Mirrors `SEARCH_TYPES`. */
+/**
+ * The document types this endpoint can search. Mirrors `SEARCH_TYPES`.
+ *
+ * @stability experimental
+ */
 export type { SearchType };
 
-/** Which field a snippet came out of. */
+/**
+ * Which field a snippet came out of.
+ *
+ * @stability experimental
+ */
 export type SearchSnippetField = 'title' | 'body' | 'segment';
 
 /**
  * Why the semantic arm did not run. Mirrors `SEMANTIC_REASONS` in
- * `apps/api/src/search/search-semantic.ts`, which states in its own header that
+ * `@marinoscar/kvox-contract/search`, which states in its own header that
  * these strings are a published contract — so this list is exhaustive on
  * purpose and a new server value is a deliberate, compiler-visible change here
  * rather than something that silently widens.
+ *
+ * @stability experimental
  */
-export type { SemanticReason };
+export type SemanticReason = ContractSemanticReason;
 
+/**
+ * One search snippet, rendered as text and `<mark>` elements, never as HTML.
+ *
+ * @stability experimental
+ */
 export interface SearchSnippet {
   /**
    * `ts_headline` output, **already HTML-escaped at the server**, with
@@ -67,7 +87,7 @@ export interface SearchSnippet {
    *
    * ⚠ NEVER RENDER THIS WITH `dangerouslySetInnerHTML`. It is parsed into
    * alternating text and `<mark>` ELEMENTS by
-   * `components/search/SearchSnippet.tsx`, which explains at length why the
+   * `ui/SearchSnippet.tsx`, which explains at length why the
    * server's guarantee is not on its own a reason to trust the string.
    */
   html: string;
@@ -76,18 +96,28 @@ export interface SearchSnippet {
    * said. `null` for a note, and for a transcript's title match.
    */
   startMs: number | null;
+  /** Where the snippet came from. */
   field: SearchSnippetField;
 }
 
+/**
+ * One ranked document in a search response.
+ *
+ * @stability experimental
+ */
 export interface SearchResult {
+  /** The document type. */
   type: SearchType;
+  /** The document id. */
   id: string;
+  /** The document title. */
   title: string;
   /**
    * `ts_rank_cd` relevance. Comparable WITHIN one response and meaningless
    * across two, which is why nothing in this app renders it.
    */
   score: number;
+  /** When the document last changed, ISO-8601. */
   updatedAt: string;
   /** The document's own status enum, as its own module defines it. */
   status: string;
@@ -95,18 +125,30 @@ export interface SearchResult {
   snippets: SearchSnippet[];
 }
 
+/**
+ * The body of `GET /api/search`, as the contract defines it.
+ *
+ * @stability experimental
+ */
 export type { SearchResponse };
 
+/**
+ * What {@link search} sends.
+ *
+ * @stability experimental
+ */
 export interface SearchParams {
+  /** The search text. */
   q: string;
   /** The types to search. Sent as the CSV the endpoint documents. */
   types?: SearchType[];
+  /** The page size. */
   limit?: number;
   /** Opaque, from a previous response. Never built here. */
   cursor?: string;
   /**
    * Cancels the request. Passed straight through to `fetch` by
-   * `services/api.ts`, so a superseded keystroke's request is genuinely
+   * the host's HTTP transport, so a superseded keystroke's request is genuinely
    * aborted rather than merely ignored on arrival.
    */
   signal?: AbortSignal;
@@ -116,17 +158,20 @@ export interface SearchParams {
 // The call
 // =============================================================================
 
-/** `GET /api/search`. */
-export async function search(params: SearchParams): Promise<SearchResponse> {
-  const query = new URLSearchParams();
-  query.set('q', params.q);
-  if (params.types && params.types.length > 0) query.set('types', params.types.join(','));
-  if (params.limit !== undefined) query.set('limit', String(params.limit));
+/**
+ * `GET /api/search`.
+ *
+ * @stability experimental
+ */
+export async function search(host: KvoxWebHost, params: SearchParams): Promise<SearchResponse> {
+  const query: Record<string, string> = { q: params.q };
+  if (params.types && params.types.length > 0) query.types = params.types.join(',');
+  if (params.limit !== undefined) query.limit = String(params.limit);
   // Verbatim. See the file header: this client has no opinion about a cursor's
   // contents and must never acquire one.
-  if (params.cursor) query.set('cursor', params.cursor);
+  if (params.cursor) query.cursor = params.cursor;
 
-  return api.get<SearchResponse>(`/search?${query.toString()}`, { signal: params.signal });
+  return kvoxGet<SearchResponse>(host, '/search', { query, signal: params.signal });
 }
 
 /**
@@ -136,14 +181,16 @@ export async function search(params: SearchParams): Promise<SearchResponse> {
  * client can recover from by itself, and the recovery is "ask for page one
  * again". Recognised HERE rather than at the call site so no hook spells the
  * condition for itself, exactly as `noteConflictReason` is the one place
- * `services/notes.ts` reads a 409's `details.reason`.
+ * the notes client reads a 409's `details.reason`.
  *
  * ⚠ It takes `hadCursor` rather than sniffing the message, because the other
  * 400s this endpoint answers (an empty `q`, an unrecognised `types`, a `limit`
  * out of range) are the CALLER's bugs and must stay visible as errors. Only a
  * request that actually carried a cursor can have been refused for having a
  * stale one.
+ *
+ * @stability experimental
  */
 export function isStaleCursorError(err: unknown, hadCursor: boolean): boolean {
-  return hadCursor && err instanceof ApiError && err.status === 400;
+  return hadCursor && err instanceof KvoxApiError && err.status === 400;
 }

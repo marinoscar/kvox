@@ -38,6 +38,14 @@
       "types": "./dist/transcription/ui/index.d.ts",
       "default": "./dist/transcription/ui/index.js"
     },
+    "./search/headless": {
+      "types": "./dist/search/headless/index.d.ts",
+      "default": "./dist/search/headless/index.js"
+    },
+    "./search/ui": {
+      "types": "./dist/search/ui/index.d.ts",
+      "default": "./dist/search/ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

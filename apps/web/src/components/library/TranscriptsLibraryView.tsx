@@ -69,18 +69,18 @@ import {
   FeedDateSeparator,
 } from '@marinoscar/kvox-web/core/ui';
 import { TranscriptRowActions } from './TranscriptRowActions';
-import { SearchResultsView } from '../search/SearchResultsView';
+import { SearchResultsView } from '@marinoscar/kvox-web/search/ui';
 import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { useSearch } from '../../hooks/useSearch';
+import { useSearch } from '@marinoscar/kvox-web/search/headless';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
 import { feedCountLabel, groupFeedByDate } from '@marinoscar/kvox-web/core/headless';
 import { feedCacheKey } from '@marinoscar/kvox-web/core/headless';
-import type { SearchResult, SearchType } from '../../services/search';
+import type { SearchResult, SearchType } from '@marinoscar/kvox-web/search/headless';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';

@@ -69,16 +69,16 @@ import {
   FeedDateSeparator,
 } from '@marinoscar/kvox-web/core/ui';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
-import { SearchResultsView } from '../search/SearchResultsView';
+import { SearchResultsView } from '@marinoscar/kvox-web/search/ui';
 import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
-import { useSearch } from '../../hooks/useSearch';
+import { useSearch } from '@marinoscar/kvox-web/search/headless';
 import { useScrollRestoration } from '@marinoscar/kvox-web/core/headless';
 import { feedCountLabel, groupFeedByDate } from '@marinoscar/kvox-web/core/headless';
 import { feedCacheKey } from '@marinoscar/kvox-web/core/headless';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
-import type { SearchResult, SearchType } from '../../services/search';
+import type { SearchResult, SearchType } from '@marinoscar/kvox-web/search/headless';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
 import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
 import {

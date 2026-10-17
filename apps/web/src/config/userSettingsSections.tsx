@@ -26,7 +26,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
-import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import { kvoxSearchUserSettingsSections } from '@marinoscar/kvox-web/search/ui';
 import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 // Getting Started (#279, epic #271) — the same icon the admin `Setup` card
 // carries, on purpose: the two are the same idea on two axes (this deployment
@@ -142,31 +142,11 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         permission: 'ai:use',
         feature: 'ai',
       },
-      {
-        // Issue #191, epic #165. NO `permission`, like every card here, and
-        // here the API's own shape is the argument rather than a convention
-        // this file follows: `search-index.controller.ts` gates
-        // `GET /api/search/index-status` and `POST /api/search/index` on
-        // `@Auth()` with NO permission string, because the resource is the
-        // caller's OWN content and the caller's OWN vendor account, scoped by
-        // `ownerId` in the query itself — the identical posture
-        // `ai-credentials.controller.ts` and `/api/user-data` take. Gating on
-        // `transcripts:read` + `notes:read` was the near miss: `PermissionsGuard`
-        // requires ALL declared permissions, so a user narrowed to one document
-        // type would be hidden from the page reporting the state of the other.
-        //
-        // Under `Account`, directly after `AI Provider`, because that is the
-        // order the setup actually happens in: indexing spends the key that
-        // page collects, and this page's primary action is disabled with a link
-        // back to it until one is saved. A PER-USER card and never an admin one
-        // — the key is the user's, the content is the user's, and the bill is
-        // the user's, so there is nobody else who could press this button.
-        title: 'Search Indexing',
-        description:
-          'See what of your library can be found by meaning rather than keyword, and index the rest. Runs on your own AI provider account.',
-        Icon: ManageSearchIcon,
-        path: '/settings/search-index',
-      },
+      // Search Indexing (#191, epic #165; the slice's since #501, epic #498).
+      // The card is DATA exported by `@marinoscar/kvox-web/search/ui`, with no
+      // `permission` (the API gates the routes on `@Auth()` alone) and the
+      // comment explaining why; it keeps its place directly after `AI Provider`.
+      ...kvoxSearchUserSettingsSections.account,
       {
         // Issue #56, epic #45. NO `permission`, like every card here:
         // `note-templates.controller.ts` gates its routes on

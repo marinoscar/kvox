@@ -19,10 +19,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { userEvent } from '@testing-library/user-event';
 
-vi.mock('../../services/searchIndex', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/searchIndex')>();
+vi.mock('../../src/search/headless/search-index-client.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/search/headless/search-index-client.js')>();
   return {
     ...actual,
     getSearchIndexStatus: vi.fn(),
@@ -30,11 +30,21 @@ vi.mock('../../services/searchIndex', async (importOriginal) => {
   };
 });
 
-import { render } from '../utils/test-utils';
-import UserSearchIndexPage from '../../pages/UserSearchIndexPage';
-import { SEARCH_INDEX_POLL_INTERVAL_MS } from '../../hooks/useSearchIndex';
-import { getSearchIndexStatus, requestSearchIndex } from '../../services/searchIndex';
-import type { SearchIndexStatus, SearchIndexTypeCounts } from '../../services/searchIndex';
+import { KvoxApiError } from '../../src/core/headless/index.js';
+import { createFakeKvoxWebHost, renderWithKvoxHost } from '../../src/core/testing/index.js';
+import { UserSearchIndexPage } from '../../src/search/ui/index.js';
+import { SEARCH_INDEX_POLL_INTERVAL_MS } from '../../src/search/headless/index.js';
+import {
+  getSearchIndexStatus,
+  requestSearchIndex,
+} from '../../src/search/headless/search-index-client.js';
+import type {
+  SearchIndexStatus,
+  SearchIndexTypeCounts,
+} from '../../src/search/headless/search-index-client.js';
+
+/** The clients are mocked, so the host the page reads is a bare fake. */
+const render = (ui: React.ReactElement) => renderWithKvoxHost(ui, createFakeKvoxWebHost());
 
 const mockGetStatus = vi.mocked(getSearchIndexStatus);
 const mockRequestIndex = vi.mocked(requestSearchIndex);
@@ -235,10 +245,9 @@ describe('UserSearchIndexPage', () => {
 
     it("surfaces the API's own 409 message rather than a generic failure", async () => {
       const user = userEvent.setup();
-      const { ApiError } = await import('../../services/api');
       mockGetStatus.mockResolvedValue(MIXED);
       mockRequestIndex.mockRejectedValue(
-        new ApiError('You have not saved an AI provider key.', 409, 'CONFLICT'),
+        new KvoxApiError('You have not saved an AI provider key.', 409, 'CONFLICT'),
       );
       await renderPage();
 
