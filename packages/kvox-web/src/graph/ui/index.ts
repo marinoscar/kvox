@@ -19,6 +19,7 @@ export type {
 export { GraphExplorerPage } from './pages/GraphExplorerPage.js';
 export { GraphOverviewPage } from './pages/GraphOverviewPage.js';
 export { GraphImportPage } from './pages/GraphImportPage.js';
+export { GraphReviewPage, reviewTarget } from './pages/GraphReviewPage.js';
 export { UserKnowledgeGraphPage } from './pages/UserKnowledgeGraphPage.js';
 
 export { EvidenceChip, EvidenceChips } from './components/EvidenceChip.js';
