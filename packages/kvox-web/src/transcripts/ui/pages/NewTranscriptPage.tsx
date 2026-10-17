@@ -48,6 +48,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ImportTranscriptButton } from '../components/ImportTranscriptButton.js';
 import { KeytermsField } from '../components/KeytermsField.js';
 import { KeepScreenAwakeToggle } from '../components/KeepScreenAwakeToggle.js';
 import { useUploadManager } from '../../headless/hooks/useUploadManager.js';
@@ -264,6 +265,7 @@ export function NewTranscriptPage() {
             </Box>
           )}
         </Alert>
+        <ImportTranscriptSection />
       </Box>
     );
   }
@@ -500,7 +502,31 @@ export function NewTranscriptPage() {
           </StepContent>
         </Step>
       </Stepper>
+
+      {/* Hidden once an upload has started: this screen is then about that
+          upload, and a second way in would only compete with it. */}
+      {!uploadId && <ImportTranscriptSection />}
     </Box>
   );
 }
 
+/**
+ * "Already have a transcript?" — the import entry (#571). Shown under the
+ * stepper AND on the "not set up" screen: an import needs no transcription
+ * provider, so it is the one way in that still works there.
+ */
+function ImportTranscriptSection() {
+  return (
+    <Paper variant="outlined" component="section" aria-labelledby="import-transcript-heading" sx={{ p: 2, mt: 3 }}>
+      <Typography id="import-transcript-heading" variant="subtitle1" component="h2" gutterBottom>
+        Already have a transcript?
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Import a transcript exported from KVox as JSON. Its lines, speakers and
+        recording date come with it; there is no audio, and nothing is sent for
+        transcription.
+      </Typography>
+      <ImportTranscriptButton />
+    </Paper>
+  );
+}

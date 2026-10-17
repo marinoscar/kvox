@@ -32,6 +32,8 @@ import { ORDINAL_GAP } from '../editing/index.js';
 export const FIXED_EXPORTED_AT = new Date('2026-09-14T12:00:00.000Z');
 /** A fixed creation instant, so two runs produce the same bytes. @stability experimental */
 export const FIXED_CREATED_AT = new Date('2026-09-10T15:04:22.000Z');
+/** A fixed recording date (#571), so two runs produce the same bytes. @stability experimental */
+export const FIXED_RECORDED_AT = new Date('2026-09-10T14:30:00.000Z');
 
 /**
  * A speaker for an export fixture.
@@ -126,6 +128,7 @@ export function fixtureDocument(overrides: Partial<ExportDocument> = {}): Export
       version: 4,
       createdAt: FIXED_CREATED_AT,
       exportedAt: FIXED_EXPORTED_AT,
+      recordedAt: FIXED_RECORDED_AT,
       author: { displayName: 'Oscar Marin', email: 'oscar@example.test' },
       provider: { id: 'assemblyai', model: 'best' },
       state: { speakers, segments },
@@ -165,6 +168,7 @@ export function longDocument(turns = 120): ExportDocument {
     version: 4,
     createdAt: FIXED_CREATED_AT,
     exportedAt: FIXED_EXPORTED_AT,
+    recordedAt: FIXED_RECORDED_AT,
     author: null,
     provider: { id: 'assemblyai', model: null },
     state: { speakers, segments },
