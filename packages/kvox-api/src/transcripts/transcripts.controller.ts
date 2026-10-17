@@ -75,6 +75,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  InternalServerErrorException,
   Param,
   ParseIntPipe,
   ParseUUIDPipe,
@@ -166,6 +167,11 @@ import { TranscriptSharesService } from './transcript-shares.service.js';
 import { TranscriptsService } from './transcripts.service.js';
 import { TranscriptImportService } from './import/transcript-import.service.js';
 import { TRANSCRIPTS_MODULE_OPTIONS, type ResolvedTranscriptsOptions } from './transcripts.options.js';
+
+/** The 500 a request gets when the host never registered `@fastify/multipart` (a host duty, `$hostPlugins`). */
+const HOST_MULTIPART_MISSING =
+  'This host has not registered @fastify/multipart on its Fastify app, so uploads cannot be read ' +
+  '(a kvox host duty: see docs/guides/kvox-desktop.md and $hostPlugins in packages/kvox-slice-peers.json).';
 
 /** The part of `@fastify/multipart`'s request decoration the import route uses (#571). */
 interface MultipartRequest {
@@ -347,7 +353,12 @@ export class TranscriptsController {
     const req = request as unknown as MultipartRequest;
     const maxBytes = this.options.maxImportBytes;
 
-    if (typeof req.isMultipart !== 'function' || !req.isMultipart()) {
+    // A host that skipped the plugin has no decoration: say so instead of a bare TypeError.
+    if (typeof req.isMultipart !== 'function') {
+      throw new InternalServerErrorException(HOST_MULTIPART_MISSING);
+    }
+
+    if (!req.isMultipart()) {
       throw new BadRequestException('Expected multipart/form-data with a single "file" field.');
     }
 
