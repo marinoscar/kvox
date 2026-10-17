@@ -46,7 +46,7 @@
 
 import { ConflictException, HttpException, Injectable, Logger, Inject } from '@nestjs/common';
 
-import { GraphAccessService, GRAPH_CONFLICT_REASONS, toGraphHttpException } from '../../graph/index.js';
+import { GRAPH_CHANGED_EVENT, type GraphChangedEvent, GraphAccessService, GRAPH_CONFLICT_REASONS, toGraphHttpException } from '../../graph/index.js';
 import { MergeService, type ReverseResult } from '../resolution/merge.service.js';
 import type { RevertKept, RevertResponse, RevertResult } from './dto/proposal.dto.js';
 import {
@@ -58,7 +58,7 @@ import {
 } from './proposal-commit.service.js';
 import { asObject } from './proposal-view.mapper.js';
 import { KG_PROPOSAL_TARGET_TYPE, lockProposal, ProposalsService } from './proposals.service.js';
-import { KVOX_PRISMA, KVOX_AUDIT, type KvoxAuditPort } from '../../ports/index.js';
+import { KVOX_PRISMA, KVOX_AUDIT, type KvoxAuditPort, KVOX_EVENTS, type KvoxEventsPort } from '../../ports/index.js';
 import { Prisma } from '../../core/index.js';
 import type { KvoxGraphDb, KvoxGraphTx, GraphActor, InputJsonValue, InputJsonObject } from '../../graph/index.js';
 
@@ -120,6 +120,7 @@ export class ProposalRevertService {
     private readonly commits: ProposalCommitService,
     private readonly proposals: ProposalsService,
     @Inject(KVOX_AUDIT) private readonly auditPort: KvoxAuditPort,
+    @Inject(KVOX_EVENTS) private readonly events: KvoxEventsPort,
   ) {}
 
   /**
@@ -144,6 +145,9 @@ export class ProposalRevertService {
     }
 
     await this.afterRevert(user.id, proposalId, outcome);
+    // After the transaction committed (#591): one 'revert' covers the merges
+    // reversed inside it — `MergeService` emits nothing when handed our `tx`.
+    this.emitChanged(user.id);
     this.logger.log(
       `kg.revert proposal=${proposalId} reverted=${outcome.result.reverted} kept=${outcome.result.kept.length}`,
     );
@@ -493,6 +497,19 @@ export class ProposalRevertService {
       });
     } catch (err) {
       this.logger.warn(`Audit after reverting proposal ${proposalId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
+   * `graph.changed` (#371, #591), after the revert transaction has committed.
+   * The layout listener only counts and, at most, enqueues; a listener failure
+   * must never fail a revert that already happened, hence the catch.
+   */
+  private emitChanged(ownerId: string): void {
+    try {
+      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId, reason: 'revert' } satisfies GraphChangedEvent);
+    } catch (err) {
+      this.logger.warn(`Could not emit graph.changed for user ${ownerId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

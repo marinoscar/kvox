@@ -70,6 +70,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
       { enqueue: jest.fn(), isRegistered: () => false } as never,
       followUps as never,
       createDbAudit(prisma),
+      { emit: jest.fn(), subscribe: jest.fn() } as never,
     );
     distinct = new DistinctPairService();
     purge = new KgPurgeService(db, createDbGraphObjects(prisma));

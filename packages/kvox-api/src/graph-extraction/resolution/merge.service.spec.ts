@@ -34,7 +34,7 @@ describe('chooseSurvivor (the curated-survivor rule)', () => {
 describe('MergeService guards', () => {
   it('refuses to merge an entity into itself before touching the database', async () => {
     const prisma = { $transaction: jest.fn() };
-    const service = new MergeService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const service = new MergeService(prisma as never, {} as never, {} as never, {} as never, {} as never, { emit: jest.fn(), subscribe: jest.fn() } as never);
     await expect(
       service.merge({ ownerId: 'o', mergedId: A, survivorId: A.toUpperCase(), actorId: 'o', source: 'manual' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -148,7 +148,7 @@ function scriptedMerge(dupProps: Record<string, unknown>, keptProps: Record<stri
     kgEvidence: { count: jest.fn(async () => 1) },
   };
   const write = { addAliases: jest.fn(async () => []) };
-  const service = new MergeService({} as never, write as never, {} as never, {} as never, {} as never);
+  const service = new MergeService({} as never, write as never, {} as never, {} as never, {} as never, { emit: jest.fn(), subscribe: jest.fn() } as never);
   return {
     service,
     tx,

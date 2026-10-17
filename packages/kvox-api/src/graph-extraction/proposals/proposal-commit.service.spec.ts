@@ -86,6 +86,7 @@ function setup(rows: Row[], opts: { kind?: string; liveEntities?: Row[] } = {}) 
     { get: () => undefined } as never,
     { get: async () => ({}) } as never,
     {} as never,
+    { emit: jest.fn(), subscribe: jest.fn() } as never,
   );
   return { service, tx, write, aliases, distinct, merges, calls };
 }

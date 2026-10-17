@@ -851,5 +851,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- Package gaps found by the graph run (issue #573): a proposal commit does not publish `graph.changed` (only `kg.purge` and manual entity edits do), so the material-change re-layout never fires after a commit; `@fastify/multipart` is missing from the slice peers data.
+- Package gaps found by the graph run (issue #573): `@fastify/multipart` is missing from the slice peers data. (The other one, a proposal commit not publishing `graph.changed`, is fixed by #591: commits, imports, reverts, merges and merge reversals now publish it after commit.)
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.
