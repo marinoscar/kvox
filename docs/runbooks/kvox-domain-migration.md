@@ -42,16 +42,32 @@ Never fix a mistake by editing an installed migration: production databases hold
 
 ## Install the domain into a new host
 
-KVox Desktop and the bare host have no domain history, so they use `after-host` names (the domain migrations are dated before the platform's, and `users` must exist first):
+KVox Desktop and the bare host have no domain history, so they use `stable` names. They build `prisma/` from scratch, so the platform timestamp is pinned before the domain's September-2026 ids: the platform tables come first on a fresh database and the platform names are deterministic.
 
 ```bash
-npx platform db sync && npx platform db compose   # platform schema and migrations first
-npx kvox-db sync --names after-host                # fragments, migrations, kvox.lock
+npx platform db sync --timestamp 2024-01-01T00:00:00Z && npx platform db compose   # platform schema and migrations first
+npx kvox-db sync --names stable                    # fragments, migrations, kvox.lock
 npx platform db compose
 npx kvox-db check
 ```
 
 As a PostgreSQL superuser, once per database: `CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;`. `kvox-db` never creates an extension. Then apply with `prisma migrate deploy` and run `npx kvox-db check --database`.
+
+## Migration folder names
+
+Rule: an installed migration's folder name is a pure function of the migration; an upgrade only appends names, never renames one. A database records the name in `_prisma_migrations`, so a name that moves breaks it.
+
+| `--names` | Installed name | Use |
+|---|---|---|
+| `original` | the package id (`20260914130000_add_transcripts`) | a host whose databases already ran the migrations under those names (the web app) |
+| `stable` | `<the id's 14-digit timestamp>_kvox_<slug>` (`20260914130000_kvox_add_transcripts`) | a host with no domain history; the default there. Depends only on the package id, never on build time or other packages' migration counts |
+| `after-host` | `<ts>_kvox_<slug>`, newest host directory + 1s | deprecated; kept only for a host that already installed under it |
+
+`after-host` is deprecated because its names depend on the newest host directory. When a platform upgrade adds a migration to a host that builds `prisma/` from scratch, every domain name shifts, and databases that recorded the old names in `_prisma_migrations` break. A host with a `prisma/kvox.lock` keeps the policy the lock records.
+
+Platform pin: a host that builds from scratch runs `platform db sync --timestamp 2024-01-01T00:00:00Z`, before the domain's September-2026 ids, so the platform migrations sort first and their names do not depend on the clock.
+
+Upstream gap: `platform db sync` still derives names from the clock or `--timestamp` and the newest existing directory (`max(now, latest+1s)`). A host that keeps its `prisma/` between builds and one that rebuilds from scratch can therefore give a newly added platform migration different names. Tracked as a seam request: [marinoscar/EnterpriseAppBase#992](https://github.com/marinoscar/EnterpriseAppBase/issues/992).
 
 ## When a check fails
 

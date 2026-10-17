@@ -163,9 +163,7 @@ The bare host now mounts all four over the shared transcripts, notes and search 
 7. **`KVOX_AI` must answer structured output** under the schema names `kg_extraction`, `kg_adjudication`, `kg_item_adjudication` and `entity_digest`. An entity digest with no surviving citation fails the job. With `embeddings: null`, resolution works by name only and `kg.embed` jobs are no-ops (`src/fake-ai.ts`, `src/graph-scenario.ts`). The Ask loop needs `chat` with tool calling.
 8. **`autoExtract: false`** keeps extraction on the explicit route `POST /api/graph/notes/:noteId/extract`. With it on, every ready note spends the user's AI quota.
 
-Known package gaps (not host duties, open):
-
-- A proposal commit does not publish `graph.changed` (only `kg.purge` and manual entity edits do), so the material-change re-layout never fires after a commit.
+Known package gaps: none open. The two the graph run found are fixed: `graph.changed` is published after proposal commits, imports, reverts and merges (#591), and `@fastify/multipart` is a declared host plugin (`$hostPlugins`, `check-slice-peers` rule 8, #592).
 
 ## 7. Out of scope
 
