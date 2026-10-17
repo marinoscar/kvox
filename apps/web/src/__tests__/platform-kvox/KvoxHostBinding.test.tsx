@@ -134,7 +134,8 @@ describe('the HTTP port', () => {
     );
     const kvox = await mountHost();
     const form = new FormData();
-    form.append('file', new File(['x'], 'doc.txt'));
+    // A string part: jsdom's File is not the undici File the fetch stack under MSW accepts.
+    form.append('file', 'x');
 
     expect(await kvoxPostFormData(kvox, '/probe/upload', form)).toEqual({ stored: true });
     expect(contentType).toMatch(/^multipart\/form-data; boundary=/);
