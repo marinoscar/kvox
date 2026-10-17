@@ -62,6 +62,23 @@ import {
 export const TRANSCRIPT_IMPORT_PROVIDER = 'import';
 
 /**
+ * Whether a transcript with this `provider` has a recording (#571).
+ *
+ * The one predicate behind both the list/detail `hasAudio` field and the 404
+ * `GET /api/transcripts/:id/audio` answers for an import, so the two can never
+ * disagree: an imported transcript's source object is the JSON file it was made
+ * from, not audio.
+ *
+ * @param provider - `transcripts.provider`.
+ * @returns `false` for an imported transcript, `true` otherwise.
+ *
+ * @stability experimental
+ */
+export function transcriptHasAudio(provider: string): boolean {
+  return provider !== TRANSCRIPT_IMPORT_PROVIDER;
+}
+
+/**
  * The largest value an `int4` column (`start_ms`, `end_ms`, `duration_ms`) holds.
  *
  * @stability experimental

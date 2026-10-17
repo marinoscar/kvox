@@ -202,6 +202,8 @@ describe('POST /api/transcripts/imports (integration)', () => {
       transcriptionStatus: 'completed',
       playbackStatus: 'not_needed',
       provider: 'import',
+      // #571: no recording, so the client hides playback (GET :id/audio answers 404).
+      hasAudio: false,
       currentVersion: 1,
       language: 'en',
     });

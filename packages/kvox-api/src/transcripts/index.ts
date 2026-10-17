@@ -96,6 +96,7 @@ export {
   TRANSCRIPT_IMPORT_PROVIDER,
   parseTranscriptImport,
   planTranscriptImport,
+  transcriptHasAudio,
   type TranscriptImportFailure,
   type TranscriptImportIssue,
   type TranscriptImportParseResult,

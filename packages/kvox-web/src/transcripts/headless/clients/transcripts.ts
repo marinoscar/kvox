@@ -206,6 +206,12 @@ export interface TranscriptListItem {
    */
   ownerName: string;
   /**
+   * Whether the transcript has a recording to play (#571): `false` for one
+   * imported from a `kvox.transcript/v1` file, whose audio URL answers 404;
+   * `true` otherwise.
+   */
+  hasAudio: boolean;
+  /**
    * When the recording was made (ISO 8601), issue #352. Defaults to the upload
    * instant; the owner or an editor can correct it. Connected knowledge reads
    * it as the meeting date, so it is never the same fact as `createdAt`.
