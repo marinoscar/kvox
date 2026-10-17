@@ -25,6 +25,7 @@ Status: ports, core and testing are in place (issue 5.4); `transcription` (issue
 - `@marinoscar/kvox-api/graph-extraction`: `GraphExtractionModule.forRoot` (`kg.extract`, `kg.resolve`, `kg.embed`, the proposal stages and the review-and-commit routes, the ready-note subscription) on the graph and notes slices. [README](src/graph-extraction/README.md).
 - `@marinoscar/kvox-api/graph-extraction/testing`: `describeGraphExtractionConformance` and the `internals` namespace the evaluation scripts import. [README](src/graph-extraction/README.md#conformance-suite).
 - `@marinoscar/kvox-api/graph-rdf`: `GraphRdfModule.forRoot` (the OWL and SHACL artefacts, `kg.export`, `kg.import`) on the graph and graph-extraction slices. [README](src/graph-rdf/README.md).
+- `@marinoscar/kvox-api/graph-rdf/shacl-runner`: `runShaclValidation`, the import's SHACL validation step with Node built-ins only (no Nest, no Prisma), for the isolated process a host passes as `GraphRdfModule.forRoot({ shacl: { run } })`. [README](src/graph-rdf/README.md#configuration).
 - `@marinoscar/kvox-api/graph-rdf/testing`: `describeGraphRdfConformance` and the `internals` namespace. [README](src/graph-rdf/README.md#conformance-suite).
 - `@marinoscar/kvox-api/ask`: `AskModule.forRoot` (saved conversations, the `ask.respond` job on `KVOX_AI.chat` with the seven read-only graph tools, the SSE view over the durable answer) on the graph, notes and search slices. [README](src/ask/README.md#purpose-and-scope).
 - `@marinoscar/kvox-api/ask/testing`: `describeAskConformance`, `createScriptedChat`, the in-memory Ask tables, the tool fakes and the `internals` namespace. [README](src/ask/README.md#conformance-suite).
@@ -64,7 +65,7 @@ Optional peers, installed for the features that need them. The three marked "loa
 | `nestjs-zod` | `^5.4.0` | `transcription`, `search`, `transcripts`, `notes` and the graph slices: the DTO classes (required by those slices) |
 | `graphology`, `graphology-communities-louvain`, `graphology-layout`, `graphology-layout-forceatlas2` | `>=0.26.0`, `>=2.0.2`, `>=0.6.1`, `>=0.10.1` | `graph`: the overview layout (loaded when a layout is computed) |
 | `n3`, `jsonld` | `>=2.7.0`, `>=9.0.0` | `graph-rdf`: parsing and serialising RDF (loaded when a file is parsed or written) |
-| `rdf-validate-shacl` | `>=0.6.0` | `graph-rdf`: SHACL validation of an import (ESM-only, run in a child process) |
+| `rdf-validate-shacl` | `>=0.6.0` | `graph-rdf`: SHACL validation of an import (ESM-only, run in a child process or the host's `shacl.run`) |
 | `@prisma/client-runtime-utils` | `^7.8.0` | `core`: the `Prisma.sql`, `raw` and `join` helpers (loaded on first use) |
 | `@marinoscar/platform-api` | `0.1.0-next.5` | no slice: host wiring only (`apps/api/src/platform-kvox`) |
 
