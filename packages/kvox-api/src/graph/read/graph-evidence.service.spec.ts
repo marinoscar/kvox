@@ -41,7 +41,7 @@ function ev(over: Partial<KgEvidenceRow>): KgEvidenceRow {
 }
 
 function build(state: {
-  transcripts?: { id: string; ownerId: string; title: string; deletedAt: Date | null }[];
+  transcripts?: { id: string; ownerId: string; title: string; deletedAt: Date | null; provider?: string }[];
   segments?: { id: string; transcriptId: string; rev: number }[];
   notes?: { id: string; ownerId: string; title: string; deletedAt: Date | null; currentVersion: number }[];
   objects?: { id: string; uploadedById: string }[];
@@ -137,6 +137,34 @@ describe('GraphEvidenceService.resolve', () => {
         href: `/transcripts/${T1}?segment=${SEG}&t=1500`,
       },
     });
+  });
+
+  it('reports hasAudio false for an imported transcript and true otherwise (#604)', async () => {
+    const { svc } = build({
+      transcripts: [
+        { id: T1, ownerId: USER, title: 'Imported', deletedAt: null, provider: 'import' },
+        { id: T2, ownerId: USER, title: 'Recorded', deletedAt: null, provider: 'openai' },
+      ],
+      segments: [
+        { id: SEG, transcriptId: T1, rev: 1 },
+        { id: '00000000-0000-4000-8000-000000000008', transcriptId: T2, rev: 1 },
+      ],
+    });
+    const [imported, recorded] = await svc.resolve(USER, [
+      ev({ transcriptId: T1, segmentId: SEG, segmentRev: 1 }),
+      ev({ transcriptId: T2, segmentId: '00000000-0000-4000-8000-000000000008', segmentRev: 1 }),
+    ]);
+    expect(imported.source).toMatchObject({ available: true, hasAudio: false });
+    expect(recorded.source).toMatchObject({ available: true, hasAudio: true });
+  });
+
+  it('reports hasAudio false for an unavailable transcript (#604)', async () => {
+    const { svc } = build({
+      transcripts: [{ id: T1, ownerId: 'someone-else', title: 'Their call', deletedAt: null, provider: 'openai' }],
+      sharedWith: [],
+    });
+    const [link] = await svc.resolve(USER, [ev({ transcriptId: T1, segmentId: SEG, segmentRev: 1 })]);
+    expect(link.source).toMatchObject({ available: false, hasAudio: false });
   });
 
   it('keeps the quote but drops title, revision and link once a share is revoked or the transcript deleted', async () => {

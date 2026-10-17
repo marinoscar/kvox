@@ -51,6 +51,7 @@ function transcriptRow(overrides: Record<string, unknown> = {}) {
     durationMs: 120_000,
     status: 'ready',
     playbackStatus: 'ready',
+    provider: 'openai',
     ...overrides,
   };
 }
@@ -113,6 +114,36 @@ describe('NoteOriginService', () => {
       hops: 0,
     });
     expect(prisma.note.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('reports hasAudio false for an imported transcript (#604)', async () => {
+    prisma.transcript.findFirst.mockResolvedValue(transcriptRow({ provider: 'import' }));
+
+    const result = await service.resolve(
+      startingNote({ sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID }),
+      USER_ID,
+    );
+
+    expect(result?.hasAudio).toBe(false);
+  });
+
+  it('reports hasAudio true for a normal provider (#604)', async () => {
+    prisma.transcript.findFirst.mockResolvedValue(transcriptRow({ provider: 'openai' }));
+
+    const result = await service.resolve(
+      startingNote({ sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID }),
+      USER_ID,
+    );
+
+    expect(result?.hasAudio).toBe(true);
+  });
+
+  it('selects the transcript provider so hasAudio needs no extra query (#604)', async () => {
+    prisma.transcript.findFirst.mockResolvedValue(transcriptRow());
+
+    await service.resolve(startingNote({ sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID }), USER_ID);
+
+    expect(prisma.transcript.findFirst.mock.calls[0][0].select).toEqual(expect.objectContaining({ provider: true }));
   });
 
   it('answers null for a transcript source with no sourceTranscriptId', async () => {
