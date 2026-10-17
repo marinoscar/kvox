@@ -4,6 +4,9 @@ import { KVOX_JOBS, type KvoxJobHandler } from '../src/ports/index.js';
 import { JsonTranscriptExporter } from '../src/transcripts/export/json.exporter.js';
 import { MarkdownTranscriptExporter } from '../src/transcripts/export/markdown.exporter.js';
 import { PdfTranscriptExporter } from '../src/transcripts/export/pdf.exporter.js';
+import { parseTranscriptImport } from '../src/transcripts/import/transcript-import.js';
+import { TranscriptImportService } from '../src/transcripts/import/transcript-import.service.js';
+import { TranscriptObjectsService } from '../src/transcripts/transcript-objects.service.js';
 import { TranscriptPipelineService } from '../src/transcripts/transcript-pipeline.service.js';
 import { TranscriptsModule } from '../src/transcripts/transcripts.module.js';
 import { resolveTranscriptsOptions } from '../src/transcripts/transcripts.options.js';
@@ -73,6 +76,28 @@ describeTranscriptsConformance(
           {} as never,
           {} as never,
         ),
+      importer: {
+        parse: parseTranscriptImport,
+        serviceFor: (ports) => {
+          const options = resolveTranscriptsOptions({});
+
+          return new TranscriptImportService(
+            ports.prisma,
+            ports.events,
+            ports.audit,
+            new TranscriptObjectsService(ports.objectStore, options),
+            new TranscriptPipelineService(
+              {} as never,
+              ports.jobs,
+              {} as never,
+              options,
+              {} as never,
+              // The search index is a peer slice's; the kit asserts on the job port only.
+              { enqueue: async () => undefined } as never,
+            ),
+          );
+        },
+      },
     };
   },
   { describe, it, expect },

@@ -74,6 +74,7 @@ import {
   TranscriptAccessService,
   type TranscriptAccessRole,
 } from './transcript-access.service.js';
+import { TRANSCRIPT_IMPORT_PROVIDER } from './import/transcript-import.js';
 import { TranscriptObjectsService } from './transcript-objects.service.js';
 import { TranscriptPipelineService } from './transcript-pipeline.service.js';
 import { TranscriptionRuntimeService } from './transcription-runtime.service.js';
@@ -581,6 +582,12 @@ export class TranscriptsService {
    */
   async audio(id: string, user: TranscriptsActor) {
     const { transcript } = await this.access.require(user.id, id, 'view');
+
+    // #571: an imported transcript's source object is the JSON file it was made from,
+    // not audio. Signing it for an `<audio>` element would hand the player a document.
+    if (transcript.provider === TRANSCRIPT_IMPORT_PROVIDER) {
+      throw new NotFoundException('This transcript was imported from a file and has no audio');
+    }
 
     const ttl = this.transcriptObjects.playbackUrlTtlSeconds();
 

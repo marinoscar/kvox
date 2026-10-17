@@ -6,6 +6,7 @@
 
 export { TranscriptsModule } from './transcripts.module.js';
 export {
+  DEFAULT_MAX_IMPORT_BYTES,
   DEFAULT_PLAYBACK_URL_TTL_SECONDS,
   DEFAULT_STALE_UPLOAD_HOURS,
   TRANSCRIPTS_MODULE_OPTIONS,
@@ -88,6 +89,30 @@ export {
 } from './transcript-materialize.service.js';
 export { TranscriptEditingService } from './transcript-editing.service.js';
 export { TranscriptPipelineService, type MarkFailedInput, type TranscriptStage } from './transcript-pipeline.service.js';
+
+// The JSON import (#571): the pure parser and planner, the shared version-1 writer, the service.
+export {
+  TRANSCRIPT_IMPORT_MAX_OFFSET_MS,
+  TRANSCRIPT_IMPORT_PROVIDER,
+  parseTranscriptImport,
+  planTranscriptImport,
+  type TranscriptImportFailure,
+  type TranscriptImportIssue,
+  type TranscriptImportParseResult,
+  type TranscriptImportPlan,
+  type TranscriptImportSpeakerPlan,
+} from './import/transcript-import.js';
+export {
+  TranscriptImportService,
+  transcriptImportException,
+  type TranscriptImportFile,
+} from './import/transcript-import.service.js';
+export {
+  countSegmentWords,
+  writeOriginalVersion,
+  type OriginalSegmentInput,
+  type OriginalSpeakerInput,
+} from './original-version.js';
 
 export {
   OwnerOnlyTranscriptSharing,
