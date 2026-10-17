@@ -613,7 +613,7 @@ neighbouring file:
    neither ever noticed, because nothing measured a hex literal before this
    issue added a test that does.
 
-⚠ `apps/api/src/transcripts/export/speaker-palette.ts` mirrors the **light**
+⚠ `packages/kvox-api/src/transcripts/export/speaker-palette.ts` mirrors the **light**
 list, value for value, for the PDF exporter — a monochrome-paper surface has
 only one ground to satisfy. The two files must change together: the package
 boundary (`apps/api` cannot import from `apps/web`, and there is no shared

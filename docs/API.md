@@ -1696,7 +1696,7 @@ The gaps are exactly the parts a resuming client must re-upload. Listing needs `
 }
 ```
 
-Completing queues the `storage.object.process` job, which runs the registered object processors against the object. The one this application registers (`kvox.transcripts.source`) starts the transcription pipeline for a transcript's source audio and does nothing for any other object. There is no `storage.object.uploaded` event and no listener to attach any more: add an `ObjectProcessor` instead.
+Completing queues the `storage.object.process` job, which runs the registered object processors against the object. The one this application registers (`kvox.ports.uploaded`, the object-store port's processor) hands the event to the handlers the domain slices subscribed; the transcripts slice's upload hook starts the transcription pipeline for a transcript's source audio and does nothing for any other object. A job is queued only for an audio or video file. There is no `storage.object.uploaded` event and no listener to attach any more: add an `ObjectProcessor` instead.
 
 ---
 
@@ -3375,8 +3375,8 @@ and listing what the bucket holds with `GET /storage/objects/:id/upload/parts`,
 and finish with `POST /storage/objects/:id/upload/complete` carrying that list,
 exactly as for any other resumable upload (see `### Storage Objects`). `partSize`
 is the deployment-wide `STORAGE_PART_SIZE`, the same for every upload. Completing
-it queues `storage.object.process`, whose `kvox.transcripts.source` processor is
-what starts the pipeline.
+it queues `storage.object.process`, whose port processor (`kvox.ports.uploaded`) hands the
+event to the transcripts slice's upload hook, which starts the pipeline.
 
 An upload that is cancelled or abandoned is reflected on the transcript by
 `transcripts.housekeeping` (marked `failed`, `failure_reason: "upload_aborted"`),

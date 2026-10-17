@@ -229,8 +229,9 @@ describe('kvox AI job types (#477)', () => {
           model: null,
           mode: 'quick',
           terms: [],
-          transcript: { id: GUID(4), status: 'ready', deletedAt: null },
         } as never);
+        // The slice reads the run and its transcript separately (it has no relation to include).
+        prismaMock.transcript.findUnique.mockResolvedValue({ id: GUID(4), status: 'ready', deletedAt: null } as never);
         prismaMock.transcriptNameCheck.updateMany.mockResolvedValue({ count: 1 } as never);
         return { payload: { checkId: GUID(3) } };
       },

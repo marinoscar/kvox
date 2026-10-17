@@ -48,6 +48,21 @@ export interface KvoxUploadPart {
 }
 
 /**
+ * Narrows which completed uploads a {@link KvoxObjectStorePort.onUploaded} handler
+ * is interested in, so a host can skip the work of reporting the rest.
+ *
+ * @stability experimental
+ */
+export interface KvoxUploadedOptions {
+  /**
+   * The content types the handler cares about: `audio/*` (a family) or an exact
+   * type, matched case-insensitively. Absent: every upload. A hint only: the
+   * handler still decides from `managedBy` whether the object is its own.
+   */
+  contentTypes?: readonly string[];
+}
+
+/**
  * What a completed upload reports to {@link KvoxObjectStorePort.onUploaded}
  * handlers.
  *
@@ -61,6 +76,16 @@ export interface KvoxUploadedEvent {
 }
 
 /**
+ * What {@link KvoxObjectStorePort.adopt} answers.
+ *
+ * @stability experimental
+ */
+export interface KvoxAdoptResult {
+  /** The object that now records the bytes. */
+  objectId: string;
+}
+
+/**
  * What `initUpload` returns.
  *
  * @stability experimental
@@ -68,10 +93,79 @@ export interface KvoxUploadedEvent {
 export interface KvoxInitUploadResult {
   /** The new object's id. */
   objectId: string;
+  /** The host's id of the resumable upload (the multipart upload id; the object id when the host has none). */
+  uploadId: string;
   /** The size of every part but the last, in bytes. */
   partSize: number;
-  /** A presigned URL per part. */
+  /** How many parts the whole upload has (`parts` may carry only the first batch). */
+  totalParts: number;
+  /** A presigned URL per part (the first batch when the upload has many parts). */
   parts: KvoxUploadPart[];
+}
+
+/**
+ * What an object-store port reports about an object's lifecycle, unfolded: the
+ * five states the host tracks.
+ *
+ * @stability experimental
+ */
+export type KvoxObjectState = 'pending' | 'uploading' | 'processing' | 'ready' | 'failed';
+
+/**
+ * What `describe` reports about one object.
+ *
+ * @stability experimental
+ */
+export interface KvoxObjectInfo {
+  /** The object's id. */
+  id: string;
+  /** The display name (the uploaded file's name). */
+  name: string;
+  /** The content type. */
+  mimeType: string;
+  /** The size in bytes. */
+  size: number;
+  /** Where the object stands. */
+  state: KvoxObjectState;
+  /** When the object was created. */
+  createdAt: Date;
+  /** When it last changed. */
+  updatedAt: Date;
+}
+
+/**
+ * Thrown by `adopt` when no bytes exist under the key it was asked to record.
+ *
+ * @stability experimental
+ */
+export class KvoxObjectMissingError extends Error {
+  /** The key that holds nothing. */
+  readonly key: string;
+
+  /**
+   * @param key - the key that holds nothing.
+   */
+  constructor(key: string) {
+    super(
+      `No object exists at "${key}". The executor reported a result for bytes that never landed in storage, so there is nothing to record.`,
+    );
+    this.name = 'KvoxObjectMissingError';
+    this.key = key;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+/**
+ * What an aborted upload reports to {@link KvoxObjectStorePort.onAborted}
+ * handlers.
+ *
+ * @stability experimental
+ */
+export interface KvoxAbortedEvent {
+  /** The cancelled upload. */
+  objectId: string;
+  /** The owning module, or `null` when no module owns it. */
+  managedBy: KvoxManagedBy | null;
 }
 
 /**
@@ -115,7 +209,15 @@ export interface KvoxObjectStorePort {
    */
   initUpload(
     ctx: { userId: string },
-    req: { name: string; mimeType: string; size: number; managedBy: KvoxManagedBy },
+    req: {
+      name: string;
+      /** The type the client reported; absent or empty, the host resolves it from the file name's extension. */
+      mimeType?: string | null;
+      size: number;
+      managedBy: KvoxManagedBy;
+      /** Content types the owning module accepts (`audio/*`); checked after the host resolves the type from the name. */
+      allowedMimeTypes?: readonly string[];
+    },
   ): Promise<KvoxInitUploadResult>;
 
   /**
@@ -153,7 +255,29 @@ export interface KvoxObjectStorePort {
     body: NodeJS.ReadableStream | Buffer;
     contentType: string;
     managedBy: KvoxManagedBy;
+    /** A display name; defaults to the last segment of `key`. */
+    name?: string;
+    /** Free-form data stored with the object (the transcript id, so an orphan is traceable). */
+    metadata?: Record<string, unknown>;
   }): Promise<KvoxPutResult>;
+
+  /**
+   * Records bytes that are ALREADY stored under `key` (a worker node uploaded
+   * them straight to a presigned URL), after checking they are there.
+   * Idempotent on the key: a second call returns the object the first recorded.
+   *
+   * @param req - the owner, key, size the producer reported, and owning module.
+   * @throws KvoxObjectMissingError when nothing is stored under the key.
+   */
+  adopt(req: {
+    ownerId: string;
+    key: string;
+    name: string;
+    contentType: string;
+    size: number;
+    managedBy: KvoxManagedBy;
+    metadata?: Record<string, unknown>;
+  }): Promise<KvoxAdoptResult>;
 
   /**
    * The object's bytes as a stream.
@@ -169,6 +293,14 @@ export interface KvoxObjectStorePort {
    * @param objectId - the object.
    */
   head(objectId: string): Promise<KvoxObjectHead | null>;
+
+  /**
+   * The facts of many objects in one call. An id that does not exist is absent
+   * from the map.
+   *
+   * @param objectIds - the objects.
+   */
+  describe(objectIds: readonly string[]): Promise<Map<string, KvoxObjectInfo>>;
 
   /**
    * A time-limited download URL.
@@ -191,6 +323,17 @@ export interface KvoxObjectStorePort {
    * decides from `managedBy` whether the object is its own.
    *
    * @param handler - called after the upload is sealed.
+   * @param options - which uploads the handler wants reported; a host that runs one
+   *   processing job per completed upload uses it to queue none for a file no handler wants.
    */
-  onUploaded(handler: (e: KvoxUploadedEvent) => Promise<void>): void;
+  onUploaded(handler: (e: KvoxUploadedEvent) => Promise<void>, options?: KvoxUploadedOptions): void;
+
+  /**
+   * Registers a handler that runs once for each cancelled upload, so a module
+   * can fail the record that was waiting for it. Like `onUploaded`, a handler
+   * decides from `managedBy` whether the object is its own.
+   *
+   * @param handler - called after the upload is cancelled.
+   */
+  onAborted(handler: (e: KvoxAbortedEvent) => Promise<void>): void;
 }

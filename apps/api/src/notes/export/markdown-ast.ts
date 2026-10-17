@@ -5,7 +5,7 @@
 // `docs/specs/notes.md` §8.3's second difference from transcript export: a
 // note's body IS markdown (§4.5 — its native storage format), so the PDF and
 // DOCX renderers have to INTERPRET syntax somebody else wrote, which
-// `apps/api/src/transcripts/export/` has never had to do. Its PDF and Markdown
+// `packages/kvox-api/src/transcripts/export/` has never had to do. Its PDF and Markdown
 // renderers build their layout directly from segments and speakers; there is no
 // user-authored markup anywhere in that path.
 //

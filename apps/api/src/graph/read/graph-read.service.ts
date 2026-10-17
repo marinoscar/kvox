@@ -19,7 +19,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { inViewerScope, transcriptViewer, transcriptVisibleSql } from '../../app-sharing/transcript-visibility';
-import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
+import { TranscriptAccessService } from '@marinoscar/kvox-api/transcripts';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
 import { normalizeAlias } from '../write/normalize';

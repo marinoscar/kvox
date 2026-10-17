@@ -14,7 +14,7 @@ import { MAX_TITLE_CHARS } from '../dto/note.dto';
 // -----------------------------------------------------------------------------
 //
 // No `@Injectable`, no `PrismaService`, no provider, no key, no network, no
-// clock — the same rule `prompt.ts` and `apps/api/src/transcripts/editing/`
+// clock — the same rule `prompt.ts` and `packages/kvox-api/src/transcripts/editing/`
 // live under, for a reason of its own here: this is the rank that has to work
 // when EVERYTHING ELSE HAS ALREADY FAILED. It is reached precisely because the
 // deployment has AI switched off, or the user's key was erased between the

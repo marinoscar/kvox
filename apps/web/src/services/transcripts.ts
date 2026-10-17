@@ -1,7 +1,7 @@
 /**
  * The transcripts API, as the web app sees it — issue #30, epic #19.
  *
- * The backend half is `apps/api/src/transcripts/transcripts.controller.ts` and
+ * The backend half is `packages/kvox-api/src/transcripts/transcripts.controller.ts` and
  * `dto/transcript.dto.ts`; every type below is a hand-written mirror of a Zod
  * schema in that file, named identically so the two can be diffed by eye. This
  * module is shaped after `services/transcription.ts`: `services/api.ts` stays

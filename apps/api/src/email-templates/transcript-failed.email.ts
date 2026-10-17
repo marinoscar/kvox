@@ -1,3 +1,4 @@
+import type { TranscriptFailedNotificationData } from '@marinoscar/kvox-api/transcripts';
 import { APP_NAME } from '@app/shared';
 import {
   SafeHtml,
@@ -37,24 +38,8 @@ import {
 // anything that prefetches a URL.
 // =============================================================================
 
-/** Everything the failure message renders. */
-export interface TranscriptFailedEmailData {
-  /** The transcript row's id. Used for the CTA path. */
-  transcriptId: string;
-  /** The owner's own title. Escaped on the way into the html. */
-  title: string;
-  /** `transcripts.failure_reason`, verbatim. See the header. */
-  reason: string;
-  /**
-   * Which part of the pipeline gave up, in words a reader recognises
-   * ("Transcribing", "Preparing audio"). Not an enum value.
-   */
-  stage: string;
-  /** Whether the owner can ask for it to be tried again. */
-  retryable: boolean;
-  /** Absolute URL of the application root, for the CTA. Optional. */
-  appUrl?: string;
-}
+/** Everything the failure message renders: the slice's notification data (`@marinoscar/kvox-api/transcripts`). */
+export type TranscriptFailedEmailData = TranscriptFailedNotificationData;
 
 // Typed registration (issue #460): this domain declares its own template key,
 // so the base `EmailTemplateDataMap` names no domain payload.

@@ -49,7 +49,7 @@ import {
   applyIdentities,
   isUnidentified,
   parseSpeakerIdentities,
-} from '../../transcripts/editing/speaker-identity';
+} from '@marinoscar/kvox-api/transcripts';
 import type { EvidenceInput } from '../dto/graph-evidence.dto';
 import { KG_SUBJECT_TRANSCRIPT } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';

@@ -45,10 +45,19 @@
       "types": "./dist/search/testing/index.d.ts",
       "default": "./dist/search/testing/index.js"
     },
+    "./transcripts": {
+      "types": "./dist/transcripts/index.d.ts",
+      "default": "./dist/transcripts/index.js"
+    },
+    "./transcripts/testing": {
+      "types": "./dist/transcripts/testing/index.d.ts",
+      "default": "./dist/transcripts/testing/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "assets",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -74,7 +83,9 @@
     "@nestjs/schedule": "^6.1.0",
     "@nestjs/swagger": "^11.2.5",
     "@prisma/client-runtime-utils": "^7.8.0",
+    "fastify": "^5.0.0",
     "nestjs-zod": "^5.4.0",
+    "pdfkit": ">=0.17.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.4.3"
@@ -95,7 +106,13 @@
     "@prisma/client-runtime-utils": {
       "optional": true
     },
+    "fastify": {
+      "optional": true
+    },
     "nestjs-zod": {
+      "optional": true
+    },
+    "pdfkit": {
       "optional": true
     }
   },

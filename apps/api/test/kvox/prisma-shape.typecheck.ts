@@ -16,10 +16,7 @@
 //
 // TRANSCRIPTION NEEDS NO PRISMA. It reads and writes through the settings,
 // secrets and audit ports only, so it adds no line here. The first line is search's
-// (#494); the transcripts slice (6.2) adds:
-//
-//   import type { KvoxTranscriptsDb } from '@marinoscar/kvox-api/transcripts';
-//   const _transcripts: KvoxTranscriptsDb = null as unknown as KvoxHostPrisma;
+// (#494), the second the transcripts slice's (#493).
 //
 // Keep one line per slice, named `_<slice>`.
 // =============================================================================
@@ -38,3 +35,12 @@ import type { KvoxSearchDb } from '@marinoscar/kvox-api/search';
  * not part of the shape.
  */
 export const _search: KvoxSearchDb = null as unknown as KvoxHostPrisma;
+
+import type { KvoxTranscriptsDb } from '@marinoscar/kvox-api/transcripts';
+
+/**
+ * Transcripts (#493): the seven transcript tables plus the `user`, `organization` and `note`
+ * delegates, with the columns the slice reads and writes, and `$transaction` in both its
+ * callback and array forms.
+ */
+export const _transcripts: KvoxTranscriptsDb = null as unknown as KvoxHostPrisma;

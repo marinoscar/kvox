@@ -22,18 +22,20 @@
 
 import { Test } from '@nestjs/testing';
 import { writeFileSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 
-import { JobHandlerRegistry, JobScope, type JobHandler } from '@marinoscar/platform-api/jobs';
+import { JobHandlerRegistry, type JobHandler } from '@marinoscar/platform-api/jobs';
 import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/testing';
+import { KVOX_JOBS, KVOX_OBJECT_STORE, KVOX_PRISMA } from '@marinoscar/kvox-api/ports';
+import {
+  FfmpegService,
+  MediaAudioTranscodeHandler,
+  TranscriptObjectsService,
+  TranscriptPipelineService,
+  TranscriptionRuntimeService,
+} from '@marinoscar/kvox-api/transcripts';
 
-import { MediaAudioTranscodeHandler } from '../../src/transcripts/handlers/media-audio-transcode.handler';
-import { FfmpegService } from '../../src/transcripts/media/ffmpeg.service';
-import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
-import { KvoxManagedObjectsService } from '../../src/kvox-objects/kvox-managed-objects.service';
-import { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
-import { TranscriptionRuntimeService } from '../../src/transcripts/transcription-runtime.service';
-import { PrismaService } from '../../src/prisma/prisma.service';
-import { STORAGE_PROVIDER } from '@marinoscar/platform-api/storage';
+import { createKvoxJobsHarness, platformHandlerOf } from '../helpers/kvox-handler.helper';
 
 const TRANSCRIPT_ID = 'transcript-1';
 const OBJECT_ID = 'obj-1';
@@ -73,14 +75,27 @@ async function buildWorld(): Promise<JobHandler> {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUnique: jest.fn().mockResolvedValue({ transcriptionStatus: 'waiting_input', status: 'processing' }),
     },
-    storageObject: {
-      findUnique: jest.fn().mockResolvedValue({
-        id: OBJECT_ID,
-        storageKey: 'transcripts/t-1/source/a.wav',
-        size: BigInt(10_000_000),
-        mimeType: 'audio/wav',
-      }),
-    },
+  };
+
+  // The source object, as the store port describes it.
+  const store = {
+    describe: jest.fn().mockResolvedValue(
+      new Map([
+        [
+          OBJECT_ID,
+          {
+            id: OBJECT_ID,
+            name: 'a.wav',
+            mimeType: 'audio/wav',
+            size: 10_000_000,
+            state: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      ]),
+    ),
+    signedDownloadUrl: jest.fn().mockResolvedValue('https://bucket.example/signed'),
   };
 
   const ffmpeg = {
@@ -99,7 +114,23 @@ async function buildWorld(): Promise<JobHandler> {
     }),
   };
 
+  // The server path stores and records in one streamed call; the node path records bytes a node put.
   const objects = {
+    putStream: jest.fn((input: { storageKey: string }) => {
+      uploads.push(input.storageKey);
+      recorded.push(input.storageKey);
+
+      const body = new PassThrough();
+      let size = 0;
+      const done = new Promise<{ id: string; size: number }>((resolve) => {
+        body.on('data', (chunk: Buffer) => {
+          size += chunk.byteLength;
+        });
+        body.on('end', () => resolve({ id: 'rendition-1', size }));
+      });
+
+      return { body, done };
+    }),
     recordUploaded: jest.fn(async (input: { storageKey: string }) => {
       recorded.push(input.storageKey);
 
@@ -118,38 +149,24 @@ async function buildWorld(): Promise<JobHandler> {
     activeProvider: jest.fn().mockResolvedValue({ provider: { capabilities: { maxDurationMs: 10 * 60 * 60_000 } }, policy: {} }),
   };
 
-  const storage = {
-    getSignedDownloadUrl: jest.fn().mockResolvedValue('https://bucket.example/signed'),
-    upload: jest.fn(async (key: string) => {
-      uploads.push(key);
-
-      return {};
-    }),
-  };
-
-  // The port wraps `storage_objects` access in `JobScope.run(job, fn)`. Whatever
-  // the handler hands to `fn` is the same stub client, so a handler that scopes
-  // and one that does not behave identically here.
-  const jobScope = { run: (_job: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(prisma) };
+  // The handler registers itself through the web edition's jobs adapter, as at boot; the platform
+  // contract is held against what the registry then holds.
+  const harness = createKvoxJobsHarness();
 
   const module = await Test.createTestingModule({
     providers: [
       MediaAudioTranscodeHandler,
-      { provide: JobHandlerRegistry, useValue: new JobHandlerRegistry() },
-      { provide: JobScope, useValue: jobScope },
-      // The handler reads the source object through the ownership gateway (#469); the stub row is the
-      // one the old `storageObject.findUnique` mock returned.
-      { provide: KvoxManagedObjectsService, useValue: { get: (...args: unknown[]) => prisma.storageObject.findUnique(...args) } },
-      { provide: PrismaService, useValue: prisma },
+      { provide: KVOX_JOBS, useValue: harness.adapter },
+      { provide: KVOX_OBJECT_STORE, useValue: store },
+      { provide: KVOX_PRISMA, useValue: prisma },
       { provide: FfmpegService, useValue: ffmpeg },
       { provide: TranscriptObjectsService, useValue: objects },
       { provide: TranscriptPipelineService, useValue: pipeline },
       { provide: TranscriptionRuntimeService, useValue: runtime },
-      { provide: STORAGE_PROVIDER, useValue: storage },
     ],
   }).compile();
 
-  const handler = module.get(MediaAudioTranscodeHandler);
+  const handler = platformHandlerOf(harness, module.get(MediaAudioTranscodeHandler));
 
   world = { handler, transcript, uploads, recorded };
 

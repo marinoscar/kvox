@@ -27,37 +27,39 @@
 // `npm run test:db`. See `../jobs/db-test-support.ts` for the probe.
 // =============================================================================
 
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import { ConfigService } from '@nestjs/config';
 import type { PrismaClient } from '@prisma/client';
 
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageProvider } from '@marinoscar/platform-api/storage';
-import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
-import type { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import type { RequestUser } from '@marinoscar/platform-api/identity';
-import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
-import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
-import { TranscriptObjectsService } from '../../src/transcripts/transcript-objects.service';
-import { TranscriptSnapshotHandler } from '../../src/transcripts/handlers/transcript-snapshot.handler';
-import { TranscriptExportHandler } from '../../src/transcripts/handlers/transcript-export.handler';
-import { TranscriptsHousekeepingHandler } from '../../src/transcripts/handlers/transcripts-housekeeping.handler';
-import { TranscriptExportService } from '../../src/transcripts/export/transcript-export.service';
-import { TranscriptExporterRegistry } from '../../src/transcripts/export/transcript-exporter.interface';
-import { JsonTranscriptExporter } from '../../src/transcripts/export/json.exporter';
-import { MarkdownTranscriptExporter } from '../../src/transcripts/export/markdown.exporter';
-import { PdfTranscriptExporter } from '../../src/transcripts/export/pdf.exporter';
-import { ORDINAL_GAP, OP_TYPES } from '../../src/transcripts/editing';
+import type { KvoxJobsPort } from '@marinoscar/kvox-api/ports';
+import {
+  JsonTranscriptExporter,
+  MarkdownTranscriptExporter,
+  ORDINAL_GAP,
+  OP_TYPES,
+  PdfTranscriptExporter,
+  TranscriptEditingService,
+  TranscriptExportHandler,
+  TranscriptExportService,
+  TranscriptExporterRegistry,
+  TranscriptMaterializeService,
+  TranscriptObjectsService,
+  TranscriptSnapshotHandler,
+  TranscriptsHousekeepingHandler,
+  resolveTranscriptsOptions,
+  type TranscriptPipelineService,
+} from '@marinoscar/kvox-api/transcripts';
+import type { TranscriptionSettingsService } from '@marinoscar/kvox-api/transcription';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
 import { TmpDirStorageProvider } from '../helpers/tmp-storage-provider.helper';
 import { createStorageObject, idsManagedBy, managedByOf } from '../helpers/storage-object.helper';
-import { JobScope, type JobHandlerRegistry, type JobsService } from '@marinoscar/platform-api/jobs';
-import { createDbManagedObjects } from '../helpers/db-managed-objects.helper';
+import { createDbAudit, createDbObjectStore } from '../helpers/db-managed-objects.helper';
 import { createTranscript as createTranscriptRow } from '../helpers/transcript.helper';
 import { createTranscriptAccess } from '../helpers/sharing-kit.helper';
 
@@ -73,7 +75,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
   let storage: StorageProvider;
 
   let objects: TranscriptObjectsService;
-  let managed: ReturnType<typeof createDbManagedObjects>;
+  let jobs: KvoxJobsPort;
   let editing: TranscriptEditingService;
   let exportService: TranscriptExportService;
   let exportHandler: TranscriptExportHandler;
@@ -101,8 +103,9 @@ describeWithDb('Transcript exports (real Postgres)', () => {
 
     const service = prisma as unknown as PrismaService;
 
-    managed = createDbManagedObjects(prisma, storage);
-    objects = new TranscriptObjectsService(managed, new ConfigService({}), storage);
+    const store = createDbObjectStore(prisma, storage);
+    const options = resolveTranscriptsOptions({});
+    objects = new TranscriptObjectsService(store, options);
 
     const materialize = new TranscriptMaterializeService(service, objects);
     const access = createTranscriptAccess(prisma);
@@ -110,8 +113,8 @@ describeWithDb('Transcript exports (real Postgres)', () => {
     // A REAL `jobs` row, not a stub id: `transcript_exports.job_id` is a
     // foreign key, and a fake id would fail the constraint the moment the
     // service links the job back onto the export row.
-    enqueue = jest.fn(async (input: { type: string; subjectId?: string | null }) =>
-      prisma.job.create({
+    enqueue = jest.fn(async (input: { type: string; subjectId?: string | null }) => {
+      const row = await prisma.job.create({
         data: {
           type: input.type,
           reason: 'rerun',
@@ -119,8 +122,21 @@ describeWithDb('Transcript exports (real Postgres)', () => {
           subjectId: input.subjectId ?? null,
           status: 'pending',
         },
-      }),
-    );
+      });
+
+      return { id: row.id, deduplicated: false };
+    });
+
+    // The queue as the slice sees it: the one call this suite drives, plus the registration and
+    // the active-job look-up the handlers make.
+    jobs = {
+      enqueue,
+      registerHandler: jest.fn(),
+      isRegistered: jest.fn(),
+      onSettled: jest.fn(),
+      findActive: jest.fn().mockResolvedValue([]),
+      tempPath: jest.fn(),
+    } as unknown as KvoxJobsPort;
 
     const registry = new TranscriptExporterRegistry();
 
@@ -138,43 +154,51 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       materialize,
       objects,
       registry,
-      { enqueue } as unknown as JobsService,
+      jobs,
+      createDbAudit(prisma),
     );
 
     exportHandler = new TranscriptExportHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
+      jobs,
       service,
       exportService,
       objects,
     );
 
     snapshotHandler = new TranscriptSnapshotHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
+      jobs,
       service,
       materialize,
       objects,
     );
 
     housekeeping = new TranscriptsHousekeepingHandler(
-      { register: jest.fn() } as unknown as JobHandlerRegistry,
+      jobs,
       service,
+      store,
+      options,
       { enqueueFirstPoll: jest.fn(), markFailed: jest.fn() } as unknown as TranscriptPipelineService,
       objects,
       // #322: the abandoned-upload window is read from settings each sweep.
       {
         get: jest.fn().mockResolvedValue({ abandonedUploadHours: 3 }),
       } as unknown as TranscriptionSettingsService,
-      new JobScope(prisma as never),
-      managed,
     );
 
-    editing = new TranscriptEditingService(service, access, materialize, {
-      enqueueSnapshot: jest.fn().mockResolvedValue(true),
-      // #188's semantic re-index, stubbed. `TranscriptEditingService` AWAITS
-      // it after every committed op batch and after a restore, so a missing
-      // member is a TypeError that fails the suite, not a silent no-op.
-      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
-    } as unknown as TranscriptPipelineService, new EventEmitter2());
+    editing = new TranscriptEditingService(
+      service,
+      access,
+      materialize,
+      {
+        enqueueSnapshot: jest.fn().mockResolvedValue(true),
+        // #188's semantic re-index, stubbed. `TranscriptEditingService` AWAITS
+        // it after every committed op batch and after a restore, so a missing
+        // member is a TypeError that fails the suite, not a silent no-op.
+        enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
+      } as unknown as TranscriptPipelineService,
+      { emit: jest.fn(), subscribe: jest.fn() },
+      createDbAudit(prisma),
+    );
 
     const account = await prisma.user.create({
       data: { email: `${EMAIL_PREFIX}-${randomUUID()}@example.test` },

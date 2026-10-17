@@ -35,7 +35,7 @@ The existing app token `KVOX_AI` in `apps/api/src/ai-port/kvox-ai.ts` is a diffe
 
 ```ts
 capabilities(ctx): Promise<KvoxAiCapabilities>             // never throws
-resolveTask(ctx, task, opts?): Promise<KvoxAiTarget>        // throws KvoxAiError not_configured | key_missing | capability
+resolveTask(ctx, task, opts?): Promise<KvoxAiTarget>        // throws KvoxAiError not_configured | key_missing | capability; opts.requireKey false names the model without a key
 generateText(ctx, req): AsyncIterable<KvoxTextEvent>        // delta*, then exactly one done
 generateStructured<T>(ctx, req): Promise<{ value: T; usage }>
 chat(ctx, req): AsyncIterable<KvoxChatEvent>                // delta | tool_call, then step_end, then exactly one done
@@ -51,21 +51,23 @@ countTokens(target, text): number
 
 ### 3.2 KVOX_OBJECT_STORE
 
-`initUpload`, `signParts`, `completeUpload`, `abortUpload`, `put`, `openRead`, `head`, `signedDownloadUrl`, `delete`, `onUploaded`.
+`initUpload`, `signParts`, `completeUpload`, `abortUpload`, `put`, `adopt`, `describe`, `openRead`, `head`, `signedDownloadUrl`, `delete`, `onUploaded`, `onAborted`.
 
 - Every object has an owning module (`transcripts`, `notes`, `graph`). The web adapter stamps it in the `kvox_object_ownership` side table in the same transaction as the object row, through `KvoxManagedObjects` (the only code that reads `storage_objects`).
 - `put` and `openRead` move streams; a stream is never collected whole in the adapter. The web `put` counts bytes as they pass, uploads them, writes the row, and takes the bytes back if the row fails.
-- `delete` and `abortUpload` are idempotent. `head` answers `null` for a missing object.
+- `put` is idempotent on its key (a retry of a job that already stored and recorded the bytes answers the first object) and takes an optional display `name` and `metadata`. `adopt` records an object whose bytes a worker node already PUT at a key (idempotent on the key; it throws `KvoxObjectMissingError` when the bytes never landed). `describe(ids)` answers `{ id, name, mimeType, size, state, createdAt, updatedAt }` for every id it knows in ONE call and leaves the unknown ones out of the map; a caller that reads many objects must not loop `head`. `initUpload` takes the content types the owning module accepts (`allowedMimeTypes`) and returns `uploadId` and `totalParts` beside the first batch of parts.
+- `delete` and `abortUpload` are idempotent. `head` answers `null` for a missing object. `onAborted` fires once for a cancelled upload, after the abort commits.
 - `onUploaded` fires once per completed upload, but not necessarily inside `completeUpload`: the web edition registers one `ObjectProcessor` with the platform registry, which runs in the server-only `storage.object.process` job. A handler decides from `managedBy` whether the object is its own.
 
 ### 3.3 KVOX_JOBS
 
-`enqueue(input)` returns `{ id, deduplicated }`; `registerHandler(handler)`; `isRegistered(type)`.
+`enqueue(input)` returns `{ id, deduplicated }`; `registerHandler(handler)`; `isRegistered(type)`; `onSettled(listener)`; `findActive(query)`; `tempPath(suffix?)`.
 
+- `findActive({ types, subjectType?, subjectIds?, payloadKey?, payloadValues?, excludeJobId? })` lists the pending or running jobs that match: the way a handler or a sweep sees queue state (a transcript with no live poll job, a name check whose job is gone, a sweep already queued). `onSettled` reports every job that reaches `succeeded` or `failed` with its type, subject, payload and last error; a listener only decides whether work is due (queue rule 1). `tempPath` is a path in the job's scratch space, swept by the host.
 - Two pending or running jobs with the same `type`, `subjectType` and `subjectId` collapse into one unless `skipDedup` is set (a job that re-enqueues itself, such as `transcription.poll`, must pass it).
-- `KvoxJobHandler` has exactly the platform handler's fields: `type`, `label`, `profile` (`{ maxRuntimeMs, maxAttempts }` only; never a lease or heartbeat field), `nodeResultSchema` and `persistNodeResult` together, and `process`. `usesAi` is read by the adapter only.
+- `KvoxJobHandler` has exactly the platform handler's fields: `type`, `label`, `profile` (`{ maxRuntimeMs, maxAttempts }` only; never a lease or heartbeat field), `nodeResultSchema` and `persistNodeResult` together, `deriveOutputKey` (where a node's output upload lands) and `nodeOffloadEnabled` (the runtime switch for offering the type to nodes), and `process`. `usesAi` and `throttleKey` (the ONE deployment-wide provider bucket the type draws on, as the three transcription types do) are read by the adapter only.
 - A job `type` is permanent once jobs of it exist. The web adapter registers exactly the strings pinned by `apps/api/test/jobs/job-type-snapshot.spec.ts`.
-- A handler defers a job with `KvoxRateLimitError(throttleKey, retryAfterMs)`. The web adapter turns it into the platform `RateLimitError`, the only thing the queue defers on, after registering the bucket. The error also answers the queue's `jobs.classifyRateLimit` self-classification (`KVOX_CLASSIFY_RATE_LIMIT`), so a handler registered with the platform queue directly (the transcript handlers, until they move into the package) defers on it too. The throttle key given at `enqueue` is recorded on the job row and registered per job immediately before the handler runs. For AI work the bucket is per user (`aiProviderThrottleKey(userId)`), never shared; the transcription provider's bucket is one shared key on purpose (`TRANSCRIPTION_THROTTLE_KEY`).
+- A handler defers a job with `KvoxRateLimitError(throttleKey, retryAfterMs)`. The web adapter turns it into the platform `RateLimitError`, the only thing the queue defers on, after registering the bucket. The error also answers the queue's `jobs.classifyRateLimit` self-classification (`KVOX_CLASSIFY_RATE_LIMIT`), so a handler registered with the platform queue directly defers on it too. The throttle key given at `enqueue` is recorded on the job row and registered per job immediately before the handler runs. For AI work the bucket is per user (`aiProviderThrottleKey(userId)`), never shared; the transcription provider's bucket is one shared key on purpose (`TRANSCRIPTION_THROTTLE_KEY`).
 - **AI handlers stay server-only.** A handler that calls a model and also declares `nodeResultSchema` is refused at registration (`note.generate`, `note.retitle`, `transcript.name_check`, `search.index`, `ask.respond`, `kg.extract`, `kg.resolve`, `kg.embed`, `kg.entity_digest`, `kg.import`, or any handler with `usesAi`).
 - The web adapter passes the default organization's id on every enqueue (single-organization mode).
 
@@ -87,7 +89,7 @@ countTokens(target, text): number
 
 ### 3.7 KVOX_PRISMA
 
-The host's client, seen through `KvoxPrismaClientLike` (`$queryRaw`, `$executeRaw`, `$transaction`). A slice never imports a generated client: it narrows the port with the delegates it uses and builds SQL with the `Prisma` helper of `core` (`sql`, `raw`, `join`, `empty` from `@prisma/client-runtime-utils`, an optional peer loaded on first use). Both hosts run PostgreSQL, so slices keep `tsvector`, `tstzrange`, `pg_trgm` and `vector`. A generated client behind the port is out of scope (Epic 6).
+The host's client, seen through `KvoxPrismaClientLike` (`$queryRaw`, `$executeRaw`, `$transaction`). `$transaction` takes an interactive callback or an array of prepared queries, with optional `timeout` and `isolationLevel`. A slice never imports a generated client: it narrows the port with the delegates it uses (a row interface per table and loose-argument delegates with fixed result types, so the host's generated client stays assignable; `apps/api/test/kvox/prisma-shape.typecheck.ts` proves it) and builds SQL with the `Prisma` helper of `core` (`sql`, `raw`, `join`, `empty` from `@prisma/client-runtime-utils`, an optional peer loaded on first use). Both hosts run PostgreSQL, so slices keep `tsvector`, `tstzrange`, `pg_trgm` and `vector`. A generated client behind the port is out of scope (Epic 6).
 
 ### 3.8 KVOX_SETTINGS
 
@@ -100,6 +102,10 @@ The host's client, seen through `KvoxPrismaClientLike` (`$queryRaw`, `$executeRa
 ### 3.10 KVOX_AUDIT
 
 `record(event)`. The web adapter writes `audit_events` through the platform sink, which takes scalar `meta`; a non-scalar value is stored as its JSON text.
+
+### 3.11 KVOX_BRAND
+
+Not a port to implement but a value a host provides through `KvoxPortsModule.forRoot({ brand })`: `{ appName, appSlug }`, the product name a slice prints where a document carries one (the PDF export footer) and the slug it builds names from. A slice injects it `@Optional()` and falls back to `DEFAULT_KVOX_BRAND`, so no slice names a product.
 
 ## 4. The `core` helpers and the cycles they cut
 
@@ -117,7 +123,7 @@ The importers in `transcripts`, `search`, `graph` and `ask` now import `@marinos
 
 `describeKvoxPortsConformance(name, factory, { describe, it, expect })` (Jest or Vitest) registers one `it` per rule. The factory returns the ports under test plus hooks the suite cannot invent: `failNextWith(errorClass)`, `arrangeTextAfterToolCall()`, an anonymous and an authenticated execution context, the settings namespaces the host knows, a secrets purpose. A rule whose hook is absent is skipped; a port the factory omits fails its section unless named in `options.skip`.
 
-The rules: AI errors are `KvoxAiError`s of a known class with no key in the message, `capabilities()` never throws, `generateText` and `chat` end with exactly one `done`, no text follows a tool call, `embed` returns one vector per input of the reported width; the object store round-trips bytes, takes a 6 MiB stream pulled in order, signs, deletes idempotently and fires `onUploaded` once; jobs return `{ id, deduplicated }`, collapse a repeat, honour `skipDedup`, run a registered handler once per distinct job and report an unknown type unregistered; identity answers `null` without credentials, a `ReadonlySet` of permissions with them; `notify` returns at once; events deliver until unsubscribed and survive a throwing listener; settings and secrets round-trip and `status` never returns material.
+The rules: AI errors are `KvoxAiError`s of a known class with no key in the message, `capabilities()` never throws, `generateText` and `chat` end with exactly one `done`, no text follows a tool call, `embed` returns one vector per input of the reported width; the object store round-trips bytes, takes a 6 MiB stream pulled in order, is idempotent on a key, describes the objects it holds, signs, deletes idempotently and fires `onUploaded` and `onAborted` once; jobs return `{ id, deduplicated }`, collapse a repeat, honour `skipDedup`, list their active jobs, report a settled job, hand out distinct temp paths, run a registered handler once per distinct job and report an unknown type unregistered; identity answers `null` without credentials, a `ReadonlySet` of permissions with them; `notify` returns at once; events deliver until unsubscribed and survive a throwing listener; settings and secrets round-trip and `status` never returns material.
 
 It runs against the fakes (`packages/kvox-api/test/ports-conformance.spec.ts`) and against the web adapters (`apps/api/test/platform-kvox/ports-conformance.spec.ts`: the real adapters over the real platform registries and `createFakeJobQueue`, with in-memory stand-ins for the services behind them). The adapters' own rules (error translation, the AI-job refusal, rate-limit plumbing, object cleanup, the identity trap, the boot failure) are in `platform-kvox-adapters.spec.ts`, and `kvox-auth.integration.spec.ts` drives `@KvoxAuth` through the real guard stack (401 with no token, 403 for a Viewer without the permission, 200 otherwise, and a permissionless route that still gets a full principal).
 
