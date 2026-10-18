@@ -52,5 +52,7 @@ export {
   EVAL_TIMEOUT_MS,
   EVAL_USER_ID,
   createExtractRunner,
+  fixtureToInput,
+  runExtraction,
 } from './runners/extract-runner.js';
 export { createExtractResolveRunner, trigramSimilarity } from './runners/extract-resolve-runner.js';

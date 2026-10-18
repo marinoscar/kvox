@@ -61,6 +61,7 @@
     "real-data": [],
     "live": [],
     "kg": ["fixtures"],
+    "parity": ["fixtures", "kg"],
     "cli": ["fixtures", "kg", "live", "real-data"]
   }
 }
