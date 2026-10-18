@@ -169,7 +169,7 @@ describe('GraphWriteService', () => {
     it('validates evidence against the owner, on the same transaction', async () => {
       const { service, asTx, validator } = setup();
       await service.createEntity(asTx, baseEntity, schema);
-      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx, undefined);
     });
   });
 
@@ -704,7 +704,7 @@ describe('GraphWriteService', () => {
     it('validates only the wire rows of a mixed batch, keeping their order', async () => {
       const { service, tx, asTx, validator } = setup();
       await service.createRelation(asTx, { ...baseRelation, evidence: [manual(), ...evidence] }, schema);
-      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx, undefined);
       const rows = tx.kgEvidence.createMany.mock.calls[0][0].data as Array<{ sourceIri: string | null; noteId: string | null }>;
       expect(rows.map((r) => r.sourceIri)).toEqual([MANUAL_EVIDENCE_SOURCE_IRI, undefined]);
       expect(rows[1].noteId).toBe(OWNER);
@@ -723,7 +723,7 @@ describe('GraphWriteService', () => {
       const { service, asTx, validator } = setup();
       const forged = { quote: 'Set by hand', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI } as unknown as EvidenceInput;
       await service.createRelation(asTx, { ...baseRelation, evidence: [forged] }, schema);
-      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, [forged], asTx);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, [forged], asTx, undefined);
     });
 
     it('addEvidence takes a ManualEvidence for an owned subject', async () => {

@@ -105,7 +105,10 @@ function setup(opts: { status?: string; items?: Row[]; evidence?: string[]; enti
   };
   const access = { require: jest.fn(async () => ({ id: P, ownerId: OWNER, noteId: 'n', status: 'draft' })) };
   const ontology = { effectiveSchemaFor: jest.fn(async () => schema) };
-  const spans = { validate: jest.fn(async (_tx: unknown, _s: unknown, list: unknown[]) => list.map(() => ({ quote: 'q' }))) };
+  const spans = {
+    prepare: jest.fn(async (source: { ownerId: string; noteId: string | null }) => ({ ...source })),
+    validate: jest.fn(async (_tx: unknown, _s: unknown, list: unknown[]) => list.map(() => ({ quote: 'q' }))),
+  };
   const service = new ProposalsService(prisma as never, access as never, {} as never, ontology as never, spans as never, { record: jest.fn(async () => undefined) } as never);
   jest.spyOn(service, 'detail').mockImplementation(async () => ({
     proposal: { counts: { total: items.length } } as never,
