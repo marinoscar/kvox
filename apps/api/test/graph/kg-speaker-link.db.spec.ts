@@ -63,7 +63,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     await prisma.$connect();
     audit = createDbAudit(prisma);
     reconciler = new SpeakerLinkReconciler(
-      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
+      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma), prisma as never)),
       new GraphOntologyService(prisma as never, new GraphPreferencesService(createDbSettings(prisma))),
       // The platform answers "does the owner hold graph:write" from roles and memberships; this suite grants it
       // through a role of its own, so the identity port reads that role link.

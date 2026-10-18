@@ -42,6 +42,16 @@
 // `kg.entity_digest` enqueues — each ONLY while its handler is registered, the
 // digest also only while `ai.graphEnabled` — the audit row, and the log line.
 //
+// THE PORTS RUN BEFORE THE TRANSACTION (#615). Proving a citation readable asks
+// two ports for some anchors — an import object (`KVOX_OBJECT_STORE.describe`)
+// and a transcript the owner does not own (transcript sharing) — and both read
+// the database through the root client. On a one-connection pool (PGlite: KVox
+// Desktop, the bare host's pglite leg) a root-client read inside the
+// transaction waits forever for the connection it holds. So `commit` reads the
+// proposal's evidence rows read-only first, has `GraphWriteService` prefetch
+// those answers, and hands the `EvidenceAccess` to `commitIn`, which passes it
+// to every write that carries evidence. Everything else is still read on `tx`.
+//
 // A concurrent second commit waits on the row lock, then either reads the
 // proposal as `committed` (409 `proposal_not_draft`) or fails serialization;
 // a serialization failure is retried, and the retry reads the same 409.
@@ -81,7 +91,7 @@ import {
 import { KG_PROPOSAL_TARGET_TYPE, lockProposal, notDraft, ProposalsService } from './proposals.service.js';
 import { relationFills } from './relation-fills.js';
 import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, KVOX_AUDIT, type KvoxAuditPort, KVOX_EVENTS, type KvoxEventsPort } from '../../ports/index.js';
-import type { KvoxGraphDb, KvoxGraphTx, GraphActor, KgProposalRow as KgProposal, InputJsonValue } from '../../graph/index.js';
+import type { EvidenceAccess, KvoxGraphDb, KvoxGraphTx, GraphActor, KgProposalRow as KgProposal, InputJsonValue } from '../../graph/index.js';
 
 type Tx = KvoxGraphTx;
 type Json = Record<string, unknown>;
@@ -321,7 +331,9 @@ export class ProposalCommitService {
     let outcome: CommitOutcome | undefined;
     for (let attempt = 1; outcome === undefined; attempt += 1) {
       try {
-        outcome = await this.prisma.$transaction((tx) => this.commitIn(tx, user.id, proposalId, schema), {
+        // Before the transaction, never inside it (#615).
+        const access = await this.prefetchEvidenceAccess(user.id, proposalId);
+        outcome = await this.prisma.$transaction((tx) => this.commitIn(tx, user.id, proposalId, schema, access), {
           isolationLevel: 'Serializable',
           timeout: 60_000,
           maxWait: 10_000,
@@ -348,9 +360,32 @@ export class ProposalCommitService {
   // ===========================================================================
 
   /**
-   * Commit in.
+   * The port answers the commit's evidence checks need (#615), read through the root
+   * client and the ports, read-only. Call it BEFORE opening the transaction: the same
+   * proposal-item evidence `commitIn` reads, handed to `GraphWriteService.prefetchEvidence`.
+   * A row added after this read is still proven, through the port, inside the transaction.
    */
-  async commitIn(tx: Tx, ownerId: string, proposalId: string, schema: EffectiveSchema): Promise<CommitOutcome> {
+  async prefetchEvidenceAccess(ownerId: string, proposalId: string): Promise<EvidenceAccess> {
+    const items = await this.prisma.kgProposalItem.findMany({ where: { proposalId }, select: { id: true } });
+    const evidence = items.length === 0 ? [] : await this.prisma.kgEvidence.findMany({
+      where: { ownerId, subjectKind: 'proposal_item', subjectId: { in: items.map((i) => i.id) } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return this.write.prefetchEvidence(ownerId, toEvidenceInputs(evidence));
+  }
+
+  /**
+   * Commit in: the whole commit on `tx` only. `evidenceAccess` comes from
+   * `prefetchEvidenceAccess`, run before the transaction (#615); without it the
+   * evidence checks ask their ports, which a one-connection pool cannot serve.
+   */
+  async commitIn(
+    tx: Tx,
+    ownerId: string,
+    proposalId: string,
+    schema: EffectiveSchema,
+    evidenceAccess?: EvidenceAccess,
+  ): Promise<CommitOutcome> {
     const status = await lockProposal(tx, proposalId);
     if (status !== 'draft') throw notDraft(status);
 
@@ -365,7 +400,7 @@ export class ProposalCommitService {
     });
     const evidenceOf = (itemId: string) => toEvidenceInputs(evidence.filter((e) => e.subjectId === itemId));
 
-    const run = new CommitRun(ownerId, proposal, items, evidenceOf, schema, tx, {
+    const run = new CommitRun(ownerId, proposal, items, evidenceOf, schema, tx, evidenceAccess, {
       write: this.write,
       aliases: this.aliases,
       distinct: this.distinct,
@@ -508,6 +543,8 @@ class CommitRun {
     private readonly evidenceOf: (itemId: string) => EvidenceInput[],
     private readonly schema: EffectiveSchema,
     private readonly tx: Tx,
+    /** The prefetched port answers every evidence-carrying write receives (#615). */
+    private readonly evidenceAccess: EvidenceAccess | undefined,
     private readonly deps: RunDeps,
   ) {}
 
@@ -747,6 +784,7 @@ class CommitRun {
             aliases: payload.aliases.map((alias) => ({ alias, source: 'extraction' as const })),
             labelSource: row.origin === 'user' ? 'user' : 'extraction',
             evidence,
+            evidenceAccess: this.evidenceAccess,
           },
           this.schema,
         ),
@@ -804,6 +842,7 @@ class CommitRun {
           validPrecision: validity.validPrecision,
           reviewStatus: row.editedPayload ? 'edited' : 'accepted',
           evidence,
+          evidenceAccess: this.evidenceAccess,
         },
         this.schema,
       ),
@@ -876,6 +915,7 @@ class CommitRun {
           reviewStatus: row.editedPayload ? 'edited' : 'accepted',
           supersedesId,
           evidence,
+          evidenceAccess: this.evidenceAccess,
         },
         this.schema,
       );
@@ -954,7 +994,7 @@ class CommitRun {
 
   private async appendEvidence(kind: 'entity' | 'relation' | 'item', subjectId: string, evidence: EvidenceInput[]): Promise<void> {
     if (evidence.length === 0) return;
-    const rows = await this.deps.write.addEvidence(this.tx, this.ownerId, kind, subjectId, evidence);
+    const rows = await this.deps.write.addEvidence(this.tx, this.ownerId, kind, subjectId, evidence, this.evidenceAccess);
     this.log.evidenceAdded.push(...rows.map((r) => r.id));
     this.result.evidenceAdded += rows.length;
   }

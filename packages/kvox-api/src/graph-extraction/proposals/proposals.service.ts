@@ -22,6 +22,12 @@
 // `subject_kind: 'proposal_item'`. Only `ProposalCommitService` turns a
 // proposal into graph rows (§8).
 //
+// ONLY `tx` INSIDE A TRANSACTION (#615): an added span's origin transcript is
+// resolved by `SpanValidator.prepare` before the transaction opens, from the
+// proposal row `GraphAccessService.require` already read (its `noteId` never
+// changes); on a one-connection pool a root-client read inside the callback
+// waits forever for the connection the transaction holds.
+//
 // Per-item decisions are deliberately NOT audited — the commit is (§ Security).
 // ⚠ Logs carry ids and counts only, never a label, a statement or a quote.
 // =============================================================================
@@ -70,7 +76,7 @@ import {
   type ProposalItemRowInput,
   type ViewLookups,
 } from './proposal-view.mapper.js';
-import { SpanValidator } from './span-validator.js';
+import { SpanValidator, type SpanContext } from './span-validator.js';
 import { knownRelationTargetOf } from './relation-fills.js';
 import { KVOX_PRISMA, KVOX_AUDIT, type KvoxAuditPort } from '../../ports/index.js';
 import type { KvoxGraphDb, KvoxGraphTx, GraphActor, KgProposalRow as KgProposal, InputJsonValue } from '../../graph/index.js';
@@ -296,6 +302,9 @@ export class ProposalsService {
     const proposal = await this.access.require(user.id, 'proposal', proposalId, 'edit', user.permissions);
     this.checkDecisionShape(dto);
     const schema = await this.ontology.effectiveSchemaFor(user.id);
+    // Before the transaction (#615): the spans' origin is a root-client read.
+    const spanSource = { ownerId: user.id, noteId: proposal.noteId };
+    const spanContext = await this.spans.prepare(spanSource, dto.evidence?.add ?? []);
 
     await this.prisma.$transaction(
       async (tx) => {
@@ -308,7 +317,7 @@ export class ProposalsService {
         })) as unknown as ProposalItemRowInput[];
         const row = items.find((i) => i.id === itemId);
         if (!row) throw new NotFoundException(PROPOSAL_ITEM_NOT_FOUND_MESSAGE);
-        await this.applyDecision(tx, user.id, proposal, row, items, dto, schema);
+        await this.applyDecision(tx, user.id, proposal, row, items, dto, schema, spanContext);
       },
       { timeout: 30_000 },
     );
@@ -381,6 +390,9 @@ export class ProposalsService {
       throw new BadRequestException('existingEntityId is only accepted for an entity row.');
     }
     const schema = await this.ontology.effectiveSchemaFor(user.id);
+    // Before the transaction (#615): the spans' origin is a root-client read.
+    const spanSource = { ownerId: user.id, noteId: proposal.noteId };
+    const spanContext = await this.spans.prepare(spanSource, dto.evidence);
 
     const itemId = await this.prisma.$transaction(
       async (tx) => {
@@ -412,7 +424,7 @@ export class ProposalsService {
           await this.assertRefsReviewable(dto.kind, payload, items);
         }
 
-        const evidence = await this.spans.validate(tx, { ownerId: user.id, noteId: proposal.noteId }, dto.evidence);
+        const evidence = await this.spans.validate(tx, spanSource, dto.evidence, spanContext);
         const sortOrder = items.reduce((max, i) => Math.max(max, i.sortOrder), -1) + 1;
         const created = await tx.kgProposalItem.create({
           data: {
@@ -496,6 +508,7 @@ export class ProposalsService {
     items: ProposalItemRowInput[],
     dto: PatchItemDto,
     schema: EffectiveSchema,
+    spanContext: SpanContext,
   ): Promise<void> {
     const bad = (path: string, message: string) => new BadRequestException({ message, details: { issues: [{ path, message }] } });
 
@@ -596,7 +609,7 @@ export class ProposalsService {
       const currentIds = new Set(current.map((c) => c.id.toLowerCase()));
       const remove = [...new Set(dto.evidence.remove.map((id) => id.toLowerCase()))];
       if (remove.some((id) => !currentIds.has(id))) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.evidence);
-      const added = await this.spans.validate(tx, { ownerId, noteId: proposal.noteId }, dto.evidence.add);
+      const added = await this.spans.validate(tx, { ownerId, noteId: proposal.noteId }, dto.evidence.add, spanContext);
       if (current.length - remove.length + added.length < 1) {
         throw new BadRequestException({
           message: 'A row must keep at least one citation.',

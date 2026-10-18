@@ -66,7 +66,8 @@ describe('EvidenceValidator', () => {
       new Map(rows.filter((row) => row.id === TRANSCRIPT).map((row) => [row.id, 'viewer'] as const)),
     ),
   };
-  const validator = new EvidenceValidator(managed as never, transcriptAccess as never);
+  // No test here prefetches (#615), so the root client is never read.
+  const validator = new EvidenceValidator(managed as never, transcriptAccess as never, {} as never);
 
   beforeEach(() => {
     managed.describe.mockClear();
@@ -162,5 +163,243 @@ describe('EvidenceValidator', () => {
       tx as unknown as KvoxGraphTx,
     );
     for (const table of Object.values(tx)) expect(table.findMany).not.toHaveBeenCalled();
+  });
+});
+
+// #615: the ports are asked BEFORE the transaction (`prefetch`); inside it
+// `assertReadable` / `viewableTranscriptIds` read only `tx` for every id the access covers.
+describe('EvidenceValidator — prefetch and access (#615)', () => {
+  const IMPORT_OWNED = 'b0000000-0000-4000-8000-000000000001';
+  const IMPORT_OTHER_OWNER = 'b0000000-0000-4000-8000-000000000002';
+  const IMPORT_UNMANAGED = 'b0000000-0000-4000-8000-000000000003';
+  const IMPORT_UNKNOWN = 'b0000000-0000-4000-8000-000000000004';
+  const T_OWNED = 'c0000000-0000-4000-8000-000000000001';
+  const T_SHARED = 'c0000000-0000-4000-8000-000000000002';
+  const T_NOT_SHARED = 'c0000000-0000-4000-8000-000000000003';
+  const T_MISSING = 'c0000000-0000-4000-8000-000000000004'; // missing or soft-deleted: not returned by the live query
+
+  const TRANSCRIPT_ROWS = [
+    { id: T_OWNED, ownerId: OWNER, orgId: ORG },
+    { id: T_SHARED, ownerId: OTHER_OWNER, orgId: ORG },
+    { id: T_NOT_SHARED, ownerId: OWNER_STRANGER, orgId: ORG },
+  ];
+
+  const importEv = (importObjectId: string) => ({ importObjectId, quote: 'q' }) as unknown as EvidenceInput;
+  // A transcript citation needs a segment of that transcript: 'c…' transcript ↔ 'd…' segment.
+  const segmentOf = (transcriptId: string) => transcriptId.replace(/^c/, 'd');
+  const transcriptEv = (transcriptId: string) =>
+    ({ transcriptId, segmentId: segmentOf(transcriptId), quote: 'q' }) as unknown as EvidenceInput;
+
+  function build() {
+    const store = {
+      describe: jest.fn(async (ids: readonly string[]) => {
+        const all: Record<string, { id: string; ownerId: string | null; managedBy: string | null }> = {
+          [IMPORT_OWNED]: { id: IMPORT_OWNED, ownerId: OWNER, managedBy: 'graph-rdf' },
+          [IMPORT_OTHER_OWNER]: { id: IMPORT_OTHER_OWNER, ownerId: OTHER_OWNER, managedBy: 'graph-rdf' },
+          [IMPORT_UNMANAGED]: { id: IMPORT_UNMANAGED, ownerId: OWNER, managedBy: null },
+        };
+        return new Map(ids.filter((id) => all[id]).map((id) => [id, all[id]] as const));
+      }),
+    };
+    const access = {
+      rolesFor: jest.fn(async (_u: string, rows: Array<{ id: string }>) =>
+        new Map(rows.filter((r) => r.id === T_SHARED).map((r) => [r.id, 'viewer'] as const)),
+      ),
+    };
+    const rootFindMany = jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+      TRANSCRIPT_ROWS.filter((r) => where.id.in.includes(r.id)),
+    );
+    const root = { transcript: { findMany: rootFindMany } };
+    const validator = new EvidenceValidator(store as never, access as never, root as never);
+    const txFindMany = jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+      TRANSCRIPT_ROWS.filter((r) => where.id.in.includes(r.id)),
+    );
+    const tx = {
+      transcript: { findMany: txFindMany },
+      transcriptSegment: {
+        findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+          where.id.in.map((id) => ({ id, transcriptId: id.replace(/^d/, 'c') })),
+        ),
+      },
+    } as unknown as KvoxGraphTx;
+    return { validator, store, access, root, rootFindMany, tx, txFindMany };
+  }
+
+  describe('prefetch', () => {
+    it('answers import objects: owned and managed true, other owner / unmanaged / unknown false', async () => {
+      const { validator } = build();
+      const result = await validator.prefetch(OWNER, [
+        importEv(IMPORT_OWNED),
+        importEv(IMPORT_OTHER_OWNER),
+        importEv(IMPORT_UNMANAGED),
+        importEv(IMPORT_UNKNOWN),
+      ]);
+      expect([...result.importObjects]).toEqual([
+        [IMPORT_OWNED, true],
+        [IMPORT_OTHER_OWNER, false],
+        [IMPORT_UNMANAGED, false],
+        [IMPORT_UNKNOWN, false],
+      ]);
+      expect(result.sharedTranscripts.size).toBe(0);
+    });
+
+    it('answers transcripts: owned omitted, shared true, not shared false, missing or soft-deleted false', async () => {
+      const { validator, access } = build();
+      const result = await validator.prefetch(OWNER, [
+        transcriptEv(T_OWNED),
+        transcriptEv(T_SHARED),
+        transcriptEv(T_NOT_SHARED),
+        transcriptEv(T_MISSING),
+      ]);
+      expect(result.sharedTranscripts.has(T_OWNED)).toBe(false);
+      expect(result.sharedTranscripts.get(T_SHARED)).toBe(true);
+      expect(result.sharedTranscripts.get(T_NOT_SHARED)).toBe(false);
+      expect(result.sharedTranscripts.get(T_MISSING)).toBe(false);
+      // Only the transcripts the owner does not own reach the sharing decision, in one batch.
+      expect(access.rolesFor).toHaveBeenCalledTimes(1);
+      expect(access.rolesFor.mock.calls[0][1].map((r) => r.id).sort()).toEqual([T_NOT_SHARED, T_SHARED].sort());
+    });
+
+    it('queries live transcripts only, once, and the object store once, whatever the batch size', async () => {
+      const { validator, store, rootFindMany } = build();
+      await validator.prefetch(OWNER, [
+        transcriptEv(T_SHARED),
+        transcriptEv(T_SHARED),
+        importEv(IMPORT_OWNED),
+        importEv(IMPORT_OWNED),
+      ]);
+      expect(rootFindMany).toHaveBeenCalledTimes(1);
+      expect(rootFindMany.mock.calls[0][0]).toEqual(expect.objectContaining({ where: { id: { in: [T_SHARED] }, deletedAt: null } }));
+      expect(store.describe).toHaveBeenCalledTimes(1);
+      expect(store.describe).toHaveBeenCalledWith([IMPORT_OWNED]);
+    });
+
+    it('reads nothing for a batch that cites neither imports nor transcripts', async () => {
+      const { validator, store, access, rootFindMany } = build();
+      const result = await validator.prefetch(OWNER, [noteEv(NOTE)]);
+      expect(result.importObjects.size).toBe(0);
+      expect(result.sharedTranscripts.size).toBe(0);
+      expect(store.describe).not.toHaveBeenCalled();
+      expect(rootFindMany).not.toHaveBeenCalled();
+      expect(access.rolesFor).not.toHaveBeenCalled();
+    });
+
+    it('an all-owned batch never calls rolesFor', async () => {
+      const { validator, access } = build();
+      const result = await validator.prefetch(OWNER, [transcriptEv(T_OWNED)]);
+      expect(access.rolesFor).not.toHaveBeenCalled();
+      expect(result.sharedTranscripts.size).toBe(0);
+    });
+  });
+
+  describe('assertReadable with an access', () => {
+    it('makes no port call for ids the access covers (import object and shared transcript)', async () => {
+      const { validator, store, access, tx } = build();
+      const evidence = [importEv(IMPORT_OWNED), transcriptEv(T_SHARED)];
+      const prefetched = await validator.prefetch(OWNER, evidence);
+      store.describe.mockClear();
+      access.rolesFor.mockClear();
+
+      await expect(validator.assertReadable(OWNER, evidence, tx, prefetched)).resolves.toHaveLength(2);
+
+      expect(store.describe).not.toHaveBeenCalled();
+      expect(access.rolesFor).not.toHaveBeenCalled();
+    });
+
+    it('refuses what the access says is not the owner\'s, still without a port call', async () => {
+      const { validator, store, access, tx } = build();
+      const evidence = [importEv(IMPORT_OTHER_OWNER), transcriptEv(T_NOT_SHARED), transcriptEv(T_SHARED)];
+      const prefetched = await validator.prefetch(OWNER, evidence);
+      store.describe.mockClear();
+      access.rolesFor.mockClear();
+
+      const err = await validator.assertReadable(OWNER, evidence, tx, prefetched).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(((err as BadRequestException).getResponse() as { details: { invalidEvidence: number[] } }).details.invalidEvidence).toEqual([0, 1]);
+      expect(store.describe).not.toHaveBeenCalled();
+      expect(access.rolesFor).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the ports for ids the access does not cover', async () => {
+      const { validator, store, access, tx } = build();
+      const covered = await validator.prefetch(OWNER, [importEv(IMPORT_OWNED), transcriptEv(T_SHARED)]);
+      store.describe.mockClear();
+      access.rolesFor.mockClear();
+
+      const rows = await validator.assertReadable(
+        OWNER,
+        [importEv(IMPORT_OWNED), transcriptEv(T_SHARED), importEv(IMPORT_UNMANAGED), transcriptEv(T_NOT_SHARED)],
+        tx,
+        covered,
+      ).catch((e: unknown) => e);
+
+      // The uncovered ones are asked of the ports: exactly them, nothing covered.
+      expect(store.describe).toHaveBeenCalledTimes(1);
+      expect(store.describe).toHaveBeenCalledWith([IMPORT_UNMANAGED]);
+      expect(access.rolesFor).toHaveBeenCalledTimes(1);
+      expect(access.rolesFor.mock.calls[0][1].map((r) => r.id)).toEqual([T_NOT_SHARED]);
+      // ...and both uncovered ids are unreadable, so the batch is refused naming them.
+      expect(rows).toBeInstanceOf(BadRequestException);
+      expect(((rows as BadRequestException).getResponse() as { details: { invalidEvidence: number[] } }).details.invalidEvidence).toEqual([2, 3]);
+    });
+
+    it('without an access every port is asked, as before', async () => {
+      const { validator, store, access, tx } = build();
+      await validator.assertReadable(OWNER, [importEv(IMPORT_OWNED), transcriptEv(T_SHARED)], tx);
+      expect(store.describe).toHaveBeenCalledWith([IMPORT_OWNED]);
+      expect(access.rolesFor).toHaveBeenCalledTimes(1);
+    });
+
+    it('never calls rolesFor for an all-owned batch, with or without an access', async () => {
+      const { validator, access, tx } = build();
+      await validator.assertReadable(OWNER, [transcriptEv(T_OWNED)], tx);
+      await validator.assertReadable(OWNER, [transcriptEv(T_OWNED)], tx, { importObjects: new Map(), sharedTranscripts: new Map() });
+      expect(access.rolesFor).not.toHaveBeenCalled();
+    });
+
+    it('reads transcripts on tx, never on the root client, inside the write', async () => {
+      const { validator, rootFindMany, txFindMany, tx } = build();
+      const evidence = [transcriptEv(T_SHARED)];
+      const prefetched = await validator.prefetch(OWNER, evidence);
+      rootFindMany.mockClear();
+      await validator.assertReadable(OWNER, evidence, tx, prefetched);
+      expect(rootFindMany).not.toHaveBeenCalled();
+      expect(txFindMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('viewableTranscriptIds with an access', () => {
+    it('uses the access for shared ids and never calls rolesFor when it covers every non-owned row', async () => {
+      const { validator, access, tx } = build();
+      const ids = [T_OWNED, T_SHARED, T_NOT_SHARED, T_MISSING];
+      const prefetched = await validator.prefetch(OWNER, ids.map(transcriptEv));
+      access.rolesFor.mockClear();
+
+      const viewable = await validator.viewableTranscriptIds(OWNER, ids, tx, prefetched);
+
+      expect([...viewable].sort()).toEqual([T_OWNED, T_SHARED].sort());
+      expect(access.rolesFor).not.toHaveBeenCalled();
+    });
+
+    it('falls back to rolesFor for uncovered non-owned ids only', async () => {
+      const { validator, access, tx } = build();
+      const viewable = await validator.viewableTranscriptIds(OWNER, [T_OWNED, T_SHARED, T_NOT_SHARED], tx, {
+        importObjects: new Map(),
+        sharedTranscripts: new Map([[T_NOT_SHARED, false]]),
+      });
+      expect([...viewable].sort()).toEqual([T_OWNED, T_SHARED].sort());
+      expect(access.rolesFor).toHaveBeenCalledTimes(1);
+      expect(access.rolesFor.mock.calls[0][1].map((r) => r.id)).toEqual([T_SHARED]);
+    });
+
+    it('an all-owned batch never calls rolesFor and an empty batch reads nothing', async () => {
+      const { validator, access, tx, txFindMany } = build();
+      expect([...(await validator.viewableTranscriptIds(OWNER, [T_OWNED], tx))]).toEqual([T_OWNED]);
+      expect(access.rolesFor).not.toHaveBeenCalled();
+      txFindMany.mockClear();
+      expect((await validator.viewableTranscriptIds(OWNER, [], tx)).size).toBe(0);
+      expect(txFindMany).not.toHaveBeenCalled();
+    });
   });
 });

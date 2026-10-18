@@ -35,12 +35,12 @@ export const NOTE_BODY =
 
 export function buildServices(prisma: PrismaClient) {
   const db = prisma as unknown as PrismaService;
-  const write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
+  const write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma), db as never));
   const access = new GraphAccessService(db);
   const settings = createDbSettings(prisma);
   const audit = createDbAudit(prisma);
   const ontology = new GraphOntologyService(db, new GraphPreferencesService(settings));
-  const spans = new SpanValidator(new NoteOriginService(db as never, createPlatformTranscriptSharing(prisma)));
+  const spans = new SpanValidator(new NoteOriginService(db as never, createPlatformTranscriptSharing(prisma)), db as never);
   const proposals = new ProposalsService(db, access, new NoteAccessService(db), ontology, spans, audit);
   const merges = new MergeService(
     db,

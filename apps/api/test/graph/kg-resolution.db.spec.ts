@@ -66,7 +66,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
     );
     merges = new MergeService(
       db,
-      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma))),
+      new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma), prisma as never)),
       { enqueue: jest.fn(), isRegistered: () => false } as never,
       followUps as never,
       createDbAudit(prisma),

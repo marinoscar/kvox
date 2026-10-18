@@ -78,6 +78,7 @@ let host: RunningBareHost;
 const seeded: Seeded[] = [];
 const people = new Map<string, string>();
 let exportId = '';
+let importProposalId = '';
 
 /** A request as the one local user. */
 async function api(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
@@ -469,6 +470,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
     form.append('file', new Blob([turtle], { type: 'text/turtle' }), 'graph.ttl');
     const imported = await json(await api('/api/graph/imports', { method: 'POST', body: form }), 202);
     expect(imported.proposalId).toBeTruthy();
+    importProposalId = imported.proposalId;
     await drain();
     expect(await succeeded('kg.import')).toBe(1);
 
@@ -476,6 +478,118 @@ describe('the graph and Ask on the bare host, end to end', () => {
     const proposal = await json(await api(`/api/graph/proposals/${imported.proposalId}`));
     expect(proposal.proposal.status).toBe('draft');
     expect(await host.prisma.$queryRaw`SELECT 1 FROM kg_entities`).toHaveLength(5);
+  });
+
+  // ---------------------------------------------------------------------------
+  // The ONE-CONNECTION guard (#615). PGlite serves one connection, and an interactive
+  // transaction holds it: a root-client read, or a call into a port that reads through the
+  // root client, made inside the transaction waits for that connection forever. Steps 11b
+  // and 11c drive the two paths that did that, over HTTP on the real host. Before the fix
+  // each request never answered; every call here is bounded so a regression FAILS in 30 s
+  // instead of hanging the run. They sit before step 12 (its SQL error drops the connection).
+  // ---------------------------------------------------------------------------
+
+  /** A request that gives up after 30 s: a one-connection deadlock must fail the step, not hang it. */
+  const GUARD_MS = 30_000;
+  async function guarded(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
+    try {
+      return await api(path, { ...init, signal: AbortSignal.timeout(GUARD_MS) });
+    } catch (error) {
+      if ((error as Error).name === 'TimeoutError' || (error as Error).name === 'AbortError') {
+        throw new Error(
+          `${init.method ?? 'GET'} ${path} did not answer in ${GUARD_MS} ms: a read inside the transaction is waiting for the only connection (#615)`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  it('11b. adds and decides a transcript-segment span on a draft proposal, then commits it (#615: the span origin is resolved before the transaction)', { timeout: 120_000 }, async () => {
+    const standup = seeded[1];
+    const joe = people.get('Joe Park') as string;
+
+    // A second extraction of the standup note: a fresh draft proposal whose note's origin is the standup transcript.
+    const requested = await json(await api(`/api/graph/notes/${standup.noteId}/extract`, { method: 'POST', json: {} }), 202);
+    expect(requested.proposal.status).toBe('extracting');
+    await drain();
+    const detail = (await json(await api(`/api/graph/notes/${standup.noteId}/proposal`))).proposal;
+    expect(detail.proposal.status).toBe('draft');
+    const proposalId: string = detail.proposal.id;
+    expect(proposalId).not.toBe(standup.proposalId);
+    const rows: Array<{ id: string }> = detail.items;
+    expect(rows.length).toBeGreaterThan(0);
+
+    // A real line of the origin transcript (read-only), and the exact words to cite.
+    const segment = await host.prisma.transcriptSegment.findFirst({
+      where: { transcriptId: standup.transcriptId },
+      orderBy: { startMs: 'asc' },
+      select: { id: true, rev: true, text: true },
+    });
+    expect(segment, 'the standup transcript has segments').not.toBeNull();
+    const quote = 'Joe Park';
+    const charStart = segment!.text.indexOf(quote);
+    expect(charStart).toBeGreaterThanOrEqual(0);
+    const span = { source: 'segment' as const, segmentId: segment!.id, segmentRev: segment!.rev, charStart, charEnd: charStart + quote.length, quote };
+
+    // addItem: the span's origin is resolved by SpanValidator.prepare, before the transaction.
+    const added = await json(
+      await guarded(`/api/graph/proposals/${proposalId}/items`, {
+        method: 'POST',
+        json: { kind: 'entity', payload: { type: 'Person', label: 'Joe Park' }, existingEntityId: joe, evidence: [span] },
+      }),
+      201,
+    );
+    expect(added.item.id).toBeTruthy();
+
+    // decide: adding the same kind of span to an existing row goes the same way.
+    const patched = await json(
+      await guarded(`/api/graph/proposals/${proposalId}/items/${rows[0].id}`, {
+        method: 'PATCH',
+        json: { decision: 'accept', evidence: { add: [span], remove: [] } },
+      }),
+    );
+    expect(patched.item.id).toBe(rows[0].id);
+
+    // Both spans were stored as the segment's evidence on this proposal's rows, with its timing.
+    const all: Array<{ id: string }> = (await json(await api(`/api/graph/proposals/${proposalId}`))).items;
+    const stored = await host.prisma.kgEvidence.findMany({
+      where: { subjectKind: 'proposal_item', subjectId: { in: all.map((i) => i.id) }, segmentId: segment!.id, quote },
+      select: { subjectId: true, transcriptId: true, startMs: true },
+    });
+    expect(stored.map((e) => e.subjectId).sort()).toEqual([added.item.id, rows[0].id].sort());
+    expect(stored.every((e) => e.transcriptId === standup.transcriptId && e.startMs !== null)).toBe(true);
+
+    // Accept everything and commit: the evidence anchors (a transcript the owner owns) are proven readable.
+    await json(await api(`/api/graph/proposals/${proposalId}/items/bulk`, { method: 'POST', json: { itemIds: all.map((i) => i.id), decision: 'accept' } }));
+    const committed = await json(await guarded(`/api/graph/proposals/${proposalId}/commit`, { method: 'POST', json: {} }));
+    expect(committed.proposal.status).toBe('committed');
+    await drain();
+
+    // The segment citation reached the graph: an entity-evidence row anchored to that line.
+    const cited = await host.prisma.kgEvidence.count({ where: { subjectKind: 'entity', segmentId: segment!.id } });
+    expect(cited).toBeGreaterThanOrEqual(1);
+    expect(await orphans('kg_entities', 'entity')).toBe(0);
+  });
+
+  it('11c. commits the import proposal whose evidence cites an import object (#615: the object store is asked before the transaction)', { timeout: 120_000 }, async () => {
+    const proposal = await json(await api(`/api/graph/proposals/${importProposalId}`));
+    expect(proposal.proposal.status).toBe('draft');
+    const rows: Array<{ id: string }> = proposal.items;
+
+    const cites = await host.prisma.kgEvidence.count({
+      where: { subjectKind: 'proposal_item', subjectId: { in: rows.map((r) => r.id) }, importObjectId: { not: null } },
+    });
+    expect(cites, 'the import proposal cites its upload as evidence').toBeGreaterThan(0);
+
+    if (rows.length > 0) {
+      await json(await api(`/api/graph/proposals/${importProposalId}/items/bulk`, { method: 'POST', json: { itemIds: rows.map((r) => r.id), decision: 'accept' } }));
+    }
+    const committed = await json(await guarded(`/api/graph/proposals/${importProposalId}/commit`, { method: 'POST', json: {} }));
+    expect(committed.proposal.status).toBe('committed');
+    await drain();
+    expect(await orphans('kg_entities', 'entity')).toBe(0);
+    expect(await orphans('kg_relations', 'relation')).toBe(0);
+    expect(await orphans('kg_items', 'item')).toBe(0);
   });
 
   it('12. refuses at COMMIT a transaction that strips an accepted entity of its evidence (the trigger, proven)', async () => {

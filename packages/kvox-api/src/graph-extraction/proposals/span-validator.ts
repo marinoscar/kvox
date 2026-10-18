@@ -24,13 +24,25 @@
 // transcript — even one the caller can read — is outside this proposal's
 // source, so it is refused here rather than admitted by the looser
 // `EvidenceValidator` rule.
+//
+// TWO PHASES, ONE CONNECTION (#615). Resolving the origin transcript is a
+// root-client walk (`NoteOriginService`: notes, transcripts, and the
+// `TranscriptSharing.sharedWhere` port, which may read the database). On a
+// one-connection pool (PGlite: KVox Desktop, the bare host's pglite leg) a
+// root-client read inside an interactive transaction waits forever for the
+// connection the transaction holds. So `prepare` runs BEFORE the caller opens
+// its transaction and resolves the origin (only when a segment span needs it);
+// `validate` runs inside it and touches only `tx`. The note itself (its
+// current version, its bodies, the segment rows) is still read on `tx`, in the
+// snapshot the write commits against.
 // =============================================================================
 
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 
 import { NoteOriginService } from '../../notes/index.js';
 import type { EvidenceInput } from '@marinoscar/kvox-contract/graph';
-import type { KvoxGraphTx } from '../../graph/index.js';
+import type { KvoxGraphDb, KvoxGraphTx } from '../../graph/index.js';
+import { KVOX_PRISMA } from '../../ports/index.js';
 import { GRAPH_CONFLICT_REASONS } from '../../graph/index.js';
 import { PROPOSAL_BAD_REQUEST_REASONS, type EvidenceSpanInput } from './dto/proposal.dto.js';
 
@@ -59,6 +71,30 @@ export interface SpanSource {
 }
 
 /**
+ * What `SpanValidator.validate` needs that does not come from its transaction,
+ * resolved by `SpanValidator.prepare` before the transaction opens (#615).
+ *
+ * @internal
+ * @stability experimental
+ */
+export interface SpanContext {
+  /** The source this context was prepared for; `validate` refuses any other. */
+  readonly ownerId: string;
+  readonly noteId: string | null;
+  /**
+   * The proposal note's origin transcript as the owner may follow it right now,
+   * or `null` when there is none. Absent when the prepared spans held no segment
+   * span, so nothing was resolved.
+   */
+  readonly originTranscriptId?: string | null;
+}
+
+/** The note predicate both phases apply: the owner's own, live note. */
+function liveNoteWhere(source: SpanSource & { noteId: string }) {
+  return { id: source.noteId, ownerId: source.ownerId, deletedAt: null, status: { not: 'deleting' as const } };
+}
+
+/**
  * SpanValidator: wiring the slice registers itself; a host configures it through the slice module's `forRoot` and never calls it directly.
  *
  * @internal
@@ -66,11 +102,46 @@ export interface SpanSource {
  */
 @Injectable()
 export class SpanValidator {
-  constructor(private readonly origin: NoteOriginService) {}
+  constructor(
+    private readonly origin: NoteOriginService,
+    @Inject(KVOX_PRISMA) private readonly prisma: KvoxGraphDb,
+  ) {}
 
-  /** Validate every span, in order; return the evidence rows to store. */
-  async validate(tx: Tx, source: SpanSource, spans: readonly EvidenceSpanInput[]): Promise<EvidenceInput[]> {
+  /**
+   * Resolve what `validate` needs outside its transaction, through the root client
+   * and the ports. Call it BEFORE opening the transaction `validate` runs on, never
+   * inside it: on a one-connection pool those reads would wait for the connection
+   * the transaction holds (#615). Read-only. With no segment span among `spans` it
+   * reads nothing.
+   */
+  async prepare(source: SpanSource, spans: readonly EvidenceSpanInput[]): Promise<SpanContext> {
+    const base = { ownerId: source.ownerId, noteId: source.noteId };
+    if (!spans.some((span) => span.source === 'segment')) return base;
+    if (!source.noteId) return { ...base, originTranscriptId: null };
+
+    const note = await this.prisma.note.findFirst({
+      where: liveNoteWhere({ ...source, noteId: source.noteId }),
+      select: { id: true, sourceType: true, sourceTranscriptId: true, sourceNoteId: true },
+    });
+    const origin = note ? await this.origin.resolve(note, source.ownerId) : null;
+    return { ...base, originTranscriptId: origin?.id ?? null };
+  }
+
+  /**
+   * Validate every span, in order; return the evidence rows to store. Reads only
+   * `tx`; `context` comes from `prepare(source, spans)`, run before the transaction.
+   */
+  async validate(
+    tx: Tx,
+    source: SpanSource,
+    spans: readonly EvidenceSpanInput[],
+    context: SpanContext,
+  ): Promise<EvidenceInput[]> {
     if (spans.length === 0) return [];
+    if (context.ownerId !== source.ownerId || context.noteId !== source.noteId) {
+      // A programming bug, never a client error: the context was prepared for another source.
+      throw new Error('SpanValidator.validate: the span context was prepared for a different source');
+    }
 
     const outside = (index: number) =>
       badSpan(
@@ -81,18 +152,18 @@ export class SpanValidator {
 
     const note = source.noteId
       ? await tx.note.findFirst({
-          where: { id: source.noteId, ownerId: source.ownerId, deletedAt: null, status: { not: 'deleting' } },
-          select: { id: true, currentVersion: true, sourceType: true, sourceTranscriptId: true, sourceNoteId: true },
+          where: liveNoteWhere({ ...source, noteId: source.noteId }),
+          select: { id: true, currentVersion: true },
         })
       : null;
 
-    // The origin transcript is resolved once, and only when a segment span needs it.
-    let originId: string | null | undefined;
-    const originTranscriptId = async (): Promise<string | null> => {
-      if (originId === undefined) {
-        originId = note ? ((await this.origin.resolve(note, source.ownerId))?.id ?? null) : null;
+    // The origin transcript was resolved by `prepare`, before the transaction (#615).
+    const originTranscriptId = (): string | null => {
+      if (context.originTranscriptId === undefined) {
+        // A programming bug: `prepare` was handed spans without this segment span.
+        throw new Error('SpanValidator.validate: a segment span needs a context prepared with it');
       }
-      return originId;
+      return context.originTranscriptId;
     };
 
     const out: EvidenceInput[] = [];
@@ -129,7 +200,7 @@ export class SpanValidator {
         continue;
       }
 
-      const transcriptId = await originTranscriptId();
+      const transcriptId = originTranscriptId();
       const segment = transcriptId
         ? await tx.transcriptSegment.findFirst({
             where: { id: span.segmentId, transcriptId },

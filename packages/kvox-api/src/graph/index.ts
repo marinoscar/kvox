@@ -134,6 +134,7 @@ export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, isEx
 export type { CandidateEdge, TemporalEdge, TemporalPlan, TemporalReviewStatus, TemporalRule, ValidPrecision, ValidRange } from './temporal/index.js';
 export { GraphDuplicateError, GraphInvariantError, GraphValidationError, toGraphHttpException } from './write/graph-write.errors.js';
 export { GraphWriteService } from './write/graph-write.service.js';
+export type { EvidenceAccess } from './write/evidence-validator.service.js';
 export { loadLiveTemporalEdges } from './write/live-edges.js';
 export { ManualEvidence, MANUAL_EVIDENCE_LABEL, isManualEvidenceRow } from './write/manual-evidence.js';
 export type { GraphEvidenceInput } from './write/manual-evidence.js';
