@@ -476,7 +476,12 @@ export async function seedGraph(prisma: PrismaClient, fixtures: GoldenFixture[])
   return { userId: user.id, email, idMap };
 }
 
-/** Deletes the throwaway user and everything owned by it. Mirrors `cleanupGraphFixtures`'s technique. */
+/**
+ * Deletes the throwaway user and everything owned by it. Mirrors `cleanupGraphFixtures`'s technique.
+ *
+ * `session_replication_role = replica` disables the foreign-key triggers, so deleting a parent does NOT
+ * cascade: every cascade child that must go is deleted explicitly below, before its parent.
+ */
 export async function teardownSeededGraph(prisma: PrismaClient, userId: string): Promise<void> {
   await prisma.$transaction(
     async (tx) => {
@@ -487,6 +492,8 @@ export async function teardownSeededGraph(prisma: PrismaClient, userId: string):
       await tx.kgRelation.deleteMany({ where: { ownerId: userId } });
       await tx.kgItem.deleteMany({ where: { ownerId: userId } });
       await tx.kgEntityAlias.deleteMany({ where: { ownerId: userId } });
+      await tx.kgEntityDigest.deleteMany({ where: { ownerId: userId } });
+      await tx.kgGraphLayout.deleteMany({ where: { ownerId: userId } });
       await tx.kgEntity.deleteMany({ where: { ownerId: userId } });
       await tx.askMessage.deleteMany({ where: { conversation: { ownerId: userId } } });
       await tx.askConversation.deleteMany({ where: { ownerId: userId } });
@@ -495,7 +502,10 @@ export async function teardownSeededGraph(prisma: PrismaClient, userId: string):
       await tx.transcript.deleteMany({ where: { ownerId: userId } });
       await tx.noteVersion.deleteMany({ where: { note: { ownerId: userId } } });
       await tx.note.deleteMany({ where: { ownerId: userId } });
+      // kvox_object_ownership cascades from storage_objects, which `replica` stops.
+      await tx.kvoxObjectOwnership.deleteMany({ where: { object: { uploadedById: userId } } });
       await tx.storageObject.deleteMany({ where: { uploadedById: userId } });
+      await tx.userSettings.deleteMany({ where: { userId } });
       await tx.userAiKey.deleteMany({ where: { userId } });
       await tx.job.deleteMany({ where: { payload: { path: ['userId'], equals: userId } } });
       await tx.userRole.deleteMany({ where: { userId } });

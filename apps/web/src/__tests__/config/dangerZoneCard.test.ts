@@ -114,3 +114,73 @@ describe('USER_SETTINGS_SECTIONS — Delete my data card (issues #80, #480)', ()
     ]);
   });
 });
+
+/**
+ * Issue #562 — the admin counterpart, the factory reset card: the platform's
+ * card and page (`factoryResetSettingsPage`), in its own `Danger Zone` group
+ * pinned LAST of `ADMIN_SECTIONS`.
+ */
+const FACTORY_PATH = '/admin/settings/factory-reset';
+const FACTORY_PERMISSION = 'system:factory_reset';
+
+function adminTitles(has: (permission: string) => boolean): string[] {
+  return visibleSettingsSections(ADMIN_SECTIONS, has).flatMap((section) =>
+    section.cards.map((card) => card.title),
+  );
+}
+
+describe('ADMIN_SECTIONS — Factory reset card (issue #562)', () => {
+  const section = ADMIN_SECTIONS.find((entry) =>
+    entry.cards.some((card) => card.path === FACTORY_PATH),
+  );
+  const card = section?.cards.find((entry) => entry.path === FACTORY_PATH);
+
+  it('is declared in the registry, alone in its own "Danger Zone" group, pinned LAST', () => {
+    expect(card).toBeDefined();
+    expect(card?.title).toBe('Factory reset');
+    expect(section?.label).toBe('Danger Zone');
+    expect(section?.cards).toHaveLength(1);
+    expect(ADMIN_SECTIONS[ADMIN_SECTIONS.length - 1]).toBe(section);
+  });
+
+  it('conforms to the platform’s Danger-Zone-last rule, keeping the card’s path', () => {
+    expect(dangerZoneLastViolations(ADMIN_SECTIONS, FACTORY_PATH)).toEqual([]);
+  });
+
+  it('declares system:factory_reset and no feature, and carries an icon', () => {
+    expect(card?.permission).toBe(FACTORY_PERMISSION);
+    expect(card?.feature).toBeUndefined();
+    expect(card?.Icon).toBeDefined();
+  });
+
+  it('is visible to a holder of system:factory_reset', () => {
+    expect(adminTitles((permission) => permission === FACTORY_PERMISSION)).toContain('Factory reset');
+  });
+
+  it('is hidden from a holder of every other permission, system_settings:write included', () => {
+    expect(adminTitles((permission) => permission !== FACTORY_PERMISSION)).not.toContain(
+      'Factory reset',
+    );
+    expect(
+      adminTitles((permission) => permission.startsWith('system_settings:')),
+    ).not.toContain('Factory reset');
+  });
+
+  it('resolves its route to its own title; the user registry knows nothing about it', () => {
+    expect(settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, FACTORY_PATH)).toBe(
+      'Factory reset',
+    );
+    expect(
+      settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, FACTORY_PATH),
+    ).toBeNull();
+  });
+
+  it('has a route in App.tsx gated on the same permission, read from the live file', () => {
+    const source = readFileSync(APP_TSX, 'utf8');
+    const at = source.indexOf(`path="${FACTORY_PATH}"`);
+    expect(at).toBeGreaterThan(-1);
+    const route = source.slice(at, at + 400);
+    expect(route).toContain(`permission="${FACTORY_PERMISSION}"`);
+    expect(route).toContain('<FactoryResetPage />');
+  });
+});
