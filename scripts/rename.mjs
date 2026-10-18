@@ -246,9 +246,13 @@ function buildPlan(old, next) {
   // rasterise these two: rendering an SVG needs a toolchain this template
   // refuses to require. Anchored on the `fill` attribute of the background
   // rect so the white mark in the same file is never repainted.
-  add('apps/web/public/favicon.svg', `fill="${old.themeColor}"`, `fill="${next.themeColor}"`, 1,
+  //
+  // They live in the brand package since #628 (`@marinoscar/kvox-web/brand`
+  // assets); `apps/web/public/` holds a mirror that `syncBrandFiles` below
+  // rewrites from them, so the mirror is never an anchor of its own.
+  add('packages/kvox-web/src/brand/assets/favicon.svg', `fill="${old.themeColor}"`, `fill="${next.themeColor}"`, 1,
       'the favicon background plate');
-  add('apps/web/public/icons/source.svg', `fill="${old.themeColor}"`, `fill="${next.themeColor}"`, 1,
+  add('packages/kvox-web/src/brand/assets/mark.svg', `fill="${old.themeColor}"`, `fill="${next.themeColor}"`, 1,
       'the icon master background plate');
 
   // --- The CLI binary, only when explicitly asked for --------------------
@@ -458,6 +462,7 @@ function main() {
 
   if (!opts.dryRun) {
     regenerateIcons(old, next);
+    syncBrandFiles();
     const residual = residualScan(old, next);
     if (residual.length > 0) {
       console.log(`\nStill carrying an old value (${residual.length} line(s)) — review each:\n`);
@@ -507,11 +512,31 @@ function warnAboutCliRename(from, to) {
 `);
 }
 
+/**
+ * Re-derive the two brand files that copy the manifest or the package assets
+ * (#628): `identity.generated.ts` (the theme's `KVOX_BRAND`, from `identity.json`)
+ * and the `apps/web/public` mirror (from the package assets, after the SVG
+ * anchors and the icon regeneration above). Both are plain Node scripts.
+ */
+function syncBrandFiles() {
+  const scripts = [
+    ['packages/kvox-web/scripts/sync-brand-identity.mjs', 'the theme identity (identity.generated.ts)'],
+    ['apps/web/scripts/sync-brand-assets.mjs', 'the apps/web/public mirror of the brand assets'],
+  ];
+  for (const [script, what] of scripts) {
+    try {
+      execFileSync(process.execPath, [script], { cwd: REPO_ROOT, stdio: 'inherit' });
+    } catch {
+      console.warn(`\n  SKIPPED: ${what}. Run it yourself:\n      node ${script}`);
+    }
+  }
+}
+
 function regenerateIcons(old, next) {
   if (old.themeColor === next.themeColor && old.backgroundColor === next.backgroundColor) return;
-  const cmd = 'python3 apps/web/scripts/generate-icons.py';
+  const cmd = 'python3 packages/kvox-web/scripts/generate-icons.py';
   try {
-    execFileSync('python3', ['apps/web/scripts/generate-icons.py'], { cwd: REPO_ROOT, stdio: 'inherit' });
+    execFileSync('python3', ['packages/kvox-web/scripts/generate-icons.py'], { cwd: REPO_ROOT, stdio: 'inherit' });
     console.log('\nRegenerated the brand icons.');
   } catch {
     console.warn(
