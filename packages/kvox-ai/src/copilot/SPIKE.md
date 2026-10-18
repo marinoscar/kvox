@@ -63,7 +63,7 @@ Only what the Linux x64 runtime was seen doing, plus static strings in `runtime.
 | `api.githubcopilot.com` | model listing and inference | **inferred** (string); needs a signed-in account to exercise |
 | `127.0.0.1:<random>` | the OAuth redirect listener | **verified** in the authorize URL |
 
-Also present as static strings, not expected to be contacted by KVox's zero-tool use: `api.mcp.github.com`, `agentfinder.github.com`, `*.ghe.com` (Enterprise Cloud sign-in), `login.microsoftonline.com` and several Microsoft 365 hosts (Entra sign-in), `api.openai.com` / `api.anthropic.com` (bring-your-own-model providers), `vscode.dev`, `aka.ms`, `gh.io`, `docs.github.com`. An allowlist of `github.com`, `api.github.com`, `api.githubcopilot.com` is the starting point; the exact set must be confirmed with a proxy capture on a signed-in machine, and GitHub may add hosts in later runtime releases.
+Also present as static strings, not expected to be contacted by KVox's zero-tool use: `api.mcp.github.com`, `agentfinder.github.com`, `*.ghe.com` (Enterprise Cloud sign-in), `login.microsoftonline.com` and several Microsoft 365 hosts (Entra sign-in), the OpenAI and Anthropic API hosts (bring-your-own-model providers), `vscode.dev`, `aka.ms`, `gh.io`, `docs.github.com`. An allowlist of `github.com`, `api.github.com`, `api.githubcopilot.com` is the starting point; the exact set must be confirmed with a proxy capture on a signed-in machine, and GitHub may add hosts in later runtime releases.
 
 ## 5. Telemetry
 
