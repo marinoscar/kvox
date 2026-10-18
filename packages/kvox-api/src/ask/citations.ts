@@ -14,6 +14,11 @@
 //         first — the `evidence` tool's order), as kind `evidence` with
 //         `via: { kind, id }`; no evidence row → `valid: false`
 //
+// A MANUAL citation (#586: a relation set by hand on an entity page, the
+// owner as the source) has no document: it is a valid `evidence` citation
+// labelled "Set by hand", `documentKind: null`. Any document citation of the
+// same subject sorts before it.
+//
 // An unissued (invented, stale, malformed) marker is `valid: false, id: null`.
 // Invalid markers STAY in `content` — it is append-only under a connected
 // reader — and the UI drops them from the rendered answer and shows the count.
@@ -25,6 +30,8 @@ import { Prisma } from '../core/index.js';
 import type { SearchTranscriptVisibility } from '../search/index.js';
 import type { AskCitation } from './dto/ask.dto.js';
 import type { HandleRegistry } from './tools/handle-registry.js';
+import { MANUAL_EVIDENCE_LABEL } from '../graph/index.js';
+import { MANUAL_EVIDENCE_SOURCE_IRI } from '@marinoscar/kvox-contract/graph';
 
 /** The five marker prefixes; the digits as written (a malformed `ev0` parses, and is invalid). */
 export const CITATION_MARKER_RE = /\[\^(ev|ent|doc|itm|rel)(\d+)\]/g;
@@ -162,6 +169,7 @@ interface SourceRow {
   startMs: number | null;
   transcriptTitle: string | null;
   noteTitle: string | null;
+  sourceIri: string | null;
 }
 
 /**
@@ -194,17 +202,18 @@ export async function loadCitationSources(
            c.transcript_id::text AS "transcriptId",
            c.note_id::text     AS "noteId",
            c.start_ms          AS "startMs",
+           c.source_iri        AS "sourceIri",
            CASE WHEN t.id IS NOT NULL AND ${visibility.transcriptVisibleSql(viewer, 't')}
                 THEN t.title END AS "transcriptTitle",
            CASE WHEN n.id IS NOT NULL AND n.deleted_at IS NULL AND n.owner_id = ${ownerId}::uuid
                 THEN n.title END AS "noteTitle"
       FROM (
-        SELECT ev.id::text AS key, ev.id, ev.transcript_id, ev.note_id, ev.start_ms, ev.created_at
+        SELECT ev.id::text AS key, ev.id, ev.transcript_id, ev.note_id, ev.start_ms, ev.source_iri, ev.created_at
           FROM kg_evidence ev
          WHERE ev.owner_id = ${ownerId}::uuid AND ev.id = ANY(${uuids(request.evidenceIds)})
         UNION ALL
         SELECT ev.subject_kind::text || ':' || ev.subject_id::text AS key,
-               ev.id, ev.transcript_id, ev.note_id, ev.start_ms, ev.created_at
+               ev.id, ev.transcript_id, ev.note_id, ev.start_ms, ev.source_iri, ev.created_at
           FROM kg_evidence ev
          WHERE ev.owner_id = ${ownerId}::uuid
            AND ((ev.subject_kind = 'item' AND ev.subject_id = ANY(${uuids(request.itemIds)}))
@@ -215,9 +224,10 @@ export async function loadCitationSources(
      ORDER BY c.key, coalesce(t.recorded_at, n.created_at) DESC NULLS LAST, c.created_at DESC, c.id DESC`));
 
   for (const row of rows) {
+    const manual = row.sourceIri === MANUAL_EVIDENCE_SOURCE_IRI;
     const source: EvidenceSource = {
       evidenceId: row.evidenceId,
-      label: row.transcriptTitle ?? row.noteTitle ?? null,
+      label: manual ? MANUAL_EVIDENCE_LABEL : (row.transcriptTitle ?? row.noteTitle ?? null),
       documentKind: row.transcriptId ? 'transcript' : row.noteId ? 'note' : null,
       startMs: row.startMs ?? null,
     };

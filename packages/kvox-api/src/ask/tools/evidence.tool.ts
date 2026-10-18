@@ -15,7 +15,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
 
-import { GraphEvidenceService, AS_OF_RELATION_STATUSES, READABLE_ENTITY_STATUSES, TIMELINE_ITEM_STATUSES } from '../../graph/index.js';
+import { GraphEvidenceService, MANUAL_EVIDENCE_LABEL, AS_OF_RELATION_STATUSES, READABLE_ENTITY_STATUSES, TIMELINE_ITEM_STATUSES } from '../../graph/index.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxAskDb } from '../data/ask-db.js';
 import {
@@ -76,7 +76,15 @@ export class EvidenceTool implements AskTool<EvidenceToolInput> {
     const out = page.map(({ link, occurredAt }) => {
       const src = link.source;
       const kind = src.kind === 'segment' ? 'transcript' : src.kind;
-      const title = src.kind === 'segment' ? src.transcriptTitle : src.kind === 'note' ? src.noteTitle : null;
+      // A manual citation (#586) is the owner's own statement, set by hand on an entity page.
+      const title =
+        src.kind === 'segment'
+          ? src.transcriptTitle
+          : src.kind === 'note'
+            ? src.noteTitle
+            : src.kind === 'manual'
+              ? MANUAL_EVIDENCE_LABEL
+              : null;
       const startMs = src.kind === 'segment' && src.available ? src.startMs : null;
       return {
         ref: ctx.handles.register({ kind: 'ev', id: link.id, ...(title ? { label: title } : {}) }),

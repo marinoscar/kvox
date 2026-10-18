@@ -1,4 +1,10 @@
 import type { NormalizedTranscript } from '@marinoscar/kvox-api/transcription';
+import type {
+  KvoxScenarioCommitment,
+  KvoxScenarioMeeting,
+  KvoxScenarioPerson,
+  KvoxScenarioRelation,
+} from '@marinoscar/kvox-api/testing';
 
 // =============================================================================
 // The synthetic world the graph and Ask legs run on
@@ -6,7 +12,8 @@ import type { NormalizedTranscript } from '@marinoscar/kvox-api/transcription';
 //
 // Two recordings, each with what a meeting "said" (the fake transcription
 // provider's script) and what a model would extract from it (the fake model's
-// structured answer for `kg_extraction`, see `fake-ai.ts`). Nothing here is
+// structured answer for `kg_extraction`: `createScenarioKvoxAi` of
+// `@marinoscar/kvox-api/testing`, wired in `fake-ai.ts`). Nothing here is
 // written to the database directly: a test uploads the recordings, generates a
 // note from each, asks for the extraction over HTTP and commits the proposal,
 // so every entity, relation and commitment enters the graph through the real
@@ -23,6 +30,11 @@ import type { NormalizedTranscript } from '@marinoscar/kvox-api/transcription';
 //                                    NOT attend, which "meetings with Jenny's
 //                                    boss" must leave out.
 //
+// NO MEETING SAYS WHO JOE REPORTS TO. The Ask leg sets it by hand on Joe's
+// entity page (`POST /api/graph/entities/:id/relations`, #586) and asks
+// `ASK_QUESTIONS.manualBossMeetings`: the answer follows the manual
+// REPORTS_TO, cited "Set by hand".
+//
 // THE MEETING ITSELF IS NEVER IN THE ANSWER: `kg.extract` adds the Meeting row
 // (one per transcript, named after its title) deterministically. The ATTENDED
 // rows are the model's here, because the speakers are not named (naming one
@@ -36,44 +48,19 @@ import type { NormalizedTranscript } from '@marinoscar/kvox-api/transcription';
 // links it.
 // =============================================================================
 
-/** A person a recording mentions, and the words that prove it. */
-export interface ScenarioPerson {
-  /** The full name, as the graph labels the entity. */
-  label: string;
-  /** An exact quote from one of the recording's segments. */
-  quote: string;
-  /** Whether the person took part (an ATTENDED row to the meeting). */
-  attended: boolean;
-}
+/** A person a recording mentions (the package's scenario type). */
+export type ScenarioPerson = KvoxScenarioPerson;
 
-/** A relation between two of the recording's people. */
-export interface ScenarioRelation {
-  type: string;
-  from: string;
-  to: string;
-  quote: string;
-}
+/** A relation between two of a recording's people. */
+export type ScenarioRelation = KvoxScenarioRelation;
 
 /** A commitment a person owns. */
-export interface ScenarioCommitment {
-  owner: string;
-  counterparty: string | null;
-  title: string;
-  statement: string;
-  status: 'open' | 'done';
-  quote: string;
-}
+export type ScenarioCommitment = KvoxScenarioCommitment;
 
-/** One recording of the scenario. */
-export interface ScenarioRecording {
-  /** The transcript title, which `kg.extract` uses as the meeting title (the fake model keys on it). */
-  title: string;
+/** One recording of the scenario: what the scenario model extracts, plus what the fake speech provider hears. */
+export interface ScenarioRecording extends KvoxScenarioMeeting {
   /** What the fake transcription provider hears. */
   transcript: Omit<NormalizedTranscript, 'provider'>;
-  /** What the fake model extracts. */
-  people: ScenarioPerson[];
-  relations: ScenarioRelation[];
-  commitments: ScenarioCommitment[];
 }
 
 function segments(lines: Array<[label: string, text: string]>): NormalizedTranscript['segments'] {
@@ -154,4 +141,6 @@ export const GRAPH_SCENARIO: readonly ScenarioRecording[] = [WEEKLY_SYNC, STANDU
 export const ASK_QUESTIONS = {
   actionItems: 'What are the action items from Joe?',
   bossMeetings: "What meetings have we had with Jenny's boss?",
+  /** Answerable only once Joe's manager is set by hand (#586): no meeting states it. */
+  manualBossMeetings: "What meetings have we had with Joe's boss?",
 } as const;

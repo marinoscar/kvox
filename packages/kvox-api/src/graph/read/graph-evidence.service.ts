@@ -31,9 +31,10 @@ import { NoteAccessService } from '../../notes/index.js';
 import { TranscriptAccessService, transcriptHasAudio } from '../../transcripts/index.js';
 import { GraphAccessService } from '../access/graph-access.service.js';
 import type { EvidenceLink } from './dto/graph-read.dto.js';
+import { isManualEvidenceRow } from '../write/manual-evidence.js';
 import type { KvoxGraphDb, KgEvidenceRow as KgEvidence } from '../data/graph-db.js';
 
-export type EvidenceSourceKind = 'segment' | 'note' | 'import';
+export type EvidenceSourceKind = 'segment' | 'note' | 'import' | 'manual';
 
 /** The subjects `listForSubject` accepts — the three kinds of curated graph row. */
 export type EvidenceSubjectKind = 'entity' | 'relation' | 'item';
@@ -52,13 +53,18 @@ export interface SubjectEvidence {
 /** The most citations `listForSubject` returns. */
 export const SUBJECT_EVIDENCE_MAX = 50;
 
-/** Which anchor a row cites. `note_version`/`segment_rev` survive `SetNull`, so the kind does too. */
+/**
+ * Which anchor a row cites. `note_version`/`segment_rev` survive `SetNull`, so
+ * the kind does too. A manual citation (#586) is told apart from a row whose
+ * anchors all went NULL by its reserved `source_iri`.
+ */
 export function evidenceSourceKind(
   row: Pick<
     KgEvidence,
     'importObjectId' | 'sourceIri' | 'noteId' | 'noteVersion' | 'charStart' | 'transcriptId' | 'segmentId'
   > & { subjectKind: string },
 ): EvidenceSourceKind {
+  if (isManualEvidenceRow(row)) return 'manual';
   if (row.subjectKind === 'import' || row.importObjectId !== null || row.sourceIri !== null) return 'import';
   if (row.noteId !== null || row.noteVersion !== null) return 'note';
   return 'segment';
@@ -206,6 +212,10 @@ export class GraphEvidenceService {
       };
 
       switch (evidenceSourceKind(row)) {
+        case 'manual': {
+          // The owner is the source: nothing to open, nothing that can disappear.
+          return { ...base, source: { kind: 'manual' as const, available: true as const, href: null } };
+        }
         case 'import': {
           return {
             ...base,
