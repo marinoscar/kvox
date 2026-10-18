@@ -31,6 +31,10 @@ Change all five together or none; the boundary is `sm` (600px), never `md`. Sinc
 - `knowledge` (`/graph`, `/ask`) gates on `graph:read` **and** `feature: 'graph'` (`config/settingsFeatures.ts`, fed by `GET /api/ai-tasks/config`'s `graphEnabled` through `platform/GraphFeatureBinding.tsx`); while unknown or loading the item is hidden, never shown then removed.
 - Graph drawing goes through `GraphCanvas.tsx`, the one file that imports sigma.
 
+## Brand and theme
+
+The KVox look is `@marinoscar/kvox-web/brand` (`packages/kvox-web/src/brand/`), shared with KVox Desktop (issue #628): tokens, palettes, component overrides, `createKvoxTheme`, `BrandMark`/`BrandLockup`, the SVG/PNG brand files and the Inter font. `src/theme/index.ts` only re-exports `kvoxLightTheme` and `kvoxDarkTheme`; never add a colour, a theme override or a logo here (`grep "#4f46e5" src` must find no palette). `public/favicon.*`, `public/icons/*` and `public/fonts/*` are a byte-for-byte MIRROR of the package files: edit the package copy (the package's `scripts/generate-icons.py` writes the PNGs there), run `node scripts/sync-brand-assets.mjs`, and commit both (`npm run brand:check` and `src/__tests__/pwa/brandAssetsMirror.test.ts` fail on drift).
+
 ## Frontend conventions
 
 - The UI presents; the API authorizes. Hiding a card or button is not security.

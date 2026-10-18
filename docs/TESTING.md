@@ -1047,8 +1047,9 @@ The harness originally solved this by shipping its own copy of Inter under `apps
 
 | File | Role |
 |---|---|
-| `apps/web/public/fonts/Inter-latin-variable.woff2` | The **only** font file in the repo (~48KB, latin subset, variable `wght` 100–900) |
-| `apps/web/public/fonts/inter.css` | The **only** `@font-face` in the repo, `font-display: swap` |
+| `packages/kvox-web/src/brand/fonts/Inter-latin-variable.woff2` | The **only** font file in the repo (~48KB, latin subset, variable `wght` 100–900), shipped as `@marinoscar/kvox-web/brand/fonts/Inter-latin-variable.woff2` (#628) |
+| `packages/kvox-web/src/brand/fonts/inter.css` | The **only** `@font-face` in the repo, `font-display: swap`, with a relative font URL |
+| `apps/web/public/fonts/*` | A byte-for-byte mirror of the two files above (`apps/web/scripts/sync-brand-assets.mjs`, checked by `npm run brand:check -w web` and `src/__tests__/pwa/brandAssetsMirror.test.ts`); it is what `/fonts/...` serves |
 | `apps/web/index.html` | `<link>`s that stylesheet — the real app |
 | `apps/web/visual/index.html` | `<link>`s **the same** stylesheet at the same URL — the harness |
 
@@ -1063,9 +1064,9 @@ That assertion is deliberately not `document.fonts.check('16px Inter')`, which i
 ### Directory Structure
 
 ```
-apps/web/public/fonts/            # Shared by the app AND the harness (#111)
-├── Inter-latin-variable.woff2    # The repo's only font file
-└── inter.css                     # The repo's only @font-face
+apps/web/public/fonts/            # Shared by the app AND the harness (#111); a mirror of
+├── Inter-latin-variable.woff2    #   packages/kvox-web/src/brand/fonts/, the repo's only
+└── inter.css                     #   font file and @font-face (#628)
 
 apps/web/visual/                  # Harness — mounts real app components
 ├── index.html                    # <link>s the app's /fonts/inter.css
