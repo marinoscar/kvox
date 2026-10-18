@@ -1,9 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Inject, Injectable, Module, type OnModuleInit } from '@nestjs/common';
 import { runAsSystem } from '@marinoscar/platform-api/core';
+import { STORAGE_PROVIDER, StorageProvidersModule, type StorageProvider } from '@marinoscar/platform-api/storage';
 import { USER_DATA_DB } from '@marinoscar/platform-api/user-data';
 import type { UserDataDbPort, UserDataSystemReason } from '@marinoscar/platform-api/user-data';
 
 import { PrismaSystemService } from '../../prisma/prisma-system.service';
+import { bindKvoxFactoryResetDeps } from '../../kvox-objects/factory-reset-storage.step';
 
 // =============================================================================
 // The user-data slice's one host port (issue #480)
@@ -23,10 +25,29 @@ import { PrismaSystemService } from '../../prisma/prisma-system.service';
 //
 // Not @Global: only `UserDataModule.forRoot({ imports: [UserDataHostModule] })`
 // needs it, and keeping the bypass client's reach narrow is the point.
+//
+// It also hands this app's factory reset storage sweep (`factory-reset.steps.ts`) the two
+// ports a registered step function cannot inject: this bypass client and the active storage
+// provider (issue #562).
 // =============================================================================
 
+/** Binds the storage sweep's ports once the container is up. */
+@Injectable()
+export class KvoxFactoryResetBinding implements OnModuleInit {
+  constructor(
+    @Inject(USER_DATA_DB) private readonly db: UserDataDbPort,
+    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+  ) {}
+
+  onModuleInit(): void {
+    bindKvoxFactoryResetDeps({ db: this.db, storage: this.storage });
+  }
+}
+
 @Module({
+  imports: [StorageProvidersModule],
   providers: [
+    KvoxFactoryResetBinding,
     {
       provide: USER_DATA_DB,
       inject: [PrismaSystemService],

@@ -7622,7 +7622,7 @@ admin job list.
 The platform also mounts `GET|POST /admin/factory-reset` and
 `GET|POST /admin/orgs/{orgId}/offboarding` (Admin only: `system:factory_reset`,
 `orgs:offboard`) under the `Factory reset` and `Organization offboarding` tags;
-this application has no page for either yet.
+the web app has a page for the factory reset (`/admin/settings/factory-reset`, #562) and none for offboarding yet.
 
 ---
 
