@@ -6,6 +6,7 @@ import type { UserDataDbPort, UserDataSystemReason } from '@marinoscar/platform-
 
 import { PrismaSystemService } from '../../prisma/prisma-system.service';
 import { bindKvoxFactoryResetDeps } from '../../kvox-objects/factory-reset-storage.step';
+import { KvoxOrgOffboardBinding } from './offboarding.steps';
 
 // =============================================================================
 // The user-data slice's one host port (issue #480)
@@ -28,7 +29,8 @@ import { bindKvoxFactoryResetDeps } from '../../kvox-objects/factory-reset-stora
 //
 // It also hands this app's factory reset storage sweep (`factory-reset.steps.ts`) the two
 // ports a registered step function cannot inject: this bypass client and the active storage
-// provider (issue #562).
+// provider (issue #562). `KvoxOrgOffboardBinding` installs this app's organization offboarding
+// steps on the platform's `org.offboard` handler (`offboarding.steps.ts`, issue #568).
 // =============================================================================
 
 /** Binds the storage sweep's ports once the container is up. */
@@ -48,6 +50,7 @@ export class KvoxFactoryResetBinding implements OnModuleInit {
   imports: [StorageProvidersModule],
   providers: [
     KvoxFactoryResetBinding,
+    KvoxOrgOffboardBinding,
     {
       provide: USER_DATA_DB,
       inject: [PrismaSystemService],

@@ -23,6 +23,9 @@ import type { FactoryResetStepDef, UserDataDbPort } from '@marinoscar/platform-a
 // page selects what is still there. A provider failure keeps the row and is counted in
 // `storageObjectsFailed`; it never throws. The rows go with their `kvox_object_ownership`
 // marker and multipart chunks by cascade.
+//
+// The same sweep, filtered to one organization, is the storage step of the organization
+// offboarding (`runKvoxOrgStorageObjects`, issue #568); it shares the bound ports below.
 // =============================================================================
 
 const logger = new Logger('KvoxFactoryReset');
@@ -82,6 +85,62 @@ function slices<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
+/** The `where` that leaves out every object under a surviving key prefix (database backups). */
+function notSurvivingFilter(): Record<string, unknown> {
+  const surviving = survivingKeyPrefixes();
+
+  return surviving.length > 0
+    ? { NOT: { OR: surviving.map((prefix) => ({ storageKey: { startsWith: prefix } })) } }
+    : {};
+}
+
+/**
+ * Deletes every storage object matching `where` (bytes, then the row), paging by id cursor so
+ * a retried call selects what is still there. A provider failure keeps the row and is counted;
+ * it never throws. Shared by the factory reset sweep and the organization offboarding sweep.
+ *
+ * @param where - the base filter; the cursor is added to it on every page.
+ * @param label - the caller named in the deletion's log lines (`admin.factory_reset`, ...).
+ */
+export async function sweepStorageObjects(
+  where: Record<string, unknown>,
+  label: string,
+  sweepLogger: Logger = logger,
+): Promise<{ storageObjectsDeleted: number; storageObjectsFailed: number }> {
+  const { db, storage } = requireDeps();
+  const system = db.system('purge');
+  let cursor: string | undefined;
+  let storageObjectsDeleted = 0;
+  let storageObjectsFailed = 0;
+
+  for (;;) {
+    const page: { id: string }[] = await system.storageObject.findMany({
+      where: { ...where, ...(cursor ? { id: { gt: cursor } } : {}) },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: USER_DATA_CHUNK_SIZE,
+    });
+
+    if (page.length === 0) break;
+
+    cursor = page[page.length - 1].id;
+
+    // A few provider round trips at a time: each delete is a network call.
+    for (const group of slices(slices(page.map((row) => row.id), SWEEP_SLICE), SWEEP_CONCURRENCY)) {
+      const results = await Promise.all(
+        group.map((ids) => deleteStorageObjects(system, storage as StorageProvider, sweepLogger, label, ids)),
+      );
+
+      for (const result of results) {
+        storageObjectsDeleted += result.storageObjectsDeleted;
+        storageObjectsFailed += result.storageObjectsFailed;
+      }
+    }
+  }
+
+  return { storageObjectsDeleted, storageObjectsFailed };
+}
+
 /**
  * Every storage object outside the `survivesFactoryReset` prefixes: the bytes, then the row.
  * See the header for why this app registers it and for its transaction posture.
@@ -91,42 +150,44 @@ export const KVOX_STORAGE_STEP: FactoryResetStepDef = {
   phase: 'deployment',
   description: 'Every stored file outside the surviving prefixes (database backups): bytes, then the row.',
   async run(): Promise<Record<string, number>> {
-    const { db, storage } = requireDeps();
-    const system = db.system('purge');
-    const surviving = survivingKeyPrefixes();
-    const notSurviving =
-      surviving.length > 0 ? { NOT: { OR: surviving.map((prefix) => ({ storageKey: { startsWith: prefix } })) } } : {};
-    let cursor: string | undefined;
-    let storageObjectsDeleted = 0;
-    let storageObjectsFailed = 0;
-
-    for (;;) {
-      const page: { id: string }[] = await system.storageObject.findMany({
-        where: { ...notSurviving, ...(cursor ? { id: { gt: cursor } } : {}) },
-        select: { id: true },
-        orderBy: { id: 'asc' },
-        take: USER_DATA_CHUNK_SIZE,
-      });
-
-      if (page.length === 0) break;
-
-      cursor = page[page.length - 1].id;
-
-      // A few provider round trips at a time: each delete is a network call.
-      for (const group of slices(slices(page.map((row) => row.id), SWEEP_SLICE), SWEEP_CONCURRENCY)) {
-        const results = await Promise.all(
-          group.map((ids) =>
-            deleteStorageObjects(system, storage as StorageProvider, logger, 'admin.factory_reset', ids),
-          ),
-        );
-
-        for (const result of results) {
-          storageObjectsDeleted += result.storageObjectsDeleted;
-          storageObjectsFailed += result.storageObjectsFailed;
-        }
-      }
-    }
-
-    return { storageObjectsDeleted, storageObjectsFailed };
+    return sweepStorageObjects(notSurvivingFilter(), 'admin.factory_reset');
   },
 };
+
+/**
+ * The storage step of the organization offboarding (issue #568): every storage object of ONE
+ * organization outside the surviving prefixes, bytes then row. The platform's `org.offboard`
+ * handler would run `storage_objects.deleteMany({ orgId })` for this app (`StorageObject` is not
+ * flagged `storageObjects: true`), which fails on the `Restrict` references and never deletes a
+ * byte; `platform/user-data/offboarding.steps.ts` runs this first, after `kvox.org.content`.
+ *
+ * Retry-safe (each page selects what is left). A provider failure keeps the row and, after the
+ * whole sweep, THROWS so the job retries: the organization row cannot go while an object
+ * references it.
+ *
+ * @param input - the organization and the job (for the log lines).
+ * @returns the counts, when nothing failed.
+ * @throws Error when at least one object could not be deleted.
+ */
+export async function runKvoxOrgStorageObjects(input: {
+  orgId: string;
+  jobId: string;
+}): Promise<{ storageObjectsDeleted: number; storageObjectsFailed: number }> {
+  const counts = await sweepStorageObjects(
+    { orgId: input.orgId, ...notSurvivingFilter() },
+    `org.offboard job ${input.jobId}`,
+  );
+
+  logger.log(
+    `org.offboard job ${input.jobId}: organization ${input.orgId} storage objects deleted=${counts.storageObjectsDeleted} failed=${counts.storageObjectsFailed}`,
+  );
+
+  if (counts.storageObjectsFailed > 0) {
+    throw new Error(
+      `kvox.org.storage-objects: org.offboard job ${input.jobId}: ${counts.storageObjectsFailed} storage object(s) ` +
+        'could not be deleted; the organization is kept so a retry can finish them',
+    );
+  }
+
+  return counts;
+}
