@@ -4,13 +4,12 @@
 // =============================================================================
 //
 //   kvox-eval kg  ...   score knowledge-graph extraction (see kg-command.ts)
-//   kvox-eval ask ...   the Ask evaluation: NOT headless yet (exit 2)
-//
-// The Ask run seeds a graph in a database and drives the real `ask.respond`
-// handler on a Nest application, which only the web app has; until a headless
-// runner exists it stays `npm run ask:eval --workspace=api`.
+//   kvox-eval ask ...   the Ask evaluation, headless (see ask-command.ts): an
+//                       in-memory PostgreSQL, the golden graph, the real
+//                       `ask.respond` handler; `--replay` needs no model or key
 // =============================================================================
 
+import type * as AskRun from '../ask-run/index.js';
 import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo, type KgCommandOptions } from './kg-command.js';
 
 /**
@@ -19,15 +18,17 @@ import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo, type KgCommandOptions }
  * @stability experimental
  */
 export const KVOX_EVAL_USAGE = `usage: kvox-eval kg [flags]    score knowledge-graph extraction against the golden set
-       kvox-eval ask          the Ask evaluation (not headless yet: npm run ask:eval --workspace=api)
-       kvox-eval kg --help    the kg flags`;
+       kvox-eval ask [flags]   run the Ask evaluation headless (in-memory database, live model)
+       kvox-eval ask --replay  the Ask harness's scripted self-test (no model, no key)
+       kvox-eval kg --help     the kg flags
+       kvox-eval ask --help    the ask flags`;
 
 /**
  * Runs `kvox-eval` with the given arguments (everything after the command name).
  *
  * @param argv - the arguments, the subcommand first.
  * @param io - output streams and environment.
- * @param options - passed to the kg command.
+ * @param options - passed to the kg command (the ask command takes its defaults).
  * @returns the exit code.
  * @stability experimental
  */
@@ -35,8 +36,10 @@ export async function main(argv: string[], io: EvalCommandIo = defaultIo(), opti
   const [command, ...rest] = argv;
   if (command === 'kg') return runKgCommand(rest, io, options);
   if (command === 'ask') {
-    io.err('kvox-eval ask: the headless Ask run is not available yet; run the Ask evaluation from the web app: npm run ask:eval --workspace=api');
-    return KG_EVAL_EXIT.usage;
+    // Loaded only here: the ask command brings Nest, the domain slices, PGlite and
+    // the generated Prisma client, which `kvox-eval kg` and `--help` never need.
+    const { runAskCommand } = require('../ask-run/index.js') as typeof AskRun;
+    return runAskCommand(rest, io);
   }
   if (command === '--help' || command === '-h' || command === 'help') {
     io.out(KVOX_EVAL_USAGE);
