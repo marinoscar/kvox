@@ -167,10 +167,14 @@ npx kvox-eval kg --runner extract --provider openai --model gpt-5-mini --out /tm
 # The same flags through the web app's thin wrappers
 npm run kg:eval --workspace=api -- --predictions gold
 npm run ask:eval --workspace=api -- <flags>
+
+# The headless Ask evaluation (in-memory database; --replay needs no key)
+npx kvox-eval ask --replay
+npx kvox-eval ask --provider openai --model gpt-4o-mini --only q01,q22
 ```
 
 - `npm run kg:eval --workspace=api` is a thin wrapper over the package's `runKgCommand` with the app's synthetic runs directory; it keeps its flags. `kvox-eval kg` accepts `--predictions <dir|gold>` or `--runner extract|extract-resolve`, `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--tag`, `--json`, `--out`, `--enforce` and `--real-dir`. `--provider copilot` refuses until the Copilot adapter (#581).
-- `npm run ask:eval --workspace=api` still boots the web app (it seeds a graph and drives the real `ask.respond` handler) and imports the package's question schema, scorer and report. `kvox-eval ask` is not available yet (exit 2); a headless Ask run is a follow-up.
+- `kvox-eval ask` (issue #608) is headless: it starts an in-memory PGlite, applies the shipped migration SQL in order, seeds the golden graph (36 meetings, 94 entities, 265 relations, 187 items, 731 evidence, 0 refused) through `GraphWriteService` and drives the real `ask.respond` handler on the live model port. It never touches a real database and needs no web app. Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out`, `--min-match`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive leak) or the match fell below `--min-match`, 2 configuration, or every model call failed (a single failed call marks that turn failed and the run continues). `kvox-eval ask --replay` needs no key: six scripted questions plus the leak gate, the package's twin of `apps/api/test/ask/ask-eval.replay.db.spec.ts`. `npm run ask:eval --workspace=api` is a thin wrapper over the same command (`--keep` and `--allow-db` are accepted and ignored). Semantic search is off in the run (no embeddings), and Ask still hides personal facts.
 - The API key is `KVOX_EVAL_OPENAI_API_KEY`. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases for one release.
 - Real meetings never enter the repository: `--real-dir`, a real-data `--out` and `KG_EVAL_REAL_DIR` are refused (exit 3) when they resolve inside the git work tree. Quality bar: [specs/ontology.md](specs/ontology.md) (section 6). Package reference: [packages/kvox-eval/README.md](../packages/kvox-eval/README.md).
 

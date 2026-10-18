@@ -61,7 +61,7 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    change under `packages/kvox-contract/`. CI builds it right after `npm ci`, and
    both application Dockerfiles build it inside the image (`.dockerignore` drops every `dist/`).
 
-   The API also imports `@marinoscar/kvox-api`, `@marinoscar/kvox-ai` and `@marinoscar/kvox-eval` (the `kg:eval` and `ask:eval` scripts) from their built output. On a fresh checkout run `npm run build:kvox-packages` (order: contract, db, api, ai, eval, web) instead of building one package at a time.
+   The API also imports `@marinoscar/kvox-api`, `@marinoscar/kvox-ai` and `@marinoscar/kvox-eval` (the `kg:eval` and `ask:eval` scripts, both thin wrappers over the `kvox-eval` commands) from their built output. On a fresh checkout run `npm run build:kvox-packages` (order: contract, db, api, ai, eval, web) instead of building one package at a time.
 
 2. **Set up environment variables**
    ```bash
@@ -242,7 +242,7 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 - `KG_MIGRATE_SCHEDULE_ENABLED` - Whether this process runs the hourly (minute 17) tick that enqueues `kg.migrate` for owners whose graph rows a declared ontology migration still has to reshape (#384). The tick only enqueues, and returns at once while `ONTOLOGY_MIGRATIONS` is empty. Only the literal `false` turns it off (default: on), the `DB_BACKUP_SCHEDULE_ENABLED` convention; an admin can still re-run one owner's migration with Retry in the job list. See `docs/runbooks/ontology-migration.md`
 
 **Evaluation (developer and CI only, never set in a deployment):**
-- `KVOX_EVAL_OPENAI_API_KEY` - The API key of a live `kg:eval` / `ask:eval` / `kvox-eval kg` run. Read from the environment only, never a flag, never printed. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases, read for one more release with a one-line deprecation note on standard error. Details: [TESTING.md](TESTING.md#knowledge-graph-and-ask-evaluation)
+- `KVOX_EVAL_OPENAI_API_KEY` - The API key of a live `kg:eval` / `ask:eval` / `kvox-eval kg` / `kvox-eval ask` run (`kvox-eval ask --replay` needs none). Read from the environment only, never a flag, never printed. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases, read for one more release with a one-line deprecation note on standard error. Details: [TESTING.md](TESTING.md#knowledge-graph-and-ask-evaluation)
 - `KG_EVAL_REAL_DIR` - Stands in for `--real-dir` (real meetings; must resolve outside the git work tree)
 
 **Observability** (OpenTelemetry through `@marinoscar/platform-api/otel-core`, stored in GreptimeDB by the platform telemetry slice; full design in `docs/ARCHITECTURE.md` section 11):
@@ -804,7 +804,7 @@ To add a namespace:
 
 The platform's own namespaces are listed, in stored order, in [`settings/registry/system-settings.manifest.ts`](../apps/api/src/settings/registry/system-settings.manifest.ts) and [`user-settings.manifest.ts`](../apps/api/src/settings/registry/user-settings.manifest.ts). They are registered even where the slice that owns them is not mounted yet, because services KVox still runs read them through `SystemSettingsService.getNamespace`; when that slice mounts and tries to register its key, KVox's registration is found first and left alone. Keep that order.
 
-[`apps/api/src/kvox.manifest.ts`](../apps/api/src/kvox.manifest.ts) must be the **first import of every entry point** (`main.ts`, `scripts/dump-openapi.ts`, `scripts/ask-eval/run.ts`, `app.module.ts`, `test/setup.ts`). Its first import is `kvox.settings-manifest.ts`, a stub that imports `settings/registry/`, which registers every namespace as a side effect, because the request bodies are composed from the registries when `SettingsModule.forRoot()` runs. A mis-wired entry point fails on start instead of silently stripping a namespace from every PATCH.
+[`apps/api/src/kvox.manifest.ts`](../apps/api/src/kvox.manifest.ts) must be the **first import of every entry point** (`main.ts`, `scripts/dump-openapi.ts`, `app.module.ts`, `test/setup.ts`). Its first import is `kvox.settings-manifest.ts`, a stub that imports `settings/registry/`, which registers every namespace as a side effect, because the request bodies are composed from the registries when `SettingsModule.forRoot()` runs. A mis-wired entry point fails on start instead of silently stripping a namespace from every PATCH.
 
 The platform's `settings` conformance suite (`test/conformance.spec.ts`) iterates the registries, so a registered namespace is checked automatically. A merge is still behaviour, not a key set: cover a new namespace's `merge` with a unit test of the declaration.
 

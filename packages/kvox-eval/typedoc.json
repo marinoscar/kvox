@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["../../typedoc.base.json"],
   "tsconfig": "./tsconfig.json",
-  "entryPoints": ["./src/index.ts", "./src/fixtures/index.ts", "./src/parity/index.ts"],
+  "entryPoints": ["./src/index.ts", "./src/ask-run/index.ts", "./src/fixtures/index.ts", "./src/parity/index.ts"],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-eval",
   "out": "./docs-api/html",

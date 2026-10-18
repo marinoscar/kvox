@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // IMPORT THIS FIRST. Every entry point (`main.ts`, `scripts/dump-openapi.ts`,
-// `scripts/ask-eval/run.ts`, `scripts/kg-eval.ts`, `app.module.ts`,
+// `scripts/kg-eval.ts`, `app.module.ts`,
 // `test/setup.ts`) imports it before anything that reads the settings
 // registries, because the request/response DTOs, the composed settings schemas
 // and `DEFAULT_SYSTEM_SETTINGS` are COMPOSED FROM THEM AT IMPORT TIME. The

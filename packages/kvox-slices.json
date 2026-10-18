@@ -63,6 +63,7 @@
     "live": [],
     "kg": ["fixtures"],
     "parity": ["fixtures", "kg"],
-    "cli": ["fixtures", "kg", "live", "real-data"]
+    "cli": ["ask", "ask-run", "fixtures", "kg", "live", "real-data"],
+    "ask-run": ["ask", "fixtures", "live"]
   }
 }

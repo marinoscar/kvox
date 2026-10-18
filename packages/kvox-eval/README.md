@@ -1,29 +1,32 @@
 # @marinoscar/kvox-eval
 
-The KVox knowledge-graph and Ask evaluation: the synthetic golden set, its schemas, the scorers, the report, the gold and live runners and the `kvox-eval` command. Written only against the model port, so every host measures the prompts, schemas and validators the product ships. CommonJS.
+The KVox knowledge-graph and Ask evaluation: the synthetic golden set, its schemas, the scorers, the report, the gold and live runners, the headless Ask run and the `kvox-eval` command. Written only against the model port, so every host measures the prompts, schemas and validators the product ships. CommonJS.
 
 ## Purpose and scope
 
 One package for "how good is extraction (and Ask) on the golden set", shared by the web edition and KVox Desktop. A live run binds the same `KvoxAiPort` every host binds (`createKvoxAi` of `@marinoscar/kvox-ai`, over `createDirectRuntime` and the platform's provider adapters); the extraction pipeline it scores is `@marinoscar/kvox-api`'s own (`graph-extraction` internals), minus the loader and the writer. The package owns no prompt, schema or pipeline of the product.
 
-It does not own the Ask run itself: seeding a graph and driving the real `ask.respond` handler needs the web app's database and Nest application, so `npm run ask:eval --workspace=api` stays in `apps/api` and imports this package's question schema, scorer and report. Exporting one of your own notes as an unlabelled skeleton (`--export-note`) reads the web app's tables and stays there too.
+The Ask run is headless (issue #608): `kvox-eval ask` starts an in-memory PGlite, applies the shipped migration SQL in order, seeds the golden graph through `GraphWriteService` and drives the real `ask.respond` handler, with no web app and no real database. `npm run ask:eval --workspace=api` is a thin wrapper over the same command. Exporting one of your own notes as an unlabelled skeleton (`--export-note`) reads the web app's tables and stays in `apps/api`.
 
 Status: implemented by issue #580 (moved from `apps/api/scripts/kg-eval/`, `apps/api/scripts/ask-eval/` and `apps/api/test/fixtures/kg-golden/`), unreleased like the other packages. The web app's private OpenAI client (`direct-structured.ts`) is deleted; `npm run kg:eval --workspace=api` is a thin wrapper over `runKgCommand`.
 
 Entry points:
 
-- `@marinoscar/kvox-eval`: the package root, which re-exports the `kg`, `ask`, `live`, `real-data` and `cli` slices. Slice READMEs: [kg](src/kg/README.md), [ask](src/ask/README.md), [live](src/live/README.md), [real-data](src/real-data/README.md), [cli](src/cli/README.md).
+- `@marinoscar/kvox-eval`: the package root, which re-exports the `kg`, `ask`, `live`, `real-data` and `cli` slices (not `ask-run`: import the subpath below). The root is still slow to import (about 2 s) because the kg runners import `@marinoscar/kvox-api/graph`. Slice READMEs: [kg](src/kg/README.md), [ask](src/ask/README.md), [live](src/live/README.md), [real-data](src/real-data/README.md), [cli](src/cli/README.md).
 - `@marinoscar/kvox-eval/fixtures`: the golden set (`loadGoldenMeetings`, `GOLDEN_MEETINGS_DIR`, `ASK_QUESTIONS_PATH`, `loadGoldenAskQuestions`) and its schema (`goldenFixtureSchema`, `GoldenFixture`). Slice README: [fixtures](src/fixtures/README.md). The data is under [fixtures/kg-golden](fixtures/kg-golden/README.md).
+- `@marinoscar/kvox-eval/ask-run`: the headless Ask evaluation (`runAskEval`, `runAskReplay`, `startAskEvalHost`, `seedGoldenGraph`, `runAskCommand`): an in-memory PGlite, the golden graph seeded through the graph write service, the real `ask.respond` handler. Slice README: [ask-run](src/ask-run/README.md).
 - `@marinoscar/kvox-eval/parity`: the harness-parity scenario and its committed request snapshots (`parity/requests.*.json`), which prove two bindings of the model port send the same provider requests (`runParityScenario`, `createParityScript`, `loadParitySnapshot`). Slice README: [parity](src/parity/README.md).
-- `kvox-eval` (the `bin`, `dist/cli/main.js`).
+- `kvox-eval` (the `bin`, `dist/cli/main.js`): `kvox-eval kg` and `kvox-eval ask`.
 
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-api@0.1.0-next.5 zod
+npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-api@0.1.0-next.5 zod \
+  @electric-sql/pglite@0.5.10 @electric-sql/pglite-pgvector@0.0.11 @electric-sql/pglite-socket@0.2.13 \
+  @prisma/client @prisma/adapter-pg pg @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
 
-Every slice is universal, so every peer is required:
+Every slice is universal, so every peer is required, including those only `ask-run` imports (PGlite, Prisma, Nest):
 
 | Package | Range | Needed by |
 |---|---|---|
@@ -31,7 +34,16 @@ Every slice is universal, so every peer is required:
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` | `fixtures`, `kg` (the ontology registry), `ask` (the Ask wire types) |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `kg` (the extraction pipeline, `graph-extraction` and `graph`), `live` and `cli` (`KvoxAiPort`, `KvoxAiError`) |
 | `@marinoscar/kvox-ai` | `>=0.0.0-0 \|\| >=0.1.0-0` | `live` (`createKvoxAi`, `createDirectRuntime`) |
-| `@marinoscar/platform-api` | `0.1.0-next.5` (exact, the repository's platform pin) | `live` and `cli`: the OpenAI and OpenAI-compatible adapters. Only `@marinoscar/platform-api/ai`, as in `@marinoscar/kvox-ai`; an interim peer until the lean adapter package of #578. |
+| `@marinoscar/platform-api` | `0.1.0-next.5` (exact, the repository's platform pin) | `live` and `cli`: the OpenAI and OpenAI-compatible adapters; `ask-run`: the provider event types of the replay. Only `@marinoscar/platform-api/ai`, as in `@marinoscar/kvox-ai`; an interim peer until the lean adapter package of #578. |
+| `@electric-sql/pglite` | `0.5.10` (exact) | `ask-run`: the in-memory PostgreSQL |
+| `@electric-sql/pglite-pgvector` | `0.0.11` (exact) | `ask-run`: the `vector` extension the migrations create |
+| `@electric-sql/pglite-socket` | `0.2.13` (exact) | `ask-run`: the loopback socket the Prisma client connects to |
+| `@prisma/client` | `^7.8.0` | `ask-run`: the client generated into `host/generated` |
+| `@prisma/adapter-pg` | `^7.8.0` | `ask-run`: the driver adapter over `pg` |
+| `pg` | `^8.23.0` | `ask-run` |
+| `@nestjs/common`, `@nestjs/core` | `^11.1.12` | `ask-run`: the application context of the Ask slices |
+| `reflect-metadata` | `^0.2.2` | `ask-run` |
+| `rxjs` | `^7.8.1` | `ask-run` |
 
 `@marinoscar/kvox-api`'s graph slices bring their own peers (Nest, among others). The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
@@ -52,6 +64,18 @@ kvox-eval kg --runner extract --provider openai --model gpt-5-mini --out /tmp/kg
 kvox-eval kg --runner extract-resolve --provider openai-compatible --base-url http://localhost:8000/v1 --model local-model
 ```
 
+The Ask evaluation, headless (in-memory database, golden graph seeded through the graph write service, the real `ask.respond` handler):
+
+```bash
+kvox-eval ask --replay                          # the scripted self-test: 6 questions and the leak gate; no key, no network
+export KVOX_EVAL_OPENAI_API_KEY=...
+kvox-eval ask --model gpt-4o-mini --out /tmp/ask-run
+kvox-eval ask --only q01,q22 --category negative --min-match 0.7
+kvox-eval ask --provider openai-compatible --base-url http://localhost:8000/v1 --model local-model
+```
+
+Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out` (writes `report.json` and `answers.md`; `replay.json` for `--replay`), `--min-match <0..1>`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive-fact leak) or the answer match fell below `--min-match` (or a replay expectation failed), 2 configuration (no key, a refused provider, a bad flag, an unknown question id) or every model call failed. One failed model call marks that turn failed and the run goes on. The seeded graph is 36 meetings, 94 entities, 265 relations, 187 items and 731 evidence rows, 0 refused. Semantic search is off (no embeddings). `--replay` reproduces `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
+
 From code:
 
 ```ts
@@ -68,11 +92,17 @@ const live = await runKgEval({ runner: 'extract', ai, model: 'gpt-5-mini', fixtu
 loadGoldenMeetings(['m01', 'm07']); // the fixtures themselves
 ```
 
+```ts
+import { runAskReplay } from '@marinoscar/kvox-eval/ask-run'; // never from the root
+
+const replay = await runAskReplay(); // no key; starts and closes its own PGlite
+```
+
 ## Configuration
 
 Environment only, read by the `live` slice and the CLI:
 
-- `KVOX_EVAL_OPENAI_API_KEY`: the key of a live run. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are read for one more release, with a one-line deprecation note on standard error.
+- `KVOX_EVAL_OPENAI_API_KEY`: the key of a live run (`kg` and `ask`; read only from here, never a flag). `kvox-eval ask --replay` needs none. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are read for one more release, with a one-line deprecation note on standard error.
 - `KG_EVAL_REAL_DIR`: stands in for `--real-dir`.
 
 No settings key and no file. The models a live run uses are the command line's (`--provider`, `--model`, `--base-url`).
@@ -83,7 +113,7 @@ No settings key and no file. The models a live run uses are the command line's (
 
 ## Data
 
-The golden set, shipped in the tarball under `fixtures/kg-golden/`: 36 synthetic meetings (`meetings/mNN-<slug>.json`) and the Ask question file (`ask-questions.json`). **Synthetic only, ever**: no real recording, transcript, note, name, company, email address or phone number belongs there (the rule, the format and the coverage the set must keep: [fixtures/kg-golden/README.md](fixtures/kg-golden/README.md); `test/kg-golden-fixtures.spec.ts` asserts them). A fixture's and a question's id is permanent once committed. The package owns no table.
+The golden set, shipped in the tarball under `fixtures/kg-golden/`: 36 synthetic meetings (`meetings/mNN-<slug>.json`) and the Ask question file (`ask-questions.json`). **Synthetic only, ever**: no real recording, transcript, note, name, company, email address or phone number belongs there (the rule, the format and the coverage the set must keep: [fixtures/kg-golden/README.md](fixtures/kg-golden/README.md); `test/kg-golden-fixtures.spec.ts` asserts them). A fixture's and a question's id is permanent once committed. The package owns no table. The `ask-run` slice ships `host/prisma` and `host/generated` (the schema, migrations and Prisma client), generated at build time by `scripts/prepare-host.mjs`; the in-memory database they run on is created per run and discarded.
 
 ## Permissions and settings
 
@@ -95,18 +125,19 @@ None.
 
 ## Infra
 
-None. A live run reaches the provider's API from the machine it runs on.
+None. A live run reaches the provider's API from the machine it runs on. The Ask run needs no database server: it never touches a real database.
 
 ## Observability
 
-None: no log, metric or span. The CLI prints the report table to standard output and its notes (missing predictions, where predictions were written, deprecations) to standard error.
+None: no log, metric or span (the Ask run's Nest context logs errors and warnings only). The CLI prints the report table to standard output and its notes (missing predictions, where predictions were written, deprecations) to standard error.
 
 ## Security notes
 
 - The API key is read from the environment only, never a flag. It is handed to `createDirectRuntime`'s `keys()` per call and never logged, printed, put in an error or written into a prediction or a report (a prediction carries `model` alone). A failed live call is reported by its `KvoxAiError` class, the platform error code and the HTTP status, never a message body.
 - Real meetings never enter the repository: `--real-dir`, `--out` of a real-data run and `KG_EVAL_REAL_DIR` are refused (exit 3) when they resolve inside the git work tree, symlinks included (`assertOutsideRepo`).
 - The golden set is synthetic; its spec rejects a real-looking email address, a phone number and the product's name.
-- The source imports no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-api/ai` (rule `host-neutral` of `npm run check:kvox-slice-peers`).
+- The Ask run uses an in-memory PGlite only: it has no connection string to a real database, so it cannot read or write one. The key never enters that database.
+- Apart from the `ask-run` slice (Prisma, Nest, PGlite), the source imports no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-api/ai` (rule `host-neutral` of `npm run check:kvox-slice-peers`).
 
 ## Conformance suite
 
@@ -122,6 +153,7 @@ First release. For code that imported these files from the web app: `apps/api/sc
 |---|---|
 | `Cannot find module '@marinoscar/kvox-eval'` in `apps/api` | Build the packages first: `npm run build:kvox-packages`. |
 | `reads its API key from KVOX_EVAL_OPENAI_API_KEY; it is not set` | Export the key in the shell that runs the command; it is never a flag. |
+| `Cannot find module '@electric-sql/pglite'` (or `@prisma/client`, `@nestjs/core`) on `kvox-eval ask` | Install the `ask-run` peers listed above; they are required. |
 | `the 'copilot' provider is not available yet` | The Copilot adapter arrives with #581; use `--provider openai` or `openai-compatible`. |
 | `real meeting data must never be written inside the repository` (exit 3) | Point `--real-dir` / `--out` outside the git work tree. |
 

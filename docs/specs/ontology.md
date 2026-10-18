@@ -3660,12 +3660,12 @@ truncated, ms }`, never its arguments or result.
 
 The agent promises two things a unit test cannot prove: that every citation
 it shows points at something a tool really returned, and that its answers are
-right often enough to trust. `apps/api/scripts/ask-eval/` (the runner; schema, scorer and report are in `@marinoscar/kvox-eval`) builds that
+right often enough to trust. `@marinoscar/kvox-eval` (the `ask-run` slice and `kvox-eval ask`, headless since #608; the web app's `npm run ask:eval` is a wrapper) builds that
 evaluation on top of #362's synthetic golden meetings, isolating the agent
 from extraction quality by seeding the meetings' **hand labels** as the
 graph — never a model's own extraction — under one throwaway user
-(`seed-graph.ts`; refuses to run against a database whose name doesn't end
-`_test`/`_eval`, per `--allow-db`).
+(`seed-golden-graph.ts`, through `GraphWriteService`). The run uses an in-memory PGlite migrated by
+the shipped migration SQL, so it can never touch a real database and the old `_test`/`_eval` name check and `--allow-db` are gone.
 
 `packages/kvox-eval/fixtures/kg-golden/ask-questions.json` is a second golden set
 over the same meetings: ≥ 40 questions (`question-schema.ts` in `@marinoscar/kvox-eval`), each with
@@ -3674,15 +3674,13 @@ groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
 
-The runner (`run.ts`) boots a real `NestFactory.createApplicationContext`
-(`JOBS_WORKER_MODE=off`), stores the key from `KVOX_EVAL_OPENAI_API_KEY` (`ASK_EVAL_OPENAI_API_KEY` is a deprecated alias) on
-the eval user, points this deployment's `ai` policy at the eval model for
-the run's duration only (restored in `teardown()` regardless of outcome —
-leaving it wired in would silently change every other user's Ask
-conversation), and for each question calls the real `AskMessagesService`
+The runner (`run-ask-eval.ts`) boots a real `NestFactory.createApplicationContext`
+over that database (the transcription, search, transcripts, notes, graph and Ask slices), binds the `KVOX_AI` port to the live model port
+(the key comes from `KVOX_EVAL_OPENAI_API_KEY`, `ASK_EVAL_OPENAI_API_KEY` is a deprecated alias, and is never stored: no settings
+row or user key exists in the in-memory database, so there is nothing to restore), and for each question calls the real `AskMessagesService`
 then invokes `AskRespondHandler.process(job)` directly — no queue poll, this
-process is the only claimer. A thin wrapper around the registered `KVOX_AI` port
-port's own `chat()` (§21.3, "Provider call") captures every `messages` array
+process is the only claimer. A thin wrapper around the port's own
+`chat()` (§21.3, "Provider call") captures every `messages` array
 actually sent, for the leak check.
 
 `scorer.ts` (pure, in `@marinoscar/kvox-eval`) computes, per question: `citationValidity` (valid
@@ -3694,8 +3692,8 @@ and `sensitiveLeak` (an `answerNone` string found in the answer **or** in any
 captured prompt — **gate: must be zero**, turning §15's "sensitive never
 leaves" into a measured property rather than an assertion about the code).
 
-Two run modes, mirroring `kg:eval`'s own posture: `npm run ask:eval
---workspace=api` needs a real key and is **local and report-only** — CI never
+Two run modes, mirroring `kg:eval`'s own posture: `kvox-eval ask` (or `npm run ask:eval
+--workspace=api`) needs a real key and is **local and report-only** — CI never
 gates on a real model's answer quality, which would need a paid key in CI and
 flakes on provider variance. `apps/api/test/ask/ask-eval.replay.db.spec.ts`
 (the web edition's replay, over its AI adapter; the slice's own conformance suite, `describeAskConformance`, runs the same scripted turns over the in-memory tables) is what runs in CI (the `db-test` job's `npm run test:db`): the full gold graph,

@@ -191,10 +191,17 @@ describe('kvox-eval kg (in process)', () => {
     expect(c.all()).not.toContain(SECRET);
   });
 
-  it('kvox-eval ask is not headless yet: exit 2, pointing at npm run ask:eval', async () => {
-    const c = capture();
+  it('kvox-eval ask dispatches to the headless command (no key: exit 2 naming the variable, before any database)', async () => {
+    const c = capture({});
     expect(await main(['ask'], c.io)).toBe(KG_EVAL_EXIT.usage);
-    expect(c.err.join('\n')).toContain('npm run ask:eval --workspace=api');
+    expect(c.err.join('\n')).toContain(`reads its API key from ${KVOX_EVAL_API_KEY_ENV}; it is not set`);
+    expect(c.err.join('\n')).not.toContain('npm run ask:eval');
+  });
+
+  it('--help lists the ask command', async () => {
+    const c = capture();
+    await main(['--help'], c.io);
+    expect(c.all()).toMatch(/\bask\b/);
   });
 });
 
