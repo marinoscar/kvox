@@ -218,11 +218,16 @@ run, and a `files` deletion never touches a managed object.
   routes (`system:factory_reset`, `orgs:offboard`; Admin only). The factory reset has
   a page since #562: the `Factory reset` card in the pinned-last admin `Danger Zone`
   group, routed at `/admin/settings/factory-reset` behind `system:factory_reset`.
-  Organization offboarding has no page yet. Both routes are refused in deployments
+  Organization offboarding has no page yet; its KVox steps are in
+  [section 8](#organization-offboarding). Both routes are refused in deployments
   the platform gates them out of (`saas` mode; offboarding needs multi-organization
   tenancy).
 
-## 8. Admin factory reset on KVox
+## 8. Admin factory reset and organization offboarding on KVox
+
+Both sections below close the same gap in the platform's destructive jobs: this app's content is
+delegated and its `storage_objects` rows are guarded by `Restrict` keys. The factory reset comes
+first; [Organization offboarding](#organization-offboarding) is the organization-scoped twin.
 
 The platform's `admin.factory_reset` job (`system:factory_reset`, Admin only; page
 `/admin/settings/factory-reset`) wipes inline owner models, every `org` model and every user
@@ -281,13 +286,48 @@ directly). The deferred `kg_assert_has_evidence` trigger re-reads each subject's
 `COMMIT`, so the step deletes every entity, relation and item and then all evidence in the same
 transaction and the trigger finds nothing to refuse.
 
-### Not fixed: organization offboarding
+### Organization offboarding
 
-`orgs:offboard` (multi-organization tenancy only; no page) deletes the organization's rows,
-including `storage_objects`, which transcripts, note sources and exports, version snapshots and
-graph exports reference with `onDelete: Restrict`. It has the same foreign-key defect and no KVox
-step. Closing it needs a follow-up or a platform seam; until then, do not offboard an
-organization that holds transcripts on this app.
+The platform's `org.offboard` job (`orgs:offboard`, Admin only, multi-organization tenancy only;
+no page) has the same defect as the bare factory reset and no step registry: it deletes the
+organization's rows, including `storage_objects`, which transcripts, note exports, version
+snapshots and exports and graph exports reference with `onDelete: Restrict`, so the job failed
+on those foreign keys and left the bytes in the bucket (#568). KVox closes it with a wrapper:
+`KvoxOrgOffboardBinding` (`apps/api/src/platform/user-data/user-data-host.module.ts`), an
+`OnApplicationBootstrap` provider, calls `wrapOrgOffboardHandler`
+(`apps/api/src/platform/user-data/offboarding.steps.ts`), which **patches `process` in place** on
+the already registered `org.offboard` handler (idempotent; the handler keeps its identity, label,
+profile and node members, and the registry sees no duplicate type). The wrapper runs two
+organization-scoped steps and then calls the platform's own `process`, which finds no storage
+object and no transcript of the organization left and finishes invites, memberships, users and
+the organization row.
+
+| Step | What it does |
+|---|---|
+| `kvox.org.content` | One transaction: the organization's transcripts and everything that references them, in foreign-key order: versions, exports, name checks, segments and speakers, the transcripts' share grants and search chunks and index state, and the `note_exports` and `kg_exports` of the organization's storage objects. Note source references to a deleted transcript or object are set to null |
+| `kvox.org.storage-objects` | Deletes every storage object of the organization outside the surviving key prefixes: the bytes, then the row (`runKvoxOrgStorageObjects` in `kvox-objects/factory-reset-storage.step.ts`) |
+
+- **Scope is organization-scoped only where an organization column exists**: transcripts and
+  storage objects have `org_id`; the rest is reached through them. **Notes, the knowledge graph,
+  Ask and custom note templates have only `owner_id`** (an owner may belong to other
+  organizations), so offboarding does **not** delete them.
+- **Known limit**: `kg_evidence` rows keep their quote text from a deleted transcript in the
+  owners' graphs (`transcript_id` becomes null). Deleting that evidence would violate the
+  deferred `kg_assert_has_evidence` trigger, so it stays until the owner deletes the graph item
+  or purges their data.
+- **Skips**: for the default organization, a missing organization or a malformed payload the
+  wrapper runs neither step and delegates to the platform unchanged. If the `org.offboard`
+  handler is not registered at bootstrap, the binding logs a warning and wraps nothing.
+- **Retry behaviour**: every step is a `deleteMany` by predicate or a page selected from what is
+  still there, so it is idempotent. A provider failure on a bucket deletion keeps that row and
+  makes the job **fail after the sweep** (as the platform does), so the queue retries it and
+  only the rows still present are attempted again.
+- **Why a wrapper**: the platform has no offboarding step seam (the factory reset has
+  `registerFactoryResetStep`). The seam request is
+  https://github.com/marinoscar/EnterpriseAppBase/issues/996; the wrapper is a recorded local
+  exception ([`local-exceptions.md`](../platform-adoption/local-exceptions.md)).
+- **Proof**: `apps/api/test/user-data/org-offboarding.db.spec.ts` runs the real handler over the
+  real schema.
 
 Every step is a `deleteMany` by predicate or a page selected from what is still there, so a
 retried job deletes what is left.
@@ -313,3 +353,7 @@ retried job deletes what is left.
   and asserting `transcriptGrants`, including the evidence trigger forced with
   `SET CONSTRAINTS ALL IMMEDIATE`) and the factory reset RBAC specs
   (`factory-reset-rbac.integration.spec.ts`, `factory-reset-permissions.spec.ts`).
+- `apps/api/test/user-data/org-offboarding.db.spec.ts`: the real `org.offboard` wrapper over the
+  real schema (an organization holding transcripts, search rows, shares and storage objects,
+  plus a bystander organization and user-owned notes and graph rows that must survive; retry
+  after a provider failure).
