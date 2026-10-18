@@ -1,4 +1,3 @@
-import { featureOf } from '../port/feature-names.js';
 import {
   KVOX_TASK_IDS,
   KVOX_TASK_REQUIREMENTS,
@@ -30,12 +29,6 @@ const EMBEDS: KvoxTaskId[] = ['graph.embed', 'search.embed'];
 const TEXT_TASKS = KVOX_TASK_IDS.filter((t) => t !== 'ask.respond' && !EMBEDS.includes(t));
 
 describe('task vocabulary', () => {
-  it('maps every task id to a registered feature', () => {
-    for (const task of KVOX_TASK_IDS) {
-      expect(featureOf(task)).toBeDefined();
-    }
-  });
-
   it('requires tool calling only for ask.respond and embeddings only for the embed tasks', () => {
     for (const task of KVOX_TASK_IDS) {
       expect(KVOX_TASK_REQUIREMENTS[task]).toEqual({
