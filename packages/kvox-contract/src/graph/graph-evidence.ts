@@ -20,6 +20,20 @@ import { z } from 'zod';
 // =============================================================================
 
 /**
+ * The `source_iri` of a SERVER-AUTHORED manual citation (#586): the owner,
+ * stating a fact by hand on an entity page (§8's manual-edit exception). Such
+ * a row has no transcript, note or import anchor; its `quote` says what was
+ * set ("Set by hand: Jenny Kim reports to Mark Chen"). Readers report it as
+ * an evidence link of `source.kind: 'manual'`.
+ *
+ * Reserved: {@link evidenceInputSchema} refuses it, so no client can author a
+ * manual citation through a proposal or an import.
+ *
+ * @stability experimental
+ */
+export const MANUAL_EVIDENCE_SOURCE_IRI = 'urn:kvox:evidence:manual';
+
+/**
  * Zod schema for the evidence input wire shape.
  *
  * @stability experimental
@@ -46,7 +60,11 @@ export const evidenceInputSchema = z
       e.importObjectId ||
       e.sourceIri,
     { message: 'Evidence needs a segment, a note span (or the note Context), or an import source.' },
-  );
+  )
+  .refine((e) => e.sourceIri !== MANUAL_EVIDENCE_SOURCE_IRI, {
+    message: 'That source is reserved for edits made by hand.',
+    path: ['sourceIri'],
+  });
 
 /**
  * The parsed shape of {@link evidenceInputSchema}.

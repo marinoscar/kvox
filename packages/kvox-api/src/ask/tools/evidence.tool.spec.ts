@@ -142,4 +142,28 @@ describe('EvidenceTool', () => {
     const ctx = makeCtx();
     await expect(tool.run(ctx, tool.input.parse({ subject: seedEntity(ctx, ACME) }))).rejects.toThrow(AskToolError);
   });
+
+  it('reports a manual citation (#586) as "Set by hand", available, with no date and no time', async () => {
+    const manualLink = {
+      id: uid(33),
+      subjectKind: 'relation',
+      subjectId: REL,
+      quote: 'Set by hand: Jenny Kim reports to Mark Chen',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      source: { kind: 'manual', available: true, href: null },
+    };
+    const { tool } = build({ rows: [{ link: manualLink, occurredAt: null }] });
+    const ctx = makeCtx();
+    const rel = ctx.handles.register({ kind: 'rel', id: REL, label: 'REPORTS_TO' });
+    const res = await tool.run(ctx, tool.input.parse({ subject: rel, limit: null }));
+    expect(res.data).toEqual([
+      {
+        ref: 'ev1',
+        quote: 'Set by hand: Jenny Kim reports to Mark Chen',
+        source: { kind: 'manual', title: 'Set by hand', at: null, startMs: null },
+        available: true,
+      },
+    ]);
+    expect(ctx.handles.resolve('ev1')).toEqual({ kind: 'ev', id: uid(33), label: 'Set by hand' });
+  });
 });

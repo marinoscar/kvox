@@ -1,3 +1,4 @@
+import { MANUAL_EVIDENCE_SOURCE_IRI } from '@marinoscar/kvox-contract/graph';
 import { Prisma } from '../core/index.js';
 import type { SearchTranscriptVisibility } from '../search/index.js';
 import {
@@ -179,5 +180,30 @@ describe('loadCitationSources', () => {
     expect(prisma.viewerFor).toHaveBeenCalledWith(ENT);
     expect(prisma.transcriptVisibleSql).toHaveBeenCalledWith({ userId: ENT }, 't');
     expect(prisma.run).toHaveBeenCalledWith({ userId: ENT }, expect.any(Function));
+  });
+
+  it('labels a manual citation (#586) "Set by hand" with no document, and selects source_iri', async () => {
+    const prisma = fakeVisibility(
+      jest.fn().mockResolvedValue([
+        {
+          key: `relation:${REL}`,
+          evidenceId: EV_OF_ITEM,
+          transcriptId: null,
+          noteId: null,
+          startMs: null,
+          transcriptTitle: null,
+          noteTitle: null,
+          sourceIri: MANUAL_EVIDENCE_SOURCE_IRI,
+        },
+      ]),
+    );
+    const out = await loadCitationSources(prisma, ENT, { evidenceIds: [], itemIds: [], relationIds: [REL] });
+    expect(out.firstEvidence.get(`relation:${REL}`)).toEqual({
+      evidenceId: EV_OF_ITEM,
+      label: 'Set by hand',
+      documentKind: null,
+      startMs: null,
+    });
+    expect((prisma.$queryRaw.mock.calls[0][0] as { sql: string }).sql).toContain('source_iri');
   });
 });
