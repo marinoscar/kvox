@@ -164,7 +164,7 @@ export async function runKvoxOrgContent(tx: any, orgId: string): Promise<Record<
 }
 
 /**
- * The two KVox steps for one `org.offboard` job: `kvox.org.content` in one transaction, then
+ * The two app steps for one `org.offboard` job: `kvox.org.content` in one transaction, then
  * `kvox.org.storage-objects`. Skips both (returns `null`) when the organization does not exist
  * or is the default one, leaving the refusal to the platform.
  *
@@ -203,7 +203,7 @@ export async function runKvoxOrgOffboardingSteps(
 const WRAPPED = Symbol.for('kvox.org-offboard.wrapped');
 
 /**
- * Wraps `handler.process` so the KVox steps run first. Idempotent.
+ * Wraps `handler.process` so the app steps run first. Idempotent.
  *
  * @param handler - the registered `org.offboard` handler (mutated in place).
  * @param db - the bypass client port.
@@ -247,13 +247,13 @@ export class KvoxOrgOffboardBinding implements OnApplicationBootstrap {
     const handler = this.registry.get(ORG_OFFBOARD_JOB_TYPE);
 
     if (!handler) {
-      logger.warn(`No "${ORG_OFFBOARD_JOB_TYPE}" handler is registered; the KVox offboarding steps were not installed`);
+      logger.warn(`No "${ORG_OFFBOARD_JOB_TYPE}" handler is registered; the app offboarding steps were not installed`);
 
       return;
     }
 
     if (wrapOrgOffboardHandler(handler, this.db)) {
-      logger.log(`KVox offboarding steps installed on "${ORG_OFFBOARD_JOB_TYPE}"`);
+      logger.log(`The app offboarding steps installed on "${ORG_OFFBOARD_JOB_TYPE}"`);
     }
   }
 }
