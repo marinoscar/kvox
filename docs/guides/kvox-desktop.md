@@ -485,11 +485,49 @@ Add a Copilot switch to the Desktop settings, default **off**. Turning it on mus
 
 ### Sign-in
 
-The SDK owns sign-in. No GitHub or Copilot token passes through KVox code: `gitHubToken` is never set, the runtime reads the user's own credentials (`useLoggedInUser`), and the `keys` reader answers `AI_KEYLESS_API_KEY`. The shell offers a "Sign in to GitHub Copilot" action that starts the SDK's flow (the SDK's sign-in APIs are experimental in 1.0.22; check them when bumping), then reads `copilot.authStatus()` (`{ signedIn, login }`) to show the account. A call while signed out fails with `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`: the same 409 with `details.reason` as a missing OpenAI key. `verifyKey` answers "is the user signed in" without throwing.
+The Copilot runtime owns sign-in. No GitHub or Copilot token passes through KVox code: `gitHubToken` is never set, the runtime reads the user's own credentials (`useLoggedInUser`), and the `keys` reader answers `AI_KEYLESS_API_KEY`. The adapter exposes the flow (the SDK's account APIs are experimental in 1.0.22; check them when bumping):
+
+```ts
+// Illustrative, not compiled
+const challenge = await copilot.signIn.start();               // 'browser': { url }; 'device': { userCode, verificationUri, expiresAt }
+if (challenge.kind === 'browser') shell.openExternal(challenge.url);
+const { login } = await copilot.signIn.wait(abort.signal);    // resolves once the user has finished
+await copilot.signOut();                                      // then read copilot.authStatus() for the truth
+```
+
+- Switch on `challenge.kind`. The real transport returns only `browser` (the only flow SDK 1.0.22 offers; the runtime catches the OAuth redirect on a loopback port); `device` is in the type for a later runtime.
+- A sign-in that does not end signed in rejects `AI_KEY_REQUIRED` with `details.signInReason`: `sign_in_expired` (10 minutes by default, `signInTimeoutMs` on the transport), `sign_in_cancelled` (the signal aborted), `sign_in_failed`, `sign_in_not_started`, `sign_in_needs_plaintext_consent`, `sign_in_needs_account_selection`, `sign_in_needs_input`. Show a message per reason; do not parse the text.
+- `copilot.authStatus()` returns `{ signedIn, login }` for the account line. A call while signed out fails with `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`: the same 409 with `details.reason` as a missing OpenAI key. `verifyKey` answers "is the user signed in" without throwing.
+- Tell the user before they sign in that the authorize page asks for broad GitHub scopes (`read:user read:org repo gist codespace write:plugin_gateway_connections`); the runtime chooses them.
+- `signOut()` removes only what the runtime stored. A GitHub CLI login or a `GH_TOKEN`-style variable still counts as signed in, so a user signed in to `gh` appears signed in without ever using the button. Show `authStatus()` after sign-out, not an assumption.
+- Open risk: `mode: 'empty'` may leave the runtime unable to use the OS keychain, so it can ask to store the token in a plain file. KVox refuses that (`sign_in_needs_plaintext_consent`). It was not tried with a real account; it is the first thing to check ([SPIKE.md](../../packages/kvox-ai/src/copilot/SPIKE.md), risk 1).
 
 ### Packaging
 
-The SDK drives a per-platform Copilot runtime binary, about 133 to 174 MB unpacked. Bundle it with the app per platform (D6, packaging: [desktop plan](../desktop/README.md)), or download it on first use if the installer size matters. Either way it runs in the main process. Give the SDK a private `baseDirectory`: the runtime writes session state there, and the adapter deletes every session it creates in a `finally`.
+The SDK drives a per-platform runtime of about 133 to 174 MB. The SDK downloads nothing: it ships as the optional npm package `@github/copilot-sdk-<platform>`, so "bundle" means shipping that package's launcher (unpacked from the asar), and "download" means fetching it yourself. `prepareCopilotRuntime` owns the mechanics; it runs in the main process before the transport is built:
+
+```ts
+// Illustrative, not compiled
+import { prepareCopilotRuntime, createSdkCopilotTransport, COPILOT_EGRESS_HOSTS } from '@marinoscar/kvox-ai/copilot';
+
+const rt = await prepareCopilotRuntime({
+  dataDirectory: join(app.getPath('userData'), 'copilot'),
+  bundledRuntimePath: join(process.resourcesPath, 'copilot', 'copilot-runtime'), // preferred
+  // download: { allowedHosts: ['downloads.example.com'], url, sha256, extract },   // only after the user opts in
+});
+const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, workingDirectory: rt.workingDirectory });
+```
+
+- Directories under `dataDirectory`: `home/` (Copilot's private home: the runtime writes session state there, and the adapter deletes every session it creates), `work/` (EMPTY on every call) and `runtime/<version>/`.
+- Bundled first. A bundled runtime that is missing or fails its SHA-256 (`bundledSha256`, or a sibling `<path>.sha256`) is an error, never a quiet switch to a download.
+- A download needs the user's opt-in (passing `download` is the opt-in) and comes only from `download.allowedHosts` (https, exact hostname, default port, every redirect checked). The SDK publishes no checksum, so YOU supply it: `url` plus a pinned `sha256`, or a `manifestUrl` that serves `{ version, url, sha256 }`. Pin it at build time; a manifest on the same host proves the transfer, not the host. The official artifact is a `.tgz`: pass an `extract` hook that returns the launcher path.
+- Failures are `AiError`s with `details.check`: `runtime_missing`, `checksum_mismatch`, `download_failed`, `download_too_large`, `download_host_refused`.
+- `createSdkCopilotTransport` takes no `runtimePath` option today. The spike read that the SDK honours a `COPILOT_CLI_PATH` environment variable of the runtime process (not exercised); wiring `rt.runtimePath` to the SDK is the host's step.
+- Egress: allow `COPILOT_EGRESS_HOSTS` (`api.githubcopilot.com`, `github.com`, `api.github.com`) and nothing else for Copilot. The list is inferred from the runtime's strings, not measured; confirm it with a capture on Windows and Linux before you tighten a firewall. Do not tell users Copilot sends no telemetry: the runtime has a product-telemetry service with no documented switch, and the allowlist is the control. Findings and their basis: [SPIKE.md](../../packages/kvox-ai/src/copilot/SPIKE.md).
+
+### Routing the tasks
+
+Copilot has no tool calling and no embeddings. `routeKvoxTasks({ primary, fallback })` from the package root (`@marinoscar/kvox-ai`; [routing README](../../packages/kvox-ai/src/routing/README.md)) gives each task to the primary provider when it can serve it, else to the fallback (OpenAI, when the user saved a key), else lists it in `unavailable` with `needs_tool_calling` or `needs_embeddings`, so the shell can hide Ask or semantic search with a reason. Persist the returned `taskModels`.
 
 ### What the adapter does for you
 
@@ -765,7 +803,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ## Evaluating extraction quality: `kvox-eval`
 
-`@marinoscar/kvox-eval` (the sixth package; issue #580) holds the knowledge-graph and Ask evaluation: the synthetic golden set (`fixtures/kg-golden/`), the scorers, the report and the `kvox-eval` command. It is written only against the model port, so it measures the prompts, schemas and validators the product ships. Desktop runs `kvox-eval kg` in its own CI with its own binding: `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime` (key in `KVOX_EVAL_OPENAI_API_KEY`, environment only), the same call the web edition's `npm run kg:eval` makes. `kvox-eval kg --predictions gold` is the harness self-test and must print 1.000 everywhere. `--provider copilot` refuses until the Copilot adapter lands (#581), and `kvox-eval ask` (issue #608) runs the Ask evaluation headless over the same binding: an in-memory PGlite, the golden graph seeded through `GraphWriteService`, the real `ask.respond` handler, no real database (`kvox-eval ask --replay` needs no key; peers and usage: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md)). The request-level parity check (#580 part 2) proves the harness is the same: `@marinoscar/kvox-eval/parity` drives the product's own notes, extraction, adjudication and Ask code through a `KvoxAiPort` and the recorded provider requests must equal the snapshots shipped in the package (`parity/`). Desktop runs it in its own CI over its binding: `runParityScenario(createKvoxAi({ runtime, taskModels: parityTaskModelSource() }), { script })` with `createParityScript()` as the scripted provider, where `runtime` is `createDirectRuntime` with `createRecordingAdapter(script)` as its adapter (or `createRecordingRuntime` around the runtime Desktop already uses), then `withRecordedFeatures(adapter.requests(), runtime.requests())` compared with `loadParitySnapshot('m01')` to `'m10'` and `'ask'`. A mismatch means Desktop's harness differs from the web edition's; no key and no network are needed. Reference: [packages/kvox-eval/src/parity/README.md](../../packages/kvox-eval/src/parity/README.md). Reference: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md).
+`@marinoscar/kvox-eval` (the sixth package; issue #580) holds the knowledge-graph and Ask evaluation: the synthetic golden set (`fixtures/kg-golden/`), the scorers, the report and the `kvox-eval` command. It is written only against the model port, so it measures the prompts, schemas and validators the product ships. Desktop runs `kvox-eval kg` in its own CI with its own binding: `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime` (key in `KVOX_EVAL_OPENAI_API_KEY`, environment only), the same call the web edition's `npm run kg:eval` makes. `kvox-eval kg --predictions gold` is the harness self-test and must print 1.000 everywhere. `--provider copilot` is still refused (the adapter is published in `@marinoscar/kvox-ai/copilot`, but `kvox-eval` has no live Copilot binding; the parity check runs the adapter on its mock transport), and `kvox-eval ask` (issue #608) runs the Ask evaluation headless over the same binding: an in-memory PGlite, the golden graph seeded through `GraphWriteService`, the real `ask.respond` handler, no real database (`kvox-eval ask --replay` needs no key; peers and usage: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md)). The request-level parity check (#580 part 2) proves the harness is the same: `@marinoscar/kvox-eval/parity` drives the product's own notes, extraction, adjudication and Ask code through a `KvoxAiPort` and the recorded provider requests must equal the snapshots shipped in the package (`parity/`). Desktop runs it in its own CI over its binding: `runParityScenario(createKvoxAi({ runtime, taskModels: parityTaskModelSource() }), { script })` with `createParityScript()` as the scripted provider, where `runtime` is `createDirectRuntime` with `createRecordingAdapter(script)` as its adapter (or `createRecordingRuntime` around the runtime Desktop already uses), then `withRecordedFeatures(adapter.requests(), runtime.requests())` compared with `loadParitySnapshot('m01')` to `'m10'` and `'ask'`. A mismatch means Desktop's harness differs from the web edition's; no key and no network are needed. Reference: [packages/kvox-eval/src/parity/README.md](../../packages/kvox-eval/src/parity/README.md). Reference: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md).
 
 ## Version policy
 

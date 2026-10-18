@@ -22,10 +22,9 @@
 // runtime has an OpenTelemetry exporter (`telemetry.endpoint`, `telemetry.*`
 // settings) whose endpoint is whatever the user or the host configures, so it
 // contacts nothing of its own unless one is set; and "session telemetry" for
-// GitHub-authenticated sessions, which the SDK types document as ON unless the
-// session sets `enableSessionTelemetry: false`. Where that goes is not stated
-// in the SDK; it is inferred to be one of the hosts below. The transport should
-// pass `enableSessionTelemetry: false` where it can.
+// GitHub-authenticated sessions, for which the spike (SPIKE.md) found no
+// documented off switch. Where that goes is not stated in the SDK; it is
+// inferred to be one of the hosts below, so the egress allowlist is the control.
 // =============================================================================
 
 /**
