@@ -89,7 +89,7 @@ flowchart LR
 
 ## Install
 
-Print the per-slice peer data any time with `node scripts/kvox-packages/check-slice-peers.mjs --table` (in the KVox repository); the rule is in [PACKAGES.md](../PACKAGES.md#peer-dependencies-per-slice). Packages are `0.x` on the `next` dist-tag; until the first release is published, pack the workspace packages as `examples/bare-host/run.mjs --from pack` does.
+Print the per-slice peer data any time with `node scripts/kvox-packages/check-slice-peers.mjs --table` (in the KVox repository); the rule is in [PACKAGES.md](../PACKAGES.md#peer-dependencies-per-slice). The packages are published on npm (first release `0.1.0-next.0`, `next` dist-tag, provenance attached). A host installs and pins every package it uses to one exact version, for example `npm install --save-exact @marinoscar/kvox-api@0.1.0-next.0 ...`, and bumps them together because they are one release group. To test unreleased changes, pack the workspace packages as `examples/bare-host/run.mjs --from pack` does.
 
 **Main process, minimal set (transcription, search, transcripts, notes).**
 
