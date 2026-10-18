@@ -1,0 +1,64 @@
+/*
+ * The Inter @font-face of the brand package: the ONLY declaration of it (issue #111, packaged by
+ * issue #628 as `@marinoscar/kvox-web/brand/fonts/inter.css`).
+ * =============================================================================
+ * The brand theme declares Inter first in `typography.fontFamily`, so a host has
+ * to actually LOAD it; without a @font-face every user sees the Arial/Helvetica/
+ * DejaVu fallback instead of the typeface the UI was designed in, with three
+ * different sets of glyph metrics and so three different wrapping points.
+ *
+ * SELF-HOSTED, AND THE URL IS RELATIVE
+ * -----------------------------------------------------------------------------
+ * The `url('./Inter-latin-variable.woff2')` below is relative to THIS file, which
+ * is what lets every bundler resolve and emit the font from the package:
+ *
+ *   import '@marinoscar/kvox-web/brand/fonts/inter.css';   // Vite, electron-vite
+ *
+ * There is no CDN: the deployed web CSP is `font-src 'self' data:` and the
+ * Desktop host's is the same, with no remote assets at all (ADR-0004).
+ *
+ * The web app does not import it from TypeScript: its `index.html` links
+ * `/fonts/inter.css`, a byte-for-byte mirror that
+ * `apps/web/scripts/sync-brand-assets.mjs` writes into `public/` (and `--check`
+ * verifies), because a <link> in <head> is discovered by the preload scanner in
+ * the first parse of the document and the visual-regression harness
+ * (`apps/web/visual/index.html`) needs the same path. The mirror's sibling
+ * `Inter-latin-variable.woff2` resolves this same relative URL.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  /*
+   * A WEIGHT RANGE, not a single value — Inter-latin-variable.woff2 is a
+   * VARIABLE font carrying a `wght` axis spanning 100–900 in one file.
+   * Declaring the full range is what lets the browser instantiate the real
+   * designed weight for every weight the theme asks for: MUI's body text at
+   * 400, `.MuiButton`/medium UI at 500, the h1–h6 overrides of
+   * the shell theme at 600, and 700 wherever bold is used. Had this said
+   * `font-weight: 400`, the browser would match this face for 400 only and
+   * SYNTHESISE the rest by algorithmically smearing the 400 outlines — visibly
+   * worse, and with different metrics from the real cut, which would defeat
+   * the point of loading Inter at all.
+   */
+  font-weight: 100 900;
+  /*
+   * `swap`, per #111: render immediately in the fallback and swap Inter in when
+   * it arrives, so text is never invisible while the font loads. The
+   * alternative, `block`, hides text for up to ~3s on a slow connection.
+   *
+   * The harness shares this value rather than overriding it to `block` for
+   * screenshot determinism — the tests are supposed to exercise what ships.
+   * Determinism is handled on the test side instead, by
+   * `tests/visual/support/harness.ts`'s `waitForInter()`, which awaits
+   * `document.fonts.load()` before any screenshot is taken.
+   */
+  font-display: swap;
+  /*
+   * Latin subset only (~48KB). Every string this application renders is ASCII;
+   * the full multi-script Inter is several hundred KB for glyphs nothing here
+   * would ever use. Sourced from Google Fonts' static CDN once and committed,
+   * SIL Open Font License 1.1.
+   */
+  src: url('./Inter-latin-variable.woff2') format('woff2');
+}

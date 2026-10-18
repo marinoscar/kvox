@@ -50,6 +50,24 @@ describe('scanKvoxWebSources finds a violation', () => {
     }
   });
 
+  it('lets the brand slice import the shell headless entry and nothing else of the platform', () => {
+    const shell = `@marinoscar/${'platform'}-web/shell/headless`;
+    const ui = `@marinoscar/${'platform'}-web/shell/ui`;
+    const dir = sandbox({
+      'brand/theme.ts': `import { createShellTheme } from '${shell}';\nexport { createShellTheme };\n`,
+      'brand/root.ts': `import { ShellRoot } from '${ui}';\nexport { ShellRoot };\n`,
+      'core/ui/theme.ts': `import { createShellTheme } from '${shell}';\nexport { createShellTheme };\n`,
+    });
+    try {
+      const problems = scanKvoxWebSources(dir);
+      expect(problems).toHaveLength(2);
+      expect(problems.join('\n')).toMatch(/brand\/root\.ts imports .*shell\/ui/);
+      expect(problems.join('\n')).toMatch(/core\/ui\/theme\.ts imports .*shell\/headless/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('in any file that imports a platform package, but not in a comment', () => {
     const platform = `@marinoscar/${'platform'}-web/core`;
     const dir = sandbox({

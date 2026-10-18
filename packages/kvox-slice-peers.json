@@ -30,7 +30,7 @@
   },
   "$hostOnly": {
     "kvox-api": ["@marinoscar/platform-api"],
-    "kvox-web": ["@marinoscar/platform-web"]
+    "kvox-web": []
   },
   "$hostPlugins": {
     "kvox-api": {
@@ -243,7 +243,8 @@
       "entries": {
         "ui": ["@mui/icons-material", "@mui/material", "react-markdown", "react-router-dom"]
       }
-    }
+    },
+    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] }
   },
   "kvox-contract": {
     "errors": { "peers": ["zod"] },
