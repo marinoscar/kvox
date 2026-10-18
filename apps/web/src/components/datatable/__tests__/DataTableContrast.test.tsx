@@ -10,14 +10,14 @@
  * relative-luminance / contrast-ratio calculator
  * (`testUtils/contrast.ts`) run directly against the actual
  * `lightTheme` / `darkTheme` palette values the app ships
- * (`../../../theme/light.ts`, `dark.ts`) for the specific foreground/
+ * (`@marinoscar/kvox-web/brand`: `light.ts`, `dark.ts`) for the specific foreground/
  * background pairs THIS component paints — not a generic "is the theme
  * accessible" audit.
  *
  * ## Every ratio here is re-pinned against THIS repo's palette
  *
  * The measured ratios in the comments below were computed from
- * `theme/light.ts` / `theme/dark.ts` as they stand, NOT carried over from the
+ * `light.ts` / `dark.ts` of `@marinoscar/kvox-web/brand` as they stand, NOT carried over from the
  * upstream palette this suite was ported from. They are recorded so that a
  * future palette change shows up as a diff in intent, not just as a pass/fail
  * flip. Issue #110 repalletted the app and every number below moved; the
@@ -54,8 +54,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { alpha } from '@mui/material/styles';
-import { lightPalette } from '../../../theme/light';
-import { darkPalette } from '../../../theme/dark';
+import { kvoxDarkPalette as darkPalette, kvoxLightPalette as lightPalette } from '@marinoscar/kvox-web/brand';
 import {
   contrastRatio,
   WCAG_AA_LARGE_TEXT,
@@ -232,7 +231,7 @@ describe('DataTable — WCAG contrast (computed against the real theme)', () => 
     // leave the two assertions above measuring a colour the app never paints.
     it('the built themes carry the error tokens these ratios were computed from', async () => {
       const { lightTheme, darkTheme } = await import('../../../theme');
-      const { BRAND_TOKENS } = await import('../../../theme/tokens');
+      const { kvoxTokens: BRAND_TOKENS } = await import('@marinoscar/kvox-web/brand');
       expect(lightTheme.palette.error.main).toBe(BRAND_TOKENS.light.error);
       expect(darkTheme.palette.error.main).toBe(BRAND_TOKENS.dark.error);
     });

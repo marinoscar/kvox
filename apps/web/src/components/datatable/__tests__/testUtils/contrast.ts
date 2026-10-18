@@ -13,7 +13,7 @@
  *
  * This module is the real substitute: a pure WCAG 2.1 relative-luminance /
  * contrast-ratio calculator run directly against the actual theme palette
- * values (`../../../theme/light.ts` / `dark.ts`), for the specific
+ * values (`light.ts` / `dark.ts` of `@marinoscar/kvox-web/brand`), for the specific
  * foreground/background pairs the DataTable component itself paints (the
  * selected-row tint, the destructive action palette, body text on a card).
  * No rendering involved, so nothing here depends on jsdom's layout gaps.

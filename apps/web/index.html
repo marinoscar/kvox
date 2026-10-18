@@ -46,18 +46,21 @@
     <meta name="apple-mobile-web-app-title" content="%APP_NAME%" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <!--
-      Issue #111: `src/theme/index.ts` declares Inter as the first family in
-      `typography.fontFamily`, so the app has to actually LOAD it — before this
-      link existed it did not, and every user saw the Arial/Helvetica/DejaVu
+      Issue #111: the KVox theme (`@marinoscar/kvox-web/brand`) declares Inter as
+      the first family in `typography.fontFamily`, so the app has to actually LOAD
+      it; before this link existed every user saw the Arial/Helvetica/DejaVu
       fallback instead of the typeface the UI was designed in.
 
-      The @font-face itself lives in `public/fonts/inter.css` rather than in a
-      <style> block here, because it is shared verbatim with the visual
-      regression harness (`visual/index.html`, issue #107). One declaration,
-      one font file: a harness with its own copy would be screenshotting a
-      font-loading path the application does not use. See that file's header
-      for the full rationale on self-hosting, `font-display: swap`, and the
-      variable-weight range.
+      The @font-face itself lives in the brand package
+      (`@marinoscar/kvox-web/brand/fonts/inter.css`, with a relative font URL), and
+      `public/fonts/` holds a byte-for-byte mirror of it
+      (`scripts/sync-brand-assets.mjs`, checked by `npm run brand:check` and by a
+      test). A <link> in <head> is discovered by the browser's preload scanner in
+      the first parse of the document, so the font request starts before the React
+      bundle is even fetched, and the visual regression harness
+      (`visual/index.html`, issue #107) loads the very same file, so its baselines
+      describe the font-loading path users get. See the package file's header for
+      self-hosting, `font-display: swap` and the variable-weight range.
 
       Served from `public/`, so Vite copies it into `dist/` untouched and
       nginx's static-asset cache rule (`apps/web/nginx.conf`) already covers

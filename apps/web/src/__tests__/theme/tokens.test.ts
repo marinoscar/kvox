@@ -50,8 +50,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { THEME_COLOR } from '@app/shared';
-import { BRAND_TOKENS } from '../../theme/tokens';
-import { lightPalette } from '../../theme/light';
+import { kvoxLightPalette as lightPalette, kvoxTokens as BRAND_TOKENS } from '@marinoscar/kvox-web/brand';
 import { SPEAKER_PALETTES } from '@marinoscar/kvox-web/transcripts/headless';
 import {
   contrastRatio,
@@ -72,7 +71,7 @@ function surfaces(mode: (typeof MODES)[number]): ReadonlyArray<readonly [string,
 }
 
 describe('the brand token map is the single source of both palettes', () => {
-  // The rebrand contract (see `theme/tokens.ts`): `identity.json` is what
+  // The rebrand contract (see `tokens.ts` in `@marinoscar/kvox-web/brand`): `identity.json` is what
   // `scripts/rename.mjs` rewrites and what `generate-icons.py` paints into the
   // committed PNGs. If the light primary ever stops being that value, the
   // running application and the browser tab / Home Screen icon / OS chrome are
