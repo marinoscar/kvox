@@ -14,7 +14,7 @@ Status: issue #580.
 
 ## Peer dependencies
 
-`@marinoscar/kvox-api` (`KvoxAiError`) and `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`, a type). It imports the `fixtures`, `kg`, `live` and `real-data` slices.
+`@marinoscar/kvox-api` (`KvoxAiError`) and `@marinoscar/platform-ai-providers` (a type). It imports the `fixtures`, `kg`, `live` and `real-data` slices.
 
 ## Configuration
 

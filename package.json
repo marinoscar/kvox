@@ -26,6 +26,7 @@
     "check:kvox-slice-peers": "node scripts/kvox-packages/check-slice-peers.mjs && node scripts/kvox-packages/check-slice-peers.mjs --app apps/api --app apps/web",
     "check:kvox-package-docs": "npm run docs:kvox-packages && node scripts/kvox-packages/check-package-docs.mjs",
     "check:kvox-pack": "node scripts/kvox-packages/check-package-pack.mjs",
+    "check:kvox-lean-install": "node scripts/kvox-packages/check-lean-install.mjs",
     "build:packages": "npm run build:kvox-packages",
     "typecheck:packages": "npm run typecheck:kvox-packages",
     "test:packages": "npm run test:kvox-packages && npm run test:kvox-scripts",
@@ -49,8 +50,8 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
-    "@marinoscar/platform-contract": "0.1.0-next.5",
-    "@marinoscar/platform-infra": "0.1.0-next.5",
+    "@marinoscar/platform-contract": "0.1.0-next.6",
+    "@marinoscar/platform-infra": "0.1.0-next.6",
     "@stoplight/spectral-cli": "^6.16.3",
     "eslint": "^10.12.0",
     "eslint-import-resolver-typescript": "^4.4.5",

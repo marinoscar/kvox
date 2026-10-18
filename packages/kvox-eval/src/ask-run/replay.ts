@@ -26,7 +26,7 @@
 import type { AskMessageResponse } from '@marinoscar/kvox-contract/ask';
 import { createKvoxAi } from '@marinoscar/kvox-ai';
 import { completedEvent, createScriptedRuntime, functionCallEvent, textDeltaEvent } from '@marinoscar/kvox-ai/testing';
-import type { AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 import { scoreCitationValidity, scoreSensitiveLeak } from '../ask/index.js';
 import { staticTaskModelSource } from '../live/index.js';

@@ -164,11 +164,11 @@ The packages are released together, so a consumer who installs the six from one 
 
 ## The host-neutral rule
 
-**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`; a file under `packages/kvox-ai/src/**` or `packages/kvox-eval/src/**` may import exactly `@marinoscar/platform-api/ai` (the provider-adapter types and classes, an interim peer until the lean adapter package of #578) and nothing else of the platform.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
+**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`; a file under `packages/kvox-ai/src/**` or `packages/kvox-eval/src/**` may import exactly `@marinoscar/platform-ai-providers` (the provider-adapter types and classes; `kvox-eval` also its `/openai` subpath) and nothing else of the platform. Importing `@marinoscar/platform-api` from either is a violation.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
 
 What to do instead: depend on a port from `@marinoscar/kvox-api/ports` (AI, object store, jobs, identity, notifications and so on). The web edition binds each port to a platform slice in one place, `apps/api/src/platform-kvox/` (issue 5.4); Desktop binds its own. The two optional `@marinoscar/platform-*` peers exist for those bindings' helpers, listed in `$hostOnly`, and no slice may list them.
 
-The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutral]` naming the file and the specifier, and the fixtures in `scripts/kvox-packages/test/fixtures/` pin both outcomes (`npm run test:kvox-scripts`). It complements ESLint's deep-import rule, which bans `@marinoscar/platform-*/src`, `/dist` and `/internal` paths everywhere. The rule keeps the sources clean; what proves a host can really run without the platform is [examples/bare-host](../examples/bare-host/README.md), which installs the packed packages with no `@marinoscar/platform-api` and passes the domain end to end in CI.
+The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutral]` naming the file and the specifier, and the fixtures in `scripts/kvox-packages/test/fixtures/` pin both outcomes (`npm run test:kvox-scripts`). It complements ESLint's deep-import rule, which bans `@marinoscar/platform-*/src`, `/dist` and `/internal` paths everywhere. `npm run check:kvox-lean-install` proves it for `kvox-ai`: it packs the package, installs it alone with no `@marinoscar/platform-api` and builds an OpenAI adapter through `createDirectRuntime`. The rule keeps the sources clean; what proves a host can really run without the platform is [examples/bare-host](../examples/bare-host/README.md), which installs the packed packages with no `@marinoscar/platform-api` and passes the domain end to end in CI.
 
 ## Checks and commands
 
@@ -185,6 +185,7 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 | `npm run docs:kvox-packages` | TypeDoc for the six packages. |
 | `npm run check:kvox-slice-peers` | The eight rules above, for the packages and then for `apps/api` and `apps/web`. |
 | `npm run check:kvox-package-docs` | `docs:kvox-packages`, then the README, TSDoc and TypeDoc standard. |
+| `npm run check:kvox-lean-install` | Packs `kvox-ai`, installs it alone in a scratch project with no `@marinoscar/platform-api` (its `@marinoscar/kvox-api` peer is installed without the optional platform-api peer), asserts the absence and runs a `createDirectRuntime` smoke over an OpenAI adapter. Run after the build. |
 | `npm run check:kvox-pack` | `npm pack --dry-run` of each package against its manifest. Run after the build. |
 | `node scripts/kvox-packages/check-single-instance.mjs --root . --guard '@marinoscar/platform-*' --guard '@marinoscar/kvox-*'` | One copy of every singleton library and package. |
 | `npx changeset status --since=origin/main` | Fails when a package source changed without a changeset. |

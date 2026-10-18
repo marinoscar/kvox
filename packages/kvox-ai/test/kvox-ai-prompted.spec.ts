@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AiError } from '@marinoscar/platform-api/ai';
+import { AiError } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError, type KvoxAiContext, type KvoxAiTarget } from '@marinoscar/kvox-api/ports';
 
 import {

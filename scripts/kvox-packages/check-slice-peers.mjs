@@ -58,14 +58,14 @@
 //                    the platform does not exist. The one place that imports
 //                    the platform is the app folder apps/api/src/platform-kvox.
 //                    packages/kvox-ai/src/** may import exactly one platform
-//                    specifier, the public subpath @marinoscar/platform-api/ai
-//                    (the provider-adapter types and classes, an interim peer
-//                    until the lean adapter package of #578); any other
-//                    platform specifier, the bare package or a deeper path
-//                    such as @marinoscar/platform-api/ai/core, is a violation
-//                    (HOST_NEUTRAL_ALLOWED). packages/kvox-eval/src/** has the
-//                    same single exception, for the provider adapters its live
-//                    runs call (issue #580).
+//                    specifier, the lean
+//                    @marinoscar/platform-ai-providers (the provider-adapter
+//                    types and AiError; issue #578); any other platform
+//                    specifier, @marinoscar/platform-api included, or a deeper
+//                    path, is a violation (HOST_NEUTRAL_ALLOWED).
+//                    packages/kvox-eval/src/** may also import its /openai
+//                    subpath, for the adapter factories its live runs call
+//                    (issue #580).
 //   7. headless      No file under packages/kvox-web/src/<slice>/headless/**
 //                    imports @mui/*, @emotion/* or a router (react-router*), or
 //                    reaches into a ui/ folder. A headless entry is what a host
@@ -127,14 +127,15 @@ export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvo
 /**
  * The platform specifiers a host-neutral package may import anyway, matched
  * EXACTLY (rule 6). `kvox-ai` implements the model port over the provider-adapter
- * types and classes of `@marinoscar/platform-api/ai` (issue #579) until the lean
- * adapter package (#578) replaces that peer; nothing else of the platform.
- * `kvox-eval` builds its live runs' port over the OpenAI and OpenAI-compatible
- * adapters of the same subpath (issue #580), under the same interim rule.
+ * types and `AiError` of the lean `@marinoscar/platform-ai-providers` (issues #578,
+ * #579): a plain Node package with no Nest and no database, so it installs on
+ * Desktop. `kvox-eval` builds its live runs' port over the OpenAI and
+ * OpenAI-compatible adapter factories of its `/openai` subpath (issue #580).
+ * `@marinoscar/platform-api` (and every other platform specifier) stays a violation.
  */
 export const HOST_NEUTRAL_ALLOWED = Object.freeze({
-  'kvox-ai': Object.freeze(['@marinoscar/platform-api/ai']),
-  'kvox-eval': Object.freeze(['@marinoscar/platform-api/ai']),
+  'kvox-ai': Object.freeze(['@marinoscar/platform-ai-providers']),
+  'kvox-eval': Object.freeze(['@marinoscar/platform-ai-providers', '@marinoscar/platform-ai-providers/openai']),
 });
 /** Specifier prefix rule 6 forbids. */
 export const PLATFORM_PREFIX = '@marinoscar/platform-';

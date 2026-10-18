@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { AiError, type AiCallContext, type AiProviderAdapter, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { type AiCallContext, type AiProviderAdapter, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 
-import { isErrorLike, scrub } from '../errors/index.js';
+import { isAiError, isErrorLike, scrub } from '../errors/index.js';
 import type {
   KvoxAiKeyReadiness,
   KvoxAiRuntime,
@@ -182,7 +182,7 @@ function noPort(call: KvoxAiRuntimeCall, port: string): KvoxAiError {
  * other error with its name kept and its message scrubbed.
  */
 function sanitize(error: unknown): unknown {
-  if (error instanceof KvoxAiError || AiError.isAiError(error)) return error;
+  if (error instanceof KvoxAiError || isAiError(error)) return error;
   if (isErrorLike(error)) {
     const clean = new Error(scrub(error.message));
     clean.name = error.name;

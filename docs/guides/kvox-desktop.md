@@ -455,7 +455,7 @@ Status: experimental, and **off by default**. The owner has not yet decided the 
 
 ```ts
 // Illustrative, not compiled
-import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-ai-providers';
 import { createDirectRuntime, createKvoxAi } from '@marinoscar/kvox-ai';
 import { createCopilotAdapter, createSdkCopilotTransport } from '@marinoscar/kvox-ai/copilot';
 

@@ -102,7 +102,7 @@
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
-    "@marinoscar/platform-web": "0.1.0-next.5",
+    "@marinoscar/platform-web": "0.1.0-next.6",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
     "@react-sigma/core": "^5.0.6",

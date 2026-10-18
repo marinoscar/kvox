@@ -1,4 +1,4 @@
-import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-ai-providers';
 import { z } from 'zod';
 
 import { createCopilotAdapter, createCopilotMockTransport } from '../src/copilot/index.js';

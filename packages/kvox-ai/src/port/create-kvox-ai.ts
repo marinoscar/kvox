@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AiError, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AiError, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import {
   KvoxAiError,
   type KvoxAiCapabilities,
@@ -27,7 +27,7 @@ import {
   toolCallIdsOf,
 } from '../chat/index.js';
 import { KVOX_EMBEDDING } from '../embedding/index.js';
-import { isErrorLike, refusalFor, scrub, toKvoxAiError, type KvoxAiErrorContext } from '../errors/index.js';
+import { isAiError, isErrorLike, refusalFor, scrub, toKvoxAiError, type KvoxAiErrorContext } from '../errors/index.js';
 import type { KvoxAiFeatureId } from '../features/index.js';
 import type {
   KvoxAiModelState,
@@ -866,7 +866,7 @@ class KvoxAi implements KvoxAiPort {
       return new KvoxAiError('timeout', `The AI request timed out after ${ctx.guard.timeoutMs} ms.`);
     }
 
-    if (AiError.isAiError(err) && err.code === STRUCTURED_INVALID && ctx.structuredCeiling !== undefined) {
+    if (isAiError(err) && err.code === STRUCTURED_INVALID && ctx.structuredCeiling !== undefined) {
       return structuredFailure(err, ctx.structuredCeiling);
     }
 

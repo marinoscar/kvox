@@ -90,6 +90,10 @@ jobs:
       # Asks npm what each package would publish and compares it with the
       # manifest. Needs the build above.
       - run: npm run check:kvox-pack
+      # Installs kvox-ai alone with its peers into an empty project and asserts
+      # @marinoscar/platform-api is not in the tree (issue #578). Needs the build
+      # above and the registry.
+      - run: npm run check:kvox-lean-install
 
       # Every entry point must load from the module system it advertises. The
       # packages resolve through the workspace links `npm ci` created.

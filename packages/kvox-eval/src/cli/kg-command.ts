@@ -33,7 +33,7 @@ import { dirname, join, resolve } from 'path';
 import { parseArgs } from 'util';
 
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
-import type { AiProviderAdapter } from '@marinoscar/platform-api/ai';
+import type { AiProviderAdapter } from '@marinoscar/platform-ai-providers';
 
 import { KgEvalLoadError } from '../fixtures/index.js';
 import { formatReport } from '../kg/index.js';
