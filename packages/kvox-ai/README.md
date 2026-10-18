@@ -12,7 +12,7 @@ Status: implemented by issue #579 ([ADR-0005](../../docs/decisions/0005-ai-archi
 
 Entry points:
 
-- `@marinoscar/kvox-ai`: the package root, which re-exports every slice. Slice READMEs: [types](src/types/README.md), [features](src/features/README.md), [tasks](src/tasks/README.md), [structured](src/structured/README.md), [chat](src/chat/README.md), [tokens](src/tokens/README.md), [embedding](src/embedding/README.md), [runtime](src/runtime/README.md), [errors](src/errors/README.md), [port](src/port/README.md), [direct](src/direct/README.md).
+- `@marinoscar/kvox-ai`: the package root, which re-exports every slice. Slice READMEs: [types](src/types/README.md), [features](src/features/README.md), [tasks](src/tasks/README.md), [routing](src/routing/README.md), [structured](src/structured/README.md), [chat](src/chat/README.md), [tokens](src/tokens/README.md), [embedding](src/embedding/README.md), [runtime](src/runtime/README.md), [errors](src/errors/README.md), [port](src/port/README.md), [direct](src/direct/README.md).
 
 - `@marinoscar/kvox-ai/testing`: `createScriptedRuntime` and `describeKvoxAiConformance` (not re-exported by the root). Slice README: [testing](src/testing/README.md).
 
