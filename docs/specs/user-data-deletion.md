@@ -228,16 +228,17 @@ The platform's `admin.factory_reset` job (`system:factory_reset`, Admin only; pa
 `/admin/settings/factory-reset`) wipes inline owner models, every `org` model and every user
 but the actor, then every storage object outside the surviving prefixes. It assumes content
 in inline models and one `storageObjects: true` model. KVox has neither, so the bare reset is
-wrong here in five ways: the content is delegated and the reset never enqueues a delegate;
+wrong here in six ways: the content is delegated and the reset never enqueues a delegate;
 the `storage_objects` table is not swept, or fails on a `Restrict` key; the actor is never
-cascaded; the search index has no foreign key; and the built-in note templates are deleted.
+cascaded; the search index has no foreign key; transcript shares (platform `grants` rows) have
+no foreign key either; and the built-in note templates are deleted.
 `apps/api/src/platform/user-data/factory-reset.steps.ts` carries the full reasoning in its
 header. This app closes the gaps with three registered steps, the `StorageObject` hint
 `factoryReset: 'keep'` (`user-data.manifest.ts`) and one config line (`user-data.config.ts`).
 
 | Step | Phase | What it does |
 |---|---|---|
-| `kvox.content` | `before-users` | Deletes, for every user and the actor included, the transcripts, notes, custom note templates, search index rows and the knowledge graph, in foreign-key order |
+| `kvox.content` | `before-users` | Deletes, for every user and the actor included, the transcripts and their grants (share links included), notes, custom note templates, search index rows and the knowledge graph, in foreign-key order |
 | `kvox.storage-objects` | `deployment` | Deletes every storage object outside the surviving prefixes: the bytes, then the row (`kvox-objects/factory-reset-storage.step.ts`) |
 | `kvox.note-templates` | `deployment` | Re-seeds the built-in note templates that the platform's owner-less sweep deleted (fixed ids, idempotent) |
 
@@ -256,11 +257,20 @@ The job result namespaces each step's counts as `step.<id>.<key>`.
 | Key | Meaning |
 |---|---|
 | `step.kvox.content.providerCopiesRemaining` | Transcripts whose copy still sits at the transcription provider. The reset does not delete vendor copies; the administrator removes them at the provider |
+| `step.kvox.content.transcriptGrants` | Grants deleted for the transcripts the step deleted (`resource_type` `transcript`, share-link grants included) |
 | `step.kvox.storage-objects.storageObjectsFailed` | Bucket deletions the provider refused. The row stays so a re-run retries it; the step never throws on one |
 
 The other counts are `transcripts`, `notes`, `noteTemplates`, `graphEntities`,
 `graphRelations`, `graphItems`, `graphExports`, `searchChunks`, `searchIndexState`,
 `storageObjectsDeleted`, `builtInTemplatesRestored` and `builtInTemplatesPresent`.
+
+### Transcript grants
+
+A share is a `grants` row with no foreign key to the transcript. The step pages the transcript
+ids and deletes their grants with `deleteGrantsForResources` before deleting the transcripts, as
+`transcript.purge` does. Limit: it deletes only the grants of transcripts that still exist.
+Grants with no transcript row (left by an earlier failed purge) are left to the platform job
+`sharing.grants.prune`, because no platform helper deletes every grant of a type.
 
 ### Graph erasure
 
@@ -299,6 +309,7 @@ retried job deletes what is left.
 - Web: `apps/web/src/__tests__/config/dangerZoneCard.test.ts` (the card is
   declared, ungated, and last).
 - `apps/api/test/user-data/factory-reset-steps.spec.ts` (the three steps over mocks),
-  `factory-reset.db.spec.ts` (the real handler over the real schema, including the evidence
-  trigger forced with `SET CONSTRAINTS ALL IMMEDIATE`) and the factory reset RBAC specs
+  `factory-reset.db.spec.ts` (the real handler over the real schema, seeding transcript grants
+  and asserting `transcriptGrants`, including the evidence trigger forced with
+  `SET CONSTRAINTS ALL IMMEDIATE`) and the factory reset RBAC specs
   (`factory-reset-rbac.integration.spec.ts`, `factory-reset-permissions.spec.ts`).
