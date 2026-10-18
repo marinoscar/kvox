@@ -108,6 +108,8 @@ jobs:
           node -e "require('@marinoscar/kvox-eval/fixtures')"
           node -e "require('@marinoscar/kvox-eval/parity')"
           node packages/kvox-eval/dist/cli/main.js kg --predictions gold --only m01
+          node -e "require('@marinoscar/kvox-eval/ask-run')"
+          node packages/kvox-eval/dist/cli/main.js ask --replay --out "$RUNNER_TEMP/ask-replay"
           node -e "require('@marinoscar/kvox-contract')"
           node -e "require('@marinoscar/kvox-contract/graph')"
           node -e "require('@marinoscar/kvox-contract/ontology')"
