@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["../../typedoc.base.json"],
   "tsconfig": "./tsconfig.json",
-  "entryPoints": ["./src/index.ts", "./src/testing/index.ts"],
+  "entryPoints": ["./src/index.ts", "./src/testing/index.ts", "./src/copilot/index.ts"],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-ai",
   "out": "./docs-api/html",

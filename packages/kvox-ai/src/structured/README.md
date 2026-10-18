@@ -6,6 +6,8 @@ The strict JSON-schema subset structured output is constrained to, checked local
 
 `assertStrictJsonSchema` (throws `StrictSchemaError` naming the JSON path of the first violation), `zodToStrictJsonSchema`, and the limits `MAX_NESTING_DEPTH` and `MAX_TOTAL_PROPERTIES`. The rules are stricter than the vendor in two places so a schema that passes is portable to another provider.
 
+The prompted path (#581), for a model whose `structuredOutputMode` is `prompted`: `buildPromptedStructuredInstructions` (the generic schema block appended to the system prompt), `parsePromptedStructuredAnswer` (fence strip, `JSON.parse`, validation by each schema in order), `buildPromptedRepairInput` (the one repair request's input) and `promptedJsonSchemaOf`. Pure; the calls and the error classes are the `port` slice's.
+
 Status: moved from `apps/api/src/ai-port/strict-json-schema.ts` (issue #579).
 
 ## Entry point

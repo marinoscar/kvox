@@ -27,6 +27,10 @@
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
     },
+    "./copilot": {
+      "types": "./dist/copilot/index.d.ts",
+      "default": "./dist/copilot/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -46,9 +50,15 @@
     "test:run": "jest -c test/jest.config.js --ci"
   },
   "peerDependencies": {
+    "@github/copilot-sdk": "^1.0.22",
     "@marinoscar/kvox-api": ">=0.0.0-0 || >=0.1.0-0",
     "@marinoscar/platform-api": "0.1.0-next.5",
     "zod": "^4.4.3"
+  },
+  "peerDependenciesMeta": {
+    "@github/copilot-sdk": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@marinoscar/kvox-api": "*",

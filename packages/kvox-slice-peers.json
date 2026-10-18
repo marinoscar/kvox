@@ -5,7 +5,7 @@
     "kvox-web": ["core"],
     "kvox-contract": "*",
     "kvox-db": ["bin"],
-    "kvox-ai": "*",
+    "kvox-ai": ["tasks", "features", "types", "tokens", "structured", "chat", "embedding", "runtime", "errors", "testing", "port", "direct"],
     "kvox-eval": "*"
   },
   "$implies": {
@@ -276,7 +276,8 @@
     "errors": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
     "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
     "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
-    "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] }
+    "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] },
+    "copilot": { "peers": ["@github/copilot-sdk", "@marinoscar/platform-api", "zod"] }
   },
   "kvox-eval": {
     "ask": { "peers": ["@marinoscar/kvox-contract", "zod"] },

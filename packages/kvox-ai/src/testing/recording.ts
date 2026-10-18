@@ -449,6 +449,72 @@ export function createRecordingAdapter(script: RecordingScript = {}, id = 'opena
 }
 
 /**
+ * Wraps a real provider adapter so the requests its `responses.create` and
+ * `responses.stream` receive are recorded exactly as {@link createRecordingAdapter}
+ * records them (the same `recordProviderRequest` normalization, one numbering per
+ * recording), then delegated to `inner` unchanged. Everything else (`id`,
+ * `displayName`, `listModels`, `verifyKey`, `classifyModel`, the behaviour flags and
+ * the other ports) is the inner adapter's.
+ *
+ * @remarks
+ * For a parity check over an adapter that answers for itself, such as the GitHub
+ * Copilot adapter over its mock transport (#581): the recording proves the request
+ * that reached the adapter, the inner adapter proves what it did with it.
+ *
+ * @example
+ * ```ts
+ * const adapter = wrapRecordingAdapter(createCopilotAdapter({ optIn: true, transport: createCopilotMockTransport() }));
+ * const runtime = createDirectRuntime({ adapters: { copilot: adapter }, keys: async () => ({ apiKey: AI_KEYLESS_API_KEY }) });
+ * ```
+ *
+ * @param inner - the adapter to delegate to; it must have a `responses` port.
+ * @returns the recording adapter.
+ * @throws when `inner` has no `responses` port (there would be nothing to record).
+ * @stability experimental
+ */
+export function wrapRecordingAdapter(inner: AiProviderAdapter): RecordingAdapter {
+  const responses = inner.responses;
+  if (responses === undefined) {
+    throw new Error(`The adapter "${inner.id}" has no responses port to record.`);
+  }
+  let records: RecordedProviderRequest[] = [];
+  let normalize = createRecordedValueNormalizer();
+
+  const recorded: AiProviderAdapter['responses'] = {
+    create(req: AiResponseRequest, ctx: AiCallContext): Promise<AiResponse> {
+      records.push(recordProviderRequest('create', req, normalize));
+      return responses.create(req, ctx);
+    },
+    stream(req: AiResponseRequest, ctx: AiCallContext): AsyncIterable<AiStreamEvent> {
+      records.push(recordProviderRequest('stream', req, normalize));
+      return responses.stream(req, ctx);
+    },
+  };
+
+  const own: Record<PropertyKey, unknown> = {
+    responses: recorded,
+    requests: () => records.map((r) => ({ ...r })),
+    reset: () => {
+      records = [];
+      normalize = createRecordedValueNormalizer();
+    },
+  };
+  // Every other member is read from the inner adapter, its methods bound to it (so a
+  // class adapter with private state keeps working).
+  const adapter = new Proxy(inner, {
+    get(target, prop) {
+      if (Object.prototype.hasOwnProperty.call(own, prop)) return own[prop];
+      const value: unknown = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+    has(target, prop) {
+      return Object.prototype.hasOwnProperty.call(own, prop) || Reflect.has(target, prop);
+    },
+  }) as unknown as RecordingAdapter;
+  return adapter;
+}
+
+/**
  * Puts the AI feature on provider-level records that do not know it (an adapter is
  * not told which feature a round trip is for), taking it from the runtime-level
  * records of the same recording. Both lists are in call order and hold one record per

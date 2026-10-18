@@ -51,14 +51,16 @@ import type { KvoxAiReadiness } from '../types/index.js';
 // =============================================================================
 
 /** Strings shaped like a provider credential. */
-const KEY_SHAPES: readonly RegExp[] = [/sk-[A-Za-z0-9_-]{10,}/g, /(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]+/g];
+const KEY_SHAPES: readonly RegExp[] = [/sk-[A-Za-z0-9_-]{10,}/g, /(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]+/g];
 
 /** The sentence a request-timeout backstop throws, which the old second hop read as `timeout`. */
 const TIMEOUT_SENTENCE = /^The AI request timed out/;
 
 /**
  * Removes anything shaped like a provider key (`sk-...`, `ghp_...`, `gho_...`,
- * `github_pat_...`) from a text.
+ * `ghu_...`, `ghs_...`, `ghr_...`, `github_pat_...`) from a text. The `ghu_`,
+ * `ghs_` and `ghr_` shapes are GitHub's user-to-server, server-to-server and
+ * refresh tokens, which a GitHub Copilot sign-in holds (#581).
  *
  * @param text - a message about to leave the port.
  * @returns the text with every key-shaped run replaced by `[redacted]`.
