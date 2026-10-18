@@ -105,15 +105,30 @@ function setup(opts: {
     createRelation: jest.fn().mockResolvedValue({ id: 'new-edge' }),
     addAliases: jest.fn().mockResolvedValue([]),
   };
-  const ontology = { effectiveSchemaFor: jest.fn().mockResolvedValue(SCHEMA) };
-  // The owner's `graph:write`, asked of the host's identity port (#465).
-  const identity = { hasPermission: jest.fn(async (_userId: string, _permission: string) => opts.canWrite !== false) };
+  // A one-connection pool (#612): while `reconcile` runs on its transaction, a read through the
+  // root client or a port would wait forever for the connection; here it throws instead.
+  let inside = false;
+  const outsideOnly = <T>(value: T) => {
+    if (inside) throw new Error('read outside the transaction while it holds the only connection');
+    return value;
+  };
+  const ontology = { effectiveSchemaFor: jest.fn(async (_userId: string) => outsideOnly(SCHEMA)) };
+  // The actor's `graph:write`, asked of the host's identity port (#465).
+  const identity = {
+    hasPermission: jest.fn(async (_userId: string, _permission: string) => outsideOnly(opts.canWrite !== false)),
+  };
   const reconciler = new SpeakerLinkReconciler(write as never, ontology as never, identity as never);
   let last: { audit: unknown[] } | null = null;
   const run = async (actorUserId = OWNER) => {
-    const summary = await reconciler.reconcile(tx as never, { transcriptId: TRANSCRIPT, actorUserId });
-    last = summary;
-    return summary;
+    const context = await reconciler.resolveContext(actorUserId);
+    inside = true;
+    try {
+      const summary = await reconciler.reconcile(tx as never, { transcriptId: TRANSCRIPT, actorUserId }, context);
+      last = summary;
+      return summary;
+    } finally {
+      inside = false;
+    }
   };
   // The events the caller records after commit (the audit port is not in the transaction).
   const audits = () => (last?.audit ?? []) as Array<Record<string, any>>;
@@ -142,10 +157,21 @@ describe('SpeakerLinkReconciler', () => {
       noWrites(s);
     });
 
-    it('when the actor is not the owner (§12) — and never asks about permissions', async () => {
-      const s = setup();
+    it('when the actor is not the owner (§12) — even one holding graph:write', async () => {
+      const s = setup({ canWrite: true });
       await expect(s.run('editor-1')).resolves.toMatchObject({ skipped: 'not_owner' });
-      expect(s.identity.hasPermission).not.toHaveBeenCalled();
+      noWrites(s);
+    });
+
+    it('reports not_owner before no_permission, as before #612', async () => {
+      const s = setup({ canWrite: false });
+      await expect(s.run('editor-1')).resolves.toMatchObject({ skipped: 'not_owner' });
+      noWrites(s);
+    });
+
+    it('reports missing before not_owner and no_permission', async () => {
+      const s = setup({ transcript: null, canWrite: false });
+      await expect(s.run('editor-1')).resolves.toMatchObject({ skipped: 'missing' });
       noWrites(s);
     });
 
@@ -154,6 +180,16 @@ describe('SpeakerLinkReconciler', () => {
       await expect(s.run()).resolves.toMatchObject({ skipped: 'no_permission' });
       expect(s.identity.hasPermission).toHaveBeenCalledWith(OWNER, 'graph:write');
       noWrites(s);
+    });
+
+    it('resolves the schema and permission before the transaction, then reads only tx (#612)', async () => {
+      const s = setup();
+      await expect(s.run()).resolves.toMatchObject({ skipped: null, created: 1, linked: 1 });
+      expect(s.ontology.effectiveSchemaFor).toHaveBeenCalledTimes(1);
+      expect(s.ontology.effectiveSchemaFor).toHaveBeenCalledWith(OWNER);
+      expect(s.identity.hasPermission).toHaveBeenCalledTimes(1);
+      expect(s.write.createEntity).toHaveBeenCalledWith(s.tx, expect.anything(), SCHEMA);
+      expect(s.write.createRelation).toHaveBeenCalledWith(s.tx, expect.anything(), SCHEMA);
     });
 
     it('takes the per-transcript advisory lock first', async () => {

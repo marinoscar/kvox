@@ -36,6 +36,14 @@
 // transaction, deleting evidence TOGETHER WITH its subject: the deferred
 // no-orphans trigger re-reads the subject at COMMIT, finds no row, and passes.
 //
+// ONLY `tx` INSIDE THE TRANSACTION (#612). What does not need the transaction
+// — the effective schema (a root-client query plus a settings read) and the
+// actor's `graph:write` permission (an identity read) — is resolved BEFORE it
+// opens, by `resolveContext`, and passed in. On a one-connection pool (PGlite:
+// KVox Desktop) a root-client query inside the callback waits forever for the
+// connection the transaction holds. The actor's schema and permission are the
+// owner's whenever they matter: nothing is written unless actor === owner.
+//
 // ⚠ Never log or audit a name. Ids and counts only.
 // =============================================================================
 
@@ -73,6 +81,17 @@ const MAX_QUOTE = 500;
 export interface SpeakerLinkInput {
   transcriptId: string;
   actorUserId: string;
+}
+
+/**
+ * What `reconcile` needs that does not come from its transaction, resolved by
+ * `resolveContext` before the transaction opens (#612).
+ */
+export interface SpeakerLinkContext {
+  /** The acting user's effective schema; used only when the actor is the owner. */
+  schema: EffectiveSchema;
+  /** Whether the acting user holds `graph:write` (effective permissions, #465). */
+  canWrite: boolean;
 }
 
 export type SpeakerLinkSkip = 'missing' | 'not_owner' | 'no_permission';
@@ -183,8 +202,25 @@ export class SpeakerLinkReconciler {
     @Inject(KVOX_IDENTITY) private readonly identity: KvoxIdentityPort,
   ) {}
 
-  async reconcile(tx: Tx, input: SpeakerLinkInput): Promise<SpeakerLinkSummary> {
+  /**
+   * The schema and the `graph:write` permission of `actorUserId`, read through the root client
+   * and the ports. Call it BEFORE opening the transaction `reconcile` runs on, never inside it:
+   * on a one-connection pool those reads would wait for the connection the transaction holds (#612).
+   */
+  async resolveContext(actorUserId: string): Promise<SpeakerLinkContext> {
+    // The actor's EFFECTIVE permissions (system grants plus their membership's
+    // org role), through the platform principal (#465).
+    const [schema, canWrite] = await Promise.all([
+      this.ontology.effectiveSchemaFor(actorUserId),
+      this.identity.hasPermission(actorUserId, GRAPH_WRITE_PERMISSION),
+    ]);
+    return { schema, canWrite };
+  }
+
+  /** The reconcile, on `tx` only; `context` comes from `resolveContext(input.actorUserId)`. */
+  async reconcile(tx: Tx, input: SpeakerLinkInput, context: SpeakerLinkContext): Promise<SpeakerLinkSummary> {
     const { transcriptId, actorUserId } = input;
+    const { schema, canWrite } = context;
 
     // 1. One run per transcript at a time; released at COMMIT/ROLLBACK.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`kg.speaker_link:${transcriptId}`}))`;
@@ -202,9 +238,7 @@ export class SpeakerLinkReconciler {
       return emptySummary('not_owner', ownerId);
     }
 
-    // The owner's EFFECTIVE permissions (system grants plus their membership's
-    // org role), through the platform principal (#465).
-    const canWrite = await this.identity.hasPermission(ownerId, GRAPH_WRITE_PERMISSION);
+    // actor === owner here, so the context's permission is the owner's.
     if (!canWrite) return emptySummary('no_permission', ownerId);
 
     // 3. speakerId → the name's comparable form, for speakers still in the transcript.
@@ -224,8 +258,6 @@ export class SpeakerLinkReconciler {
     const edgeBySpeaker = new Map(edges.map((e) => [e.speakerId, e]));
 
     const summary = emptySummary(null, ownerId);
-    let schema: EffectiveSchema | null = null;
-    const schemaFor = async () => (schema ??= await this.ontology.effectiveSchemaFor(ownerId));
 
     // 5. Every named speaker.
     const orphaned: string[] = []; // Persons whose edge was removed — cleanup candidates
@@ -274,7 +306,7 @@ export class SpeakerLinkReconciler {
             labelSource: 'speaker_naming',
             evidence,
           },
-          await schemaFor(),
+          schema,
         );
         personId = person.id;
         createdPerson = true;
@@ -300,7 +332,7 @@ export class SpeakerLinkReconciler {
           reviewStatus: 'accepted',
           evidence,
         },
-        await schemaFor(),
+        schema,
       );
       summary.linked += 1;
 
