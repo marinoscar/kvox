@@ -3,10 +3,10 @@
 // Mirror the package's brand assets into apps/web/public
 // =============================================================================
 //
-// The SINGLE copy of the KVox brand files is `packages/kvox-web/src/brand/`
-// (`assets/` and `fonts/`, the `@marinoscar/kvox-web/brand/*` exports; issue
-// #628). This app still has to serve some of them from fixed URLs that no
-// bundler rewrites:
+// The SINGLE copy of the brand files is the brand folder of the
+// `@marinoscar/kvox-web` package, `src/brand/` (`assets/` and `fonts/`, the
+// `@marinoscar/kvox-web/brand/*` exports; issue #628). This app still has to
+// serve some of them from fixed URLs that no bundler rewrites:
 //
 //   /favicon.svg, /favicon.ico   `index.html` <link rel="icon">
 //   /icons/*.png                 the web app manifest and the service worker
@@ -16,7 +16,7 @@
 // script and verified by `--check` (also asserted by
 // `src/__tests__/pwa/brandAssetsMirror.test.ts`, so `npm run test:run` fails on
 // drift). Nobody edits a mirrored file in `public/`: edit the package copy
-// (`packages/kvox-web/scripts/generate-icons.py` writes the rasters there), then run
+// (the package's `scripts/generate-icons.py` writes the rasters there), then run
 //
 //   node apps/web/scripts/sync-brand-assets.mjs
 //
@@ -34,14 +34,22 @@
 // =============================================================================
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const WEB_DIR = resolve(HERE, '..');
 export const REPO_ROOT = resolve(WEB_DIR, '..', '..');
-/** Where the single copy lives. */
-export const BRAND_DIR = join(REPO_ROOT, 'packages', 'kvox-web', 'src', 'brand');
+/**
+ * Where the single copy lives: `src/brand` of the `@marinoscar/kvox-web` workspace
+ * package, found through its `package.json` export so this file names no folder.
+ */
+export const BRAND_DIR = join(
+  dirname(createRequire(import.meta.url).resolve('@marinoscar/kvox-web/package.json')),
+  'src',
+  'brand',
+);
 /** Where the mirror is served from. */
 export const PUBLIC_DIR = join(WEB_DIR, 'public');
 
@@ -103,7 +111,7 @@ if (isDirectExecution) {
   const check = process.argv.includes('--check');
   const { missing, stale, written } = syncBrandAssets({ check });
   if (missing.length > 0) {
-    console.error(`sync-brand-assets: missing in packages/kvox-web/src/brand: ${missing.join(', ')}`);
+    console.error(`sync-brand-assets: missing in ${BRAND_DIR}: ${missing.join(', ')}`);
     process.exit(2);
   }
   if (check && stale.length > 0) {
