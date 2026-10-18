@@ -83,12 +83,13 @@ export const PARITY_USER_ID = '11111111-1111-4111-8111-111111111111';
 /**
  * The task-model state of a parity run: AI on, the graph switch on, the models above, the tasks above.
  *
+ * @param provider - the provider id the state names (the active provider and the policy's). Default {@link PARITY_PROVIDER}; `copilot` runs the same scenario over the GitHub Copilot adapter (#581).
  * @returns a fresh state.
  * @stability experimental
  */
-export function parityModelState(): KvoxAiModelState {
+export function parityModelState(provider: string = PARITY_PROVIDER): KvoxAiModelState {
   return {
-    provider: PARITY_PROVIDER,
+    provider,
     models: PARITY_MODELS.map((m) => ({
       id: m.id,
       label: m.id,
@@ -99,7 +100,7 @@ export function parityModelState(): KvoxAiModelState {
     })),
     policy: {
       enabled: true,
-      provider: PARITY_PROVIDER,
+      provider,
       defaultModel: PARITY_DEFAULT_MODEL,
       graphEnabled: true,
       taskModels: { ...PARITY_TASK_MODELS },
@@ -113,9 +114,10 @@ export function parityModelState(): KvoxAiModelState {
 /**
  * The same state as a static task-model source, for `createKvoxAi({ taskModels })` of the direct binding.
  *
+ * @param provider - the provider id the state names. Default {@link PARITY_PROVIDER}.
  * @returns a source whose `load()` always answers {@link parityModelState}.
  * @stability experimental
  */
-export function parityTaskModelSource(): KvoxTaskModelSource {
-  return { load: async () => parityModelState() };
+export function parityTaskModelSource(provider: string = PARITY_PROVIDER): KvoxTaskModelSource {
+  return { load: async () => parityModelState(provider) };
 }

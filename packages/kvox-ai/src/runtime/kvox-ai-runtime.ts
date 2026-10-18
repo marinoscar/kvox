@@ -190,6 +190,22 @@ export interface KvoxAiRuntime {
 }
 
 /**
+ * How a model is held to a structured-output schema (#581).
+ *
+ * @remarks
+ * - `native`: the request carries `structuredOutput` and the provider enforces
+ *   the schema (OpenAI's strict JSON Schema). The default.
+ * - `prompted`: the provider has no schema enforcement for this model (a GitHub
+ *   Copilot-hosted Claude model). `createKvoxAi` puts the JSON Schema in the
+ *   system prompt, parses the text answer, validates it and asks for ONE repair
+ *   when it does not validate (`buildPromptedStructuredRequest` and its siblings
+ *   in the `structured` slice).
+ *
+ * @stability experimental
+ */
+export type KvoxStructuredOutputMode = 'native' | 'prompted';
+
+/**
  * One model the host enabled, as task-to-model choice reads it: the chooser's
  * candidate flags plus the numbers the token budget takes.
  *
@@ -212,6 +228,11 @@ export interface KvoxAiEnabledModel {
   contextWindow: number | null;
   /** The output ceiling in tokens; `null` when the host does not know it. */
   maxOutputTokens: number | null;
+  /**
+   * How `generateStructured` holds the model to a schema (#581). Absent means
+   * `native`, so every existing row keeps its behaviour.
+   */
+  structuredOutputMode?: KvoxStructuredOutputMode;
 }
 
 /**
@@ -307,6 +328,8 @@ export interface KvoxModelInfo {
   structuredOutput: boolean;
   /** Whether the model can call tools. */
   toolCalling: boolean;
+  /** How `generateStructured` holds the model to a schema (#581). Absent means `native`. */
+  structuredOutputMode?: KvoxStructuredOutputMode;
 }
 
 /**

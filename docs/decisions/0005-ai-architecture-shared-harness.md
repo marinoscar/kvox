@@ -65,3 +65,26 @@ Same harness does not mean same output. Parity is proven by byte-identical provi
 The hand-written OpenAI client `apps/api/scripts/kg-eval/direct-structured.ts` is deleted. The evaluation moved to the published package `@marinoscar/kvox-eval`; a live run goes through `createKvoxAi` over `createDirectRuntime`, and the golden set lives at `packages/kvox-eval/fixtures/kg-golden/`. The key is `KVOX_EVAL_OPENAI_API_KEY` (`KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases for one release). The request-level web versus direct parity check is the next part of #580.
 
 Status note (#580, part 2): the request-level web versus direct parity proof is delivered. `@marinoscar/kvox-eval/parity` and the snapshots under `packages/kvox-eval/parity/` are compared by `packages/kvox-eval/test/parity.spec.ts` (direct binding) and `apps/api/test/kvox/ai-parity.spec.ts` (web binding); a change to a snapshot is a harness change and is explained in its PR ([TESTING.md](../TESTING.md#harness-parity)).
+
+## Status note (#581)
+
+Phase 2 ("go, without Ask") is implemented: `@marinoscar/kvox-ai/copilot`, an `AiProviderAdapter` over the GitHub Copilot SDK (`@github/copilot-sdk` 1.0.22, runtime 1.0.98, checked 2026-10-17), plugged into `createDirectRuntime`. The Ask loop is never moved into the SDK. The spike answered twelve questions:
+
+| Q | Question | Answer | Consequence |
+|---|---|---|---|
+| Q1 | Can our system prompt replace the SDK's? | Yes (wire-verified). | `systemMessage.mode: 'replace'`. |
+| Q2 | Can every built-in tool be disabled? | Yes: client `mode: 'empty'` and `availableTools: []`. | Zero tools; the adapter also reads the live tool list and aborts if it is not empty. |
+| Q3 | Can one model step return tool calls and stop? | Partial. Stop works, but a session takes user messages only, so a tool step cannot be continued statelessly. | Copilot serves notes and graph extraction only. `toolCalling` is `false`. Ask stays on OpenAI. |
+| Q4 | Streaming and finish reason? | Yes, with caveats: after `length` the runtime continues on its own; there is no per-call output cap for Copilot-hosted models. | The adapter aborts on `length`. `maxOutputTokens` is not sent. |
+| Q5 | Native JSON-schema output? | GPT yes; Claude unverified. | Per-model `native` or `prompted`. The generic prompt, validate and one-repair path lives in kvox-ai and serves every adapter. |
+| Q6 | Model list with limits? | Yes, after sign-in. | Live listing wins; a small versioned fallback catalog (`COPILOT_CATALOG_VERSION`) covers the rest. |
+| Q7 | Usage per call? | Yes. | Token counts feed the usual usage record. |
+| Q8 | Embeddings? | No. | Embeddings come from the OpenAI adapter, or are `null` and search is full text only. |
+| Q9 | Sign-in managed by the SDK, no token through our code? | Yes (experimental APIs). | `gitHubToken` is never used. The key is `AI_KEYLESS_API_KEY`. Messages are redacted. |
+| Q10 | Runtime binary? | One per platform, about 133 to 174 MB unpacked. | Bundle it in the Desktop packaging (D6); consider an optional download. |
+| Q11 | Rate-limit and auth signals? | Partial: the runtime retries 429 and 401 itself; no retry-after on `session.error` in 1.0.22. | The adapter aborts on `model.call_failure`, so kvox-ai owns retries. A rate limit carries no `retryAfterMs`. |
+| Q12 | Are the terms of use compatible? | The owner decides. | The adapter ships behind an opt-in: `createCopilotAdapter` throws unless `optIn === true`, and the Desktop setting defaults to off. Users are told notes go to GitHub and are pointed at the GitHub terms of service (section J, training opt-out). |
+
+Also: the runtime persists prompts in its session state, so each call is one session, deleted in a `finally`, in an app-private `baseDirectory` with an empty `workingDirectory`. The SDK is an optional peer, loaded lazily by `createSdkCopilotTransport`, and the package root does not re-export the slice.
+
+Decision: the integration sits at the provider-adapter layer, not the port layer. kvox-ai gains the shared pieces it needs: `structuredOutputMode` per model, the prompted structured path with one repair, per-model `toolCalling` in `capabilities()`, `wrapRecordingAdapter` and `scrub` coverage of `ghu_`, `ghs_` and `ghr_`. Guide: [KVox Desktop](../guides/kvox-desktop.md#the-copilot-provider-adapter).
