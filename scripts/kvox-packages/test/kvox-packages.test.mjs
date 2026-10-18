@@ -26,6 +26,7 @@ import {
   stripComments,
   withImplied,
 } from '../check-slice-peers.mjs';
+import { forbiddenIn, treeNames } from '../check-lean-install.mjs';
 import { copyLicense } from '../copy-license.mjs';
 import { expandGuards } from '../check-single-instance.mjs';
 import { writeDistStubs } from '../write-dist-stubs.mjs';
@@ -89,34 +90,23 @@ test('host-neutral: the same file under kvox-web fails too', () => {
 });
 
 /** Adds a kvox-ai package (one universal `runtime` slice peering on the platform) to a fixture copy. */
-function addKvoxAi(dir) {
-  mkdirSync(join(dir, 'packages/kvox-ai/src/runtime'), { recursive: true });
+function addKvoxAi(dir, pkg = 'kvox-ai') {
+  mkdirSync(join(dir, `packages/${pkg}/src/runtime`), { recursive: true });
   writeFileSync(
-    join(dir, 'packages/kvox-ai/package.json'),
-    JSON.stringify({ name: '@marinoscar/kvox-ai', version: '0.0.0', peerDependencies: { '@marinoscar/platform-api': '0.1.0-next.5' } })
+    join(dir, `packages/${pkg}/package.json`),
+    JSON.stringify({ name: `@marinoscar/${pkg}`, version: '0.0.0', peerDependencies: { '@marinoscar/platform-api': '0.1.0-next.5' } })
   );
-  writeFileSync(join(dir, 'packages/kvox-ai/src/runtime/index.ts'), 'export const RUNTIME = 1;\n');
+  writeFileSync(join(dir, `packages/${pkg}/src/runtime/index.ts`), 'export const RUNTIME = 1;\n');
   const graph = JSON.parse(readFileSync(join(dir, 'packages/kvox-slices.json'), 'utf8'));
-  graph['kvox-ai'] = { runtime: [] };
+  graph[pkg] = { runtime: [] };
   writeFileSync(join(dir, 'packages/kvox-slices.json'), JSON.stringify(graph));
   const peers = JSON.parse(readFileSync(join(dir, 'packages/kvox-slice-peers.json'), 'utf8'));
-  peers.$universal['kvox-ai'] = '*';
-  peers['kvox-ai'] = { runtime: { peers: ['@marinoscar/platform-api'] } };
+  peers.$universal[pkg] = '*';
+  peers[pkg] = { runtime: { peers: ['@marinoscar/platform-api'] } };
   writeFileSync(join(dir, 'packages/kvox-slice-peers.json'), JSON.stringify(peers));
 }
 
-test('host-neutral: a kvox-ai slice may import exactly @marinoscar/platform-api/ai (value and type)', () => {
-  const dir = fixtureCopy();
-  try {
-    addKvoxAi(dir);
-    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-ai/src/runtime/allowed.ts');
-    assert.deepEqual(checkSlicePeers({ root: dir }), []);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('host-neutral: a kvox-ai slice importing any other platform specifier fails, once per specifier', () => {
+test('host-neutral: a kvox-ai slice importing any other platform specifier fails, once per specifier (platform-api/ai/core, settings, bare)', () => {
   const dir = fixtureCopy();
   try {
     addKvoxAi(dir);
@@ -127,7 +117,75 @@ test('host-neutral: a kvox-ai slice importing any other platform specifier fails
     assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/settings'/);
     assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/ai\/core'/);
     assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api'\./);
-    assert.match(hostNeutral[0].message, /may import only '@marinoscar\/platform-api\/ai'/);
+    assert.match(hostNeutral[0].message, /may import only '@marinoscar\/platform-ai-providers'/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const hostNeutralOf = (dir) => checkSlicePeers({ root: dir }).filter((v) => v.rule === 'host-neutral');
+
+test('host-neutral: kvox-ai and kvox-eval may import the lean @marinoscar/platform-ai-providers (value and type)', () => {
+  for (const pkg of ['kvox-ai', 'kvox-eval']) {
+    const dir = fixtureCopy();
+    try {
+      addKvoxAi(dir, pkg);
+      plant(dir, 'host-neutral/kvox-ai-lean-allowed.ts', `packages/${pkg}/src/runtime/allowed.ts`);
+      assert.deepEqual(hostNeutralOf(dir), [], pkg);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('host-neutral: kvox-eval may import platform-ai-providers/openai', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir, 'kvox-eval');
+    plant(dir, 'host-neutral/kvox-eval-lean-allowed.ts', 'packages/kvox-eval/src/runtime/allowed.ts');
+    assert.deepEqual(hostNeutralOf(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: kvox-ai may NOT import platform-ai-providers/openai (kvox-eval only)', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir, 'kvox-ai');
+    plant(dir, 'host-neutral/kvox-eval-openai-in-ai.ts', 'packages/kvox-ai/src/runtime/openai.ts');
+    const violations = hostNeutralOf(dir);
+    assert.equal(violations.length, 1);
+    assert.match(violations[0].message, /'@marinoscar\/platform-ai-providers\/openai'/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: importing @marinoscar/platform-api or platform-api/ai from kvox-ai or kvox-eval is a violation', () => {
+  for (const pkg of ['kvox-ai', 'kvox-eval']) {
+    const dir = fixtureCopy();
+    try {
+      addKvoxAi(dir, pkg);
+      plant(dir, 'host-neutral/lean-forbidden-platform-api.ts', `packages/${pkg}/src/runtime/forbidden.ts`);
+      const violations = hostNeutralOf(dir);
+      const text = violations.map((v) => v.message).join('\n');
+      assert.equal(violations.length, 2, `${pkg}: ${text}`);
+      assert.match(text, /'@marinoscar\/platform-api\/ai'/);
+      assert.match(text, /'@marinoscar\/platform-api'\./);
+      assert.match(violations[0].message, /may import only '@marinoscar\/platform-ai-providers/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('host-neutral: kvox-api importing @marinoscar/platform-api is unchanged: still a rule-6 violation (its only platform home is apps/api/src/platform-kvox)', () => {
+  const dir = fixtureCopy();
+  try {
+    plant(dir, 'host-neutral/lean-forbidden-platform-api.ts', 'packages/kvox-api/src/core/uses-platform-api.ts');
+    const mine = hostNeutralOf(dir).filter((v) => v.message.includes('uses-platform-api.ts'));
+    assert.equal(mine.length, 2);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -136,7 +194,7 @@ test('host-neutral: a kvox-ai slice importing any other platform specifier fails
 test('host-neutral: the kvox-ai exception does not extend to kvox-api', () => {
   const dir = fixtureCopy();
   try {
-    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-api/src/core/allowed.ts');
+    plant(dir, 'host-neutral/kvox-ai-lean-allowed.ts', 'packages/kvox-api/src/core/allowed.ts');
     assert.ok(rulesOf(checkSlicePeers({ root: dir })).includes('host-neutral'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -638,4 +696,22 @@ test('expandGuards expands * patterns against the known names and keeps plain na
   const known = ['@marinoscar/kvox-api', '@marinoscar/kvox-web', '@marinoscar/platform-api', 'react'];
   assert.deepEqual(expandGuards(['@marinoscar/kvox-*'], known), ['@marinoscar/kvox-api', '@marinoscar/kvox-web']);
   assert.deepEqual(expandGuards(['@marinoscar/platform-*', 'react', 'not-installed'], known), ['@marinoscar/platform-api', 'react', 'not-installed']);
+});
+
+test('lean-install: treeNames counts installed packages at any depth and skips an unmet optional peer', () => {
+  const tree = {
+    dependencies: {
+      '@marinoscar/kvox-api': {
+        version: '1.0.0',
+        dependencies: { '@marinoscar/platform-api': {}, zod: { version: '4.4.3' } },
+      },
+    },
+  };
+  assert.deepEqual([...treeNames(tree)].sort(), ['@marinoscar/kvox-api', 'zod']);
+  assert.deepEqual(forbiddenIn(treeNames(tree)), []);
+});
+
+test('lean-install: forbiddenIn flags @marinoscar/platform-api when it is installed, nested or not', () => {
+  const tree = { dependencies: { a: { version: '1.0.0', dependencies: { '@marinoscar/platform-api': { version: '0.1.0-next.5' } } } } };
+  assert.deepEqual(forbiddenIn(treeNames(tree)), ['@marinoscar/platform-api']);
 });

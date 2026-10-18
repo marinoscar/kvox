@@ -1,4 +1,4 @@
-import { AiError } from '@marinoscar/platform-api/ai';
+import { AiError } from '@marinoscar/platform-ai-providers';
 
 import { COPILOT_SIGN_IN_MESSAGE, copilotErrorFromData, copilotErrorFromThrown, redactTokens } from './copilot-errors.js';
 

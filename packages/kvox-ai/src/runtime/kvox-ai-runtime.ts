@@ -1,4 +1,4 @@
-import type { AiResponse, AiResponseRequest, AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiResponse, AiResponseRequest, AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 import type { KvoxAiFeatureId } from '../features/index.js';
 import type { AiTaskKey, TaskModelPolicy } from '../tasks/index.js';
@@ -34,8 +34,8 @@ import type { KvoxReasoningEffort } from '../types/index.js';
 // ⚠ A KEY NEVER CROSSES THESE INTERFACES. A call names a user and a provider;
 // the runtime resolves the key itself, per call, and never returns it.
 // ⚠ The request and event types are the provider-adapter types of
-// `@marinoscar/platform-api/ai` (an interim peer until the lean adapter package
-// of #578 ships), imported as types only.
+// `@marinoscar/platform-ai-providers` (the lean provider-adapter package, #578),
+// imported as types only.
 // =============================================================================
 
 /**

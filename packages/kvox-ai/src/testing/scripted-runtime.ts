@@ -1,4 +1,4 @@
-import type { AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiResponse, AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 import { EMBEDDING_DIMENSIONS } from '../embedding/index.js';
 import type {

@@ -1,4 +1,4 @@
-import { AiError, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AiError, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError, type KvoxAiErrorClass, type KvoxAiPort } from '@marinoscar/kvox-api/ports';
 import type { ScriptedTurn } from '@marinoscar/kvox-api/ask/testing';
 import type { KvoxPortsUnderTest } from '@marinoscar/kvox-api/testing';

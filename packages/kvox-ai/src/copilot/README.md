@@ -23,7 +23,7 @@ Status: issue #581, Phase 2 (Ask is not offered on Copilot: `toolCalling` is `fa
 
 ## Peer dependencies
 
-`@github/copilot-sdk` `^1.0.22`, an OPTIONAL peer (`peerDependenciesMeta`): only `createSdkCopilotTransport` loads it, lazily, and the adapter, the catalog, the error mapping and the mock run without it. `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`: `AiError`, the adapter types, `toJsonSchema`, `parseStructured`) and `zod` (types). It imports no other slice. The web edition never installs the SDK.
+`@github/copilot-sdk` `^1.0.22`, an OPTIONAL peer (`peerDependenciesMeta`): only `createSdkCopilotTransport` loads it, lazily, and the adapter, the catalog, the error mapping and the mock run without it. `@marinoscar/platform-ai-providers` (`AiError`, the adapter types, `toJsonSchema`, `parseStructured`) and `zod` (types). It imports no other slice. The web edition never installs the SDK.
 
 ## Configuration
 

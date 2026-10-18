@@ -14,7 +14,7 @@ Status: issue #579. The readiness logic lives here rather than in `tasks` becaus
 
 ## Peer dependencies
 
-`@marinoscar/kvox-api` (`KvoxAiPort`, `KvoxAiError`), `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`: `AiError` and the adapter types) and `zod`. It imports the `types`, `features`, `tasks`, `chat`, `tokens`, `embedding`, `runtime` and `errors` slices.
+`@marinoscar/kvox-api` (`KvoxAiPort`, `KvoxAiError`), `@marinoscar/platform-ai-providers` (`AiError` and the adapter types) and `zod`. It imports the `types`, `features`, `tasks`, `chat`, `tokens`, `embedding`, `runtime` and `errors` slices.
 
 ## Configuration
 

@@ -1,4 +1,4 @@
-import type { AiResponse, AiResponseRequest, AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiResponse, AiResponseRequest, AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { completedEvent, functionCallEvent, textAnswer, type RecordingScript } from '@marinoscar/kvox-ai/testing';
 
 import { loadGoldenMeetings, type GoldenFixture } from '../fixtures/index.js';

@@ -1,4 +1,4 @@
-import { AiError, type AiCallContext, type AiProviderAdapter, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AiError, type AiCallContext, type AiProviderAdapter, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 import { createDirectRuntime } from './direct-runtime.js';
 

@@ -1,4 +1,4 @@
-import type { AiCallContext, AiProviderAdapter, AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiCallContext, AiProviderAdapter, AiResponse, AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 
 import { createDirectRuntime } from '../src/direct/index.js';

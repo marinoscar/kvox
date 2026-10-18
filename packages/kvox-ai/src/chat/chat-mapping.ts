@@ -9,7 +9,7 @@ import {
   type AiResponse,
   type AiStreamEvent,
   type AiToolChoice,
-} from '@marinoscar/platform-api/ai';
+} from '@marinoscar/platform-ai-providers';
 
 import type {
   KvoxChatEvent,

@@ -14,7 +14,7 @@ Status: moved from `apps/api/src/ai-port/chat-mapping.ts` (issue #579).
 
 ## Peer dependencies
 
-`zod`, `@marinoscar/platform-api` (only the subpath `@marinoscar/platform-api/ai`: `AiError` and the provider-adapter request and event types). It imports the `types` slice.
+`zod`, `@marinoscar/platform-ai-providers` (`AiError` and the provider-adapter request and event types). It imports the `types` slice.
 
 ## Configuration
 

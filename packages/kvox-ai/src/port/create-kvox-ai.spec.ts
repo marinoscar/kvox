@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AiError, type AiErrorCode, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AiError, type AiErrorCode, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError, type KvoxAiContext, type KvoxAiTarget } from '@marinoscar/kvox-api/ports';
 
 import { EMBEDDING_DIMENSIONS, KVOX_EMBEDDING } from '../embedding/index.js';

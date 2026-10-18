@@ -7,7 +7,7 @@ import type {
   AiResponse,
   AiResponseRequest,
   AiStreamEvent,
-} from '@marinoscar/platform-api/ai';
+} from '@marinoscar/platform-ai-providers';
 
 import type {
   KvoxAiKeyReadiness,

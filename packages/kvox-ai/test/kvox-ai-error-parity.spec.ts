@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { z } from 'zod';
-import { AI_ERROR_CODES, AiError, type AiErrorCode } from '@marinoscar/platform-api/ai';
+import { AI_ERROR_CODES, AiError, type AiErrorCode } from '@marinoscar/platform-ai-providers';
 import { KVOX_AI_ERROR_CLASSES, KvoxAiError, type KvoxAiContext, type KvoxAiTarget } from '@marinoscar/kvox-api/ports';
 
 import { createKvoxAi } from '../src/port/index.js';

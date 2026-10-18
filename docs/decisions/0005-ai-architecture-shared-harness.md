@@ -1,6 +1,6 @@
 # ADR-0005: AI architecture: one shared harness, pluggable providers
 
-- Status: Accepted (implementation #579)
+- Status: Accepted (implementation #579; lean provider package consumed, #578)
 - Date: 2026-10-17
 - Related issues: epic #574, #578, #579, #580, #581, #584
 
@@ -17,7 +17,9 @@ Four layers:
 | L4 | Orchestration: prompts, note pipeline, `kg.extract` and `kg.resolve`, Ask loop, budgets, sensitivity | `@marinoscar/kvox-api` | Shared today |
 | L3 | The `KVOX_AI` port (`KvoxAiPort`) | `@marinoscar/kvox-api` | Shared today |
 | L2 | Model mechanics: strict JSON schema, chat and tool mapping, structured-output rules, task-to-model resolution, token counting, error mapping | `@marinoscar/kvox-ai` (`packages/kvox-ai`) | Implemented by #579 |
-| L1 | Transport: provider adapters implementing `AiProviderAdapter` (OpenAI, OpenAI-compatible, Anthropic, Azure, Gemini) from `@marinoscar/platform-api/ai` | Platform; to be split into a lean provider package upstream (#578) | Shared |
+| L1 | Transport: provider adapters implementing `AiProviderAdapter` (OpenAI, OpenAI-compatible, Anthropic, Azure, Gemini) from `@marinoscar/platform-ai-providers` | Platform; the lean provider package (split out upstream, #578), consumed by `kvox-ai` and `kvox-eval` as a peer, with no NestJS and no database | Shared |
+
+The web edition keeps its platform `AiService`, whose `AiError` is, since `@marinoscar/platform-api` 0.1.0-next.6, the same class as the lean package's (platform-api re-exports it); `isAiError` of `@marinoscar/kvox-ai` also classifies structurally, as a safeguard for duplicate package copies or platform-api at next.5 or older. `npm run check:kvox-lean-install` proves `kvox-ai` installs with no `@marinoscar/platform-api`.
 
 L2 is exposed as `createKvoxAi({ runtime, taskModels, readiness?, requestTimeoutMs, graphEnabled, logger, catalog })` (the one `KvoxAiPort` implementation) and `createDirectRuntime({ adapters, keys })`, both from `@marinoscar/kvox-ai`; `@marinoscar/kvox-ai/testing` carries the scripted runtime and `describeKvoxAiConformance`. Implemented by #579.
 

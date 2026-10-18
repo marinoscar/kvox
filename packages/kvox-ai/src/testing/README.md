@@ -22,7 +22,7 @@ Status: issue #579.
 
 ## Peer dependencies
 
-`@marinoscar/kvox-api` (`KvoxAiError`, the port types), `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`) and `zod`. It imports the `types`, `features`, `tasks`, `structured`, `chat`, `tokens`, `embedding`, `runtime` and `errors` slices. It uses no test runner import: pass `{ describe, it, expect }` (Jest or Vitest) or let the globals be used.
+`@marinoscar/kvox-api` (`KvoxAiError`, the port types), `@marinoscar/platform-ai-providers` and `zod`. It imports the `types`, `features`, `tasks`, `structured`, `chat`, `tokens`, `embedding`, `runtime` and `errors` slices. It uses no test runner import: pass `{ describe, it, expect }` (Jest or Vitest) or let the globals be used.
 
 ## Configuration
 

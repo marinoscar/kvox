@@ -4,7 +4,7 @@ The host-neutral model mechanics of KVox: strict structured output, the chat and
 
 ## Purpose and scope
 
-KVox's AI stack has four layers: orchestration (prompts, pipelines, the Ask loop) in `@marinoscar/kvox-api`, the model port `KvoxAiPort` in `@marinoscar/kvox-api/ports`, the model mechanics in this package, and the provider adapters (`AiProviderAdapter`) in `@marinoscar/platform-api/ai`. This package owns the third layer. A host decides only which provider runs a call and where the key comes from, through `KvoxAiRuntime` and `KvoxTaskModelSource` (see the [runtime slice](src/runtime/README.md)).
+KVox's AI stack has four layers: orchestration (prompts, pipelines, the Ask loop) in `@marinoscar/kvox-api`, the model port `KvoxAiPort` in `@marinoscar/kvox-api/ports`, the model mechanics in this package, and the provider adapters (`AiProviderAdapter`) in the lean `@marinoscar/platform-ai-providers`, which needs no NestJS and no database. This package owns the third layer. A host decides only which provider runs a call and where the key comes from, through `KvoxAiRuntime` and `KvoxTaskModelSource` (see the [runtime slice](src/runtime/README.md)).
 
 It does not own prompts, schemas, caps or pipelines (those are `@marinoscar/kvox-api`'s), the provider adapters (the platform's), key storage, usage rows or traces (the host's runtime: the platform `AiService` on web, the OS keychain on Desktop).
 
@@ -21,7 +21,7 @@ Entry points:
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-api@0.1.0-next.5 zod
+npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.6 zod
 ```
 
 Every slice except `copilot` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
@@ -29,7 +29,7 @@ Every slice except `copilot` is universal, so every peer in this table is requir
 | Package | Range | Needed by |
 |---|---|---|
 | `zod` | `^4.4.3` | `tasks`, `structured`, `chat`, `port`, `testing` |
-| `@marinoscar/platform-api` | `0.1.0-next.5` (exact, the repository's platform pin) | `chat`, `errors`, `port` (`AiError`, the adapter types), `runtime` (request and event types), `direct` (`AiProviderAdapter`, `AiCallContext`). Only the subpath `@marinoscar/platform-api/ai` is imported. An interim peer: it moves to the lean adapter package of #578. |
+| `@marinoscar/platform-ai-providers` | `0.1.0-next.6` (exact) | `chat`, `errors`, `port` (`AiError`, the adapter types), `runtime` (request and event types), `direct` (`AiProviderAdapter`, `AiCallContext`). Only the package root is imported (the OpenAI factories under `/openai` belong to `@marinoscar/kvox-eval`). Its `AiError` extends `Error`, not a Nest `HttpException`, and has no `toRateLimitError()`; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `errors`, `port`, `direct` and `testing` (`KvoxAiPort`, `KvoxAiError` from `@marinoscar/kvox-api/ports`). Same range as the contract peer of the other packages ([why](../../docs/PACKAGES.md#the-contract-peer-range)). |
 
 ### Optional: the GitHub Copilot adapter
@@ -81,7 +81,7 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource });
 The Copilot adapter plugs into the same `createDirectRuntime` as OpenAI. Copilot serves the notes and graph-extraction tasks; Ask and embeddings stay on OpenAI.
 
 ```ts
-import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-ai-providers';
 import { createDirectRuntime, createKvoxAi } from '@marinoscar/kvox-ai';
 import { createCopilotAdapter, createSdkCopilotTransport } from '@marinoscar/kvox-ai/copilot';
 
@@ -196,7 +196,7 @@ None of its own: the package logs nothing (the Copilot adapter takes an optional
   - One session per call, always disconnected and deleted in a `finally` (the runtime would otherwise keep the prompt in its session state on disk), in an app-private `baseDirectory` with an empty `workingDirectory`.
   - No GitHub token crosses our code: `gitHubToken` is never set, `ctx.apiKey` (`AI_KEYLESS_API_KEY`) is ignored, and the SDK uses the user's own sign-in. Every message that leaves the adapter (error message and details, log entry, stream error) passes through `redactTokens` (`gh[opusr]_`, `github_pat_`, `sk-`, `Bearer`) and is truncated. The logger never gets a prompt, an answer or a schema.
   - Opt-in. `createCopilotAdapter` throws unless `optIn === true`; the host's setting defaults to off.
-- The source imports no `@nestjs/*`, no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-api/ai` (rule `host-neutral` of `npm run check:kvox-slice-peers`, and `apps/api/test/ai/ai-port-boundary.spec.ts`).
+- The source imports no `@nestjs/*`, no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-ai-providers` (rule `host-neutral` of `npm run check:kvox-slice-peers`, and `apps/api/test/ai/ai-port-boundary.spec.ts`).
 
 ## Conformance suite
 
@@ -206,16 +206,22 @@ None of its own: the package logs nothing (the Copilot adapter takes an optional
 
 The Copilot adapter is proven on two levels. Its own unit specs (`src/copilot/*.spec.ts`) pin the session template (zero built-in tools, replace mode), the tripwire, token redaction, the single model request after a `length` or a call failure, the datetime suppression, session deletion on success, failure and abort, the request refusals and the error mapping. The `describeKvoxAiConformance` suite then runs over `createKvoxAi`, `createDirectRuntime` and the adapter on `createCopilotMockTransport()` (asynchronous SDK-shaped events, abort, model-request counting, live tools for the tripwire). Two cases are named `optOut`s with their reason (`test/kvox-ai-copilot-conformance.spec.ts`): the tool-call mapping (`chat_tool_calls`), because `toolCalling` is `false`, and the retry hint in a job (`rate_limit_job`), because SDK 1.0.22 puts no retry-after on `session.error` or `model.call_failure`. Every other case runs. The real SDK is not part of CI, and `createSdkCopilotTransport` has not yet run against a signed-in Copilot runtime: that live check, with the `kvox-eval` runs, is an owner step on #581.
 
+### Lean install and the foreign `AiError`
+
+`npm run check:kvox-lean-install` (in the repository) packs `@marinoscar/kvox-ai`, installs it alone in a scratch project with no `@marinoscar/platform-api`, asserts that package is absent from the install tree and builds an OpenAI adapter through `createDirectRuntime`. One honest limit: the peer `@marinoscar/kvox-api` is installed with its `@marinoscar/platform-api` peer left out, because that peer is optional there.
+
+`isAiError(value)` (root export, `errors` slice) answers whether a thrown value is a provider `AiError` by class (`AiError.isAiError`, `instanceof`) or by shape (an `Error` named `AiError` with a known AI error code and a `getResponse` function). Since `@marinoscar/platform-api` 0.1.0-next.6 the web host's `AiService` throws the same `AiError` class as the lean package (platform-api re-exports it; it does not re-export `isAiError`), so the structural check is a safeguard for duplicate package copies or platform-api next.5 and older, not a needed bridge. `toKvoxAiError` and `createDirectRuntime` classify through `isAiError`, so any such copy maps to the same `KvoxAiError`; only `code`, `message` and `retryAfterMs` are read. A host that catches errors itself should use `isAiError`, not `instanceof`.
+
 ## Upgrade notes
 
-First release. The web edition's second mapping hop is gone: `mapAiError` and the port adapter's `toKvoxAiError` are one function, `toKvoxAiError` of the `errors` slice, proven equal by `test/fixtures/error-parity.v1.json`. For code that imported these files from `apps/api/src/ai-port/` (`strict-json-schema`, `chat-mapping`, `count-tokens`, `embedding-catalog`, `features`, `ai-task-keys`, `task-models`, the type half of `kvox-ai.ts`): import the same names from `@marinoscar/kvox-ai`. `KvoxAiReason` moved from `kvox-ai-errors.ts` with `KvoxAiReadiness`. Nothing was renamed.
+First release. The provider types and the `AiError` class come from `@marinoscar/platform-ai-providers` (issue #578), no longer from `@marinoscar/platform-api/ai`. The web edition's second mapping hop is gone: `mapAiError` and the port adapter's `toKvoxAiError` are one function, `toKvoxAiError` of the `errors` slice, proven equal by `test/fixtures/error-parity.v1.json`. For code that imported these files from `apps/api/src/ai-port/` (`strict-json-schema`, `chat-mapping`, `count-tokens`, `embedding-catalog`, `features`, `ai-task-keys`, `task-models`, the type half of `kvox-ai.ts`): import the same names from `@marinoscar/kvox-ai`. `KvoxAiReason` moved from `kvox-ai-errors.ts` with `KvoxAiReadiness`. Nothing was renamed.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `Cannot find module '@marinoscar/kvox-ai'` in `apps/api` | Build the packages first: `npm run build:kvox-packages`. |
-| `[host-neutral] ... may import only '@marinoscar/platform-api/ai'` | A slice imported another platform subpath or a deeper path. Use only the public `@marinoscar/platform-api/ai`; anything host-specific belongs in the host's runtime. |
+| `[host-neutral] ... may import only '@marinoscar/platform-ai-providers'` | A slice imported `@marinoscar/platform-api` or another platform package. Use only the lean `@marinoscar/platform-ai-providers`; anything host-specific belongs in the host's runtime. |
 | `createCopilotAdapter` throws "GitHub Copilot is switched off" | The host did not pass `optIn: true`. Pass the user's own Copilot setting (default off). |
 | `AI_PROVIDER_UNAVAILABLE`: "The GitHub Copilot SDK is not installed" | Install the optional peer: `npm install @github/copilot-sdk`. |
 | `AI_KEY_REQUIRED`: "Sign in to GitHub Copilot to use it in KVox." | The user is not signed in. Start the SDK's sign-in, then check `copilot.authStatus()`. |

@@ -23,7 +23,7 @@
 
 import { createDirectRuntime, createKvoxAi, type KvoxAiModelState, type KvoxAiRuntime, type KvoxTaskModelSource } from '@marinoscar/kvox-ai';
 import type { KvoxAiPort } from '@marinoscar/kvox-api/ports';
-import type { AiProviderAdapter } from '@marinoscar/platform-api/ai';
+import type { AiProviderAdapter } from '@marinoscar/platform-ai-providers';
 
 import { platformAdapter, type PlatformAdapterProvider } from './adapters.js';
 

@@ -1,4 +1,4 @@
-import { AI_PROVIDER_STATE, AiError, type AiErrorCode, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AI_PROVIDER_STATE, AiError, type AiErrorCode, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import type { KvoxAiContext, KvoxAiTarget, KvoxChatEvent, KvoxChatMessage, KvoxToolDef } from '@marinoscar/kvox-api/ports';
 
 import { clearToolCache } from '../chat/index.js';

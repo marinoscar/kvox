@@ -1,4 +1,4 @@
-import type { AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
+import type { AiResponse, AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 // =============================================================================
 // Provider events and responses for a scripted runtime (issue #579)
@@ -7,7 +7,7 @@ import type { AiResponse, AiStreamEvent } from '@marinoscar/platform-api/ai';
 // The few builders every spec of this package, the conformance suite and a host's
 // own tests need to write what a provider says: a streamed text delta, a function
 // call, a completed response. They produce the provider-adapter types of
-// `@marinoscar/platform-api/ai` and nothing else, so a host that drives its own
+// `@marinoscar/platform-ai-providers` and nothing else, so a host that drives its own
 // platform client with them (the web edition's `AiService` stand-in) says exactly
 // what a scripted runtime says.
 // =============================================================================

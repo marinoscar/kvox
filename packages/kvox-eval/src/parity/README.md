@@ -23,7 +23,7 @@ Status: issue #580, part 2.
 
 ## Peer dependencies
 
-`@marinoscar/kvox-ai` (`/testing`: the recorders), `@marinoscar/kvox-api` (`/notes`, `/core`, `/graph`, `/graph-extraction`, `/ask`, `/ask/testing`, `/graph-extraction/testing`, `/ports`), `@marinoscar/kvox-contract` (`/ontology`) and `@marinoscar/platform-api` (only `/ai`, types). It imports the `fixtures` and `kg` slices.
+`@marinoscar/kvox-ai` (`/testing`: the recorders), `@marinoscar/kvox-api` (`/notes`, `/core`, `/graph`, `/graph-extraction`, `/ask`, `/ask/testing`, `/graph-extraction/testing`, `/ports`), `@marinoscar/kvox-contract` (`/ontology`) and `@marinoscar/platform-ai-providers` (types). It imports the `fixtures` and `kg` slices.
 
 ## Configuration
 

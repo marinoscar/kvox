@@ -1,4 +1,4 @@
-import { AiError } from '@marinoscar/platform-api/ai';
+import { AiError } from '@marinoscar/platform-ai-providers';
 
 import { createSdkCopilotTransport } from './copilot-transport.js';
 import { copilotSessionConfig } from './copilot-adapter.js';

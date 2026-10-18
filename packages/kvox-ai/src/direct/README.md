@@ -14,7 +14,7 @@ Status: issue #579. It records no usage and traces nothing: a host that wants ei
 
 ## Peer dependencies
 
-`@marinoscar/kvox-api` (`KvoxAiError`) and `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`: `AiError`, `AiProviderAdapter`, `AiCallContext`). It imports the `runtime` and `errors` slices.
+`@marinoscar/kvox-api` (`KvoxAiError`) and `@marinoscar/platform-ai-providers` (`AiError`, `AiProviderAdapter`, `AiCallContext`). It imports the `runtime` and `errors` slices.
 
 ## Configuration
 

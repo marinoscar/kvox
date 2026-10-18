@@ -7,7 +7,7 @@ import {
   withRecordedFeatures,
   type RecordedProviderRequest,
 } from '@marinoscar/kvox-ai/testing';
-import { AI_KEYLESS_API_KEY, type AiResponseRequest } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY, type AiResponseRequest } from '@marinoscar/platform-ai-providers';
 import { z } from 'zod';
 
 import {

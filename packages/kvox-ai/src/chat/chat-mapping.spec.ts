@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AI_PROVIDER_STATE, AiError, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AI_PROVIDER_STATE, AiError, type AiResponse, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 
 import {
   ReasoningReplayCache,

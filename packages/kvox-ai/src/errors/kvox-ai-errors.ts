@@ -1,4 +1,4 @@
-import { AiError } from '@marinoscar/platform-api/ai';
+import { AiError, isAiErrorCode } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 
 import type { KvoxAiFeatureId } from '../features/index.js';
@@ -101,6 +101,33 @@ export function isErrorLike(value: unknown): value is Error {
 }
 
 /**
+ * Whether a thrown value is an `AiError` of the provider platform, by CLASS or by
+ * SHAPE.
+ *
+ * @remarks
+ * `AiError.isAiError` is `instanceof`, which holds only for the one copy of the
+ * class this package loaded. A host whose runtime throws the error of another copy
+ * (the web edition's `AiService`, whose `@marinoscar/platform-api` carries its own
+ * `AiError` class until it re-exports the lean package's) would otherwise be
+ * classified as a plain failure. So a value that is an `Error` named `AiError`
+ * with a known AI error code and the `getResponse` of a platform error also
+ * counts. Nothing is read from it but `code`, `message` and `retryAfterMs`.
+ *
+ * @param value - anything caught.
+ * @returns whether it is an `AiError`, narrowed to the lean package's type.
+ * @stability experimental
+ */
+export function isAiError(value: unknown): value is AiError {
+  if (AiError.isAiError(value)) return true;
+  return (
+    value instanceof Error &&
+    value.name === 'AiError' &&
+    isAiErrorCode((value as { code?: unknown }).code) &&
+    typeof (value as { getResponse?: unknown }).getResponse === 'function'
+  );
+}
+
+/**
  * Translates whatever a runtime or provider threw into the one error type the
  * port promises.
  *
@@ -118,7 +145,7 @@ export function isErrorLike(value: unknown): value is Error {
  */
 export function toKvoxAiError(error: unknown, ctx: KvoxAiErrorContext): KvoxAiError {
   if (error instanceof KvoxAiError) return error;
-  if (AiError.isAiError(error)) return fromAiError(error, ctx);
+  if (isAiError(error)) return fromAiError(error, ctx);
 
   const message = scrub(
     isErrorLike(error) ? error.message : typeof error === 'string' ? error : 'Unknown AI failure',

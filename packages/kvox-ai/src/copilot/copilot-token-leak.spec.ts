@@ -1,4 +1,4 @@
-import { AI_KEYLESS_API_KEY, AiError, type AiCallContext, type AiResponseRequest, type AiStreamEvent } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY, AiError, type AiCallContext, type AiResponseRequest, type AiStreamEvent } from '@marinoscar/platform-ai-providers';
 import { z } from 'zod';
 
 import { createCopilotAdapter } from './copilot-adapter.js';
