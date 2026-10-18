@@ -14,6 +14,7 @@
  * @packageDocumentation
  */
 export * from './ask/index.js';
+export * from './ask-run/index.js';
 export * from './cli/index.js';
 export * from './kg/index.js';
 export * from './live/index.js';
