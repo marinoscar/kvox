@@ -119,6 +119,21 @@ const platform = binOf('@marinoscar/platform-db', 'platform');
 const kvoxDb = binOf('@marinoscar/kvox-db', 'kvox-db');
 const prisma = binOf('prisma', 'prisma');
 
+// IN THE REPOSITORY kvox-db is a workspace whose `kvox-db` bin loads its own
+// `dist/`, which only its build writes. A CI job (or a fresh checkout) that runs
+// kvox-eval's build, typecheck, test or docs without building kvox-db first would
+// fail here, so the workspace copy is built on demand. An installed kvox-db
+// ships `dist/` and never reaches this.
+const kvoxDbDir = dirname(manifestOf('@marinoscar/kvox-db'));
+if (!existsSync(join(kvoxDbDir, 'dist', 'bin', 'index.js')) && existsSync(join(kvoxDbDir, 'tsconfig.build.json'))) {
+  console.log('kvox-eval host: build the workspace @marinoscar/kvox-db (its dist/ is missing)');
+  const result = spawnSync('npm', ['run', 'build'], { cwd: kvoxDbDir, stdio: 'inherit', shell: process.platform === 'win32' });
+  if (result.status !== 0) {
+    console.error(`kvox-eval host: building @marinoscar/kvox-db failed (exit ${result.status ?? 'signal'})`);
+    process.exit(result.status ?? 1);
+  }
+}
+
 rmSync(join(hostDir, 'prisma'), { recursive: true, force: true });
 rmSync(join(hostDir, 'generated'), { recursive: true, force: true });
 rmSync(stampPath, { force: true });

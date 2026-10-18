@@ -83,8 +83,6 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-ai
       # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
       # the kg:eval and ask:eval scripts and their specs import it.
-      # kvox-eval's build composes its Ask host with the kvox-db CLI (issue #608), so kvox-db is built first.
-      - run: npm run build --workspace=@marinoscar/kvox-db
       - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
@@ -186,8 +184,6 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-ai
       # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
       # the kg:eval and ask:eval scripts and their specs import it.
-      # kvox-eval's build composes its Ask host with the kvox-db CLI (issue #608), so kvox-db is built first.
-      - run: npm run build --workspace=@marinoscar/kvox-db
       - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
@@ -304,8 +300,6 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-ai
       # ...and @marinoscar/kvox-eval (issue #580): openapi:typecheck compiles scripts/, whose
       # kg:eval and ask:eval wrappers import it.
-      # kvox-eval's build composes its Ask host with the kvox-db CLI (issue #608), so kvox-db is built first.
-      - run: npm run build --workspace=@marinoscar/kvox-db
       - run: npm run build --workspace=@marinoscar/kvox-eval
 
       # The dump imports AppModule, which imports @prisma/client. Preview mode
@@ -540,8 +534,6 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-ai
       # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
       # the kg:eval and ask:eval scripts and their specs import it.
-      # kvox-eval's build composes its Ask host with the kvox-db CLI (issue #608), so kvox-db is built first.
-      - run: npm run build --workspace=@marinoscar/kvox-db
       - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
