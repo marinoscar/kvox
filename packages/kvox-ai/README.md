@@ -24,13 +24,23 @@ Entry points:
 npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-api@0.1.0-next.5 zod
 ```
 
-Every slice is universal, so every peer is required:
+Every slice except `copilot` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
 
 | Package | Range | Needed by |
 |---|---|---|
 | `zod` | `^4.4.3` | `tasks`, `structured`, `chat`, `port`, `testing` |
 | `@marinoscar/platform-api` | `0.1.0-next.5` (exact, the repository's platform pin) | `chat`, `errors`, `port` (`AiError`, the adapter types), `runtime` (request and event types), `direct` (`AiProviderAdapter`, `AiCallContext`). Only the subpath `@marinoscar/platform-api/ai` is imported. An interim peer: it moves to the lean adapter package of #578. |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `errors`, `port`, `direct` and `testing` (`KvoxAiPort`, `KvoxAiError` from `@marinoscar/kvox-api/ports`). Same range as the contract peer of the other packages ([why](../../docs/PACKAGES.md#the-contract-peer-range)). |
+
+### Optional: the GitHub Copilot adapter
+
+Only a host that offers the Copilot provider (KVox Desktop) installs the SDK:
+
+```bash
+npm install @github/copilot-sdk
+```
+
+`@github/copilot-sdk` (`^1.0.22`) is an OPTIONAL peer (`peerDependenciesMeta`), needed only by `@marinoscar/kvox-ai/copilot`, and only by `createSdkCopilotTransport`, which `require`s it lazily on its first call. The package root never imports it, so the web edition never installs it. Without the SDK the adapter, the catalog, the error mapping and the mock transport still work; the real transport answers `AI_PROVIDER_UNAVAILABLE` ("The GitHub Copilot SDK is not installed"). The SDK downloads or bundles a per-platform Copilot runtime (about 133 to 174 MB unpacked): a Desktop host packages it with the app ([KVox Desktop guide](../../docs/guides/kvox-desktop.md#the-copilot-provider-adapter)).
 
 The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
@@ -65,6 +75,49 @@ const runtime = createDirectRuntime({
 });
 const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource });
 ```
+
+### GitHub Copilot on KVox Desktop (opt-in)
+
+The Copilot adapter plugs into the same `createDirectRuntime` as OpenAI. Copilot serves the notes and graph-extraction tasks; Ask and embeddings stay on OpenAI.
+
+```ts
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { createDirectRuntime, createKvoxAi } from '@marinoscar/kvox-ai';
+import { createCopilotAdapter, createSdkCopilotTransport } from '@marinoscar/kvox-ai/copilot';
+
+const copilot = createCopilotAdapter({
+  optIn: settings.copilotEnabled,             // the user's own opt-in, default OFF; anything but true throws
+  transport: createSdkCopilotTransport({
+    baseDirectory: join(app.getPath('userData'), 'copilot'),   // app-private, never the user's Copilot CLI dir
+    workingDirectory: emptyTempDir,                            // EMPTY: no AGENTS.md, CLAUDE.md, skills or MCP found
+  }),
+  logger,                                     // optional: provider, model, duration, tokens, finish reason
+});
+const runtime = createDirectRuntime({
+  adapters: { openai: openAiAdapter, copilot },
+  keys: async (provider) =>
+    provider === 'copilot'
+      ? { apiKey: AI_KEYLESS_API_KEY }        // the runtime uses the user's own sign-in; the adapter ignores this
+      : (await keychain.get(`ai:${provider}`).then((apiKey) => (apiKey ? { apiKey } : null))),
+});
+const kvoxAi = createKvoxAi({
+  runtime,
+  taskModels: localTaskModelSource,
+  catalog: copilot.kvox.catalog,              // per-model limits, toolCalling false, structuredOutputMode
+});
+```
+
+Sign-in is the SDK's: `copilot.authStatus()` returns `{ signedIn, login }` (never a token), and a call while signed out is `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`.
+
+Limits of the Copilot provider, by design:
+
+- **No Ask.** Copilot models are never offered a tool: `capabilities().toolCalling` is `false` for them, so Ask stays on OpenAI. A Copilot session takes user messages only, so the harness cannot continue a tool step statelessly, and the Ask loop is never moved into the SDK.
+- **No embeddings.** The adapter has no `embeddings` port. Embeddings come from the OpenAI adapter, or are `null` and search is full text only.
+- **One system prompt and one user message per call.** Assistant turns, tool items, images and files are refused with `AI_CAPABILITY_UNSUPPORTED`.
+- **No output cap and no temperature.** The SDK has no per-call setting for either on Copilot-hosted models, so `maxOutputTokens` is not sent. A `length` finish aborts the call at once (the runtime would otherwise continue by itself) and kvox-ai reports `truncated`.
+- **Prompted structured output for some models.** GPT models hold the answer to a JSON Schema natively. Claude models are not verified for it, so the catalog marks them `prompted`: `createKvoxAi` puts the schema in the system prompt and makes one repair attempt (see the [structured slice](src/structured/README.md)). The same path serves any adapter whose model is `prompted`.
+- **Sign-in needed.** Listing models and every call need a signed-in GitHub account with Copilot.
+- **Opt-in until the owner decides the terms question.** Prompts and notes go to GitHub. A host must say so and point the user at the GitHub terms of service (section J, the training opt-out) before it turns the setting on. The setting defaults to off.
 
 The pure helpers are usable on their own:
 
@@ -129,19 +182,29 @@ None.
 
 ## Observability
 
-None of its own: the package logs nothing, emits no metric and opens no span. Usage rows and spans are the host runtime's (one per provider round trip on web, written by the platform `AiService`).
+None of its own: the package logs nothing (the Copilot adapter takes an optional `logger` and writes one metadata-only `info` per call, never content), emits no metric and opens no span. Usage rows and spans are the host runtime's (one per provider round trip on web, written by the platform `AiService`).
 
 ## Security notes
 
 - A key never crosses the port or a package interface: `KvoxAiRuntimeCall` names a user and a provider, never a key, and `KvoxAiKeyReadiness` says only whether a key exists. `createDirectRuntime` asks the host for a key per call, hands it to the adapter in that call's `AiCallContext` and drops it when the call settles; it caches none.
-- Every failure that leaves the port is a `KvoxAiError` of an existing `KvoxAiErrorClass` (`auth`, `refusal`, `rate_limit`, `budget`, `timeout`, `not_configured`, `key_missing`, `capability`, `truncated`, `invalid_output`, `other`); a runtime's raw error never escapes. Every message passes through `scrub`, which replaces key-shaped strings (`sk-...`, `ghp_`, `gho_`, `github_pat_`), as a backstop.
+- Every failure that leaves the port is a `KvoxAiError` of an existing `KvoxAiErrorClass` (`auth`, `refusal`, `rate_limit`, `budget`, `timeout`, `not_configured`, `key_missing`, `capability`, `truncated`, `invalid_output`, `other`); a runtime's raw error never escapes. Every message passes through `scrub`, which replaces key-shaped strings (`sk-...`, `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), as a backstop.
 - No prompt, answer, tool argument or reasoning item is logged or persisted. Reasoning items replayed by the chat mapping are opaque provider state, kept in memory per user and job, never written anywhere.
 - Tool-call arguments (`argumentsJson`) are untrusted model output: callers parse and validate them before use.
+- **The Copilot adapter** (`@marinoscar/kvox-ai/copilot`) is a translator with several guards:
+  - Zero tools. `availableTools: []`, client `mode: 'empty'`, every permission request rejected. After `createSession` the adapter reads the session's live tool list; any tool, or any tool event during the call, aborts it with `AI_CAPABILITY_UNSUPPORTED`.
+  - Our system prompt replaces the SDK's (`systemMessage.mode: 'replace'`), and the runtime's `<current_datetime>` prefix is suppressed.
+  - One session per call, always disconnected and deleted in a `finally` (the runtime would otherwise keep the prompt in its session state on disk), in an app-private `baseDirectory` with an empty `workingDirectory`.
+  - No GitHub token crosses our code: `gitHubToken` is never set, `ctx.apiKey` (`AI_KEYLESS_API_KEY`) is ignored, and the SDK uses the user's own sign-in. Every message that leaves the adapter (error message and details, log entry, stream error) passes through `redactTokens` (`gh[opusr]_`, `github_pat_`, `sk-`, `Bearer`) and is truncated. The logger never gets a prompt, an answer or a schema.
+  - Opt-in. `createCopilotAdapter` throws unless `optIn === true`; the host's setting defaults to off.
 - The source imports no `@nestjs/*`, no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-api/ai` (rule `host-neutral` of `npm run check:kvox-slice-peers`, and `apps/api/test/ai/ai-port-boundary.spec.ts`).
 
 ## Conformance suite
 
 `@marinoscar/kvox-ai/testing` exports `createScriptedRuntime` (a runtime that replays scripted provider events, responses, errors and hangs, and records each call) and `describeKvoxAiConformance(name, build, harness?, options?)`: the rules of a `KvoxAiPort` (strict structured output validated twice, `truncated`, `invalid_output`, the tool-call event mapping, `rate_limit` with `retryAfterMs` in a job, `auth`, `refusal`, `timeout`, no key-shaped string in any error or event, deterministic `countTokens`). A case a host cannot produce is a reasoned `optOut`, never a silent skip. The package runs it with `createKvoxAi` over the scripted runtime (`test/kvox-ai-conformance.spec.ts`), together with the host-port kit `describeKvoxPortsConformance` and the Ask kit `describeAskConformance` from `@marinoscar/kvox-api` bound to the same port; the web edition runs the same three over its platform binding (`apps/api/test/platform-kvox/`). The moved unit specs (`src/**/*.spec.ts`, `npm run test:run -w @marinoscar/kvox-ai`) pin the structured-schema rules, the chat mapping, the chooser, the token estimate and the embedding contract.
+
+### Copilot adapter
+
+The Copilot adapter is proven on two levels. Its own unit specs (`src/copilot/*.spec.ts`) pin the session template (zero built-in tools, replace mode), the tripwire, token redaction, the single model request after a `length` or a call failure, the datetime suppression, session deletion on success, failure and abort, the request refusals and the error mapping. The `describeKvoxAiConformance` suite then runs over `createKvoxAi`, `createDirectRuntime` and the adapter on `createCopilotMockTransport()` (asynchronous SDK-shaped events, abort, model-request counting, live tools for the tripwire). A case the Copilot path cannot produce is a named `optOut` with its reason, for example the tool-call mapping (`chat_tool_calls`), because `toolCalling` is `false`. The real SDK is not part of CI, and `createSdkCopilotTransport` has not yet run against a signed-in Copilot runtime: that live check, with the `kvox-eval` runs, is an owner step on #581.
 
 ## Upgrade notes
 
@@ -153,6 +216,10 @@ First release. The web edition's second mapping hop is gone: `mapAiError` and th
 |---|---|
 | `Cannot find module '@marinoscar/kvox-ai'` in `apps/api` | Build the packages first: `npm run build:kvox-packages`. |
 | `[host-neutral] ... may import only '@marinoscar/platform-api/ai'` | A slice imported another platform subpath or a deeper path. Use only the public `@marinoscar/platform-api/ai`; anything host-specific belongs in the host's runtime. |
+| `createCopilotAdapter` throws "GitHub Copilot is switched off" | The host did not pass `optIn: true`. Pass the user's own Copilot setting (default off). |
+| `AI_PROVIDER_UNAVAILABLE`: "The GitHub Copilot SDK is not installed" | Install the optional peer: `npm install @github/copilot-sdk`. |
+| `AI_KEY_REQUIRED`: "Sign in to GitHub Copilot to use it in KVox." | The user is not signed in. Start the SDK's sign-in, then check `copilot.authStatus()`. |
+| `AI_CAPABILITY_UNSUPPORTED` from the Copilot adapter | A request carried tools, history, images or a structured schema for a `prompted` model. Route tool calling to OpenAI; pass `catalog: copilot.kvox.catalog` to `createKvoxAi` so kvox-ai takes its prompted path. |
 | `StrictSchemaError` at a JSON path | The caller's schema is outside the strict subset (rules in `src/structured/strict-json-schema.ts`); fix the schema (`.nullable()`, not `.optional()`). |
 
 ## Links
