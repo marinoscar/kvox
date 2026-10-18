@@ -1235,6 +1235,8 @@ function NotePageView({ id, slots, ai }: NotePageViewProps) {
             version={note.currentVersion}
             bodyRef={renderedBodyRef}
             originTranscriptId={note.originTranscript?.id ?? null}
+            status={note.status}
+            updatedAt={note.updatedAt}
           />
         </NotesSlotBoundary>
       ) : null}
