@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { createRef } from 'react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { http, HttpResponse, server } from './msw-compat.js';
@@ -11,7 +12,13 @@ import { mockAdminUser, render, testAi } from '../notes/helpers.js';
 import type { MockUser } from '../notes/helpers.js';
 import { NotePage } from '../../src/notes/ui/index.js';
 import type { Note } from '../../src/notes/headless/index.js';
-import { graphNotePageSlots } from '../../src/graph/ui/slots/GraphNoteSlots.js';
+import {
+  GraphNotePageProvider,
+  GraphNoteProposalActions,
+  graphNotePageSlots,
+} from '../../src/graph/ui/slots/GraphNoteSlots.js';
+import { NOTE_EXTRACTION_FOLLOW_MS } from '../../src/graph/headless/hooks/useGraphProposal.js';
+import type { NoteStatus } from '../../src/notes/headless/index.js';
 
 /**
  * `/notes/:id` with the web edition's graph slots — issues #367 and #368,
@@ -256,5 +263,114 @@ describe('NotePage — guide the graph and add from a selection (issue #368)', (
     act(() => selectRendered('We will ship ', 3, 'behind a flag', 6));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByRole('button', { name: 'Add to graph' })).not.toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// #616 — the proposal follows an automatic extraction
+// =============================================================================
+
+describe('GraphNoteProposalActions — following an automatic extraction (issue #616)', () => {
+  const graphUser: MockUser = {
+    ...mockAdminUser,
+    permissions: [...mockAdminUser.permissions, 'graph:read', 'graph:write'],
+  };
+  const EMPTY = 'Nothing sent to your graph from this note yet.';
+  const bodyRef = createRef<HTMLElement>();
+
+  function Harness({ status, updatedAt }: { status: NoteStatus; updatedAt: string }) {
+    return (
+      <GraphNotePageProvider noteId="n1">
+        <GraphNoteProposalActions
+          noteId="n1"
+          version={1}
+          bodyRef={bodyRef}
+          originTranscriptId={null}
+          status={status}
+          updatedAt={updatedAt}
+        />
+      </GraphNotePageProvider>
+    );
+  }
+
+  const OLD = '2020-01-01T00:00:00.000Z';
+  /** The default handler does not record reads; count them here instead. */
+  let reads: number;
+
+  beforeEach(() => {
+    reads = 0;
+    proposalMock.reset(null);
+    server.use(
+      http.get(`${API_BASE}/graph/notes/:noteId/proposal`, () => {
+        reads += 1;
+        const detail = proposalMock.detail;
+        return HttpResponse.json({ data: { proposal: detail } });
+      }),
+    );
+    // Only the poll's interval and the clock are faked; fetch and waitFor keep real timers.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderHarness(status: NoteStatus, updatedAt: string) {
+    return render(<Harness status={status} updatedAt={updatedAt} />, {
+      wrapperOptions: { user: graphUser, route: '/notes/n1?review=1' },
+      hostOptions: { features: { graphEnabled: true } },
+    });
+  }
+
+  /** Lets the in-flight request settle (real timers keep running). */
+  const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 60)); });
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it('shows the extraction a note started on turning ready, without a reload', async () => {
+    const { rerender } = renderHarness('generating', new Date().toISOString());
+    expect(await screen.findByText(EMPTY)).toBeInTheDocument();
+    expect(reads).toBe(1);
+
+    // The edge refreshes at once; the server has not created the proposal yet.
+    rerender(<Harness status="ready" updatedAt={new Date().toISOString()} />);
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByText(EMPTY)).toBeInTheDocument();
+
+    // The extraction appears after the edge read; the follow poll finds it.
+    proposalMock.reset(mockProposalDetail('draft'));
+    await tick(2_000);
+    await settle();
+    expect(await screen.findByRole('heading', { name: /People/ })).toBeInTheDocument();
+    expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
+  });
+
+  it('follows a ready note that turned ready moments ago', async () => {
+    renderHarness('ready', new Date(Date.now() - 5_000).toISOString());
+    expect(await screen.findByText(EMPTY)).toBeInTheDocument();
+    expect(reads).toBe(1);
+
+    proposalMock.reset(mockProposalDetail('draft'));
+    await tick(2_000);
+    await settle();
+    expect(await screen.findByRole('heading', { name: /People/ })).toBeInTheDocument();
+  });
+
+  it('stops following once the window has passed', async () => {
+    renderHarness('ready', new Date(Date.now() - 5_000).toISOString());
+    await screen.findByText(EMPTY);
+    await tick(NOTE_EXTRACTION_FOLLOW_MS);
+    await settle();
+    const stopped = reads;
+    await tick(10_000);
+    await settle();
+    expect(reads).toBe(stopped);
+  });
+
+  it('reads an old ready note exactly once', async () => {
+    renderHarness('ready', OLD);
+    await screen.findByText(EMPTY);
+    await tick(20_000);
+    await settle();
+    expect(reads).toBe(1);
   });
 });

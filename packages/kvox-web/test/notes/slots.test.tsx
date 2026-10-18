@@ -103,7 +103,13 @@ describe('NotePage — slots', () => {
 
     expect(header).toHaveBeenCalledWith({ noteId: 'n1' }, undefined);
     const proposalProps = proposal.mock.calls.at(-1)![0];
-    expect(proposalProps).toMatchObject({ noteId: 'n1', version: 3, originTranscriptId: 't1' });
+    expect(proposalProps).toMatchObject({
+      noteId: 'n1',
+      version: 3,
+      originTranscriptId: 't1',
+      status: 'ready',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
     expect(proposalProps.bodyRef).toHaveProperty('current');
     expect(selection.mock.calls.at(-1)![0]).toMatchObject({
       noteId: 'n1',
