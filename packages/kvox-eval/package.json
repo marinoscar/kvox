@@ -26,6 +26,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./ask-run": {
+      "types": "./dist/ask-run/index.d.ts",
+      "default": "./dist/ask-run/index.js"
+    },
     "./fixtures": {
       "types": "./dist/fixtures/index.d.ts",
       "default": "./dist/fixtures/index.js"

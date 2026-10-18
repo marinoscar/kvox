@@ -50,11 +50,26 @@ import {
   selectAskEvalQuestions,
   type AskEvalQuestion,
 } from '../ask/index.js';
-import { DEFAULT_ASK_EVAL_MODEL, runAskEval, runAskReplay } from '../ask-run/index.js';
 import { KgEvalLoadError, loadGoldenAskQuestions, loadGoldenSet } from '../fixtures/index.js';
 import { KVOX_EVAL_API_KEY_ENV, readEvalApiKey } from '../live/index.js';
 import { assertLiveProvider, createLiveKvoxAi, LiveProviderError, type LiveCallFailure } from '../live/index.js';
-import type { EvalCommandIo } from './kg-command.js';
+import { runAskReplay } from './replay.js';
+import { DEFAULT_ASK_EVAL_MODEL, runAskEval } from './run-ask-eval.js';
+
+/**
+ * Where the ask command writes, and the environment it reads (the same shape as
+ * the kg command's `AskCommandIo`).
+ *
+ * @stability experimental
+ */
+export interface AskCommandIo {
+  /** One line to standard output. */
+  out: (line: string) => void;
+  /** One line to standard error. */
+  err: (line: string) => void;
+  /** The environment (`process.env`, or a test's own). */
+  env: Readonly<Record<string, string | undefined>>;
+}
 
 /**
  * The exit codes of `kvox-eval ask` (and of the web app's `npm run ask:eval`).
@@ -111,7 +126,7 @@ const LIVE_ONLY_FLAGS = ['provider', 'model', 'base-url', 'only', 'category', 'm
  * @returns the exit code ({@link ASK_EVAL_EXIT}).
  * @stability experimental
  */
-export async function runAskCommand(argv: string[], io: EvalCommandIo, options: AskCommandOptions = {}): Promise<number> {
+export async function runAskCommand(argv: string[], io: AskCommandIo, options: AskCommandOptions = {}): Promise<number> {
   const name = options.name ?? 'kvox-eval ask';
   const usage = options.usage ?? ASK_COMMAND_USAGE;
   try {
@@ -130,7 +145,7 @@ export async function runAskCommand(argv: string[], io: EvalCommandIo, options: 
   }
 }
 
-async function run(argv: string[], io: EvalCommandIo, options: AskCommandOptions, name: string, usage: string): Promise<number> {
+async function run(argv: string[], io: AskCommandIo, options: AskCommandOptions, name: string, usage: string): Promise<number> {
   let values: Record<string, string | boolean | undefined>;
   try {
     ({ values } = parseArgs({
@@ -255,7 +270,7 @@ function reportFailures(failures: readonly LiveCallFailure[], log: (line: string
 }
 
 /** `--replay`: the six scripted questions, one line each, then the gates; `replay.json` under `--out`. */
-async function replay(io: EvalCommandIo, log: (line: string) => void, outDir: string): Promise<number> {
+async function replay(io: AskCommandIo, log: (line: string) => void, outDir: string): Promise<number> {
   const run = await runAskReplay({ log });
   io.out('Ask evaluation replay (scripted runtime, no model)');
   for (const r of run.results) {

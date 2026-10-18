@@ -14,6 +14,7 @@ Entry points:
 
 - `@marinoscar/kvox-eval`: the package root, which re-exports the `kg`, `ask`, `live`, `real-data` and `cli` slices. Slice READMEs: [kg](src/kg/README.md), [ask](src/ask/README.md), [live](src/live/README.md), [real-data](src/real-data/README.md), [cli](src/cli/README.md).
 - `@marinoscar/kvox-eval/fixtures`: the golden set (`loadGoldenMeetings`, `GOLDEN_MEETINGS_DIR`, `ASK_QUESTIONS_PATH`, `loadGoldenAskQuestions`) and its schema (`goldenFixtureSchema`, `GoldenFixture`). Slice README: [fixtures](src/fixtures/README.md). The data is under [fixtures/kg-golden](fixtures/kg-golden/README.md).
+- `@marinoscar/kvox-eval/ask-run`: the headless Ask evaluation (`runAskEval`, `runAskReplay`, `startAskEvalHost`, `seedGoldenGraph`, `runAskCommand`): an in-memory PGlite, the golden graph seeded through the graph write service, the real `ask.respond` handler. Slice README: [ask-run](src/ask-run/README.md).
 - `@marinoscar/kvox-eval/parity`: the harness-parity scenario and its committed request snapshots (`parity/requests.*.json`), which prove two bindings of the model port send the same provider requests (`runParityScenario`, `createParityScript`, `loadParitySnapshot`). Slice README: [parity](src/parity/README.md).
 - `kvox-eval` (the `bin`, `dist/cli/main.js`).
 

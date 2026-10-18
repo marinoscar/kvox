@@ -1,4 +1,5 @@
-// The ask-run slice's public surface (re-exported by the package root): the
+// The ask-run slice's public surface: the `@marinoscar/kvox-eval/ask-run` entry
+// (kept off the package root, which stays light for the pure scorer): the
 // headless Ask evaluation. An in-memory PostgreSQL (PGlite) migrated with the
 // platform and domain history, the golden graph seeded through the graph write
 // service, the real `ask.respond` handler on the Ask slice, over any model port.
@@ -19,3 +20,5 @@ export {
   runAskReplay,
 } from './replay.js';
 export type { AskReplayResult, AskReplayRun, AskReplayScenario, AskReplayStep } from './replay.js';
+export { ASK_COMMAND_USAGE, ASK_EVAL_EXIT, runAskCommand } from './ask-command.js';
+export type { AskCommandIo, AskCommandOptions } from './ask-command.js';

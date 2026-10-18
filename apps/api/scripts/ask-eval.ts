@@ -8,7 +8,7 @@
 //   npm run ask:eval --workspace=api -- --replay
 //
 // A THIN WRAPPER (#608): this is `kvox-eval ask` of `@marinoscar/kvox-eval`
-// (`runAskCommand`), run under this script's name with the git-ignored
+// (`runAskCommand` of `@marinoscar/kvox-eval/ask-run`), run under this script's name with the git-ignored
 // `apps/api/.ask-eval/` as the runs directory. Every flag of the package
 // command works here (`--provider`, `--base-url`, `--min-match`, `--replay`, ...).
 //
@@ -29,7 +29,8 @@
 
 import { join } from 'path';
 
-import { ASK_EVAL_EXIT, DEFAULT_ASK_EVAL_MODEL, KVOX_EVAL_API_KEY_ENV, runAskCommand, type EvalCommandIo } from '@marinoscar/kvox-eval';
+import { KVOX_EVAL_API_KEY_ENV, type EvalCommandIo } from '@marinoscar/kvox-eval';
+import { ASK_EVAL_EXIT, DEFAULT_ASK_EVAL_MODEL, runAskCommand } from '@marinoscar/kvox-eval/ask-run';
 
 export const EXIT = ASK_EVAL_EXIT;
 

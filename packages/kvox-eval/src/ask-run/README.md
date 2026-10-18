@@ -14,7 +14,7 @@ Status: issue #608 (from the web app's `apps/api/scripts/ask-eval/run.ts` and `s
 
 ## Entry point
 
-`@marinoscar/kvox-eval` (the package root re-exports this slice). The schema, migrations and client it runs on are built into `host/` by `scripts/prepare-host.mjs` (the package's `build`, `typecheck` and `test` run it first) and shipped in the package.
+`@marinoscar/kvox-eval/ask-run` (kept off the package root, which stays light for the pure scorer; `kvox-eval ask` loads it only when run). It also holds the command itself, `runAskCommand`. The schema, migrations and client it runs on are built into `host/` by `scripts/prepare-host.mjs` (the package's `build`, `typecheck` and `test` run it first) and shipped in the package.
 
 ## Peer dependencies
 

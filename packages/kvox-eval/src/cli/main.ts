@@ -9,7 +9,7 @@
 //                       `ask.respond` handler; `--replay` needs no model or key
 // =============================================================================
 
-import { runAskCommand } from './ask-command.js';
+import type * as AskRun from '../ask-run/index.js';
 import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo, type KgCommandOptions } from './kg-command.js';
 
 /**
@@ -35,7 +35,12 @@ export const KVOX_EVAL_USAGE = `usage: kvox-eval kg [flags]    score knowledge-g
 export async function main(argv: string[], io: EvalCommandIo = defaultIo(), options: KgCommandOptions = {}): Promise<number> {
   const [command, ...rest] = argv;
   if (command === 'kg') return runKgCommand(rest, io, options);
-  if (command === 'ask') return runAskCommand(rest, io);
+  if (command === 'ask') {
+    // Loaded only here: the ask command brings Nest, the domain slices, PGlite and
+    // the generated Prisma client, which `kvox-eval kg` and `--help` never need.
+    const { runAskCommand } = require('../ask-run/index.js') as typeof AskRun;
+    return runAskCommand(rest, io);
+  }
   if (command === '--help' || command === '-h' || command === 'help') {
     io.out(KVOX_EVAL_USAGE);
     return KG_EVAL_EXIT.ok;
