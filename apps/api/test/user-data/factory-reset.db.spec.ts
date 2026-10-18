@@ -28,6 +28,9 @@
 //     app's content is delegated);
 //   * no bytes are left: every storage key is deleted from the provider except the
 //     surviving prefix; a provider refusal keeps the row and is counted;
+//   * the transcripts' platform `grants` rows (a user share and a link share) go with them:
+//     no foreign key points from a grant to its resource, so only the step removes them,
+//     while a grant on another resource type is left alone;
 //   * the search index, which has no foreign key to a document, is emptied;
 //   * the built-in note templates the platform's owner-less sweep deletes are back;
 //   * a re-run of the same job changes nothing.
@@ -49,10 +52,11 @@ import '../../src/app-registrations/registrations';
 import '../../src/platform/storage/storage-key-prefix.manifest';
 import '../../src/platform/user-data/user-data.manifest';
 
+import { KVOX_CONTENT_STEP } from '../../src/platform/user-data/factory-reset.steps';
 import { bindKvoxFactoryResetDeps } from '../../src/kvox-objects/factory-reset-storage.step';
 import { connectTestPrisma } from '../graph/graph-read.fixtures';
-import { createStorageObject } from '../helpers/storage-object.helper';
-import { createTranscript } from '../helpers/transcript.helper';
+import { createStorageObject, defaultOrgId } from '../helpers/storage-object.helper';
+import { createTranscript, shareTranscript } from '../helpers/transcript.helper';
 import { resolveDbSuite } from '../jobs/db-test-support';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('factory-reset.db.spec');
@@ -356,6 +360,24 @@ describeWithDb('admin.factory_reset on this app’s data (real Postgres, rolled 
         },
       });
 
+      // Grants on the actor's transcript: a user share and a link share. Neither has a foreign
+      // key to the transcript.
+      const orgId = await defaultOrgId(tx);
+
+      await shareTranscript(tx, { transcriptId: actor.transcriptId, userId: other.userId, role: 'viewer', grantedById: actor.userId, orgId });
+      await tx.grant.create({
+        data: {
+          orgId,
+          resourceType: 'transcript',
+          resourceId: actor.transcriptId,
+          granteeKind: 'link',
+          role: 'viewer',
+          linkTokenHash: `hash-${randomUUID()}`,
+          grantedById: actor.userId,
+        },
+      });
+      expect(await tx.grant.count({ where: { resourceType: 'transcript', resourceId: actor.transcriptId } })).toBe(2);
+
       const job = await runningJob(tx, actor.userId);
 
       await handler.process(job);
@@ -368,6 +390,9 @@ describeWithDb('admin.factory_reset on this app’s data (real Postgres, rolled 
       for (const table of TABLES) {
         expect({ table, rows: await tx[table].count() }).toEqual({ table, rows: 0 });
       }
+
+      // The transcripts' grants are gone, the user share and the link share alike.
+      expect(await tx.grant.count({ where: { resourceType: 'transcript' } })).toBe(0);
 
       // Custom templates go (also the actor's, which a note still named); the built-ins are back.
       expect(await tx.noteTemplate.count({ where: { ownerId: { not: null } } })).toBe(0);
@@ -386,6 +411,7 @@ describeWithDb('admin.factory_reset on this app’s data (real Postgres, rolled 
       const counts = (stored.payload as { result: { counts: Record<string, number> } }).result.counts;
 
       expect(counts['step.kvox.content.transcripts']).toBeGreaterThanOrEqual(2);
+      expect(counts['step.kvox.content.transcriptGrants']).toBeGreaterThanOrEqual(2);
       expect(counts['step.kvox.content.notes']).toBeGreaterThanOrEqual(7);
       expect(counts['step.kvox.content.graphEntities']).toBeGreaterThanOrEqual(4);
       expect(counts['step.kvox.content.providerCopiesRemaining']).toBeGreaterThanOrEqual(1);
@@ -398,6 +424,49 @@ describeWithDb('admin.factory_reset on this app’s data (real Postgres, rolled 
 
       expect(await tx.user.count()).toBe(1);
       expect(await tx.noteTemplate.count({ where: { ownerId: null } })).toBe(NOTE_BUILTIN_TEMPLATES.length);
+    });
+  }, 300_000);
+
+  it('the content step alone deletes the transcripts’ grants (user and link) and leaves a grant on another resource type', async () => {
+    await inRolledBackReset(async ({ tx }) => {
+      const actor = await seedUser(tx, 'actor', { providerCopy: false });
+      const other = await seedUser(tx, 'other', { providerCopy: false });
+      const orgId = await defaultOrgId(tx);
+      const otherResourceId = randomUUID();
+
+      // The platform's own reset steps also sweep grants, so this runs the step on its own to
+      // prove IT removes them: a user share, a link share (no foreign key to the transcript),
+      // and a share of a resource of another type, which is not the step's to delete.
+      await shareTranscript(tx, { transcriptId: actor.transcriptId, userId: other.userId, role: 'viewer', grantedById: actor.userId, orgId });
+      await tx.grant.create({
+        data: {
+          orgId,
+          resourceType: 'transcript',
+          resourceId: other.transcriptId,
+          granteeKind: 'link',
+          role: 'viewer',
+          linkTokenHash: `hash-${randomUUID()}`,
+          grantedById: actor.userId,
+        },
+      });
+      await tx.grant.create({
+        data: {
+          orgId,
+          resourceType: 'other_resource',
+          resourceId: otherResourceId,
+          granteeKind: 'user',
+          granteeUserId: actor.userId,
+          role: 'viewer',
+          grantedById: actor.userId,
+        },
+      });
+      expect(await tx.grant.count({ where: { resourceType: 'transcript' } })).toBe(2);
+
+      const counts = await KVOX_CONTENT_STEP.run(tx, { actorUserId: actor.userId, jobId: randomUUID() });
+
+      expect(counts.transcriptGrants).toBe(2);
+      expect(await tx.grant.count({ where: { resourceType: 'transcript' } })).toBe(0);
+      expect(await tx.grant.count({ where: { resourceType: 'other_resource', resourceId: otherResourceId } })).toBe(1);
     });
   }, 300_000);
 

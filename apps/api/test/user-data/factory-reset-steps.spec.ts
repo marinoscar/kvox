@@ -29,7 +29,9 @@ import { KVOX_STORAGE_STEP, bindKvoxFactoryResetDeps } from '../../src/kvox-obje
 const CTX = { actorUserId: '11111111-1111-4111-8111-111111111111', jobId: '22222222-2222-4222-8222-222222222222' };
 
 /** A transaction that records `<model>.<method>` and answers counts. */
-function recordingTx(counts: Record<string, number> = {}) {
+function recordingTx(counts: Record<string, number> = {}, rows: Record<string, unknown[][]> = {}) {
+  /** `findMany` answers the next page queued for the model, then an empty page. */
+  const pages: Record<string, unknown[][]> = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, [...v]]));
   const calls: Array<{ call: string; args: any }> = [];
   const tx = new Proxy(
     {},
@@ -40,6 +42,8 @@ function recordingTx(counts: Record<string, number> = {}) {
           {
             get: (_t, method: string) => async (args?: any) => {
               calls.push({ call: `${model}.${method}`, args });
+
+              if (method === 'findMany') return pages[model]?.shift() ?? [];
 
               return method === 'count' ? (counts[model] ?? 0) : { count: counts[model] ?? 0 };
             },
@@ -181,6 +185,35 @@ describe('kvox.content', () => {
     expect(counts).toMatchObject({ transcripts: 3, notes: 5, graphEntities: 7, searchChunks: 11 });
     // `transcript.count` answers the same 3: the number of transcripts still held by the provider.
     expect(counts.providerCopiesRemaining).toBe(3);
+  });
+
+  it('deletes the platform grants of every transcript before the transcripts, and reports the count', async () => {
+    const { tx, calls, order } = recordingTx(
+      { grant: 4 },
+      { transcript: [[{ id: 't1' }, { id: 't2' }], [{ id: 't3' }]] },
+    );
+
+    const counts = await KVOX_CONTENT_STEP.run(tx, CTX);
+
+    // Grants have no foreign key to a transcript, so only this explicit delete removes them.
+    const grantDeletes = calls.filter((entry) => entry.call === 'grant.deleteMany');
+
+    expect(grantDeletes.map((entry) => entry.args)).toEqual([
+      { where: { resourceType: 'transcript', resourceId: { in: ['t1', 't2'] } } },
+      { where: { resourceType: 'transcript', resourceId: { in: ['t3'] } } },
+    ]);
+    // Two pages, 4 rows reported per delete call.
+    expect(counts.transcriptGrants).toBe(8);
+    expect(order('grant.deleteMany')).toBeLessThan(order('transcript.deleteMany'));
+  });
+
+  it('reports zero grants and issues no grant delete when there is no transcript', async () => {
+    const { tx, names } = recordingTx();
+
+    const counts = await KVOX_CONTENT_STEP.run(tx, CTX);
+
+    expect(counts.transcriptGrants).toBe(0);
+    expect(names()).not.toContain('grant.deleteMany');
   });
 
   it('counts only transcripts whose provider copy was never deleted', async () => {
