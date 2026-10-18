@@ -536,3 +536,142 @@ describe('HomeHero — the search field', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+// =============================================================================
+// Layout guarantees — issue #563
+// =============================================================================
+
+/**
+ * jsdom does no layout, so a "the greeting is not one letter per line" test
+ * cannot measure anything. What it CAN pin is the CSS the fix relies on: read
+ * back from the rules emotion injected for an element's classes, split into the
+ * base declarations and the ones inside `@media (min-width:600px)` (the `sm`
+ * breakpoint), which `getComputedStyle` cannot see.
+ */
+interface ElementCss {
+  base: Record<string, string>;
+  sm: Record<string, string>;
+}
+
+function cssOf(element: HTMLElement): ElementCss {
+  const classes = Array.from(element.classList);
+  const out: ElementCss = { base: {}, sm: {} };
+
+  const collect = (rule: CSSStyleRule, into: Record<string, string>) => {
+    const selectors = rule.selectorText.split(',').map((s) => s.trim());
+    const matches = selectors.some((selector) =>
+      classes.some((cls) => selector === `.${cls}`),
+    );
+    if (!matches) return;
+    for (let i = 0; i < rule.style.length; i += 1) {
+      const prop = rule.style[i];
+      into[prop] = rule.style.getPropertyValue(prop);
+    }
+  };
+
+  const sheets = Array.from(document.styleSheets);
+  // Base rules first, then media rules, so a later declaration wins as in CSS.
+  for (const sheet of sheets) {
+    for (const rule of Array.from(sheet.cssRules)) {
+      if (rule instanceof CSSStyleRule) collect(rule, out.base);
+    }
+  }
+  // MUI emits the `xs` value inside `@media (min-width:0px)`: that is base too.
+  for (const sheet of sheets) {
+    for (const rule of Array.from(sheet.cssRules)) {
+      if (
+        rule instanceof CSSMediaRule &&
+        /min-width:\s*0(px)?\)/.test(rule.conditionText ?? rule.media.mediaText)
+      ) {
+        for (const inner of Array.from(rule.cssRules)) {
+          if (inner instanceof CSSStyleRule) collect(inner, out.base);
+        }
+      }
+    }
+  }
+  for (const sheet of sheets) {
+    for (const rule of Array.from(sheet.cssRules)) {
+      if (
+        rule instanceof CSSMediaRule &&
+        /min-width:\s*600px/.test(rule.conditionText ?? rule.media.mediaText)
+      ) {
+        for (const inner of Array.from(rule.cssRules)) {
+          if (inner instanceof CSSStyleRule) collect(inner, out.sm);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+describe('HomeHero — the greeting survives a long blocked-state sentence (#563)', () => {
+  function renderBlocked() {
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable={false} canCreateNote />);
+    const heading = screen.getByRole('heading', { level: 1, name: 'Hi, Ana' });
+    const explanation = screen.getByText(/transcription is not set up for this workspace yet/i);
+    const greetingColumn = heading.parentElement as HTMLElement;
+    // button -> NewTranscriptButton's wrapper -> the actions container.
+    const actions = screen.getByRole('button', { name: 'New transcript' }).parentElement!
+      .parentElement as HTMLElement;
+    return { heading, explanation, greetingColumn, actions };
+  }
+
+  it('does not let the h1 break between any two letters', () => {
+    const { heading } = renderBlocked();
+    const css = cssOf(heading);
+
+    // `anywhere` counts every character as a break opportunity when computing
+    // min-content, which is what let the column collapse to one letter wide.
+    expect(css.base['overflow-wrap']).toBe('break-word');
+    expect(css.base['overflow-wrap']).not.toBe('anywhere');
+  });
+
+  it('gives the greeting column a growth factor and a width floor at sm and up', () => {
+    const { greetingColumn } = renderBlocked();
+    const css = cssOf(greetingColumn);
+
+    expect(css.sm['flex']).toBe('1 1 240px');
+    expect(css.sm['min-width']).toBe('240px');
+  });
+
+  it('does not put a width floor on the greeting column in the phone layout', () => {
+    // In the stacked column `flex-basis` would set a HEIGHT, so the floor is sm+.
+    const { greetingColumn } = renderBlocked();
+    const css = cssOf(greetingColumn);
+
+    expect(css.base['min-width']).toBe('0px');
+    expect(css.base['flex']).toBe('0 0 auto');
+  });
+
+  it('lets the hero row wrap at sm and up', () => {
+    const { greetingColumn } = renderBlocked();
+    const row = greetingColumn.parentElement as HTMLElement;
+    const css = cssOf(row);
+
+    expect(css.sm['flex-wrap']).toBe('wrap');
+  });
+
+  it('lets the actions wrap at sm and up and caps their width', () => {
+    const { actions } = renderBlocked();
+    const css = cssOf(actions);
+
+    expect(css.sm['flex-wrap']).toBe('wrap');
+    expect(css.sm['max-width']).toBe('min(100%, 480px)');
+    expect(css.base['max-width']).toBe('100%');
+  });
+
+  it('lets the actions shrink instead of refusing to', () => {
+    const { actions } = renderBlocked();
+    const css = cssOf(actions);
+
+    expect(css.sm['flex']).toBe('0 1 auto');
+  });
+
+  it('bounds the width of the "not set up" explanation', () => {
+    const { explanation } = renderBlocked();
+    const css = cssOf(explanation);
+
+    expect(css.base['max-width']).toBe('36ch');
+    expect(css.base['overflow-wrap']).toBe('break-word');
+  });
+});

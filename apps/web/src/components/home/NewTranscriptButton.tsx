@@ -82,7 +82,7 @@ export function NewTranscriptButton({
   const blocked = !available && !isChecking;
 
   return (
-    <Box sx={{ width: fullWidth ? '100%' : 'auto' }}>
+    <Box sx={{ width: fullWidth ? '100%' : 'auto', minWidth: 0 }}>
       <Button
         variant="contained"
         size={size}
@@ -100,7 +100,9 @@ export function NewTranscriptButton({
         <Typography
           variant="body2"
           color="text.secondary"
-          sx={{ mt: 1 }}
+          // Bounded (#563): an unbounded sentence made this column as wide as
+          // the row and squeezed the hero's greeting to nothing.
+          sx={{ mt: 1, maxWidth: '36ch', overflowWrap: 'break-word' }}
           // Tied to the button rather than left floating, so a screen-reader
           // user who lands on a disabled control is told why it is disabled
           // instead of having to go hunting for the sentence below it.
