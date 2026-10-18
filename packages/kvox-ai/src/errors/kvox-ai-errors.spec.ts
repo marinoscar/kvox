@@ -5,7 +5,7 @@ import { AI_ERROR_CODES, AiError, type AiErrorCode } from '@marinoscar/platform-
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 
 import type { KvoxAiFeatureId } from '../features/index.js';
-import { isErrorLike, refusalFor, scrub, toKvoxAiError } from './kvox-ai-errors.js';
+import { isAiError, isErrorLike, refusalFor, scrub, toKvoxAiError } from './kvox-ai-errors.js';
 
 // =============================================================================
 // toKvoxAiError against the frozen table of the old two-hop path (issue #579)
@@ -135,5 +135,83 @@ describe('refusalFor', () => {
     [null, 'not_configured'],
   ] as const)('maps the readiness reason %s to %s', (reason, errorClass) => {
     expect(refusalFor({ reason }).errorClass).toBe(errorClass);
+  });
+});
+
+/**
+ * The error of ANOTHER copy of the class: what the web host's platform AiService
+ * throws (its own `AiError`, a distinct class that is not an `instanceof` of the
+ * lean package's).
+ */
+class ForeignAiError extends Error {
+  readonly retryAfterMs?: number;
+  constructor(
+    readonly code: string,
+    message: string,
+    retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = 'AiError';
+    if (retryAfterMs !== undefined) this.retryAfterMs = retryAfterMs;
+  }
+  getResponse(): object {
+    return { code: this.code, message: this.message };
+  }
+}
+
+describe('isAiError (class or shape)', () => {
+  it('accepts the lean package\'s own AiError', () => {
+    expect(isAiError(new AiError('AI_RATE_LIMITED', 'slow'))).toBe(true);
+  });
+
+  it('accepts a lookalike from another copy of the class', () => {
+    const foreign = new ForeignAiError('AI_RATE_LIMITED', 'slow', 1_000);
+    expect(foreign instanceof AiError).toBe(false);
+    expect(isAiError(foreign)).toBe(true);
+  });
+
+  it.each([
+    ['a plain Error', new Error('x')],
+    ['a bare object shaped like one', { name: 'AiError', code: 'AI_RATE_LIMITED', message: 'x', getResponse: () => ({}) }],
+    ['a null', null],
+    ['a string', 'AiError'],
+    ['an Error named AiError with an unknown code', new ForeignAiError('AI_NOT_A_CODE', 'x')],
+    ['an Error named AiError with no code', Object.assign(new Error('x'), { name: 'AiError', getResponse: () => ({}) })],
+    ['an Error with a known code but another name', Object.assign(new Error('x'), { code: 'AI_RATE_LIMITED', getResponse: () => ({}) })],
+    ['an Error named AiError, a known code and no getResponse', Object.assign(new Error('x'), { name: 'AiError', code: 'AI_RATE_LIMITED' })],
+  ])('rejects %s', (_label, value) => {
+    expect(isAiError(value)).toBe(false);
+  });
+
+  it('every known AI error code is accepted on a lookalike', () => {
+    for (const code of AI_ERROR_CODES) expect(isAiError(new ForeignAiError(code, 'x'))).toBe(true);
+  });
+});
+
+describe('toKvoxAiError on an error of a foreign AiError class', () => {
+  it('classifies a foreign rate limit as rate_limit and keeps retryAfterMs in a job', () => {
+    const out = toKvoxAiError(new ForeignAiError('AI_RATE_LIMITED', 'slow down', 4_000), { feature: 'note_generate', inJob: true });
+    expect(out).toBeInstanceOf(KvoxAiError);
+    expect(out.errorClass).toBe('rate_limit');
+    expect(out.retryAfterMs).toBe(4_000);
+  });
+
+  it('drops the retry hint on a route, as for the lean class', () => {
+    const out = toKvoxAiError(new ForeignAiError('AI_RATE_LIMITED', 'slow down', 4_000), { feature: 'note_generate', inJob: false });
+    expect(out.errorClass).toBe('rate_limit');
+    expect(out.retryAfterMs).toBeUndefined();
+  });
+
+  it('classifies a lookalike exactly as the lean error of the same code', () => {
+    for (const code of AI_ERROR_CODES) {
+      const ctx = { feature: 'note_generate' as const, inJob: true };
+      const lean = toKvoxAiError(new AiError(code, 'm', { retryAfterMs: 500 }), ctx);
+      const foreign = toKvoxAiError(new ForeignAiError(code, 'm', 500), ctx);
+      expect({ code, errorClass: foreign.errorClass, retryAfterMs: foreign.retryAfterMs }).toEqual({
+        code,
+        errorClass: lean.errorClass,
+        retryAfterMs: lean.retryAfterMs,
+      });
+    }
   });
 });
