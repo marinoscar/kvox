@@ -113,7 +113,7 @@ npm run dist     # build installers
 
 ## Package versions
 
-Pin the `@marinoscar/kvox-*` packages to exact versions and bump them together; they are one release group. Until #577 publishes them, install the `kvox-tarballs` artifact from the kvox CI.
+Pin the `@marinoscar/kvox-*` packages to exact versions and bump them together; they are one release group. They are published on npm (`0.1.0-next.0`, `next` dist-tag); install that exact version.
 
 ## Roadmap
 
