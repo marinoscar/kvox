@@ -52,8 +52,9 @@
     "runtime": ["types", "features", "tasks"],
     "errors": ["types", "features"],
     "testing": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors"],
-    "port": ["types", "features", "tasks", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
-    "direct": ["runtime", "errors"]
+    "port": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
+    "direct": ["runtime", "errors"],
+    "copilot": []
   },
   "kvox-eval": {
     "ask": [],
@@ -62,6 +63,7 @@
     "live": [],
     "kg": ["fixtures"],
     "parity": ["fixtures", "kg"],
-    "cli": ["fixtures", "kg", "live", "real-data"]
+    "cli": ["ask", "ask-run", "fixtures", "kg", "live", "real-data"],
+    "ask-run": ["ask", "fixtures", "live"]
   }
 }

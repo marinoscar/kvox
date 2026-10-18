@@ -205,7 +205,7 @@ The bare host's classes are reference code, not a package. "Desktop recommendati
 
 ### KVOX_AI
 
-Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; the Copilot mapping is [the next section](#the-copilot-sdk-kvox_ai-adapter-sketch).
+Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; GitHub Copilot is one more provider adapter, an opt-in ([the Copilot provider adapter](#the-copilot-provider-adapter)); it serves notes and graph extraction, not Ask.
 
 ```ts
 export interface KvoxAiPort {
@@ -242,7 +242,7 @@ Binding sketch (the signatures are in the [package README](../../packages/kvox-a
 import { createKvoxAi, createDirectRuntime } from '@marinoscar/kvox-ai';
 
 const runtime = createDirectRuntime({
-  adapters: { openai: openAiAdapter, copilot: copilotAdapter }, // AiProviderAdapter per provider id
+  adapters: { openai: openAiAdapter, copilot: copilotAdapter }, // AiProviderAdapter per provider id; copilot only after the opt-in
   keys: async (provider) => {                                    // fetched per call, never held
     const apiKey = await keychain.get(`ai:${provider}`);
     return apiKey ? { apiKey } : null;                           // null: the user has no key (key_missing)
@@ -437,138 +437,74 @@ Optional; the default records nothing (`NOOP_KVOX_AUDIT`). Settings changes and 
 
 Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appName, appSlug } })` (`KvoxBrand`, token `KVOX_BRAND`, both from `@marinoscar/kvox-api/core`). It is the product name a document carries (the PDF export footer) and the slug names are built from. Omitted, `DEFAULT_KVOX_BRAND` (`KVox` / `kvox`) applies.
 
-## The Copilot SDK `KVOX_AI` adapter (sketch)
+## The Copilot provider adapter
 
-Note: per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md), the Copilot integration targets an `AiProviderAdapter` plugged into `createDirectRuntime` of `@marinoscar/kvox-ai` (#579, #581), not a `KvoxAiPort` implementation. The sketch below maps the same behaviour at the port level and is kept for history: it shows what the adapter plus the shared mechanics must add up to, not a class to write.
+GitHub Copilot is a provider, not a `KvoxAiPort`. Per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md) it is an `AiProviderAdapter` in `@marinoscar/kvox-ai/copilot` (#581) that plugs into `createDirectRuntime`, beneath the same `createKvoxAi` as every other provider. The adapter translates one call into one Copilot session. It holds no prompt, no retry loop, no tool loop and no KVox rule: structured output, truncation, retries and the error classes are the shared mechanics. Reference: [the package README](../../packages/kvox-ai/README.md#github-copilot-on-kvox-desktop-opt-in) and [the slice README](../../packages/kvox-ai/src/copilot/README.md).
 
-The code below is **illustrative and not compiled**. It maps each port method onto a Copilot session at the level of the port contract. The SDK's API changes; this sketch declares a tiny `CopilotLike` stand-in instead of naming SDK methods, so replace it with calls from the SDK's own documentation. What is fixed is the right-hand side: the port types, the event order and the error classes.
+Status: experimental, and **off by default**. The owner has not yet decided the terms-of-use question (Q12 of the spike): whether a desktop app may drive a user's Copilot subscription through the SDK. Until then the feature ships behind the user's own opt-in.
+
+### What Copilot does and does not serve
+
+| Need | Provider | Why |
+|---|---|---|
+| Notes (`notes.generate`, `notes.title`) and graph extraction (`graph.*`, `transcripts.name_check`) | Copilot or OpenAI, the user's choice | One system prompt plus one user message, text out. |
+| Ask (`ask.respond`) | OpenAI | A Copilot session takes user messages only, so a tool step cannot be continued statelessly. The adapter reports `toolCalling: false` and `capabilities()` follows. The Ask loop is never moved into the SDK. |
+| Embeddings | OpenAI, or none | The SDK has no embeddings. With `embeddings: null` search is full text only. |
+
+### Wiring
 
 ```ts
-// Illustrative — not compiled
-import type { z } from 'zod';
-import {
-  KvoxAiBudgetError, KvoxAiError,
-  type KvoxAiCapabilities, type KvoxAiContext, type KvoxAiPort, type KvoxAiTarget, type KvoxChatEvent,
-  type KvoxChatMessage, type KvoxEmbedResult, type KvoxStructuredResult, type KvoxTextEvent, type KvoxToolDef,
-} from '@marinoscar/kvox-api/ports';
+// Illustrative, not compiled
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { createDirectRuntime, createKvoxAi } from '@marinoscar/kvox-ai';
+import { createCopilotAdapter, createSdkCopilotTransport } from '@marinoscar/kvox-ai/copilot';
 
-/** Stand-in for the Copilot SDK. Replace with the SDK's real client; keep it inside the main process. */
-interface CopilotLike {
-  isSignedIn(): Promise<boolean>;
-  models(): Promise<Array<{ id: string; contextTokens: number; maxOutputTokens: number; tools: boolean; json: boolean; embeds?: number }>>;
-  /** One model step; yields text deltas and tool calls, then the usage and why it stopped. */
-  step(args: { model: string; system?: string; messages: unknown[]; tools?: unknown[]; maxOutputTokens?: number; signal?: AbortSignal }):
-    AsyncIterable<
-      | { kind: 'text'; text: string }
-      | { kind: 'tool'; id: string; name: string; args: unknown }
-      | { kind: 'end'; inputTokens: number | null; outputTokens: number | null; reason: 'stop' | 'length' | 'filtered' }
-    >;
-  embed?(args: { model: string; inputs: string[] }): Promise<number[][]>;
-}
-
-export class CopilotKvoxAi implements KvoxAiPort {
-  // The sign-in token lives inside `copilot`, in the main process. It is never a field here,
-  // never in a log line, never in an error message, never sent to the renderer.
-  constructor(private readonly copilot: CopilotLike, private readonly graphEnabled: () => boolean) {}
-
-  async capabilities(_ctx: KvoxAiContext): Promise<KvoxAiCapabilities> {
-    try {                                                    // never throws
-      if (!(await this.copilot.isSignedIn())) return this.off('ai_key_missing');
-      const models = await this.copilot.models();
-      const embed = models.find((m) => m.embeds === 1536);   // only a 1536-wide model keeps search semantic
-      return {
-        available: models.length > 0, structuredOutput: models.some((m) => m.json), toolCalling: models.some((m) => m.tools),
-        embeddings: embed ? { model: embed.id, dimensions: 1536 } : null,   // null: full-text search only
-        graphEnabled: this.graphEnabled(),
-      };
-    } catch { return this.off('ai_not_configured'); }
-  }
-
-  async resolveTask(ctx: KvoxAiContext, task: string, opts?: { model?: string; requireKey?: boolean }): Promise<KvoxAiTarget> {
-    if (opts?.requireKey !== false && !(await this.copilot.isSignedIn())) throw new KvoxAiError('key_missing', 'Sign in to GitHub Copilot.');
-    const models = await this.copilot.models();
-    const pick = models.find((m) => m.id === opts?.model) ?? models.find((m) => (task.startsWith('ask') || task.includes('extract') ? m.tools : true));
-    if (!pick) throw new KvoxAiError('not_configured', 'No Copilot model is available.');
-    if ((task.startsWith('ask') && !pick.tools) || (task.includes('extract') && !pick.json)) throw new KvoxAiError('capability', 'The model cannot do this task.');
-    return { provider: 'copilot', model: pick.id, contextWindowTokens: pick.contextTokens, maxOutputTokens: pick.maxOutputTokens, source: 'copilot' };
-  }
-
-  async *generateText(ctx: KvoxAiContext, req: { target: KvoxAiTarget; system: string; user: string; maxOutputTokens?: number }): AsyncIterable<KvoxTextEvent> {
-    for await (const e of this.run(ctx, { model: req.target.model, system: req.system, messages: [{ role: 'user', content: req.user }], maxOutputTokens: req.maxOutputTokens })) {
-      if (e.kind === 'text') yield { type: 'delta', text: e.text };
-      if (e.kind === 'end') yield { type: 'done', usage: { inputTokens: e.inputTokens, outputTokens: e.outputTokens }, finishReason: e.reason === 'length' ? 'length' : 'stop' };
-    }                                                         // exactly one `done`
-  }
-
-  async generateStructured<T>(ctx: KvoxAiContext, req: { target: KvoxAiTarget; system: string; user: string; schema: z.ZodType<T>; schemaName: string; jsonSchema?: Record<string, unknown>; maxOutputTokens?: number }): Promise<KvoxStructuredResult<T>> {
-    // Prompt with the JSON Schema, parse with the caller's Zod schema, one repair attempt, then give up.
-    let text = await this.collect(ctx, req, `${req.user}\n\nAnswer with JSON only, matching: ${JSON.stringify(req.jsonSchema)}`);
-    for (let attempt = 0; ; attempt += 1) {
-      try { return { value: req.schema.parse(JSON.parse(text.value)), usage: text.usage }; }
-      catch (error) {
-        if (attempt === 1) throw new KvoxAiError('invalid_output', 'The model did not return the requested JSON.', undefined, text.usage);
-        text = await this.collect(ctx, req, `${req.user}\n\nYour last answer was invalid (${String(error).slice(0, 200)}). Answer with valid JSON only.`);
-      }
-    }
-    // If the chosen model cannot return JSON at all, resolveTask already threw KvoxAiError('capability').
-  }
-
-  async *chat(ctx: KvoxAiContext, req: { target: KvoxAiTarget; messages: KvoxChatMessage[]; tools: KvoxToolDef[]; toolChoice: 'auto' | 'none' }): AsyncIterable<KvoxChatEvent> {
-    // One model step per call: the caller owns the loop and sends the whole history each time.
-    let sawTool = false;
-    for await (const e of this.run(ctx, { model: req.target.model, messages: req.messages, tools: req.toolChoice === 'none' ? [] : req.tools })) {
-      if (e.kind === 'text' && !sawTool) yield { type: 'delta', text: e.text };   // never text after a tool call of the step
-      if (e.kind === 'tool') { sawTool = true; yield { type: 'tool_call', id: e.id, name: e.name, arguments: e.args }; }
-      if (e.kind === 'end') {
-        yield { type: 'step_end' };
-        yield { type: 'done', usage: { inputTokens: e.inputTokens, outputTokens: e.outputTokens }, finishReason: e.reason === 'length' ? 'length' : e.reason === 'filtered' ? 'content_filter' : 'stop' };
-      }
-    }
-  }
-
-  async embed(ctx: KvoxAiContext, req: { inputs: string[] }): Promise<KvoxEmbedResult> {
-    const caps = await this.capabilities(ctx);
-    if (!caps.embeddings || !this.copilot.embed) throw new KvoxAiError('capability', 'No embeddings model.');
-    const vectors = await this.copilot.embed({ model: caps.embeddings.model, inputs: req.inputs });
-    return { model: caps.embeddings.model, dimensions: caps.embeddings.dimensions, vectors };   // one vector per input
-  }
-
-  countTokens(_target: KvoxAiTarget, text: string): number {
-    return Math.ceil(text.length / 4);   // synchronous; replace with the model's tokenizer. Over-count rather than under-count.
-  }
-
-  /** Maps the SDK's failures to port errors; the retry-after of a 429 rides on the error. */
-  private async *run(ctx: KvoxAiContext, args: Parameters<CopilotLike['step']>[0]) {
-    try { yield* this.copilot.step({ ...args, signal: ctx.signal }); }
-    catch (error) { throw toKvoxAiError(error); }
-  }
-  private off(reason: KvoxAiCapabilities['reason']): KvoxAiCapabilities {
-    return { available: false, reason, structuredOutput: false, toolCalling: false, embeddings: null, graphEnabled: false };
-  }
-  private async collect(_ctx: KvoxAiContext, _req: unknown, _prompt: string): Promise<{ value: string; usage: { inputTokens: number | null; outputTokens: number | null } }> {
-    throw new Error('Illustrative: gather generateText-style deltas into one string.');
-  }
-}
-
-function toKvoxAiError(error: unknown): KvoxAiError {
-  const e = error as { status?: number; code?: string; retryAfterMs?: number; name?: string };
-  if (e.status === 401 || e.status === 403) return new KvoxAiError('auth', 'Copilot rejected the credentials.');          // never include the token
-  if (e.status === 429) return new KvoxAiError('rate_limit', 'Copilot is rate limiting.', e.retryAfterMs ?? 5000);          // the job defers on the user's own bucket
-  if (e.code === 'content_filter') return new KvoxAiError('refusal', 'The model declined to answer.');
-  if (e.code === 'context_length_exceeded') return new KvoxAiBudgetError(0, 0);   // fill in the real numbers; do not truncate
-  if (e.name === 'AbortError' || e.code === 'ETIMEDOUT') return new KvoxAiError('timeout', 'The model call timed out.');
-  return new KvoxAiError('other', 'The model call failed.');   // a scrubbed message: no tokens, no request bodies
-}
+const copilot = createCopilotAdapter({
+  optIn: settings.copilotEnabled,   // the user's own setting; default false; anything but true throws
+  transport: createSdkCopilotTransport({
+    baseDirectory: join(app.getPath('userData'), 'copilot'), // app-private: never the user's own Copilot CLI directory
+    workingDirectory: emptyDir,                                // EMPTY, so no AGENTS.md, CLAUDE.md, skills or MCP are found
+  }),
+});
+const runtime = createDirectRuntime({
+  adapters: { openai: openAiAdapter, copilot },
+  keys: async (provider) =>
+    provider === 'copilot' ? { apiKey: AI_KEYLESS_API_KEY } : keychainKey(provider), // the adapter ignores the Copilot value
+});
+const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog: copilot.kvox.catalog });
 ```
 
-Points the sketch must keep, because the slices depend on them:
+- Build the adapter only when the setting is on. `createCopilotAdapter` throws a plain `Error` otherwise, so a code path that forgot the check fails loudly.
+- `catalog: copilot.kvox.catalog` is how `createKvoxAi` learns, per model, that `toolCalling` is `false` and whether structured output is `native` or `prompted`. Without it a Claude model would be sent a native schema it may not honour.
+- The task-model source lists Copilot models from `adapter.listModels(...)` (needs sign-in; models whose policy is `disabled` are dropped). When the live listing is unavailable, `COPILOT_CATALOG` (version `COPILOT_CATALOG_VERSION`) is a small fallback with conservative limits.
+- Install the optional peer in the Desktop app only: `npm install @github/copilot-sdk`. The web edition never installs it, and the package root never imports it.
 
-- **Offline behaviour.** Everything that calls the model is unavailable without a network and without a Copilot sign-in. When the SDK is offline, `capabilities()` still answers (never throws) with `available: false` and a `reason`; `resolveTask` then throws `key_missing` or `not_configured`. The slices turn those into the product's 409s with `details.reason`; reading and editing existing data keeps working ([Offline constraints](#offline-constraints-feature-by-feature)). A queued AI job that fails with `rate_limit` defers; one that fails with another class fails the job with its message.
-- **Rate limits.** The adapter throws `KvoxAiError('rate_limit', message, retryAfterMs)`. The handlers translate it into `KvoxRateLimitError` on the user's own throttle bucket, which defers the job without spending an attempt. (The issue text says the adapter throws `KvoxRateLimitError`; the code puts that error class in the job handlers' hands.)
-- **Embeddings.** With `embeddings: null`, search answers with full text only and the reason `embeddings_unavailable`, `search.index` records why nothing was embedded, and the graph's resolution skips the vector candidate source. A model whose vectors are not 1536 wide gets the same answer and a one-time warning.
-- **Structured output.** The port returns a value validated against the caller's Zod schema or throws; `invalid_output` is the class for "the answer was not the requested JSON", `capability` for "this model cannot do structured output at all".
-- **The token budget** uses `target.contextWindowTokens`, `target.maxOutputTokens` and the synchronous `countTokens`. Be conservative: an under-count turns into a provider error mid-job.
-- **Prove it** with `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)).
+### The opt-in setting
+
+Add a Copilot switch to the Desktop settings, default **off**. Turning it on must show, before it takes effect, that notes and transcript text are sent to GitHub, and link the GitHub terms of service (section J, the training opt-out) so the user can check their plan. Turning it off removes the adapter from `adapters` and from the model picker. Do not enable it by default, in a migration or in an installer.
+
+### Sign-in
+
+The SDK owns sign-in. No GitHub or Copilot token passes through KVox code: `gitHubToken` is never set, the runtime reads the user's own credentials (`useLoggedInUser`), and the `keys` reader answers `AI_KEYLESS_API_KEY`. The shell offers a "Sign in to GitHub Copilot" action that starts the SDK's flow (the SDK's sign-in APIs are experimental in 1.0.22; check them when bumping), then reads `copilot.authStatus()` (`{ signedIn, login }`) to show the account. A call while signed out fails with `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`: the same 409 with `details.reason` as a missing OpenAI key. `verifyKey` answers "is the user signed in" without throwing.
+
+### Packaging
+
+The SDK drives a per-platform Copilot runtime binary, about 133 to 174 MB unpacked. Bundle it with the app per platform (D6, packaging: [desktop plan](../desktop/README.md)), or download it on first use if the installer size matters. Either way it runs in the main process. Give the SDK a private `baseDirectory`: the runtime writes session state there, and the adapter deletes every session it creates in a `finally`.
+
+### What the adapter does for you
+
+- Zero tools. Every built-in Copilot tool is disabled and every permission request is rejected. The adapter reads the session's live tool list and aborts if it is not empty.
+- Our system prompt replaces the SDK's. The runtime's date prefix is suppressed.
+- One session per call, deleted when the call settles (the runtime would otherwise keep the prompt on disk).
+- `rate_limit`, `auth`, `refusal`, `truncated` and `invalid_output` reach the app as the usual `KvoxAiError` classes. The SDK retries 429 and 401 on its own; the adapter aborts on the first `model.call_failure` so kvox-ai owns retries, and 1.0.22 gives no retry-after, so a rate limit is deferred on the job's default back-off.
+- On `length` the session is aborted at once (the runtime would otherwise continue by itself). The SDK has no per-call output cap for Copilot-hosted models, so `maxOutputTokens` is not sent.
+
+Points the Desktop host must keep, because the slices depend on them:
+
+- **Offline behaviour.** Everything that calls a model needs a network and, for Copilot, a sign-in. `capabilities()` still answers (never throws) with `available: false` and a `reason`; `resolveTask` then throws `key_missing` or `not_configured`. The slices turn those into the product's 409s with `details.reason`; reading and editing existing data keeps working ([Offline constraints](#offline-constraints-feature-by-feature)). A queued AI job that fails with `rate_limit` defers; one that fails with another class fails the job with its message.
+- **Embeddings.** With `embeddings: null`, search answers with full text only and the reason `embeddings_unavailable`, `search.index` records why nothing was embedded, and the graph's resolution skips the vector candidate source.
+- **Token budget.** The budget uses `target.contextWindowTokens`, `target.maxOutputTokens` and the synchronous `countTokens`. Copilot limits come from the live listing, else the fallback catalog; both are estimates, so stay conservative.
+- **Prove it** with `describeKvoxAiConformance`, `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)). The Copilot adapter runs the first over `createCopilotMockTransport()`; Ask is proven on the OpenAI path only.
 
 ## Jobs offline
 
@@ -829,7 +765,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ## Evaluating extraction quality: `kvox-eval`
 
-`@marinoscar/kvox-eval` (the sixth package; issue #580) holds the knowledge-graph and Ask evaluation: the synthetic golden set (`fixtures/kg-golden/`), the scorers, the report and the `kvox-eval` command. It is written only against the model port, so it measures the prompts, schemas and validators the product ships. Desktop runs `kvox-eval kg` in its own CI with its own binding: `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime` (key in `KVOX_EVAL_OPENAI_API_KEY`, environment only), the same call the web edition's `npm run kg:eval` makes. `kvox-eval kg --predictions gold` is the harness self-test and must print 1.000 everywhere. `--provider copilot` refuses until the Copilot adapter lands (#581), and `kvox-eval ask` is not available yet (the headless Ask run is a follow-up). The request-level parity check (#580 part 2) proves the harness is the same: `@marinoscar/kvox-eval/parity` drives the product's own notes, extraction, adjudication and Ask code through a `KvoxAiPort` and the recorded provider requests must equal the snapshots shipped in the package (`parity/`). Desktop runs it in its own CI over its binding: `runParityScenario(createKvoxAi({ runtime, taskModels: parityTaskModelSource() }), { script })` with `createParityScript()` as the scripted provider, where `runtime` is `createDirectRuntime` with `createRecordingAdapter(script)` as its adapter (or `createRecordingRuntime` around the runtime Desktop already uses), then `withRecordedFeatures(adapter.requests(), runtime.requests())` compared with `loadParitySnapshot('m01')` to `'m10'` and `'ask'`. A mismatch means Desktop's harness differs from the web edition's; no key and no network are needed. Reference: [packages/kvox-eval/src/parity/README.md](../../packages/kvox-eval/src/parity/README.md). Reference: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md).
+`@marinoscar/kvox-eval` (the sixth package; issue #580) holds the knowledge-graph and Ask evaluation: the synthetic golden set (`fixtures/kg-golden/`), the scorers, the report and the `kvox-eval` command. It is written only against the model port, so it measures the prompts, schemas and validators the product ships. Desktop runs `kvox-eval kg` in its own CI with its own binding: `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime` (key in `KVOX_EVAL_OPENAI_API_KEY`, environment only), the same call the web edition's `npm run kg:eval` makes. `kvox-eval kg --predictions gold` is the harness self-test and must print 1.000 everywhere. `--provider copilot` refuses until the Copilot adapter lands (#581), and `kvox-eval ask` (issue #608) runs the Ask evaluation headless over the same binding: an in-memory PGlite, the golden graph seeded through `GraphWriteService`, the real `ask.respond` handler, no real database (`kvox-eval ask --replay` needs no key; peers and usage: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md)). The request-level parity check (#580 part 2) proves the harness is the same: `@marinoscar/kvox-eval/parity` drives the product's own notes, extraction, adjudication and Ask code through a `KvoxAiPort` and the recorded provider requests must equal the snapshots shipped in the package (`parity/`). Desktop runs it in its own CI over its binding: `runParityScenario(createKvoxAi({ runtime, taskModels: parityTaskModelSource() }), { script })` with `createParityScript()` as the scripted provider, where `runtime` is `createDirectRuntime` with `createRecordingAdapter(script)` as its adapter (or `createRecordingRuntime` around the runtime Desktop already uses), then `withRecordedFeatures(adapter.requests(), runtime.requests())` compared with `loadParitySnapshot('m01')` to `'m10'` and `'ask'`. A mismatch means Desktop's harness differs from the web edition's; no key and no network are needed. Reference: [packages/kvox-eval/src/parity/README.md](../../packages/kvox-eval/src/parity/README.md). Reference: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md).
 
 ## Version policy
 
