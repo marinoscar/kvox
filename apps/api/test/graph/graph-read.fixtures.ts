@@ -49,6 +49,13 @@ export async function createUser(prisma: PrismaClient, prefix: string, suffix: s
  * both sides of it anyway — this is cleanup, not a write path any production
  * code exercises, so skipping the check is safe. `SET LOCAL` is
  * transaction-scoped and never leaks to the connection pool's next borrower.
+ *
+ * The same setting also disables the foreign-key RI triggers, so
+ * `user.deleteMany` does NOT cascade: every `ON DELETE CASCADE` child of a user
+ * that a spec using these fixtures can leave behind is deleted EXPLICITLY below,
+ * before the users. Otherwise the rows stay as orphans whose owner is gone and
+ * break any later spec that asserts a table is empty (the factory reset spec).
+ * When a spec using this helper starts creating a new user-owned table, add it here.
  */
 export async function cleanupGraphFixtures(prisma: PrismaClient, prefix: string): Promise<void> {
   const owner = { owner: { email: { startsWith: prefix } } };
@@ -67,7 +74,15 @@ export async function cleanupGraphFixtures(prisma: PrismaClient, prefix: string)
       await tx.transcriptSegment.deleteMany({ where: { transcript: owner } });
       await tx.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
       await tx.transcript.deleteMany({ where: owner });
+      // kvox_object_ownership cascades from storage_objects, which `replica` stops.
+      await tx.kvoxObjectOwnership.deleteMany({ where: { object: { uploadedBy: userFilter } } });
       await tx.storageObject.deleteMany({ where: { uploadedBy: userFilter } });
+      // Cascade children of users / ask_conversations, which `replica` stops cascading.
+      await tx.askMessage.deleteMany({ where: { conversation: owner } });
+      await tx.askConversation.deleteMany({ where: owner });
+      await tx.kgEntityDigest.deleteMany({ where: owner });
+      await tx.kgGraphLayout.deleteMany({ where: owner });
+      await tx.userSettings.deleteMany({ where: { user: userFilter } });
       await tx.noteVersion.deleteMany({ where: { note: owner } });
       await tx.note.deleteMany({ where: owner });
       await tx.user.deleteMany({ where: userFilter });

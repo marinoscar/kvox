@@ -53,7 +53,8 @@ describeWithDb('Ask conversations (real Postgres)', () => {
   afterEach(async () => {
     if (!dbReachable) return;
     await prisma.auditEvent.deleteMany({ where: { actorUser: { email: { startsWith: EMAIL_PREFIX } } } });
-    // ask_conversations (and their messages) go with their owner — Cascade.
+    // cleanupGraphFixtures deletes ask_messages and ask_conversations explicitly: it runs
+    // with session_replication_role = replica, so deleting the owner does not cascade.
     await cleanupGraphFixtures(prisma, EMAIL_PREFIX);
   }, 60_000);
 

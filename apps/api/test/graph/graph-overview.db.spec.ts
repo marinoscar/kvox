@@ -66,7 +66,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     if (!dbReachable) return;
     await prisma.job.deleteMany({ where: { type: KG_GRAPH_LAYOUT_JOB_TYPE, subjectId: { in: owners } } });
     owners.length = 0;
-    // kg_graph_layouts rows go with their owner (owner_id Cascade).
+    // cleanupGraphFixtures deletes kg_graph_layouts explicitly (replica role: no cascade from the owner).
     await cleanupGraphFixtures(prisma, EMAIL_PREFIX);
   }, 60_000);
 
