@@ -113,7 +113,7 @@ never enables `personal` is offered none of it.
 the **same** meetings: ≥ 40 hand-written questions with expectations, scored
 against the Ask agent (#377/#378) rather than against extraction. It is
 validated by `packages/kvox-eval/test/ask-eval-questions.spec.ts`, scored by
-`npm run ask:eval --workspace=api`, and its schema lives in
+`kvox-eval ask` (headless; `npm run ask:eval --workspace=api` is a wrapper), and its schema lives in
 `packages/kvox-eval/src/ask/question-schema.ts`. See that file's own comments
 for the full contract (`category`, `expected.{entities,answerAll,answerNone,
 citeFrom,notFound}`); the short version:
@@ -124,7 +124,7 @@ citeFrom,notFound}`); the short version:
 - A question's `id` (`q01`, `q02`, …) is **permanent** once committed, for the
   identical reason a fixture's `id` is: a report stays comparable run over
   run. Retire a question by noting it here, never by renumbering.
-- The seeder (`apps/api/scripts/ask-eval/seed-graph.ts`) always loads **every**
+- The seeder (`seedGoldenGraph` in `packages/kvox-eval/src/ask-run/seed-golden-graph.ts`) always loads **every**
   fixture in this directory and writes the meetings' hand LABELS (never a
   model's extraction) as the graph the agent is asked about — so a question's
   `fixtures` field is provenance for a reviewer, not a scoping instruction.
