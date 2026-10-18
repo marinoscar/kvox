@@ -14,7 +14,7 @@ Status: interfaces (issue #579). `createKvoxAi` (`port` slice) implements `KvoxA
 
 ## Peer dependencies
 
-`@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`, as types: `AiResponseRequest`, `AiResponse`, `AiStreamEvent`). It imports the `types`, `features` and `tasks` slices.
+`@marinoscar/platform-ai-providers` (as types: `AiResponseRequest`, `AiResponse`, `AiStreamEvent`). It imports the `types`, `features` and `tasks` slices.
 
 ## Configuration
 

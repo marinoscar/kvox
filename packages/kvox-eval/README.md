@@ -21,7 +21,7 @@ Entry points:
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-api@0.1.0-next.5 zod \
+npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-ai-providers@0.1.0-next.6 openai zod \
   @electric-sql/pglite@0.5.10 @electric-sql/pglite-pgvector@0.0.11 @electric-sql/pglite-socket@0.2.13 \
   @prisma/client @prisma/adapter-pg pg @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
@@ -34,7 +34,8 @@ Every slice is universal, so every peer is required, including those only `ask-r
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` | `fixtures`, `kg` (the ontology registry), `ask` (the Ask wire types) |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `kg` (the extraction pipeline, `graph-extraction` and `graph`), `live` and `cli` (`KvoxAiPort`, `KvoxAiError`) |
 | `@marinoscar/kvox-ai` | `>=0.0.0-0 \|\| >=0.1.0-0` | `live` (`createKvoxAi`, `createDirectRuntime`) |
-| `@marinoscar/platform-api` | `0.1.0-next.5` (exact, the repository's platform pin) | `live` and `cli`: the OpenAI and OpenAI-compatible adapters; `ask-run`: the provider event types of the replay. Only `@marinoscar/platform-api/ai`, as in `@marinoscar/kvox-ai`; an interim peer until the lean adapter package of #578. |
+| `@marinoscar/platform-ai-providers` | `0.1.0-next.6` (exact) | `live` and `cli`: `createOpenAiAdapter` and `createOpenAiCompatibleAdapter` from the `/openai` subpath; `parity`, `ask-run`: the provider event types. Only the package root and `/openai` are imported; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
+| `openai` | `^7.23.0` | `live`: the OpenAI SDK that the lean `/openai` factories build their client from. Required, because `live` constructs the SDK client. |
 | `@electric-sql/pglite` | `0.5.10` (exact) | `ask-run`: the in-memory PostgreSQL |
 | `@electric-sql/pglite-pgvector` | `0.0.11` (exact) | `ask-run`: the `vector` extension the migrations create |
 | `@electric-sql/pglite-socket` | `0.2.13` (exact) | `ask-run`: the loopback socket the Prisma client connects to |
@@ -133,11 +134,11 @@ None: no log, metric or span (the Ask run's Nest context logs errors and warning
 
 ## Security notes
 
-- The API key is read from the environment only, never a flag. It is handed to `createDirectRuntime`'s `keys()` per call and never logged, printed, put in an error or written into a prediction or a report (a prediction carries `model` alone). A failed live call is reported by its `KvoxAiError` class, the platform error code and the HTTP status, never a message body.
+- The API key is read from the environment only, never a flag. It is handed to `createDirectRuntime`'s `keys()` per call and never logged, printed, put in an error or written into a prediction or a report (a prediction carries `model` alone). A failed live call is reported by its `KvoxAiError` class, the provider error code and the HTTP status, never a message body.
 - Real meetings never enter the repository: `--real-dir`, `--out` of a real-data run and `KG_EVAL_REAL_DIR` are refused (exit 3) when they resolve inside the git work tree, symlinks included (`assertOutsideRepo`).
 - The golden set is synthetic; its spec rejects a real-looking email address, a phone number and the product's name.
 - The Ask run uses an in-memory PGlite only: it has no connection string to a real database, so it cannot read or write one. The key never enters that database.
-- Apart from the `ask-run` slice (Prisma, Nest, PGlite), the source imports no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-api/ai` (rule `host-neutral` of `npm run check:kvox-slice-peers`).
+- Apart from the `ask-run` slice (Prisma, Nest, PGlite), the source imports no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-ai-providers` and its `/openai` subpath (rule `host-neutral` of `npm run check:kvox-slice-peers`).
 
 ## Conformance suite
 

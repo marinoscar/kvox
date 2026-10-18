@@ -25,7 +25,7 @@ Status: issue #608 (from the web app's `apps/api/scripts/ask-eval/run.ts` and `s
 
 ## Peer dependencies
 
-`@electric-sql/pglite` (0.5.10), `@electric-sql/pglite-pgvector` (0.0.11), `@electric-sql/pglite-socket` (0.2.13), `@prisma/client`, `@prisma/adapter-pg`, `pg`, `@nestjs/common`, `@nestjs/core` (with `reflect-metadata` and `rxjs`), `zod`, `@marinoscar/kvox-api` (the slices and `testing`), `@marinoscar/kvox-ai` (`createKvoxAi`, and `testing` for the replay), `@marinoscar/kvox-contract` (types) and `@marinoscar/platform-api` (only `@marinoscar/platform-api/ai`, the provider event types of the replay). The domain slices' own peers (`@nestjs/swagger`, `nestjs-zod`, `graphology` and so on) are `@marinoscar/kvox-api`'s.
+`@electric-sql/pglite` (0.5.10), `@electric-sql/pglite-pgvector` (0.0.11), `@electric-sql/pglite-socket` (0.2.13), `@prisma/client`, `@prisma/adapter-pg`, `pg`, `@nestjs/common`, `@nestjs/core` (with `reflect-metadata` and `rxjs`), `zod`, `@marinoscar/kvox-api` (the slices and `testing`), `@marinoscar/kvox-ai` (`createKvoxAi`, and `testing` for the replay), `@marinoscar/kvox-contract` (types) and `@marinoscar/platform-api` (only `@marinoscar/platform-ai-providers`, the provider event types of the replay). The domain slices' own peers (`@nestjs/swagger`, `nestjs-zod`, `graphology` and so on) are `@marinoscar/kvox-api`'s.
 
 ## Configuration
 
