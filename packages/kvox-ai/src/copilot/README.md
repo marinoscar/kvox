@@ -17,7 +17,7 @@
 
 Status: implemented by issue #581 (the adapter) and issue #630 (sign-in and sign-out, `prepareCopilotRuntime`, `COPILOT_EGRESS_HOSTS`, and `routeKvoxTasks` in the package root), published on the `next` dist-tag. Ask is not offered on Copilot: `toolCalling` is `false`. Opt-in only: `createCopilotAdapter` throws unless `optIn === true`; the host passes the user's own opt-in setting, which defaults to OFF. The SDK findings behind sign-in, the runtime, the egress hosts and telemetry, each marked verified, read or inferred, are in [SPIKE.md](SPIKE.md). Not yet done: a complete sign-in against a real GitHub account, and a wire capture of the hosts the runtime contacts.
 
-## Sign-in and sign-out
+### Sign-in and sign-out
 
 The Copilot runtime runs the sign-in; no token reaches KVox code. The SDK's account RPCs are experimental and live on a SESSION, so the real transport opens a short-lived, zero-tool session for each sign-in or sign-out and deletes it afterwards. Check them when you bump the SDK.
 
@@ -55,7 +55,7 @@ A runtime `error` step maps like any other failure (`copilot-errors.ts`) and car
 2. Broad OAuth scopes. The authorize URL asks for `read:user read:org repo gist codespace write:plugin_gateway_connections` (verified), far more than Copilot inference needs. The runtime owns the scopes and the consent screen shows them, so tell the user before they sign in.
 3. Ambient credentials. `useLoggedInUser: true` also picks up a GitHub CLI login (`gh auth`) and token environment variables (`GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN`). A user signed in to `gh` appears signed in to KVox without signing in, and `signOut()` cannot remove such a credential. The transport does not strip those variables (a follow-up could, through the client's `env` option).
 
-## The runtime
+### The runtime
 
 `@github/copilot-sdk` drives a per-platform runtime of about 133 to 174 MB. The SDK downloads nothing: the runtime ships as the optional npm dependency `@github/copilot-sdk-<platform>` (eight platforms), whose `prebuilds/<platform>/` holds a small launcher (`copilot-runtime`, `copilot-runtime.exe` on Windows) beside a large `runtime.node`; the launcher needs its sibling. The SDK ships no checksum or release manifest for it (SPIKE.md section 3).
 
@@ -79,7 +79,7 @@ const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, w
 
 `createSdkCopilotTransport` has no option that takes `runtimePath`. The spike read that the SDK lets the connection `path` or the `COPILOT_CLI_PATH` environment variable of the runtime process override the bundled package (not exercised); pointing the SDK at `runtimePath` is the host's step.
 
-## Egress hosts
+### Egress hosts
 
 `COPILOT_EGRESS_HOSTS` is the one list for a host that allowlists outbound traffic (a desktop egress allowlist, a proxy rule, a firewall). Plain hostnames, no scheme, no wildcard:
 
@@ -93,7 +93,7 @@ It is INFERRED, not measured: no traffic was captured against a signed-in runtim
 
 **Telemetry.** No dedicated telemetry host was found. SDK-level OpenTelemetry is off unless the client is given `telemetry`, and KVox passes none. The runtime itself carries a GitHub product-telemetry service, and the spike found no documented switch to turn it off; `copilotSessionConfig` sets none. Do not tell users that Copilot sends no telemetry. A host not on the allowlist cannot receive it, so the allowlist is the control that works. Where session telemetry goes is not stated in the SDK; it is inferred to be one of the hosts above.
 
-## Routing the tasks
+### Routing the tasks
 
 Copilot has no tool calling and no embeddings, so a host with Copilot as its primary provider routes Ask and the two embedding tasks elsewhere. That is `routeKvoxTasks`, in the package ROOT (`@marinoscar/kvox-ai`), not in this entry, and it is pure and provider-agnostic: see [src/routing/README.md](../routing/README.md). Pass the adapter's `kvox.toolCalling` and `kvox.embeddings` in the `ProviderChoice`.
 

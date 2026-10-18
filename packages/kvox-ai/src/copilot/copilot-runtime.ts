@@ -93,8 +93,13 @@ export interface CopilotRuntimeFs {
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   /** `fs.promises.rm` (always recursive and forced). */
   rm(path: string, options: { recursive: true; force: true }): Promise<void>;
-  /** `fs.promises.stat`. */
-  stat(path: string): Promise<{ isFile(): boolean; size: number }>;
+  /** `fs.promises.stat`: whether the path is a file, and its size in bytes. */
+  stat(path: string): Promise<{
+    /** Whether the path is a regular file. */
+    isFile(): boolean;
+    /** The size in bytes. */
+    size: number;
+  }>;
   /** `fs.promises.readFile` as UTF-8 text. */
   readFile(path: string, encoding: 'utf8'): Promise<string>;
   /** `fs.promises.writeFile` of UTF-8 text. */
@@ -104,7 +109,12 @@ export interface CopilotRuntimeFs {
   /** `fs.promises.chmod`. */
   chmod(path: string, mode: number): Promise<void>;
   /** `fs.promises.open` for exclusive writing (`wx`). */
-  open(path: string, flags: 'wx'): Promise<{ write(data: Uint8Array): Promise<unknown>; close(): Promise<void> }>;
+  open(path: string, flags: 'wx'): Promise<{
+    /** Writes one chunk. */
+    write(data: Uint8Array): Promise<unknown>;
+    /** Closes the file. */
+    close(): Promise<void>;
+  }>;
   /** `fs.createReadStream`, as the chunks it yields. */
   createReadStream(path: string): AsyncIterable<Uint8Array | string>;
 }
