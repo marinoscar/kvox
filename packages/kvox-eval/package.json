@@ -62,9 +62,9 @@
     "predocs": "node scripts/prepare-host.mjs",
     "docs": "typedoc --options typedoc.json",
     "pretest": "node scripts/prepare-host.mjs",
-    "test": "jest -c test/jest.config.js",
+    "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js -c test/jest.config.js",
     "pretest:run": "node scripts/prepare-host.mjs",
-    "test:run": "jest -c test/jest.config.js --ci"
+    "test:run": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js -c test/jest.config.js --ci"
   },
   "peerDependencies": {
     "@electric-sql/pglite": "0.5.10",
