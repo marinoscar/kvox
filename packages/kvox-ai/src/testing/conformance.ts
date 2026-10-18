@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import type { AiStreamEvent } from '@marinoscar/platform-api/ai';
-import { AiError } from '@marinoscar/platform-api/ai';
+import type { AiStreamEvent } from '@marinoscar/platform-ai-providers';
+import { AiError } from '@marinoscar/platform-ai-providers';
 import {
   KvoxAiError,
   type KvoxAiContext,

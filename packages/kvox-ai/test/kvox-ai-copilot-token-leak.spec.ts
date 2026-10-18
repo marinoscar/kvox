@@ -1,4 +1,4 @@
-import { AI_KEYLESS_API_KEY, AiError } from '@marinoscar/platform-api/ai';
+import { AI_KEYLESS_API_KEY, AiError } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError, type KvoxAiContext } from '@marinoscar/kvox-api/ports';
 import { z } from 'zod';
 

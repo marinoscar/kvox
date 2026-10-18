@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 
-import { AiError, type AiProviderAdapter, type AiResponse } from '@marinoscar/platform-api/ai';
+import { AiError, type AiProviderAdapter, type AiResponse } from '@marinoscar/platform-ai-providers';
 
 import { main } from '../src/cli/main';
 import { KG_EVAL_EXIT, runKgCommand, type EvalCommandIo } from '../src/cli/kg-command';

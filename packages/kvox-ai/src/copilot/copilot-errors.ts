@@ -1,4 +1,4 @@
-import { AiError, type AiErrorCode } from '@marinoscar/platform-api/ai';
+import { AiError, type AiErrorCode } from '@marinoscar/platform-ai-providers';
 
 // =============================================================================
 // GitHub Copilot failures as platform `AiError`s, and the token redaction (#581)

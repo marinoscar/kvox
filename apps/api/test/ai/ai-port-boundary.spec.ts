@@ -23,8 +23,8 @@
 //      strict structured output, the chat mapping, the task chooser, token counts, the
 //      embedding catalog, the error translation and the port itself, `createKvoxAi`) make `packages/kvox-ai/src/` the one other home of the
 //      platform AI package, on a tighter rule than `ai-port/`: it imports exactly the
-//      public subpath `@marinoscar/platform-api/ai` (no other platform subpath, no
-//      deeper path), and no Nest, no Prisma and no `@app/shared`, because KVox Desktop
+//      lean provider package `@marinoscar/platform-ai-providers` (#578; no
+//      `@marinoscar/platform-api`, no other platform package or subpath), and no Nest, no Prisma and no `@app/shared`, because KVox Desktop
 //      installs it without the platform's runtime. `npm run check:kvox-slice-peers`
 //      (rule `host-neutral`) enforces the platform half for the package; this spec
 //      states it from the app's side, next to the rule it extends.
@@ -56,10 +56,13 @@ const PLATFORM_AI = '@marinoscar/platform-api/ai';
 /** Directories (under `src/`) that may import the platform AI package. */
 const PLATFORM_AI_HOMES = ['ai-port/', 'platform/ai/'];
 
-/** The package the model mechanics moved to (#579): the other home of the platform AI package (rule 4). */
+/** The lean provider-adapter package `packages/kvox-ai/src/` imports instead of the platform AI package (#578). */
+const LEAN_PROVIDERS = '@marinoscar/platform-ai-providers';
+
+/** The package the model mechanics moved to (#579): imports the lean provider package, not the platform AI package (rule 4). */
 const KVOX_AI_PACKAGE_SRC = resolve(__dirname, '../../../../packages/kvox-ai/src');
 
-/** What `packages/kvox-ai/src/` may never import (rule 4), besides any platform specifier but {@link PLATFORM_AI}. */
+/** What `packages/kvox-ai/src/` may never import (rule 4), besides any platform specifier but {@link LEAN_PROVIDERS}. */
 const KVOX_AI_PACKAGE_FORBIDDEN = [/^@nestjs\//, /^@prisma\//, /^prisma$/, /^@app\/shared(\/|$)/];
 
 /**
@@ -256,14 +259,14 @@ describe('the AI port boundary (#475)', () => {
       })),
     );
 
-    it('is scanned at all, and does import the platform AI package (so the rule below is not vacuous)', () => {
+    it('is scanned at all, and does import the lean provider package (so the rule below is not vacuous)', () => {
       expect(packageEdges.length).toBeGreaterThan(0);
-      expect(packageEdges.some(({ specifier }) => specifier === PLATFORM_AI)).toBe(true);
+      expect(packageEdges.some(({ specifier }) => specifier === LEAN_PROVIDERS)).toBe(true);
     });
 
-    it('imports the platform only through exactly @marinoscar/platform-api/ai', () => {
+    it('imports the platform only through exactly @marinoscar/platform-ai-providers', () => {
       const violations = packageEdges
-        .filter(({ specifier }) => specifier.startsWith('@marinoscar/platform-') && specifier !== PLATFORM_AI)
+        .filter(({ specifier }) => specifier.startsWith('@marinoscar/platform-') && specifier !== LEAN_PROVIDERS)
         .map(({ file, line, specifier }) => `${file}:${line} imports "${specifier}"`);
 
       expect(violations).toEqual([]);

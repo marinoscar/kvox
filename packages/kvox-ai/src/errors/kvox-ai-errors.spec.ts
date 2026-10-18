@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { AI_ERROR_CODES, AiError, type AiErrorCode } from '@marinoscar/platform-api/ai';
+import { AI_ERROR_CODES, AiError, type AiErrorCode } from '@marinoscar/platform-ai-providers';
 import { KvoxAiError } from '@marinoscar/kvox-api/ports';
 
 import type { KvoxAiFeatureId } from '../features/index.js';

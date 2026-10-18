@@ -270,25 +270,25 @@
     "types": { "peers": [] },
     "tokens": { "peers": [] },
     "structured": { "peers": ["zod"] },
-    "chat": { "peers": ["@marinoscar/platform-api", "zod"] },
+    "chat": { "peers": ["@marinoscar/platform-ai-providers", "zod"] },
     "embedding": { "peers": [] },
-    "runtime": { "peers": ["@marinoscar/platform-api"] },
-    "errors": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
-    "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
-    "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api", "zod"] },
-    "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] },
-    "copilot": { "peers": ["@github/copilot-sdk", "@marinoscar/platform-api", "zod"] }
+    "runtime": { "peers": ["@marinoscar/platform-ai-providers"] },
+    "errors": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "zod"] },
+    "testing": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "zod"] },
+    "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "zod"] },
+    "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers"] },
+    "copilot": { "peers": ["@github/copilot-sdk", "@marinoscar/platform-ai-providers", "zod"] }
   },
   "kvox-eval": {
     "ask": { "peers": ["@marinoscar/kvox-contract", "zod"] },
     "fixtures": { "peers": ["@marinoscar/kvox-contract", "zod"] },
     "real-data": { "peers": [] },
-    "live": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/platform-api"] },
+    "live": { "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "openai"] },
     "kg": { "peers": ["@marinoscar/kvox-api", "@marinoscar/kvox-contract", "zod"] },
     "parity": {
-      "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/kvox-contract", "@marinoscar/platform-api"]
+      "peers": ["@marinoscar/kvox-ai", "@marinoscar/kvox-api", "@marinoscar/kvox-contract", "@marinoscar/platform-ai-providers"]
     },
-    "cli": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-api"] },
+    "cli": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers"] },
     "ask-run": {
       "peers": [
         "@electric-sql/pglite",
@@ -297,7 +297,7 @@
         "@marinoscar/kvox-ai",
         "@marinoscar/kvox-api",
         "@marinoscar/kvox-contract",
-        "@marinoscar/platform-api",
+        "@marinoscar/platform-ai-providers",
         "@nestjs/common",
         "@nestjs/core",
         "@prisma/adapter-pg",

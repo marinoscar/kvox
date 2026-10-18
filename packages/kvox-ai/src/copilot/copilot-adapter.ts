@@ -16,7 +16,7 @@ import {
   type AiResponsesPort,
   type AiStreamEvent,
   type AiUsage,
-} from '@marinoscar/platform-api/ai';
+} from '@marinoscar/platform-ai-providers';
 import type { z } from 'zod';
 
 import {

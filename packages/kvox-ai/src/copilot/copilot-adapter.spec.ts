@@ -4,7 +4,7 @@ import {
   type AiCallContext,
   type AiResponseRequest,
   type AiStreamEvent,
-} from '@marinoscar/platform-api/ai';
+} from '@marinoscar/platform-ai-providers';
 import { z } from 'zod';
 
 import { copilotSessionConfig, createCopilotAdapter, COPILOT_PROVIDER_ID, type CopilotProviderAdapter } from './copilot-adapter.js';

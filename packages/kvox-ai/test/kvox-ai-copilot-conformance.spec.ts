@@ -4,7 +4,7 @@ import {
   type AiEmbeddingRequest,
   type AiProviderAdapter,
   type AiStreamEvent,
-} from '@marinoscar/platform-api/ai';
+} from '@marinoscar/platform-ai-providers';
 
 import { createCopilotAdapter, createCopilotMockTransport, type CopilotMockReply, type CopilotMockTransport } from '../src/copilot/index.js';
 import { createDirectRuntime } from '../src/direct/index.js';
