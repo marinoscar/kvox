@@ -7,7 +7,7 @@ npm run test:host:prepare -w @marinoscar/kvox-api   # no database needed
 npm run test:db -w @marinoscar/kvox-api             # needs PostgreSQL 16 with pgvector
 ```
 
-`prepare.mjs` removes `prisma/` and `generated/` and rebuilds them: `platform db sync`, `platform db compose`, `kvox-db sync --names after-host` (the domain migrations are dated before the platform tables a fresh host installs, so they take host-relative names), `platform db compose` again, then `prisma generate` with the generator output pointed at `generated/` so this client never overwrites the application's. Both folders are git-ignored.
+`prepare.mjs` removes `prisma/` and `generated/` and rebuilds them: `platform db sync --timestamp 2024-01-01T00:00:00Z` (pinned before the domain's September-2026 ids so the platform tables come first and their names are deterministic), `platform db compose`, `kvox-db sync --names stable` (names derived from the package ids only), `platform db compose` again, then `prisma generate` with the generator output pointed at `generated/` so this client never overwrites the application's. Both folders are git-ignored.
 
 `db.ts` is what a spec imports:
 

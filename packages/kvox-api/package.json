@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-api",
-  "version": "0.0.0",
+  "version": "0.1.0-next.0",
   "description": "The NestJS side of the KVox domain: host ports, in-memory fakes and, later, the domain slices (CommonJS).",
   "license": "MIT",
   "type": "commonjs",
@@ -85,6 +85,10 @@
       "types": "./dist/graph-rdf/index.d.ts",
       "default": "./dist/graph-rdf/index.js"
     },
+    "./graph-rdf/shacl-runner": {
+      "types": "./dist/graph-rdf/shacl-runner/index.d.ts",
+      "default": "./dist/graph-rdf/shacl-runner/index.js"
+    },
     "./graph-rdf/testing": {
       "types": "./dist/graph-rdf/testing/index.d.ts",
       "default": "./dist/graph-rdf/testing/index.js"
@@ -102,6 +106,7 @@
   "files": [
     "dist",
     "assets",
+    "runners",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -197,7 +202,7 @@
     }
   },
   "devDependencies": {
-    "@marinoscar/kvox-db": "*",
+    "@marinoscar/kvox-db": "0.1.0-next.0",
     "@marinoscar/platform-db": "0.1.0-next.5",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",

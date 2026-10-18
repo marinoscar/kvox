@@ -48,7 +48,9 @@ import {
   MediaAudioTranscodeHandler,
   TRANSCRIPTS_MODULE_OPTIONS,
   TranscriptExportHandler,
+  TranscriptImportService,
   TranscriptNameCheckHandler,
+  TranscriptObjectsService,
   TranscriptPipelineService,
   TranscriptPurgeHandler,
   TranscriptSnapshotHandler,
@@ -60,6 +62,7 @@ import {
   MarkdownTranscriptExporter,
   PdfTranscriptExporter,
   TranscriptExporterRegistry,
+  parseTranscriptImport,
   type ResolvedTranscriptsOptions,
 } from '@marinoscar/kvox-api/transcripts';
 import {
@@ -88,7 +91,7 @@ import { describeTranscriptionProviderConformance } from '@marinoscar/kvox-api/t
 import { AppModule } from '../src/app.module';
 import { SharedTranscriptVisibility } from '../src/kvox/search/shared-transcript-visibility';
 import { TranscriptionConfig } from '../src/kvox/transcription/transcription.config';
-import { KVOX_EMBEDDING } from '../src/ai-port/embedding-catalog';
+import { KVOX_EMBEDDING } from '@marinoscar/kvox-ai';
 import { PERMISSIONS } from '../src/common/constants/roles.constants';
 // The notification and email registries are filled by this import (it is also reached through
 // AppModule); the suites below read them, so name the dependency.
@@ -528,6 +531,27 @@ describeTranscriptsConformance(
       // The slice's service over the given queue and the application's own resolved options.
       pipelineFor: (jobs) =>
         new TranscriptPipelineService({} as never, jobs, {} as never, options, {} as never, {} as never),
+      // The JSON import (#571): the slice's parser, and its service over the kit's in-memory
+      // ports with the application's own resolved options.
+      importer: {
+        parse: parseTranscriptImport,
+        serviceFor: (ports) =>
+          new TranscriptImportService(
+            ports.prisma,
+            ports.events,
+            ports.audit,
+            new TranscriptObjectsService(ports.objectStore, options),
+            new TranscriptPipelineService(
+              {} as never,
+              ports.jobs,
+              {} as never,
+              options,
+              {} as never,
+              // The search index is a peer slice's; the kit asserts on the job port only.
+              { enqueue: async () => undefined } as never,
+            ),
+          ),
+      },
     };
   },
   { describe, it, expect },
@@ -670,6 +694,7 @@ describe('kvox-guarded routes', () => {
       'GraphReadController',
       'GraphResolutionController',
       'NoteGenerationStreamController',
+      'NoteImportController',
       'NoteSourcesController',
       'NoteTemplatesController',
       'NotesController',

@@ -34,13 +34,21 @@
 // Errors are DOMAIN errors (`graph-write.errors.ts`); an HTTP caller maps them
 // with `toGraphHttpException`.
 //
+// ONLY `tx` INSIDE THE CALLER'S TRANSACTION (#615): rule 6 asks two ports
+// (the object store, transcript sharing) that read the database through the
+// root client, which on a one-connection pool (PGlite: KVox Desktop) waits
+// forever for the connection the transaction holds. A caller that cites
+// import objects or shared transcripts calls `prefetchEvidence` BEFORE its
+// transaction and passes the result as `evidenceAccess`; an owned transcript
+// or a note needs nothing.
+//
 // ⚠ Never log a label, a statement, a quote or a props value: a graph is
 // somebody's reading of their private conversations. Ids and counts only.
 // =============================================================================
 
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ONTOLOGY_VERSION,
   validateProps,
@@ -53,7 +61,8 @@ import {
 import type { EvidenceInput } from '../dto/graph-evidence.dto.js';
 import { GRAPH_NOT_FOUND_MESSAGES } from '../access/graph-access.service.js';
 import { toPgRange, type ValidRange } from '../temporal/index.js';
-import { EvidenceValidator } from './evidence-validator.service.js';
+import { EvidenceValidator, type EvidenceAccess } from './evidence-validator.service.js';
+import { ManualEvidence, type GraphEvidenceInput } from './manual-evidence.js';
 import {
   GraphDuplicateError,
   GraphInvariantError,
@@ -84,6 +93,8 @@ export interface CreateEntityInput {
   labelSource: KgAliasSource;
   /** At least one — enforced. */
   evidence: EvidenceInput[];
+  /** The port answers for `evidence`, from `prefetchEvidence` before the transaction (#615). */
+  evidenceAccess?: EvidenceAccess;
 }
 
 export interface CreateRelationInput {
@@ -98,7 +109,13 @@ export interface CreateRelationInput {
   confidence?: number | null;
   reviewStatus: CuratedStatus;
   supersedesId?: string | null;
-  evidence: EvidenceInput[];
+  /**
+   * At least one — enforced. A {@link ManualEvidence} (the owner as the
+   * source, #586) is stored as-is; every other row must be readable.
+   */
+  evidence: GraphEvidenceInput[];
+  /** The port answers for `evidence`, from `prefetchEvidence` before the transaction (#615). */
+  evidenceAccess?: EvidenceAccess;
 }
 
 export interface CreateItemInput {
@@ -123,6 +140,8 @@ export interface CreateItemInput {
   reviewStatus: CuratedStatus;
   supersedesId?: string | null;
   evidence: EvidenceInput[];
+  /** The port answers for `evidence`, from `prefetchEvidence` before the transaction (#615). */
+  evidenceAccess?: EvidenceAccess;
 }
 
 /** A manual edit (§8's second named exception). `type` is always refused. */
@@ -180,6 +199,17 @@ function sameJson(a: unknown, b: unknown): boolean {
 export class GraphWriteService {
   constructor(private readonly evidenceValidator: EvidenceValidator) {}
 
+  /**
+   * The port answers rule 6 needs for `evidence` (cited import objects, cited
+   * transcripts `ownerId` does not own), read through the root client and the ports.
+   * Call it BEFORE opening the transaction the write runs on and pass the result as
+   * `evidenceAccess` (or `addEvidence`'s `access`): on a one-connection pool those
+   * reads would wait for the connection the transaction holds (#615). Read-only.
+   */
+  prefetchEvidence(ownerId: string, evidence: readonly EvidenceInput[]): Promise<EvidenceAccess> {
+    return this.evidenceValidator.prefetch(ownerId, evidence);
+  }
+
   // ===========================================================================
   // Entities
   // ===========================================================================
@@ -205,7 +235,7 @@ export class GraphWriteService {
       ...(input.aliases ?? []),
     ]);
 
-    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx);
+    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx, input.evidenceAccess);
 
     const entity = await tx.kgEntity.create({
       data: {
@@ -430,7 +460,7 @@ export class GraphWriteService {
         throw invalid(`'${input.type}' does not connect a ${fromType} to a ${toType}.`, 'toId');
       }
     } else {
-      const speakerTranscriptId = await this.requireViewableSpeaker(tx, input.ownerId, input.fromSpeakerId!);
+      const speakerTranscriptId = await this.requireViewableSpeaker(tx, input.ownerId, input.fromSpeakerId!, input.evidenceAccess);
       if (claimedLink.speakerId !== undefined && claimedLink.speakerId !== input.fromSpeakerId) {
         throw invalid('props.speakerId must equal fromSpeakerId.', 'props.speakerId');
       }
@@ -449,7 +479,7 @@ export class GraphWriteService {
       if (!older) throw invalid('The relation to supersede is not in your graph.', 'supersedesId');
     }
 
-    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx);
+    const evidence = await this.readableEvidence(input.ownerId, input.evidence, tx, input.evidenceAccess);
 
     const created = await tx.kgRelation.create({
       data: {
@@ -555,7 +585,7 @@ export class GraphWriteService {
       if (duplicate) throw new GraphDuplicateError(hash, duplicate.id);
     }
 
-    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx);
+    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx, input.evidenceAccess);
 
     // Retire the older row FIRST: a restatement that supersedes its own
     // predecessor carries the same hash, and the live-statement index would
@@ -653,6 +683,45 @@ export class GraphWriteService {
   }
 
   /**
+   * Retract a WRONG relation (#586's manual removal; §5.5): a correction, not
+   * an end of validity — the fact was never true, so its range is left as it
+   * was and the row becomes `rejected`: kept for the record, never read again
+   * (every read path filters it out, and #353's planner ignores it). Its
+   * evidence stays; the deferred no-orphans trigger only asks it of
+   * accepted/edited rows.
+   *
+   * An edge this one CLOSED when it was set (`superseded_by_id` = this row,
+   * still live, its upper bound equal to this row's start) is reopened: the
+   * close was a consequence of the wrong fact. Returns the reopened ids,
+   * sorted.
+   */
+  async retractRelation(tx: Tx, ownerId: string, relationId: string): Promise<{ reopenedIds: string[] }> {
+    const relation = await tx.kgRelation.findFirst({
+      where: { id: relationId, ownerId, reviewStatus: { in: LIVE_STATUSES } },
+      select: { id: true },
+    });
+    if (!relation) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.relation);
+
+    const reopened = await tx.$queryRaw<{ id: string }[]>`
+      UPDATE kg_relations AS r
+         SET valid = tstzrange(lower(r.valid), NULL, '[)'),
+             superseded_by_id = NULL,
+             updated_at = now()
+        FROM kg_relations AS wrong
+       WHERE wrong.id = ${relationId}::uuid
+         AND r.superseded_by_id = wrong.id
+         AND r.owner_id = ${ownerId}::uuid
+         AND r.review_status IN ('accepted', 'edited')
+         AND r.valid IS NOT NULL AND NOT upper_inf(r.valid)
+         AND wrong.valid IS NOT NULL AND NOT lower_inf(wrong.valid)
+         AND upper(r.valid) = lower(wrong.valid)
+      RETURNING r.id::text AS id`;
+
+    await tx.kgRelation.update({ where: { id: relationId }, data: { reviewStatus: 'rejected' } });
+    return { reopenedIds: reopened.map((r) => r.id).sort() };
+  }
+
+  /**
    * Fill props a live relation does not carry yet (#444 — a `known` relation
    * row whose statement adds, e.g., a HAS_ROLE's business unit; applied by the
    * proposal commit #366). FILL-ONLY: a key the stored row already holds a
@@ -737,18 +806,20 @@ export class GraphWriteService {
   // ===========================================================================
 
   /**
-   * Add evidence.
+   * Add evidence. `access` is the port answers for `evidence`, from
+   * `prefetchEvidence` before the transaction (#615); without it the ports are asked.
    */
   async addEvidence(
     tx: Tx,
     ownerId: string,
     subjectKind: EvidenceSubjectKind,
     subjectId: string,
-    evidence: EvidenceInput[],
+    evidence: GraphEvidenceInput[],
+    access?: EvidenceAccess,
   ): Promise<KgEvidence[]> {
     if (evidence.length === 0) return [];
     await this.requireOwnedSubject(tx, ownerId, subjectKind, subjectId);
-    const parsed = await this.evidenceValidator.assertReadable(ownerId, evidence, tx);
+    const parsed = await this.readableEvidence(ownerId, evidence, tx, access);
     return tx.kgEvidence.createManyAndReturn({
       data: parsed.map((e) => this.evidenceRow(ownerId, subjectKind, subjectId, e)),
     });
@@ -822,7 +893,40 @@ export class GraphWriteService {
   // Private
   // ===========================================================================
 
-  private requireEvidence(evidence: readonly EvidenceInput[] | undefined): void {
+  /**
+   * Wire citations through `EvidenceValidator` (parsed, every anchor proven
+   * readable); a {@link ManualEvidence} as its own row, which has no anchor to
+   * prove. A 400 still names the indexes of the invalid rows in the CALLER'S
+   * array.
+   */
+  private async readableEvidence(
+    ownerId: string,
+    evidence: readonly GraphEvidenceInput[],
+    tx: Tx,
+    access?: EvidenceAccess,
+  ): Promise<EvidenceInput[]> {
+    const wire: { index: number; row: EvidenceInput }[] = [];
+    evidence.forEach((row, index) => {
+      if (!(row instanceof ManualEvidence)) wire.push({ index, row });
+    });
+    let parsed: EvidenceInput[] = [];
+    if (wire.length > 0) {
+      try {
+        parsed = await this.evidenceValidator.assertReadable(ownerId, wire.map((w) => w.row), tx, access);
+      } catch (err) {
+        const body = err instanceof BadRequestException ? (err.getResponse() as { details?: { invalidEvidence?: number[] } }) : null;
+        if (wire.length === evidence.length || !body?.details?.invalidEvidence) throw err;
+        throw new BadRequestException({
+          ...body,
+          details: { ...body.details, invalidEvidence: body.details.invalidEvidence.map((i) => wire[i].index) },
+        });
+      }
+    }
+    const byIndex = new Map(wire.map((w, i) => [w.index, parsed[i]]));
+    return evidence.map((row, index) => (row instanceof ManualEvidence ? row.toEvidenceInput() : byIndex.get(index)!));
+  }
+
+  private requireEvidence(evidence: readonly GraphEvidenceInput[] | undefined): void {
     if (!evidence || evidence.length === 0) throw new GraphInvariantError('evidence_required');
   }
 
@@ -933,15 +1037,16 @@ export class GraphWriteService {
 
   /**
    * A diarized speaker, in a transcript the owner can view (the evidence rule).
-   * Returns the speaker's transcript id — a speaker link's system prop.
+   * Returns the speaker's transcript id — a speaker link's system prop. An owned
+   * transcript needs no port; a shared one uses `access` when it covers it (#615).
    */
-  private async requireViewableSpeaker(tx: Tx, ownerId: string, speakerId: string): Promise<string> {
+  private async requireViewableSpeaker(tx: Tx, ownerId: string, speakerId: string, access?: EvidenceAccess): Promise<string> {
     const speaker = await tx.transcriptSpeaker.findFirst({
       where: { id: speakerId, transcript: { deletedAt: null } },
       select: { id: true, transcriptId: true },
     });
     const viewable = speaker
-      ? await this.evidenceValidator.viewableTranscriptIds(ownerId, [speaker.transcriptId], tx)
+      ? await this.evidenceValidator.viewableTranscriptIds(ownerId, [speaker.transcriptId], tx, access)
       : new Set<string>();
     if (!speaker || !viewable.has(speaker.transcriptId)) {
       throw invalid('The speaker is not in a transcript you can view.', 'fromSpeakerId');

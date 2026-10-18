@@ -5,177 +5,73 @@
 //   npm run ask:eval --workspace=api -- --model gpt-4o-mini
 //   npm run ask:eval --workspace=api -- --only q01,q22 --model gpt-4o-mini
 //   npm run ask:eval --workspace=api -- --category negative --model gpt-4o-mini
-//   npm run ask:eval --workspace=api -- --keep --model gpt-4o-mini
+//   npm run ask:eval --workspace=api -- --replay
 //
-// Seeds #362's gold graph under a throwaway user in the CURRENT database
-// (never against real data — CLAUDE.md's "synthetic fixtures only, ever"),
-// runs every selected question through the real `ask.respond` handler on a
-// real Nest application context, scores each answer, prints the table, and
-// writes `report.json`/`answers.md` under a git-ignored directory.
+// A THIN WRAPPER (#608): this is `kvox-eval ask` of `@marinoscar/kvox-eval`
+// (`runAskCommand` of `@marinoscar/kvox-eval/ask-run`), run under this script's name with the git-ignored
+// `apps/api/.ask-eval/` as the runs directory. Every flag of the package
+// command works here (`--provider`, `--base-url`, `--min-match`, `--replay`, ...).
 //
-// The API key comes ONLY from `ASK_EVAL_OPENAI_API_KEY` (never a flag) and is
-// stored ONLY on the throwaway user, removed at teardown.
+// The run no longer touches this app's database or its Nest application: the
+// package starts an in-memory PostgreSQL (PGlite), applies the platform and
+// domain migrations, seeds the golden graph through the graph write service and
+// runs every question through the real `ask.respond` handler on the live model
+// port. Nothing outlives the process, so the old `--keep` and `--allow-db`
+// flags have nothing left to do: they are accepted, ignored, and say so.
+//
+// The API key comes ONLY from `KVOX_EVAL_OPENAI_API_KEY` (never a flag;
+// `ASK_EVAL_OPENAI_API_KEY` is still read for one release, #580).
 //
 // Exit codes: 0 pass · 1 a gate failed (citation validity < 1, a sensitive
 // leak) or answer match fell below `--min-match` · 2 configuration error (no
-// key, an unsafe database).
+// key, a refused provider, a bad flag).
 // =============================================================================
 
-// Registers the settings namespaces the DTOs are composed from. Must be the
-// first import (see src/kvox.manifest.ts).
-import '../src/kvox.manifest';
+import { join } from 'path';
 
-import { mkdirSync, writeFileSync } from 'fs';
-import { join, resolve } from 'path';
-import { parseArgs } from 'util';
+import { KVOX_EVAL_API_KEY_ENV, type EvalCommandIo } from '@marinoscar/kvox-eval';
+import { ASK_EVAL_EXIT, DEFAULT_ASK_EVAL_MODEL, runAskCommand } from '@marinoscar/kvox-eval/ask-run';
 
-import { loadGoldenSet } from './kg-eval/load';
-import { formatAnswersMarkdown, buildAskEvalReport, formatAskEvalReport } from './ask-eval/report';
-import {
-  loadAskEvalQuestions,
-  selectAskEvalQuestions,
-  AskEvalQuestionLoadError,
-} from './ask-eval/question-schema';
-import { ASK_EVAL_API_KEY_ENV, DEFAULT_ASK_EVAL_MODEL, runAskEval } from './ask-eval/run';
-import { scoreAnswer } from './ask-eval/scorer';
-import { UnsafeDatabaseError } from './ask-eval/seed-graph';
+export const EXIT = ASK_EVAL_EXIT;
 
-export const EXIT = { ok: 0, failed: 1, config: 2 } as const;
+const USAGE = `usage: ask:eval [--model <id>] [--provider openai|openai-compatible] [--base-url <url>]
+               [--only q01,q07] [--category <c>] [--out <dir>] [--min-match <0..1>]
+       ask:eval --replay      the scripted self-test (no model, no key)
+       reads the API key from ${KVOX_EVAL_API_KEY_ENV} (never a flag); default model ${DEFAULT_ASK_EVAL_MODEL}`;
 
-const QUESTIONS_PATH = resolve(__dirname, '../test/fixtures/kg-golden/ask-questions.json');
+/** The flags the database-backed runner took, which the in-memory run has no use for. */
+const RETIRED_FLAGS = ['--keep', '--allow-db'] as const;
 
-const USAGE = `usage: ask:eval --model <id> [--only q01,q07] [--category <c>] [--out <dir>]
-               [--min-match <0..1>] [--keep] [--allow-db <name>]
-       reads the API key from ${ASK_EVAL_API_KEY_ENV} (never a flag)`;
-
-class UsageError extends Error {}
-
-interface Io {
-  out: (s: string) => void;
-  err: (s: string) => void;
-  env: NodeJS.ProcessEnv;
+/** `argv` without the retired flags (and `--allow-db`'s value), plus which ones were given. */
+export function withoutRetiredFlags(argv: readonly string[]): { args: string[]; retired: string[] } {
+  const args: string[] = [];
+  const retired = new Set<string>();
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--keep') {
+      retired.add('--keep');
+    } else if (arg === '--allow-db') {
+      retired.add('--allow-db');
+      i += 1; // its value
+    } else if (arg.startsWith('--allow-db=')) {
+      retired.add('--allow-db');
+    } else {
+      args.push(arg);
+    }
+  }
+  return { args, retired: RETIRED_FLAGS.filter((flag) => retired.has(flag)) };
 }
 
-function defaultIo(): Io {
+function defaultIo(): EvalCommandIo {
   return { out: (s) => process.stdout.write(`${s}\n`), err: (s) => process.stderr.write(`${s}\n`), env: process.env };
 }
 
-export async function main(argv: string[], io: Io = defaultIo()): Promise<number> {
-  let values: Record<string, string | boolean | undefined>;
-  try {
-    ({ values } = parseArgs({
-      args: argv,
-      strict: true,
-      allowPositionals: false,
-      options: {
-        model: { type: 'string' },
-        only: { type: 'string' },
-        category: { type: 'string' },
-        out: { type: 'string' },
-        'min-match': { type: 'string' },
-        keep: { type: 'boolean' },
-        'allow-db': { type: 'string' },
-        help: { type: 'boolean' },
-      },
-    }));
-  } catch (err) {
-    io.err(`ask:eval: ${(err as Error).message}`);
-    io.err(USAGE);
-    return EXIT.config;
+export async function main(argv: string[], io: EvalCommandIo = defaultIo()): Promise<number> {
+  const { args, retired } = withoutRetiredFlags(argv);
+  if (retired.length > 0) {
+    io.err(`ask:eval: ignoring ${retired.join(' and ')}: the run uses an in-memory database that ends with the process`);
   }
-
-  if (values.help) {
-    io.out(USAGE);
-    return EXIT.ok;
-  }
-
-  const str = (k: string) => (typeof values[k] === 'string' ? (values[k] as string) : undefined);
-  const model = str('model') ?? DEFAULT_ASK_EVAL_MODEL;
-  const minMatchArg = str('min-match');
-  const minMatch = minMatchArg !== undefined ? Number(minMatchArg) : 0.8;
-  if (!Number.isFinite(minMatch) || minMatch < 0 || minMatch > 1) {
-    io.err('ask:eval: --min-match must be a number between 0 and 1');
-    io.err(USAGE);
-    return EXIT.config;
-  }
-
-  // The key gate runs FIRST, and needs no database — a run with no key
-  // configured is a configuration error, not a run that seeds a graph and
-  // then fails partway through.
-  const apiKey = io.env[ASK_EVAL_API_KEY_ENV];
-  if (!apiKey) {
-    io.err(`ask:eval: reads its API key from ${ASK_EVAL_API_KEY_ENV}; it is not set`);
-    return EXIT.config;
-  }
-
-  let questions;
-  try {
-    const all = loadAskEvalQuestions(QUESTIONS_PATH);
-    const only = str('only')
-      ?.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    questions = selectAskEvalQuestions(all, only ?? null, str('category') ?? null);
-  } catch (err) {
-    if (err instanceof AskEvalQuestionLoadError) {
-      io.err(`ask:eval: ${err.message}`);
-      return EXIT.config;
-    }
-    throw err;
-  }
-  if (questions.length === 0) {
-    io.err('ask:eval: no questions selected');
-    return EXIT.config;
-  }
-
-  // `loadGoldenSet()` throws `KgEvalLoadError` on a malformed fixture — that
-  // is a configuration error too, and must not seed a partial graph.
-  try {
-    loadGoldenSet();
-  } catch (err) {
-    io.err(`ask:eval: ${(err as Error).message}`);
-    return EXIT.config;
-  }
-
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const outDir = resolve(str('out') ?? join(__dirname, '../.ask-eval/runs', stamp));
-
-  let handle;
-  try {
-    handle = await runAskEval({
-      questions,
-      model,
-      apiKey,
-      keep: Boolean(values.keep),
-      allowDb: str('allow-db') ?? null,
-    });
-  } catch (err) {
-    if (err instanceof UnsafeDatabaseError) {
-      io.err(`ask:eval: ${err.message}`);
-      return EXIT.config;
-    }
-    throw err;
-  }
-
-  try {
-    const scores = handle.results.map((r) =>
-      scoreAnswer(r.question, r.message, r.capturedPrompts, handle.idMap.evidenceSource, { ms: r.ms }),
-    );
-    const report = buildAskEvalReport(scores, { model, minMatch });
-    io.out(formatAskEvalReport(report));
-
-    mkdirSync(outDir, { recursive: true });
-    writeFileSync(join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
-    const answers = new Map(handle.results.map((r) => [r.question.id, { question: r.question.question, content: r.message.content }]));
-    writeFileSync(join(outDir, 'answers.md'), formatAnswersMarkdown(report, answers));
-    io.err(`ask:eval: report written to ${outDir}`);
-
-    if (!report.gatesPassed || !report.answerMatchPassed) return EXIT.failed;
-    return EXIT.ok;
-  } finally {
-    await handle.teardown();
-    await handle.close();
-  }
+  return runAskCommand(args, io, { name: 'ask:eval', usage: USAGE, syntheticRunsDir: join(__dirname, '../.ask-eval') });
 }
 
 if (require.main === module) {

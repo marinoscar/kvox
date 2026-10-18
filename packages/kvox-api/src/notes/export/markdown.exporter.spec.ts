@@ -51,7 +51,8 @@ describe('MarkdownNoteExporter', () => {
   it('emits front matter by default and omits it on request', async () => {
     const withFront = (await collect(exporter, noteDocument())).toString('utf8');
 
-    expect(withFront.startsWith('---\n')).toBe(true);
+    expect(withFront.startsWith('---\nschema: "kvox.note/v1"\n')).toBe(true);
+    expect(withFront).toContain('bodyFormat: "markdown"');
     expect(withFront).toContain('version: 3');
     expect(withFront).toContain('  type: "transcript"');
 

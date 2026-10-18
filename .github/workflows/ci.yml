@@ -79,6 +79,11 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-web
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -175,6 +180,11 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npm test --workspace=api -- --shard=${{ matrix.shard }}/4
 
@@ -286,6 +296,11 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (issue #580): openapi:typecheck compiles scripts/, whose
+      # kg:eval and ask:eval wrappers import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       # The dump imports AppModule, which imports @prisma/client. Preview mode
       # never instantiates PrismaService, but the generated client still has to
@@ -402,6 +417,8 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -513,6 +530,11 @@ jobs:
       - run: npm run build --workspace=@marinoscar/kvox-contract
       # The API also imports @marinoscar/kvox-api (ports, core) from its built output (issue #490).
       - run: npm run build --workspace=@marinoscar/kvox-api
+      # ...and @marinoscar/kvox-ai (the model mechanics, issue #579), built after kvox-api.
+      - run: npm run build --workspace=@marinoscar/kvox-ai
+      # ...and @marinoscar/kvox-eval (the kg and Ask evaluation, issue #580), built after kvox-ai:
+      # the kg:eval and ask:eval scripts and their specs import it.
+      - run: npm run build --workspace=@marinoscar/kvox-eval
 
       - run: npx prisma generate
         working-directory: apps/api
@@ -534,7 +556,7 @@ jobs:
           NODE_ENV: test
 
       # The kvox-db package applies the platform history and then the domain
-      # history (installed `after-host`) to a database of its own, then runs
+      # history (installed under `stable` names) to a database of its own, then runs
       # `kvox-db check --database` (issue #489). It creates and drops that
       # database next to the one named here, so it runs on one shard only.
       - if: matrix.shard == 1
@@ -543,7 +565,7 @@ jobs:
           DATABASE_URL: ${{ format('postgres://postgres:ci-{0}-{1}-{2}@127.0.0.1:5432/postgres', github.run_id, github.run_attempt, matrix.shard) }}
 
       # The kvox-api real-database tier (issue #492): the test host composes the
-      # platform and domain schema (`kvox-db sync --names after-host`), generates
+      # platform and domain schema (`kvox-db sync --names stable`), generates
       # its own client and migrates a database of its own per spec file next to
       # the one named here, so it too runs on one shard only. `test:host:prepare`
       # needs the `kvox-db` bin, which runs from its built output.

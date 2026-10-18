@@ -14,7 +14,7 @@ Status: filled (Epic 7, issue 7.4).
 
 ## Entry point
 
-- `@marinoscar/kvox-web/notes/headless`: the clients (`getNotes`, `getNote`, `getNoteSummary`, `createNote`, `updateNote`, `regenerateNote`, `retitleNote`, the version, context and document calls, the note-template calls, the export calls; each takes the host first), `connectNoteStream` and `connectNoteGenerationStream` (the generation stream over `host.sse`), the hooks above, `noteConflictReason` and the wire types. No component, no `@mui/*`, no router, and none of the optional editor peers.
+- `@marinoscar/kvox-web/notes/headless`: the clients (`getNotes`, `getNote`, `getNoteSummary`, `createNote`, `updateNote`, `regenerateNote`, `retitleNote`, the version, context and document calls (`getNoteDocumentExtraction` polls `GET /api/notes/sources/documents/{objectId}`, not the storage object), the note-template calls, the export calls; each takes the host first), `connectNoteStream` and `connectNoteGenerationStream` (the generation stream over `host.sse`), the hooks above, `noteConflictReason` and the wire types. No component, no `@mui/*`, no router, and none of the optional editor peers.
 - `@marinoscar/kvox-web/notes/ui`: the pages, `NotesLibraryView`, `SourceLine`, `TranscriptNotesSection`, `MarkdownView`, `NoteStatusChip`, `NotesSlotBoundary`, the slot and AI types (`NotePageSlots`, `NotesLibrarySlots`, `NotesAiAccess`), `kvoxNotesDestinations`, `kvoxNotesDestinationRoutes`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes`.
 
 The slice depends on `core`, `transcripts` and `search`. The app spreads `kvoxNotesDestinations` into its destination table directly after Transcripts, `kvoxNotesDestinationRoutes` into its ownership table, `kvoxNotesUserSettingsSections.account` into its `Account` group directly after `AI Provider`, and renders `kvoxNotesRoutes` (the four `/notes` routes and `/settings/note-templates`) where its literal routes used to be.
@@ -41,10 +41,13 @@ The pages that need AI take `ai` (`NotesAiAccess`): a hook returning `{ isLoadin
   - `Provider`: `ComponentType<{ noteId, children }>`, wraps the whole page (loading and error states included) so the other slots can share state. It must render `children` and add no element.
   - `useAsideWidth`: a hook returning the pixel width of a panel the page makes room for at `lg` and up, or `0`.
   - `HeaderActions`: `ComponentType<{ noteId }>`, extra actions in the header after History.
-  - `ProposalActions`: `ComponentType<{ noteId, version, bodyRef, originTranscriptId }>`, a panel over the note's connected-knowledge proposal.
+  - `ProposalActions`: `ComponentType<{ noteId, version, bodyRef, originTranscriptId, status, updatedAt }>`, a panel over the note's connected-knowledge proposal (`status` is the note's lifecycle status, `updatedAt` the ISO time it last changed, so a graph panel can follow an automatic extraction).
   - `SelectionActions`: `ComponentType<{ noteId, version, markdown, containerRef, enabled, onReload }>`, an action over a text selection in the rendered body.
 - `NotesLibrarySlots.SearchPrefix` (prop `slots` of `NotesPage` and `NotesLibraryView`): `ComponentType<{ query }>`, rendered above the ranked results while the search box holds a query.
 - `NotesAiAccess` (prop `ai` of `NotePage`, `NewNotePage` and `UserNoteTemplatesPage`).
+- `NotesPage`'s `secondaryAction` (#585): a node rendered beside "New note" in the header at every width (KVox Desktop's "Import…"); it gates itself.
+- `NewNotePage` query parameters: `?transcriptId=` and `?templateId=` pre-select a source transcript and a template; `?objectId=` (#585) pre-selects a document the host already uploaded (with `?documentName=` as its display name) and polls its extraction, which is how KVox Desktop offers "Create note" after an import.
+- `importNoteMarkdown(host, file)` (#585): `POST /api/notes/import`, a Markdown note export (or any Markdown or text file) into a new note.
 - `TranscriptNotesSection`: the component the transcript page draws through its `NotesSection` slot.
 - `kvoxNotesDestinations`: one destination, `notes` ("Notes" for both labels, the page icon, `/notes`, `notes:read`, not pinned). `kvoxNotesDestinationRoutes`: its single ownership prefix `/notes`.
 - `kvoxNotesUserSettingsSections.account`: the Note Templates card, with NO `permission` (the API's `note_templates:*` permissions are seeded to every role, and the page's real gate is the key).

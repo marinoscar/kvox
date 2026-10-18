@@ -82,7 +82,7 @@ import { relationPropsDisplay, relationTypeLabel } from '../../headless/utils/gr
 import { useKvoxHost } from '../../../core/headless/index.js';
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
 
-/** The most seeds `?seed=` carries (the issue's URL contract). */
+/** The most seed ids `?seed=` may carry. */
 export const MAX_URL_SEEDS = 10;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -107,7 +107,7 @@ function fiveYearsAgo(): string {
 }
 
 /**
- * Graph explorer page.
+ * The `/graph/explore` page: a bounded, interactive exploration of the graph with filters, an `as of` date, a canvas view and a list view, whose state lives in the URL.
  *
  * @stability experimental
  */

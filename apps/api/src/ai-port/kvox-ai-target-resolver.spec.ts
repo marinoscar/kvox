@@ -2,14 +2,22 @@ import { HttpException, Logger } from '@nestjs/common';
 
 import type { AiTargetContext, DefaultAiTargetResolver } from '@marinoscar/platform-api/ai';
 
-import { KVOX_AI_FEATURES, KVOX_FEATURE_TASK, type KvoxAiFeatureId } from './features';
+import {
+  AI_TASK_KEYS,
+  KVOX_AI_FEATURES,
+  KVOX_EMBEDDING,
+  KVOX_FEATURE_TASK,
+  chooseTaskModel,
+  type AiTaskKey,
+  type KvoxAiFeatureId,
+  type TaskModelPolicy,
+} from '@marinoscar/kvox-ai';
 import {
   KVOX_AI_RESOLVER_CACHE_MS,
   KVOX_EMBEDDING_MODEL,
   KvoxAiTargetResolver,
 } from './kvox-ai-target-resolver';
-import { AI_TASK_KEYS, type AiTaskKey } from './ai-task-keys';
-import { chooseTaskModel, type TaskModelPolicy } from './task-models';
+import { PlatformTaskModelSource } from './platform-task-model-source';
 
 // =============================================================================
 // KvoxAiTargetResolver (issue #473)
@@ -65,11 +73,9 @@ function setup(initial: Ai = ai(), rows: Row[] = ROWS) {
   const prisma = { aiModel: { findMany: jest.fn(async () => rows) } };
   const settings = { getNamespace: jest.fn(async () => current) };
   const fallback = { resolve: jest.fn(async () => ({ provider: 'openai', model: 'platform-pick' })) };
-  const resolver = new KvoxAiTargetResolver(
-    prisma as never,
-    settings as never,
-    fallback as unknown as DefaultAiTargetResolver,
-  );
+  // The reads and their cache live in the task-model source (#579); the resolver delegates to it.
+  const source = new PlatformTaskModelSource(prisma as never, settings as never);
+  const resolver = new KvoxAiTargetResolver(source, fallback as unknown as DefaultAiTargetResolver);
   return {
     resolver,
     prisma,
@@ -420,5 +426,11 @@ describe('capability mapping from the ai_models row', () => {
       ['odd2', false, false],
       ['full', true, true],
     ]);
+  });
+});
+
+describe('the embeddings model', () => {
+  it('is the package catalog\'s, so the platform target and the bound port agree (moved from platform-kvox-ai.spec.ts)', () => {
+    expect(KVOX_EMBEDDING_MODEL).toBe(KVOX_EMBEDDING.model);
   });
 });

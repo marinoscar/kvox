@@ -86,6 +86,7 @@ function setup(rows: Row[], opts: { kind?: string; liveEntities?: Row[] } = {}) 
     { get: () => undefined } as never,
     { get: async () => ({}) } as never,
     {} as never,
+    { emit: jest.fn(), subscribe: jest.fn() } as never,
   );
   return { service, tx, write, aliases, distinct, merges, calls };
 }
@@ -225,7 +226,7 @@ describe('ProposalCommitService', () => {
       const outcome = await service.commitIn(tx as never, OWNER, P, schema);
 
       expect(write.fillRelationProps).not.toHaveBeenCalled();
-      expect(write.addEvidence).toHaveBeenCalledWith(tx, OWNER, 'relation', LIVE_ROLE, expect.any(Array));
+      expect(write.addEvidence).toHaveBeenCalledWith(tx, OWNER, 'relation', LIVE_ROLE, expect.any(Array), undefined);
       expect(outcome.log.relationFills).toEqual([]);
       expect(outcome.result.propsFilled).toBe(0);
     });

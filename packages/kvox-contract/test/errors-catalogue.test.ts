@@ -8,9 +8,9 @@ import {
   GRAPH_IMPORT_FAILURE_REASONS,
   PROPOSAL_BAD_REQUEST_REASONS,
 } from '../src/graph/index.js';
-import { NOTE_CONFLICT_REASONS } from '../src/notes/index.js';
+import { NOTE_CONFLICT_REASONS, NOTE_IMPORT_FAILURE_REASONS } from '../src/notes/index.js';
 import { SEMANTIC_REASONS } from '../src/search/index.js';
-import { NAME_CHECK_CONFLICT_REASONS } from '../src/transcripts/index.js';
+import { NAME_CHECK_CONFLICT_REASONS, TRANSCRIPT_IMPORT_FAILURE_REASONS } from '../src/transcripts/index.js';
 
 /**
  * Every per-slice alias, with the status the API answers ALL its values with
@@ -23,6 +23,8 @@ const ALIASES: ReadonlyArray<readonly [string, readonly string[], number | null]
   ['NAME_CHECK_CONFLICT_REASONS', Object.values(NAME_CHECK_CONFLICT_REASONS), 409],
   ['ASK_CONFLICT_REASONS', ASK_CONFLICT_REASONS, 409],
   ['PROPOSAL_BAD_REQUEST_REASONS', Object.values(PROPOSAL_BAD_REQUEST_REASONS), 400],
+  ['TRANSCRIPT_IMPORT_FAILURE_REASONS', Object.values(TRANSCRIPT_IMPORT_FAILURE_REASONS), 400],
+  ['NOTE_IMPORT_FAILURE_REASONS', Object.values(NOTE_IMPORT_FAILURE_REASONS), 400],
   ['ASK_FINISH_REASONS', ASK_FINISH_REASONS, 200],
   ['DIGEST_UNAVAILABLE_REASONS', DIGEST_UNAVAILABLE_REASONS, null],
   ['GRAPH_IMPORT_FAILURE_REASONS', GRAPH_IMPORT_FAILURE_REASONS, 200],

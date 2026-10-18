@@ -2,8 +2,9 @@
 //
 // Depends on `ports`, `core`, `transcripts`, `notes` and `search`. The one way in is
 // `GraphModule.forRoot(options)`; the rest of this file is what a host or a sibling slice
-// (`graph-extraction`, `graph-rdf`, Ask) imports. The classes are internal wiring (tagged
-// `@internal`): a host configures them through `forRoot` and never instantiates them.
+// (`graph-extraction`, `graph-rdf`, Ask) imports. Most classes are internal wiring (tagged
+// `@internal`): a host configures them through `forRoot` and never instantiates them. The
+// exception is `KgMigrateEnqueuer`, which a host with `schedules: false` calls on its own timer.
 
 export { GraphModule } from './graph.module.js';
 export {
@@ -121,6 +122,7 @@ export { GraphObjectsService } from './graph-objects.service.js';
 export { subjectHousekeeping } from './housekeeping-subject.enqueue.js';
 export { DEFAULT_KG_MIGRATE_DEFINITION, KG_MIGRATE_DEFINITION, KG_MIGRATE_TABLES, candidatePredicate, kgMigrateEnqueueFields, migrationsUpTo } from './migrate/kg-migrate.plan.js';
 export type { KgMigrateDefinition, KgMigrateTable } from './migrate/kg-migrate.plan.js';
+export { KG_MIGRATE_OWNERS_PER_TICK, KgMigrateEnqueuer } from './migrate/kg-migrate.enqueuer.js';
 export { KgMigrateRepository } from './migrate/kg-migrate.repository.js';
 export { GraphOntologyService } from './ontology/graph-ontology.service.js';
 export { GRAPH_PREFERENCE_DEFAULTS } from './preferences/graph-preferences.defaults.js';
@@ -128,10 +130,14 @@ export type { GraphPreferences } from './preferences/graph-preferences.defaults.
 export { GRAPH_PREFERENCES_CHANGED_EVENT } from './preferences/graph-preferences.events.js';
 export type { GraphPreferencesChangedEvent } from './preferences/graph-preferences.events.js';
 export { GraphPreferencesService } from './preferences/graph-preferences.service.js';
-export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, planTemporalInsert, rangeFromPrecision, sameIdentityProps, stableStringify, temporalRuleFor, toPgRange } from './temporal/index.js';
+export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, isExclusiveTemporal, planTemporalInsert, rangeFromPrecision, ruleForEffectiveRelation, sameIdentityProps, stableStringify, temporalRuleFor, toPgRange } from './temporal/index.js';
 export type { CandidateEdge, TemporalEdge, TemporalPlan, TemporalReviewStatus, TemporalRule, ValidPrecision, ValidRange } from './temporal/index.js';
 export { GraphDuplicateError, GraphInvariantError, GraphValidationError, toGraphHttpException } from './write/graph-write.errors.js';
 export { GraphWriteService } from './write/graph-write.service.js';
+export type { EvidenceAccess } from './write/evidence-validator.service.js';
+export { loadLiveTemporalEdges } from './write/live-edges.js';
+export { ManualEvidence, MANUAL_EVIDENCE_LABEL, isManualEvidenceRow } from './write/manual-evidence.js';
+export type { GraphEvidenceInput } from './write/manual-evidence.js';
 export { normalizeAlias, statementHash } from './write/normalize.js';
 
 // The read-side services and constants the Ask agent and the host's wiring use.

@@ -32,21 +32,27 @@
  * spells `(err.details as …)?.reason` for itself.
  *
  * =============================================================================
- * WHY DOCUMENT EXTRACTION IS READ OFF A STORAGE OBJECT
+ * WHY DOCUMENT EXTRACTION IS READ THROUGH THE NOTES SLICE
  * =============================================================================
  *
  * `POST /api/notes/sources/documents` answers
- * `{ objectId, jobId, status: 'extracting' }` and queues `note.source.extract`. There is deliberately no
- * sixth table and no "extraction status" endpoint: the extracted text is a
- * SECOND storage object, and the link plus the outcome are keys in the FIRST
- * object's own `metadata` (`packages/kvox-api/src/notes/source-metadata.ts` is the one
+ * `{ objectId, jobId, status: 'extracting' }` and queues `note.source.extract`.
+ * There is deliberately no sixth table: the extracted text is a SECOND storage
+ * object, and the link plus the outcome are still keys in the FIRST object's
+ * own `metadata` (`packages/kvox-api/src/notes/source-metadata.ts` is the one
  * definition both the writer and the reader import).
  *
- * So {@link getNoteDocumentExtraction} polls `GET /api/storage/objects/:id` and
- * reads that block. It is `storage:read`-gated, which every seeded role holds,
- * and it is TOTAL OVER GARBAGE for the same reason the API's own reader is: the
- * column is shared JSONB written by several modules and by older builds, and
- * every shape this client cannot understand means the same thing — "not
+ * What changed in #596 is WHO READS IT. The notes slice owns the read:
+ * {@link getNoteDocumentExtraction} polls
+ * `GET /api/notes/sources/documents/:objectId`, which is `notes:read`-gated and
+ * owner-scoped (404 for anyone else's document), and the API interprets the
+ * metadata block itself. This client no longer reads storage at all, so a host
+ * that embeds the notes slice needs no `GET /api/storage/objects/:id` route and
+ * no `storage:read` grant to wait on an extraction.
+ *
+ * The client stays TOTAL OVER GARBAGE anyway: the answer crosses a version
+ * boundary (an older or newer API, a host's own implementation of the route),
+ * and every shape this client cannot understand means the same thing — "not
  * extracted yet".
  */
 
@@ -130,6 +136,13 @@ export interface NoteOriginTranscript {
   status: TranscriptStatus;
   /** Whether the transcript has playable audio. */
   playbackStatus: PlaybackStatus;
+  /**
+   * Whether the transcript has a recording at all (#604). `false` for a
+   * transcript imported from a `kvox.transcript/v1` file, whose
+   * `GET /api/transcripts/:id/audio` answers 404. Absent from an older server:
+   * treat `undefined` as `true`.
+   */
+  hasAudio?: boolean;
   /** `direct` when the note came from the transcript, `note_chain` when it came from a note that did. */
   via: 'direct' | 'note_chain';
   /** How many notes sit between this one and the transcript (`0` for `direct`). */
@@ -530,9 +543,10 @@ export interface NoteSourceDocument {
 /**
  * What `note.source.extract` has recorded so far about one uploaded document.
  *
- * `extracting` is this client's word for "the metadata block is not there yet",
- * not a value the API stores — the job writes `extracted` or `unextractable`
- * when it finishes and nothing at all before that. Named the same as the upload
+ * `extracting` means "no outcome recorded yet", not a value the job stores —
+ * the job writes `extracted` or `unextractable` when it finishes and nothing at
+ * all before that; the API answers `extracting` meanwhile, and this client
+ * also maps any answer it cannot read to it. Named the same as the upload
  * response's own `status` so a caller has one vocabulary for the whole wait.
   *
   * @stability experimental
@@ -796,40 +810,31 @@ export async function getNoteGenerationContext(
 }
 
 /**
- * How far `note.source.extract` has got with one uploaded document.
+ * How far `note.source.extract` has got with one uploaded document:
+ * `GET /api/notes/sources/documents/:objectId` (`notes:read`, owner-scoped).
  *
- * See this file's header for why this reads a storage object rather than a
- * notes endpoint. Every unreadable shape resolves to `extracting`, which is the
- * only safe direction: the caller uses this to decide whether Generate is
- * enabled, and reporting "extracted" on a metadata block it could not parse
- * would let a user start a generation that fails minutes later on their own
- * provider account.
-  *
-  * @stability experimental
+ * See this file's header for why the notes slice, not storage, answers this
+ * (#596). Every unreadable shape resolves to `extracting`, which is the only
+ * safe direction: the caller uses this to decide whether Generate is enabled,
+ * and reporting "extracted" on an answer it could not parse would let a user
+ * start a generation that fails minutes later on their own provider account.
+ *
+ * @stability experimental
  */
 export async function getNoteDocumentExtraction(
   host: KvoxWebHost,
   objectId: string,
 ): Promise<NoteDocumentExtraction> {
-  const object = await kvoxGet<{ metadata: Record<string, unknown> | null }>(
+  const answer = await kvoxGet<unknown>(
     host,
-    `/storage/objects/${encodeURIComponent(objectId)}`,
+    `/notes/sources/documents/${encodeURIComponent(objectId)}`,
   );
 
-  const metadata = object.metadata;
-  if (typeof metadata !== 'object' || metadata === null) {
+  if (typeof answer !== 'object' || answer === null) {
     return { status: 'extracting', message: null, characters: null };
   }
 
-  // ⚠ `noteSourceExtraction`, the namespaced key — NOT a bare `status` at the
-  // top level. `metadata` is a shared bag several writers merge into, and the
-  // API namespaces its own write for exactly that reason.
-  const block = (metadata as Record<string, unknown>).noteSourceExtraction;
-  if (typeof block !== 'object' || block === null) {
-    return { status: 'extracting', message: null, characters: null };
-  }
-
-  const record = block as Record<string, unknown>;
+  const record = answer as Record<string, unknown>;
   const status = record.status;
   const message = typeof record.message === 'string' ? record.message : null;
   const characters = typeof record.characters === 'number' ? record.characters : null;
@@ -959,4 +964,24 @@ export async function uploadNoteSourceDocument(
   const form = new FormData();
   form.append('file', file);
   return kvoxPostFormData<NoteSourceDocument>(host, '/notes/sources/documents', form);
+}
+
+/**
+ * `POST /api/notes/import` — create a note from a Markdown note export (#585).
+ *
+ * Multipart with a single `file` part. Any Markdown or text file is accepted; a KVox note
+ * export keeps its title and body. A refused file is a `KvoxApiError` (400) whose
+ * `details.reason` is one of `NOTE_IMPORT_FAILURE_REASONS` (`not_text`,
+ * `invalid_front_matter`, `unsupported_note_format`, `empty_note`) and whose message a
+ * person can read; over the size limit is a 413.
+ *
+ * @param host - the host.
+ * @param file - the file.
+ * @returns the new note, as {@link getNote} returns it.
+ * @stability experimental
+ */
+export async function importNoteMarkdown(host: KvoxWebHost, file: File): Promise<Note> {
+  const form = new FormData();
+  form.append('file', file);
+  return kvoxPostFormData<Note>(host, '/notes/import', form);
 }

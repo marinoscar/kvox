@@ -2,7 +2,7 @@
 // The four structured schemas survive `z.fromJSONSchema` (issue #475, epic #472)
 // =============================================================================
 //
-// `PlatformKvoxAi.generateStructured` turns a caller's strict JSON Schema into Zod
+// `createKvoxAi(...).generateStructured` (`@marinoscar/kvox-ai`, the bound `KVOX_AI`) turns a caller's strict JSON Schema into Zod
 // with `z.fromJSONSchema` (the call the platform's own HTTP layer makes); the
 // platform converts it BACK with `z.toJSONSchema` for the wire and validates the
 // model's answer with the Zod form. The risk the issue names is a strict-mode

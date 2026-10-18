@@ -23,7 +23,7 @@ export const SEARCH_HIT_TYPES = ['Person', 'Organization', 'Project'] as const;
 export const SEARCH_HIT_LIMIT = 5;
 
 /**
- * The props of entity search hits.
+ * Props of {@link EntitySearchHits}.
  *
  * @stability experimental
  */
@@ -33,7 +33,7 @@ export interface EntitySearchHitsProps {
 }
 
 /**
- * The entity search hits.
+ * People, organizations and projects matching the library search box, shown above the ranked results. Renders nothing when there are no hits, the request fails or the caller lacks the permission.
  *
  * @stability experimental
  */

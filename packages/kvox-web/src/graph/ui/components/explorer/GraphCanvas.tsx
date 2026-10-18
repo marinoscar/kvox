@@ -97,44 +97,44 @@ function themedHover(background: string, text: string, border: string): Settings
 }
 
 /**
- * The graph canvas controls.
+ * Imperative controls the canvas hands to its toolbar and keyboard handler.
  *
  * @stability experimental
  */
 export interface GraphCanvasControls {
-  /** The zoom in. */
+  /** Zoom the camera in one step. */
   zoomIn: () => void;
-  /** The zoom out. */
+  /** Zoom the camera out one step. */
   zoomOut: () => void;
   /** Animated camera reset — "Fit". */
   fit: () => void;
 }
 
 /**
- * The props of graph canvas.
+ * Props of `GraphCanvas`, the sigma drawing surface for an explorer or overview graph.
  *
  * @stability experimental
  */
 export interface GraphCanvasProps {
-  /** The graph. */
+  /** The graph to draw. It is mutated in place; bump `version` after changing it. */
   graph: GraphCanvasGraph;
   /** Increments on every mutation of `graph`; the canvas re-syncs on change. */
   version: number;
-  /** The visible ids. */
+  /** Ids of the nodes to show; every other node is hidden. */
   visibleIds: ReadonlySet<string>;
-  /** The id of the selected. */
+  /** Id of the selected node, which is highlighted, or `null` for none. */
   selectedId: string | null;
-  /** The layout. */
+  /** `forceatlas` settles the layout with ForceAtlas2; `static` draws the stored `x`/`y` as they are (reduced motion, visual baselines). */
   layout: 'forceatlas' | 'static';
-  /** Called when node click. */
+  /** Called with the node id when a node is clicked. */
   onNodeClick: (id: string) => void;
-  /** Called when node double click. */
+  /** Called with the node id when a node is double-clicked. */
   onNodeDoubleClick: (id: string) => void;
-  /** Called when stage click. */
+  /** Called when empty space is clicked, which clears the selection. */
   onStageClick: () => void;
-  /** Called when edge click. */
+  /** Called with the edge id when an edge is clicked. */
   onEdgeClick?: (id: string) => void;
-  /** The height. */
+  /** Height of the canvas, as a CSS length or a number of pixels. */
   height: number | string;
   /** `false`: no pan, zoom, drag or clicks (the phone widget, which must not trap scroll). */
   interactive?: boolean;

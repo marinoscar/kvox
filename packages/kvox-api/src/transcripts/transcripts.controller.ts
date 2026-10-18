@@ -2,11 +2,12 @@
 // TranscriptsController (issue #25, epic #19)
 // =============================================================================
 //
-// Twenty-two routes: the ten reads and lifecycle actions of issue #25, the five
+// Twenty-three routes: the ten reads and lifecycle actions of issue #25, the five
 // corrections routes of issue #27 — apply a batch of ops, search, browse the
 // version history, read one version, restore one — the four sharing routes of
 // issue #29, and the three export routes of issue #28: list the formats,
-// request an export, poll and download it.
+// request an export, poll and download it. And one more since #571: import a
+// `kvox.transcript/v1` file as a new transcript (`POST imports`).
 //
 // -----------------------------------------------------------------------------
 // THE SHARING FOUR, AND THE ONE OF THEM THAT IS NOT OWNER-ONLY
@@ -66,16 +67,20 @@
 // =============================================================================
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
+  InternalServerErrorException,
   Param,
   ParseIntPipe,
   ParseUUIDPipe,
   Patch,
+  PayloadTooLargeException,
   Post,
   Query,
   Req,
@@ -83,6 +88,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -159,6 +165,43 @@ import { identitiesFingerprint } from './editing/speaker-identity.js';
 import { TranscriptEditingService } from './transcript-editing.service.js';
 import { TranscriptSharesService } from './transcript-shares.service.js';
 import { TranscriptsService } from './transcripts.service.js';
+import { TranscriptImportService } from './import/transcript-import.service.js';
+import { TRANSCRIPTS_MODULE_OPTIONS, type ResolvedTranscriptsOptions } from './transcripts.options.js';
+
+/** The 500 a request gets when the host never registered `@fastify/multipart` (a host duty, `$hostPlugins`). */
+const HOST_MULTIPART_MISSING =
+  'This host has not registered @fastify/multipart on its Fastify app, so uploads cannot be read ' +
+  '(a kvox host duty: see docs/guides/kvox-desktop.md and $hostPlugins in packages/kvox-slice-peers.json).';
+
+/** The part of `@fastify/multipart`'s request decoration the import route uses (#571). */
+interface MultipartRequest {
+  isMultipart(): boolean;
+  file(options: { limits: { fileSize: number; files: number }; throwFileSizeLimit: boolean }): Promise<
+    | {
+        fieldname: string;
+        filename: string;
+        mimetype: string;
+        toBuffer(): Promise<Buffer>;
+        file?: { truncated?: boolean };
+      }
+    | undefined
+  >;
+}
+
+/** A multipart failure as the client's error: 413 over the limit, 400 for any other Fastify one. */
+function multipartClientError(error: unknown, maxBytes: number): unknown {
+  const code = (error as { code?: unknown } | null)?.code;
+
+  if (code === 'FST_REQ_FILE_TOO_LARGE') {
+    return new PayloadTooLargeException(`A transcript file may be at most ${maxBytes} bytes.`);
+  }
+
+  if (typeof code === 'string' && code.startsWith('FST_')) {
+    return new BadRequestException('Invalid multipart body. Send multipart/form-data with a single "file" field.');
+  }
+
+  return error;
+}
 
 // `versionETag` and `matchesETag` moved to `@marinoscar/kvox-api/core` (issue #490, epic #486):
 // notes and the graph's RDF export reuse them, and importing a controller for two pure
@@ -199,6 +242,8 @@ export class TranscriptsController {
     private readonly editing: TranscriptEditingService,
     private readonly sharing: TranscriptSharesService,
     private readonly exports: TranscriptExportService,
+    private readonly imports: TranscriptImportService,
+    @Inject(TRANSCRIPTS_MODULE_OPTIONS) private readonly options: ResolvedTranscriptsOptions,
   ) {}
 
   // ===========================================================================
@@ -248,6 +293,98 @@ export class TranscriptsController {
     @CurrentActor() user: TranscriptsActor,
   ) {
     return this.transcripts.create(dto, user);
+  }
+
+  // ===========================================================================
+  // Import (issue #571, spec §8.2)
+  // ===========================================================================
+
+  @Post('imports')
+  @HttpCode(HttpStatus.CREATED)
+  @KvoxAuth(TRANSCRIPTS_WRITE_PERMISSION)
+  @ApiOperation({
+    summary: 'Import a transcript from a kvox.transcript/v1 JSON file',
+    description:
+      'Multipart upload with a single `file` part holding the JSON the transcript export ' +
+      'writes (`format: json`, the published `kvox.transcript/v1` schema). Creates a new ' +
+      'transcript owned by the caller, already `ready`: its segments, speakers and word ' +
+      'timings (when the file carries them), its speaker names, and its recording date ' +
+      '(`transcript.recordedAt`, else `transcript.createdAt`). There is **no audio** and ' +
+      '**no transcription job**: `playbackStatus` is `not_needed`, `provider` is `import`, ' +
+      'and `GET /api/transcripts/{id}/audio` answers 404. Notes, search and connected ' +
+      'knowledge treat it like any other transcript; a speaker the file names (anything ' +
+      'but a `Speaker A` placeholder) is recorded as identified, exactly as naming it ' +
+      'would.\n\n' +
+      'The file is kept as the transcript\'s source (`managed_by: transcripts`) and removed ' +
+      'with it. The import is synchronous and bounded by the size limit (25 MiB by default, ' +
+      'the slice option `maxImportBytes`).\n\n' +
+      '- **201** the new transcript, as `GET /api/transcripts/{id}` returns it\n' +
+      '- **400** no file, a part not named `file`, or not multipart; or the file is refused, ' +
+      'with `details.reason`: `not_json` (not UTF-8 JSON), `unsupported_schema` (JSON, but ' +
+      'not a `kvox.transcript/v1` document: a foreign file or a later version; ' +
+      '`details.schema` echoes the value it names), `invalid_document` (fails the published ' +
+      'schema, or holds a value a transcript cannot store; `details.issues` lists up to 20 ' +
+      '`{ path, message }`), `duplicate_id` (two speakers or two segments share an id), ' +
+      '`unknown_speaker` (a segment names an undeclared speaker) or `empty_transcript` ' +
+      '(no segments)\n' +
+      '- **413** over the size limit\n\nRequires `transcripts:write`.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'A `kvox.transcript/v1` JSON file' },
+      },
+    },
+  })
+  @ApiDataResponse(TranscriptDetailDto, { status: 201, description: 'Transcript imported' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Missing file or invalid multipart body; or `details.reason`: `not_json`, ' +
+      '`unsupported_schema`, `invalid_document`, `duplicate_id`, `unknown_speaker` or ' +
+      '`empty_transcript`',
+  })
+  @ApiResponse({ status: 413, description: 'The file is over the import size limit' })
+  async importTranscript(@Req() request: FastifyRequest, @CurrentActor() user: TranscriptsActor) {
+    // `@fastify/multipart` decorates the request; its types are the host's, so the slice
+    // states the members it uses. The read is bounded BEFORE anything is buffered.
+    const req = request as unknown as MultipartRequest;
+    const maxBytes = this.options.maxImportBytes;
+
+    // A host that skipped the plugin has no decoration: say so instead of a bare TypeError.
+    if (typeof req.isMultipart !== 'function') {
+      throw new InternalServerErrorException(HOST_MULTIPART_MISSING);
+    }
+
+    if (!req.isMultipart()) {
+      throw new BadRequestException('Expected multipart/form-data with a single "file" field.');
+    }
+
+    let filename: string;
+    let body: Buffer;
+
+    try {
+      const part = await req.file({ limits: { fileSize: maxBytes, files: 1 }, throwFileSizeLimit: true });
+
+      if (!part) throw new BadRequestException('No file provided');
+      if (part.fieldname !== 'file') throw new BadRequestException('The file must be sent in the "file" field.');
+
+      filename = part.filename;
+      body = await part.toBuffer();
+      // ⚠ `toBuffer` can return the first `fileSize` bytes WITHOUT throwing when the limit is
+      // hit as the last chunk is read (#585); a truncated file is over the limit, never valid.
+      if (part.file?.truncated) throw Object.assign(new Error('File too large'), { code: 'FST_REQ_FILE_TOO_LARGE' });
+    } catch (error) {
+      throw multipartClientError(error, maxBytes);
+    }
+
+    // An empty file reaches the parser, which answers `not_json` like any other non-JSON.
+    const { transcriptId } = await this.imports.importFile(user, { filename, body });
+
+    return this.transcripts.detail(transcriptId, user);
   }
 
   // ===========================================================================

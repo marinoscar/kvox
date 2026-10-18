@@ -184,7 +184,7 @@ describeWithDb('Semantic search: the indexing status surface (real Postgres)', (
   }
 
   /**
-   * The service, with the `KvoxAi` port stubbed and
+   * The service, with the `KVOX_AI` port stubbed and
    * EVERYTHING ELSE REAL — including `SearchIndexService`, so the candidate
    * selection runs through the one enqueue path the whole epic shares.
    */

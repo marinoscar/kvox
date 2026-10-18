@@ -36,10 +36,13 @@ import { GraphRdfService } from './rdf/graph-rdf.service.js';
 // installs them.
 //
 // ⚠ `rdf-validate-shacl` IS ESM-ONLY, and this package is CommonJS. The import job validates
-// in a CHILD `node` process started with an inline ES-module script (`SHACL_CHILD_SCRIPT`),
-// so nothing is shipped beside the code; the engine is located with `require.resolve` from
-// this package's own place on disk, which is why the HOST must install it. The module checks
-// that when the import is switched on, and refuses to start naming the missing peer.
+// in a CHILD `node` process running the package's plain CommonJS script
+// `runners/shacl-runner.cjs`, or, when the host passes `shacl.run` (a binary that cannot run
+// Node, such as Desktop's Electron), through the host, which runs the same script's
+// `runShaclValidation` (`@marinoscar/kvox-api/graph-rdf/shacl-runner`) in an isolated process.
+// Either way the engine is located with `require.resolve` from this package's own place on
+// disk, which is why the HOST must install it. The module checks that when the import is
+// switched on, and refuses to start naming the missing peer.
 //
 // RDF IRIs include the application slug (`KVOX_BRAND.appSlug`): a different slug changes
 // every IRI. A host whose graphs travel between editions passes the same slug.

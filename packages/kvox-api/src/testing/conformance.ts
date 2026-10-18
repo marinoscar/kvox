@@ -12,6 +12,7 @@ import {
   type KvoxAuditPort,
   type KvoxEventsPort,
   type KvoxIdentityPort,
+  type KvoxInitUploadResult,
   type KvoxJobsPort,
   type KvoxNotifyPort,
   type KvoxObjectStorePort,
@@ -169,6 +170,13 @@ export interface KvoxObjectStoreUnderTest {
   port: KvoxObjectStorePort;
   /** The owner to put objects as. Defaults to a throwaway user. */
   ownerId?: string;
+  /**
+   * Puts the bytes of an upload the kit just started to the part URLs `initUpload` handed out.
+   * A store that checks its parts at `completeUpload` (a filesystem store, S3) refuses to seal an
+   * upload nothing was sent to; leave the hook out only when the port accepts that (the fakes do).
+   * The kit calls it with the result of `initUpload` and the declared size, before `completeUpload`.
+   */
+  uploadParts?(init: KvoxInitUploadResult, size: number): Promise<void>;
 }
 
 /**
@@ -212,6 +220,22 @@ export interface KvoxNotifyUnderTest {
 }
 
 /**
+ * A user namespace with no defaults, and a valid patch for it.
+ *
+ * @stability experimental
+ */
+export interface KvoxNoDefaultsSettingsFixture {
+  /** The namespace key. */
+  name: string;
+  /** An object schema the patch satisfies (it would refuse `undefined`). */
+  schema: z.ZodType;
+  /** The user to read and write as. */
+  userId: string;
+  /** A valid patch; the value read back must carry every field of it. */
+  patch: Record<string, unknown>;
+}
+
+/**
  * What the kit needs to test the settings port.
  *
  * @stability experimental
@@ -225,6 +249,13 @@ export interface KvoxSettingsUnderTest {
   system?: KvoxSystemSettingsFixture;
   /** A user namespace the host knows and a valid patch for it. */
   user?: KvoxUserSettingsFixture;
+  /**
+   * A per-user namespace declared with `defaults: undefined` (the graph slice's `graph`
+   * preferences: absent means the slice's own defaults). The kit registers it with
+   * `defaults: undefined` and the given object schema; a host whose `registerNamespace` only
+   * verifies pre-registered namespaces must already know `name`.
+   */
+  noDefaults?: KvoxNoDefaultsSettingsFixture;
 }
 
 /**
@@ -717,6 +748,7 @@ export function describeKvoxPortsConformance(
         { userId: owner(store) },
         { name: 'b.m4a', mimeType: 'audio/mp4', size: 1024, managedBy: 'transcripts' },
       );
+      await store.uploadParts?.(init, 1024);
       await store.port.completeUpload(init.objectId);
       await tick();
       expect(seen.length).toBe(1);
@@ -926,6 +958,19 @@ export function describeKvoxPortsConformance(
       const { name: namespace, userId, patch } = settings.user;
       await settings.port.patchUser(userId, namespace, patch);
       const read = await settings.port.readUser<Record<string, unknown>>(userId, namespace);
+      for (const [key, value] of Object.entries(patch)) expect(read[key]).toEqual(value);
+    });
+
+    rule('a user namespace with undefined defaults reads undefined until written, then the parsed value', async (settings) => {
+      declare(settings);
+      if (!settings.noDefaults) return;
+      const { name: namespace, schema, userId, patch } = settings.noDefaults;
+      settings.port.registerNamespace({ scope: 'user', name: namespace, schema, defaults: undefined });
+      // Nothing stored: `undefined`, and the schema is not run on the absent value.
+      expect(await settings.port.readUser<unknown>(userId, namespace)).toBeUndefined();
+      await settings.port.patchUser(userId, namespace, patch);
+      const read = await settings.port.readUser<Record<string, unknown>>(userId, namespace);
+      expect(read).toBeDefined();
       for (const [key, value] of Object.entries(patch)) expect(read[key]).toEqual(value);
     });
   });

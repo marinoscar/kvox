@@ -7,13 +7,13 @@
 > recognition still got wrong. Implemented in `packages/kvox-api/src/transcription/
 > keyterms.ts` (#327), `packages/kvox-api/src/transcripts/name-check/` and
 > `packages/kvox-api/src/transcripts/handlers/transcript-name-check.handler.ts` (#328),
-> `apps/web/src/components/transcripts/` name-check review panel (#329), and
+> `packages/kvox-web/src/transcripts/ui/components/` name-check review panel (#329), and
 > the `thorough` mode plus its discovery pass on top of #328's pipeline
 > (#330). Builds on `docs/specs/transcription.md` (the transcript pipeline
 > and its `TranscriptionProvider` contract) and `docs/specs/notes.md` §2.5–3.3
 > (the AI call layer, per-user keys, and the token-budget
 > refusal this feature reuses verbatim; since #475 to #477 the call layer is
-> `KvoxAi` over the platform AI slice, see `notes.md` §2).
+> the `KVOX_AI` port (`createKvoxAi`, #579) over the platform AI slice, see `notes.md` §2).
 
 ## 1. The problem, and the framing
 
@@ -314,7 +314,7 @@ under-state a thorough run's true cost, never over-state it.
 Both modes run entirely on **the requesting user's own AI provider key**
 (the platform's `user_ai_keys`, never a deployment-wide credential — `docs/specs/
 notes.md` §9's bring-your-own-key posture, reused verbatim). `assertWithinBudget`
-/ `computeTokenBudget` (`apps/api/src/ai-port/ai-token-budget.ts`, shared with
+/ `computeTokenBudget` (`packages/kvox-api/src/core/ai/token-budget.ts`, shared with
 note generation) refuse a request that would not fit the resolved model's
 context window **before** any call is made — a batch too large to fit is
 split in half rather than the whole run being refused, and only a *single*

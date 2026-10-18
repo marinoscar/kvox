@@ -40,5 +40,30 @@
     "promote": ["lock", "manifest", "sql", "sync"],
     "sql": [],
     "sync": ["lock", "manifest"]
+  },
+  "kvox-ai": {
+    "tasks": [],
+    "features": ["tasks"],
+    "types": ["features"],
+    "tokens": [],
+    "structured": ["types"],
+    "chat": ["types"],
+    "embedding": ["types"],
+    "runtime": ["types", "features", "tasks"],
+    "errors": ["types", "features"],
+    "testing": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors"],
+    "port": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
+    "direct": ["runtime", "errors"],
+    "copilot": []
+  },
+  "kvox-eval": {
+    "ask": [],
+    "fixtures": ["ask"],
+    "real-data": [],
+    "live": [],
+    "kg": ["fixtures"],
+    "parity": ["fixtures", "kg"],
+    "cli": ["ask", "ask-run", "fixtures", "kg", "live", "real-data"],
+    "ask-run": ["ask", "fixtures", "live"]
   }
 }

@@ -16,35 +16,35 @@ import { useGraphProposal, type UseGraphProposalReturn } from './useGraphProposa
 
 import { useIsMounted, useKvoxHost } from '../../../core/headless/index.js';
 /**
- * The GRAPH IMPORT POLL MS.
+ * How often an import that is still extracting is re-read, in milliseconds.
  *
  * @stability experimental
  */
 export const GRAPH_IMPORT_POLL_MS = 3_000;
 
 /**
- * What use graph import returns.
+ * What {@link useGraphImport} returns: everything {@link UseGraphProposalReturn} does, plus the import's stats and offer decisions.
  *
  * @stability experimental
  */
 export interface UseGraphImportReturn extends UseGraphProposalReturn {
-  /** The stats. */
+  /** The import facts of the proposal; fields that have not been produced yet are absent. */
   stats: GraphImportStats;
   /** The offer with a decision in flight, if any. */
   busyOfferId: string | null;
-  /** The accept offer. */
+  /** Adopts an unknown imported property as an attribute, optionally with a label, then re-reads the proposal. */
   acceptOffer: (offerId: string, label?: string) => Promise<AttributeOfferResult>;
-  /** The reject offer. */
+  /** Turns down an unknown imported property, then re-reads the proposal. */
   rejectOffer: (offerId: string) => Promise<AttributeOfferResult>;
 }
 
 /**
- * Hook: reads graph import.
+ * Reads one import proposal, polls it while it extracts, and exposes the review mutations plus accept and reject of attribute offers.
  *
  * @stability experimental
  */
 export function useGraphImport(proposalId: string, options: {
-  /** The poll ms. */
+  /** Poll interval while the import is extracting, in milliseconds; defaults to {@link GRAPH_IMPORT_POLL_MS}. */
   pollMs?: number;
 } = {}): UseGraphImportReturn {
   const host = useKvoxHost();
@@ -94,13 +94,13 @@ const RECENT_IMPORT_STATUSES: readonly ProposalStatus[] = ['extracting', 'draft'
  * `GET /api/graph/proposals` filters by ONE status, so this asks once per
  * status and merges — four small reads rather than a new list route. Errors
  * leave the list empty: the section is a convenience, never a blocker.
-  *
+ *
  * @stability experimental
  */
 export function useRecentGraphImports(enabled: boolean): {
-  /** The imports. */
+  /** The imports found, newest first. */
   imports: ProposalSummary[];
-  /** Whether it is loading. */
+  /** The listings are loading. */
   isLoading: boolean;
 } {
   const host = useKvoxHost();

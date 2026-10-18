@@ -178,20 +178,31 @@ export function NewNotePage({ ai = NO_NOTES_AI_ACCESS }: NewNotePageProps = {}) 
    */
   const [draft, setDraft] = useState<NewNoteDraft>(() => {
     const transcriptId = searchParams.get('transcriptId');
+    const objectId = searchParams.get('objectId');
     const templateId = searchParams.get('templateId');
     const base = emptyNewNoteDraft();
     const withTemplate = templateId ? { ...base, templateId } : base;
-    return transcriptId
-      ? { ...withTemplate, kind: 'transcript', transcriptId }
-      : withTemplate;
+    if (transcriptId) return { ...withTemplate, kind: 'transcript', transcriptId };
+    // `?objectId=` (#585): a document the host already uploaded (KVox Desktop's import),
+    // offered exactly as if it had been chosen here. Its extraction is polled below.
+    if (objectId) return { ...withTemplate, kind: 'document', objectId };
+    return withTemplate;
   });
 
   const [transcripts, setTranscripts] = useState<TranscriptListItem[]>([]);
   const [sourceNotes, setSourceNotes] = useState<NoteListItem[]>([]);
 
-  const [documentName, setDocumentName] = useState<string | null>(null);
+  // `?objectId=` arrives with the name the host showed (`?documentName=`) and starts out
+  // extracting, so the poll below reads its real state at once.
+  const [documentName, setDocumentName] = useState<string | null>(() =>
+    searchParams.get('objectId') ? (searchParams.get('documentName') ?? 'Imported document') : null,
+  );
   const [isUploading, setIsUploading] = useState(false);
-  const [extraction, setExtraction] = useState<NoteDocumentExtraction | null>(null);
+  const [extraction, setExtraction] = useState<NoteDocumentExtraction | null>(() =>
+    searchParams.get('objectId') && !searchParams.get('transcriptId')
+      ? { status: 'extracting', message: null, characters: null }
+      : null,
+  );
   const [documentError, setDocumentError] = useState<string | null>(null);
 
   /**

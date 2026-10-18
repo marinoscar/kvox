@@ -15,9 +15,14 @@ import { checkAllPackageDocs, checkSections, parseMarkdown, README_HEADINGS, rel
 import { checkManifest, checkTarball, exportTargets, promisedFiles } from '../check-package-pack.mjs';
 import {
   checkSlicePeers,
+  closureHostPlugins,
+  HOST_PLUGIN_USES,
   importSpecifiers,
   listPackages,
   packageNameOf,
+  peersTable,
+  readGraph,
+  readPeers,
   stripComments,
   withImplied,
 } from '../check-slice-peers.mjs';
@@ -77,6 +82,61 @@ test('host-neutral: the same file under kvox-web fails too', () => {
   const dir = fixtureCopy();
   try {
     plant(dir, 'host-neutral/uses-platform.ts', 'packages/kvox-web/src/core/uses-platform.ts');
+    assert.ok(rulesOf(checkSlicePeers({ root: dir })).includes('host-neutral'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Adds a kvox-ai package (one universal `runtime` slice peering on the platform) to a fixture copy. */
+function addKvoxAi(dir) {
+  mkdirSync(join(dir, 'packages/kvox-ai/src/runtime'), { recursive: true });
+  writeFileSync(
+    join(dir, 'packages/kvox-ai/package.json'),
+    JSON.stringify({ name: '@marinoscar/kvox-ai', version: '0.0.0', peerDependencies: { '@marinoscar/platform-api': '0.1.0-next.5' } })
+  );
+  writeFileSync(join(dir, 'packages/kvox-ai/src/runtime/index.ts'), 'export const RUNTIME = 1;\n');
+  const graph = JSON.parse(readFileSync(join(dir, 'packages/kvox-slices.json'), 'utf8'));
+  graph['kvox-ai'] = { runtime: [] };
+  writeFileSync(join(dir, 'packages/kvox-slices.json'), JSON.stringify(graph));
+  const peers = JSON.parse(readFileSync(join(dir, 'packages/kvox-slice-peers.json'), 'utf8'));
+  peers.$universal['kvox-ai'] = '*';
+  peers['kvox-ai'] = { runtime: { peers: ['@marinoscar/platform-api'] } };
+  writeFileSync(join(dir, 'packages/kvox-slice-peers.json'), JSON.stringify(peers));
+}
+
+test('host-neutral: a kvox-ai slice may import exactly @marinoscar/platform-api/ai (value and type)', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir);
+    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-ai/src/runtime/allowed.ts');
+    assert.deepEqual(checkSlicePeers({ root: dir }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: a kvox-ai slice importing any other platform specifier fails, once per specifier', () => {
+  const dir = fixtureCopy();
+  try {
+    addKvoxAi(dir);
+    plant(dir, 'host-neutral/kvox-ai-forbidden.ts', 'packages/kvox-ai/src/runtime/forbidden.ts');
+    const hostNeutral = checkSlicePeers({ root: dir }).filter((v) => v.rule === 'host-neutral');
+    assert.equal(hostNeutral.length, 3);
+    for (const v of hostNeutral) assert.match(v.message, /packages\/kvox-ai\/src\/runtime\/forbidden\.ts/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/settings'/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api\/ai\/core'/);
+    assert.match(hostNeutral.map((v) => v.message).join('\n'), /'@marinoscar\/platform-api'\./);
+    assert.match(hostNeutral[0].message, /may import only '@marinoscar\/platform-api\/ai'/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: the kvox-ai exception does not extend to kvox-api', () => {
+  const dir = fixtureCopy();
+  try {
+    plant(dir, 'host-neutral/kvox-ai-allowed.ts', 'packages/kvox-api/src/core/allowed.ts');
     assert.ok(rulesOf(checkSlicePeers({ root: dir })).includes('host-neutral'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -181,6 +241,160 @@ test('app-installs: a peer named in `without` is not required of the app', () =>
     assert.match(stillFailing[0].message, /'zod'/);
     // Naming zod leaves the app clean without listing it.
     assert.deepEqual(checkSlicePeers({ root: dir, apps: ['apps/api'], without: ['zod'] }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// check-slice-peers: rule 8, host-plugins ($hostPlugins)
+// -----------------------------------------------------------------------------
+
+const MULTIPART = { name: '@fastify/multipart', range: '^10.0.0', why: 'the slice reads uploads with request.file()' };
+const PEERS_PATH = 'packages/kvox-slice-peers.json';
+const GRAPH_PATH = 'packages/kvox-slices.json';
+
+/** Edits the peers file of a fixture copy. */
+function editPeers(dir, edit) {
+  const peers = JSON.parse(readFileSync(join(dir, PEERS_PATH), 'utf8'));
+  edit(peers);
+  writeFileSync(join(dir, PEERS_PATH), JSON.stringify(peers));
+}
+
+/** Declares the multipart plugin on kvox-api/core. */
+const declareOnCore = (dir) => editPeers(dir, (peers) => { peers.$hostPlugins = { 'kvox-api': { core: [{ ...MULTIPART }] } }; });
+
+/** Writes a kvox-api source file into a slice folder. */
+function writeSlice(dir, slice, name, text) {
+  const to = join(dir, 'packages/kvox-api/src', slice, name);
+  mkdirSync(dirname(to), { recursive: true });
+  writeFileSync(to, text);
+}
+
+/** Adds a slice `uploads` that depends on `core` (graph and peers entries). */
+function addDependentSlice(dir) {
+  const graph = JSON.parse(readFileSync(join(dir, GRAPH_PATH), 'utf8'));
+  graph['kvox-api'].uploads = ['core'];
+  writeFileSync(join(dir, GRAPH_PATH), JSON.stringify(graph));
+  editPeers(dir, (peers) => { peers['kvox-api'].uploads = { peers: [] }; });
+}
+
+const hostPluginViolations = (dir, extra = {}) => checkSlicePeers({ root: dir, ...extra }).filter((v) => v.rule === 'host-plugins');
+const peersDataMessages = (dir) => checkSlicePeers({ root: dir }).filter((v) => v.rule === 'peers-data').map((v) => v.message).join('\n');
+
+test('host-plugins: a slice calling r.isMultipart() without a declaration fails, naming the file', () => {
+  const dir = fixtureCopy();
+  try {
+    writeSlice(dir, 'core', 'upload.ts', 'export const ok = (r: { isMultipart(): boolean }) => r.isMultipart();\n');
+    const found = hostPluginViolations(dir);
+    assert.equal(found.length, 1);
+    assert.match(found[0].message, /packages\/kvox-api\/src\/core\/upload\.ts/);
+    assert.match(found[0].message, /@fastify\/multipart/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-plugins: the same file passes once the slice declares the plugin in $hostPlugins', () => {
+  const dir = fixtureCopy();
+  try {
+    writeSlice(dir, 'core', 'upload.ts', 'export const ok = (r: { isMultipart(): boolean }) => r.isMultipart();\n');
+    declareOnCore(dir);
+    assert.deepEqual(checkSlicePeers({ root: dir }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-plugins: a declaration inherited through a slice dependency passes', () => {
+  const dir = fixtureCopy();
+  try {
+    addDependentSlice(dir);
+    writeSlice(dir, 'uploads', 'upload.ts', 'export const ok = (request: { file(o: object): unknown }) => request.file({});\n');
+    assert.equal(hostPluginViolations(dir).length, 1);
+    declareOnCore(dir);
+    assert.deepEqual(checkSlicePeers({ root: dir }), []);
+    const peers = readPeers(dir);
+    const closure = closureHostPlugins(readGraph(dir), peers, 'kvox-api', 'uploads');
+    assert.equal(closure.get('@fastify/multipart').slice, 'core');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-plugins: mentions inside comments do not trigger', () => {
+  const dir = fixtureCopy();
+  try {
+    writeSlice(
+      dir,
+      'core',
+      'commented.ts',
+      '// the host calls req.isMultipart() and request.file({}) before us\n/* x.saveRequestFiles() and request.parts() */\nexport const NAME = 1;\n'
+    );
+    assert.deepEqual(hostPluginViolations(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-plugins: the @fastify/multipart pattern matches the request decoration and nothing else', () => {
+  const pattern = HOST_PLUGIN_USES['@fastify/multipart'];
+  for (const code of ['req.file({})', 'request.parts()', 'x.saveRequestFiles()', 'x.isMultipart()', 'request.files()']) {
+    assert.ok(pattern.test(code), `should match ${code}`);
+  }
+  for (const code of ['zip.files()', 'doc.parts()', 'archive.file(name)', 'const isMultipart = true']) {
+    assert.ok(!pattern.test(code), `should not match ${code}`);
+  }
+});
+
+test('peers-data: a malformed $hostPlugins is reported', () => {
+  const cases = [
+    ['a key that is not a package', (p) => { p.$hostPlugins = { nope: {} }; }, /\$hostPlugins names 'nope', which is not a package/],
+    ['a slice no graph declares', (p) => { p.$hostPlugins = { 'kvox-api': { ghost: [{ ...MULTIPART }] } }; }, /'ghost', which .* does not declare/],
+    ['a value that is not a list', (p) => { p.$hostPlugins = { 'kvox-api': { core: { ...MULTIPART } } }; }, /\$hostPlugins\.kvox-api\.core must be a list/],
+    ['an empty range', (p) => { p.$hostPlugins = { 'kvox-api': { core: [{ ...MULTIPART, range: '' }] } }; }, /needs a non-empty string 'range'/],
+    ['a blank why', (p) => { p.$hostPlugins = { 'kvox-api': { core: [{ ...MULTIPART, why: '  ' }] } }; }, /needs a non-empty string 'why'/],
+    ['an unknown field', (p) => { p.$hostPlugins = { 'kvox-api': { core: [{ ...MULTIPART, extra: 1 }] } }; }, /unknown field\(s\) 'extra'/],
+    ['a duplicate name', (p) => { p.$hostPlugins = { 'kvox-api': { core: [{ ...MULTIPART }, { ...MULTIPART }] } }; }, /lists '@fastify\/multipart' twice/],
+  ];
+  for (const [label, edit, expected] of cases) {
+    const dir = fixtureCopy();
+    try {
+      editPeers(dir, edit);
+      assert.match(peersDataMessages(dir), expected, label);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('app-installs: an app importing a slice with a host plugin must list the plugin', () => {
+  const dir = fixtureCopy();
+  try {
+    declareOnCore(dir);
+    mkdirSync(join(dir, 'apps/api/src'), { recursive: true });
+    writeFileSync(join(dir, 'apps/api/package.json'), JSON.stringify({ name: 'api', dependencies: { '@marinoscar/kvox-api': '*', zod: '^4.4.3' } }));
+    writeFileSync(join(dir, 'apps/api/src/main.ts'), "import { NAME } from '@marinoscar/kvox-api/core';\n");
+    const failing = checkSlicePeers({ root: dir, apps: ['apps/api'] });
+    assert.deepEqual(rulesOf(failing), ['app-installs']);
+    assert.match(failing[0].message, /'@fastify\/multipart'/);
+    writeFileSync(
+      join(dir, 'apps/api/package.json'),
+      JSON.stringify({ name: 'api', dependencies: { '@marinoscar/kvox-api': '*', zod: '^4.4.3', '@fastify/multipart': '^10.0.0' } })
+    );
+    assert.deepEqual(checkSlicePeers({ root: dir, apps: ['apps/api'] }), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('peersTable: lists the host plugins of a package and of each slice', () => {
+  const dir = fixtureCopy();
+  try {
+    declareOnCore(dir);
+    const table = peersTable(dir);
+    assert.match(table, /host plugins \(register on the Fastify app\): @fastify\/multipart@\^10\.0\.0 \(core\)/);
+    assert.match(table, /core host plugins: @fastify\/multipart@\^10\.0\.0/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

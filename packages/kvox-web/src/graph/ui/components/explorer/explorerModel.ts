@@ -34,85 +34,85 @@ export const EXPLORER_MAX_REQUEST_SEEDS = 50;
 // -----------------------------------------------------------------------------
 
 /**
- * The explorer node attributes.
+ * Attributes of a node in the explorer graph. Sigma draws `x`, `y`, `size`, `color` and `label` as they are.
  *
  * @stability experimental
  */
 export interface ExplorerNodeAttributes {
-  /** The x. */
+  /** Horizontal position in layout space. */
   x: number;
-  /** The y. */
+  /** Vertical position in layout space. */
   y: number;
-  /** The size. */
+  /** Drawn radius, derived from the node's degree. */
   size: number;
-  /** The color. */
+  /** Fill colour, derived from the node's type. */
   color: string;
-  /** The label. */
+  /** Text drawn beside the node. */
   label: string;
-  /** The node kind. */
+  /** Whether the node is an entity or a knowledge item. */
   nodeKind: 'entity' | 'item';
   /** The ontology type key (`Person`) or item kind (`commitment`). */
   entityType: string;
-  /** The degree. */
+  /** Number of readable relations the node has in the whole graph; drives its size. */
   degree: number;
-  /** The status. */
+  /** Item status, or `null` for an entity. */
   status: string | null;
-  /** When the occurred happened, as an ISO timestamp. */
+  /** ISO 8601 instant for an event-like entity or an item, or `null` when it has none. */
   occurredAt: string | null;
   /** Set by a drag on the canvas; ForceAtlas2 leaves a fixed node where it is. */
   fixed?: boolean;
 }
 
 /**
- * The explorer edge attributes.
+ * Attributes of an edge in the explorer graph. Sigma draws `size` and `color` as they are.
  *
  * @stability experimental
  */
 export interface ExplorerEdgeAttributes {
   /** Sigma's edge program — always an arrow: the stored direction is meaningful. */
   type: 'arrow';
-  /** The relation type. */
+  /** Relation type key, e.g. `WORKS_FOR`. Stored here because `type` names sigma's drawing program. */
   relationType: string;
-  /** The valid. */
+  /** When the relation holds, or `null` for a non-temporal relation. */
   valid: GraphValidRange | null;
-  /** The confidence. */
+  /** Extraction confidence from 0 to 1, or `null` when the relation was not extracted. */
   confidence: number | null;
-  /** Whether virtual applies. */
+  /** `true` for an edge derived from an item column rather than a stored relation. */
   virtual: boolean;
   /** The relation's own props (#442), `{}` when none or from an older API. */
   props: Record<string, unknown>;
-  /** The size. */
+  /** Drawn line width. */
   size: number;
-  /** The color. */
+  /** Line colour. */
   color: string;
 }
 
 /**
- * The explorer graph.
+ * The directed multigraph the explorer builds from graph slices; nodes and edges carry the attributes above.
  *
  * @stability experimental
  */
 export type ExplorerGraph = MultiDirectedGraph<ExplorerNodeAttributes, ExplorerEdgeAttributes>;
 
 /**
- * The explorer state.
+ * Everything the explorer remembers: the graph, which nodes are seeds or expanded, the `as of` date, the active filters and whether the last slice was cut off.
  *
  * @stability experimental
  */
 export interface ExplorerState {
-  /** The graph. */
+  /** The graph the canvas draws. */
   graph: ExplorerGraph;
-  /** The seed ids. */
+  /** Ids of the nodes the exploration started from; they survive filters and are never hidden. */
   seedIds: string[];
   /** Nodes whose one-hop neighbourhood has been requested. */
   expanded: Set<string>;
-  /** The as of. */
+  /** The instant the graph is evaluated at (`YYYY-MM-DD` or ISO 8601), or `null` for now. */
   asOf: string | null;
-  /** The hidden types. */
+  /** Node types currently hidden by the type and domain filters. */
   hiddenTypes: Set<string>;
-  /** The hidden relation types. */
+  /** Relation types currently hidden by the filters. */
   hiddenRelationTypes: Set<string>;
-  /** The LAST slice said more was reachable than it returned. */
+  /** `true` when the last slice reported that more was reachable than it returned. */
   truncated: boolean;
 }
 
@@ -136,47 +136,47 @@ export function createExplorerState(): ExplorerState {
  * The slice of an MUI theme this model reads. A full `Theme` satisfies it
  * structurally, so a caller passes `useTheme()` straight through and dark mode
  * restyles through the same tokens every other surface uses.
-  *
+ *
  * @stability experimental
  */
 export interface ExplorerPalette {
-  /** The palette. */
+  /** The colour tokens the model reads. */
   palette: {
-    /** The primary. */
+    /** Used for Person nodes. */
     primary: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The secondary. */
+    /** Used for Organization nodes. */
     secondary: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The success. */
+    /** Used for Project nodes. */
     success: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The info. */
+    /** Used for Meeting nodes. */
     info: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The warning. */
+    /** Used for commitment nodes. */
     warning: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The error. */
+    /** Used for decision nodes. */
     error: {
-      /** The main. */
+      /** Colour string of the token. */
       main: string;
     };
-    /** The text. */
+    /** Text colours; used for every other node type and for edges. */
     text: {
-      /** The secondary. */
+      /** Colour of nodes with no colour of their own. */
       secondary: string;
-      /** Whether disabled applies. */
+      /** Colour of edges. */
       disabled: string;
     };
   };

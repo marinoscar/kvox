@@ -105,7 +105,10 @@ function setup(opts: { status?: string; items?: Row[]; evidence?: string[]; enti
   };
   const access = { require: jest.fn(async () => ({ id: P, ownerId: OWNER, noteId: 'n', status: 'draft' })) };
   const ontology = { effectiveSchemaFor: jest.fn(async () => schema) };
-  const spans = { validate: jest.fn(async (_tx: unknown, _s: unknown, list: unknown[]) => list.map(() => ({ quote: 'q' }))) };
+  const spans = {
+    prepare: jest.fn(async (source: { ownerId: string; noteId: string | null }) => ({ ...source })),
+    validate: jest.fn(async (_tx: unknown, _s: unknown, list: unknown[]) => list.map(() => ({ quote: 'q' }))),
+  };
   const service = new ProposalsService(prisma as never, access as never, {} as never, ontology as never, spans as never, { record: jest.fn(async () => undefined) } as never);
   jest.spyOn(service, 'detail').mockImplementation(async () => ({
     proposal: { counts: { total: items.length } } as never,
@@ -330,5 +333,25 @@ describe('ProposalsService — add from span', () => {
       evidence: [{ source: 'note', noteVersion: 1, charStart: 0, charEnd: 2, quote: 'ab' }],
     });
     expect(tx.kgProposalItem.create.mock.calls[0][0].data.payload.statementHash).not.toBe('forged');
+  });
+});
+
+describe('ProposalsService.detail evidence read (#604)', () => {
+  it('joins the cited transcript provider into the evidence findMany', async () => {
+    const { service, prisma } = setup();
+    (service.detail as jest.Mock).mockRestore();
+    prisma.kgProposalItem.findMany = jest.fn(async () => [item(E1, { sortOrder: 0 })]);
+    prisma.kgEvidence.findMany = jest.fn(async () => []);
+    jest.spyOn(service as any, 'lookups').mockResolvedValue({
+      schema, entityLabels: new Map(), segments: new Map(), noteVersions: new Map(), prechecked: new Set(),
+    });
+    jest.spyOn(service as any, 'noteHeader').mockResolvedValue(null);
+
+    await service.detail({ id: P, ownerId: OWNER, noteId: null, createdAt: new Date(), stats: {}, userGuidance: null } as never, false);
+
+    expect(prisma.kgEvidence.findMany).toHaveBeenCalledTimes(1);
+    const arg = prisma.kgEvidence.findMany.mock.calls[0][0];
+    expect(arg.where).toEqual(expect.objectContaining({ subjectKind: 'proposal_item', subjectId: { in: [E1] } }));
+    expect(arg.include).toEqual({ transcript: { select: { provider: true } } });
   });
 });

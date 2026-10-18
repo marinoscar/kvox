@@ -6,9 +6,11 @@
 // in-memory fakes, run against each adapter in `src/platform-kvox/`. What is real and
 // what is a stand-in:
 //
-//   ai          the REAL adapter over `FakeKvoxAi` (the app's scripted `KvoxAi`), so the
-//               feature mapping, the error translation and the step handling are exercised;
-//               the facade's own model calls have their own specs (`platform-kvox-ai.spec.ts`).
+//   ai          the REAL binding (`createWebKvoxAi`: `createKvoxAi` of `@marinoscar/kvox-ai`
+//               over the real `PlatformAiRuntime`, #579) over a scripted platform `AiService`
+//               (`test/helpers/web-kvox-ai.helper.ts`), so the feature mapping, the error
+//               translation (the package's and the runtime's) and the step handling are
+//               exercised; the model mechanics have their own specs in `packages/kvox-ai`.
 //   objectStore the REAL adapter over an in-memory `KvoxManagedObjects`, storage provider
 //               and `ObjectsService`, with the REAL `ObjectProcessorRegistry`: completing an
 //               upload runs the registered processors as the platform's job does.
@@ -49,10 +51,10 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JOB_SETTLED_EVENT, JobSettledEvent, RateLimitError } from '@marinoscar/platform-api/jobs';
 
-import { AiAuthError, AiBudgetError, AiRefusedError, AiStructuredOutputError } from '../../src/ai-port/ai-errors';
-import { keyMissingConflict, lacksCapabilityConflict, notConfiguredConflict } from '../../src/ai-port/kvox-ai-errors';
-import { FakeKvoxAi } from '../../src/ai-port/testing/fake-kvox-ai';
-import { PlatformKvoxAiAdapter } from '../../src/platform-kvox/ai/platform-kvox-ai.adapter';
+import { AiError } from '@marinoscar/platform-api/ai';
+
+import { KvoxAiConflict } from '../../src/ai-port/kvox-ai-errors';
+import { createWebAiUnderTest } from '../helpers/web-kvox-ai.helper';
 import { PlatformKvoxAuditAdapter } from '../../src/platform-kvox/audit/platform-kvox-audit.adapter';
 import { PlatformKvoxEventsAdapter } from '../../src/platform-kvox/events/platform-kvox-events.adapter';
 import { PlatformKvoxIdentityAdapter } from '../../src/platform-kvox/identity/platform-kvox-identity.adapter';
@@ -65,72 +67,47 @@ import { InProcessEventBus } from '@marinoscar/platform-api/host';
 
 // -- ai ----------------------------------------------------------------------
 
-/** A `FakeKvoxAi` whose NEXT stream, chat or embed call fails with the armed error. */
-class ArmedFacade extends FakeKvoxAi {
-  armed: unknown = null;
-
-  private take(): unknown {
-    const error = this.armed;
-    this.armed = null;
-    return error;
-  }
-
-  override streamText(req: Parameters<FakeKvoxAi['streamText']>[0]) {
-    const error = this.take();
-    if (error === null) return super.streamText(req);
-    return (async function* () {
-      throw error;
-    })();
-  }
-
-  override chat(req: Parameters<FakeKvoxAi['chat']>[0]) {
-    const error = this.take();
-    if (error === null) return super.chat(req);
-    return (async function* () {
-      throw error;
-    })();
-  }
-
-  override async embed(req: Parameters<FakeKvoxAi['embed']>[0]) {
-    const error = this.take();
-    if (error !== null) throw error;
-    return super.embed(req);
-  }
-}
-
-/** What the facade throws for each port error class (the auth one carries a key-shaped string on purpose). */
-const FACADE_FAILURES: Record<KvoxAiErrorClass, () => unknown> = {
-  auth: () => new AiAuthError('The provider rejected the key sk-abcdefghij1234567890 for this user.'),
-  refusal: () => new AiRefusedError('The provider declined to answer.'),
-  rate_limit: () => new RateLimitError('Rate limited', 1500),
-  budget: () => new AiBudgetError('Too large', 14_200, 11_500, 'openai'),
-  timeout: () => new Error('The AI request timed out after 600000 ms.'),
-  not_configured: () => notConfiguredConflict(),
-  key_missing: () => keyMissingConflict(),
-  capability: () => lacksCapabilityConflict({ task: 'graph.extract', model: 'm', missing: ['structured output'] }),
-  truncated: () => new AiStructuredOutputError('The answer was cut off.', 'truncated'),
-  invalid_output: () => new AiStructuredOutputError('The answer was not JSON.', 'invalid_json'),
-  other: () => new Error('The provider is having a bad day.'),
+/**
+ * What the platform `AiService` (or the target resolver under it) throws for each port error
+ * class, on a route (the kit's default context has no job). The auth one carries a key-shaped
+ * string on purpose. `null`: a text, chat or embeddings round trip of the web edition cannot
+ * produce the class, and why.
+ */
+const PLATFORM_FAILURES: Record<KvoxAiErrorClass, (() => unknown) | { cannot: string }> = {
+  auth: () => new KvoxAiConflict('ai_key_invalid', 'The provider rejected the key sk-abcdefghij1234567890 for this user.'),
+  refusal: () => new AiError('AI_CONTENT_FILTERED', 'The provider declined to answer.'),
+  rate_limit: () => new AiError('AI_RATE_LIMITED', 'Rate limited', { retryAfterMs: 1500 }),
+  budget: { cannot: 'a budget refusal is the caller\'s pre-flight check (computeTokenBudget), never a provider answer' },
+  timeout: () => new DOMException('The provider call outlived its deadline.', 'TimeoutError'),
+  not_configured: () => new AiError('AI_DISABLED', 'AI is switched off.'),
+  key_missing: () => new AiError('AI_KEY_REQUIRED', 'No key may pay for this call.'),
+  capability: () => new AiError('AI_MODEL_NOT_ENABLED', 'The model is not enabled.'),
+  truncated: { cannot: 'only a structured call that set an output ceiling reads truncation (proved in packages/kvox-ai)' },
+  invalid_output: { cannot: 'only a structured call or a job reads an unusable structured answer (proved in packages/kvox-ai)' },
+  other: () => new AiError('AI_PROVIDER_UNAVAILABLE', 'The provider is having a bad day.'),
 };
 
 function aiUnderTest(): KvoxPortsUnderTest['ai'] {
-  const facade = new ArmedFacade();
-  facade.setStructuredHandler(() => ({ ok: true }));
-  const adapter = new PlatformKvoxAiAdapter(facade, { graphEnabled: async () => true } as never);
+  const web = createWebAiUnderTest();
 
   return {
-    port: adapter,
+    port: web.port,
     structured: { schema: z.object({ ok: z.boolean() }), schemaName: 'conformance' },
     failNextWith(errorClass) {
-      facade.armed = FACADE_FAILURES[errorClass]();
+      const failure = PLATFORM_FAILURES[errorClass];
+      if (typeof failure !== 'function') return false;
+      web.arm(failure());
       return true;
     },
     arrangeTextAfterToolCall() {
-      facade.queueChat([
-        { kind: 'delta', text: 'Let me look.' },
-        { kind: 'tool_call', id: 'call-1', name: 'lookup', argumentsJson: '{}' },
-        { kind: 'delta', text: 'Text after the call.' },
-        { kind: 'done', finishReason: 'tool_calls', model: 'gpt-4o', usage: { inputTokens: 1, outputTokens: 1 } },
+      web.script([
+        { type: 'output_text.delta', delta: 'Let me look.' },
+        { type: 'output_item.done', item: { type: 'function_call', callId: 'call-1', name: 'lookup', arguments: '{}' } },
+        { type: 'output_text.delta', delta: 'Text after the call.' },
+        {
+          type: 'response.completed',
+          response: { id: 'r', provider: 'openai', model: 'gpt-4o', output: [], outputText: '', usage: { inputTokens: 1, outputTokens: 1 }, finishReason: 'tool_calls' },
+        },
       ]);
     },
   };
@@ -462,6 +439,8 @@ function settingsUnderTest(): KvoxPortsUnderTest['settings'] {
     ],
     system: { name: 'transcription', patch: { enabled: true, label: 'x' }, actorUserId: 'user-conformance' },
     user: { name: 'graph', userId: 'user-conformance', patch: { mode: 'dark' } },
+    // The real per-user `graph` namespace is declared with `defaults: undefined` (absent means the slice's own).
+    noDefaults: { name: 'graph', schema: z.object({ mode: z.string() }), userId: 'user-conformance-fresh', patch: { mode: 'dark' } },
   };
 }
 
@@ -511,7 +490,30 @@ async function build(): Promise<KvoxPortsUnderTest> {
 describeKvoxPortsConformance('web edition adapters', build, { describe, it, expect });
 
 describe('the adapters cover every port error class', () => {
-  it('has a facade failure for each class the kit knows', () => {
-    expect(Object.keys(FACADE_FAILURES).sort()).toEqual([...KVOX_AI_ERROR_CLASSES].sort());
+  it('has a platform failure (or a reason it cannot happen) for each class the kit knows', () => {
+    expect(Object.keys(PLATFORM_FAILURES).sort()).toEqual([...KVOX_AI_ERROR_CLASSES].sort());
+  });
+
+  it.each(
+    (Object.entries(PLATFORM_FAILURES) as Array<[KvoxAiErrorClass, (() => unknown) | { cannot: string }]>).filter(
+      (entry): entry is [KvoxAiErrorClass, () => unknown] => typeof entry[1] === 'function',
+    ),
+  )('a platform failure meant as %s surfaces as exactly that class, with no key in it', async (errorClass, failure) => {
+    const web = createWebAiUnderTest();
+    const ctx = { userId: 'user-conformance', orgId: null, feature: 'notes.generate' };
+    const target = await web.port.resolveTask(ctx, 'notes.generate');
+    web.arm(failure());
+
+    const error = await (async () => {
+      try {
+        for await (const event of web.port.generateText(ctx, { target, system: 's', user: 'u' })) void event;
+      } catch (caught) {
+        return caught as { errorClass?: string; message: string };
+      }
+      throw new Error('expected a failure');
+    })();
+
+    expect(error.errorClass).toBe(errorClass);
+    expect(error.message).not.toMatch(/sk-[A-Za-z0-9]{10,}/);
   });
 });

@@ -4,8 +4,10 @@
 //
 // The speaker-naming write into the transcript owner's graph. Thin on purpose:
 // `SpeakerLinkReconciler` holds the algorithm and runs on the transaction this
-// handler opens; afterwards, outside it, `kg.embed` is enqueued for any Person
-// the run created (guarded on the registry, as #355 does).
+// handler opens, with the schema and permission resolved before it opens
+// (#612: the transaction uses only `tx`); afterwards, outside it, `kg.embed`
+// is enqueued for any Person the run created (guarded on the registry, as
+// #355 does).
 //
 //   profile      { maxRuntimeMs: 2 min, maxAttempts: 3 } — retry-safe because
 //                the reconcile is idempotent under its advisory lock
@@ -75,7 +77,10 @@ export class KgSpeakerLinkHandler implements KvoxJobHandler, OnModuleInit {
       return;
     }
 
-    const summary = await this.prisma.$transaction((tx) => this.reconciler.reconcile(tx, input), {
+    // Everything that does not need the transaction is read before it opens: on a
+    // one-connection pool (PGlite) a read inside it would wait forever (#612).
+    const context = await this.reconciler.resolveContext(input.actorUserId);
+    const summary = await this.prisma.$transaction((tx) => this.reconciler.reconcile(tx, input, context), {
       timeout: 60_000,
     });
 

@@ -17,7 +17,7 @@
 > (`aiProviderThrottleKey`); `packages/kvox-api/src/transcription/keyterms.ts`
 > (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
 > (the four-tab ceiling). Everything under `packages/kvox-api/src/graph/`,
-> `apps/web/src/pages/graph/` (or wherever §13 lands it), and every `kg_*`
+> `packages/kvox-web/src/graph/ui/pages/` (or wherever §13 lands it), and every `kg_*`
 > table is *planned*.
 >
 > Builds on: `docs/specs/transcription.md` (segment stability, the version
@@ -846,7 +846,7 @@ about that specific pattern does not apply to this job type at all).
   something it does not, rather than inventing a fresh entity for every
   mention regardless of whether one already exists.
 
-> **Call path since issue #475.** The provider call below is `KvoxAi.generateStructured` (`apps/api/src/ai-port/`, [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph were the original design and no longer exist (#477 deleted them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
+> **Call path since issue #475.** The provider call below is `generateStructured` of the `KVOX_AI` port (`createKvoxAi` of `@marinoscar/kvox-ai`; [notes.md](notes.md) §2.8 "`KvoxAi` call path") with feature `graph_extract`, passing the run's strict JSON Schema as `jsonSchema` and the Zod validator as `schema`. The `AiProvider.generateStructured` method and `AiTaskModelResolver` named in the paragraph were the original design and no longer exist (#477 deleted them); the single-request, Zod-validated, failed-proposal-on-malformed-answer posture is unchanged.
 
 **One provider call, structured output.** A single request per extraction
 run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
@@ -914,7 +914,7 @@ itself.
 afterthought — per the research summary above.** A golden set of 30
 **synthetic**, hand-authored meeting transcripts — invented conversations,
 never real recordings or real customer data — kept under
-`apps/api/test/fixtures/kg-golden/` (planned) and committed to the
+`packages/kvox-eval/fixtures/kg-golden/` and committed to the
 repository like any other fixture, specifically because a real transcript
 can never be checked into a repository or run inside CI's shared
 environment without becoming exactly the third-party-consent problem §15
@@ -941,9 +941,9 @@ ships regardless of where the numbers land, and the numbers are what
 determine how much the panel can safely pre-check versus leave for a human.
 
 **Measuring extraction (issue #362).** The golden set lives at
-`apps/api/test/fixtures/kg-golden/` (format, the synthetic-only rule and the
-coverage list are in its `README.md`), and the harness is `npm run kg:eval
---workspace=api`: `--predictions gold` is the self-test that must print 1.000
+`packages/kvox-eval/fixtures/kg-golden/` (format, the synthetic-only rule and the
+coverage list are in its `README.md`), and the harness is the published package `@marinoscar/kvox-eval` (`kvox-eval kg`, #580;
+`npm run kg:eval --workspace=api` is a thin wrapper): `--predictions gold` is the self-test that must print 1.000
 everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
 runs a registered `KgEvalRunner` (`extract`, issue #363, below),
 `--enforce` fails on a missed target for local use (CI reports only), and
@@ -969,8 +969,10 @@ Between persisting the rows and pre-checking them, the job runs every stage
 registered with `ProposalStageRegistry`, in order — #364's `resolution`,
 #365's `work-item-dedup`, `temporal-closing`, `rejection-memory`. The payload
 shapes every later issue imports are `graph/proposals/proposal-payload.schema.ts`.
-`npm run kg:eval -- --run extract --model <id>` runs this same pure pipeline
-against the golden set with `KG_EVAL_OPENAI_API_KEY` and no database.
+`npm run kg:eval -- --run extract --model <id>` (or `kvox-eval kg --runner extract`)
+runs this same pure pipeline against the golden set with `KVOX_EVAL_OPENAI_API_KEY`
+(`KG_EVAL_OPENAI_API_KEY` is a deprecated alias) and no database, through
+`createKvoxAi` over `createDirectRuntime`.
 
 **Sizing the answer, and recovering from truncation (issue #435).** A note
 can hold more rows than one structured-output answer can carry, and before
@@ -1053,7 +1055,7 @@ precise at this stage:
   type, organization, role, and top co-mentions concatenated and embedded
   through `KvoxAi.embed` (feature `graph_embed`, via `GraphEmbedder`, since #475; the
   search side uses the same port with `search_embed`) —
-  one catalog (`ai-port/embedding-catalog.ts`), because a second embedder for the same
+  one catalog (`packages/kvox-ai/src/embedding/embedding-catalog.ts`), because a second embedder for the same
   model and dimension contract is a second place for those two facts to
   drift apart.
 
@@ -1274,6 +1276,22 @@ an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
+
+The manual edit covers a **manual relation edit** too (#586): on a `Person`'s
+page the owner may set a `REPORTS_TO` (→ `Person`), `WORKS_FOR` or `HAS_ROLE`
+(→ `Organization`) by hand, or remove a wrong one
+(`POST`/`DELETE /api/graph/entities/:id/relations`, §12). It changes no part
+of the model above. The write still goes through `GraphWriteService`, and it
+still carries evidence: one server-authored citation whose source is **the
+owner** (§5.3's row with every anchor `NULL`, the `quote` "Set by hand: …",
+and a reserved `source_iri` no wire caller may send), so the no-orphans
+invariant (§3.3) holds and Ask can cite the fact. Setting one applies §5.4's
+closing rule exactly as committing a proposal does — the person's still-open
+edge of the type, started earlier, closes at the new start and is linked to
+the new edge — because the owner stating "Jenny now reports to Mark" is the
+review that a `closing` row otherwise waits for. Removing one is a
+correction, not an end of validity: the row becomes `rejected` (kept, never
+read, §5.5) and an edge it had closed reopens.
 
 The speaker-naming write (#356) is **owner-only and a full reconcile**: it
 writes only into the transcript owner's graph, only when the owner performed
@@ -1775,7 +1793,9 @@ app's default role is Viewer.
   (§18.2 — reading one's own graph or its shapes out in a standard format is
   a read, not a write).
 - **`graph:write`** — proposal commit/discard, re-extract, entity
-  create/edit/merge/reverse-merge/forget-a-person, relation edit, resolution
+  create/edit/merge/reverse-merge/forget-a-person, relation edit (realized by
+  #586 as `POST /api/graph/entities/:id/relations` and `DELETE
+  /api/graph/entities/:id/relations/:relationId`, §8), resolution
   settings, `kg_attribute_defs` CRUD (§17.3 — adding, editing, and
   deprecating a user-defined attribute is authoring the schema one proposes
   against, gated the same as every other write to it), and import (§18.3 —
@@ -2853,8 +2873,10 @@ server-only, `{ 30 min, 1 attempt }`):
   rejecting drops them. `kv:sensitivity` on an item is lifted out here too,
   never offered.
 - **Validates** the rest against `generateShacl` for this owner with
-  `rdf-validate-shacl` — in a **child `node` process** started with an inline
-  ES module (`shacl-engine.ts`): the engine is ESM-only while the API is
+  `rdf-validate-shacl` — in a **child `node` process** running the plain
+  CommonJS script `runners/shacl-runner.cjs` (`shacl-engine.ts`; a host whose
+  binary cannot run Node, KVox Desktop, passes `shacl.run` and runs the same
+  script's `runShaclValidation` in an isolated process of its own): the engine is ESM-only while the API is
   CommonJS, a child loads it the same way under the compiled build and under
   Jest, the engine's synchronous `validateAll` never blocks the worker's event
   loop (lease renewal keeps running), and a pathological file costs one killed
@@ -3103,7 +3125,7 @@ brief's prose is `kg.entity_digest`'s own output, shown as-is (§9.1). A
 
 ### 20.2 Capability flags
 
-> Since issue #476 the Ask loop's `chat()` is `KvoxAi.chat()`, a platform `stream()` call (`apps/api/src/ai-port/platform-kvox-ai.ts`, `chat-mapping.ts`), and since #477 the `AiProvider` interface and its registry no longer exist; see §21.3 "Provider call" and [`notes.md`](notes.md) §2.6 and §2.7. The text below keeps the original design where it explains the capability flags.
+> Since issue #476 the Ask loop's `chat()` is `chat` of the `KVOX_AI` port, a platform `stream()` call (`createKvoxAi` and `chat/chat-mapping.ts` of `@marinoscar/kvox-ai`), and since #477 the `AiProvider` interface and its registry no longer exist; see §21.3 "Provider call" and [`notes.md`](notes.md) §2.6 and §2.7. The text below keeps the original design where it explains the capability flags.
 
 `generateStructured` (§6) and the tool-calling loop `ask.respond` needs
 (§21) are both capabilities of the AI call layer, now the `KvoxAi` methods
@@ -3123,7 +3145,7 @@ unrepresentable rather than merely discouraged.
 
 > Since issue #473 the task-to-model decision runs in `KvoxAiTargetResolver` (`apps/api/src/ai-port/`), a platform `AI_TARGET_RESOLVER`, over the same `chooseTaskModel`; the feature ids and wire codes are in [`notes.md`](notes.md) §2.8 "Platform AI slice". The text below describes the original `AiTaskModelResolver`, which it replaced (deleted by #477).
 >
-> **Graph call path since issue #475.** Every graph model call goes through `KvoxAi` and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
+> **Graph call path since issue #475.** Every graph model call goes through the `KVOX_AI` port and nothing in `graph/` imports a provider, a key service or the platform AI package. The graph's feature ids are `graph_extract` (`kg.extract`), `graph_adjudicate` (`kg.resolve`, dedup, `kg.import`), `graph_digest` (`kg.entity_digest`), `graph_embed` (`kg.embed`, resolution) and `graph_agent` (`ask.respond`, ported by #476); the first three map to the task keys `graph.extract`, `graph.adjudicate`, `graph.digest`.
 >
 > `GraphAiRunResolver.resolve(userId, task, requested?, { requireKey? })` (`packages/kvox-api/src/graph/graph-ai-run.service.ts`) replaces `AiTaskModelResolver.resolve` for those three tasks. It calls `KvoxAi.readiness(userId, feature, requested)` and either returns a `GraphAiRun` (`providerId`, `model`, `reasoningEffort`, `modelLimits`, the policy caps, a `countTokens` bound to `KvoxAi.countTokens`, `keyConfigured`, `source`) or throws the same 409 or 400 the product always answered with, built from the `ai-port/kvox-ai-errors.ts` sentences: `graph_disabled`, `ai_not_configured`, `ai_key_missing`, `model_not_permitted`, `model_lacks_capability`. `requireKey: false` skips only the missing-key refusal, for an estimate that spends nothing. It also owns the one read of `ai.graphEnabled`, so no graph service reads the retired settings service. No key is read or held: `readiness` reports `hasKey`, and the platform resolves the key per call.
 >
@@ -3312,9 +3334,9 @@ of a proposal.
   call is appended to `tool_calls` and written immediately (#379's `step`
   frames). Output is `min(2000, the model's ceiling)` tokens a call, 60 s a
   call (narrowed by `ai.requestTimeoutMs`).
-- *Provider call (#476)*: each `KvoxAi.chat()` is one platform `stream()` call
-  on the asking user's client (`apps/api/src/ai-port/platform-kvox-ai.ts`);
-  the pure mapping is `chat-mapping.ts`. Ask no longer calls `AiProvider.chat`.
+- *Provider call (#476)*: each port `chat()` is one platform `stream()` call
+  on the asking user's client (`createKvoxAi` over `PlatformAiRuntime`);
+  the pure mapping is `chat/chat-mapping.ts` of `@marinoscar/kvox-ai`. Ask no longer calls `AiProvider.chat`.
   - *History*: the whole transcript is replayed on every call, never
     `previousResponseId`; the loop owns its messages and budget, and a provider
     that stores nothing works the same. Leading `system` messages become
@@ -3342,7 +3364,7 @@ of a proposal.
     (an unknown reason reads as `stop`); a response that ends with `error`, or
     a stream that closes without `response.completed`, is an error, never a
     short answer. Usage that is absent is `null`, never 0.
-  - *Errors*: every failure leaves through `mapAiError` (a 429 is
+  - *Errors*: every failure leaves as a `KvoxAiError` (`toKvoxAiError`) (a 429 is
     `RateLimitError`, which the handler defers before any text was flushed and
     files as `rate_limit` after). The call is bounded by the shorter of the
     request's `timeoutMs` and `ai.requestTimeoutMs`; expiry is a
@@ -3638,32 +3660,30 @@ truncated, ms }`, never its arguments or result.
 
 The agent promises two things a unit test cannot prove: that every citation
 it shows points at something a tool really returned, and that its answers are
-right often enough to trust. `apps/api/scripts/ask-eval/` builds that
+right often enough to trust. `@marinoscar/kvox-eval` (the `ask-run` slice and `kvox-eval ask`, headless since #608; the web app's `npm run ask:eval` is a wrapper) builds that
 evaluation on top of #362's synthetic golden meetings, isolating the agent
 from extraction quality by seeding the meetings' **hand labels** as the
 graph — never a model's own extraction — under one throwaway user
-(`seed-graph.ts`; refuses to run against a database whose name doesn't end
-`_test`/`_eval`, per `--allow-db`).
+(`seed-golden-graph.ts`, through `GraphWriteService`). The run uses an in-memory PGlite migrated by
+the shipped migration SQL, so it can never touch a real database and the old `_test`/`_eval` name check and `--allow-db` are gone.
 
-`apps/api/test/fixtures/kg-golden/ask-questions.json` is a second golden set
-over the same meetings: ≥ 40 questions (`question-schema.ts`), each with
+`packages/kvox-eval/fixtures/kg-golden/ask-questions.json` is a second golden set
+over the same meetings: ≥ 40 questions (`question-schema.ts` in `@marinoscar/kvox-eval`), each with
 `expected.{entities, answerAll, answerNone, citeFrom, notFound}` — substring
 groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
 fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
 
-The runner (`run.ts`) boots a real `NestFactory.createApplicationContext`
-(`JOBS_WORKER_MODE=off`), stores the key from `ASK_EVAL_OPENAI_API_KEY` on
-the eval user, points this deployment's `ai` policy at the eval model for
-the run's duration only (restored in `teardown()` regardless of outcome —
-leaving it wired in would silently change every other user's Ask
-conversation), and for each question calls the real `AskMessagesService`
+The runner (`run-ask-eval.ts`) boots a real `NestFactory.createApplicationContext`
+over that database (the transcription, search, transcripts, notes, graph and Ask slices), binds the `KVOX_AI` port to the live model port
+(the key comes from `KVOX_EVAL_OPENAI_API_KEY`, `ASK_EVAL_OPENAI_API_KEY` is a deprecated alias, and is never stored: no settings
+row or user key exists in the in-memory database, so there is nothing to restore), and for each question calls the real `AskMessagesService`
 then invokes `AskRespondHandler.process(job)` directly — no queue poll, this
-process is the only claimer. A thin wrapper around the registered `KvoxAi`
-port's own `chat()` (§21.3, "Provider call") captures every `messages` array
+process is the only claimer. A thin wrapper around the port's own
+`chat()` (§21.3, "Provider call") captures every `messages` array
 actually sent, for the leak check.
 
-`scorer.ts` (pure) computes, per question: `citationValidity` (valid
+`scorer.ts` (pure, in `@marinoscar/kvox-eval`) computes, per question: `citationValidity` (valid
 citations ÷ all markers — **gate: must be 1.0**), `citeFromHit` (a valid
 `evidence`-kind citation resolves, via the seeder's evidence-source map, to a
 listed segment/note — `itm`/`rel` markers resolve through their evidence row
@@ -3672,8 +3692,8 @@ and `sensitiveLeak` (an `answerNone` string found in the answer **or** in any
 captured prompt — **gate: must be zero**, turning §15's "sensitive never
 leaves" into a measured property rather than an assertion about the code).
 
-Two run modes, mirroring `kg:eval`'s own posture: `npm run ask:eval
---workspace=api` needs a real key and is **local and report-only** — CI never
+Two run modes, mirroring `kg:eval`'s own posture: `kvox-eval ask` (or `npm run ask:eval
+--workspace=api`) needs a real key and is **local and report-only** — CI never
 gates on a real model's answer quality, which would need a paid key in CI and
 flakes on provider variance. `apps/api/test/ask/ask-eval.replay.db.spec.ts`
 (the web edition's replay, over its AI adapter; the slice's own conformance suite, `describeAskConformance`, runs the same scripted turns over the in-memory tables) is what runs in CI (the `db-test` job's `npm run test:db`): the full gold graph,
@@ -4108,7 +4128,7 @@ serve for their own epics.
 | All eight job types (`kg.extract`, `kg.resolve`, `kg.entity_digest`, `kg.embed`, `kg.purge`, `kg.migrate`, `kg.export`, `kg.import`) declare no `nodeResultSchema`/`persistNodeResult`, and each declares exactly the `{ maxRuntimeMs, maxAttempts }` profile §11's table states | Unit assertions over each handler's declared members, mirroring `job-handler.registry.spec.ts`'s existing pattern |
 | Every graph-touching `@Cron` (if any is added, e.g. a `graph.housekeeping` sweep) only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended |
 | An `accepted`/`edited` entity, relation, or proposal item always has ≥ 1 `kg_evidence` row after a commit — the no-orphans invariant (§3.3, §8) | A dedicated integration test committing a proposal and asserting every resulting row's evidence count, plus a negative test asserting the commit transaction refuses to write an evidence-less row |
-| The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `apps/api/scripts/kg-eval.ts` run in CI against `apps/api/test/fixtures/kg-golden/`, gating the targets stated in §6 |
+| The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `kvox-eval kg` (`@marinoscar/kvox-eval`; `apps/api/scripts/kg-eval.ts` is a wrapper) run in CI against `packages/kvox-eval/fixtures/kg-golden/`, gating the targets stated in §6 |
 | The rate-limit throttle key for `kg.extract`/`kg.resolve`/`kg.entity_digest` is `aiProviderThrottleKey(userId)`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the run's `userId`, mirroring `note-generate.handler.spec.ts`'s existing pattern |
 | Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `packages/kvox-api/src/graph-extraction/resolution/resolution.service.spec.ts` |
 | A merge is fully reversible: `POST .../merges/:id/reverse` restores the tombstoned entity, its reassigned relations/evidence/aliases, and re-queues the pair for review | An integration test performing a merge, reversing it, and asserting the graph state is byte-for-byte the pre-merge state |
@@ -4128,7 +4148,7 @@ serve for their own epics.
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
-| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai-port/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
+| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `packages/kvox-ai/src/tasks/task-models.spec.ts` and the `PUT /api/ai-tasks/settings` integration test (`apps/api/test/ai/ai-tasks.integration.spec.ts`) asserting the save is rejected, not merely warned about |
 | Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `packages/kvox-api/src/ask/citations.spec.ts` and `packages/kvox-api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 

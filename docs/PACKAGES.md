@@ -1,6 +1,6 @@
 # The `@marinoscar/kvox-*` packages
 
-How the four publishable KVox packages are laid out, documented, checked and released. The platform packages (`@marinoscar/platform-*`) follow the same standard in the EnterpriseAppBase repository; this page adapts it to KVox. Release procedure: [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md). Epic: marinoscar/kvox#486, this pipeline: #487.
+How the six publishable KVox packages are laid out, documented, checked and released. The platform packages (`@marinoscar/platform-*`) follow the same standard in the EnterpriseAppBase repository; this page adapts it to KVox. Release procedure: [runbooks/release-kvox-packages.md](runbooks/release-kvox-packages.md). Epic: marinoscar/kvox#486, this pipeline: #487.
 
 ## Contents
 
@@ -23,12 +23,14 @@ How the four publishable KVox packages are laid out, documented, checked and rel
 |---|---|---|---|
 | `@marinoscar/kvox-contract` | `packages/kvox-contract` | dual ESM + CommonJS | `.`, `./transcription`, `./transcripts`, `./search`, `./notes`, `./graph`, `./ask`, `./ontology`, `./errors`, `./schemas/transcript-export.v1.json` |
 | `@marinoscar/kvox-db` | `packages/kvox-db` | CommonJS, plus the `kvox-db` bin | `.` |
-| `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing`, `./transcription`, `./transcription/testing`, `./search`, `./search/testing`, `./transcripts`, `./transcripts/testing`, `./notes`, `./notes/templates`, `./notes/testing`, `./graph`, `./graph/testing`, `./graph-extraction`, `./graph-extraction/testing`, `./graph-rdf`, `./graph-rdf/testing`, `./ask`, `./ask/testing` |
+| `@marinoscar/kvox-api` | `packages/kvox-api` | CommonJS (`tsc`, decorator metadata) | `./core`, `./ports`, `./testing`, `./transcription`, `./transcription/testing`, `./search`, `./search/testing`, `./transcripts`, `./transcripts/testing`, `./notes`, `./notes/templates`, `./notes/testing`, `./graph`, `./graph/testing`, `./graph-extraction`, `./graph-extraction/testing`, `./graph-rdf`, `./graph-rdf/shacl-runner`, `./graph-rdf/testing`, `./ask`, `./ask/testing` |
+| `@marinoscar/kvox-ai` | `packages/kvox-ai` | CommonJS (`tsc`) | `.`, `./testing` (scripted runtime, conformance suite, request recorders), `./copilot` (GitHub Copilot adapter; optional peer `@github/copilot-sdk`) |
+| `@marinoscar/kvox-eval` | `packages/kvox-eval` | CommonJS (`tsc`), plus the `kvox-eval` bin | `.`, `./fixtures` (and the golden set under `fixtures/kg-golden/`), `./parity` (and the request snapshots under `parity/`) |
 | `@marinoscar/kvox-web` | `packages/kvox-web` | ESM | `./core/headless`, `./core/ui`, `./core/testing`, `./transcription/headless`, `./transcription/ui`, `./search/headless`, `./search/ui`, `./transcripts/headless`, `./transcripts/ui`, `./notes/headless`, `./notes/ui`, `./graph/headless`, `./graph/ui`, `./graph/testing`, `./ask/headless`, `./ask/ui` |
 
 Every package: `"version"` moved by Changesets (the source says `0.0.0`), `"license": "MIT"`, `engines.node >=24`, `publishConfig` `{ "access": "public", "provenance": true }`, a `repository.directory`, and a `files` list of `dist`, `README.md`, `CHANGELOG.md` and `LICENSE` (plus `bin`, `schema`, `migrations`, `raw-sql-indexes.json`, `extensions.json`, `schema-objects.json` for `kvox-db`). `LICENSE` is copied from the repository root by the `prepack` script (`scripts/kvox-packages/copy-license.mjs`) and is git-ignored in the package.
 
-The four packages are one Changesets `fixed` group: they always share one version, so a consumer never mixes `kvox-api@0.1.0-next.3` with `kvox-contract@0.1.0-next.2`. The apps (`api`, `web`, `cli`) and `@app/shared` are in `ignore`; `apps/api` and `apps/web` depend on the packages with a `*` workspace range.
+The six packages are one Changesets `fixed` group: they always share one version, so a consumer never mixes `kvox-api@0.1.0-next.3` with `kvox-contract@0.1.0-next.2`. The apps (`api`, `web`, `cli`) and `@app/shared` are in `ignore`; `apps/api` and `apps/web` depend on the packages with a `*` workspace range.
 
 `@marinoscar/kvox-contract` is dual because three kinds of consumer load it. Its build is `tsc -p tsconfig.cjs.json && tsc -p tsconfig.esm.json && node ../../scripts/kvox-packages/write-dist-stubs.mjs`. A `.d.ts` takes its module format from the nearest `package.json`; the package is `"type": "module"`, so `dist/cjs` gets a stub `package.json` of `{"type":"commonjs"}` or a CommonJS consumer fails with TS1479. `exports` points the `import` and `require` conditions at their own trees.
 
@@ -102,7 +104,7 @@ Describe behaviour and the reason in the comment, name units, and use `{@link Sy
 A package whose public types are mostly `z.infer` shapes (`kvox-contract`) may drop `"Property"` from `requiredToBeDocumented` in its own `typedoc.json`, with a comment saying why; every exported declaration still needs TSDoc and `@stability`. `typedoc.base.json` holds the shared options (private and internal members excluded, validation of undocumented, unexported and unresolved items treated as errors, the two extra block tags). Each package's `typedoc.json` extends it and sets `tsconfig`, `entryPoints` (one `./src/<slice>/index.ts` per exported subpath, `./src/index.ts` for the root), `out` (`docs-api/html`) and `json` (`docs-api/api.json`). The `docs-api/` folder is generated and git-ignored.
 
 ```bash
-npm run docs:kvox-packages          # TypeDoc for the four packages
+npm run docs:kvox-packages          # TypeDoc for the six packages
 npm run check:kvox-package-docs     # docs, then the standard above
 ```
 
@@ -129,12 +131,13 @@ Data lives in two files (both append-only):
 | File | Content |
 |---|---|
 | `packages/kvox-slices.json` | slice -> slices it may import |
-| `packages/kvox-slice-peers.json` | per package and slice, `{ "peers": [...] }`: every package its own files import; plus `$universal`, `$implies`, `$reserved` and `$hostOnly` |
+| `packages/kvox-slice-peers.json` | per package and slice, `{ "peers": [...] }`: every package its own files import; plus `$universal`, `$implies`, `$reserved`, `$hostOnly` and `$hostPlugins` |
 
 - `$universal`: the slices every consumer of the package gets (`"*"` for all). The peers of these slices, with the slices they depend on, are the package's **required** peers. Any other peer must be `optional` in `peerDependenciesMeta`.
 - `$implies`: `{ "react-dom": ["react"] }`. Installing the key brings the values with it, so a slice that lists `react-dom` may also import `react`.
 - `$reserved`: optional peers declared ahead of the slice that will import them (Epic 6 and 7). Move the entry into the slice when it arrives.
 - `$hostOnly`: optional peers no slice may import (`@marinoscar/platform-api` and `@marinoscar/platform-web`, used by host wiring only).
+- `$hostPlugins`: `{ "kvox-api": { "notes": [{ "name", "range", "why" }] } }`. Fastify plugins the **host** must install and register on its app because a slice uses the request decoration they add (`request.file()`) without importing them, so rule 4 cannot see them. Not peers of the package. Today `@fastify/multipart@^10.0.0` for `transcripts`, `notes` and `graph-rdf`; a slice that depends on one of those (`graph`, `graph-extraction`, `ask`) inherits it. `--table` prints a "host plugins (register on the Fastify app)" line.
 - `entries` (per slice, web only): `{ "peers": [...], "entries": { "ui": ["@mui/material"] } }`. A web slice is split into the entry folders `headless/`, `ui/` and `testing/`; the slice's own `peers` are what every file of it may import, and an entry's list adds the peers only the files of that entry (and the same entry of the slices it depends on) may import. An entry's peers are never required, even when the slice is universal, so a host that uses only the `headless` entries installs no MUI. `app-installs` follows the entry the app imports (`@marinoscar/kvox-web/core/ui`).
 
 The rules (each violation prints as `[rule] message`):
@@ -146,6 +149,7 @@ The rules (each violation prints as `[rule] message`):
 5. **app-installs** - with `--app <dir>` (CI passes `apps/api` and `apps/web`): an app that imports `@marinoscar/kvox-<pkg>/<slice>` lists the package and every peer of that slice in its own `package.json` or the root one. `--without <package>` (repeatable) exempts a peer the app leaves out on purpose because the feature that needs it is switched off in `forRoot`: the bare host passes `@nestjs/schedule`, `pdfkit`, `docx` and `unpdf`, and its runner asserts they are not installed.
 6. **host-neutral** - see below.
 7. **headless** - no file under `packages/kvox-web/src/<slice>/headless/**` imports `@mui/*`, `@emotion/*`, a router (`react-router*`) or a `ui/` folder. A headless entry is what a host with another design system builds its own UI on.
+8. **host-plugins** - a slice file that calls `isMultipart()`, `saveRequestFiles()`, `req.file()`, `files()` or `parts()` needs a `$hostPlugins` declaration for the slice or a slice it depends on. With `--app`, rule 5 also requires the app's `package.json` (or the root one) to list each plugin the imported slices declare. The upload controllers answer 500 naming the missing plugin when the host did not register it.
 
 A `@marinoscar/platform-*` peer is pinned to one exact version (`check:platform-pin` requires it of every entry in the repository), so these two optional peers move with the platform pin.
 
@@ -156,11 +160,11 @@ A `@marinoscar/platform-*` peer is pinned to one exact version (`check:platform-
 - Changesets bumps the **major** version of a package whose peer dependency receives a minor or major bump, even inside a `fixed` group (so every first release would come out as `1.0.0-next.0`). `.changeset/config.json` therefore sets `onlyUpdatePeerDependentsWhenOutOfRange: true` (under `___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH`), which bumps a dependent only when the new version leaves the peer range.
 - A pre-release version satisfies a range only when some comparator names the same `major.minor.patch`. `>=0.0.0-0` covers the unversioned source (`0.0.0`) and every stable release; `>=0.1.0-0` covers `0.1.0-next.N`. A line of pre-releases with another `major.minor.patch` (for example `0.2.0-next.0`) leaves the range, and Changesets then bumps the packages to a major version. **Before the first pre-release of a new minor line, widen the range** (add `|| >=0.2.0-0`) in both `package.json` files, in the same pull request.
 
-The packages are released together, so a consumer who installs the four from one `next` tag gets one version. The range is not what keeps them in step; the `fixed` group and the release gate (which refuses a release whose four versions differ) do.
+The packages are released together, so a consumer who installs the six from one `next` tag gets one version. The range is not what keeps them in step; the `fixed` group and the release gate (which refuses a release whose six versions differ) do.
 
 ## The host-neutral rule
 
-**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
+**No file under `packages/kvox-api/src/**` or `packages/kvox-web/src/**` may import `@marinoscar/platform-*`; a file under `packages/kvox-ai/src/**` or `packages/kvox-eval/src/**` may import exactly `@marinoscar/platform-api/ai` (the provider-adapter types and classes, an interim peer until the lean adapter package of #578) and nothing else of the platform.** The second host of the domain, KVox Desktop, runs offline with local adapters and never installs the platform. A slice that imported the platform could not be installed there.
 
 What to do instead: depend on a port from `@marinoscar/kvox-api/ports` (AI, object store, jobs, identity, notifications and so on). The web edition binds each port to a platform slice in one place, `apps/api/src/platform-kvox/` (issue 5.4); Desktop binds its own. The two optional `@marinoscar/platform-*` peers exist for those bindings' helpers, listed in `$hostOnly`, and no slice may list them.
 
@@ -170,7 +174,7 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 
 | Command | What it does |
 |---|---|
-| `npm run build:kvox-packages` | Builds the four packages (`build:packages` is an alias). |
+| `npm run build:kvox-packages` | Builds the six packages (`build:packages` is an alias). |
 | `npm run typecheck:kvox-packages` | `tsc --noEmit` in each. |
 | `npm run test:kvox-packages` | Vitest (contract, db, web) and Jest (api, project `unit`); `test:packages` also runs the script tests. |
 | `npm run test:host:prepare -w @marinoscar/kvox-api` | Builds the real-database test host (`packages/kvox-api/test/host/`: platform and domain schema and migrations, a test-only Prisma client). Needs no database. |
@@ -178,8 +182,8 @@ The rule is executable: `npm run check:kvox-slice-peers` fails with `[host-neutr
 | `node examples/bare-host/run.mjs --from pack --db pglite` | The bare-host smoke app: installs the packed tarballs outside the repository and runs the domain end to end on PGlite (`--db service` with `DATABASE_URL` for a PostgreSQL with pgvector). Build first. [README](../examples/bare-host/README.md). |
 | `npm run test:kvox-scripts` | `node --test scripts/kvox-packages/test/`: the check scripts against fixtures, including `host-neutral`. |
 | `npm run lint:packages` | ESLint over `packages/kvox-*/src` (deep imports, slice direction, TSDoc, contract imports). |
-| `npm run docs:kvox-packages` | TypeDoc for the four packages. |
-| `npm run check:kvox-slice-peers` | The seven rules above, for the packages and then for `apps/api` and `apps/web`. |
+| `npm run docs:kvox-packages` | TypeDoc for the six packages. |
+| `npm run check:kvox-slice-peers` | The eight rules above, for the packages and then for `apps/api` and `apps/web`. |
 | `npm run check:kvox-package-docs` | `docs:kvox-packages`, then the README, TSDoc and TypeDoc standard. |
 | `npm run check:kvox-pack` | `npm pack --dry-run` of each package against its manifest. Run after the build. |
 | `node scripts/kvox-packages/check-single-instance.mjs --root . --guard '@marinoscar/platform-*' --guard '@marinoscar/kvox-*'` | One copy of every singleton library and package. |

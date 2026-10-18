@@ -168,6 +168,7 @@ function transcript(overrides: Partial<TranscriptListItem> = {}): TranscriptList
     failureReason: null,
     access: 'owner',
     ownerName: 'Test User',
+    hasAudio: true,
     recordedAt: '2026-03-12T09:00:00.000Z',
     createdAt: '2026-03-12T09:00:00.000Z',
     updatedAt: '2026-03-12T09:30:00.000Z',

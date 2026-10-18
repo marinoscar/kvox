@@ -15,6 +15,8 @@ This document describes the testing strategy, frameworks, and conventions used i
 9. [Visual Regression Testing](#visual-regression-testing)
 10. [Real-Postgres Testing](#real-postgres-testing)
 
+The knowledge-graph and Ask evaluation is described under [Running Tests](#knowledge-graph-and-ask-evaluation).
+
 ## Testing Framework Overview
 
 ### Backend (API)
@@ -147,6 +149,49 @@ npm run test:db -w @marinoscar/kvox-api           # db: test/**/*.db.spec.ts aga
 ```
 
 A unit spec moves with its code. A real-database spec (`*.db.spec.ts`) uses `createTestDb()` and `createTestKvoxModule({ db })` from `packages/kvox-api/test/host/db.ts` ([README](../packages/kvox-api/test/host/README.md)). A spec that boots the whole application through the real guards (`apps/api/test/<slice>/*.integration.spec.ts`) stays in the app: it is the proof the binding in `apps/api/src/kvox/` is right. A slice's conformance suite is exported from its `/testing` entry (`describeTranscriptionProviderConformance`) and run both in the package and in `apps/api/test/conformance.spec.ts`.
+
+### Knowledge-Graph and Ask Evaluation
+
+The evaluation harness is the published package `@marinoscar/kvox-eval` (`packages/kvox-eval`, issue #580): the synthetic golden set, its schemas, the scorers, the report, the gold and live runners and the `kvox-eval` command. It was moved from `apps/api/scripts/kg-eval/`, `apps/api/scripts/ask-eval/` and `apps/api/test/fixtures/kg-golden/`. The golden fixtures (36 synthetic meetings plus `ask-questions.json`) are now `packages/kvox-eval/fixtures/kg-golden/` ([README](../packages/kvox-eval/fixtures/kg-golden/README.md): format and the synthetic-only rule). The web app's private OpenAI client (`direct-structured.ts`) is deleted: a live run goes through `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime`, the same model port every host binds.
+
+```bash
+npm run build:kvox-packages                          # once: the scripts import the built package
+npm run test:run -w @marinoscar/kvox-eval            # the package's specs: scorer, golden-set validity and coverage, runners over a fake port, key aliases, real-data guard
+
+# The harness self-test: must print 1.000 everywhere
+npx kvox-eval kg --predictions gold
+# Score earlier predictions, or run live (the key comes from the environment only)
+export KVOX_EVAL_OPENAI_API_KEY=...
+npx kvox-eval kg --runner extract --provider openai --model gpt-5-mini --out /tmp/kg-run
+
+# The same flags through the web app's thin wrappers
+npm run kg:eval --workspace=api -- --predictions gold
+npm run ask:eval --workspace=api -- <flags>
+
+# The headless Ask evaluation (in-memory database; --replay needs no key)
+npx kvox-eval ask --replay
+npx kvox-eval ask --provider openai --model gpt-4o-mini --only q01,q22
+```
+
+- `npm run kg:eval --workspace=api` is a thin wrapper over the package's `runKgCommand` with the app's synthetic runs directory; it keeps its flags. `kvox-eval kg` accepts `--predictions <dir|gold>` or `--runner extract|extract-resolve`, `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--tag`, `--json`, `--out`, `--enforce` and `--real-dir`. `--provider copilot` refuses until the Copilot adapter (#581).
+- `kvox-eval ask` (issue #608) is headless: it starts an in-memory PGlite, applies the shipped migration SQL in order, seeds the golden graph (36 meetings, 94 entities, 265 relations, 187 items, 731 evidence, 0 refused) through `GraphWriteService` and drives the real `ask.respond` handler on the live model port. It never touches a real database and needs no web app. Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out`, `--min-match`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive leak) or the match fell below `--min-match`, 2 configuration, or every model call failed (a single failed call marks that turn failed and the run continues). `kvox-eval ask --replay` needs no key: six scripted questions plus the leak gate, the package's twin of `apps/api/test/ask/ask-eval.replay.db.spec.ts`. `npm run ask:eval --workspace=api` is a thin wrapper over the same command (`--keep` and `--allow-db` are accepted and ignored). Semantic search is off in the run (no embeddings), and Ask still hides personal facts.
+- The API key is `KVOX_EVAL_OPENAI_API_KEY`. `KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases for one release.
+- Real meetings never enter the repository: `--real-dir`, a real-data `--out` and `KG_EVAL_REAL_DIR` are refused (exit 3) when they resolve inside the git work tree. Quality bar: [specs/ontology.md](specs/ontology.md) (section 6). Package reference: [packages/kvox-eval/README.md](../packages/kvox-eval/README.md).
+
+#### Harness parity
+
+Part 2 of #580 proves that the web edition and a direct binding (the Desktop edition's shape) send a provider the same request. `runParityScenario` of `@marinoscar/kvox-eval/parity` drives the product's own code (notes generation, graph extraction, adjudication and the Ask handler) through a `KvoxAiPort`, with a scripted provider that answers as a pure function of the request, so no key and no network are involved. The committed snapshots `packages/kvox-eval/parity/requests.<fixture>.json` (`m01` to `m10`) and `requests.ask.json` are the single source of truth; each binding is compared with them, so the two are equal to each other by transitivity.
+
+- **Compared**, per provider round trip: the method, the feature, the instructions (system prompt), the input, the strict structured-output schema, the tool definitions, the model, the reasoning effort and the maximum output tokens.
+- **Normalized**: ids (UUIDs), ISO timestamps and `requestId`-like fields (`requestId`, `traceId`, `spanId`, `correlationId`) become numbered placeholders by first appearance (`normalizeRecordedValue` of `@marinoscar/kvox-ai/testing`); nothing else is dropped, and a Zod schema becomes JSON Schema.
+- **Excluded**, because host-specific and never part of what a provider sees: `userId`, `orgId`, `jobId`, the abort `signal` and the API key; and, on the web path, the provider id (the platform's target resolver picks the provider from the model).
+
+| Binding | Spec | Command |
+|---|---|---|
+| Direct: `createKvoxAi` over `createDirectRuntime` over a recording adapter | `packages/kvox-eval/test/parity.spec.ts` | `npm run test:run -w @marinoscar/kvox-eval -- parity` |
+| Web: the real `PlatformAiRuntime` and `PlatformTaskModelSource` over a scripted `AiService` | `apps/api/test/kvox/ai-parity.spec.ts` | `npm test --workspace=api -- ai-parity` |
+
+Both run in CI with no network and no key. When a prompt, schema, tool or limit changes on purpose, regenerate the snapshots with `KVOX_EVAL_UPDATE_PARITY=1 npm run test:run -w @marinoscar/kvox-eval -- parity`, read the diff and commit it. A snapshot change is a harness change: it is what every host now sends to a provider, so the PR must explain it. A failing parity spec without an intended change means a binding (or the web wiring) drifted from the shared harness; fix the binding, never the snapshot. Slice reference: [packages/kvox-eval/src/parity/README.md](../packages/kvox-eval/src/parity/README.md).
 
 ### Frontend Tests
 

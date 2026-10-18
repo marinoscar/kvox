@@ -17,7 +17,8 @@
  * never whether app chrome mounts, so it is not a sixth coupled breakpoint gate
  * (CLAUDE.md, Settings UI Pattern rule 5).
  *
- * The header's overflow menu (phone and desktop alike) carries "Export
+ * The header links to Explore, Overview and Review (`/graph/review`, the
+ * proposals waiting for review). The header's overflow menu (phone and desktop alike) carries "Export
  * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph —
  * and, for a caller holding `graph:write`, "Import graph…" —
  * `ImportGraphDialog` (#387), which uploads an RDF file as a proposal to
@@ -73,7 +74,7 @@ import { useHasPermission } from '../../../core/headless/index.js';
  * @stability experimental
  */
 export interface GraphIndexLocationState {
-  /** The snackbar. */
+  /** Message the entity page hands over to show in a snackbar, such as "Forgetting…". */
   snackbar?: string;
 }
 
@@ -128,7 +129,7 @@ export function typesFromQuery(value: string | null): string[] {
 }
 
 /**
- * Graph index page.
+ * The `/graph` page: the caller's entities, filtered by type and search text held in the URL, with export and import actions in the header.
  *
  * @stability experimental
  */
@@ -220,6 +221,9 @@ export function GraphIndexPage() {
             <MenuItem component={RouterLink} to="/graph/overview" onClick={() => setMenuAnchor(null)}>
               Overview
             </MenuItem>
+            <MenuItem component={RouterLink} to="/graph/review" onClick={() => setMenuAnchor(null)}>
+              Review
+            </MenuItem>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
             {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
@@ -231,6 +235,9 @@ export function GraphIndexPage() {
           </Button>
           <Button component={RouterLink} to="/graph/overview" variant="outlined">
             Overview
+          </Button>
+          <Button component={RouterLink} to="/graph/review" variant="outlined">
+            Review
           </Button>
           <IconButton
             aria-label="More knowledge actions"

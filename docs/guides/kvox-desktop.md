@@ -2,7 +2,9 @@
 
 This guide is for the engineers who build KVox Desktop: an offline application with a React renderer, a Node main process, an embedded PostgreSQL and the GitHub Copilot SDK for AI. It takes you from an empty Node + React project to a running KVox domain (transcripts, notes and search; then the graph and Ask) without reading KVox source. It names every port and web host member you implement, sketches the Copilot `KVOX_AI` adapter, states what changes offline feature by feature, and points to the conformance kits that prove an implementation correct.
 
-Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
+Everything here is grounded in code that exists: the packages (`packages/kvox-{contract,db,api,ai,web}`), the ports spec ([kvox-ports.md](../specs/kvox-ports.md)) and the reference host in [`examples/bare-host/`](../../examples/bare-host/README.md), a Nest app that installs the packed tarballs with no platform package, binds every port to a small local class and passes an end-to-end test on PostgreSQL 16 + pgvector and on PGlite in CI. Where this guide quotes code, it is copied from that app and says so; the one block that is not real code (the Copilot adapter) is marked illustrative. Package standard: [PACKAGES.md](../PACKAGES.md).
+
+> Decisions behind this guide: [ADR-0001 to ADR-0006](../decisions/README.md) (packages first, Electron shell, PostgreSQL and PGlite, local-only data, AI layering, Desktop inputs). The Desktop repository starts from [../desktop/README.md](../desktop/README.md).
 
 ## Who this is for and what you get
 
@@ -34,7 +36,7 @@ All six web slices are merged. `packages/kvox-web/README.md` and each slice's ow
 
 - The ten ports ([Ports to implement](#ports-to-implement)) and the web host ([Wiring the web](#wiring-the-web)).
 - The four host tables `users`, `organizations`, `storage_objects`, `jobs`, and the seed rows ([Database](#database)).
-- Four duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings)): declare the system `ai` settings namespace; install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies.
+- Duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings) and [section 6.1](../specs/kvox-ports.md#61-what-the-bare-host-and-the-desktop-guide-added-issues-505-506)): declare the system `ai` settings namespace (with `graphEnabled` and `reasoningEffort` once the graph is mounted); install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies; with the graph, register `@fastify/multipart`, read an unwritten `defaults: undefined` setting as `undefined`, tick four housekeeping enqueuers, and answer the graph's structured-output schemas from `KVOX_AI`.
 - The renderer's shell: router, theme, navigation, settings hub. Slices export cards, destinations and routes as data; you place them.
 - The transcription provider, ffmpeg, fonts for PDF export.
 
@@ -87,7 +89,7 @@ flowchart LR
 
 ## Install
 
-Print the per-slice peer data any time with `node scripts/kvox-packages/check-slice-peers.mjs --table` (in the KVox repository); the rule is in [PACKAGES.md](../PACKAGES.md#peer-dependencies-per-slice). Packages are `0.x` on the `next` dist-tag; until the first release is published, pack the workspace packages as `examples/bare-host/run.mjs --from pack` does.
+Print the per-slice peer data any time with `node scripts/kvox-packages/check-slice-peers.mjs --table` (in the KVox repository); the rule is in [PACKAGES.md](../PACKAGES.md#peer-dependencies-per-slice). The packages are published on npm (first release `0.1.0-next.0`, `next` dist-tag, provenance attached). A host installs and pins every package it uses to one exact version, for example `npm install --save-exact @marinoscar/kvox-api@0.1.0-next.0 ...`, and bumps them together because they are one release group. To test unreleased changes, pack the workspace packages as `examples/bare-host/run.mjs --from pack` does.
 
 **Main process, minimal set (transcription, search, transcripts, notes).**
 
@@ -109,7 +111,7 @@ Add your embedded database (`@electric-sql/pglite` 0.5.10, `@electric-sql/pglite
 
 | Feature | Peer | Switch it off with |
 |---|---|---|
-| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
+| Housekeeping crons (`transcripts`, `notes`, `graph`, `graph-rdf`; four enqueuers) | `@nestjs/schedule@^6.1.0` | `schedules: false`; call the enqueuers on your own timer ([Jobs offline](#jobs-offline)) |
 | Transcript PDF export | `pdfkit@>=0.17.0` | `exporters: { pdf: false }` |
 | Note PDF export | `pdfkit` | `exporters: { pdf: false }` |
 | Note Word export | `docx@>=9.0.0` | `exporters: { docx: false }` |
@@ -123,7 +125,7 @@ npm install graphology@>=0.26.0 graphology-communities-louvain@>=2.0.2 grapholog
 npm install n3@>=2.7.0 jsonld@>=9.0.0 rdf-validate-shacl@>=0.6.0   # graph-rdf: RDF export and SHACL-validated import
 ```
 
-`rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). `ask` adds no peer of its own.
+The layout libraries are required in practice: any `GET /api/graph/overview` on a non-empty graph schedules `kg.graph_layout`. Also install `@fastify/multipart@^10.0.0` and register it on the Fastify app (`await app.register(multipart, ...)`, `examples/bare-host/src/bootstrap.ts`): `POST /api/graph/imports`, `POST /api/transcripts/imports`, `POST /api/notes/import` and the notes document-source upload read `request.file()`. No slice registers it, so it is not a peer; it is a **host plugin**, listed under `$hostPlugins` in `packages/kvox-slice-peers.json` (`transcripts`, `notes` and `graph-rdf`, inherited by `graph`, `graph-extraction` and `ask`), and `check-slice-peers --app` requires the app's `package.json` to list it. Without it the upload routes answer 500 naming the missing plugin. The transcript import and the notes upload need it too, so install it even without the graph. `rdf-validate-shacl` is ESM-only and runs in a child process; the `graph-rdf` module refuses to start, naming it, when the import is on and it cannot be resolved (`GraphRdfModule.forRoot({ import: false })` leaves it out). By default that child is `process.execPath`, which on Desktop is the Electron binary, and with the RunAsNode fuse off it cannot run Node: Desktop passes `GraphRdfModule.forRoot({ shacl: { run } })`, where `run(input, { signal })` hands the input JSON to a utility process forked by the main process, whose script calls `runShaclValidation(input)` from `@marinoscar/kvox-api/graph-rdf/shacl-runner` (Node built-ins only, no Nest) and prints the report JSON, which `run` resolves with. The import's timeout still applies; on `signal` Desktop kills the utility process, and it sizes that process's memory itself. `rdf-validate-shacl` is still resolved by the server process and named to the runner by `file:` URL. See [the graph-rdf README](../../packages/kvox-api/src/graph-rdf/README.md#configuration). `ask` adds no peer of its own.
 
 **Renderer.**
 
@@ -144,7 +146,7 @@ Singletons (Nest, Zod, the contract, Prisma, React, MUI) must exist once. A seco
 
 | | PGlite | A bundled PostgreSQL server |
 |---|---|---|
-| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
+| What the bare host proved | The whole history (37 platform and 19 domain migrations) applies in about three seconds on PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6); `kvox-db check --database` passes; transcripts, notes and search pass the end-to-end test; the graph, graph-extraction, graph-rdf and Ask slices run over the same host (extraction, review and commit, the overview, RDF export and import, the Ask tool loop) against a scripted model. | The CI `service` leg runs `pgvector/pgvector:pg16`. A server you ship must have `vector` and `pg_trgm` available. |
 | Cost | One session only (see below); the socket quirk. | You ship, start, stop and upgrade a server, and a `vector` build per platform. |
 | Recommendation | Start here. | Choose it if any migration fails on PGlite, or when you need more than one connection. |
 
@@ -169,9 +171,9 @@ Seed before the first request (`examples/bare-host/src/seed.ts`): the one `users
 This is `examples/bare-host/scripts/prepare-db.mjs`. It needs no database: composing a schema and installing migrations only write files under `prisma/`, which is generated and git-ignored.
 
 ```bash
-npx platform db sync    --root .                          # 1. install the platform migrations (byte copies)
+npx platform db sync    --root . --timestamp 2024-01-01T00:00:00Z   # 1. install the platform migrations (byte copies), pinned before the domain ids
 npx platform db compose --root .                          # 2. compose the platform schema; kvox-db refuses a host without User, StorageObject, Job
-npx kvox-db sync        --root . --names after-host       # 3. install the domain fragments and migrations
+npx kvox-db sync        --root . --names stable           # 3. install the domain fragments and migrations
 npx platform db compose --root .                          # 4. compose again, now with the domain fragments
 npx prisma generate --config prisma.config.ts             # 5. generate the client
 ```
@@ -183,14 +185,14 @@ npx prisma migrate deploy --config prisma.config.ts       # platform history, th
 npx kvox-db check --root . --database                     # exit 1 if an extension or a raw-SQL object is missing
 ```
 
-Why `--names after-host`: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. `after-host` names each one `<ts>_kvox_<slug>`, one second after the newest directory in `prisma/migrations` (which is why step 1 comes before step 3). A host that already ran the migrations under the original names (the web edition) keeps `original`. (The issue text lists `platform db sync` last; the working order is the one above.)
+Why `--names stable` and the pinned timestamp: the domain migrations are dated September 2026. Under their original names they would sort before the platform migrations a fresh host installs first and run before `users` exists. The pin `--timestamp 2024-01-01T00:00:00Z` dates the platform migrations before them, so the platform tables come first and the platform names are deterministic. `stable` names each domain migration `<the id's timestamp>_kvox_<slug>`, a pure function of the package migration id, never of build time or other packages' migration counts. `after-host` is deprecated: its names are the newest host directory plus one second, so a platform upgrade on a host that builds `prisma/` from scratch shifts every domain name and breaks databases that recorded the old ones. A host that already ran the migrations under the original names (the web edition) keeps `original`; a host with a lock keeps the policy the lock records. Upstream gap: `platform db sync` still derives names from the clock or `--timestamp` and the newest directory; see [marinoscar/EnterpriseAppBase#992](https://github.com/marinoscar/EnterpriseAppBase/issues/992). Rule: [migration folder names](../runbooks/kvox-domain-migration.md#migration-folder-names). (The issue text lists `platform db sync` last; the working order is the one above.)
 
 `prisma.config.ts` points `schema` at `prisma/schema` and `migrations.path` at `prisma/migrations`, and reads `DATABASE_URL`; copy it from the bare host.
 
 ### Upgrades
 
 1. Bump the four packages together, and `@marinoscar/platform-db` to the version `@marinoscar/kvox-db` was tested with.
-2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names after-host` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
+2. `npx platform db sync` (new platform migrations), `npx kvox-db sync --root . --names stable` (it installs only migrations `prisma/kvox.lock` does not record), `npx platform db compose`, `npx prisma generate`.
 3. `npx prisma migrate deploy`, then `npx kvox-db check --root . --database`.
 
 Never edit, rename or reformat an installed migration or a generated `prisma/fragments/kvox.*.prisma`: `kvox-db check` fails with `INSTALLED_MODIFIED` or `FRAGMENT_MODIFIED`, and comments count toward the hash. Exclude `**/migration.sql` from any formatter. A fix is a new migration released in a package, never an edit. Details: [kvox-db README](../../packages/kvox-db/README.md#upgrade-notes).
@@ -203,7 +205,7 @@ The bare host's classes are reference code, not a package. "Desktop recommendati
 
 ### KVOX_AI
 
-Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). The Copilot mapping is [the next section](#the-copilot-sdk-kvox_ai-adapter-sketch).
+Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; GitHub Copilot is one more provider adapter, an opt-in ([the Copilot provider adapter](#the-copilot-provider-adapter)); it serves notes and graph extraction, not Ask.
 
 ```ts
 export interface KvoxAiPort {
@@ -224,6 +226,7 @@ export interface KvoxAiPort {
 
 Rules:
 
+- **Graph schemas.** Extraction calls `generateStructured` under the schema names `kg_extraction`, `kg_adjudication`, `kg_item_adjudication` and `entity_digest`; an entity digest with no surviving citation fails its job. With `embeddings: null`, resolution works by name only and `kg.embed` jobs are no-ops. Ask needs `chat` with tool calling. The bare host's scripted model is `examples/bare-host/src/fake-ai.ts`.
 - `capabilities()` never throws. It reports `available`, `structuredOutput`, `toolCalling`, `embeddings` (`{ model, dimensions }` or `null`) and `graphEnabled`.
 - `resolveTask` throws `KvoxAiError` of class `not_configured`, `key_missing` or `capability`; `requireKey: false` names the model without needing a key (a token estimate).
 - A text stream is `delta*` then exactly one `done`. A chat call is one model step: `delta` or `tool_call` events, then `step_end`, then exactly one `done`; **no text of a step after one of its `tool_call`s**. `done.finishReason` is `stop`, `length` or (chat only) `content_filter`.
@@ -232,7 +235,24 @@ Rules:
 - The context carries `userId`, `orgId`, the `feature` (`notes.generate`, `notes.title`, `transcripts.name_check`, `search.embed`, `graph.extract`, `graph.adjudicate`, `graph.digest`, `graph.embed`, `ask.respond`), an optional `AbortSignal` and the queue `jobId`. Honour the signal.
 - `embeddings.dimensions` other than 1536 makes search semantic-off (the index column is `vector(1536)`).
 
-Reference: `createFakeKvoxAi` from `@marinoscar/kvox-api/testing`, scripted to stream a fixed note body and report `embeddings: null` (`examples/bare-host/src/bootstrap.ts`). Desktop: the Copilot SDK adapter.
+Binding sketch (the signatures are in the [package README](../../packages/kvox-ai/README.md#quick-start)):
+
+```ts
+// Illustrative, not compiled
+import { createKvoxAi, createDirectRuntime } from '@marinoscar/kvox-ai';
+
+const runtime = createDirectRuntime({
+  adapters: { openai: openAiAdapter, copilot: copilotAdapter }, // AiProviderAdapter per provider id; copilot only after the opt-in
+  keys: async (provider) => {                                    // fetched per call, never held
+    const apiKey = await keychain.get(`ai:${provider}`);
+    return apiKey ? { apiKey } : null;                           // null: the user has no key (key_missing)
+  },
+});
+const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, requestTimeoutMs: 600_000, graphEnabled: () => true });
+// bind it: KvoxPortsModule.forRoot({ ports: { ai: { useValue: kvoxAi }, ... } })
+```
+
+Reference: `createFakeKvoxAi` from `@marinoscar/kvox-api/testing`, scripted to stream a fixed note body and report `embeddings: null` (`examples/bare-host/src/bootstrap.ts`); `createScriptedRuntime` from `@marinoscar/kvox-ai/testing` scripts provider events beneath the real `createKvoxAi`.
 
 ### KVOX_OBJECT_STORE
 
@@ -266,7 +286,7 @@ Rules:
 - `onUploaded` fires once per completed upload, after the commit; a handler decides from `managedBy` whether the object is its own. `onAborted` fires once for a cancelled upload.
 - A signed URL must reject a tampered, foreign or expired signature.
 
-Reference: [`src/ports/local-fs-object-store.ts`](../../examples/bare-host/src/ports/local-fs-object-store.ts) and [`src/local-store.controller.ts`](../../examples/bare-host/src/local-store.controller.ts): a `storage_objects` row plus a file under `.data/objects/<key>`, loopback part URLs with an HMAC (random per-process key, 15-minute expiry), keys that leave the folder refused. The bare host keeps `managedBy` as a reserved key of the row's `metadata` (the web edition uses a side table). **The host owns the upload completion route** (`POST /api/storage/objects/{id}/upload/complete`, `LocalUploadsController`): `POST /api/transcripts` answers with part URLs and nothing else seals the upload. Desktop: the same folder in the application-data directory; a shell may let the renderer write straight to disk and call `adopt`, instead of loopback part URLs.
+Reference: [`src/ports/local-fs-object-store.ts`](../../examples/bare-host/src/ports/local-fs-object-store.ts) and [`src/local-store.controller.ts`](../../examples/bare-host/src/local-store.controller.ts): a `storage_objects` row plus a file under `.data/objects/<key>`, loopback part URLs with an HMAC (random per-process key, 15-minute expiry), keys that leave the folder refused. The bare host keeps `managedBy` as a reserved key of the row's `metadata` (the web edition uses a side table). **The host owns the upload completion route** (`POST /api/storage/objects/{id}/upload/complete`, `LocalUploadsController`): `POST /api/transcripts` answers with part URLs and nothing else seals the upload. It is the only storage route the host owns (with abort): the notes slice serves a document's extraction status itself, `GET /api/notes/sources/documents/{objectId}` (#596), so no storage object read is needed for notes. Desktop: the same folder in the application-data directory; a shell may let the renderer write straight to disk and call `adopt`, instead of loopback part URLs.
 
 ### KVOX_JOBS
 
@@ -364,7 +384,7 @@ Rules: the slices declare two namespaces themselves (system `transcription` in `
 Reference: [`src/ports/file-settings.ts`](../../examples/bare-host/src/ports/file-settings.ts) (one JSON file, atomic rewrite, versions for the system scope) and the `ai` declaration in `src/bootstrap.ts`, copied here:
 
 ```ts
-// Copied from examples/bare-host/src/bootstrap.ts (the bare host declares the three caps; add graphEnabled to run the graph).
+// Copied from examples/bare-host/src/bootstrap.ts (comments trimmed).
 settings.registerNamespace({
   scope: 'system',
   name: 'ai',
@@ -372,10 +392,16 @@ settings.registerNamespace({
     maxInputTokens: z.number().int().positive().nullable().default(null),
     maxOutputTokens: z.number().int().positive().nullable().default(null),
     maxDocumentBytes: z.number().int().positive().default(10 * 1024 * 1024),
+    graphEnabled: z.boolean().default(false),
+    reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).default('none'),
   }),
-  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024 },
+  defaults: { maxInputTokens: null, maxOutputTokens: null, maxDocumentBytes: 10 * 1024 * 1024, graphEnabled: false, reasoningEffort: 'none' },
 });
 ```
+
+Turn `graphEnabled` on once at start-up (`settings.patchSystem('ai', { graphEnabled: true }, ...)`, as `seedRuntime` does in `examples/bare-host/src/seed.ts`), or the graph answers 409 `graph_disabled` and no digest is queued.
+
+**`defaults: undefined`.** The graph slice registers its per-user `graph` namespace with `defaults: undefined` (absent means the slice's own defaults). Your port must read an unwritten one as `undefined` and parse only stored values; parsing the defaults throws "expected object, received undefined" on the first graph read (`parsedOrDefaults` in `examples/bare-host/src/ports/file-settings.ts`). The conformance kit tests it when the factory supplies the opt-in `settings.noDefaults` fixture (`{ name, schema, userId, patch }`, a user-scope namespace registered with `defaults: undefined`; issue #593).
 
 Desktop: the same file in the user's application-data folder, or a table.
 
@@ -411,136 +437,74 @@ Optional; the default records nothing (`NOOP_KVOX_AUDIT`). Settings changes and 
 
 Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appName, appSlug } })` (`KvoxBrand`, token `KVOX_BRAND`, both from `@marinoscar/kvox-api/core`). It is the product name a document carries (the PDF export footer) and the slug names are built from. Omitted, `DEFAULT_KVOX_BRAND` (`KVox` / `kvox`) applies.
 
-## The Copilot SDK `KVOX_AI` adapter (sketch)
+## The Copilot provider adapter
 
-The code below is **illustrative and not compiled**. It maps each port method onto a Copilot session at the level of the port contract. The SDK's API changes; this sketch declares a tiny `CopilotLike` stand-in instead of naming SDK methods, so replace it with calls from the SDK's own documentation. What is fixed is the right-hand side: the port types, the event order and the error classes.
+GitHub Copilot is a provider, not a `KvoxAiPort`. Per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md) it is an `AiProviderAdapter` in `@marinoscar/kvox-ai/copilot` (#581) that plugs into `createDirectRuntime`, beneath the same `createKvoxAi` as every other provider. The adapter translates one call into one Copilot session. It holds no prompt, no retry loop, no tool loop and no KVox rule: structured output, truncation, retries and the error classes are the shared mechanics. Reference: [the package README](../../packages/kvox-ai/README.md#github-copilot-on-kvox-desktop-opt-in) and [the slice README](../../packages/kvox-ai/src/copilot/README.md).
+
+Status: experimental, and **off by default**. The owner has not yet decided the terms-of-use question (Q12 of the spike): whether a desktop app may drive a user's Copilot subscription through the SDK. Until then the feature ships behind the user's own opt-in.
+
+### What Copilot does and does not serve
+
+| Need | Provider | Why |
+|---|---|---|
+| Notes (`notes.generate`, `notes.title`) and graph extraction (`graph.*`, `transcripts.name_check`) | Copilot or OpenAI, the user's choice | One system prompt plus one user message, text out. |
+| Ask (`ask.respond`) | OpenAI | A Copilot session takes user messages only, so a tool step cannot be continued statelessly. The adapter reports `toolCalling: false` and `capabilities()` follows. The Ask loop is never moved into the SDK. |
+| Embeddings | OpenAI, or none | The SDK has no embeddings. With `embeddings: null` search is full text only. |
+
+### Wiring
 
 ```ts
-// Illustrative — not compiled
-import type { z } from 'zod';
-import {
-  KvoxAiBudgetError, KvoxAiError,
-  type KvoxAiCapabilities, type KvoxAiContext, type KvoxAiPort, type KvoxAiTarget, type KvoxChatEvent,
-  type KvoxChatMessage, type KvoxEmbedResult, type KvoxStructuredResult, type KvoxTextEvent, type KvoxToolDef,
-} from '@marinoscar/kvox-api/ports';
+// Illustrative, not compiled
+import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-api/ai';
+import { createDirectRuntime, createKvoxAi } from '@marinoscar/kvox-ai';
+import { createCopilotAdapter, createSdkCopilotTransport } from '@marinoscar/kvox-ai/copilot';
 
-/** Stand-in for the Copilot SDK. Replace with the SDK's real client; keep it inside the main process. */
-interface CopilotLike {
-  isSignedIn(): Promise<boolean>;
-  models(): Promise<Array<{ id: string; contextTokens: number; maxOutputTokens: number; tools: boolean; json: boolean; embeds?: number }>>;
-  /** One model step; yields text deltas and tool calls, then the usage and why it stopped. */
-  step(args: { model: string; system?: string; messages: unknown[]; tools?: unknown[]; maxOutputTokens?: number; signal?: AbortSignal }):
-    AsyncIterable<
-      | { kind: 'text'; text: string }
-      | { kind: 'tool'; id: string; name: string; args: unknown }
-      | { kind: 'end'; inputTokens: number | null; outputTokens: number | null; reason: 'stop' | 'length' | 'filtered' }
-    >;
-  embed?(args: { model: string; inputs: string[] }): Promise<number[][]>;
-}
-
-export class CopilotKvoxAi implements KvoxAiPort {
-  // The sign-in token lives inside `copilot`, in the main process. It is never a field here,
-  // never in a log line, never in an error message, never sent to the renderer.
-  constructor(private readonly copilot: CopilotLike, private readonly graphEnabled: () => boolean) {}
-
-  async capabilities(_ctx: KvoxAiContext): Promise<KvoxAiCapabilities> {
-    try {                                                    // never throws
-      if (!(await this.copilot.isSignedIn())) return this.off('ai_key_missing');
-      const models = await this.copilot.models();
-      const embed = models.find((m) => m.embeds === 1536);   // only a 1536-wide model keeps search semantic
-      return {
-        available: models.length > 0, structuredOutput: models.some((m) => m.json), toolCalling: models.some((m) => m.tools),
-        embeddings: embed ? { model: embed.id, dimensions: 1536 } : null,   // null: full-text search only
-        graphEnabled: this.graphEnabled(),
-      };
-    } catch { return this.off('ai_not_configured'); }
-  }
-
-  async resolveTask(ctx: KvoxAiContext, task: string, opts?: { model?: string; requireKey?: boolean }): Promise<KvoxAiTarget> {
-    if (opts?.requireKey !== false && !(await this.copilot.isSignedIn())) throw new KvoxAiError('key_missing', 'Sign in to GitHub Copilot.');
-    const models = await this.copilot.models();
-    const pick = models.find((m) => m.id === opts?.model) ?? models.find((m) => (task.startsWith('ask') || task.includes('extract') ? m.tools : true));
-    if (!pick) throw new KvoxAiError('not_configured', 'No Copilot model is available.');
-    if ((task.startsWith('ask') && !pick.tools) || (task.includes('extract') && !pick.json)) throw new KvoxAiError('capability', 'The model cannot do this task.');
-    return { provider: 'copilot', model: pick.id, contextWindowTokens: pick.contextTokens, maxOutputTokens: pick.maxOutputTokens, source: 'copilot' };
-  }
-
-  async *generateText(ctx: KvoxAiContext, req: { target: KvoxAiTarget; system: string; user: string; maxOutputTokens?: number }): AsyncIterable<KvoxTextEvent> {
-    for await (const e of this.run(ctx, { model: req.target.model, system: req.system, messages: [{ role: 'user', content: req.user }], maxOutputTokens: req.maxOutputTokens })) {
-      if (e.kind === 'text') yield { type: 'delta', text: e.text };
-      if (e.kind === 'end') yield { type: 'done', usage: { inputTokens: e.inputTokens, outputTokens: e.outputTokens }, finishReason: e.reason === 'length' ? 'length' : 'stop' };
-    }                                                         // exactly one `done`
-  }
-
-  async generateStructured<T>(ctx: KvoxAiContext, req: { target: KvoxAiTarget; system: string; user: string; schema: z.ZodType<T>; schemaName: string; jsonSchema?: Record<string, unknown>; maxOutputTokens?: number }): Promise<KvoxStructuredResult<T>> {
-    // Prompt with the JSON Schema, parse with the caller's Zod schema, one repair attempt, then give up.
-    let text = await this.collect(ctx, req, `${req.user}\n\nAnswer with JSON only, matching: ${JSON.stringify(req.jsonSchema)}`);
-    for (let attempt = 0; ; attempt += 1) {
-      try { return { value: req.schema.parse(JSON.parse(text.value)), usage: text.usage }; }
-      catch (error) {
-        if (attempt === 1) throw new KvoxAiError('invalid_output', 'The model did not return the requested JSON.', undefined, text.usage);
-        text = await this.collect(ctx, req, `${req.user}\n\nYour last answer was invalid (${String(error).slice(0, 200)}). Answer with valid JSON only.`);
-      }
-    }
-    // If the chosen model cannot return JSON at all, resolveTask already threw KvoxAiError('capability').
-  }
-
-  async *chat(ctx: KvoxAiContext, req: { target: KvoxAiTarget; messages: KvoxChatMessage[]; tools: KvoxToolDef[]; toolChoice: 'auto' | 'none' }): AsyncIterable<KvoxChatEvent> {
-    // One model step per call: the caller owns the loop and sends the whole history each time.
-    let sawTool = false;
-    for await (const e of this.run(ctx, { model: req.target.model, messages: req.messages, tools: req.toolChoice === 'none' ? [] : req.tools })) {
-      if (e.kind === 'text' && !sawTool) yield { type: 'delta', text: e.text };   // never text after a tool call of the step
-      if (e.kind === 'tool') { sawTool = true; yield { type: 'tool_call', id: e.id, name: e.name, arguments: e.args }; }
-      if (e.kind === 'end') {
-        yield { type: 'step_end' };
-        yield { type: 'done', usage: { inputTokens: e.inputTokens, outputTokens: e.outputTokens }, finishReason: e.reason === 'length' ? 'length' : e.reason === 'filtered' ? 'content_filter' : 'stop' };
-      }
-    }
-  }
-
-  async embed(ctx: KvoxAiContext, req: { inputs: string[] }): Promise<KvoxEmbedResult> {
-    const caps = await this.capabilities(ctx);
-    if (!caps.embeddings || !this.copilot.embed) throw new KvoxAiError('capability', 'No embeddings model.');
-    const vectors = await this.copilot.embed({ model: caps.embeddings.model, inputs: req.inputs });
-    return { model: caps.embeddings.model, dimensions: caps.embeddings.dimensions, vectors };   // one vector per input
-  }
-
-  countTokens(_target: KvoxAiTarget, text: string): number {
-    return Math.ceil(text.length / 4);   // synchronous; replace with the model's tokenizer. Over-count rather than under-count.
-  }
-
-  /** Maps the SDK's failures to port errors; the retry-after of a 429 rides on the error. */
-  private async *run(ctx: KvoxAiContext, args: Parameters<CopilotLike['step']>[0]) {
-    try { yield* this.copilot.step({ ...args, signal: ctx.signal }); }
-    catch (error) { throw toKvoxAiError(error); }
-  }
-  private off(reason: KvoxAiCapabilities['reason']): KvoxAiCapabilities {
-    return { available: false, reason, structuredOutput: false, toolCalling: false, embeddings: null, graphEnabled: false };
-  }
-  private async collect(_ctx: KvoxAiContext, _req: unknown, _prompt: string): Promise<{ value: string; usage: { inputTokens: number | null; outputTokens: number | null } }> {
-    throw new Error('Illustrative: gather generateText-style deltas into one string.');
-  }
-}
-
-function toKvoxAiError(error: unknown): KvoxAiError {
-  const e = error as { status?: number; code?: string; retryAfterMs?: number; name?: string };
-  if (e.status === 401 || e.status === 403) return new KvoxAiError('auth', 'Copilot rejected the credentials.');          // never include the token
-  if (e.status === 429) return new KvoxAiError('rate_limit', 'Copilot is rate limiting.', e.retryAfterMs ?? 5000);          // the job defers on the user's own bucket
-  if (e.code === 'content_filter') return new KvoxAiError('refusal', 'The model declined to answer.');
-  if (e.code === 'context_length_exceeded') return new KvoxAiBudgetError(0, 0);   // fill in the real numbers; do not truncate
-  if (e.name === 'AbortError' || e.code === 'ETIMEDOUT') return new KvoxAiError('timeout', 'The model call timed out.');
-  return new KvoxAiError('other', 'The model call failed.');   // a scrubbed message: no tokens, no request bodies
-}
+const copilot = createCopilotAdapter({
+  optIn: settings.copilotEnabled,   // the user's own setting; default false; anything but true throws
+  transport: createSdkCopilotTransport({
+    baseDirectory: join(app.getPath('userData'), 'copilot'), // app-private: never the user's own Copilot CLI directory
+    workingDirectory: emptyDir,                                // EMPTY, so no AGENTS.md, CLAUDE.md, skills or MCP are found
+  }),
+});
+const runtime = createDirectRuntime({
+  adapters: { openai: openAiAdapter, copilot },
+  keys: async (provider) =>
+    provider === 'copilot' ? { apiKey: AI_KEYLESS_API_KEY } : keychainKey(provider), // the adapter ignores the Copilot value
+});
+const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog: copilot.kvox.catalog });
 ```
 
-Points the sketch must keep, because the slices depend on them:
+- Build the adapter only when the setting is on. `createCopilotAdapter` throws a plain `Error` otherwise, so a code path that forgot the check fails loudly.
+- `catalog: copilot.kvox.catalog` is how `createKvoxAi` learns, per model, that `toolCalling` is `false` and whether structured output is `native` or `prompted`. Without it a Claude model would be sent a native schema it may not honour.
+- The task-model source lists Copilot models from `adapter.listModels(...)` (needs sign-in; models whose policy is `disabled` are dropped). When the live listing is unavailable, `COPILOT_CATALOG` (version `COPILOT_CATALOG_VERSION`) is a small fallback with conservative limits.
+- Install the optional peer in the Desktop app only: `npm install @github/copilot-sdk`. The web edition never installs it, and the package root never imports it.
 
-- **Offline behaviour.** Everything that calls the model is unavailable without a network and without a Copilot sign-in. When the SDK is offline, `capabilities()` still answers (never throws) with `available: false` and a `reason`; `resolveTask` then throws `key_missing` or `not_configured`. The slices turn those into the product's 409s with `details.reason`; reading and editing existing data keeps working ([Offline constraints](#offline-constraints-feature-by-feature)). A queued AI job that fails with `rate_limit` defers; one that fails with another class fails the job with its message.
-- **Rate limits.** The adapter throws `KvoxAiError('rate_limit', message, retryAfterMs)`. The handlers translate it into `KvoxRateLimitError` on the user's own throttle bucket, which defers the job without spending an attempt. (The issue text says the adapter throws `KvoxRateLimitError`; the code puts that error class in the job handlers' hands.)
-- **Embeddings.** With `embeddings: null`, search answers with full text only and the reason `embeddings_unavailable`, `search.index` records why nothing was embedded, and the graph's resolution skips the vector candidate source. A model whose vectors are not 1536 wide gets the same answer and a one-time warning.
-- **Structured output.** The port returns a value validated against the caller's Zod schema or throws; `invalid_output` is the class for "the answer was not the requested JSON", `capability` for "this model cannot do structured output at all".
-- **The token budget** uses `target.contextWindowTokens`, `target.maxOutputTokens` and the synchronous `countTokens`. Be conservative: an under-count turns into a provider error mid-job.
-- **Prove it** with `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)).
+### The opt-in setting
+
+Add a Copilot switch to the Desktop settings, default **off**. Turning it on must show, before it takes effect, that notes and transcript text are sent to GitHub, and link the GitHub terms of service (section J, the training opt-out) so the user can check their plan. Turning it off removes the adapter from `adapters` and from the model picker. Do not enable it by default, in a migration or in an installer.
+
+### Sign-in
+
+The SDK owns sign-in. No GitHub or Copilot token passes through KVox code: `gitHubToken` is never set, the runtime reads the user's own credentials (`useLoggedInUser`), and the `keys` reader answers `AI_KEYLESS_API_KEY`. The shell offers a "Sign in to GitHub Copilot" action that starts the SDK's flow (the SDK's sign-in APIs are experimental in 1.0.22; check them when bumping), then reads `copilot.authStatus()` (`{ signedIn, login }`) to show the account. A call while signed out fails with `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`: the same 409 with `details.reason` as a missing OpenAI key. `verifyKey` answers "is the user signed in" without throwing.
+
+### Packaging
+
+The SDK drives a per-platform Copilot runtime binary, about 133 to 174 MB unpacked. Bundle it with the app per platform (D6, packaging: [desktop plan](../desktop/README.md)), or download it on first use if the installer size matters. Either way it runs in the main process. Give the SDK a private `baseDirectory`: the runtime writes session state there, and the adapter deletes every session it creates in a `finally`.
+
+### What the adapter does for you
+
+- Zero tools. Every built-in Copilot tool is disabled and every permission request is rejected. The adapter reads the session's live tool list and aborts if it is not empty.
+- Our system prompt replaces the SDK's. The runtime's date prefix is suppressed.
+- One session per call, deleted when the call settles (the runtime would otherwise keep the prompt on disk).
+- `rate_limit`, `auth`, `refusal`, `truncated` and `invalid_output` reach the app as the usual `KvoxAiError` classes. The SDK retries 429 and 401 on its own; the adapter aborts on the first `model.call_failure` so kvox-ai owns retries, and 1.0.22 gives no retry-after, so a rate limit is deferred on the job's default back-off.
+- On `length` the session is aborted at once (the runtime would otherwise continue by itself). The SDK has no per-call output cap for Copilot-hosted models, so `maxOutputTokens` is not sent.
+
+Points the Desktop host must keep, because the slices depend on them:
+
+- **Offline behaviour.** Everything that calls a model needs a network and, for Copilot, a sign-in. `capabilities()` still answers (never throws) with `available: false` and a `reason`; `resolveTask` then throws `key_missing` or `not_configured`. The slices turn those into the product's 409s with `details.reason`; reading and editing existing data keeps working ([Offline constraints](#offline-constraints-feature-by-feature)). A queued AI job that fails with `rate_limit` defers; one that fails with another class fails the job with its message.
+- **Embeddings.** With `embeddings: null`, search answers with full text only and the reason `embeddings_unavailable`, `search.index` records why nothing was embedded, and the graph's resolution skips the vector candidate source.
+- **Token budget.** The budget uses `target.contextWindowTokens`, `target.maxOutputTokens` and the synchronous `countTokens`. Copilot limits come from the live listing, else the fallback catalog; both are estimates, so stay conservative.
+- **Prove it** with `describeKvoxAiConformance`, `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)). The Copilot adapter runs the first over `createCopilotMockTransport()`; Ask is proven on the OpenAI path only.
 
 ## Jobs offline
 
@@ -551,7 +515,7 @@ Points the sketch must keep, because the slices depend on them:
 - **Claiming** is one statement (`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING`), outside any transaction, so no handler runs inside one (essential on PGlite). It honours `scheduled_for`; the runner settles a job `succeeded` or `failed`, retries up to the handler's `profile.maxAttempts` (default 3 when absent) and fires `onSettled` after the write.
 - **Rate limits.** A handler throws `KvoxRateLimitError(throttleKey, retryAfterMs)`; the runner reschedules the job (`retryAfterMs`, or 5 s) without spending an attempt. `runNow(jobId)` asks for a pending job to run at once (`false` when it already settled).
 - **`enqueueWithin(tx, input)`** inserts inside the caller's open `$transaction`, so a row and its job commit together or not at all.
-- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`). The graph's `kg.migrate` enqueuer (`KgMigrateEnqueuer`) is not exported from `@marinoscar/kvox-api/graph` today; a fresh database has nothing to migrate, but read [Open points](#open-points) before you ship an ontology bump. A cron only decides whether work is due and enqueues it.
+- **Crons are explicit calls.** With `schedules: false` the slices register no `@nestjs/schedule` task. You call, on your own timer (a period of an hour is a reasonable start): `TranscriptsHousekeepingEnqueuer.enqueue()` (`@marinoscar/kvox-api/transcripts`), `NotesHousekeepingEnqueuer.enqueue()` (`/notes`) and, with the graph installed, `KgExportExpiryEnqueuer.enqueue()` (`/graph-rdf`; it exists only while `export` is on). Four enqueuers in all; the bare host ticks them hourly from `examples/bare-host/src/housekeeping.ts`, each resolved with `app.get(T, { strict: false })` because it lives in a slice module, not the root. The graph adds `KgMigrateEnqueuer.enqueue()` (`/graph`, `@stability experimental`): it queues one `kg.migrate` per owner whose rows a declared ontology migration would touch, returns at once without a query while no migration is declared (a fresh database, every build so far), and drains a backlog of more than 200 owners over successive ticks. Resolve it from the container (`app.get(KgMigrateEnqueuer)`; `GraphModule` exports it) and call it on the same timer. A cron only decides whether work is due and enqueues it.
 - **Why everything is still a job:** a job is a row, so work interrupted by quitting the application is still there on the next start. The 200 ms loop (`jobs.start()`) resumes it; tests call `drain()` instead.
 
 What the bare host's runner does **not** do, and Desktop must decide: it does not enforce `maxRuntimeMs` (a hung handler hangs the drain); a failed attempt retries at once instead of with a back-off; and a crash leaves a `running` row that nothing resets (the platform queue has a lease and a reaper). A Desktop runner should, on start, return `running` rows to `pending` (this process is the only runner), and enforce a timeout derived from `profile.maxRuntimeMs`.
@@ -635,18 +599,19 @@ app.getHttpAdapter().getInstance().addContentTypeParser('*', { parseAs: 'buffer'
 await app.listen(options.port ?? 0, '127.0.0.1');
 ```
 
-**Adding the graph and Ask** is more of the same; this block is illustrative (the bare host does not include these slices, so it is not compiled in CI). Each slice takes its peers' module objects:
+**Adding the graph and Ask.** The bare host mounts them (`examples/bare-host/src/app.module.ts`, copied here). Each slice takes its peers' module objects:
 
 ```ts
-// Illustrative — not compiled (the bare host runs transcription, search, transcripts and notes only)
+// Copied from examples/bare-host/src/app.module.ts
+const search = SearchModule.forRoot();
 const graph = GraphModule.forRoot({ schedules: false, peers: { transcripts, notes, search } });
 const extraction = GraphExtractionModule.forRoot({ autoExtract: false, peers: { graph, notes } });
 const rdf = GraphRdfModule.forRoot({ schedules: false, peers: { graph, extraction, transcripts, notes } });
 const ask = AskModule.forRoot({ peers: { graph, notes, search } });
-// where `search = SearchModule.forRoot()` is the instance you import, and each is added to `imports` after its peers.
+// imports: [..., transcription, search, searchIndexing, transcripts, notes, graph, extraction, rdf, ask]
 ```
 
-`autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; Desktop may prefer to keep it explicit. Remember the `ai.graphEnabled` setting.
+Build `SearchModule.forRoot()` once and share it. `autoExtract` (default `true`) makes the graph extract a note the moment it becomes ready, spending the user's Copilot quota; the bare host sets it `false`, which keeps extraction on `POST /api/graph/notes/:noteId/extract`. Also: set `ai.graphEnabled`, register `@fastify/multipart` (a `$hostPlugins` entry) (`await app.register(multipart, { limits: { fileSize: 64 * 1024 * 1024, files: 1 } })`), and tick the four enqueuers.
 
 **Options that matter offline**, per slice (full tables in each slice README):
 
@@ -655,7 +620,7 @@ const ask = AskModule.forRoot({ peers: { graph, notes, search } });
 | `transcription` | `providers: { assemblyai: false }`, `extraProviders: [YourLocalProvider]` | No AssemblyAI unless the user opts in to uploading audio to a third party. |
 | `transcripts` | `schedules: false`, `media: { transcode: false }` or `media.ffmpegPath` / `media.ffprobePath`, `exporters: { pdf, json, markdown, extra }`, `pdf.fontDir`, `playbackUrlTtlSeconds`, `sharing` | Ship ffmpeg or turn transcode off. The default `sharing` (`OwnerOnlyTranscriptSharing`) fits a single user. |
 | `search` | `semantic: { enabled, provider, onSemanticOff }`, `transcriptVisibility` (default: the owner's own), `typePermissions` | Leave semantic on; it switches itself off when the embeddings model is missing or not 1536 wide. |
-| `notes` | `schedules`, `exporters: { markdown, pdf, docx, extra }`, `documentSources: { pdf, text }`, `stream`, `appUrl` | Same switches as the bare host. |
+| `notes` | `schedules`, `exporters: { markdown, pdf, docx, extra }`, `documentSources: { pdf, text }`, `stream`, `appUrl`, `maxImportBytes` | Same switches as the bare host. Keep `documentSources.pdf` on (install `unpdf`) for PDF transcripts. |
 | `graph`, `graph-rdf`, `ask` | `schedules`, `layout`, `export` / `import` / `maxImportBytes`, `limits` (may only be lowered) | See [Jobs offline](#jobs-offline). |
 
 **Permission strings.** The slices export their permission sets as data; the single local user holds all of them, and the defaults are right, so pass nothing:
@@ -762,7 +727,7 @@ A card's `permission` is the exact string the API enforces, so the Desktop setti
 | **Search** | Full text over transcripts and notes (generated `tsvector` columns, GIN). | Semantic search only with a local 1536-dimension embedder behind `KVOX_AI.embed`. Plainly: if you have none, there is no semantic search. | Results carry `semanticReason: embeddings_unavailable` and the UI says "Results match your words exactly." `search.index` records why it embedded nothing. |
 | **Graph** | Reading the graph, entity pages, the overview layout (`kg.graph_layout`, `graphology*`), editing and merging entities, proposals already extracted, RDF export and import (`n3`, `jsonld`, `rdf-validate-shacl`). | Extraction, resolution (`kg.extract`, `kg.resolve`, `kg.embed`) and entity briefs (`kg.entity_digest`) call `KVOX_AI` (structured output; embeddings for the vector candidate source). Needs the `ai.graphEnabled` setting. | Extraction answers 409 `graph_disabled` / `ai_*`; resolution skips the vector candidates when `embeddings` is `null`. |
 | **Ask** | Reading saved conversations. | A turn calls `KVOX_AI.chat` with tool calling, repeatedly (up to 8 steps, 4 calls per step, 240 s). | A new question cannot be answered; saved conversations and the answers already stored stay readable. |
-| **Exports** | Transcript JSON and Markdown; note Markdown; graph RDF (Turtle, JSON-LD). | Transcript PDF and note PDF need `pdfkit` and the font directory (`pdf.fontDir`); note Word needs `docx`. | The format is simply not offered when its exporter is switched off. |
+| **Exports** | Transcript JSON and Markdown; note Markdown; graph RDF (Turtle, JSON-LD). Desktop imports the transcript JSON back through `POST /api/transcripts/imports` (the slice's `TranscriptImportService`, no audio, no provider call, so it works offline). A note Markdown export comes back through `POST /api/notes/import` (#585: same title and body, a `ready` note, no provider call). `detectKvoxImport` (`@marinoscar/kvox-contract/notes`) decides which route a local file goes to from its first bytes, so a host keeps no routing table of its own. | Transcript PDF and note PDF need `pdfkit` and the font directory (`pdf.fontDir`); note Word needs `docx`. | The format is simply not offered when its exporter is switched off. |
 | **Sharing** | Not applicable: single user, the default `OwnerOnlyTranscriptSharing`. | | |
 | **Notifications** | OS notifications from your `KVOX_NOTIFY` adapter. | An event def may name an email channel and template; a Desktop adapter ignores it or maps it to a local notification. | |
 
@@ -781,22 +746,26 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
    describeKvoxPortsConformance('desktop adapters', async (): Promise<KvoxPortsUnderTest> => ({
      ai: { port: copilotAdapter, failNextWith: (errorClass) => makeNextCallFail(errorClass) },
-     objectStore: { port: localObjectStore, ownerId: LOCAL_USER_ID },
+     objectStore: { port: localObjectStore, ownerId: LOCAL_USER_ID, uploadParts: putPartsToLocalServer },
      jobs: { port: pgTableJobs, drain: () => pgTableJobs.drain().then(() => undefined) },
      identity: { port: identity, anonymous: anonymousContext(), authenticated: tokenContext(), permissions: { granted: 'transcripts:read', notGranted: 'nope:read' } },
      notify: { port: osNotify },
-     settings: { port: fileSettings },
+     settings: { port: fileSettings /*, noDefaults: { name, schema, userId, patch } */ },
      secrets: { port: keychain, purpose: 'conformance', name: 'k', actorUserId: LOCAL_USER_ID },
      dispose: async () => { /* stop timers */ },
    }), { describe, it, expect });
    ```
 
-   One `it` per rule; a hook that is absent skips its rule, a port the factory omits fails its section unless named in `options.skip`. The rules are listed in [kvox-ports.md §5](../specs/kvox-ports.md#5-the-conformance-suite). The package runs it against the fakes (`packages/kvox-api/test/ports-conformance.spec.ts`); the bare host does **not** run the kit against its local ports, it holds them to the same rules by hand in `test/local-ports.test.ts`, so a Desktop repo is where the kit first runs against a real set.
+   One `it` per rule; a hook that is absent skips its rule, a port the factory omits fails its section unless named in `options.skip`. The rules are listed in [kvox-ports.md §5](../specs/kvox-ports.md#5-the-conformance-suite). The package runs it against the fakes (`packages/kvox-api/test/ports-conformance.spec.ts`) and the bare host runs it against its local ports ([`examples/bare-host/test/ports-conformance.test.ts`](../../examples/bare-host/test/ports-conformance.test.ts): the object store, jobs, identity, settings and secrets; `ai`, `notify`, `events` and `audit` are skipped there), so that file is the worked example of a factory over real adapters. Two things it shows: a store that checks its parts when an upload is sealed needs the object-store hook `uploadParts(init, size)` (PUT the bytes to the signed part URLs; the fakes accept an empty upload), and `ownerId` must be a seeded `users` row because every owner column is a foreign key. `test/local-ports.test.ts` keeps the rules the kit does not state (path escapes, signed-URL tampering, retries, merge patches).
 2. **The AI adapter and Ask.** `describeAskConformance(name, aiFactory, { describe, it, expect })` from `@marinoscar/kvox-api/ask/testing`: any adapter that passes the ports kit and this suite runs a full Ask turn (`scriptedAiUnderTest()` is the package's own factory and the worked example).
 3. **A local transcription provider.** `describeTranscriptionProviderConformance(name, () => new YourProvider(), { describe, it, expect }, { scenarios, settings })` from `@marinoscar/kvox-api/transcription/testing`; its first rule is a stable lowercase id matching `^[a-z][a-z0-9_-]*$`. An extra exporter: `describeTranscriptExporterConformance` (`/transcripts/testing`) or `describeNoteExporterConformance` (`/notes/testing`).
 4. **The slice suites** the web edition also runs over its own binding: `describeTranscriptsConformance`, `describeNotesConformance`, `describeSearchConformance` (with `{ permissions }` if you changed the strings), and for the graph `describeGraphConformance`, `describeGraphExtractionConformance`, `describeGraphRdfConformance`. They take a target built from your module wiring (job handlers as you register them), so they catch a wiring that drops a handler or an `ai` flag. Their TSDoc and slice READMEs show the target shape.
 5. **A copy of the bare-host happy path.** [`examples/bare-host/test/happy-path.e2e.test.ts`](../../examples/bare-host/test/happy-path.e2e.test.ts) drives one recording through the domain with `fetch`: config 401 without the identity header and `available: true` with it; create a transcript and PUT the bytes to the part URL; seal the upload; drain the jobs; the transcript is `ready` with the provider's segments; edit a segment; generate a note and replay its stream; search finds both on full text with `embeddings_unavailable`; export Markdown; delete and see the rows and files go. Copy it, point it at your app, and keep it green in CI on both database legs. Run the bare host itself to confirm the quoted code still works: `node examples/bare-host/run.mjs --from pack --db pglite` from a KVox checkout.
 6. **Web.** `describeKvoxWebConformance({ describe, it, expect }, { createHost: () => desktopHost })` from `@marinoscar/kvox-web/core/testing` checks that every port is present, links return paths and the viewer has the right shape (the `srcDir` option scans the package's own sources and is for the package).
+
+## Evaluating extraction quality: `kvox-eval`
+
+`@marinoscar/kvox-eval` (the sixth package; issue #580) holds the knowledge-graph and Ask evaluation: the synthetic golden set (`fixtures/kg-golden/`), the scorers, the report and the `kvox-eval` command. It is written only against the model port, so it measures the prompts, schemas and validators the product ships. Desktop runs `kvox-eval kg` in its own CI with its own binding: `createKvoxAi` of `@marinoscar/kvox-ai` over `createDirectRuntime` (key in `KVOX_EVAL_OPENAI_API_KEY`, environment only), the same call the web edition's `npm run kg:eval` makes. `kvox-eval kg --predictions gold` is the harness self-test and must print 1.000 everywhere. `--provider copilot` refuses until the Copilot adapter lands (#581), and `kvox-eval ask` (issue #608) runs the Ask evaluation headless over the same binding: an in-memory PGlite, the golden graph seeded through `GraphWriteService`, the real `ask.respond` handler, no real database (`kvox-eval ask --replay` needs no key; peers and usage: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md)). The request-level parity check (#580 part 2) proves the harness is the same: `@marinoscar/kvox-eval/parity` drives the product's own notes, extraction, adjudication and Ask code through a `KvoxAiPort` and the recorded provider requests must equal the snapshots shipped in the package (`parity/`). Desktop runs it in its own CI over its binding: `runParityScenario(createKvoxAi({ runtime, taskModels: parityTaskModelSource() }), { script })` with `createParityScript()` as the scripted provider, where `runtime` is `createDirectRuntime` with `createRecordingAdapter(script)` as its adapter (or `createRecordingRuntime` around the runtime Desktop already uses), then `withRecordedFeatures(adapter.requests(), runtime.requests())` compared with `loadParitySnapshot('m01')` to `'m10'` and `'ask'`. A mismatch means Desktop's harness differs from the web edition's; no key and no network are needed. Reference: [packages/kvox-eval/src/parity/README.md](../../packages/kvox-eval/src/parity/README.md). Reference: [packages/kvox-eval/README.md](../../packages/kvox-eval/README.md).
 
 ## Version policy
 
@@ -815,7 +784,7 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 **`Unknown transcription provider "x". Known providers: ...` (a provider id rejected).** The settings only accept an id some registered class declares. Register it through `TranscriptionModule.forRoot({ extraProviders: [YourProvider] })` (a class the container builds, not an instance), keep `id` lowercase `[a-z][a-z0-9_-]*`, and store a key for it under the `transcription` secret purpose. A settings row that names a provider this build lacks reads as unavailable.
 
-**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `kvox-db sync --names after-host` after `platform db sync`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`.
+**A migration out of order / `relation "users" does not exist`.** The domain migrations ran before the platform's. Install with `platform db sync --timestamp 2024-01-01T00:00:00Z`, then `kvox-db sync --names stable`, and never rename an installed directory. A database that already ran them under the original names keeps `--names original`; one that recorded `after-host` names keeps the policy its lock records.
 
 **`kvox-db check`: `INSTALLED_MODIFIED`, `FRAGMENT_MODIFIED`, `NOT_INSTALLED`, `LOCK_MISSING`.** Someone edited, formatted or lost an installed file. Restore it from version control, or run `kvox-db sync`; edit nothing under `prisma/migrations` or `prisma/fragments/kvox.*`.
 
@@ -839,6 +808,5 @@ The kits are the executable definition of correct. Add these files to the Deskto
 
 ### Open points
 
-- `KgMigrateEnqueuer` (the `kg.migrate` scheduler) is documented as callable by a host with `schedules: false` but is not exported from `@marinoscar/kvox-api/graph`. Until it is, a Desktop host cannot trigger the graph's ontology migration on its own timer.
-- The graph, graph-extraction, graph-rdf and Ask slices are described from their READMEs and conformance kits; they have not been run in the bare host. Expect to find host duties the way the bare host found the `ai` namespace and the `org_id` column.
+- Package gaps found by the graph run (issue #573), both fixed: a proposal commit now publishes `graph.changed` after commit, as do imports, reverts, merges and merge reversals (#591); `@fastify/multipart` is declared as a host plugin in the slice peers data (`$hostPlugins`) and checked by `check-slice-peers` rule 8 (#592).
 - The web slices for transcripts, notes, graph and Ask (issues #500, #502, #503, #504) were not merged when this guide was written.

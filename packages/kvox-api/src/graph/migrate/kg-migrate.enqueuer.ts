@@ -47,13 +47,27 @@ import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, type KvoxSql } from '../../p
 import { GRAPH_MODULE_OPTIONS, type ResolvedGraphOptions } from '../graph.options.js';
 import type { KvoxGraphDb } from '../data/graph-db.js';
 
-/** Owners enqueued per tick at most. */
+/**
+ * The most owners one `kg.migrate` tick queues. A backlog larger than this drains over
+ * successive ticks.
+ *
+ * @stability experimental
+ */
 export const KG_MIGRATE_OWNERS_PER_TICK = 200;
 
 /**
- * KgMigrateEnqueuer: wiring the slice registers itself; a host configures it through `GraphModule.forRoot` and never calls it directly.
+ * Queues the `kg.migrate` jobs: one per owner that still has graph rows a declared ontology
+ * migration would touch. The scheduler of the slice, split from its `@Cron` timer so a host
+ * without `@nestjs/schedule` can drive it.
  *
- * @internal
+ * With `schedules: false` in `GraphModule.forRoot` the slice registers no timer. The host then
+ * resolves this class from the container (`app.get(KgMigrateEnqueuer)`, or by injection: the
+ * module exports it) and calls `enqueue()` on its own timer, hourly being a reasonable
+ * period. A tick with no declared migration returns at once and runs no query, so a fresh
+ * database costs nothing. `migrate.scheduleEnabled` is read at every call and a false
+ * answer queues nothing; the job itself stays runnable from the host's own job controls.
+ *
+ * @extensionPoint
  * @stability experimental
  */
 @Injectable()
@@ -72,7 +86,11 @@ export class KgMigrateEnqueuer {
     this.definition = definition ?? DEFAULT_KG_MIGRATE_DEFINITION;
   }
 
-  /** Queues one migration job per owner that needs one. Never throws. */
+  /**
+   * Queues one `kg.migrate` job per owner that needs one, up to {@link KG_MIGRATE_OWNERS_PER_TICK}
+   * owners. A job already pending or running for an owner is not queued twice. Never throws:
+   * a failure is logged and the next tick tries again.
+   */
   async enqueue(): Promise<void> {
     if (!this.scheduleEnabled()) {
       this.logger.debug('kg.migrate scheduling is disabled by the host; skipping');
@@ -104,7 +122,12 @@ export class KgMigrateEnqueuer {
     }
   }
 
-  /** Read-only: the owners with at least one row a declared migration touches. */
+  /**
+   * Read-only: the owners with at least one row a declared migration touches, at most
+   * {@link KG_MIGRATE_OWNERS_PER_TICK} of them. Empty when no migration is declared.
+   *
+   * @returns the owner ids.
+   */
   async ownersToMigrate(): Promise<string[]> {
     const migrations = migrationsUpTo(this.definition.targetVersion, this.definition);
     const predicates: Partial<Record<KgMigrateTable, KvoxSql>> = {};

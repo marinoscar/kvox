@@ -43,14 +43,14 @@ const NeighborhoodCanvas = lazy(() => canvasLoaders.neighborhoodCanvas());
 export const NEIGHBORHOOD_WIDGET_LIMIT = 60;
 
 /**
- * The props of neighborhood widget.
+ * Props of {@link NeighborhoodWidget}.
  *
  * @stability experimental
  */
 export interface NeighborhoodWidgetProps {
-  /** The id of the entity. */
+  /** Id of the entity whose neighbourhood to draw. */
   entityId: string;
-  /** The entity label. */
+  /** The entity's label, used in the accessible name of the drawing. */
   entityLabel: string;
 }
 
@@ -66,7 +66,7 @@ export function explorerPathFor(entityId: string): string {
 }
 
 /**
- * Neighborhood widget.
+ * The entity page's interactive one-hop neighbourhood. Renders nothing without WebGL or when the neighbourhood cannot be read; on a phone the canvas is not interactive and a tap opens the explorer.
  *
  * @stability experimental
  */

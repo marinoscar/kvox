@@ -3,11 +3,12 @@
 //
 // Real meetings are private conversations — there is no `transcripts:read_any`
 // for exactly that reason — so nothing from this mode may ever land inside the
-// repository. The one security control is `assertOutsideRepo`: every path this
-// mode writes to or reads a real set from is resolved (symlinks included) and
-// refused when it falls inside the git work tree. The single exception is the
-// git-ignored `apps/api/.kg-eval/` scratch directory, and only for runs over
-// the committed SYNTHETIC set.
+// repository. The one security control is `assertOutsideRepo`, which lives in
+// `@marinoscar/kvox-eval` (#580) so the package's own `kvox-eval kg --real-dir`
+// refuses the same paths: every path this mode writes to or reads a real set
+// from is resolved (symlinks included) and refused when it falls inside the git
+// work tree. The single exception is the git-ignored `apps/api/.kg-eval/`
+// scratch directory, and only for runs over the committed SYNTHETIC set.
 //
 // `exportNoteSkeleton` reads one note (plus its origin transcript's segments
 // and speaker identities) and writes an UNLABELLED fixture skeleton — labels
@@ -16,71 +17,19 @@
 // own with a plain "not found" (the 404-never-403 posture of the API).
 // =============================================================================
 
-import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
+import { mkdirSync, writeFileSync } from 'fs';
+import { join, resolve } from 'path';
 
 import type { PrismaClient } from '@prisma/client';
 
 import { parseSpeakerIdentities } from '@marinoscar/kvox-api/transcripts';
-import type { GoldenFixtureInput } from './fixture-schema';
+import { assertOutsideRepo as assertOutsideRepoOf, canonicalPath, nextRealFixtureId } from '@marinoscar/kvox-eval';
+import type { GoldenFixtureInput } from '@marinoscar/kvox-eval/fixtures';
 
-export const REAL_DATA_REFUSAL = 'real meeting data must never be written inside the repository';
-
-/** Exit code 3. */
-export class RealDataPathError extends Error {
-  constructor(readonly path: string) {
-    super(`${REAL_DATA_REFUSAL}: ${path}`);
-  }
-}
+export { canonicalPath, isInside, nextRealFixtureId, RealDataPathError, REAL_DATA_REFUSAL, repositoryRoots } from '@marinoscar/kvox-eval';
 
 /** Exit code 2 — a plain "not found", whoever actually owns the note. */
 export class RealDataNotFoundError extends Error {}
-
-/** The repository root(s): git's answer, plus this file's own location as a fallback. */
-export function repositoryRoots(): string[] {
-  const roots = new Set<string>();
-  // scripts/kg-eval → scripts → api → apps → <root>
-  roots.add(canonicalPath(resolve(__dirname, '..', '..', '..', '..')));
-  for (const cwd of [__dirname, process.cwd()]) {
-    try {
-      const top = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-      if (top) roots.add(canonicalPath(top));
-    } catch {
-      // Not a git checkout (or no git binary): the fallback above still applies.
-    }
-  }
-  return [...roots];
-}
-
-/** Absolute, with symlinks resolved on the longest prefix that exists. */
-export function canonicalPath(p: string): string {
-  const abs = resolve(p);
-  let existing = abs;
-  const rest: string[] = [];
-  while (!existsSync(existing)) {
-    const parent = dirname(existing);
-    if (parent === existing) break;
-    rest.unshift(basename(existing));
-    existing = parent;
-  }
-  let real = existing;
-  try {
-    real = realpathSync(existing);
-  } catch {
-    // keep the unresolved prefix
-  }
-  return rest.length > 0 ? join(real, ...rest) : real;
-}
-
-export function isInside(child: string, parent: string): boolean {
-  const rel = relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-}
 
 /** The git-ignored scratch directory synthetic runs may write into. */
 export function syntheticRunsDir(): string {
@@ -93,26 +42,7 @@ export function syntheticRunsDir(): string {
  * pass it ONLY for output of a run over the committed synthetic set.
  */
 export function assertOutsideRepo(p: string, opts: { allowSyntheticRunsDir?: boolean } = {}): string {
-  const abs = canonicalPath(p);
-  if (opts.allowSyntheticRunsDir && isInside(abs, syntheticRunsDir())) return abs;
-  for (const root of repositoryRoots()) {
-    if (isInside(abs, root)) throw new RealDataPathError(abs);
-  }
-  return abs;
-}
-
-/** Next free `m9NN` id in a real directory (real ids never collide with the committed m01…). */
-export function nextRealFixtureId(realDir: string): string {
-  const used = new Set<number>();
-  if (existsSync(realDir)) {
-    for (const f of readdirSync(realDir)) {
-      const m = /^m(\d{2,3})/.exec(f);
-      if (m) used.add(Number(m[1]));
-    }
-  }
-  let n = 901;
-  while (used.has(n)) n += 1;
-  return `m${n}`;
+  return assertOutsideRepoOf(p, { allowInside: opts.allowSyntheticRunsDir ? syntheticRunsDir() : null });
 }
 
 export interface ExportNoteArgs {

@@ -12,6 +12,7 @@ export * from './graph-import.js';
 export * from './graph-ontology.js';
 export * from './graph-overview.js';
 export * from './graph-read.js';
+export * from './graph-relation-edit.js';
 export * from './proposal.js';
 export * from './proposal-payload.schema.js';
 export * from './resolution.js';

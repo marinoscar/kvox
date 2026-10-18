@@ -43,7 +43,7 @@ import {
   type GoldenItemLabel,
   type GoldenRelationLabel,
   type ItemLabelKind,
-} from '../kg-eval/fixture-schema';
+} from '@marinoscar/kvox-eval/fixtures';
 
 // `storage_objects.org_id` is required, so the fixture inserts use the default
 // organization; which module owns an object is a `kvox_object_ownership` row.
@@ -60,23 +60,6 @@ async function stampManagedBy(tx: Prisma.TransactionClient, id: string, module: 
 
 /** Every email this seeder's throwaway user gets starts with this. */
 export const ASK_EVAL_EMAIL_PREFIX = 'ask-eval';
-
-export class UnsafeDatabaseError extends Error {}
-
-/**
- * Refuses to run against a database that is not obviously a scratch one.
- * `--allow-db <name>` (checked by the caller against the ACTUAL configured
- * name) is the only override — see `apps/api/scripts/ask-eval.ts`.
- */
-export function assertSafeDatabase(databaseName: string, allowDb: string | null): void {
-  if (databaseName === allowDb) return;
-  if (/_test$/.test(databaseName) || /_eval$/.test(databaseName)) return;
-  throw new UnsafeDatabaseError(
-    `refusing to seed the gold graph into database "${databaseName}" — its name doesn't end in ` +
-      `"_test" or "_eval". Point POSTGRES_DB at a scratch database, or pass --allow-db "${databaseName}" ` +
-      `if you are certain (it will be filled with synthetic data and then have a user deleted from it).`,
-  );
-}
 
 /** Fixture ids / labels ↔ the database rows the seeder wrote for them. */
 export interface AskEvalIdMap {

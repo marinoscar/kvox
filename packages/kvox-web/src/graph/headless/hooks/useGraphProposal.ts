@@ -9,6 +9,11 @@
  * - While the proposal is `extracting`, it is re-read every 2 s (`pollMs`) through
  *   `useVisiblePolling` (paused in a hidden tab) and polling stops the moment
  *   it settles.
+ * - `awaitUntil` (#616) covers the proposal that does not exist YET: while
+ *   `detail` is `null` the hook keeps re-reading every `pollMs` until that
+ *   time, so a proposal an automatic extraction creates after the first read
+ *   appears (and, being `extracting`, hands over to the poll above). Past the
+ *   deadline with still nothing, polling stops.
  * - `decide` is OPTIMISTIC: the row's checkbox moves at once and moves back if
  *   the PATCH is refused (the error is re-thrown for the sheet's snackbar).
  *   `pendingItemIds` names the rows with a write in flight.
@@ -44,65 +49,73 @@ import type {
 import { KvoxApiError, useIsMounted, useKvoxHost, useVisiblePolling } from '../../../core/headless/index.js';
 
 /**
- * The PROPOSAL POLL MS.
+ * How often a proposal that is still `extracting` is re-read, in milliseconds.
  *
  * @stability experimental
  */
 export const PROPOSAL_POLL_MS = 2_000;
 
 /**
- * The graph proposal source.
+ * How long after a note turns ready the note page keeps looking for the
+ * proposal an automatic extraction creates, in milliseconds (#616).
+ *
+ * @stability experimental
+ */
+export const NOTE_EXTRACTION_FOLLOW_MS = 30_000;
+
+/**
+ * Where a proposal is read from: the newest one of a note, or one opened directly by id.
  *
  * @stability experimental
  */
 export type GraphProposalSource = {
-  /** The id of the note. */
+  /** Note whose newest non-discarded proposal to read; it resolves to `null` when nothing was ever extracted. */
   noteId: string;
 } | {
-  /** The id of the proposal. */
+  /** Proposal to open directly. */
   proposalId: string;
 };
 
 /**
- * What use graph proposal returns.
+ * What {@link useGraphProposal} returns.
  *
  * @stability experimental
  */
 export interface UseGraphProposalReturn {
-  /** The detail. */
+  /** The proposal with its rows: `undefined` until the first answer, `null` when the note has no proposal. */
   detail: ProposalDetail | null | undefined;
-  /** Whether it is loading. */
+  /** The first read has not settled yet. */
   isLoading: boolean;
-  /** The error. */
+  /** A message when the last read failed, else `null`. */
   error: string | null;
-  /** The refresh. */
+  /** Reads the proposal again. */
   refresh: () => Promise<void>;
-  /** The decide. */
+  /** Records a decision on one row. Optimistic: the row changes at once and changes back if the request is refused, in which case the error is re-thrown. */
   decide: (itemId: string, body: PatchProposalItemInput) => Promise<PatchProposalItemResult>;
-  /** The bulk. */
+  /** Applies one decision to many rows, then re-reads the proposal because the server decides which rows it skipped. */
   bulk: (itemIds: string[], decision: BulkDecision) => Promise<BulkDecideResult>;
-  /** The commit. */
+  /** Commits the proposal into the graph and stores the updated summary. */
   commit: () => Promise<{
-    /** The proposal. */
+    /** The proposal, now committed. */
     proposal: ProposalSummary;
-    /** The result. */
+    /** What the commit wrote. */
     result: CommitResult;
   }>;
-  /** The discard. */
+  /** Discards the proposal and stores the updated summary. */
   discard: () => Promise<{
-    /** The proposal. */
+    /** The proposal, now discarded. */
     proposal: ProposalSummary;
   }>;
-  /** The revert. */
+  /** Reverts a committed proposal; `confirmPartial` lets it revert what it can when some rows changed since. */
   revert: (confirmPartial: boolean) => Promise<{
-    /** The proposal. */
+    /** The proposal, now reverted. */
     proposal: ProposalSummary;
-    /** The result. */
+    /** How many rows were reverted and which were kept. */
     result: RevertResult;
   }>;
-  /** The request extract. */
+  /** Starts an extraction for the note and re-reads the proposal. Rejects when there is no note to extract from. */
   requestExtract: (body?: RequestExtractionInput) => Promise<RequestExtractionResult>;
-  /** The pending item ids. */
+  /** Ids of the rows with a write in flight. */
   pendingItemIds: Set<string>;
 }
 
@@ -121,17 +134,23 @@ function optimistic(item: ProposalItem, body: PatchProposalItemInput): ProposalI
 }
 
 /**
- * Hook: reads graph proposal.
+ * Reads one proposal, polls it while it is extracting, and exposes the review mutations (decide, bulk, commit, discard, revert, request extraction).
  *
  * @stability experimental
  */
 export function useGraphProposal(
   source: GraphProposalSource,
   options: {
-    /** Whether enabled applies. */
+    /** Set `false` to skip reading (default `true`). */
     enabled?: boolean;
-    /** The poll ms. */
+    /** Poll interval while the proposal is `extracting`, in milliseconds; defaults to {@link PROPOSAL_POLL_MS}. Polling pauses in a hidden tab. */
     pollMs?: number;
+    /**
+     * Epoch milliseconds. While `detail` is `null`, also re-read every `pollMs`
+     * until this time, so a proposal created after the first read (an automatic
+     * extraction) appears. Polling pauses in a hidden tab.
+     */
+    awaitUntil?: number;
   } = {},
 ): UseGraphProposalReturn {
   const host = useKvoxHost();
@@ -170,8 +189,27 @@ export function useGraphProposal(
     if (enabled) void refresh();
   }, [enabled, key, refresh]);
 
+  const awaitUntil = options.awaitUntil;
+  const awaitUntilRef = useRef(awaitUntil);
+  awaitUntilRef.current = awaitUntil;
+  // Flipped by the poll once the deadline passes with still no proposal, which
+  // stops the interval; a new deadline or a new source starts the wait again.
+  const [awaitExpired, setAwaitExpired] = useState(false);
+  useEffect(() => {
+    setAwaitExpired(false);
+  }, [awaitUntil, key]);
+
   const extracting = detail?.proposal.status === 'extracting';
-  useVisiblePolling(() => void refresh(), enabled && extracting ? pollMs : 0);
+  const awaiting = detail === null && awaitUntil !== undefined && !awaitExpired;
+  const poll = useCallback(() => {
+    const until = awaitUntilRef.current;
+    if (detailRef.current === null && until !== undefined && Date.now() >= until) {
+      setAwaitExpired(true);
+      return;
+    }
+    void refresh();
+  }, [refresh]);
+  useVisiblePolling(poll, enabled && (extracting || awaiting) ? pollMs : 0);
 
   const proposalId = useCallback((): string => {
     const id = detailRef.current?.proposal.id;

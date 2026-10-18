@@ -112,6 +112,10 @@ Design and the full exemption list: [docs/specs/job-queue.md §7.10](docs/specs/
 3. **A node never persists a job-scoped credential.** Every per-job secret is issued through `POST /api/nodes/:id/jobs/:jobId/secret`, gated by `assertJobHeldByNode`, bounded by the job's lease, held in node memory only, revoked when the job settles or by the sweep. `job_node_secrets` stores the credential's **handle**, never material. A handler declares the need with `nodeSecretBroker` (`JobSecretBroker` in `@marinoscar/platform-api/jobs`). The node's own `nod_` identity token is the single exception.
 4. **A job type declares its execution profile or takes the global default.** `JobHandler.profile` is optional and carries exactly `{ maxRuntimeMs, maxAttempts }` (`JobExecutionProfile` in `@marinoscar/platform-api/jobs`). Lease, renewal interval and reaper patience derive from `maxRuntimeMs`. Never add `leaseMs` or `heartbeatMs`.
 
+## MANDATORY: Packages first
+
+Domain and AI-harness code lives once in the `@marinoscar/kvox-*` packages; web and KVox Desktop are hosts (ports, shell, packaging). Never copy slice code, prompts, schemas or parsers into a host; vary by package option or port. [ADR-0001](docs/decisions/0001-packages-first.md).
+
 ## MANDATORY: Invariants that are easy to break
 
 Each is enforced by a test or a spec; detail lives in the linked doc.
@@ -126,7 +130,7 @@ Each is enforced by a test or a spec; detail lives in the linked doc.
 - **`packages/kvox-api/src/transcripts/editing/` stays pure** (no `PrismaService`, no `@Injectable`, no `randomUUID()` in a reducer), so `materialize()` replays through the same functions as live edits ([transcription §4](docs/specs/transcription.md)).
 - **Every graph write goes through `GraphWriteService`** (`packages/kvox-api/src/graph/write/`); the sole exception is `kg.migrate`. The deferred `kg_assert_has_evidence` trigger refuses an accepted/edited row with no evidence at `COMMIT` (no orphans) ([ontology](docs/specs/ontology.md)). Nothing enters the graph except through a reviewed proposal's commit (named exceptions: speaker naming, manual entity edit); retrieval never answers from the graph alone.
 - **A `sensitive` PersonFact never leaves the deployment**, for any purpose or setting; it is never bulk-accepted, bulk-imported or exported.
-- **AI keys are per user** in the platform's `user_ai_keys` (cascade on user delete), never in `credentials`, never a deployment-wide fallback. `KvoxAi` (`apps/api/src/ai-port/`) is the only way code reaches a model; the platform resolves the key. **AI jobs** (`note.generate`, `kg.*`, `ask.respond`, `transcript.name_check`) are **server-only** permanently: no vendor offers a job-scoped sub-key to broker.
+- **AI keys are per user** in the platform's `user_ai_keys` (cascade on user delete), never in `credentials`, never a deployment-wide fallback. The `KVOX_AI` port, bound to `createKvoxAi` of `@marinoscar/kvox-ai`, is the only way code reaches a model; the platform resolves the key. **AI jobs** (`note.generate`, `kg.*`, `ask.respond`, `transcript.name_check`) are **server-only** permanently: no vendor offers a job-scoped sub-key to broker.
 - **There is no `*:read_any` for transcripts, notes or the graph**; no access answers **404, never 403**.
 
 ## Architecture principles

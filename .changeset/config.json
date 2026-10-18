@@ -6,6 +6,8 @@
     [
       "@marinoscar/kvox-contract",
       "@marinoscar/kvox-db",
+      "@marinoscar/kvox-ai",
+      "@marinoscar/kvox-eval",
       "@marinoscar/kvox-api",
       "@marinoscar/kvox-web"
     ]

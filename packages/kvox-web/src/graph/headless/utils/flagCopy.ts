@@ -11,7 +11,7 @@ import { PROPOSAL_ITEM_FLAGS } from '../clients/graph.js';
 import type { ProposalItemFlag } from '../clients/graph.js';
 
 /**
- * The FLAG COPY.
+ * The sentence shown for each proposal-item flag.
  *
  * @stability experimental
  */
@@ -51,7 +51,7 @@ const WARNING_FLAGS: ReadonlySet<string> = new Set<ProposalItemFlag>([
 ]);
 
 /**
- * Tells whether known flag.
+ * Tells whether a string is a flag this build has copy for (the wire may carry a newer one).
  *
  * @stability experimental
  */
@@ -60,16 +60,16 @@ export function isKnownFlag(flag: string): flag is ProposalItemFlag {
 }
 
 /**
- * The flag chip.
+ * One flag chip on a proposal row.
  *
  * @stability experimental
  */
 export interface FlagChip {
-  /** The key. */
+  /** The flag key. */
   key: string;
-  /** The label. */
+  /** The text the chip shows. */
   label: string;
-  /** The tone. */
+  /** `warning` for flags that deserve attention, `default` otherwise. */
   tone: 'warning' | 'default';
 }
 

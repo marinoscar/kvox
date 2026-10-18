@@ -1,7 +1,7 @@
 name: KVox packages
 
-# Build, check and pack the four publishable packages (@marinoscar/kvox-contract,
-# -db, -api, -web). Publishing is kvox-release.yml's job. The standard these
+# Build, check and pack the six publishable packages (@marinoscar/kvox-contract,
+# -db, -ai, -api, -web, -eval). Publishing is kvox-release.yml's job. The standard these
 # jobs enforce: docs/PACKAGES.md.
 #
 # The `bare-host` job is the consumer proof: it installs the PACKED tarballs into
@@ -103,6 +103,13 @@ jobs:
           node -e "require('@marinoscar/kvox-api/search')"
           node -e "require('@marinoscar/kvox-api/search/testing')"
           node -e "require('@marinoscar/kvox-db')"
+          node -e "require('@marinoscar/kvox-ai')"
+          node -e "require('@marinoscar/kvox-eval')"
+          node -e "require('@marinoscar/kvox-eval/fixtures')"
+          node -e "require('@marinoscar/kvox-eval/parity')"
+          node packages/kvox-eval/dist/cli/main.js kg --predictions gold --only m01
+          node -e "require('@marinoscar/kvox-eval/ask-run')"
+          node packages/kvox-eval/dist/cli/main.js ask --replay --out "$RUNNER_TEMP/ask-replay"
           node -e "require('@marinoscar/kvox-contract')"
           node -e "require('@marinoscar/kvox-contract/graph')"
           node -e "require('@marinoscar/kvox-contract/ontology')"
@@ -127,10 +134,12 @@ jobs:
 
       - run: npm ci
 
-      # kvox-api's slices import the contract's built subpaths.
-      - run: npm run build -w @marinoscar/kvox-contract
+      # kvox-api's slices import the contract's built subpaths, kvox-ai
+      # imports kvox-api's (`@marinoscar/kvox-api/ports`, `/testing`), and
+      # kvox-eval imports kvox-ai's (`createKvoxAi`, `createDirectRuntime`).
+      - run: npm run build -w @marinoscar/kvox-contract -w @marinoscar/kvox-api -w @marinoscar/kvox-ai
 
-      # TypeDoc for the four packages (fails on an undocumented export or a
+      # TypeDoc for the six packages (fails on an undocumented export or a
       # broken {@link}), then README, TSDoc tag and entry-point checks.
       - run: npm run check:kvox-package-docs
 

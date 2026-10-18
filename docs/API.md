@@ -3417,6 +3417,32 @@ moved, and refusing a 12 GB file before the upload starts is the entire value of
 checking here. The real size is enforced again when the multipart upload
 completes.
 
+#### POST /transcripts/imports
+Create a transcript from a `kvox.transcript/v1` JSON file, the document `POST /transcripts/{id}/exports` writes for the `json` format. Issue #571, spec §8.6.
+
+`multipart/form-data` with a single `file` part (a part under another name is a 400). The transcript is owned by the caller and answers **201** `{ data: <the transcript detail> }`, already `status: ready`, `transcriptionStatus: completed`, `playbackStatus: not_needed`, `provider: "import"`. Segments, speakers, speaker names and word timings (only if the file carries them) are stored; `recordedAt` is the file's `transcript.recordedAt`, else its `createdAt`. Version 1 is `ai_original` with no author. Named speakers are recorded as identified, as if named by hand.
+
+The import is **synchronous** and bounded by the size limit; no transcription, transcode or ready-notification job is created, and `GET /transcripts/{id}/audio` answers 404 for it. The uploaded JSON is kept as the transcript's managed source object and removed with it.
+
+| Status | Meaning |
+|---|---|
+| **201** | Imported |
+| **400** | No file, a part not named `file`, or not multipart; or the file is refused, with `details.reason` below |
+| **413** | The file is over `maxImportBytes` (25 MiB by default) |
+
+| `details.reason` | Meaning |
+|---|---|
+| `not_json` | Not UTF-8 JSON |
+| `unsupported_schema` | JSON, but not `kvox.transcript/v1`; `details.schema` echoes the value it names |
+| `invalid_document` | Fails the published schema or holds a value a transcript cannot store; `details.issues` lists up to 20 `{ path, message }` |
+| `duplicate_id` | Two speakers, or two segments, share an id |
+| `unknown_speaker` | A segment names an undeclared speaker |
+| `empty_transcript` | No segments |
+
+Ids, the version number, the provider and edit authors are **not** preserved; word timings survive only if the export used `includeWords`.
+
+**Requires:** `transcripts:write`
+
 #### GET /transcripts
 The transcripts this caller can open. Ordered by `updatedAt` descending and
 paginated by an **opaque cursor** rather than a page number — every pipeline
@@ -3978,7 +4004,7 @@ touched.
 
 | Format | What it is |
 |---|---|
-| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one |
+| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one. `transcript.recordedAt` (the meeting date) is an optional field added under that rule; older files lack it, and `POST /transcripts/imports` then uses `createdAt` |
 | `markdown` | YAML front matter (title, date, duration, speakers, version) then `**Speaker** · 00:01:23` paragraphs. Every interpolated value is escaped for Markdown's own specials, because a speaker name and a line of speech are text, not markup |
 | `pdf` | pdfkit, streamed, with bundled Noto faces: a cover block (title, date, duration, participants with talk time), speaker names in their own colours, a timestamp margin, a running header, and a footer reading `Page x of y · Version n · Exported from <app>` |
 
@@ -4875,6 +4901,29 @@ a failed row is never reused.
 
 ---
 
+#### POST /notes/import
+Creates a note from a Markdown note export (issue #585). Multipart, single
+`file` part. The title comes from the front matter (`title`), else the leading
+`# heading`, else the file name; the exporter's title heading and provenance
+block are not part of the body. Any Markdown or text file is accepted the same
+way, so an export without front matter imports as a plain-body note. Version 1
+is an `edit` by the caller (`Imported from <file>`); the file is kept as the
+note's source document (`sourceType: document`) and its extraction is queued;
+`kvox.notes.note_ready` is published. Spec: `docs/specs/notes.md` §8.7.
+
+**Requires:** `notes:write`. Size limit: the notes slice option
+`maxImportBytes` (5 MiB by default).
+
+**Response:** `201` — the new note, exactly as `GET /notes/{id}` returns it.
+
+**Error Cases:**
+- `400` - Missing file or invalid multipart body; or `details.reason`:
+  `not_text` (not UTF-8 text), `invalid_front_matter` (`details.line`),
+  `unsupported_note_format` (`details.schema`), `empty_note`
+- `413` - The file is over the import size limit
+
+---
+
 #### POST /notes/sources/documents
 Uploads a document to generate a note from. Multipart, single `file` part.
 Stored as a storage object owned by the notes module — absent from
@@ -4913,6 +4962,38 @@ the note UI shows. Optical character recognition is not supported.
 **Error Cases:**
 - `400` - Missing file, invalid multipart body, or a type this application cannot read
 - `413` - Document exceeds `ai.maxDocumentBytes`
+
+---
+
+#### GET /notes/sources/documents/{objectId}
+Extraction status of an uploaded source document (#596). The notes UI polls
+this after `POST /notes/sources/documents` instead of reading the object
+through `GET /storage/objects/:id`, so a host needs no storage object read for
+notes. Read from the source object's `noteSourceExtraction` metadata block.
+
+**Requires:** `notes:read`. Owner-scoped: a missing object, another user's, or
+one the notes module does not manage answers `404`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "objectId": "…",
+    "status": "extracted",
+    "message": null,
+    "characters": 18423
+  }
+}
+```
+
+`status` is `extracting` until the job records a result (also for a recorded
+shape the server cannot read), then `extracted` or `unextractable` (no
+readable text; `message` carries the reason). `message` and `characters` are
+`null` when the recorded result carries none.
+
+**Error Cases:**
+- `400` - `objectId` is not a UUID
+- `404` - No such object, or no access to it
 
 ---
 
@@ -5252,7 +5333,7 @@ Both take the ordinary `Authorization: Bearer …` header, and `EventSource`
 accepts no headers; a `?token=` query parameter is rejected because a URL is
 written verbatim into the nginx access log, kept in browser history, and
 forwarded in `Referer` — turning a live bearer credential into something
-replayable out of a log file. `apps/web/src/services/sse.ts` is the
+replayable out of a log file. `packages/kvox-web/src/core/headless/sse.ts` is the
 fetch-based client built for this.
 
 **Resuming with `Last-Event-ID`.** Every frame's `id:` is the **buffer
@@ -5882,6 +5963,86 @@ just asked this deployment to forget).
 entity is not a Person · `401` · `403` your own entity without
 `graph:write` · `404` `Entity not found` — no such entity, another user's,
 or merged.
+
+#### POST /graph/entities/{id}/relations
+
+Set a **Person**'s manager, employer or role by hand (issue #586) — part of
+the manual edit, one of the two ways anything changes in your graph outside a
+reviewed proposal (§8).
+
+**Requires:** `graph:write`.
+
+**Request:**
+```json
+{ "type": "HAS_ROLE", "toId": "3f2a…", "props": { "title": "VP", "businessUnit": "Finance" }, "validFrom": "2026-03-01" }
+```
+
+| Field | Rules |
+|---|---|
+| `type` | `REPORTS_TO` (→ a Person), `WORKS_FOR` (→ an Organization) or `HAS_ROLE` (→ an Organization). Anything else is a 400. |
+| `toId` | One of your live entities of the type the relation allows. |
+| `props` | `HAS_ROLE` only, and required there: `title` (1–200 characters), `businessUnit` (optional). Sent with another type, a 400. |
+| `validFrom` | `YYYY-MM-DD`, day precision. Optional; default today (UTC). The relation stays open. |
+
+The three relation types are normally exclusive (§5.4), so the edit applies
+the same **closing rule** committing a proposal does: a still-open edge of the
+same type from this person to someone else (for `HAS_ROLE`: another role at the
+same organization) that started before `validFrom` is closed at that date and
+linked to the new edge (`closedRelationIds`). The same fact already in your
+graph — restated, inside a known period, or undated — is not duplicated: the
+citation is added to it (`created: false`). An undated edge of a different
+fact cannot be ordered against a date, so it stays open and `flags` carries
+`unordered` (remove it if it is wrong). `overlaps` flags a range that still
+overlaps another edge.
+
+The relation is cited by **you**: one evidence row with `source.kind:
+"manual"` and the quote "Set by hand: …" (`evidenceId`), so it has evidence
+like every other fact and Ask can cite it. A new relation is `edited`. The
+edit is audited as `graph.relation_set` (ids, the type and counts, never a
+label); afterwards `graph.changed` is emitted and `kg.embed` /
+`kg.entity_digest` are enqueued for both entities on the usual conditions.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "relation": {
+      "id": "8d1c…", "type": "REPORTS_TO", "fromId": "0b6f…", "toId": "3f2a…", "props": {},
+      "valid": { "from": "2026-10-17T00:00:00.000Z", "to": null, "precision": "day" },
+      "reviewStatus": "edited"
+    },
+    "created": true,
+    "evidenceId": "e7a0…",
+    "closedRelationIds": ["5c44…"],
+    "flags": []
+  }
+}
+```
+
+**Errors:** `400` an invalid body, a relation to the entity itself, or an
+endpoint of the wrong type (`details.issues`) · `401` · `403` your own
+entity without `graph:write` · `404` `Entity not found` — either entity
+missing, another user's, or merged.
+
+#### DELETE /graph/entities/{id}/relations/{relationId}
+
+Remove a `REPORTS_TO`, `WORKS_FOR` or `HAS_ROLE` relation from the entity
+`{id}` as **wrong** (issue #586) — a correction, not an end date. The relation
+is kept as `rejected` and never shown again; its range is left as it was. An
+edge it closed when it was set is reopened (`reopenedRelationIds`). To record
+that a true fact ended, set the next one instead. Audited as
+`graph.relation_removed`.
+
+**Requires:** `graph:write`.
+
+**Response:** `200`
+```json
+{ "data": { "relationId": "8d1c…", "reviewStatus": "rejected", "reopenedRelationIds": ["5c44…"] } }
+```
+
+**Errors:** `400` another relation type · `401` · `403` your own entity
+without `graph:write` · `404` either id missing, another user's, merged, or a
+relation that does not start at `{id}`.
 
 #### POST /graph/notes/{noteId}/extract
 
@@ -6805,6 +6966,11 @@ transcript share), `available` is `false` and there is no link — but the
 }
 ```
 
+A citation you made BY HAND (a manager, employer or role set on an entity
+page, #586) has no document: `source` is `{ "kind": "manual", "available":
+true, "href": null }` and `quote` says what was set ("Set by hand: Jenny Kim
+reports to Mark Chen").
+
 **Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
 not yours.
 
@@ -6959,7 +7125,10 @@ issues):
 - `citations[].kind` is `evidence | entity | document`; an `itm`/`rel` marker
   is resolved to its first evidence row (`kind: "evidence"`, `via` naming the
   item or relation). `valid: false` (with `id: null`) marks a handle no tool
-  issued in that turn.
+  issued in that turn. A citation set by hand on an entity page (#586: a
+  manager, employer or role, the owner as the source) is a valid `evidence`
+  citation with `label: "Set by hand"` and `documentKind: null`; a document
+  citation of the same subject sorts before it.
 
 **One running turn per conversation.** The database refuses a second
 `pending`/`streaming` assistant message in one conversation
@@ -7152,8 +7321,7 @@ the row about every 250 ms, so it works whichever API replica runs the job.
 conversations.
 
 **Client.** Send the ordinary `Authorization: Bearer …` header — the native
-`EventSource` cannot, so use a fetch-based SSE client (`apps/web/src/services/
-sse.ts`); a `?token=` query parameter is not accepted.
+`EventSource` cannot, so use a fetch-based SSE client (`packages/kvox-web/src/core/headless/sse.ts`); a `?token=` query parameter is not accepted.
 
 **Resume.** Every text frame's `id:` is the UTF-16 offset into `content` it
 ends at. Reconnect with `Last-Event-ID: <last id seen>`, or `?lastEventId=`

@@ -39,6 +39,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { KVOX_PRISMA } from '../ports/index.js';
 import {
   TranscriptSharing,
+  transcriptHasAudio,
   type PlaybackStatusValue as PlaybackStatus,
   type TranscriptStatusValue as TranscriptStatus,
 } from '../transcripts/index.js';
@@ -64,6 +65,12 @@ export interface NoteOriginTranscript {
   durationMs: number | null;
   status: TranscriptStatus;
   playbackStatus: PlaybackStatus;
+  /**
+   * Whether the transcript has a recording to play (#604): `false` for one
+   * imported from a `kvox.transcript/v1` file, whose audio route answers 404.
+   * The same `transcriptHasAudio()` predicate the transcript list and detail use.
+   */
+  hasAudio: boolean;
   via: 'direct' | 'note_chain';
   hops: number;
 }
@@ -167,7 +174,14 @@ export class NoteOriginService {
         // platform's `accessibleWhere` (a `grants` row since #485).
         OR: [{ ownerId: userId }, await this.sharing.sharedWhere(userId)],
       },
-      select: { id: true, title: true, durationMs: true, status: true, playbackStatus: true },
+      select: {
+        id: true,
+        title: true,
+        durationMs: true,
+        status: true,
+        playbackStatus: true,
+        provider: true,
+      },
     });
 
     if (!row) return null;
@@ -178,6 +192,7 @@ export class NoteOriginService {
       durationMs: row.durationMs,
       status: row.status,
       playbackStatus: row.playbackStatus,
+      hasAudio: transcriptHasAudio(row.provider),
       via,
       hops,
     };

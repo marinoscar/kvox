@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 
+import { MANUAL_EVIDENCE_SOURCE_IRI, evidenceLinkSchema } from '@marinoscar/kvox-contract/graph';
+
 import type { KgEvidenceRow } from '../data/graph-db.js';
 import { GraphEvidenceService, evidenceSourceKind, noteHref, segmentHref } from './graph-evidence.service.js';
 
@@ -41,7 +43,7 @@ function ev(over: Partial<KgEvidenceRow>): KgEvidenceRow {
 }
 
 function build(state: {
-  transcripts?: { id: string; ownerId: string; title: string; deletedAt: Date | null }[];
+  transcripts?: { id: string; ownerId: string; title: string; deletedAt: Date | null; provider?: string }[];
   segments?: { id: string; transcriptId: string; rev: number }[];
   notes?: { id: string; ownerId: string; title: string; deletedAt: Date | null; currentVersion: number }[];
   objects?: { id: string; uploadedById: string }[];
@@ -107,6 +109,30 @@ describe('href builders', () => {
     expect(evidenceSourceKind(ev({ subjectKind: 'import' }))).toBe('import');
     expect(evidenceSourceKind(ev({}))).toBe('segment');
   });
+
+  it("classify a manual citation (#586) by its reserved IRI, never as 'import' or a lost segment", () => {
+    expect(evidenceSourceKind(ev({ sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
+    expect(evidenceSourceKind(ev({ subjectKind: 'relation', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
+    expect(evidenceSourceKind(ev({ sourceIri: 'https://example.test/x' }))).toBe('import');
+  });
+});
+
+describe('GraphEvidenceService.resolve, manual (#586)', () => {
+  it('links a manual citation as available, with its quote, nothing to open, and no source lookups', async () => {
+    const { svc, prisma, managed } = build({});
+    const [link] = await svc.resolve(USER, [ev({ subjectKind: 'relation', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI, quote: 'Set by hand: A reports to B' })]);
+    expect(link).toEqual({
+      id: expect.any(String),
+      subjectKind: 'relation',
+      subjectId: SUBJ,
+      quote: 'Set by hand: A reports to B',
+      createdAt: CREATED.toISOString(),
+      source: { kind: 'manual', available: true, href: null },
+    });
+    expect(evidenceLinkSchema.parse(link)).toEqual(link);
+    expect(prisma.transcript.findMany).not.toHaveBeenCalled();
+    expect(managed.describe).not.toHaveBeenCalled();
+  });
 });
 
 describe('GraphEvidenceService.resolve', () => {
@@ -133,9 +159,38 @@ describe('GraphEvidenceService.resolve', () => {
         endMs: 3000,
         textChanged: true,
         available: true,
+        hasAudio: true,
         href: `/transcripts/${T1}?segment=${SEG}&t=1500`,
       },
     });
+  });
+
+  it('reports hasAudio false for an imported transcript and true otherwise (#604)', async () => {
+    const { svc } = build({
+      transcripts: [
+        { id: T1, ownerId: USER, title: 'Imported', deletedAt: null, provider: 'import' },
+        { id: T2, ownerId: USER, title: 'Recorded', deletedAt: null, provider: 'openai' },
+      ],
+      segments: [
+        { id: SEG, transcriptId: T1, rev: 1 },
+        { id: '00000000-0000-4000-8000-000000000008', transcriptId: T2, rev: 1 },
+      ],
+    });
+    const [imported, recorded] = await svc.resolve(USER, [
+      ev({ transcriptId: T1, segmentId: SEG, segmentRev: 1 }),
+      ev({ transcriptId: T2, segmentId: '00000000-0000-4000-8000-000000000008', segmentRev: 1 }),
+    ]);
+    expect(imported.source).toMatchObject({ available: true, hasAudio: false });
+    expect(recorded.source).toMatchObject({ available: true, hasAudio: true });
+  });
+
+  it('reports hasAudio false for an unavailable transcript (#604)', async () => {
+    const { svc } = build({
+      transcripts: [{ id: T1, ownerId: 'someone-else', title: 'Their call', deletedAt: null, provider: 'openai' }],
+      sharedWith: [],
+    });
+    const [link] = await svc.resolve(USER, [ev({ transcriptId: T1, segmentId: SEG, segmentRev: 1 })]);
+    expect(link.source).toMatchObject({ available: false, hasAudio: false });
   });
 
   it('keeps the quote but drops title, revision and link once a share is revoked or the transcript deleted', async () => {

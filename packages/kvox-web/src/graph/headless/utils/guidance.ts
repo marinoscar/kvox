@@ -18,7 +18,7 @@
 import type { GraphOntology, ProposalItem, UserGuidance } from '../clients/graph.js';
 
 /**
- * The EMPTY GUIDANCE.
+ * Guidance that says nothing: no pinned entities, no type filters, no instructions.
  *
  * @stability experimental
  */
@@ -98,7 +98,7 @@ export function hasGuidance(guidance: UserGuidance | null | undefined): boolean 
 const labels = new Map<string, string>();
 
 /**
- * Remember entity label.
+ * Remembers an entity's label for this session so a pinned id can be shown by name.
  *
  * @stability experimental
  */
@@ -171,7 +171,7 @@ export function guidanceSummary(
  * away. A row still at its extraction-time default (`prechecked` → accept,
  * otherwise pending) is the AI's decision, not the user's; a row the user
  * added is always theirs.
-  *
+ *
  * @stability experimental
  */
 export function userDecisionCount(items: readonly ProposalItem[]): number {

@@ -7,6 +7,9 @@ import type { EvidenceValidator } from './evidence-validator.service.js';
 import { GraphDuplicateError, GraphInvariantError, GraphValidationError } from './graph-write.errors.js';
 import { GraphWriteService } from './graph-write.service.js';
 import { statementHash } from './normalize.js';
+import { ManualEvidence } from './manual-evidence.js';
+import { BadRequestException } from '@nestjs/common';
+import { MANUAL_EVIDENCE_SOURCE_IRI } from '@marinoscar/kvox-contract/graph';
 
 // =============================================================================
 // GraphWriteService — every validation branch, against a mocked transaction
@@ -166,7 +169,7 @@ describe('GraphWriteService', () => {
     it('validates evidence against the owner, on the same transaction', async () => {
       const { service, asTx, validator } = setup();
       await service.createEntity(asTx, baseEntity, schema);
-      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx, undefined);
     });
   });
 
@@ -670,6 +673,89 @@ describe('GraphWriteService', () => {
       await expect(
         service.updateEntityDetailed(asTx, OWNER, PERSON, { label: 'X' }, schema),
       ).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ===========================================================================
+  // Manual evidence (#586) and retractRelation
+  // ===========================================================================
+
+  describe('manual evidence (#586)', () => {
+    const manual = () => new ManualEvidence('  Set by hand: Sarah Chen works for Acme  ');
+
+    it('createRelation stores a ManualEvidence with no anchor and the reserved IRI, without the validator', async () => {
+      const { service, tx, asTx, validator } = setup();
+      await service.createRelation(asTx, { ...baseRelation, evidence: [manual()] }, schema);
+      expect(validator.assertReadable).not.toHaveBeenCalled();
+      expect(tx.kgEvidence.createMany.mock.calls[0][0].data).toEqual([
+        expect.objectContaining({
+          subjectKind: 'relation',
+          subjectId: 'new-relation',
+          quote: 'Set by hand: Sarah Chen works for Acme',
+          sourceIri: MANUAL_EVIDENCE_SOURCE_IRI,
+          transcriptId: null,
+          segmentId: null,
+          noteId: null,
+          importObjectId: null,
+        }),
+      ]);
+    });
+
+    it('validates only the wire rows of a mixed batch, keeping their order', async () => {
+      const { service, tx, asTx, validator } = setup();
+      await service.createRelation(asTx, { ...baseRelation, evidence: [manual(), ...evidence] }, schema);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, evidence, asTx, undefined);
+      const rows = tx.kgEvidence.createMany.mock.calls[0][0].data as Array<{ sourceIri: string | null; noteId: string | null }>;
+      expect(rows.map((r) => r.sourceIri)).toEqual([MANUAL_EVIDENCE_SOURCE_IRI, undefined]);
+      expect(rows[1].noteId).toBe(OWNER);
+    });
+
+    it("maps an invalid wire row's index back to the caller's array", async () => {
+      const { service, asTx, validator } = setup();
+      validator.assertReadable.mockRejectedValueOnce(
+        new BadRequestException({ message: 'bad', details: { invalidEvidence: [0] } }),
+      );
+      const err = await caught(service.createRelation(asTx, { ...baseRelation, evidence: [manual(), ...evidence] }, schema));
+      expect((err as BadRequestException).getResponse()).toMatchObject({ details: { invalidEvidence: [1] } });
+    });
+
+    it('a plain object shaped like a manual citation is NOT one: it goes to the validator', async () => {
+      const { service, asTx, validator } = setup();
+      const forged = { quote: 'Set by hand', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI } as unknown as EvidenceInput;
+      await service.createRelation(asTx, { ...baseRelation, evidence: [forged] }, schema);
+      expect(validator.assertReadable).toHaveBeenCalledWith(OWNER, [forged], asTx, undefined);
+    });
+
+    it('addEvidence takes a ManualEvidence for an owned subject', async () => {
+      const { service, tx, asTx, validator } = setup();
+      await service.addEvidence(asTx, OWNER, 'relation', OLDER, [manual()]);
+      expect(validator.assertReadable).not.toHaveBeenCalled();
+      expect(tx.kgEvidence.createManyAndReturn.mock.calls[0][0].data).toEqual([
+        expect.objectContaining({ subjectId: OLDER, sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }),
+      ]);
+    });
+
+    it('refuses an empty quote', () => {
+      expect(() => new ManualEvidence('  ')).toThrow();
+    });
+  });
+
+  describe('retractRelation', () => {
+    it('reopens what it closed, then marks the relation rejected', async () => {
+      const { service, tx, asTx } = setup();
+      const raw = jest.fn(async () => [{ id: 'b' }, { id: 'a' }]);
+      (tx as unknown as { $queryRaw: jest.Mock }).$queryRaw = raw;
+      const result = await service.retractRelation(asTx, OWNER, OLDER);
+      expect(result).toEqual({ reopenedIds: ['a', 'b'] });
+      expect(raw).toHaveBeenCalledTimes(1);
+      expect(tx.kgRelation.update).toHaveBeenCalledWith({ where: { id: OLDER }, data: { reviewStatus: 'rejected' } });
+    });
+
+    it('is a 404 for a relation that is not a live relation of the owner', async () => {
+      const { service, tx, asTx } = setup();
+      tx.kgRelation.findFirst.mockResolvedValueOnce(null);
+      await expect(service.retractRelation(asTx, OWNER, OLDER)).rejects.toMatchObject({ status: 404 });
+      expect(tx.kgRelation.update).not.toHaveBeenCalled();
     });
   });
 });

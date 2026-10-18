@@ -12,7 +12,7 @@ import type {
   AiTasksSettingsView,
 } from '../../services/aiTasks';
 
-/** The task copy the server publishes (`AI_TASK_DEFINITIONS` in `ai-port/task-models.ts`). */
+/** The task copy the server publishes (`AI_TASK_DEFINITIONS` in `@marinoscar/kvox-ai`, `src/tasks/task-models.ts`). */
 export const MOCK_AI_TASK_DEFINITIONS: AiTaskDefinition[] = [
   {
     key: 'graph.extract',

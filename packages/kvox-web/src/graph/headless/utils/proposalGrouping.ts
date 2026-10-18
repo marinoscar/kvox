@@ -22,7 +22,7 @@ import type {
 } from '../clients/graph.js';
 
 /**
- * The GROUP LABELS.
+ * The heading each review group is shown under.
  *
  * @stability experimental
  */
@@ -41,14 +41,14 @@ export const GROUP_LABELS: Record<ProposalGroupKey, string> = {
 };
 
 /**
- * The proposal group view.
+ * One review group of a proposal, split into the rows to review and two collapsed lists.
  *
  * @stability experimental
  */
 export interface ProposalGroupView {
-  /** The key. */
+  /** The group key. */
   key: ProposalGroupKey;
-  /** The label. */
+  /** The heading the group is shown under. */
   label: string;
   /** Rows reviewed in the group body. */
   rows: ProposalItem[];
@@ -62,7 +62,7 @@ export interface ProposalGroupView {
  * A `known` row only cites what the graph already holds, so it waits collapsed
  * under "Already in your graph" — unless it also ADDS props to that relation
  * (#444, `fills`): then it changes the graph and is reviewed with the rest.
-  *
+ *
  * @stability experimental
  */
 export function isKnownRow(item: ProposalItem): boolean {
@@ -70,7 +70,7 @@ export function isKnownRow(item: ProposalItem): boolean {
 }
 
 /**
- * Groups proposal items.
+ * Splits a proposal's rows into review groups in display order, dropping empty groups. Unknown group keys land in `Other`.
  *
  * @stability experimental
  */
@@ -126,7 +126,7 @@ export function bulkTargetIds(group: ProposalGroupView): string[] {
 }
 
 /**
- * The ENDPOINT FIELDS.
+ * The endpoint fields each kind of row can re-point: `from` and `to` for a relation, `subject`, `owner`, `counterparty` and `meeting` for an item.
  *
  * @stability experimental
  */
@@ -136,7 +136,7 @@ export const ENDPOINT_FIELDS: Record<'relation' | 'item', readonly RelinkField[]
 };
 
 /**
- * Endpoint fields.
+ * The endpoint fields of a row, or none for rows that have no endpoints (entities and closings).
  *
  * @stability experimental
  */
@@ -145,7 +145,7 @@ export function endpointFields(item: ProposalItem): readonly RelinkField[] {
 }
 
 /**
- * Read endpoint.
+ * Reads an endpoint of a row from its effective payload: an existing entity, a reference to another row, or `null` when it is unset.
  *
  * @stability experimental
  */
@@ -173,25 +173,25 @@ export function entityRowForRef(items: readonly ProposalItem[], ref: string): Pr
 }
 
 /**
- * The blocking endpoint.
+ * An endpoint entity row that blocks a relation or item row from being committed.
  *
  * @stability experimental
  */
 export interface BlockingEndpoint {
-  /** The field. */
+  /** Which endpoint of the blocked row points at it. */
   field: RelinkField;
-  /** The ref. */
+  /** The proposal-local reference to the entity row. */
   ref: string;
-  /** The label. */
+  /** The entity row's title. */
   label: string;
-  /** The id of the item. */
+  /** Id of the entity row. */
   itemId: string;
 }
 
 /**
  * Endpoint entity rows of this relation/item row that are rejected or still
  * pending — the row cannot be sent until each is accepted or linked.
-  *
+ *
  * @stability experimental
  */
 export function blockingEndpoints(

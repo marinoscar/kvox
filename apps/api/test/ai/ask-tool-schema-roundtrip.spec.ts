@@ -2,7 +2,7 @@
 // Every Ask tool survives the trip to the platform (issue #476, epic #472)
 // =============================================================================
 //
-// `PlatformKvoxAi.chat()` turns each `AskToolset.definitions()` entry into a platform
+// `createKvoxAi(...).chat()` (`@marinoscar/kvox-ai`, the bound `KVOX_AI`) turns each `AskToolset.definitions()` entry into a platform
 // `AiFunctionTool` whose `parameters` is `z.fromJSONSchema(def.parameters)`; the
 // platform converts that back with `toJsonSchema` for the wire. The tool's own Zod
 // `input` is never sent (it uses `.transform`, which JSON Schema cannot express).
@@ -21,7 +21,7 @@
 
 import { toJsonSchema } from '@marinoscar/platform-api/ai';
 
-import { clearToolCache, toPlatformTools } from '../../src/ai-port/chat-mapping';
+import { clearToolCache, toPlatformTools } from '@marinoscar/kvox-ai';
 import { internals } from '@marinoscar/kvox-api/ask/testing';
 
 type Node = Record<string, unknown>;

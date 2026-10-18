@@ -52,7 +52,7 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
-    write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma)));
+    write = new GraphWriteService(new EvidenceValidator(createDbObjectStore(prisma, UNUSED_STORAGE), createTranscriptAccess(prisma), prisma as never));
   });
 
   afterAll(async () => {
