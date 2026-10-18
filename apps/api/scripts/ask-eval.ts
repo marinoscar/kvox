@@ -13,8 +13,13 @@
 // real Nest application context, scores each answer, prints the table, and
 // writes `report.json`/`answers.md` under a git-ignored directory.
 //
-// The API key comes ONLY from `ASK_EVAL_OPENAI_API_KEY` (never a flag) and is
-// stored ONLY on the throwaway user, removed at teardown.
+// The API key comes ONLY from `KVOX_EVAL_OPENAI_API_KEY` (never a flag;
+// `ASK_EVAL_OPENAI_API_KEY` is still read for one release, #580) and is stored
+// ONLY on the throwaway user, removed at teardown.
+//
+// The pure half (question schema, scorer, report, the golden set) is
+// `@marinoscar/kvox-eval`'s (#580); the run itself needs this app's database
+// and Nest application, so it stays here.
 //
 // Exit codes: 0 pass · 1 a gate failed (citation validity < 1, a sensitive
 // leak) or answer match fell below `--min-match` · 2 configuration error (no
@@ -29,24 +34,29 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { parseArgs } from 'util';
 
-import { loadGoldenSet } from './kg-eval/load';
-import { formatAnswersMarkdown, buildAskEvalReport, formatAskEvalReport } from './ask-eval/report';
 import {
-  loadAskEvalQuestions,
-  selectAskEvalQuestions,
   AskEvalQuestionLoadError,
-} from './ask-eval/question-schema';
-import { ASK_EVAL_API_KEY_ENV, DEFAULT_ASK_EVAL_MODEL, runAskEval } from './ask-eval/run';
-import { scoreAnswer } from './ask-eval/scorer';
+  buildAskEvalReport,
+  formatAnswersMarkdown,
+  formatAskEvalReport,
+  KVOX_EVAL_API_KEY_ENV,
+  loadAskEvalQuestions,
+  readEvalApiKey,
+  scoreAnswer,
+  selectAskEvalQuestions,
+} from '@marinoscar/kvox-eval';
+import { ASK_QUESTIONS_PATH, loadGoldenSet } from '@marinoscar/kvox-eval/fixtures';
+
+import { DEFAULT_ASK_EVAL_MODEL, runAskEval } from './ask-eval/run';
 import { UnsafeDatabaseError } from './ask-eval/seed-graph';
 
 export const EXIT = { ok: 0, failed: 1, config: 2 } as const;
 
-const QUESTIONS_PATH = resolve(__dirname, '../test/fixtures/kg-golden/ask-questions.json');
+const QUESTIONS_PATH = ASK_QUESTIONS_PATH;
 
 const USAGE = `usage: ask:eval --model <id> [--only q01,q07] [--category <c>] [--out <dir>]
                [--min-match <0..1>] [--keep] [--allow-db <name>]
-       reads the API key from ${ASK_EVAL_API_KEY_ENV} (never a flag)`;
+       reads the API key from ${KVOX_EVAL_API_KEY_ENV} (never a flag)`;
 
 class UsageError extends Error {}
 
@@ -102,9 +112,9 @@ export async function main(argv: string[], io: Io = defaultIo()): Promise<number
   // The key gate runs FIRST, and needs no database — a run with no key
   // configured is a configuration error, not a run that seeds a graph and
   // then fails partway through.
-  const apiKey = io.env[ASK_EVAL_API_KEY_ENV];
+  const apiKey = readEvalApiKey(io.env, io.err)?.apiKey;
   if (!apiKey) {
-    io.err(`ask:eval: reads its API key from ${ASK_EVAL_API_KEY_ENV}; it is not set`);
+    io.err(`ask:eval: reads its API key from ${KVOX_EVAL_API_KEY_ENV}; it is not set`);
     return EXIT.config;
   }
 

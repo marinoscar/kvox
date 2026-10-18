@@ -85,6 +85,10 @@
       "types": "./dist/graph-rdf/index.d.ts",
       "default": "./dist/graph-rdf/index.js"
     },
+    "./graph-rdf/shacl-runner": {
+      "types": "./dist/graph-rdf/shacl-runner/index.d.ts",
+      "default": "./dist/graph-rdf/shacl-runner/index.js"
+    },
     "./graph-rdf/testing": {
       "types": "./dist/graph-rdf/testing/index.d.ts",
       "default": "./dist/graph-rdf/testing/index.js"
@@ -102,6 +106,7 @@
   "files": [
     "dist",
     "assets",
+    "runners",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

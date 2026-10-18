@@ -11,14 +11,15 @@ import { join, relative, resolve, sep } from 'node:path';
 // TEXT, not imports: no file under `apps/api/src`, `apps/cli/src`, `packages/kvox-api/src` or `packages/kvox-ai/src`
 // (specs included) names a provider's API host, as a URL, a default or a fixture. `packages/kvox-ai` holds the
 // model mechanics that moved out of `apps/api/src/ai-port/` (#579); it reaches a provider only through a
-// host-supplied runtime, so it names no host either.
+// host-supplied runtime, so it names no host either. `packages/kvox-eval` (#580) replaced the eval
+// scripts' private OpenAI client with that same port over the platform's adapters, and names none.
 //
 // A failure names the file and the host. Do not add an exception: route the call through `KVOX_AI`
 // (`apps/api/src/ai-port/`), and let the administrator configure an endpoint in the AI settings.
 // =============================================================================
 
 const REPO = resolve(__dirname, '../../../..');
-const ROOTS = ['apps/api/src', 'apps/cli/src', 'packages/kvox-api/src', 'packages/kvox-ai/src'];
+const ROOTS = ['apps/api/src', 'apps/cli/src', 'packages/kvox-api/src', 'packages/kvox-ai/src', 'packages/kvox-eval/src'];
 
 const VENDOR_HOSTS = ['api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com'] as const;
 
@@ -40,9 +41,10 @@ describe('no direct vendor host (#477)', () => {
     expect(files.length).toBeGreaterThan(300);
     expect(files.some((file) => file.includes(`${sep}ai-port${sep}`))).toBe(true);
     expect(files.some((file) => file.includes(`${sep}kvox-ai${sep}src${sep}`))).toBe(true);
+    expect(files.some((file) => file.includes(`${sep}kvox-eval${sep}src${sep}`))).toBe(true);
   });
 
-  it.each(VENDOR_HOSTS)('no file under apps/api/src, apps/cli/src, packages/kvox-api/src or packages/kvox-ai/src contains %s', (host) => {
+  it.each(VENDOR_HOSTS)('no file under apps/api/src, apps/cli/src, packages/kvox-api/src, packages/kvox-ai/src or packages/kvox-eval/src contains %s', (host) => {
     const offenders = files
       .filter((file) => readFileSync(file, 'utf8').includes(host))
       .map((file) => relative(REPO, file).split(sep).join('/'));
