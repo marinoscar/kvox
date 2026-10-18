@@ -184,9 +184,11 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     });
   }
 
-  function run(transcriptId: string, actorUserId: string) {
+  async function run(transcriptId: string, actorUserId: string) {
+    // As the handler does: the schema and permission are resolved before the transaction (#612).
+    const context = await reconciler.resolveContext(actorUserId);
     return prisma
-      .$transaction((tx) => reconciler.reconcile(tx, { transcriptId, actorUserId }), { timeout: 30_000 })
+      .$transaction((tx) => reconciler.reconcile(tx, { transcriptId, actorUserId }, context), { timeout: 30_000 })
       .then(async (summary) => {
         // The handler records the run's audit events once the transaction has committed; do the same here.
         for (const event of summary.audit) await audit.record(event);
