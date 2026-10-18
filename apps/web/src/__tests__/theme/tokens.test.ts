@@ -105,7 +105,7 @@ describe('the brand token map is the single source of both palettes', () => {
   // ⚠ Deliberately an EXACT-MATCH check and not a numeric "how indigo is it"
   // threshold. Both obvious metrics were tried and both are wrong here:
   // Euclidean RGB distance rejects `#7e22ce` (a purple that is 64 units from
-  // `#4f46e5` and reads as an entirely different colour), and hue distance
+  // the brand indigo and reads as an entirely different colour), and hue distance
   // rejects `#475569` and `#cbd5e1` (near-neutral slates whose residual hue
   // happens to sit 17–28° from indigo while carrying almost no saturation to
   // express it). A threshold tuned to pass those two is a threshold loose
@@ -186,7 +186,7 @@ describe.each(MODES)('%s palette — WCAG AA (4.5:1) against both surfaces', (mo
     // halves in the token map is what makes them measurable here instead of
     // dependent on an internal heuristic.
     //
-    // Measured, light: 6.29:1 (#ffffff on #4f46e5) / 5.02:1 (#ffffff on #b45309)
+    // Measured, light: 6.29:1 (#ffffff on the brand indigo) / 5.02:1 (#ffffff on #b45309)
     // Measured, dark:  9.47:1 (#0f1117 on #a5b4fc) / 11.30:1 (#0f1117 on #fbbf24)
     it('primary.contrastText on primary.main', () => {
       expect(
@@ -239,7 +239,7 @@ describe('the translucent washes the palette does build with alpha()', () => {
   // `BulkActionBar` and `DataCard` derive from `primary.main`) are the only
   // non-opaque colours this design ships. Text still has to be legible ON them,
   // and a wash is exactly the case a two-argument contrast check gets wrong —
-  // read in isolation, `alpha('#4f46e5', 0.08)` is mostly-transparent indigo
+  // read in isolation, `alpha(THEME_COLOR, 0.08)` is mostly-transparent indigo
   // and reports nothing useful. `flattenOver` composites it onto the real
   // surface first, which is what a browser does.
   it.each(MODES)('%s: text.primary stays AA over the selected-row wash', (mode) => {
