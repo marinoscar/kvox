@@ -1,0 +1,2681 @@
+[
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Who does Sarah Chen work for?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Who does Sarah Chen work for?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        {
+          "arguments": "{\"query\":\"Who does Sarah Chen work for?\"}",
+          "callId": "call_parity_1",
+          "name": "search",
+          "type": "function_call"
+        },
+        {
+          "callId": "call_parity_1",
+          "output": "{\"entities\":[{\"ref\":\"ent1\",\"label\":\"Parity Entity\"}],\"truncated\":false}",
+          "type": "function_call_output"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "What is Marcus Webb's role at Halden Freight?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "What is Marcus Webb's role at Halden Freight?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        {
+          "arguments": "{\"query\":\"What is Marcus Webb's role at Halden Freight?\"}",
+          "callId": "call_parity_1",
+          "name": "search",
+          "type": "function_call"
+        },
+        {
+          "callId": "call_parity_1",
+          "output": "{\"entities\":[{\"ref\":\"ent1\",\"label\":\"Parity Entity\"}],\"truncated\":false}",
+          "type": "function_call_output"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "What is Elif Kaya's role at Corvid Health?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "method": "stream",
+    "feature": "graph_agent",
+    "model": "gpt-parity-agent",
+    "request": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "What is Elif Kaya's role at Corvid Health?",
+              "type": "text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        {
+          "arguments": "{\"query\":\"What is Elif Kaya's role at Corvid Health?\"}",
+          "callId": "call_parity_1",
+          "name": "search",
+          "type": "function_call"
+        },
+        {
+          "callId": "call_parity_1",
+          "output": "{\"entities\":[{\"ref\":\"ent1\",\"label\":\"Parity Entity\"}],\"truncated\":false}",
+          "type": "function_call_output"
+        }
+      ],
+      "instructions": "You answer questions about the account holder's own knowledge graph, built from their reviewed meeting notes and transcripts. Today is 2026-09-26.\nRules:\n1. Use ONLY information returned by the tools in this turn. If the tools find nothing relevant, say so plainly — never guess or use outside knowledge about these people or companies.\n2. Cite every factual sentence with the markers the tools give you: [^evN] for a source quote (preferred), [^docN] for a transcript or note passage, [^entN] for an entity itself. Never invent a marker. Never print ids.\n3. Start with `search` unless you already hold a reference. For \"when\"/\"as of\" questions pass asOf; dates in the graph are meeting dates.\n4. You are read-only. If asked to change something, explain that the user can edit it on the entity page or in a note's review panel.\n5. Be concise. Use short paragraphs or bullet lists. Do not repeat the question.",
+      "maxOutputTokens": 6096,
+      "reasoning": {
+        "effort": "low"
+      },
+      "toolChoice": "auto",
+      "tools": [
+        {
+          "description": "Find people, organizations, projects and meetings by name, and passages in the user's transcripts and notes that match the query. Use this first when you do not yet have a reference.",
+          "name": "search",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Results per kind, 1–10. Default 5."
+              },
+              "query": {
+                "description": "What to look for: a name, a topic or a phrase. 1–200 characters.",
+                "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "all",
+                    "type": "string"
+                  },
+                  {
+                    "const": "entities",
+                    "type": "string"
+                  },
+                  {
+                    "const": "documents",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Which results matter most: \"entities\" (names), \"documents\" (passages) or \"all\" (default). Both kinds are always searched; the other kind is just shortened."
+              }
+            },
+            "required": [
+              "query",
+              "scope",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get one entity's type, name, aliases, attributes and counts.",
+          "name": "get_entity",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "description": "An entity reference (entN) from an earlier tool result.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List what an entity is connected to, optionally as of a past date.",
+          "name": "neighbors",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the graph as of this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "hops": {
+                "anyOf": [
+                  {
+                    "const": 1,
+                    "type": "number"
+                  },
+                  {
+                    "const": 2,
+                    "type": "number"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "How far to walk: 1 (direct connections, default) or 2."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most nodes to return, 1–50. Default 25."
+              },
+              "relationTypes": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Walk only these relation types, e.g. [\"WORKS_FOR\", \"REPORTS_TO\"]. Default: all."
+              },
+              "types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these node types, e.g. [\"Person\", \"Organization\"] or item kinds [\"commitment\", \"decision\"]. Default: all."
+              }
+            },
+            "required": [
+              "entity",
+              "hops",
+              "types",
+              "relationTypes",
+              "asOf",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List dated events about an entity (decisions, commitments, claims, role and employer changes, meetings), newest first.",
+          "name": "timeline",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only events up to this date (YYYY-MM-DD). Default: today."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "kinds": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most events to return, 1–25. Default 15."
+              }
+            },
+            "required": [
+              "entity",
+              "asOf",
+              "kinds",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get the source quotes that support an entity, item or relation. Cite these with [^evN].",
+          "name": "evidence",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most quotes to return, 1–10. Default 5."
+              },
+              "subject": {
+                "description": "An entity (entN), item (itmN) or relation (relN) reference.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "Get a cited summary of what is new about an entity: what changed, decisions, open commitments, risks and claims, people changes.",
+          "name": "entity_brief",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "asOf": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evaluate the brief as of this date (YYYY-MM-DD). Default: today. With it, no stored summary is returned."
+              },
+              "entity": {
+                "description": "An entity reference (entN).",
+                "type": "string"
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start of the \"what changed\" window (YYYY-MM-DD). Default: the last 30 days or the last summary."
+              }
+            },
+            "required": [
+              "entity",
+              "since",
+              "asOf"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List commitments, optionally for one person or organization, by status and due date.",
+          "name": "list_commitments",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "direction": {
+                "anyOf": [
+                  {
+                    "const": "owned_by",
+                    "type": "string"
+                  },
+                  {
+                    "const": "owed_to",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "With entity: \"owned_by\" (they promised it), \"owed_to\" (it was promised to them) or \"any\" (default)."
+              },
+              "dueBefore": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only commitments due on or before this date (YYYY-MM-DD)."
+              },
+              "entity": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A person or organization reference (entN). Default: every commitment."
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most commitments to return, 1–25. Default 15."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "done",
+                    "type": "string"
+                  },
+                  {
+                    "const": "dropped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Commitment status to keep. Default \"open\"; \"any\" keeps all."
+              }
+            },
+            "required": [
+              "entity",
+              "direction",
+              "status",
+              "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        }
+      ]
+    }
+  }
+]

@@ -30,11 +30,16 @@
       "types": "./dist/fixtures/index.d.ts",
       "default": "./dist/fixtures/index.js"
     },
+    "./parity": {
+      "types": "./dist/parity/index.d.ts",
+      "default": "./dist/parity/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "fixtures",
+    "parity",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

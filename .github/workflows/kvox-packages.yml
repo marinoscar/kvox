@@ -106,6 +106,7 @@ jobs:
           node -e "require('@marinoscar/kvox-ai')"
           node -e "require('@marinoscar/kvox-eval')"
           node -e "require('@marinoscar/kvox-eval/fixtures')"
+          node -e "require('@marinoscar/kvox-eval/parity')"
           node packages/kvox-eval/dist/cli/main.js kg --predictions gold --only m01
           node -e "require('@marinoscar/kvox-contract')"
           node -e "require('@marinoscar/kvox-contract/graph')"

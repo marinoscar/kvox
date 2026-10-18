@@ -14,6 +14,7 @@ Entry points:
 
 - `@marinoscar/kvox-eval`: the package root, which re-exports the `kg`, `ask`, `live`, `real-data` and `cli` slices. Slice READMEs: [kg](src/kg/README.md), [ask](src/ask/README.md), [live](src/live/README.md), [real-data](src/real-data/README.md), [cli](src/cli/README.md).
 - `@marinoscar/kvox-eval/fixtures`: the golden set (`loadGoldenMeetings`, `GOLDEN_MEETINGS_DIR`, `ASK_QUESTIONS_PATH`, `loadGoldenAskQuestions`) and its schema (`goldenFixtureSchema`, `GoldenFixture`). Slice README: [fixtures](src/fixtures/README.md). The data is under [fixtures/kg-golden](fixtures/kg-golden/README.md).
+- `@marinoscar/kvox-eval/parity`: the harness-parity scenario and its committed request snapshots (`parity/requests.*.json`), which prove two bindings of the model port send the same provider requests (`runParityScenario`, `createParityScript`, `loadParitySnapshot`). Slice README: [parity](src/parity/README.md).
 - `kvox-eval` (the `bin`, `dist/cli/main.js`).
 
 ## Install and peer dependencies
@@ -109,7 +110,7 @@ None: no log, metric or span. The CLI prints the report table to standard output
 
 ## Conformance suite
 
-None of its own to export. The package's specs (`npm run test:run -w @marinoscar/kvox-eval`) pin the scorer case by case, the golden set's validity and coverage, the extraction runners over a fake port (`createFakeKvoxAi` of `@marinoscar/kvox-api/testing`), the Ask question file and scorer, `runKgEval`, the key aliases, the copilot refusal and the real-data guard. The gold self-test (`kvox-eval kg --predictions gold`) must print 1.000 everywhere.
+None of its own to export. The package's specs (`npm run test:run -w @marinoscar/kvox-eval`) pin the scorer case by case, the golden set's validity and coverage, the extraction runners over a fake port (`createFakeKvoxAi` of `@marinoscar/kvox-api/testing`), the Ask question file and scorer, `runKgEval`, the key aliases, the copilot refusal and the real-data guard. `test/parity.spec.ts` runs the harness-parity scenario over the direct binding and compares it with the shipped `parity/` snapshots (`npm run test:run -w @marinoscar/kvox-eval -- parity`; `KVOX_EVAL_UPDATE_PARITY=1` rewrites them, see [parity](src/parity/README.md)); the web edition's twin is `apps/api/test/kvox/ai-parity.spec.ts`. The gold self-test (`kvox-eval kg --predictions gold`) must print 1.000 everywhere.
 
 ## Upgrade notes
 

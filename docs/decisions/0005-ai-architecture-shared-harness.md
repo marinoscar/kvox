@@ -63,3 +63,5 @@ Same harness does not mean same output. Parity is proven by byte-identical provi
 ## Status note (#580)
 
 The hand-written OpenAI client `apps/api/scripts/kg-eval/direct-structured.ts` is deleted. The evaluation moved to the published package `@marinoscar/kvox-eval`; a live run goes through `createKvoxAi` over `createDirectRuntime`, and the golden set lives at `packages/kvox-eval/fixtures/kg-golden/`. The key is `KVOX_EVAL_OPENAI_API_KEY` (`KG_EVAL_OPENAI_API_KEY` and `ASK_EVAL_OPENAI_API_KEY` are deprecated aliases for one release). The request-level web versus direct parity check is the next part of #580.
+
+Status note (#580, part 2): the request-level web versus direct parity proof is delivered. `@marinoscar/kvox-eval/parity` and the snapshots under `packages/kvox-eval/parity/` are compared by `packages/kvox-eval/test/parity.spec.ts` (direct binding) and `apps/api/test/kvox/ai-parity.spec.ts` (web binding); a change to a snapshot is a harness change and is explained in its PR ([TESTING.md](../TESTING.md#harness-parity)).
