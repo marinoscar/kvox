@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { alpha } from '@mui/material/styles';
 import { describe, expect, it } from 'vitest';
 import {
   KVOX_BRAND,
@@ -74,9 +75,9 @@ describe('palettes', () => {
   });
 
   it('the selection and hover washes are tinted with the primary hue', () => {
-    expect(kvoxLightTheme.palette.action.selected).toBe('rgba(79, 70, 229, 0.08)');
-    expect(kvoxLightTheme.palette.action.hover).toBe('rgba(79, 70, 229, 0.04)');
-    expect(kvoxDarkTheme.palette.action.selected).toMatch(/^rgba\(165, 180, 252, /);
+    expect(kvoxLightTheme.palette.action.selected).toBe(alpha(IDENTITY.themeColor!, 0.08));
+    expect(kvoxLightTheme.palette.action.hover).toBe(alpha(IDENTITY.themeColor!, 0.04));
+    expect(kvoxDarkTheme.palette.action.selected).toBe(alpha('#a5b4fc', 0.16));
   });
 });
 
