@@ -176,8 +176,11 @@ export function HomeHero({
     <Box component="section" aria-labelledby="home-greeting" sx={{ mb: { xs: 3, sm: 4 } }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
         sx={{
+          // `gap` rather than `spacing`, and `wrap`: the actions may drop under
+          // the greeting when the row is too narrow for both (see #563).
+          gap: 2,
+          flexWrap: { xs: 'nowrap', sm: 'wrap' },
           // `flex-start` rather than `center` at `sm`+: the left column is two
           // lines tall and the button is one, and centring the pair puts the
           // button's baseline between them where it lines up with neither.
@@ -185,12 +188,17 @@ export function HomeHero({
           justifyContent: 'space-between',
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
+        {/* #563: the greeting GROWS and has a floor. It used to be
+            `minWidth: 0` beside an actions column that refused to shrink, so a
+            long "not set up" sentence squeezed it to ~0px and the h1 broke per
+            letter (`overflowWrap: 'anywhere'`). The floor is `sm`+ only: in the
+            phone column `flex-basis` would set a HEIGHT. */}
+        <Box sx={{ flex: { xs: '0 0 auto', sm: '1 1 240px' }, minWidth: { xs: 0, sm: 240 } }}>
           <Typography
             id="home-greeting"
             variant="h4"
             component="h1"
-            sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}
+            sx={{ fontWeight: 600, overflowWrap: 'break-word' }}
           >
             {firstName ? `Hi, ${firstName}` : 'Hi there'}
           </Typography>
@@ -210,9 +218,14 @@ export function HomeHero({
             row would drag New note down to the bottom of that column. */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.5}
           sx={{
-            flexShrink: 0,
+            gap: 1.5,
+            // Capped and wrapping (#563): New note wraps under New transcript
+            // rather than clipping off the right edge, and the column can never
+            // claim the whole row from the greeting.
+            flexWrap: { xs: 'nowrap', sm: 'wrap' },
+            flex: { xs: '0 0 auto', sm: '0 1 auto' },
+            maxWidth: { xs: '100%', sm: 'min(100%, 480px)' },
             width: { xs: '100%', sm: 'auto' },
             alignItems: { xs: 'stretch', sm: 'flex-start' },
           }}
