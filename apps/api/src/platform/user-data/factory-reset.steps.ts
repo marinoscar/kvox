@@ -1,6 +1,9 @@
 import { registerFactoryResetStep } from '@marinoscar/platform-api/user-data';
 import type { FactoryResetStepDef } from '@marinoscar/platform-api/user-data';
 import { seedNoteTemplates } from '@marinoscar/kvox-api/notes/templates';
+import { deleteGrantsForResources } from '@marinoscar/platform-api/sharing';
+
+import { TRANSCRIPT_RESOURCE_TYPE } from '../../app-registrations/sharing';
 
 import { KVOX_STORAGE_STEP } from '../../kvox-objects/factory-reset-storage.step';
 
@@ -13,7 +16,7 @@ import { KVOX_STORAGE_STEP } from '../../kvox-objects/factory-reset-storage.step
 // storage object outside the `survivesFactoryReset` prefixes. It was written for an
 // app whose content lives in inline models and one storage-object model flagged
 // `storageObjects: true`. This app has neither, and left alone the reset is wrong on
-// five counts (verified against the real registries, `test/user-data/factory-reset.db.spec.ts`):
+// six counts (verified against the real registries, `test/user-data/factory-reset.db.spec.ts`):
 //
 //   1. THE CONTENT IS DELEGATED. `Transcript`, `Note` and every `Kg*` model hint a
 //      delegate job (`user.data.purge`'s way of handing them to their module). The reset
@@ -43,7 +46,13 @@ import { KVOX_STORAGE_STEP } from '../../kvox-objects/factory-reset-storage.step
 //      nothing removes them with a transcript or a user, and the indexed text of a deleted
 //      conversation would stay. (`search_embeddings` cascade from their chunk.)
 //
-//   5. THE BUILT-IN NOTE TEMPLATES GO. The platform's step 6 deletes every OWNER-LESS row of
+//   5. TRANSCRIPT SHARES ARE NOT CASCADED. A share is a platform `grants` row
+//      (`resource_type = 'transcript'`, `resource_id` = the transcript id) with no foreign key,
+//      so deleting the transcripts leaves their grants, share-link token hashes and ciphertext
+//      included, until the platform's `sharing.grants.prune` job sweeps them. The content step
+//      deletes them with `deleteGrantsForResources`, as `transcript.purge` does.
+//
+//   6. THE BUILT-IN NOTE TEMPLATES GO. The platform's step 6 deletes every OWNER-LESS row of
 //      an inline owner model; for `NoteTemplate` those are the built-in templates (seeded
 //      with `owner_id` null), which are configuration, so the deployment was left without
 //      them until the next seed.
@@ -77,6 +86,9 @@ import { KVOX_STORAGE_STEP } from '../../kvox-objects/factory-reset-storage.step
 // RETRY SAFETY. Every statement is a `deleteMany` by predicate, so a retried step deletes
 // what is left. The sweep selects what is still there on every page.
 // =============================================================================
+
+/** Transcript ids read per page when their grants are deleted. */
+const TRANSCRIPT_ID_PAGE = 2000;
 
 /** `deleteMany` on one model, returning the count. */
 async function wipe(tx: any, model: string, where: Record<string, unknown> = {}): Promise<number> {
@@ -138,7 +150,27 @@ export const KVOX_CONTENT_STEP: FactoryResetStepDef = {
     // The platform's per-user pass keeps a template a note still named; no note is left.
     counts.noteTemplates = await wipe(tx, 'noteTemplate', { ownerId: { not: null } });
 
-    // 4. Transcripts. A segment Restricts its speaker, so segments first.
+    // 4. Transcripts. Their grants first: no foreign key, so nothing else removes them. Page the
+    //    ids by cursor so a large deployment never loads them all; only the platform helper
+    //    touches the grants table.
+    counts.transcriptGrants = 0;
+    for (let cursor: string | undefined; ; ) {
+      const page: { id: string }[] = await tx.transcript.findMany({
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: TRANSCRIPT_ID_PAGE,
+        ...(cursor ? { where: { id: { gt: cursor } } } : {}),
+      });
+      if (page.length === 0) break;
+      counts.transcriptGrants += await deleteGrantsForResources(
+        tx,
+        TRANSCRIPT_RESOURCE_TYPE,
+        page.map((t) => t.id),
+      );
+      cursor = page[page.length - 1].id;
+    }
+
+    // A segment Restricts its speaker, so segments first.
     await wipe(tx, 'transcriptNameCheck'); // suggestions cascade
     await wipe(tx, 'transcriptExport'); // Restrict to storage_objects
     await wipe(tx, 'transcriptVersion'); // Restrict to storage_objects
