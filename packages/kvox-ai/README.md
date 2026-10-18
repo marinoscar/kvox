@@ -16,6 +16,8 @@ Entry points:
 
 - `@marinoscar/kvox-ai/testing`: `createScriptedRuntime` and `describeKvoxAiConformance` (not re-exported by the root). Slice README: [testing](src/testing/README.md).
 
+- `@marinoscar/kvox-ai/copilot`: the GitHub Copilot provider adapter (`createCopilotAdapter`, `createSdkCopilotTransport`, `createCopilotMockTransport`), issue #581. Not re-exported by the root: it is the only entry that loads the optional peer `@github/copilot-sdk`. Slice README: [copilot](src/copilot/README.md).
+
 ## Install and peer dependencies
 
 ```bash
@@ -107,6 +109,7 @@ What a host implements (see [the runtime slice](src/runtime/README.md#extension-
 - `AiProviderAdapter` (platform type) entries of `createDirectRuntime({ adapters })`: how a provider such as OpenAI or the Copilot SDK (#581) plugs in.
 - `KvoxTaskModelSource`: loads the task-model state (policy, active provider, enabled models). Web: system settings and the `ai_models` rows. Desktop: a local settings file.
 - `KvoxModelCatalog`: optional per-model limits and capability flags.
+- `CopilotTransport` (`@marinoscar/kvox-ai/copilot`): the GitHub Copilot adapter's view of the Copilot runtime. `createSdkCopilotTransport` binds it to the optional `@github/copilot-sdk`; `createCopilotMockTransport` is the test one (see [the copilot slice](src/copilot/README.md#extension-point-catalog)).
 
 ## Data
 

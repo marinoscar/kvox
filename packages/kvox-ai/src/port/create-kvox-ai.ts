@@ -33,9 +33,17 @@ import type {
   KvoxAiModelState,
   KvoxAiRuntime,
   KvoxAiRuntimeCall,
+  KvoxAiRuntimeRequest,
   KvoxModelCatalog,
+  KvoxStructuredOutputMode,
   KvoxTaskModelSource,
 } from '../runtime/index.js';
+import {
+  buildPromptedRepairInput,
+  buildPromptedStructuredInstructions,
+  parsePromptedStructuredAnswer,
+  promptedJsonSchemaOf,
+} from '../structured/index.js';
 import { toPlatformReasoningEffort } from '../tasks/index.js';
 import { countTokens } from '../tokens/index.js';
 import type {
@@ -103,6 +111,18 @@ import { createKvoxAiReadiness, reasoningEffortFor, type KvoxAiReadinessReader }
 //
 // PLATFORM-ADOPTION-SHIM(#475): the truncation heuristic above, until the platform's
 // `AI_STRUCTURED_OUTPUT_INVALID` error carries the response's finish reason.
+//
+// PROMPTED STRUCTURED OUTPUT (#581). A model whose `structuredOutputMode` is
+// `prompted` (looked up per call: the task-model state's row, else the catalog,
+// else `native`) cannot be held to a schema by its provider. For it the request
+// carries NO `structuredOutput`: the JSON Schema goes into the system prompt, the
+// text answer is parsed and validated twice (as above), and ONE repair call is
+// made when it does not validate (`structured/prompted-structured.ts`). The native
+// request is unchanged byte for byte. This is the only retry in the AI stack.
+//
+// TOOL CALLING IS PER MODEL. `capabilities().toolCalling` is readiness AND the
+// resolved model's `toolCalling` flag (the row's, else the catalog's, else true),
+// so a host whose model cannot call tools (GitHub Copilot) never offers Ask.
 //
 // ⚠ A KEY NEVER CROSSES THIS PORT. The context carries a user id; the runtime
 // resolves that user's own key per call. `scrub` removes anything shaped like a
@@ -246,12 +266,13 @@ class KvoxAi implements KvoxAiPort {
         this.graphEnabled(ctx.userId),
       ]);
       const reason = capabilityReason(readiness.reason);
+      const flags = readiness.ok ? await this.modelFlagsOrNone(ctx.userId, readiness.provider, readiness.model) : {};
 
       return {
         available: feature !== undefined && readiness.ok,
         ...(reason !== undefined ? { reason } : {}),
         structuredOutput: readiness.ok,
-        toolCalling: readiness.ok,
+        toolCalling: readiness.ok && (flags.toolCalling ?? true),
         embeddings: { model: KVOX_EMBEDDING.model, dimensions: KVOX_EMBEDDING.dimensions },
         graphEnabled,
       };
@@ -383,6 +404,9 @@ class KvoxAi implements KvoxAiPort {
 
     try {
       const effort = await this.effortFor(ctx.userId, feature, req.target.model ?? null, req.target.reasoningEffort);
+      if ((await this.structuredModeFor(ctx.userId, req.target)) === 'prompted') {
+        return await this.promptedStructured(ctx, feature, guard, req, effort);
+      }
       const response: AiResponse = await this.runtime.create(this.call(ctx, feature, req.target, guard.signal), {
         instructions: req.system,
         input: req.user,
@@ -426,6 +450,141 @@ class KvoxAi implements KvoxAiPort {
       return { value: checked.data, usage: usageOf(response.usage) };
     } catch (err) {
       throw this.fail(err, failure);
+    }
+  }
+
+  /**
+   * The prompted structured path (see the file header and
+   * `structured/prompted-structured.ts`): the schema in the system prompt, the
+   * answer parsed and validated twice, and ONE repair call when it does not
+   * validate. The usage of a repaired answer is the sum of both calls.
+   */
+  private async promptedStructured<T>(
+    ctx: KvoxAiContext,
+    feature: KvoxAiFeatureId,
+    guard: CallGuard,
+    req: {
+      target: KvoxAiTarget;
+      system: string;
+      user: string;
+      schema: z.ZodType<T>;
+      schemaName: string;
+      jsonSchema?: Record<string, unknown>;
+      maxOutputTokens?: number;
+    },
+    effort: Awaited<ReturnType<KvoxAi['effortFor']>>,
+  ): Promise<KvoxStructuredResult<T>> {
+    const constrained = this.constrainedSchema(req.jsonSchema, req.schema);
+    const schemas: [...z.ZodType[], z.ZodType<T>] = constrained === req.schema ? [req.schema] : [constrained, req.schema];
+    const instructions = buildPromptedStructuredInstructions({
+      system: req.system,
+      schemaName: req.schemaName,
+      jsonSchema: promptedJsonSchemaOf(req.schema, req.jsonSchema),
+    });
+    // The same ceiling and effort as the native request; NO `structuredOutput`.
+    const rest: Omit<KvoxAiRuntimeRequest, 'instructions' | 'input'> = {
+      ...(req.maxOutputTokens !== undefined ? { maxOutputTokens: req.maxOutputTokens } : {}),
+      ...(effort !== undefined ? { reasoning: { effort } } : {}),
+    };
+
+    const first = await this.runtime.create(this.call(ctx, feature, req.target, guard.signal), {
+      instructions,
+      input: req.user,
+      ...rest,
+    });
+    this.assertPromptedFinish(first, first.usage, req.schemaName);
+    const answer = parsePromptedStructuredAnswer(first.outputText, schemas);
+    if (answer.ok) return { value: answer.value, usage: usageOf(first.usage) };
+
+    // The one repair: the same system prompt, one string input.
+    const second = await this.runtime.create(this.call(ctx, feature, req.target, guard.signal), {
+      instructions,
+      input: buildPromptedRepairInput({
+        user: req.user,
+        schemaName: req.schemaName,
+        answer: first.outputText,
+        issues: answer.issues,
+      }),
+      ...rest,
+    });
+    const usage = addUsage(first.usage, second.usage);
+    this.assertPromptedFinish(second, usage, req.schemaName);
+    const repaired = parsePromptedStructuredAnswer(second.outputText, schemas);
+    if (repaired.ok) return { value: repaired.value, usage: usageOf(usage) };
+
+    throw this.mark(
+      repaired.notJson && req.maxOutputTokens !== undefined
+        ? new KvoxAiError(
+            'truncated',
+            scrub(`The structured answer for "${req.schemaName}" was cut off at the output ceiling before the JSON was complete.`),
+            undefined,
+            usageEstimate(usage),
+          )
+        : new KvoxAiError(
+            'invalid_output',
+            scrub(`The structured answer for "${req.schemaName}" does not match the requested schema.`),
+            undefined,
+            usageEstimate(usage),
+          ),
+    );
+  }
+
+  /** A prompted answer cut off (`truncated`) or filtered (a refusal) is final: no repair. */
+  private assertPromptedFinish(
+    response: AiResponse,
+    usage: { inputTokens?: number; outputTokens?: number },
+    schemaName: string,
+  ): void {
+    if (response.finishReason === 'length') {
+      throw this.mark(
+        new KvoxAiError(
+          'truncated',
+          scrub(`The structured answer for "${schemaName}" was cut off at the output ceiling before the JSON was complete.`),
+          undefined,
+          usageEstimate(usage),
+        ),
+      );
+    }
+    if (response.finishReason === 'content_filter') {
+      throw new AiError('AI_CONTENT_FILTERED', 'The provider declined to produce this structured answer.');
+    }
+  }
+
+  /**
+   * How the target model is held to a schema: the task-model state's row (when the
+   * state's provider is the target's), else the catalog, else `native`.
+   */
+  private async structuredModeFor(userId: string, target: KvoxAiTarget): Promise<KvoxStructuredOutputMode> {
+    const flags = await this.modelFlagsOrNone(userId, target.provider, target.model);
+    return flags.structuredOutputMode ?? 'native';
+  }
+
+  /**
+   * The capability flags of one model: the state's row when the state's provider is
+   * `provider` (an absent provider means the state's own), else the catalog's. A
+   * failed read answers no flags, so the defaults apply and the call fails, if at
+   * all, where it did before.
+   */
+  private async modelFlagsOrNone(
+    userId: string,
+    provider: string | null | undefined,
+    model: string | null | undefined,
+  ): Promise<{ toolCalling?: boolean; structuredOutputMode?: KvoxStructuredOutputMode }> {
+    if (typeof model !== 'string' || model.length === 0) return {};
+    try {
+      const state = await this.taskModels.load(userId);
+      const providerId = typeof provider === 'string' && provider.length > 0 ? provider : state.provider;
+      if (providerId === null) return {};
+      const row = state.provider === providerId ? state.models.find((entry) => entry.id === model) : undefined;
+      const known = this.options.catalog?.lookup(providerId, model) ?? null;
+      const toolCalling = row?.toolCalling ?? known?.toolCalling;
+      const structuredOutputMode = row?.structuredOutputMode ?? known?.structuredOutputMode;
+      return {
+        ...(toolCalling !== undefined ? { toolCalling } : {}),
+        ...(structuredOutputMode !== undefined ? { structuredOutputMode } : {}),
+      };
+    } catch {
+      return {};
     }
   }
 
@@ -737,6 +896,21 @@ function usageOf(usage: { inputTokens?: number; outputTokens?: number } | undefi
   return {
     inputTokens: usage?.inputTokens ?? null,
     outputTokens: usage?.outputTokens ?? null,
+  };
+}
+
+/** The usage of two round trips: a count is summed when both reported it, else left out. */
+function addUsage(
+  a: { inputTokens?: number; outputTokens?: number } | undefined,
+  b: { inputTokens?: number; outputTokens?: number } | undefined,
+): { inputTokens?: number; outputTokens?: number } {
+  const sum = (x: number | undefined, y: number | undefined): number | undefined =>
+    x !== undefined && y !== undefined ? x + y : undefined;
+  const inputTokens = sum(a?.inputTokens, b?.inputTokens);
+  const outputTokens = sum(a?.outputTokens, b?.outputTokens);
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
   };
 }
 

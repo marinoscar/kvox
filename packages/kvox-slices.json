@@ -52,8 +52,9 @@
     "runtime": ["types", "features", "tasks"],
     "errors": ["types", "features"],
     "testing": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors"],
-    "port": ["types", "features", "tasks", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
-    "direct": ["runtime", "errors"]
+    "port": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
+    "direct": ["runtime", "errors"],
+    "copilot": []
   },
   "kvox-eval": {
     "ask": [],
