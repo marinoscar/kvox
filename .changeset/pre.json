@@ -19,6 +19,7 @@
     "graph-tx-reads-one-connection",
     "kvox-ai-copilot",
     "kvox-ai-create",
+    "kvox-ai-lean-providers",
     "kvox-ai-package",
     "kvox-api-ask",
     "kvox-api-conformance-no-defaults",
