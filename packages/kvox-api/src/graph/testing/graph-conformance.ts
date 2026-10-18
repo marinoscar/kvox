@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { NotFoundException } from '@nestjs/common';
+import { MANUAL_EVIDENCE_SOURCE_IRI, evidenceInputSchema } from '@marinoscar/kvox-contract/graph';
 
 import type { KvoxJobHandler } from '../../ports/index.js';
 import { createFakeKvoxAi } from '../../testing/index.js';
@@ -181,6 +182,12 @@ export function describeGraphConformance(
         const paths = sliceSources(sourceRoot).map(({ path }) => path);
 
         for (const writer of GRAPH_ROW_WRITERS) expect(paths).toContain(writer);
+      });
+
+      it('a manual citation is server-authored only: wire evidence may not claim the reserved source (#586)', () => {
+        const forged = evidenceInputSchema.safeParse({ quote: 'Set by hand', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI });
+        expect(forged.success).toBe(false);
+        expect(evidenceInputSchema.safeParse({ quote: 'no anchor at all' }).success).toBe(false);
       });
     });
 

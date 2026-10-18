@@ -15,6 +15,9 @@ import type { KvoxRouteDef } from '../../core/ui/index.js';
  * - `/graph/explore` (#374): `POST /api/graph/explore/expand` is `graph:read`.
  * - `/graph/overview` (#375): `GET /api/graph/overview` is `graph:read`; its
  *   Refresh (`graph:write`) is gated inside the page.
+ * - `/graph/review`: the draft proposals waiting for review
+ *   (`GET /api/graph/proposals?status=draft` is `graph:read`), each linking
+ *   to the note page's review sheet (`?review=1`) or the import page.
  * - `/graph/imports/:proposalId` (#387): `graph:write`, the exact string
  *   `POST /api/graph/imports` and the review writes enforce, because importing
  *   is curating the graph. A viewer without it is sent to `/graph`.
@@ -62,6 +65,13 @@ export const kvoxGraphRoutes: readonly KvoxRouteDef[] = [
       import('./pages/GraphOverviewPage.js').then((module) => ({
         default: module.GraphOverviewPage,
       })),
+    ),
+  },
+  {
+    path: '/graph/review',
+    permission: 'graph:read',
+    Component: lazy(() =>
+      import('./pages/GraphReviewPage.js').then((module) => ({ default: module.GraphReviewPage })),
     ),
   },
   {

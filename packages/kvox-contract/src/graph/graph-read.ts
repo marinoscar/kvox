@@ -500,6 +500,13 @@ export const evidenceLinkSchema = z
         available: z.boolean(),
         href: z.null(),
       }),
+      z
+        .object({
+          kind: z.literal('manual'),
+          available: z.literal(true).describe('Always true: the owner is the source, and nothing can be deleted from under it.'),
+          href: z.null(),
+        })
+        .describe('Set by hand on an entity page (#586): the owner is the source; `quote` says what was set.'),
     ]),
   })
   .describe('One citation, resolved to a link you can open.');

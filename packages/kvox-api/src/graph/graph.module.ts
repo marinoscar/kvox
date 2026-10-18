@@ -23,6 +23,7 @@ import { EntityViewService } from './brief/entity-view.service.js';
 import { GraphAiRunResolver } from './graph-ai-run.service.js';
 import { GraphEntitiesController } from './graph-entities.controller.js';
 import { GraphEntitiesService } from './graph-entities.service.js';
+import { GraphRelationEditsService } from './graph-relation-edits.service.js';
 import { GraphObjectsService } from './graph-objects.service.js';
 import {
   GRAPH_MODULE_OPTIONS,
@@ -156,6 +157,7 @@ export class GraphModule {
       EvidenceValidator,
       GraphWriteService,
       GraphEntitiesService,
+      GraphRelationEditsService,
       GraphAttributeDefsService,
       // `kg.purge`: forget-a-person and the Danger Zone's `graph` category (#357).
       KgPurgeService,

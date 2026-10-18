@@ -40,7 +40,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ONTOLOGY_VERSION,
   validateProps,
@@ -54,6 +54,7 @@ import type { EvidenceInput } from '../dto/graph-evidence.dto.js';
 import { GRAPH_NOT_FOUND_MESSAGES } from '../access/graph-access.service.js';
 import { toPgRange, type ValidRange } from '../temporal/index.js';
 import { EvidenceValidator } from './evidence-validator.service.js';
+import { ManualEvidence, type GraphEvidenceInput } from './manual-evidence.js';
 import {
   GraphDuplicateError,
   GraphInvariantError,
@@ -98,7 +99,11 @@ export interface CreateRelationInput {
   confidence?: number | null;
   reviewStatus: CuratedStatus;
   supersedesId?: string | null;
-  evidence: EvidenceInput[];
+  /**
+   * At least one — enforced. A {@link ManualEvidence} (the owner as the
+   * source, #586) is stored as-is; every other row must be readable.
+   */
+  evidence: GraphEvidenceInput[];
 }
 
 export interface CreateItemInput {
@@ -449,7 +454,7 @@ export class GraphWriteService {
       if (!older) throw invalid('The relation to supersede is not in your graph.', 'supersedesId');
     }
 
-    const evidence = await this.evidenceValidator.assertReadable(input.ownerId, input.evidence, tx);
+    const evidence = await this.readableEvidence(input.ownerId, input.evidence, tx);
 
     const created = await tx.kgRelation.create({
       data: {
@@ -653,6 +658,45 @@ export class GraphWriteService {
   }
 
   /**
+   * Retract a WRONG relation (#586's manual removal; §5.5): a correction, not
+   * an end of validity — the fact was never true, so its range is left as it
+   * was and the row becomes `rejected`: kept for the record, never read again
+   * (every read path filters it out, and #353's planner ignores it). Its
+   * evidence stays; the deferred no-orphans trigger only asks it of
+   * accepted/edited rows.
+   *
+   * An edge this one CLOSED when it was set (`superseded_by_id` = this row,
+   * still live, its upper bound equal to this row's start) is reopened: the
+   * close was a consequence of the wrong fact. Returns the reopened ids,
+   * sorted.
+   */
+  async retractRelation(tx: Tx, ownerId: string, relationId: string): Promise<{ reopenedIds: string[] }> {
+    const relation = await tx.kgRelation.findFirst({
+      where: { id: relationId, ownerId, reviewStatus: { in: LIVE_STATUSES } },
+      select: { id: true },
+    });
+    if (!relation) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.relation);
+
+    const reopened = await tx.$queryRaw<{ id: string }[]>`
+      UPDATE kg_relations AS r
+         SET valid = tstzrange(lower(r.valid), NULL, '[)'),
+             superseded_by_id = NULL,
+             updated_at = now()
+        FROM kg_relations AS wrong
+       WHERE wrong.id = ${relationId}::uuid
+         AND r.superseded_by_id = wrong.id
+         AND r.owner_id = ${ownerId}::uuid
+         AND r.review_status IN ('accepted', 'edited')
+         AND r.valid IS NOT NULL AND NOT upper_inf(r.valid)
+         AND wrong.valid IS NOT NULL AND NOT lower_inf(wrong.valid)
+         AND upper(r.valid) = lower(wrong.valid)
+      RETURNING r.id::text AS id`;
+
+    await tx.kgRelation.update({ where: { id: relationId }, data: { reviewStatus: 'rejected' } });
+    return { reopenedIds: reopened.map((r) => r.id).sort() };
+  }
+
+  /**
    * Fill props a live relation does not carry yet (#444 — a `known` relation
    * row whose statement adds, e.g., a HAS_ROLE's business unit; applied by the
    * proposal commit #366). FILL-ONLY: a key the stored row already holds a
@@ -744,11 +788,11 @@ export class GraphWriteService {
     ownerId: string,
     subjectKind: EvidenceSubjectKind,
     subjectId: string,
-    evidence: EvidenceInput[],
+    evidence: GraphEvidenceInput[],
   ): Promise<KgEvidence[]> {
     if (evidence.length === 0) return [];
     await this.requireOwnedSubject(tx, ownerId, subjectKind, subjectId);
-    const parsed = await this.evidenceValidator.assertReadable(ownerId, evidence, tx);
+    const parsed = await this.readableEvidence(ownerId, evidence, tx);
     return tx.kgEvidence.createManyAndReturn({
       data: parsed.map((e) => this.evidenceRow(ownerId, subjectKind, subjectId, e)),
     });
@@ -822,7 +866,39 @@ export class GraphWriteService {
   // Private
   // ===========================================================================
 
-  private requireEvidence(evidence: readonly EvidenceInput[] | undefined): void {
+  /**
+   * Wire citations through `EvidenceValidator` (parsed, every anchor proven
+   * readable); a {@link ManualEvidence} as its own row, which has no anchor to
+   * prove. A 400 still names the indexes of the invalid rows in the CALLER'S
+   * array.
+   */
+  private async readableEvidence(
+    ownerId: string,
+    evidence: readonly GraphEvidenceInput[],
+    tx: Tx,
+  ): Promise<EvidenceInput[]> {
+    const wire: { index: number; row: EvidenceInput }[] = [];
+    evidence.forEach((row, index) => {
+      if (!(row instanceof ManualEvidence)) wire.push({ index, row });
+    });
+    let parsed: EvidenceInput[] = [];
+    if (wire.length > 0) {
+      try {
+        parsed = await this.evidenceValidator.assertReadable(ownerId, wire.map((w) => w.row), tx);
+      } catch (err) {
+        const body = err instanceof BadRequestException ? (err.getResponse() as { details?: { invalidEvidence?: number[] } }) : null;
+        if (wire.length === evidence.length || !body?.details?.invalidEvidence) throw err;
+        throw new BadRequestException({
+          ...body,
+          details: { ...body.details, invalidEvidence: body.details.invalidEvidence.map((i) => wire[i].index) },
+        });
+      }
+    }
+    const byIndex = new Map(wire.map((w, i) => [w.index, parsed[i]]));
+    return evidence.map((row, index) => (row instanceof ManualEvidence ? row.toEvidenceInput() : byIndex.get(index)!));
+  }
+
+  private requireEvidence(evidence: readonly GraphEvidenceInput[] | undefined): void {
     if (!evidence || evidence.length === 0) throw new GraphInvariantError('evidence_required');
   }
 

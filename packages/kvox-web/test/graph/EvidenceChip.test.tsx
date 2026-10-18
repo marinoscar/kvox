@@ -70,6 +70,34 @@ function renderChips(ids: string[]) {
 }
 
 describe('EvidenceChip', () => {
+  it('shows a manual citation (#586) as "Set by hand" with its quote and nothing to open', async () => {
+    const id = gid(799);
+    server.use(
+      http.get('*/api/graph/evidence', () =>
+        HttpResponse.json({
+          data: {
+            items: [
+              {
+                id,
+                subjectKind: 'relation',
+                subjectId: gid(498),
+                quote: 'Set by hand: Joe Rivera reports to Dana Li',
+                createdAt: '2026-10-17T00:00:00.000Z',
+                source: { kind: 'manual', available: true, href: null },
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderChips([id]);
+    await user.click(await screen.findByRole('button', { name: 'Source 1: Set by hand' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Set by hand' });
+    expect(within(dialog).getByText('Set by hand: Joe Rivera reports to Dana Li').tagName).toBe('BLOCKQUOTE');
+    expect(within(dialog).queryByRole('button', { name: /Play|Open/ })).not.toBeInTheDocument();
+  });
+
   it('coalesces the chips of one render into one batch request', async () => {
     renderChips([EV_SEGMENT, EV_NOTE, EV_GONE]);
 

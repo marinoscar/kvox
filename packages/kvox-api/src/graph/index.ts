@@ -130,10 +130,13 @@ export type { GraphPreferences } from './preferences/graph-preferences.defaults.
 export { GRAPH_PREFERENCES_CHANGED_EVENT } from './preferences/graph-preferences.events.js';
 export type { GraphPreferencesChangedEvent } from './preferences/graph-preferences.events.js';
 export { GraphPreferencesService } from './preferences/graph-preferences.service.js';
-export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, planTemporalInsert, rangeFromPrecision, sameIdentityProps, stableStringify, temporalRuleFor, toPgRange } from './temporal/index.js';
+export { TemporalInputError, commitmentsToReview, fromPgRange, identityKey, isExclusiveTemporal, planTemporalInsert, rangeFromPrecision, ruleForEffectiveRelation, sameIdentityProps, stableStringify, temporalRuleFor, toPgRange } from './temporal/index.js';
 export type { CandidateEdge, TemporalEdge, TemporalPlan, TemporalReviewStatus, TemporalRule, ValidPrecision, ValidRange } from './temporal/index.js';
 export { GraphDuplicateError, GraphInvariantError, GraphValidationError, toGraphHttpException } from './write/graph-write.errors.js';
 export { GraphWriteService } from './write/graph-write.service.js';
+export { loadLiveTemporalEdges } from './write/live-edges.js';
+export { ManualEvidence, MANUAL_EVIDENCE_LABEL, isManualEvidenceRow } from './write/manual-evidence.js';
+export type { GraphEvidenceInput } from './write/manual-evidence.js';
 export { normalizeAlias, statementHash } from './write/normalize.js';
 
 // The read-side services and constants the Ask agent and the host's wiring use.

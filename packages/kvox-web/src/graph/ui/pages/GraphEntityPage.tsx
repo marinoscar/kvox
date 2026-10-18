@@ -8,6 +8,8 @@
  *   2. `EntityBriefCard` — the stored digest + the five cited sections (#372).
  *   3. Connections — #374's `NeighborhoodWidget` canvas, then the text list
  *      (the accessible form of the same slice, and all there is without WebGL).
+ *      On a Person with `graph:write`, the list offers the manual relation
+ *      edits (#586): "Set manager", "Set employer", "Add role", and Remove.
  *   4. Timeline — with the opt-in sensitive-facts switch.
  *   5. Mentions.
  *
@@ -162,6 +164,8 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
 
   const [editOpen, setEditOpen] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
+  // Bumped by a manual relation edit (#586): the neighbourhood canvas re-reads.
+  const [relationsVersion, setRelationsVersion] = useState(0);
 
   // --- Ask (#381) -------------------------------------------------------------
   const location = useLocation();
@@ -294,8 +298,18 @@ export function GraphEntityPage({ slots }: GraphEntityPageProps = {}) {
           />
         ) : null}
 
-        <NeighborhoodWidget entityId={detail.id} entityLabel={detail.label} />
-        <EntityConnectionsList entityId={detail.id} entityLabel={detail.label} ontology={ontology} />
+        <NeighborhoodWidget key={`${detail.id}:${relationsVersion}`} entityId={detail.id} entityLabel={detail.label} />
+        <EntityConnectionsList
+          entityId={detail.id}
+          entityLabel={detail.label}
+          ontology={ontology}
+          entityType={detail.type}
+          canEdit={canWrite}
+          onChanged={() => {
+            setRelationsVersion((n) => n + 1);
+            void brief.refresh();
+          }}
+        />
         <EntityTimeline entityId={detail.id} ontology={ontology} />
         <EntityMentionsList entityId={detail.id} />
 

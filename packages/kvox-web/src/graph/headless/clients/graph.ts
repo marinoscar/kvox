@@ -74,7 +74,12 @@ import type {
   GraphImportFailureReason as ContractGraphImportFailureReason,
   GraphImportViolation as ContractGraphImportViolation,
   CreateGraphImportResponse as ContractCreateGraphImportResponse,
+  CreateManualRelationDto as ContractCreateManualRelationDto,
+  CreateManualRelationResponse as ContractCreateManualRelationResponse,
+  RemoveManualRelationResponse as ContractRemoveManualRelationResponse,
+  ManualRelationType as ContractManualRelationType,
 } from '@marinoscar/kvox-contract/graph';
+import { MANUAL_RELATION_TYPES as CONTRACT_MANUAL_RELATION_TYPES } from '@marinoscar/kvox-contract/graph';
 import type { AttributeChoice as ContractAttributeChoice } from '@marinoscar/kvox-contract/ontology';
 
 // =============================================================================
@@ -577,11 +582,26 @@ export interface ImportEvidenceSource {
 }
 
 /**
- * Where a citation comes from, discriminated by `kind`: a transcript segment, a note version or an import.
+ * A citation the owner made by hand on an entity page (#586): a manager,
+ * employer or role set manually. The quote says what was set.
  *
  * @stability experimental
  */
-export type EvidenceSource = SegmentEvidenceSource | NoteEvidenceSource | ImportEvidenceSource;
+export interface ManualEvidenceSource {
+  /** Discriminator for a manual source. */
+  kind: 'manual';
+  /** Always `true`: the owner is the source. */
+  available: true;
+  /** Always `null`: there is no document to open. */
+  href: null;
+}
+
+/**
+ * Where a citation comes from, discriminated by `kind`: a transcript segment, a note version, an import, or the owner by hand.
+ *
+ * @stability experimental
+ */
+export type EvidenceSource = SegmentEvidenceSource | NoteEvidenceSource | ImportEvidenceSource | ManualEvidenceSource;
 
 /**
  * One citation resolved to a link: the quote, its source and whether the source is still available. Alias of the contract's `EvidenceLink`.
@@ -1057,6 +1077,63 @@ export function forgetGraphEntity(host: KvoxWebHost, id: string): Promise<Forget
   return kvoxPost<ForgetEntityResponse>(host, `/graph/entities/${enc(id)}/forget`, {
     confirmation: FORGET_CONFIRMATION,
   });
+}
+
+// =============================================================================
+// Manual relation edits (#586)
+// =============================================================================
+
+/**
+ * The relation types a manual relation edit writes from a Person: `REPORTS_TO`, `WORKS_FOR`, `HAS_ROLE`.
+ *
+ * @stability experimental
+ */
+export const MANUAL_RELATION_TYPES = CONTRACT_MANUAL_RELATION_TYPES;
+
+/**
+ * One of {@link MANUAL_RELATION_TYPES}.
+ *
+ * @stability experimental
+ */
+export type ManualRelationType = ContractManualRelationType;
+
+/**
+ * The body of `POST /api/graph/entities/:id/relations`: `{ type, toId, props?, validFrom? }` (`props` for `HAS_ROLE` only, with a `title`).
+ *
+ * @stability experimental
+ */
+export type SetEntityRelationBody = ContractCreateManualRelationDto;
+
+/**
+ * What a manual relation edit wrote: the relation, whether it is new, the citation added, the edges it closed and soft flags.
+ *
+ * @stability experimental
+ */
+export type SetEntityRelationResult = ContractCreateManualRelationResponse;
+
+/**
+ * A removed (retracted) relation and the edges it reopened.
+ *
+ * @stability experimental
+ */
+export type RemoveEntityRelationResult = ContractRemoveManualRelationResponse;
+
+/**
+ * Sets a Person's manager, employer or role by hand (`POST /api/graph/entities/:id/relations`). A still-open edge of the same type is closed at the new start; the relation is cited "Set by hand".
+ *
+ * @stability experimental
+ */
+export function setEntityRelation(host: KvoxWebHost, entityId: string, body: SetEntityRelationBody): Promise<SetEntityRelationResult> {
+  return kvoxPost<SetEntityRelationResult>(host, `/graph/entities/${enc(entityId)}/relations`, body);
+}
+
+/**
+ * Removes a wrong manager, employer or role (`DELETE /api/graph/entities/:id/relations/:relationId`): a correction, the relation is kept as `rejected`.
+ *
+ * @stability experimental
+ */
+export function removeEntityRelation(host: KvoxWebHost, entityId: string, relationId: string): Promise<RemoveEntityRelationResult> {
+  return kvoxDelete<RemoveEntityRelationResult>(host, `/graph/entities/${enc(entityId)}/relations/${enc(relationId)}`);
 }
 
 // =============================================================================

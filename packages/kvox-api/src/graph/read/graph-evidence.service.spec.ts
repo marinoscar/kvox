@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 
+import { MANUAL_EVIDENCE_SOURCE_IRI, evidenceLinkSchema } from '@marinoscar/kvox-contract/graph';
+
 import type { KgEvidenceRow } from '../data/graph-db.js';
 import { GraphEvidenceService, evidenceSourceKind, noteHref, segmentHref } from './graph-evidence.service.js';
 
@@ -106,6 +108,30 @@ describe('href builders', () => {
     expect(evidenceSourceKind(ev({ importObjectId: OBJ }))).toBe('import');
     expect(evidenceSourceKind(ev({ subjectKind: 'import' }))).toBe('import');
     expect(evidenceSourceKind(ev({}))).toBe('segment');
+  });
+
+  it("classify a manual citation (#586) by its reserved IRI, never as 'import' or a lost segment", () => {
+    expect(evidenceSourceKind(ev({ sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
+    expect(evidenceSourceKind(ev({ subjectKind: 'relation', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI }))).toBe('manual');
+    expect(evidenceSourceKind(ev({ sourceIri: 'https://example.test/x' }))).toBe('import');
+  });
+});
+
+describe('GraphEvidenceService.resolve, manual (#586)', () => {
+  it('links a manual citation as available, with its quote, nothing to open, and no source lookups', async () => {
+    const { svc, prisma, managed } = build({});
+    const [link] = await svc.resolve(USER, [ev({ subjectKind: 'relation', sourceIri: MANUAL_EVIDENCE_SOURCE_IRI, quote: 'Set by hand: A reports to B' })]);
+    expect(link).toEqual({
+      id: expect.any(String),
+      subjectKind: 'relation',
+      subjectId: SUBJ,
+      quote: 'Set by hand: A reports to B',
+      createdAt: CREATED.toISOString(),
+      source: { kind: 'manual', available: true, href: null },
+    });
+    expect(evidenceLinkSchema.parse(link)).toEqual(link);
+    expect(prisma.transcript.findMany).not.toHaveBeenCalled();
+    expect(managed.describe).not.toHaveBeenCalled();
   });
 });
 

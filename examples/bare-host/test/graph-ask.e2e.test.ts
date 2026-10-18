@@ -22,9 +22,14 @@ import type { ScenarioRecording } from '../src/graph-scenario.js';
 //   -> proposal -> bulk accept -> POST /api/graph/proposals/:id/commit
 //   (GraphWriteService)
 //
+// Then one fact NO meeting states — who Joe reports to — is set BY HAND on his
+// entity page (step 9, `POST /api/graph/entities/:id/relations`, #586), through
+// the same GraphWriteService, cited by the owner ("Set by hand"), and Ask
+// answers "meetings with Joe's boss" from it.
+//
 // No test statement inserts, updates or deletes a kg_* row to build the graph;
 // the only SQL is read-only assertions and one refused transaction at the very
-// end (step 11), which proves the `kg_assert_has_evidence` trigger and leaves
+// end (step 12), which proves the `kg_assert_has_evidence` trigger and leaves
 // nothing behind. Nothing in the host is mocked except the speech provider and
 // the language model (`src/fake-provider.ts`, `src/fake-ai.ts`).
 //
@@ -36,7 +41,7 @@ import type { ScenarioRecording } from '../src/graph-scenario.js';
 //
 // PGLITE: the socket closes the connection after any SQL error and the next
 // query fails once with "Connection terminated unexpectedly" (README "PGlite").
-// Step 11 provokes one error on purpose, so it is the LAST step and is followed
+// Step 12 provokes one error on purpose, so it is the LAST step and is followed
 // by a retried harmless query.
 //
 // The application is loaded from `dist/` with `require`, not imported: Vitest's
@@ -373,7 +378,71 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(answer.citations.filter((c) => c.kind === 'evidence').every((c) => c.label === WEEKLY_SYNC.title)).toBe(true);
   });
 
-  it('9. runs one housekeeping round and every enqueued job succeeds', async () => {
+  it('9. a manager set by hand (no meeting states it) answers "meetings with Joe\'s boss", cited "Set by hand"', async () => {
+    const joe = people.get('Joe Park') as string;
+    const maria = people.get('Maria Lopez') as string;
+    const jenny = people.get('Jenny Kim') as string;
+
+    // Before: nothing says who Joe reports to.
+    const before = await ask(ASK_QUESTIONS.manualBossMeetings);
+    expect(before.toolCalls.map((c) => c.name)).toEqual(['search', 'neighbors']);
+    expect(before.content).toContain('could not find who Joe Park');
+
+    // Set by hand, from 1 January: one relation through GraphWriteService, one manual evidence row.
+    const set = await json(
+      await api(`/api/graph/entities/${joe}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: maria, validFrom: '2026-01-01' } }),
+    );
+    expect(set).toMatchObject({ created: true, closedRelationIds: [], flags: [] });
+    expect(set.relation).toMatchObject({ type: 'REPORTS_TO', fromId: joe, toId: maria, reviewStatus: 'edited' });
+    expect(set.relation.valid).toEqual({ from: '2026-01-01T00:00:00.000Z', to: null, precision: 'day' });
+    const joeMaria: string = set.relation.id;
+    const evidence = await host.prisma.$queryRaw<Array<{ id: string; quote: string; source_iri: string | null; anchors: number }>>`
+      SELECT id::text AS id, quote, source_iri,
+             (num_nonnulls(transcript_id, segment_id, note_id, import_object_id))::int AS anchors
+        FROM kg_evidence WHERE subject_kind::text = 'relation' AND subject_id = ${joeMaria}::uuid`;
+    expect(evidence).toEqual([
+      { id: set.evidenceId, quote: 'Set by hand: Joe Park reports to Maria Lopez', source_iri: 'urn:kvox:evidence:manual', anchors: 0 },
+    ]);
+    const link = await json(await api(`/api/graph/evidence/${set.evidenceId}`));
+    expect(link.source).toEqual({ kind: 'manual', available: true, href: null });
+
+    // A new manager closes the open edge at its start (the commit's closing rule); removing the
+    // new one as wrong retracts it and reopens what it closed.
+    const next = await json(await api(`/api/graph/entities/${joe}/relations`, { method: 'POST', json: { type: 'REPORTS_TO', toId: jenny } }));
+    expect(next.closedRelationIds).toEqual([joeMaria]);
+    const closed = await host.prisma.$queryRaw<Array<{ open: boolean; superseded_by_id: string | null }>>`
+      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${joeMaria}::uuid`;
+    expect(closed).toEqual([{ open: false, superseded_by_id: next.relation.id }]);
+    const removed = await json(await api(`/api/graph/entities/${joe}/relations/${next.relation.id}`, { method: 'DELETE' }));
+    expect(removed).toEqual({ relationId: next.relation.id, reviewStatus: 'rejected', reopenedRelationIds: [joeMaria] });
+    const reopened = await host.prisma.$queryRaw<Array<{ open: boolean; superseded_by_id: string | null }>>`
+      SELECT upper_inf(valid) AS open, superseded_by_id::text AS superseded_by_id FROM kg_relations WHERE id = ${joeMaria}::uuid`;
+    expect(reopened).toEqual([{ open: true, superseded_by_id: null }]);
+    // A relation that does not start at the entity named in the path is not found there.
+    expect((await api(`/api/graph/entities/${maria}/relations/${joeMaria}`, { method: 'DELETE' })).status).toBe(404);
+
+    // Every manual edit carries evidence: still no orphan.
+    expect(await orphans('kg_relations', 'relation')).toBe(0);
+
+    // After: Ask follows the manual REPORTS_TO to Maria, and her meeting.
+    const answer = await ask(ASK_QUESTIONS.manualBossMeetings);
+    expect(answer.status).toBe('complete');
+    expect(answer.toolCalls.map((c) => c.name)).toEqual(['search', 'neighbors', 'timeline']);
+    expect(answer.toolCalls.every((c) => c.error === null)).toBe(true);
+    expect(answer.toolCalls[2].summary).toBe('Timeline of Maria Lopez · 1 event');
+    expect(answer.content).toContain('Joe Park');
+    expect(answer.content).toContain('Maria Lopez');
+    expect(answer.content).toContain(WEEKLY_SYNC.title);
+    expect(answer.content).not.toContain(STANDUP.title);
+    expect(answer.citations.every((c) => c.valid)).toBe(true);
+    // The relation's citation is the owner's own: valid evidence, labelled "Set by hand".
+    expect(answer.citations.find((c) => c.via?.kind === 'relation')).toMatchObject({ kind: 'evidence', valid: true, label: 'Set by hand' });
+    expect(
+      answer.citations.filter((c) => c.kind === 'evidence' && c.via?.kind !== 'relation').every((c) => c.label === WEEKLY_SYNC.title),
+    ).toBe(true);
+  });
+
+  it('10. runs one housekeeping round and every enqueued job succeeds', async () => {
     const round = await host.housekeeping.runOnce();
     expect(round.kgMigrate).toBe('called');
     expect(round.kgExportExpiry).toBe('called');
@@ -383,13 +452,14 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(await succeeded('notes.housekeeping')).toBe(1);
   });
 
-  it('10. exports the graph as Turtle and imports it back through SHACL validation', async () => {
+  it('11. exports the graph as Turtle and imports it back through SHACL validation', async () => {
     const created = await json(await api('/api/graph/exports', { method: 'POST', json: { format: 'turtle' } }), 202);
     exportId = created.export.id;
     await drain();
     const done = await json(await api(`/api/graph/exports/${exportId}`));
     expect(done.status).toBe('ready');
-    expect(done.stats).toMatchObject({ entities: 5, relations: 6, items: 2, excludedSensitive: 0 });
+    // Six relations from the meetings, plus Joe's manager set by hand (step 9); the retracted one is not exported.
+    expect(done.stats).toMatchObject({ entities: 5, relations: 7, items: 2, excludedSensitive: 0 });
 
     const turtle = await (await fetch(done.downloadUrl)).text();
     expect(turtle).toContain('Maria Lopez');
@@ -408,7 +478,7 @@ describe('the graph and Ask on the bare host, end to end', () => {
     expect(await host.prisma.$queryRaw`SELECT 1 FROM kg_entities`).toHaveLength(5);
   });
 
-  it('11. refuses at COMMIT a transaction that strips an accepted entity of its evidence (the trigger, proven)', async () => {
+  it('12. refuses at COMMIT a transaction that strips an accepted entity of its evidence (the trigger, proven)', async () => {
     // LAST on purpose: on PGlite the socket drops the connection after this SQL error.
     const joe = people.get('Joe Park') as string;
     const before = await host.prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM kg_evidence WHERE subject_id = ${joe}::uuid`;

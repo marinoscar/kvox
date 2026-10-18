@@ -89,9 +89,10 @@ curl -H 'x-local-user: 1' "$BARE_HOST_URL/api/transcription/config"
 6. `GET /api/graph/overview` schedules `kg.graph_layout`, and after the drain the overview has its layout (the graphology peers).
 7. Ask, "What are the action items from Joe?": `search`, then `list_commitments` with `owned_by` and `open`; the answer cites only his open commitment.
 8. Ask, "What meetings have we had with Jenny's boss?": `search`, `neighbors` over `REPORTS_TO`, then `timeline` of the boss for meetings; the meeting Maria did not attend is left out.
-9. `HostHousekeeping.runOnce()` ticks the four enqueuers and every job it enqueued succeeds.
-10. The graph is exported as Turtle (`kg.export`) and imported back through SHACL validation (`kg.import`, multipart upload), which yields a draft proposal.
-11. Last: a transaction that deletes an accepted entity's evidence is refused at `COMMIT` by the trigger. It provokes an SQL error on purpose, so nothing follows it but one retried harmless query (PGlite).
+9. A manager set by hand (#586). No meeting says who Joe reports to, so "What meetings have we had with Joe's boss?" first finds nobody. `POST /api/graph/entities/{joe}/relations` sets `REPORTS_TO` Maria: one relation through `GraphWriteService` with one anchorless evidence row ("Set by hand: Joe Park reports to Maria Lopez", `source.kind: 'manual'`). Setting a second manager closes it at the new start; removing that one as wrong (`DELETE`) reopens it. Then Ask follows the manual edge to Maria and her meeting, and the relation's citation is a valid evidence citation labelled "Set by hand".
+10. `HostHousekeeping.runOnce()` ticks the four enqueuers and every job it enqueued succeeds.
+11. The graph is exported as Turtle (`kg.export`) and imported back through SHACL validation (`kg.import`, multipart upload), which yields a draft proposal.
+12. Last: a transaction that deletes an accepted entity's evidence is refused at `COMMIT` by the trigger. It provokes an SQL error on purpose, so nothing follows it but one retried harmless query (PGlite).
 
 ## The ports
 
@@ -172,7 +173,7 @@ examples/bare-host/
   scripts/test.mjs         npm test -- --db <leg>
   src/main.ts  bootstrap.ts  app.module.ts  db.ts  seed.ts  permissions.ts  local-store.controller.ts
   src/fake-provider.ts     the transcription provider, with a per-upload transcript queue
-  src/fake-ai.ts           KVOX_AI scripted for extraction, adjudication, digest and the Ask tool loop
+  src/fake-ai.ts           KVOX_AI: createScenarioKvoxAi of @marinoscar/kvox-api/testing over the scenario (no prompt reading here)
   src/graph-scenario.ts    the synthetic two-meeting world the graph and Ask test runs on
   src/housekeeping.ts      the hourly tick over the four enqueuers
   src/ports/               local-fs-object-store, pg-table-jobs, local-single-user-identity, file-settings, memory-secrets

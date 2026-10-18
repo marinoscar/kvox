@@ -5964,6 +5964,86 @@ entity is not a Person · `401` · `403` your own entity without
 `graph:write` · `404` `Entity not found` — no such entity, another user's,
 or merged.
 
+#### POST /graph/entities/{id}/relations
+
+Set a **Person**'s manager, employer or role by hand (issue #586) — part of
+the manual edit, one of the two ways anything changes in your graph outside a
+reviewed proposal (§8).
+
+**Requires:** `graph:write`.
+
+**Request:**
+```json
+{ "type": "HAS_ROLE", "toId": "3f2a…", "props": { "title": "VP", "businessUnit": "Finance" }, "validFrom": "2026-03-01" }
+```
+
+| Field | Rules |
+|---|---|
+| `type` | `REPORTS_TO` (→ a Person), `WORKS_FOR` (→ an Organization) or `HAS_ROLE` (→ an Organization). Anything else is a 400. |
+| `toId` | One of your live entities of the type the relation allows. |
+| `props` | `HAS_ROLE` only, and required there: `title` (1–200 characters), `businessUnit` (optional). Sent with another type, a 400. |
+| `validFrom` | `YYYY-MM-DD`, day precision. Optional; default today (UTC). The relation stays open. |
+
+The three relation types are normally exclusive (§5.4), so the edit applies
+the same **closing rule** committing a proposal does: a still-open edge of the
+same type from this person to someone else (for `HAS_ROLE`: another role at the
+same organization) that started before `validFrom` is closed at that date and
+linked to the new edge (`closedRelationIds`). The same fact already in your
+graph — restated, inside a known period, or undated — is not duplicated: the
+citation is added to it (`created: false`). An undated edge of a different
+fact cannot be ordered against a date, so it stays open and `flags` carries
+`unordered` (remove it if it is wrong). `overlaps` flags a range that still
+overlaps another edge.
+
+The relation is cited by **you**: one evidence row with `source.kind:
+"manual"` and the quote "Set by hand: …" (`evidenceId`), so it has evidence
+like every other fact and Ask can cite it. A new relation is `edited`. The
+edit is audited as `graph.relation_set` (ids, the type and counts, never a
+label); afterwards `graph.changed` is emitted and `kg.embed` /
+`kg.entity_digest` are enqueued for both entities on the usual conditions.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "relation": {
+      "id": "8d1c…", "type": "REPORTS_TO", "fromId": "0b6f…", "toId": "3f2a…", "props": {},
+      "valid": { "from": "2026-10-17T00:00:00.000Z", "to": null, "precision": "day" },
+      "reviewStatus": "edited"
+    },
+    "created": true,
+    "evidenceId": "e7a0…",
+    "closedRelationIds": ["5c44…"],
+    "flags": []
+  }
+}
+```
+
+**Errors:** `400` an invalid body, a relation to the entity itself, or an
+endpoint of the wrong type (`details.issues`) · `401` · `403` your own
+entity without `graph:write` · `404` `Entity not found` — either entity
+missing, another user's, or merged.
+
+#### DELETE /graph/entities/{id}/relations/{relationId}
+
+Remove a `REPORTS_TO`, `WORKS_FOR` or `HAS_ROLE` relation from the entity
+`{id}` as **wrong** (issue #586) — a correction, not an end date. The relation
+is kept as `rejected` and never shown again; its range is left as it was. An
+edge it closed when it was set is reopened (`reopenedRelationIds`). To record
+that a true fact ended, set the next one instead. Audited as
+`graph.relation_removed`.
+
+**Requires:** `graph:write`.
+
+**Response:** `200`
+```json
+{ "data": { "relationId": "8d1c…", "reviewStatus": "rejected", "reopenedRelationIds": ["5c44…"] } }
+```
+
+**Errors:** `400` another relation type · `401` · `403` your own entity
+without `graph:write` · `404` either id missing, another user's, merged, or a
+relation that does not start at `{id}`.
+
 #### POST /graph/notes/{noteId}/extract
 
 Extract a **draft proposal** from one of your notes (issue #363;
@@ -6886,6 +6966,11 @@ transcript share), `available` is `false` and there is no link — but the
 }
 ```
 
+A citation you made BY HAND (a manager, employer or role set on an entity
+page, #586) has no document: `source` is `{ "kind": "manual", "available":
+true, "href": null }` and `quote` says what was set ("Set by hand: Jenny Kim
+reports to Mark Chen").
+
 **Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
 not yours.
 
@@ -7040,7 +7125,10 @@ issues):
 - `citations[].kind` is `evidence | entity | document`; an `itm`/`rel` marker
   is resolved to its first evidence row (`kind: "evidence"`, `via` naming the
   item or relation). `valid: false` (with `id: null`) marks a handle no tool
-  issued in that turn.
+  issued in that turn. A citation set by hand on an entity page (#586: a
+  manager, employer or role, the owner as the source) is a valid `evidence`
+  citation with `label: "Set by hand"` and `documentKind: null`; a document
+  citation of the same subject sorts before it.
 
 **One running turn per conversation.** The database refuses a second
 `pending`/`streaming` assistant message in one conversation

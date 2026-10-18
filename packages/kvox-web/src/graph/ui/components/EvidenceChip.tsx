@@ -61,6 +61,9 @@ export function evidenceTitle(link: EvidenceLink | null | undefined): string | n
       return link.source.noteTitle ?? 'Note';
     case 'import':
       return link.source.sourceIri ?? 'Imported source';
+    case 'manual':
+      // #586: set by hand on an entity page — the owner is the source.
+      return 'Set by hand';
     default:
       return null;
   }
