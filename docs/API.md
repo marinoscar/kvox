@@ -7622,7 +7622,7 @@ admin job list.
 The platform also mounts `GET|POST /admin/factory-reset` and
 `GET|POST /admin/orgs/{orgId}/offboarding` (Admin only: `system:factory_reset`,
 `orgs:offboard`) under the `Factory reset` and `Organization offboarding` tags;
-the web app has a page for the factory reset (`/admin/settings/factory-reset`, #562) and none for offboarding yet.
+the web app has a page for the factory reset (`/admin/settings/factory-reset`, #562) and none for offboarding yet. Offboarding deletes the organization's transcripts (with their shares and search rows) and storage objects (bytes, then rows) before the platform deletes the organization; user-owned notes, graph and Ask data are not deleted (limits in `docs/specs/user-data-deletion.md`, section 8).
 
 ---
 
