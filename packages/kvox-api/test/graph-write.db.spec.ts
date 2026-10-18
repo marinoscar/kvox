@@ -30,7 +30,7 @@ describe('the no-orphans invariant (real PostgreSQL)', () => {
     db = await createTestDb();
     // Nothing here cites a note or a transcript through the service, so the validator's collaborators are never asked.
     write = new GraphWriteService(
-      new internals.EvidenceValidator({ describe: async () => new Map() } as unknown as KvoxObjectStorePort, { rolesFor: async () => new Map() } as never),
+      new internals.EvidenceValidator({ describe: async () => new Map() } as unknown as KvoxObjectStorePort, { rolesFor: async () => new Map() } as never, db.prisma as never),
     );
     const user = await db.prisma.user.create({ data: { email: `graph-write-${randomUUID()}@example.test` } });
     ownerId = user.id;

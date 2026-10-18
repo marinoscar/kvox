@@ -66,7 +66,8 @@ describe('EvidenceValidator', () => {
       new Map(rows.filter((row) => row.id === TRANSCRIPT).map((row) => [row.id, 'viewer'] as const)),
     ),
   };
-  const validator = new EvidenceValidator(managed as never, transcriptAccess as never);
+  // No test here prefetches (#615), so the root client is never read.
+  const validator = new EvidenceValidator(managed as never, transcriptAccess as never, {} as never);
 
   beforeEach(() => {
     managed.describe.mockClear();

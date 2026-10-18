@@ -26,6 +26,7 @@ function harness(txImpl?: (fn: (tx: unknown) => unknown) => unknown) {
   );
   const outcome = (kind: string) => ({ kind, result: { created: { entities: 0, relations: 0, items: 0 }, linked: 0 }, merges: [] });
   const stub = (kind: string) => {
+    jest.spyOn(service as any, 'prefetchEvidenceAccess').mockResolvedValue({ importObjects: new Map(), sharedTranscripts: new Map() });
     jest.spyOn(service as any, 'commitIn').mockResolvedValue(outcome(kind));
     jest.spyOn(service as any, 'afterCommit').mockResolvedValue(undefined);
   };

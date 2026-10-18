@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
-import { normalizeSpanText, spanMatches, SpanValidator } from './span-validator.js';
+import type { EvidenceSpanInput } from './dto/proposal.dto.js';
+import { normalizeSpanText, spanMatches, SpanValidator, type SpanSource } from './span-validator.js';
 
 const OWNER = '0a000000-0000-4000-8000-000000000001';
 const NOTE = '0b000000-0000-4000-8000-000000000001';
@@ -25,7 +26,14 @@ function setup(opts: { originId?: string | null; segmentTranscript?: string; seg
       ),
     },
   };
-  return { validator: new SpanValidator(origin as never), tx: tx as never, origin };
+  // The mock serves both phases (#615): `prepare` reads the note through the root
+  // client before the transaction, `validate` reads it again on `tx`.
+  const real = new SpanValidator(origin as never, tx as never);
+  const validator = {
+    validate: async (t: never, source: SpanSource, spans: readonly EvidenceSpanInput[]) =>
+      real.validate(t, source, spans, await real.prepare(source, spans)),
+  };
+  return { validator, tx: tx as never, origin };
 }
 
 const reasonOf = (e: unknown) => ((e as BadRequestException).getResponse() as { details: { reason: string } }).details.reason;
