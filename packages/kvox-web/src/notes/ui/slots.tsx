@@ -18,6 +18,8 @@
 import { Component } from 'react';
 import type { ComponentType, ReactNode, RefObject } from 'react';
 
+import type { NoteStatus } from '../headless/index.js';
+
 /**
  * The props of the `Provider` slot of {@link NotePageSlots}.
  *
@@ -54,6 +56,13 @@ export interface NoteProposalActionsProps {
   bodyRef: RefObject<HTMLElement | null>;
   /** The transcript the note ultimately came from, or `null`. */
   originTranscriptId: string | null;
+  /**
+   * The note's lifecycle status. A panel watches it turn `ready` to follow work
+   * the server starts on its own at that moment (an automatic graph extraction, #616).
+   */
+  status: NoteStatus;
+  /** When the note last changed (ISO 8601); with `status`, tells a page opened just after the note turned `ready`. */
+  updatedAt: string;
 }
 
 /**

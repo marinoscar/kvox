@@ -9,6 +9,11 @@
  * - While the proposal is `extracting`, it is re-read every 2 s (`pollMs`) through
  *   `useVisiblePolling` (paused in a hidden tab) and polling stops the moment
  *   it settles.
+ * - `awaitUntil` (#616) covers the proposal that does not exist YET: while
+ *   `detail` is `null` the hook keeps re-reading every `pollMs` until that
+ *   time, so a proposal an automatic extraction creates after the first read
+ *   appears (and, being `extracting`, hands over to the poll above). Past the
+ *   deadline with still nothing, polling stops.
  * - `decide` is OPTIMISTIC: the row's checkbox moves at once and moves back if
  *   the PATCH is refused (the error is re-thrown for the sheet's snackbar).
  *   `pendingItemIds` names the rows with a write in flight.
@@ -49,6 +54,14 @@ import { KvoxApiError, useIsMounted, useKvoxHost, useVisiblePolling } from '../.
  * @stability experimental
  */
 export const PROPOSAL_POLL_MS = 2_000;
+
+/**
+ * How long after a note turns ready the note page keeps looking for the
+ * proposal an automatic extraction creates, in milliseconds (#616).
+ *
+ * @stability experimental
+ */
+export const NOTE_EXTRACTION_FOLLOW_MS = 30_000;
 
 /**
  * Where a proposal is read from: the newest one of a note, or one opened directly by id.
@@ -132,6 +145,12 @@ export function useGraphProposal(
     enabled?: boolean;
     /** Poll interval while the proposal is `extracting`, in milliseconds; defaults to {@link PROPOSAL_POLL_MS}. Polling pauses in a hidden tab. */
     pollMs?: number;
+    /**
+     * Epoch milliseconds. While `detail` is `null`, also re-read every `pollMs`
+     * until this time, so a proposal created after the first read (an automatic
+     * extraction) appears. Polling pauses in a hidden tab.
+     */
+    awaitUntil?: number;
   } = {},
 ): UseGraphProposalReturn {
   const host = useKvoxHost();
@@ -170,8 +189,27 @@ export function useGraphProposal(
     if (enabled) void refresh();
   }, [enabled, key, refresh]);
 
+  const awaitUntil = options.awaitUntil;
+  const awaitUntilRef = useRef(awaitUntil);
+  awaitUntilRef.current = awaitUntil;
+  // Flipped by the poll once the deadline passes with still no proposal, which
+  // stops the interval; a new deadline or a new source starts the wait again.
+  const [awaitExpired, setAwaitExpired] = useState(false);
+  useEffect(() => {
+    setAwaitExpired(false);
+  }, [awaitUntil, key]);
+
   const extracting = detail?.proposal.status === 'extracting';
-  useVisiblePolling(() => void refresh(), enabled && extracting ? pollMs : 0);
+  const awaiting = detail === null && awaitUntil !== undefined && !awaitExpired;
+  const poll = useCallback(() => {
+    const until = awaitUntilRef.current;
+    if (detailRef.current === null && until !== undefined && Date.now() >= until) {
+      setAwaitExpired(true);
+      return;
+    }
+    void refresh();
+  }, [refresh]);
+  useVisiblePolling(poll, enabled && (extracting || awaiting) ? pollMs : 0);
 
   const proposalId = useCallback((): string => {
     const id = detailRef.current?.proposal.id;

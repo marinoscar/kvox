@@ -4,7 +4,8 @@ import { renderHook } from './helpers.js';
 import { http, HttpResponse } from './msw-compat.js';
 
 import { server } from './msw-compat.js';
-import { JOE_ID, SPEAKER_A_ID, SPEAKER_B_ID, briefFixture } from './graphData.js';
+import { JOE_ID, SPEAKER_A_ID, SPEAKER_B_ID, briefFixture, mockProposalDetail } from './graphData.js';
+import { useGraphProposal } from '../../src/graph/headless/hooks/useGraphProposal.js';
 import { useGraphBrief } from '../../src/graph/headless/hooks/useGraphBrief.js';
 import { useGraphEntities } from '../../src/graph/headless/hooks/useGraphEntities.js';
 import { speakerEntityMap, useGraphTranscriptPeople } from '../../src/graph/headless/hooks/useGraphTranscriptPeople.js';
@@ -155,5 +156,60 @@ describe('useGraphMentions / useGraphEntity', () => {
     expect(graphErrorMessage(new KvoxApiError('x', 403), 'f')).toMatch(/permission/);
     expect(graphErrorMessage(new KvoxApiError('', 500), 'f')).toBe('f');
     expect(graphErrorMessage(new Error('x'), 'f')).toBe('f');
+  });
+});
+
+describe('useGraphProposal awaitUntil (#616)', () => {
+  const proposalReads = () => requests.filter((url) => url.pathname.endsWith('/graph/notes/n1/proposal'));
+
+  /** Answers null for the first `nullReads` reads, then an extracting proposal for `extractingReads` reads, then a draft. */
+  function answerWith(nullReads: number, extractingReads: number) {
+    let calls = 0;
+    server.use(
+      http.get('*/api/graph/notes/:noteId/proposal', () => {
+        calls += 1;
+        if (calls <= nullReads) return HttpResponse.json({ data: { proposal: null } });
+        const state = calls <= nullReads + extractingReads ? 'extracting' : 'draft';
+        return HttpResponse.json({ data: { proposal: mockProposalDetail(state) } });
+      }),
+    );
+  }
+
+  it('picks up a proposal created after the first read, then polls only while it extracts', async () => {
+    answerWith(2, 2);
+    const awaitUntil = Date.now() + 10_000;
+    const { result } = renderHook(() => useGraphProposal({ noteId: 'n1' }, { pollMs: 20, awaitUntil }));
+
+    // Reaching the draft means the null reads, then the extracting ones, were all polled (the
+    // extracting state itself lasts two 20 ms ticks, too short for waitFor to catch reliably).
+    await waitFor(() => expect(result.current.detail?.proposal.status).toBe('draft'), { timeout: 2000 });
+    const settled = proposalReads().length;
+    // 2 null reads + 2 extracting reads + the read that returned the draft.
+    expect(settled).toBe(5);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(proposalReads().length).toBe(settled);
+  });
+
+  it('stops polling once awaitUntil has passed with still no proposal', async () => {
+    answerWith(Number.MAX_SAFE_INTEGER, 0);
+    // Fixed once: a deadline recomputed on every render would keep moving.
+    const awaitUntil = Date.now() + 100;
+    const { result } = renderHook(() => useGraphProposal({ noteId: 'n1' }, { pollMs: 20, awaitUntil }));
+
+    await waitFor(() => expect(result.current.detail).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const stopped = proposalReads().length;
+    expect(stopped).toBeGreaterThan(1);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(proposalReads().length).toBe(stopped);
+  });
+
+  it('does not poll a null proposal without awaitUntil', async () => {
+    answerWith(Number.MAX_SAFE_INTEGER, 0);
+    const { result } = renderHook(() => useGraphProposal({ noteId: 'n1' }, { pollMs: 20 }));
+
+    await waitFor(() => expect(result.current.detail).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(proposalReads()).toHaveLength(1);
   });
 });

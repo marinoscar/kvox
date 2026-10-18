@@ -41,7 +41,7 @@ The pages that need AI take `ai` (`NotesAiAccess`): a hook returning `{ isLoadin
   - `Provider`: `ComponentType<{ noteId, children }>`, wraps the whole page (loading and error states included) so the other slots can share state. It must render `children` and add no element.
   - `useAsideWidth`: a hook returning the pixel width of a panel the page makes room for at `lg` and up, or `0`.
   - `HeaderActions`: `ComponentType<{ noteId }>`, extra actions in the header after History.
-  - `ProposalActions`: `ComponentType<{ noteId, version, bodyRef, originTranscriptId }>`, a panel over the note's connected-knowledge proposal.
+  - `ProposalActions`: `ComponentType<{ noteId, version, bodyRef, originTranscriptId, status, updatedAt }>`, a panel over the note's connected-knowledge proposal (`status` is the note's lifecycle status, `updatedAt` the ISO time it last changed, so a graph panel can follow an automatic extraction).
   - `SelectionActions`: `ComponentType<{ noteId, version, markdown, containerRef, enabled, onReload }>`, an action over a text selection in the rendered body.
 - `NotesLibrarySlots.SearchPrefix` (prop `slots` of `NotesPage` and `NotesLibraryView`): `ComponentType<{ query }>`, rendered above the ranked results while the search box holds a query.
 - `NotesAiAccess` (prop `ai` of `NotePage`, `NewNotePage` and `UserNoteTemplatesPage`).
