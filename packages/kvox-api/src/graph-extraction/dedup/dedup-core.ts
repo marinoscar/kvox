@@ -13,8 +13,6 @@
 // proposal payloads into the planner's inputs and its plans into verdicts.
 // =============================================================================
 
-import type { EffectiveRelationType } from '@marinoscar/kvox-contract/ontology';
-
 import type {
   EndpointRef,
   EntityPayload,
@@ -149,38 +147,10 @@ export function isoDay(d: Date): string {
 // Relation rules from the EFFECTIVE schema (never a hardcoded list — §17.1)
 // -----------------------------------------------------------------------------
 
-/**
- * The planner's rule for a relation type as the caller's effective schema
- * declares it. `identityProps` are the type's REQUIRED props, sorted, and
- * `optionalIdentityProps` its `identity: true` props (#440) — the same
- * derivation as #353's `temporalRuleFor` (HAS_ROLE → `['title']` and
- * `['businessUnit']`).
- */
-export function ruleForEffectiveRelation(
-  relation: Pick<EffectiveRelationType, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props' | 'symmetric'>,
-): TemporalRule {
-  const optional = relation.props
-    .filter((p) => p.identity === true && !p.required)
-    .map((p) => p.key)
-    .sort();
-  return {
-    // #383: the planner compares a symmetric relation in both directions.
-    ...(relation.symmetric === true ? { symmetric: true } : {}),
-    temporal: relation.temporal,
-    exclusive: relation.exclusive,
-    exclusiveScope: relation.exclusiveScope,
-    identityProps: relation.props
-      .filter((p) => p.required)
-      .map((p) => p.key)
-      .sort(),
-    ...(optional.length > 0 ? { optionalIdentityProps: optional } : {}),
-  };
-}
-
-/** Closing applies to exactly the types declared `temporal: true, exclusive: 'soft'`. */
-export function isExclusiveTemporal(rule: TemporalRule): boolean {
-  return rule.temporal && rule.exclusive === 'soft';
-}
+// `ruleForEffectiveRelation` and `isExclusiveTemporal` moved to the temporal engine
+// (`graph/temporal/temporal-rule.ts`, #586) so the manual relation edit applies the
+// same rule; re-exported here so no importer changes.
+export { isExclusiveTemporal, ruleForEffectiveRelation } from '../../graph/index.js';
 
 /** A placeholder `toId` for a proposal-new target: it can never equal an existing id. */
 export function placeholderId(endpoint: ResolvedEndpoint): string {
