@@ -203,6 +203,16 @@ against fixture rows.
   registry cards are the package's (`setupGuideSettingsPage.card`,
   `gettingStartedSettingsPage.card`), first in `General` and `Account`.
 
+- **Home** is packaged (issue #632): the first-run journey ("Start here", the four
+  stage cards and the call to action) and the rest of the page are `KvoxHomePage` of
+  `@marinoscar/kvox-web/home/ui`, so KVox web and KVox Desktop show the same empty
+  state. It is a different thing from the checklist above: the journey explains the
+  product to an account with nothing yet and ends in the steps a host offers
+  (`extraSteps`: web's "Record or upload audio", Desktop's "Import a document"), while
+  the checklist is live-derived deployment and account state. This app's binding is
+  `pages/HomePage.tsx`; the slots and the rules are in the
+  [home README](../../packages/kvox-web/src/home/README.md).
+
 `GET /api/onboarding` needs `user_settings:read`, which every seeded role holds,
 so a Viewer (the default role) reads their checklist. The integration suite
 asserts both halves: a caller holding no permission is refused with 403, and a
