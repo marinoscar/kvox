@@ -31,20 +31,33 @@ import Typography from '@mui/material/Typography';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNavigate } from 'react-router-dom';
 
-import { TranscriptSummaryCard } from './TranscriptSummaryCard';
-import type { HomeTranscriptItem } from './TranscriptSummaryCard';
+import { TranscriptSummaryCard } from './TranscriptSummaryCard.js';
+import type { HomeTranscriptItem } from './TranscriptSummaryCard.js';
 
+/**
+ * Props of {@link RecentTranscripts}.
+ *
+ * @stability experimental
+ */
 export interface RecentTranscriptsProps {
   /** At most eight, already ordered newest-first by the API. */
   items: HomeTranscriptItem[];
 }
 
+/**
+ * "Recent": the newest transcripts.
+ *
+ * @param props - see {@link RecentTranscriptsProps}.
+ * @returns the section.
+ *
+ * @stability experimental
+ */
 export function RecentTranscripts({ items }: RecentTranscriptsProps) {
   const navigate = useNavigate();
 
   // BELT AND BRACES, not a state the product reaches. `recent` is the newest
   // eight of everything the caller owns, so the only account that gets here
-  // empty is a brand-new one — and `HomePage` renders `JourneyEmptyState`
+  // empty is a brand-new one — and `KvoxHomePage` renders `JourneyEmptyState`
   // instead of this section for exactly that account. The guard exists so a
   // partial or unexpected summary degrades to nothing rather than to a "Recent"
   // heading with a "View all" button over an empty grid.

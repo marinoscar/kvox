@@ -11,7 +11,7 @@
  * phone-list / tablet-2-up / desktop-3-or-4-up layout is done entirely by the
  * parent's `Grid` sizes, so the responsive behaviour costs no JavaScript, no
  * re-render on resize and — the point — no sixth coupled breakpoint gate beside
- * the five `docs/specs/settings-ui.md` §5 pins together. See `HomePage`'s
+ * the five `docs/specs/settings-ui.md` §5 pins together. See `KvoxHomePage`'s
  * header.
  *
  * =============================================================================
@@ -35,12 +35,18 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
-import { NoteStatusChip, SourceLine } from '@marinoscar/kvox-web/notes/ui';
-import { isNoteInFlight } from '@marinoscar/kvox-web/notes/headless';
-import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
+import { NoteStatusChip, SourceLine } from '../../../notes/ui/index.js';
+import { isNoteInFlight } from '../../../notes/headless/index.js';
+import type { NoteListItem } from '../../../notes/headless/index.js';
+import { formatRelativeTime } from '../../../core/headless/index.js';
 
+/**
+ * Props of {@link NoteSummaryCard}.
+ *
+ * @stability experimental
+ */
 export interface NoteSummaryCardProps {
+  /** The note to draw. */
   note: NoteListItem;
 }
 
@@ -49,6 +55,8 @@ export interface NoteSummaryCardProps {
  * — resolved server-side for the whole page, so a caller no longer has to
  * thread a separately-fetched map down to each card. `SourceLine` reads it
  * directly and falls back to the category noun for `null`.
+ *
+ * @stability experimental
  */
 export function NoteSummaryCard({ note }: NoteSummaryCardProps) {
   const navigate = useNavigate();

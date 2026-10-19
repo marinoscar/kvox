@@ -8,7 +8,7 @@ import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
 import { graphReader, noGraphUser } from '../../utils/graphTestUsers';
 import { graphEntitySummaries, mockGraphAiConfig } from '../../mocks/graphData';
-import { KnowledgeSection } from '../../../components/home/KnowledgeSection';
+import { KnowledgeSection } from '@marinoscar/kvox-web/home/ui';
 
 /** Home's "Knowledge" entry point (#373). */
 
@@ -93,7 +93,7 @@ describe('KnowledgeSection', () => {
 
   it('offers Ask (#380) only while connected knowledge is on', async () => {
     server.use(http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
-    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader, graphFeature: true } });
     const section = await screen.findByRole('region', { name: 'Knowledge' });
     expect(await within(section).findByRole('link', { name: 'Ask' })).toHaveAttribute('href', '/ask');
   });
@@ -102,7 +102,7 @@ describe('KnowledgeSection', () => {
     server.use(
       http.get('*/api/ai-tasks/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
     );
-    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader, graphFeature: true } });
     const section = await screen.findByRole('region', { name: 'Knowledge' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(within(section).queryByRole('link', { name: 'Ask' })).not.toBeInTheDocument();

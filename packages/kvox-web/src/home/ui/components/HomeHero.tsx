@@ -23,13 +23,12 @@
  * THE TAGLINE IS READ, NEVER WRITTEN
  * =============================================================================
  *
- * `TAGLINE` comes from `@app/shared`, which reads
- * `packages/shared/identity.json`. This is a TEMPLATE repository: a fork
- * renames the product and rewrites its promise in one file, and a component
- * holding its own copy of either would quietly keep the old one — the exact
- * failure `apps/cli/src/template-identity.test.ts` exists to catch for the
- * product name. There is no second spelling of this sentence anywhere in the
- * web app, and there must not be one.
+ * The sentence arrives as the `tagline` prop and this component holds no copy
+ * of it. It is a package component now, so it cannot import `@app/shared`; the
+ * host passes its own identity (KVox web: `TAGLINE` of `@app/shared`; a host on
+ * the brand entry: `KVOX_BRAND.tagline` of `@marinoscar/kvox-web/brand`), which
+ * is how a fork that rewrites `packages/shared/identity.json` keeps one
+ * spelling of its promise. Without a `tagline` the line is not drawn.
  *
  * =============================================================================
  * TWO ACTIONS, AND ONLY ONE OF THEM IS PRIMARY (#173)
@@ -49,9 +48,9 @@
  * emphasis; Transform sits beside it as the alternative, not as its equal.
  *
  * ⚠ THE NOTE ACTION IS GATED ON A PROP, NOT ON A HOOK READ IN HERE. This
- * component is presentational and stays that way: `HomePage` already calls
- * `usePermissions()` and already computes `canWriteNotes` for `RecentNotes`, so
- * a second `usePermissions()` here would be a second place for the page and its
+ * component is presentational and stays that way: `KvoxHomePage` already calls
+ * the host viewer and already computes `canWriteNotes` for `RecentNotes`, so
+ * a second the host viewer here would be a second place for the page and its
  * hero to disagree about the same user. `canCreateNote` defaults to `false`
  * rather than `true` — a caller that forgets the prop must lose an action, never
  * manufacture one the user may not be allowed to take.
@@ -69,7 +68,7 @@
  * landing screen, and the answer it returns is about the USER's own AI key,
  * which `/notes/new` asks for and explains in place far better than a greyed-out
  * button on the home page can. This action therefore costs no network request
- * at all, which keeps `HomePage`'s "one request per content type, plus one
+ * at all, which keeps `KvoxHomePage`'s "one request per content type, plus one
  * capability probe" rule exactly as it was.
  *
  * `RecentNotes`' OWN ZERO-STATE BUTTON IS UNCHANGED and is not redundant with
@@ -111,7 +110,7 @@
  *
  * The pair stacks full width on phones and sits inline from `sm` up, and that
  * is a `Stack direction={{ xs, sm }}` plus `sx` width objects resolved in CSS —
- * never a `useMediaQuery`. `HomePage`'s header states the rule for this whole
+ * never a `useMediaQuery`. `KvoxHomePage`'s header states the rule for this whole
  * subtree: a JavaScript breakpoint read here would be a sixth gate to check
  * every time one of the five `docs/specs/settings-ui.md` §5 pins together moves,
  * in exchange for a layout CSS already does.
@@ -122,19 +121,27 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TAGLINE } from '@app/shared';
 
-import { HomeSearchField } from './HomeSearchField';
-import { NewTranscriptButton } from './NewTranscriptButton';
+import { HomeSearchField } from './HomeSearchField.js';
 
+/**
+ * Props of {@link HomeHero}.
+ *
+ * @stability experimental
+ */
 export interface HomeHeroProps {
   /** The signed-in user's effective display name, or null when they have none. */
   displayName: string | null;
-  /** `GET /api/transcription/config` said this deployment can transcribe. */
-  transcriptionAvailable: boolean;
-  /** The capability probe has not answered yet. */
-  isCheckingTranscription?: boolean;
+  /** The one-line promise under the greeting. Not drawn when absent. */
+  tagline?: string;
+  /**
+   * The host's own actions, drawn BEFORE the packaged "New note" action in the
+   * same row (KVox web: its "New transcript" button, with the reason it may be
+   * blocked). The hero knows nothing about what they do.
+   */
+  actions?: ReactNode;
   /**
    * The caller holds `notes:write` — the exact string `notes.controller.ts`
    * enforces on `POST /api/notes` and `App.tsx` guards `/notes/new` with.
@@ -156,6 +163,8 @@ export interface HomeHeroProps {
  * Returns `null` — never an empty string — for a name that is absent, blank, or
  * pure whitespace, so the caller renders the nameless greeting rather than
  * "Hi, " with a dangling comma.
+ *
+ * @stability experimental
  */
 export function firstNameOf(displayName: string | null | undefined): string | null {
   if (!displayName) return null;
@@ -163,10 +172,18 @@ export function firstNameOf(displayName: string | null | undefined): string | nu
   return first ? first : null;
 }
 
+/**
+ * The greeting, the one-line promise and the actions of Home.
+ *
+ * @param props - see {@link HomeHeroProps}.
+ * @returns the hero section.
+ *
+ * @stability experimental
+ */
 export function HomeHero({
   displayName,
-  transcriptionAvailable,
-  isCheckingTranscription = false,
+  tagline,
+  actions,
   canCreateNote = false,
 }: HomeHeroProps) {
   const navigate = useNavigate();
@@ -202,9 +219,11 @@ export function HomeHero({
           >
             {firstName ? `Hi, ${firstName}` : 'Hi there'}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-            {TAGLINE}
-          </Typography>
+          {tagline && (
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+              {tagline}
+            </Typography>
+          )}
         </Box>
 
         {/* Full width on phones — where these are the page's primary actions
@@ -230,10 +249,7 @@ export function HomeHero({
             alignItems: { xs: 'stretch', sm: 'flex-start' },
           }}
         >
-          <NewTranscriptButton
-            available={transcriptionAvailable}
-            isChecking={isCheckingTranscription}
-          />
+          {actions}
 
           {canCreateNote && (
             <Button

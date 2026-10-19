@@ -173,8 +173,8 @@ function respondWith(data: TranscriptSummary, options: RespondOptions = {}) {
   );
 }
 
-function renderHome(user: MockUser = homeUser) {
-  return render(<HomePage />, { wrapperOptions: { user } });
+function renderHome(user: MockUser = homeUser, graphFeature = false) {
+  return render(<HomePage />, { wrapperOptions: { user, graphFeature } });
 }
 
 /** The greeting only appears once the first summary read has settled. */
@@ -1700,7 +1700,7 @@ describe('HomePage — waiting for review (issue #368)', () => {
   });
 
   it('shows the drafts to a graph reader when the graph is on', async () => {
-    renderHome(graphReader);
+    renderHome(graphReader, true);
     await waitForLoaded();
     const section = await screen.findByRole('region', { name: 'Waiting for review' });
     expect(within(section).getByRole('button', { name: 'Review Weekly sync — minutes' })).toBeInTheDocument();

@@ -22,7 +22,9 @@
     "./src/brand/index.ts",
     "./src/copilot/headless/index.ts",
     "./src/copilot/ui/index.ts",
-    "./src/shell/index.ts"
+    "./src/shell/index.ts",
+    "./src/home/headless/index.ts",
+    "./src/home/ui/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",
