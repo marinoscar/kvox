@@ -404,6 +404,20 @@ export function useTranscripts(
 // =============================================================================
 
 /**
+ * Options of {@link useTranscriptSummary}.
+ *
+ * @stability experimental
+ */
+export interface UseTranscriptSummaryOptions {
+  /**
+   * `false` issues NO request at all and reports `{ null, false, null }`: a host
+   * whose Home has no transcripts (KVox Desktop in v1) never asks an API that is
+   * not there. Default `true`.
+   */
+  enabled?: boolean;
+}
+
+/**
  * What {@link useTranscriptSummary} returns.
  *
  * @stability experimental
@@ -453,9 +467,11 @@ export interface UseTranscriptSummaryResult {
  *
  * @stability experimental
  */
-export function useTranscriptSummary(): UseTranscriptSummaryResult {
+export function useTranscriptSummary(options: UseTranscriptSummaryOptions = {}): UseTranscriptSummaryResult {
+  const { enabled = true } = options;
+
   const [summary, setSummary] = useState<TranscriptSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const isMounted = useIsMounted();
@@ -463,6 +479,7 @@ export function useTranscriptSummary(): UseTranscriptSummaryResult {
 
   const load = useCallback(
     async (showLoading: boolean) => {
+      if (!enabled) return;
       if (showLoading) setIsLoading(true);
       try {
         const response = await getTranscriptSummary(host);
@@ -480,24 +497,31 @@ export function useTranscriptSummary(): UseTranscriptSummaryResult {
         if (isMounted()) setIsLoading(false);
       }
     },
-    [host, isMounted],
+    [enabled, host, isMounted],
   );
 
   useEffect(() => {
+    if (!enabled) {
+      // Reset rather than keep what a previously-enabled mount read.
+      setSummary(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     void load(true);
-  }, [load]);
+  }, [enabled, load]);
 
   const hasInFlight = (summary?.inProgress.length ?? 0) > 0;
   useVisiblePolling(
     () => void load(false),
-    hasInFlight ? TRANSCRIPT_ACTIVE_POLL_MS : 0,
+    enabled && hasInFlight ? TRANSCRIPT_ACTIVE_POLL_MS : 0,
   );
 
   const latestEventId = useLatestTranscriptEventId();
   useEffect(() => {
-    if (!latestEventId) return;
+    if (!latestEventId || !enabled) return;
     void load(false);
-  }, [latestEventId, load]);
+  }, [enabled, latestEventId, load]);
 
   const refresh = useCallback(() => load(false), [load]);
 
