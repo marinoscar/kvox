@@ -13,7 +13,7 @@ import { Layout } from '../../../components/common/Layout';
  *     complements; walking the exact pixels either side of 600 here is how this
  *     app notices a package upgrade that drifts them;
  *   - the slots: the AppBar gets this app's navigation, the bottom bar gets the
- *     NON-PINNED one (`KVOX_BOTTOM_BAR_NAVIGATION`), the banners sit above the
+ *     NON-PINNED one (`withoutPinned(KVOX_NAVIGATION)`), the banners sit above the
  *     page and the welcome dialog is mounted.
  *
  * The AppBar and the bottom bar are replaced by markers (they need a session and
@@ -38,7 +38,8 @@ vi.mock('@marinoscar/platform-web/notifications/headless', async (importOriginal
 }));
 
 import { ShellAppBar, ShellBottomNav } from '@marinoscar/platform-web/shell/ui';
-import { KVOX_BOTTOM_BAR_NAVIGATION, KVOX_NAVIGATION } from '../../../config/shell';
+import { withoutPinned } from '@marinoscar/kvox-web/shell';
+import { KVOX_NAVIGATION } from '../../../config/shell';
 import { Route, Routes } from 'react-router-dom';
 import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 
@@ -209,7 +210,7 @@ describe('Layout', () => {
       renderAt(PHONE);
 
       const props = vi.mocked(ShellBottomNav).mock.calls[0][0];
-      expect(props.navigation).toBe(KVOX_BOTTOM_BAR_NAVIGATION);
+      expect(props.navigation).toBe(withoutPinned(KVOX_NAVIGATION));
       expect(props.navigation).not.toBe(KVOX_NAVIGATION);
       expect(props.navigation.destinations.some((d) => d.pinned)).toBe(false);
     });

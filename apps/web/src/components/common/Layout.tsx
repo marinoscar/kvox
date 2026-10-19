@@ -1,4 +1,4 @@
-import { BrandLockup } from '@marinoscar/kvox-web/brand';
+import { KvoxAppShell } from '@marinoscar/kvox-web/shell';
 import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import {
   NotificationBell,
@@ -12,25 +12,17 @@ import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/
 // above `RequireAuth` would buy a guaranteed 401 on `/login` and `/auth/callback`.
 import { OnboardingProvider } from '@marinoscar/platform-web/onboarding/headless';
 import { GettingStartedMenuItem, WelcomeDialog } from '@marinoscar/platform-web/onboarding/ui';
-import {
-  ShellAppBar,
-  ShellBottomNav,
-  ShellLayout,
-  ShellUserMenu,
-} from '@marinoscar/platform-web/shell/ui';
 import { APP_NAME } from '@app/shared';
-import { KVOX_BOTTOM_BAR_NAVIGATION, KVOX_NAVIGATION } from '../../config/shell';
+import { KVOX_NAVIGATION } from '../../config/shell';
 import { OnboardingBanner } from '../onboarding/OnboardingBanner';
 import { adminWelcomePane, userWelcomePane } from '../onboarding/kvoxWelcomePanes';
 
-/** The mark and the wordmark: one clickable lockup (the AppBar sends it home). */
-const BRAND = <BrandLockup />;
-
 /**
- * The app shell: a thin binding of the packaged `ShellLayout`
- * (`@marinoscar/platform-web/shell/ui`, issue #484, epic #478).
+ * The app shell: a thin binding of `KvoxAppShell` (`@marinoscar/kvox-web/shell`,
+ * issue #629), which composes the platform's `ShellLayout` (issue #484, epic #478)
+ * with the KVox brand lockup.
  *
- * The package owns the chrome and, with it, the FIVE COUPLED BREAKPOINT GATES
+ * The packages own the chrome and, with it, the FIVE COUPLED BREAKPOINT GATES
  * (`docs/specs/settings-ui.md`, "Breakpoint gates"): the rail's `up('sm')`
  * mount, the bottom bar's `down('sm')` self-gate, `<main>`'s
  * `pb: { xs: 10, sm: 3 }`, the settings hub's `isCompactWindow` and the
@@ -40,11 +32,11 @@ const BRAND = <BrandLockup />;
  * fails the build if one appears).
  *
  * What this file contributes is the app's slots:
- *   - the navigation (`config/shell.ts`) and the brand;
+ *   - the navigation (`config/shell.ts`); the brand is the shell's;
  *   - the AppBar's `actions` (the notification bell, mounted in both treatments)
  *     and its user menu with the platform's "Getting started" row;
- *   - the bottom bar, bound to the NON-PINNED destinations so the phone bar stays
- *     Home · Transcripts · Notes · Knowledge (see `KVOX_BOTTOM_BAR_NAVIGATION`);
+ *   - nothing for the phone bar: `KvoxAppShell` binds it to the NON-PINNED
+ *     destinations, so it stays Home · Transcripts · Notes · Knowledge;
  *   - the `banners` above the page (maintenance, onboarding, notification
  *     permission), each of which renders nothing on an ordinary day;
  *   - the `overlays`: the platform's one-time welcome dialog, with this app's panes.
@@ -68,26 +60,14 @@ export function Layout() {
        render the same state the banner reads, and a second provider around the
        page would be a second copy of it. */
     <OnboardingProvider appName={APP_NAME}>
-      <ShellLayout
+      <KvoxAppShell
         navigation={KVOX_NAVIGATION}
-        appBar={
-          <ShellAppBar
-            navigation={KVOX_NAVIGATION}
-            brand={BRAND}
-            // The notification centre (#127, epic #109; the platform's since #470) —
-            // mounted in BOTH treatments, including the compact drill-down, where it is
-            // the only way into the centre. Renders NOTHING when no
-            // `NotificationProvider` is mounted.
-            actions={<NotificationBell />}
-            userMenu={
-              <ShellUserMenu
-                navigation={KVOX_NAVIGATION}
-                items={(close) => <GettingStartedMenuItem onDone={close} />}
-              />
-            }
-          />
-        }
-        bottomNav={<ShellBottomNav navigation={KVOX_BOTTOM_BAR_NAVIGATION} />}
+        // The notification centre (#127, epic #109; the platform's since #470) —
+        // mounted in BOTH treatments, including the compact drill-down, where it is
+        // the only way into the centre. Renders NOTHING when no
+        // `NotificationProvider` is mounted.
+        actions={<NotificationBell />}
+        renderUserMenuItems={(close) => <GettingStartedMenuItem onDone={close} />}
         banners={
           <>
             {/* Issue #258, epic #254. Above the page rather than inside any one

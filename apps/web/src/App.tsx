@@ -59,7 +59,7 @@ import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/head
 // Issue #499, epic #498. The domain web host binding, and the transcription slice's
 // routes (data, spread where the literal route used to be).
 import { AppKvoxHostProvider } from './platform-kvox/KvoxHostBinding';
-import { renderKvoxRoutes } from './platform-kvox/renderKvoxRoutes';
+import { renderKvoxRoutes } from '@marinoscar/kvox-web/shell';
 import { appTranscriptsRoutes } from './kvox/transcriptsRoutes';
 import { appNotesRoutes } from './kvox/notesRoutes';
 import { appGraphRoutes } from './kvox/graphRoutes';
