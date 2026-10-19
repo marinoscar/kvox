@@ -11,11 +11,11 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { render } from '../../utils/test-utils';
-import { RecentTranscripts } from '../../../components/home/RecentTranscripts';
+import { RecentTranscripts } from '@marinoscar/kvox-web/home/ui';
 import {
   TranscriptSummaryCard,
   accessRoleLabel,
-} from '../../../components/home/TranscriptSummaryCard';
+} from '@marinoscar/kvox-web/home/ui';
 import { AXE_OPTIONS, transcript } from './homeFixtures';
 
 /**

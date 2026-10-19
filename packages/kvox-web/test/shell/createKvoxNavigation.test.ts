@@ -42,6 +42,19 @@ const keys = (destinations: readonly { key: string }[]) => destinations.map((d) 
 const holding = (...permissions: string[]) => (permission: string) => permissions.includes(permission);
 
 describe('createKvoxNavigation', () => {
+  it('lists the packaged Home row first when asked, owning exactly the landing page', () => {
+    const { navigation } = createKvoxNavigation({ include: ['home', 'transcripts', 'notes', 'graph'] });
+    expect(keys(navigation.destinations)).toEqual(['home', 'transcripts', 'notes', 'knowledge']);
+    expect(navigation.destinations[0]).toMatchObject({ label: 'Home', compactLabel: 'Home', path: '/' });
+    expect(navigation.destinations[0]?.permission).toBeUndefined();
+    expect(navigation.destinationRoutes?.home).toEqual(['/']);
+  });
+
+  it('does not list Home unless asked, so a host with its own Home row is unchanged', () => {
+    const { navigation } = createKvoxNavigation({ include: ['notes'] });
+    expect(keys(navigation.destinations)).toEqual(['notes']);
+  });
+
   it('defaults to the rows KVox web draws: Transcripts, Notes, Knowledge', () => {
     const { navigation } = createKvoxNavigation();
     expect(keys(navigation.destinations)).toEqual(['transcripts', 'notes', 'knowledge']);

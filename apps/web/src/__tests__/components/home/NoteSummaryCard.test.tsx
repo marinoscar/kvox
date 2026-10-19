@@ -11,7 +11,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { render } from '../../utils/test-utils';
-import { NoteSummaryCard } from '../../../components/home/NoteSummaryCard';
+import { NoteSummaryCard } from '@marinoscar/kvox-web/home/ui';
 import { AXE_OPTIONS, note } from './homeFixtures';
 
 /**

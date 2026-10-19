@@ -70,6 +70,7 @@ export type {
   UseTranscriptSegmentsResult,
   UseTranscriptsOptions,
   UseTranscriptsResult,
+  UseTranscriptSummaryOptions,
   UseTranscriptSummaryResult,
 } from './hooks/useTranscripts.js';
 export { useUploadManager } from './hooks/useUploadManager.js';

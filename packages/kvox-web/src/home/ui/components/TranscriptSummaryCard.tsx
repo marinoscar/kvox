@@ -22,10 +22,10 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
-import { TranscriptStatusChip } from '@marinoscar/kvox-web/transcripts/ui';
-import type { TranscriptAccessRole, TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
-import { formatDuration } from '@marinoscar/kvox-web/transcripts/headless';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
+import { TranscriptStatusChip } from '../../../transcripts/ui/index.js';
+import type { TranscriptAccessRole, TranscriptListItem } from '../../../transcripts/headless/index.js';
+import { formatDuration } from '../../../transcripts/headless/index.js';
+import { formatRelativeTime } from '../../../core/headless/index.js';
 
 /**
  * A summary row as this page renders it.
@@ -36,10 +36,19 @@ import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
  * named type because five components in this folder pass rows to each other,
  * and a name that says *what a row is here* survives the list item gaining a
  * field better than five separate imports of the service type would.
+ *
+ * @stability experimental
  */
 export type HomeTranscriptItem = TranscriptListItem;
 
-/** How a share role is spelled for a person. `owner` never reaches a chip here. */
+/**
+ * How a share role is spelled for a person. `owner` never reaches a chip here.
+ *
+ * @param access - the viewer's access to the transcript.
+ * @returns the label.
+ *
+ * @stability experimental
+ */
 export function accessRoleLabel(access: TranscriptAccessRole): string {
   switch (access) {
     case 'editor':
@@ -51,7 +60,13 @@ export function accessRoleLabel(access: TranscriptAccessRole): string {
   }
 }
 
+/**
+ * Props of {@link TranscriptSummaryCard}.
+ *
+ * @stability experimental
+ */
 export interface TranscriptSummaryCardProps {
+  /** The transcript to draw. */
   transcript: HomeTranscriptItem;
   /**
    * Show who shared it and what the caller may do with it.
@@ -62,6 +77,14 @@ export interface TranscriptSummaryCardProps {
   showOwner?: boolean;
 }
 
+/**
+ * One transcript as a card: status, duration, when it changed and, for a shared one, who owns it.
+ *
+ * @param props - see {@link TranscriptSummaryCardProps}.
+ * @returns the card.
+ *
+ * @stability experimental
+ */
 export function TranscriptSummaryCard({
   transcript,
   showOwner = false,

@@ -30,6 +30,13 @@ import Grid from '@mui/material/Grid';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 
+/**
+ * The placeholder Home draws until its first read settles.
+ *
+ * @returns the skeleton.
+ *
+ * @stability experimental
+ */
 export function HomeSkeleton() {
   return (
     <Box role="status" aria-busy="true" aria-label="Loading your transcripts">

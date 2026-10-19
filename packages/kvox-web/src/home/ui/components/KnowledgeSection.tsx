@@ -1,6 +1,6 @@
 /**
  * `KnowledgeSection` — Home's entry point to the knowledge graph (#373, spec
- * §13: "a new Knowledge section on HomePage.tsx surfacing recent entities").
+ * §13: "a new Knowledge section on KvoxHomePage.tsx surfacing recent entities").
  *
  * Written when the graph had no bottom-bar tab; since #438 it has one
  * (`knowledge`, while connected knowledge is on), and this section stays as
@@ -38,13 +38,21 @@ import Typography from '@mui/material/Typography';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { EntityTypeIcon, entityPath } from '@marinoscar/kvox-web/graph/ui';
-import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
-import { initials, useGraphEntities } from '@marinoscar/kvox-web/graph/headless';
-import { usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { formatRelativeTime } from '@marinoscar/kvox-web/core/headless';
+import { EntityTypeIcon, entityPath } from '../../../graph/ui/index.js';
+import { initials, useGraphEntities } from '../../../graph/headless/index.js';
+import { formatRelativeTime, useHasPermission, useKvoxHost } from '../../../core/headless/index.js';
 
+/**
+ * The entity types the Knowledge section lists.
+ *
+ * @stability experimental
+ */
 export const KNOWLEDGE_TYPES = ['Person', 'Organization'] as const;
+/**
+ * How many entities the Knowledge section lists.
+ *
+ * @stability experimental
+ */
 export const KNOWLEDGE_LIMIT = 6;
 
 /**
@@ -68,6 +76,13 @@ class KnowledgeSectionBoundary extends Component<{ children: ReactNode }, { fail
   }
 }
 
+/**
+ * Recent people and organizations, with shortcuts into the graph. Renders nothing without `graph:read` or an entity to show, and never an error box.
+ *
+ * @returns the section, or nothing.
+ *
+ * @stability experimental
+ */
 export function KnowledgeSection() {
   return (
     <KnowledgeSectionBoundary>
@@ -77,8 +92,7 @@ export function KnowledgeSection() {
 }
 
 function KnowledgeSectionContent() {
-  const { hasPermission } = usePermissions();
-  const enabled = hasPermission('graph:read');
+  const enabled = useHasPermission('graph:read');
   const recent = useGraphEntities({ type: KNOWLEDGE_TYPES, limit: KNOWLEDGE_LIMIT, enabled });
 
   if (!enabled || recent.isLoading || recent.error || recent.data.length === 0) return null;
@@ -138,8 +152,8 @@ function KnowledgeSectionContent() {
 
 /** "Ask" → `/ask`, only while connected knowledge is on (#380). */
 function KnowledgeAskButton() {
-  const { config } = useAiTasksConfig();
-  if (config?.graphEnabled !== true) return null;
+  const graphEnabled = useKvoxHost().features().graphEnabled === true;
+  if (!graphEnabled) return null;
   return (
     <Button size="small" component={RouterLink} to="/ask" startIcon={<QuestionAnswerOutlinedIcon />}>
       Ask

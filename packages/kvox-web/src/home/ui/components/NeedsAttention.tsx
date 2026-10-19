@@ -25,8 +25,8 @@
  * PROPS ONLY — IT FETCHES NOTHING
  * =============================================================================
  *
- * Both lists arrive from `HomePage`, which already holds both summaries.
- * `apps/web/src/pages/HomePage.tsx`'s header states the rule this obeys — ONE
+ * Both lists arrive from `KvoxHomePage`, which already holds both summaries.
+ * `KvoxHomePage`'s header states the rule this obeys — ONE
  * REQUEST PER CONTENT TYPE, all fired in parallel, and no per-section list
  * fetches — so a `GET /api/transcripts?status=failed` fired from here would be
  * that rule broken for the sake of two arrays the page is already holding.
@@ -63,14 +63,14 @@
  *
  * `canRetryTranscripts` is `transcripts:write` and `canRetryNotes` is
  * `notes:write` — the exact strings `transcripts.controller.ts` and
- * `notes.controller.ts` enforce on `POST /:id/retry` and `POST
- * /:id/regenerate`. Without one, the ROW still renders and only its button is
+ * `notes.controller.ts` enforce on `POST /:id/retry` and
+ * `POST /:id/regenerate`. Without one, the ROW still renders and only its button is
  * withheld: a user who cannot retry still benefits from knowing the recording
  * failed, and hiding the row too would leave them wondering why a transcript
  * they made never appeared. (Both permissions are seeded to all three roles,
  * so this is a deployment that took one away, not the ordinary case.)
  *
- * The notes half is gated one level up instead: `HomePage` passes `[]` unless
+ * The notes half is gated one level up instead: `KvoxHomePage` passes `[]` unless
  * the caller holds `notes:read`, because a user with no notes permission has no
  * notes summary at all and there is nothing to withhold a button from.
  *
@@ -86,7 +86,7 @@
  *
  * NO `useMediaQuery` HERE, AND NONE MAY BE ADDED. Every responsive decision is
  * an `sx` breakpoint object resolved in CSS, so the five coupled gates in
- * `docs/specs/settings-ui.md` §5 stay exactly five — see `HomePage`'s header.
+ * `docs/specs/settings-ui.md` §5 stay exactly five — see `KvoxHomePage`'s header.
  */
 
 import Box from '@mui/material/Box';
@@ -99,14 +99,18 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
-import { ApiError } from '../../services/api';
-import { regenerateNote } from '@marinoscar/kvox-web/notes/headless';
-import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
-import { failureMessage, retryTranscript } from '@marinoscar/kvox-web/transcripts/headless';
-import type { TranscriptListItem } from '@marinoscar/kvox-web/transcripts/headless';
-import { KvoxApiError, formatRelativeTime, useKvoxHost } from '@marinoscar/kvox-web/core/headless';
+import { useIsMounted } from '../../../core/headless/index.js';
+import { regenerateNote } from '../../../notes/headless/index.js';
+import type { NoteListItem } from '../../../notes/headless/index.js';
+import { failureMessage, retryTranscript } from '../../../transcripts/headless/index.js';
+import type { TranscriptListItem } from '../../../transcripts/headless/index.js';
+import { KvoxApiError, formatRelativeTime, useKvoxHost } from '../../../core/headless/index.js';
 
+/**
+ * Props of {@link NeedsAttention}.
+ *
+ * @stability experimental
+ */
 export interface NeedsAttentionProps {
   /** `GET /api/transcripts/summary`'s `failed` list — owner-scoped, max eight. */
   transcripts: TranscriptListItem[];
@@ -246,6 +250,14 @@ function NeedsAttentionRow({
   );
 }
 
+/**
+ * The work that STOPPED: failed transcripts and notes, each with its reason and a retry.
+ *
+ * @param props - see {@link NeedsAttentionProps}.
+ * @returns the section, or nothing when nothing failed.
+ *
+ * @stability experimental
+ */
 export function NeedsAttention({
   transcripts,
   transcriptTotal,
@@ -270,7 +282,7 @@ export function NeedsAttention({
       title: item.title,
       reason: failureMessage(item),
       failedAt: item.updatedAt,
-      href: `/transcripts/${item.id}`,
+      href: host.links.transcript(item.id),
       action: canRetryTranscripts
         ? {
             verb: 'Retry',
@@ -284,7 +296,7 @@ export function NeedsAttention({
       title: item.title,
       reason: noteFailureMessage(item),
       failedAt: item.updatedAt,
-      href: `/notes/${item.id}`,
+      href: host.links.note(item.id),
       action: canRetryNotes
         ? {
             verb: 'Regenerate',
@@ -314,10 +326,9 @@ export function NeedsAttention({
         setErrors((current) => ({
           ...current,
           [row.key]:
-            // A transcript retry goes through the slice's client, whose helpers
-            // raise `KvoxApiError`; a note retry is this app's own service and
-            // raises `ApiError`. Both carry the API's sentence.
-            err instanceof ApiError || err instanceof KvoxApiError
+            // Both retries go through a slice client, whose helpers raise
+            // `KvoxApiError`, and it carries the API's sentence.
+            err instanceof KvoxApiError
               ? err.message || 'That could not be started again.'
               : 'That could not be started again.',
         }));

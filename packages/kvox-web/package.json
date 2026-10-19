@@ -110,6 +110,14 @@
       "types": "./dist/shell/index.d.ts",
       "default": "./dist/shell/index.js"
     },
+    "./home/headless": {
+      "types": "./dist/home/headless/index.d.ts",
+      "default": "./dist/home/headless/index.js"
+    },
+    "./home/ui": {
+      "types": "./dist/home/ui/index.d.ts",
+      "default": "./dist/home/ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

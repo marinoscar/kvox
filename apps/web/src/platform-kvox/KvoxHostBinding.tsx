@@ -199,9 +199,10 @@ export function useAppKvoxHost(): KvoxWebHost {
   const { permissions } = usePermissions();
   const { graph } = useGraphFeature();
   const userId = user?.id ?? null;
+  const displayName = user?.displayName ?? null;
 
   return useMemo<KvoxWebHost>(() => {
-    const viewer: KvoxViewer | null = userId === null ? null : { userId, permissions };
+    const viewer: KvoxViewer | null = userId === null ? null : { userId, permissions, displayName };
     const features: KvoxFeatures = { graphEnabled: graph };
     return {
       http: appKvoxHttp,
@@ -211,7 +212,7 @@ export function useAppKvoxHost(): KvoxWebHost {
       features: () => features,
       useLatestEventId: useLatestAppEventId,
     };
-  }, [userId, permissions, graph]);
+  }, [userId, displayName, permissions, graph]);
 }
 
 /** Mounts the packaged host provider with {@link useAppKvoxHost}. */

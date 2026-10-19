@@ -10,13 +10,13 @@
  * =============================================================================
  *
  * Every number here is ALREADY IN HAND. `GET /api/transcripts/summary` returns
- * `counts.owned` / `counts.shared` / `counts.failed` and `GET
- * /api/notes/summary` returns `counts.total` / `counts.failed`, both read by
+ * `counts.owned` / `counts.shared` / `counts.failed` and
+ * `GET /api/notes/summary` returns `counts.total` / `counts.failed`, both read by
  * hooks the page already mounts for its lists. This component takes those two
  * count objects as props and does arithmetic.
  *
  * ⚠ IT MUST NEVER GROW A FETCH OF ITS OWN, and `HomePage.test.tsx` asserts the
- * call counts rather than trusting this paragraph. `HomePage`'s header states
+ * call counts rather than trusting this paragraph. `KvoxHomePage`'s header states
  * the rule this obeys — ONE REQUEST PER CONTENT TYPE, fired in parallel, no
  * per-section list fetches — and a strip that asked for, say, its own
  * `GET /api/transcripts?status=failed&limit=0` to get an "accurate" failure
@@ -25,10 +25,10 @@
  * summary endpoint does not return is a reason to extend that endpoint.
  *
  * =============================================================================
- * WHY IT IS NOT THE STATS DASHBOARD `HomePage` REJECTED
+ * WHY IT IS NOT THE STATS DASHBOARD `KvoxHomePage` REJECTED
  * =============================================================================
  *
- * `HomePage`'s header rejects a stats dashboard — minutes transcribed, charts —
+ * `KvoxHomePage`'s header rejects a stats dashboard — minutes transcribed, charts —
  * because it helps a user neither capture nor find anything. This is the
  * opposite shape and survives that same test: every entry is a NAVIGATION
  * TARGET whose number is the reason to press it. "Shared with me: 3" takes you
@@ -42,7 +42,7 @@
  * =============================================================================
  *
  * ⚠ `transcripts === null` RETURNS NULL, and it is the same load-bearing clause
- * `HomePage` applies to `isNewUser`. A summary read that FAILED leaves the page
+ * `KvoxHomePage` applies to `isNewUser`. A summary read that FAILED leaves the page
  * with no counts because nothing was ever read, not because nothing exists —
  * and a strip that treated "no data" as zero would tell a user with a hundred
  * recordings that they have none, in large type, directly above the alert
@@ -57,7 +57,7 @@
  * AND NOTHING ON THE NEW-USER JOURNEY
  * =============================================================================
  *
- * `HomePage` mounts this only when `isNewUser` is false. A first-run account's
+ * `KvoxHomePage` mounts this only when `isNewUser` is false. A first-run account's
  * strip would read 0 · 0 · 0 above the walkthrough that is explaining how to
  * stop it reading zero — four empty counters as the first thing on the screen,
  * competing with the one instruction that screen exists to give. The decision
@@ -69,7 +69,7 @@
  * =============================================================================
  *
  * The layout is one `Grid` breakpoint object — two columns on a phone, one row
- * from `sm` up — resolved entirely in CSS. `HomePage`'s header states the rule
+ * from `sm` up — resolved entirely in CSS. `KvoxHomePage`'s header states the rule
  * for the whole page: a JavaScript breakpoint read here would be a sixth thing
  * to check every time the five coupled gates in `docs/specs/settings-ui.md` §5
  * move, in exchange for a layout CSS already does.
@@ -82,9 +82,14 @@ import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { NoteSummary } from '@marinoscar/kvox-web/notes/headless';
-import type { TranscriptSummary } from '@marinoscar/kvox-web/transcripts/headless';
+import type { NoteSummary } from '../../../notes/headless/index.js';
+import type { TranscriptSummary } from '../../../transcripts/headless/index.js';
 
+/**
+ * Props of {@link CountsStrip}.
+ *
+ * @stability experimental
+ */
 export interface CountsStripProps {
   /** `GET /api/transcripts/summary`'s counts, or null if it never answered. */
   transcripts: TranscriptSummary['counts'] | null;
@@ -92,10 +97,19 @@ export interface CountsStripProps {
   notes: NoteSummary['counts'] | null;
 }
 
-interface CountsEntry {
+/**
+ * One number of the strip.
+ *
+ * @stability experimental
+ */
+export interface CountsEntry {
+  /** A stable key. */
   key: string;
+  /** What the number counts. */
   label: string;
+  /** The number. */
   value: number;
+  /** The in-app path the entry links to. */
   to: string;
   /** A theme colour token for the number. `null` means the ordinary text colour. */
   emphasis: 'error' | null;
@@ -107,6 +121,8 @@ interface CountsEntry {
  * EXPORTED AND PURE, so the rules below — which entries exist, which are
  * conditional, where each one points — are asserted as data rather than
  * through six queries against a rendered grid.
+ *
+ * @stability experimental
  */
 export function countsEntries(
   transcripts: TranscriptSummary['counts'] | null,
@@ -176,6 +192,14 @@ export function countsEntries(
   return entries;
 }
 
+/**
+ * The four numbers at a glance: transcripts, shared with me, notes and what needs attention, each a link into the library it counts.
+ *
+ * @param props - see {@link CountsStripProps}.
+ * @returns the strip, or nothing when there is no transcript count to build it from.
+ *
+ * @stability experimental
+ */
 export function CountsStrip({ transcripts, notes }: CountsStripProps) {
   const entries = countsEntries(transcripts, notes);
 

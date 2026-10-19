@@ -33,6 +33,43 @@ import { useNavigate } from 'react-router-dom';
 
 import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
+/**
+ * The explanation under a blocked "New transcript" button, and the admin's way out.
+ *
+ * Its own component so the hero's button and the journey's step (a slot of the
+ * packaged Home, `recordAudioStep`) say the same thing in the same words. The
+ * caller owns the `id` the button's `aria-describedby` points at.
+ */
+export function TranscriptionBlockedNote({ id }: { id: string }) {
+  const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+
+  return (
+    <>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mt: 1, maxWidth: '36ch', overflowWrap: 'break-word' }}
+        id={id}
+      >
+        Transcription is not set up for this workspace yet, so new recordings
+        cannot be transcribed.
+      </Typography>
+
+      {hasPermission('system_settings:read') && (
+        <Button
+          size="small"
+          startIcon={<SettingsIcon />}
+          onClick={() => navigate('/admin/settings/transcription')}
+          sx={{ mt: 0.5, ml: -1 }}
+        >
+          Set up transcription
+        </Button>
+      )}
+    </>
+  );
+}
+
 export interface NewTranscriptButtonProps {
   /**
    * `GET /api/transcription/config` said this deployment can transcribe.
@@ -96,33 +133,7 @@ export function NewTranscriptButton({
         New transcript
       </Button>
 
-      {blocked && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          // Bounded (#563): an unbounded sentence made this column as wide as
-          // the row and squeezed the hero's greeting to nothing.
-          sx={{ mt: 1, maxWidth: '36ch', overflowWrap: 'break-word' }}
-          // Tied to the button rather than left floating, so a screen-reader
-          // user who lands on a disabled control is told why it is disabled
-          // instead of having to go hunting for the sentence below it.
-          id={reasonId}
-        >
-          Transcription is not set up for this workspace yet, so new recordings
-          cannot be transcribed.
-        </Typography>
-      )}
-
-      {blocked && hasPermission('system_settings:read') && (
-        <Button
-          size="small"
-          startIcon={<SettingsIcon />}
-          onClick={() => navigate('/admin/settings/transcription')}
-          sx={{ mt: 0.5, ml: -1 }}
-        >
-          Set up transcription
-        </Button>
-      )}
+      {blocked && <TranscriptionBlockedNote id={reasonId} />}
     </Box>
   );
 }

@@ -19,7 +19,7 @@ import { render } from '../../utils/test-utils';
 import {
   InProgressSection,
   dedupeServerItems,
-} from '../../../components/home/InProgressSection';
+} from '@marinoscar/kvox-web/home/ui';
 import {
   UploadSessionGoneError,
   UploadSessionMismatchError,
