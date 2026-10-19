@@ -1929,8 +1929,9 @@ happens to hold. A fifth non-pinned destination is not an addition, it is a
 redesign of that bar — which is why issue #438 pins `settings` rather than
 adding `knowledge` as a fifth: the bar is `home`, `transcripts`, `notes`,
 `knowledge` (three when the graph is off or the caller lacks `graph:read`).
-The packaged bar draws pinned destinations and overflows into "More", so the
-bar is mounted with `KVOX_BOTTOM_BAR_NAVIGATION`, the same navigation filtered to
+The packaged bar draws pinned destinations (at the end) and overflows into "More",
+so `KvoxAppShell` (`@marinoscar/kvox-web/shell`) mounts the bar with
+`withoutPinned(navigation)`, the same navigation filtered to
 `BOTTOM_BAR_DESTINATIONS` (a data filter, not a breakpoint).
 
 ⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
