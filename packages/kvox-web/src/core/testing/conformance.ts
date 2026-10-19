@@ -14,8 +14,10 @@ import type { KvoxWebHost } from '../headless/host.js';
 //   kvox-web.host-neutral  A static scan of the package sources: no file imports
 //                          a platform package (the exceptions: the `brand` slice
 //                          imports `@marinoscar/platform-web/shell/headless` for
-//                          `createKvoxTheme`, and the `shell` slice imports the
-//                          platform's shell and identity entries); no `*/headless` file
+//                          `createKvoxTheme`, the `shell` slice imports the
+//                          platform's shell and identity entries, and the
+//                          `copilot/ui` entry imports `@marinoscar/platform-web/ai/ui`);
+//                          no `*/headless` file
 //                          imports `@mui/*`, `@emotion/*` or `react-router-dom`,
 //                          or reaches into a `*/ui` folder. Needs `srcDir`.
 //   kvox-web.host          The shape of a host: every port present, links that
@@ -80,6 +82,10 @@ const SLICE_PLATFORM_IMPORTS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+// The one platform import a kvox-web file may make: the Copilot settings card is
+// built on the platform's account sign-in card (issue #631), in that entry only.
+const COPILOT_UI_PLATFORM_IMPORT = `@marinoscar/${'platform'}-web/ai/ui`;
+
 const IMPORT_RE =
   /(?:\bimport|\bexport)\s[^;'"`]*?\bfrom\s*['"]([^'"\n]+)['"]|\bimport\s*['"]([^'"\n]+)['"]|\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
@@ -115,7 +121,8 @@ export function scanKvoxWebSources(srcDir: string): string[] {
     for (const match of text.matchAll(IMPORT_RE)) {
       const specifier = match[1] ?? match[2] ?? match[3] ?? '';
       const sliceAllowed = SLICE_PLATFORM_IMPORTS[parts[0] ?? '']?.includes(specifier) ?? false;
-      if (specifier.startsWith(PLATFORM_PREFIX) && !sliceAllowed) {
+      const copilotAllowed = parts[0] === 'copilot' && parts[1] === 'ui' && specifier === COPILOT_UI_PLATFORM_IMPORT;
+      if (specifier.startsWith(PLATFORM_PREFIX) && !sliceAllowed && !copilotAllowed) {
         problems.push(`${rel} imports ${specifier}: a kvox-web file must not depend on the platform`);
       }
       if (!inHeadless) continue;

@@ -87,6 +87,26 @@ describe('scanKvoxWebSources finds a violation', () => {
     }
   });
 
+  it('allows the Copilot card to import the platform account sign-in card, and nothing else, there only', () => {
+    const card = `@marinoscar/${'platform'}-web/ai/ui`;
+    const other = `@marinoscar/${'platform'}-web/settings/ui`;
+    const dir = sandbox({
+      'copilot/ui/card.ts': `import { A } from '${card}';\nexport { A };\n`,
+      'copilot/ui/other.ts': `import { B } from '${other}';\nexport { B };\n`,
+      'copilot/headless/h.ts': `import { A } from '${card}';\nexport { A };\n`,
+      'search/ui/s.ts': `import { A } from '${card}';\nexport { A };\n`,
+    });
+    try {
+      const problems = scanKvoxWebSources(dir).join('\n');
+      expect(problems).not.toMatch(/copilot\/ui\/card\.ts/);
+      expect(problems).toMatch(/copilot\/ui\/other\.ts/);
+      expect(problems).toMatch(/copilot\/headless\/h\.ts/);
+      expect(problems).toMatch(/search\/ui\/s\.ts/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('in any file that imports a platform package, but not in a comment', () => {
     const platform = `@marinoscar/${'platform'}-web/core`;
     const dir = sandbox({

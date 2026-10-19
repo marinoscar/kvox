@@ -21,7 +21,7 @@ Entry points:
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.6 zod
+npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.7 zod
 ```
 
 Every slice except `copilot` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
@@ -29,7 +29,7 @@ Every slice except `copilot` is universal, so every peer in this table is requir
 | Package | Range | Needed by |
 |---|---|---|
 | `zod` | `^4.4.3` | `tasks`, `structured`, `chat`, `port`, `testing` |
-| `@marinoscar/platform-ai-providers` | `0.1.0-next.6` (exact) | `chat`, `errors`, `port` (`AiError`, the adapter types), `runtime` (request and event types), `direct` (`AiProviderAdapter`, `AiCallContext`). Only the package root is imported (the OpenAI factories under `/openai` belong to `@marinoscar/kvox-eval`). Its `AiError` extends `Error`, not a Nest `HttpException`, and has no `toRateLimitError()`; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
+| `@marinoscar/platform-ai-providers` | `0.1.0-next.7` (exact) | `chat`, `errors`, `port` (`AiError`, the adapter types), `runtime` (request and event types), `direct` (`AiProviderAdapter`, `AiCallContext`). Only the package root is imported (the OpenAI factories under `/openai` belong to `@marinoscar/kvox-eval`). Its `AiError` extends `Error`, not a Nest `HttpException`, and has no `toRateLimitError()`; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `errors`, `port`, `direct` and `testing` (`KvoxAiPort`, `KvoxAiError` from `@marinoscar/kvox-api/ports`). Same range as the contract peer of the other packages ([why](../../docs/PACKAGES.md#the-contract-peer-range)). |
 
 ### Optional: the GitHub Copilot adapter

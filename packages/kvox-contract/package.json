@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-contract",
-  "version": "0.1.0-next.3",
+  "version": "0.1.0-next.4",
   "description": "Zod wire schemas, error codes and the ontology of the KVox domain, shared by the API, the web app and any other host. Dual CommonJS + ESM.",
   "license": "MIT",
   "type": "module",
@@ -99,6 +99,16 @@
       "require": {
         "types": "./dist/cjs/ontology/index.d.ts",
         "default": "./dist/cjs/ontology/index.js"
+      }
+    },
+    "./copilot": {
+      "import": {
+        "types": "./dist/esm/copilot/index.d.ts",
+        "default": "./dist/esm/copilot/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/copilot/index.d.ts",
+        "default": "./dist/cjs/copilot/index.js"
       }
     },
     "./errors": {
