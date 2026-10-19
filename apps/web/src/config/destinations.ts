@@ -152,7 +152,7 @@ export const UNOWNED_ROUTES: readonly string[] = [
 ];
 
 /**
- * This app's own destinations: the ones the KVox slices do not declare. Unpinned
+ * This app's own destinations: the ones the packaged slices do not declare. Unpinned
  * ones lead the navigation (Home), pinned ones close it (Settings, then Console).
  */
 const APP_DESTINATIONS: readonly ShellDestination<'home' | 'settings' | 'console'>[] = [
@@ -191,7 +191,7 @@ const APP_DESTINATIONS: readonly ShellDestination<'home' | 'settings' | 'console
 ];
 
 /**
- * The KVox navigation of this app (`@marinoscar/kvox-web/shell`, issue #629): Home,
+ * The navigation of this app (`@marinoscar/kvox-web/shell`, issue #629): Home,
  * then the slices' own rows (Transcripts, Notes, Knowledge), then the pinned
  * Settings and Console. The slice rows, their gates (`transcripts:read`,
  * `notes:read`, `graph:read` plus `feature: 'graph'`) and their route prefixes are

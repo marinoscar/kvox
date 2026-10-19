@@ -20,7 +20,7 @@ import { adminWelcomePane, userWelcomePane } from '../onboarding/kvoxWelcomePane
 /**
  * The app shell: a thin binding of `KvoxAppShell` (`@marinoscar/kvox-web/shell`,
  * issue #629), which composes the platform's `ShellLayout` (issue #484, epic #478)
- * with the KVox brand lockup.
+ * with the brand lockup.
  *
  * The packages own the chrome and, with it, the FIVE COUPLED BREAKPOINT GATES
  * (`docs/specs/settings-ui.md`, "Breakpoint gates"): the rail's `up('sm')`
