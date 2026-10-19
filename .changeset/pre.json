@@ -49,6 +49,7 @@
     "kvox-packages-scaffold",
     "kvox-transcript-json-import",
     "kvox-web-ask",
+    "kvox-web-brand",
     "kvox-web-core",
     "kvox-web-graph-tsdoc",
     "kvox-web-graph",
