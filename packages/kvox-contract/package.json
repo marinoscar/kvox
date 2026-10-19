@@ -101,6 +101,16 @@
         "default": "./dist/cjs/ontology/index.js"
       }
     },
+    "./copilot": {
+      "import": {
+        "types": "./dist/esm/copilot/index.d.ts",
+        "default": "./dist/esm/copilot/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/copilot/index.d.ts",
+        "default": "./dist/cjs/copilot/index.js"
+      }
+    },
     "./errors": {
       "import": {
         "types": "./dist/esm/errors/index.d.ts",

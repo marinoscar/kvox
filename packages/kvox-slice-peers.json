@@ -244,7 +244,13 @@
         "ui": ["@mui/icons-material", "@mui/material", "react-markdown", "react-router-dom"]
       }
     },
-    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] }
+    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] },
+    "copilot": {
+      "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
+      "entries": {
+        "ui": ["@marinoscar/platform-web", "@mui/material"]
+      }
+    }
   },
   "kvox-contract": {
     "errors": { "peers": ["zod"] },
@@ -254,7 +260,8 @@
     "search": { "peers": ["zod"] },
     "notes": { "peers": ["zod"] },
     "graph": { "peers": ["zod"] },
-    "ask": { "peers": ["zod"] }
+    "ask": { "peers": ["zod"] },
+    "copilot": { "peers": ["zod"] }
   },
   "kvox-db": {
     "bin": { "peers": ["prisma"] },

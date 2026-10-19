@@ -1,0 +1,590 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
+import { ThemeProvider } from '@mui/material/styles';
+import type { ReactElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
+import 'vitest-axe/extend-expect';
+
+import { COPILOT_CONSENT_VERSION } from '@marinoscar/kvox-contract/copilot';
+import type { CopilotSignInChallenge } from '@marinoscar/kvox-contract/copilot';
+
+import { kvoxDarkTheme, kvoxLightTheme } from '../../src/brand/index.js';
+import { COPILOT_CONSENT_COPY } from '../../src/copilot/headless/index.js';
+import { CopilotProviderCard } from '../../src/copilot/ui/index.js';
+import type { CopilotProviderCardProps } from '../../src/copilot/ui/index.js';
+import { consentedSettings, makeSettings, makeStatus, SIGNED_IN } from './copilotData.js';
+
+const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
+
+function props(overrides: Partial<CopilotProviderCardProps> = {}): CopilotProviderCardProps {
+  return {
+    status: makeStatus(),
+    settings: makeSettings(),
+    onUpdate: vi.fn().mockResolvedValue(undefined),
+    onSignIn: vi.fn(),
+    onWaitForSignIn: vi.fn(),
+    onSignOut: vi.fn().mockResolvedValue(undefined),
+    onOpenExternal: vi.fn(),
+    ...overrides,
+  };
+}
+
+function renderCard(p: CopilotProviderCardProps, mode: 'light' | 'dark' = 'light') {
+  const theme = mode === 'dark' ? kvoxDarkTheme : kvoxLightTheme;
+  const ui = (next: CopilotProviderCardProps): ReactElement => (
+    <ThemeProvider theme={theme}>
+      <CopilotProviderCard {...next} />
+    </ThemeProvider>
+  );
+  const utils = render(ui(p));
+  return { ...utils, rerenderCard: (next: CopilotProviderCardProps) => utils.rerender(ui(next)) };
+}
+
+const DEVICE: CopilotSignInChallenge = {
+  kind: 'device',
+  userCode: 'ABCD-1234',
+  verificationUri: 'https://github.com/login/device',
+  expiresAt: '2099-01-01T00:00:00.000Z',
+};
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe('CopilotProviderCard: off by default', () => {
+  it('shows only the title and the switch, and no status or models', () => {
+    renderCard(props({ status: makeStatus({ ...SIGNED_IN }) }));
+    expect(screen.getByRole('heading', { name: 'GitHub Copilot' })).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: 'Enable GitHub Copilot' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('CopilotProviderCard: the consent gate', () => {
+  it('opens the consent dialog and saves nothing until the user accepts', async () => {
+    const user = userEvent.setup();
+    const p = props();
+    renderCard(p);
+
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(p.onUpdate).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(/note and transcript text, is sent to GitHub Copilot/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Add an OpenAI key to keep Ask/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Agree and turn on' }));
+
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledTimes(1));
+    expect(p.onUpdate).toHaveBeenCalledWith({
+      enabled: true,
+      consentedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      consentVersion: COPILOT_CONSENT_VERSION,
+    });
+  });
+
+  it('links GitHub’s terms and the Copilot privacy page', async () => {
+    const user = userEvent.setup();
+    renderCard(props());
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    const dialog = await screen.findByRole('dialog');
+    const terms = within(dialog).getByRole('link', { name: /GitHub terms for additional products and features/ });
+    expect(terms).toHaveAttribute(
+      'href',
+      'https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features#github-copilot',
+    );
+    expect(within(dialog).getByRole('link', { name: /Responsible use of GitHub Copilot features/ })).toHaveAttribute(
+      'href',
+      'https://docs.github.com/en/copilot/responsible-use-of-github-copilot-features',
+    );
+  });
+
+  it('opens a link through onOpenExternal when the host provides one', async () => {
+    const user = userEvent.setup();
+    const p = props();
+    renderCard(p);
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    await user.click(await screen.findByRole('link', { name: /Responsible use of GitHub Copilot features/ }));
+    expect(p.onOpenExternal).toHaveBeenCalledWith(
+      'https://docs.github.com/en/copilot/responsible-use-of-github-copilot-features',
+    );
+  });
+
+  it('"Not now" closes the dialog, saves nothing and leaves the switch off', async () => {
+    const user = userEvent.setup();
+    const p = props();
+    renderCard(p);
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    await user.click(await screen.findByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(p.onUpdate).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Enable GitHub Copilot' })).not.toBeChecked();
+  });
+
+  it('shows the download size in the consent while the runtime is missing, and not when it is ready', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderCard(
+      props({ status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }) }),
+    );
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    expect(await screen.findByText(/runtime of about 130 to 175 MB/)).toBeInTheDocument();
+    unmount();
+
+    renderCard(props());
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    await screen.findByRole('dialog');
+    expect(screen.queryByText(/runtime of/)).not.toBeInTheDocument();
+  });
+
+  it('states the host’s exact download size when it passes one', async () => {
+    const user = userEvent.setup();
+    renderCard(
+      props({
+        status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+        runtimeDownloadSize: '151 MB',
+      }),
+    );
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    expect(await screen.findByText(/runtime of 151 MB/)).toBeInTheDocument();
+  });
+
+  it('asks again when the stored consent version differs from the current one', async () => {
+    const user = userEvent.setup();
+    const p = props({ settings: consentedSettings({ consentVersion: '0' }) });
+    renderCard(p);
+
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Agree and turn on' }));
+    await waitFor(() =>
+      expect(p.onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ enabled: true, consentVersion: COPILOT_CONSENT_VERSION }),
+      ),
+    );
+  });
+
+  it('declining a re-consent turns Copilot off', async () => {
+    const user = userEvent.setup();
+    const p = props({ settings: consentedSettings({ consentVersion: '0' }) });
+    renderCard(p);
+    await user.click(await screen.findByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledWith({ enabled: false }));
+  });
+
+  it('does not ask again for a consent already given at the current version', async () => {
+    const user = userEvent.setup();
+    const p = props({ settings: consentedSettings({ enabled: false }) });
+    renderCard(p);
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledWith({ enabled: true }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('CopilotProviderCard: turning off', () => {
+  it('calls onUpdate({ enabled: false }) and hides the status and models once the setting is off', async () => {
+    const user = userEvent.setup();
+    const status = makeStatus({ ...SIGNED_IN });
+    const p = props({ status, settings: consentedSettings() });
+    const { rerenderCard } = renderCard(p);
+    expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledWith({ enabled: false }));
+
+    rerenderCard({ ...p, settings: consentedSettings({ enabled: false }) });
+    expect(screen.queryByText('Signed in as octocat')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+  });
+
+  it('withdraws consent entirely from the signed-in card', async () => {
+    const user = userEvent.setup();
+    const p = props({ status: makeStatus({ ...SIGNED_IN }), settings: consentedSettings() });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Withdraw consent' }));
+    await waitFor(() =>
+      expect(p.onUpdate).toHaveBeenCalledWith({ enabled: false, consentedAt: null, consentVersion: null }),
+    );
+  });
+});
+
+describe('CopilotProviderCard: sign-in', () => {
+  it('device flow: shows the code, opens GitHub, then waits and closes when the wait resolves', async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => undefined;
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(() => new Promise<void>((resolve) => (finish = resolve))),
+    });
+    renderCard(p);
+
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Sign in to GitHub Copilot' });
+    expect(within(dialog).getByText('ABCD-1234')).toBeInTheDocument();
+    expect(p.onWaitForSignIn).toHaveBeenCalledWith(expect.any(AbortSignal));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Open GitHub' }));
+    expect(p.onOpenExternal).toHaveBeenCalledWith('https://github.com/login/device');
+
+    finish();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('copies the device code', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }));
+    expect(writeText).toHaveBeenCalledWith('ABCD-1234');
+    expect(await screen.findByText('Code copied.')).toBeInTheDocument();
+  });
+
+  it('browser flow: opens the address through the host and shows the hand-off', async () => {
+    const user = userEvent.setup();
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue({ kind: 'browser', url: 'https://github.com/login/oauth/authorize?x=1' }),
+      onWaitForSignIn: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Finish signing in with GitHub in your browser/)).toBeInTheDocument();
+    expect(p.onOpenExternal).toHaveBeenCalledWith('https://github.com/login/oauth/authorize?x=1');
+  });
+
+  it('opens a browser address with window.open when the host gives no opener', async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const p = props({
+      settings: consentedSettings(),
+      onOpenExternal: undefined,
+      onSignIn: vi.fn().mockResolvedValue({ kind: 'browser', url: 'https://github.com/login/oauth/authorize' }),
+      onWaitForSignIn: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await screen.findByRole('dialog');
+    expect(open).toHaveBeenCalledWith('https://github.com/login/oauth/authorize', '_blank', 'noopener,noreferrer');
+  });
+
+  it('never opens an address that is not https', async () => {
+    const user = userEvent.setup();
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue({ kind: 'browser', url: 'http://example.com/login' }),
+      onWaitForSignIn: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await screen.findByRole('dialog');
+    expect(p.onOpenExternal).not.toHaveBeenCalled();
+  });
+
+  it('Cancel aborts the wait and closes the dialog without an error', async () => {
+    const user = userEvent.setup();
+    let signal: AbortSignal | undefined;
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(
+        (s: AbortSignal) =>
+          new Promise<void>((_resolve, reject) => {
+            signal = s;
+            s.addEventListener('abort', () => reject(new Error('sign_in_cancelled')));
+          }),
+      ),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' })).toBeEnabled();
+  });
+
+  it('words a failed sign-in by its signInReason', async () => {
+    const user = userEvent.setup();
+    const failure = Object.assign(new Error('AI_KEY_REQUIRED'), { details: { signInReason: 'sign_in_expired' } });
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn().mockRejectedValue(failure),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    expect(await screen.findByText('The sign-in took too long and was cancelled. Try again.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('shows a readable error when the sign-in cannot start', async () => {
+    const user = userEvent.setup();
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockRejectedValue(new Error('The runtime did not start.')),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    expect(await screen.findByText('The runtime did not start.')).toBeInTheDocument();
+    expect(p.onWaitForSignIn).not.toHaveBeenCalled();
+  });
+
+  it('refuses to sign in while the runtime is missing and does not start a flow', async () => {
+    const user = userEvent.setup();
+    const p = props({
+      settings: consentedSettings(),
+      status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    expect(await screen.findByText(/Download the Copilot runtime first/)).toBeInTheDocument();
+    expect(p.onSignIn).not.toHaveBeenCalled();
+  });
+
+  it('shows the signed-in chip with the login, the models and the model choice', async () => {
+    const user = userEvent.setup();
+    const p = props({ settings: consentedSettings({ model: 'gpt-5' }), status: makeStatus({ ...SIGNED_IN }) });
+    renderCard(p);
+    expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: /Model/ }));
+    await user.click(await screen.findByRole('option', { name: 'Claude Sonnet' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledWith({ model: 'claude-sonnet' }));
+  });
+});
+
+describe('CopilotProviderCard: device code expiry', () => {
+  it('stops waiting when the code expires and offers a new code', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const expiring: CopilotSignInChallenge = {
+      ...DEVICE,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    let signal: AbortSignal | undefined;
+    const onSignIn = vi
+      .fn()
+      .mockResolvedValueOnce(expiring)
+      .mockResolvedValueOnce({ ...DEVICE, userCode: 'WXYZ-9999' });
+    const p = props({
+      settings: consentedSettings(),
+      onSignIn,
+      onWaitForSignIn: vi.fn(
+        (s: AbortSignal) =>
+          new Promise<void>((_resolve, reject) => {
+            signal = s;
+            s.addEventListener('abort', () => reject(new Error('sign_in_cancelled')));
+          }),
+      ),
+    });
+    renderCard(p);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await screen.findByText('ABCD-1234');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+
+    expect(await screen.findByText(/This code has expired/)).toBeInTheDocument();
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('ABCD-1234')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get a new code' }));
+    expect(await screen.findByText('WXYZ-9999')).toBeInTheDocument();
+    expect(onSignIn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CopilotProviderCard: sign-out', () => {
+  it('calls onSignOut', async () => {
+    const user = userEvent.setup();
+    const p = props({ settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN }) });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(p.onSignOut).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a readable error when sign-out fails', async () => {
+    const user = userEvent.setup();
+    const p = props({
+      settings: consentedSettings(),
+      status: makeStatus({ ...SIGNED_IN }),
+      onSignOut: vi.fn().mockRejectedValue(new Error('Could not reach the runtime.')),
+    });
+    renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(await screen.findByText('Could not reach the runtime.')).toBeInTheDocument();
+  });
+});
+
+describe('CopilotProviderCard: capabilities', () => {
+  it('lists Notes, Knowledge extraction and Name check as available and Ask as unavailable with the reason', () => {
+    renderCard(props({ settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN }) }));
+    const list = screen.getByRole('list', { name: 'GitHub Copilot capabilities' });
+    const rows = within(list).getAllByRole('listitem');
+    const text = (label: string) => rows.find((r) => within(r).queryByText(label))!;
+
+    for (const label of ['Notes', 'Knowledge extraction', 'Name check']) {
+      expect(within(text(label)).getByText('Available')).toBeInTheDocument();
+    }
+    const ask = text('Ask');
+    expect(within(ask).getByText('Not available')).toBeInTheDocument();
+    expect(within(ask).getByText(/Needs a provider with tool calling\. Add an OpenAI key to keep Ask\./)).toBeInTheDocument();
+  });
+
+  it('shows Ask as available when the host routes it elsewhere (not in unavailableTasks)', () => {
+    renderCard(
+      props({ settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN, unavailableTasks: [] }) }),
+    );
+    const row = screen.getByText('Ask').closest('li')!;
+    expect(within(row).getByText('Available')).toBeInTheDocument();
+  });
+
+  it('adds a Search by meaning row only when embeddings are unavailable', () => {
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({
+          ...SIGNED_IN,
+          unavailableTasks: [
+            { task: 'ask.respond', reason: 'needs_tool_calling' },
+            { task: 'search.embed', reason: 'needs_embeddings' },
+          ],
+        }),
+      }),
+    );
+    const row = screen.getByText('Search by meaning').closest('li')!;
+    expect(within(row).getByText('Not available')).toBeInTheDocument();
+  });
+});
+
+describe('CopilotProviderCard: runtime', () => {
+  it('missing: states the size and downloads on request', async () => {
+    const user = userEvent.setup();
+    const onDownloadRuntime = vi.fn().mockResolvedValue(undefined);
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+        onDownloadRuntime,
+      }),
+    );
+    expect(screen.getByText(/Download it once \(about 130 to 175 MB\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download runtime' }));
+    expect(onDownloadRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing without a download handler shows the notice but no button', () => {
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+      }),
+    );
+    expect(screen.getByText(/The Copilot runtime is not installed/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download runtime' })).not.toBeInTheDocument();
+  });
+
+  it('downloading: renders the progress and a Cancel button', async () => {
+    const user = userEvent.setup();
+    const onCancelRuntimeDownload = vi.fn();
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'downloading', version: null, progress: 0.42 } }),
+        onCancelRuntimeDownload,
+      }),
+    );
+    expect(screen.getByText('Downloading the Copilot runtime… 42%')).toBeInTheDocument();
+    const bar = screen.getByRole('progressbar', { name: 'Copilot runtime download' });
+    expect(bar).toHaveAttribute('aria-valuenow', '42');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancelRuntimeDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('downloading with unknown progress shows an indeterminate bar', () => {
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'downloading', version: null, progress: null } }),
+      }),
+    );
+    expect(screen.getByText('Downloading the Copilot runtime…')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Copilot runtime download' })).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('error: renders readable text and a retry; a failed download is worded', async () => {
+    const user = userEvent.setup();
+    const onDownloadRuntime = vi.fn().mockRejectedValue(new Error('Checksum did not match.'));
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'error', version: null, progress: null } }),
+        onDownloadRuntime,
+      }),
+    );
+    expect(screen.getByText(/could not be installed or started/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try download again' }));
+    expect(await screen.findByText('Checksum did not match.')).toBeInTheDocument();
+  });
+
+  it('ready: shows no runtime notice', () => {
+    renderCard(props({ settings: consentedSettings() }));
+    expect(screen.queryByText(/Copilot runtime/)).not.toBeInTheDocument();
+  });
+});
+
+describe('CopilotProviderCard: footer and accessibility', () => {
+  it('lists the allowed hosts', () => {
+    renderCard(
+      props({ settings: consentedSettings(), allowedHosts: ['api.githubcopilot.com', 'github.com'] }),
+    );
+    expect(
+      screen.getByText('Besides this device, KVox may connect only to api.githubcopilot.com, github.com.'),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['light', 'dark'] as const)('has no axe violations in %s mode, off and signed in', async (mode) => {
+    const off = renderCard(props(), mode);
+    expect(await axe(off.container, AXE_OPTIONS)).toHaveNoViolations();
+    off.unmount();
+
+    const on = renderCard(
+      props({ settings: consentedSettings({ model: 'gpt-5' }), status: makeStatus({ ...SIGNED_IN }) }),
+      mode,
+    );
+    expect(await axe(on.container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('uses no hard-coded colours', async () => {
+    const files = ['CopilotProviderCard', 'CopilotConsentBody', 'CopilotSignInDialog', 'CopilotRuntimeSection'].map(
+      (n) => readFileSync(join(import.meta.dirname, '../../src/copilot/ui', `${n}.tsx`), 'utf8'),
+    );
+    for (const source of files) {
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source).not.toMatch(/\brgba?\(/);
+    }
+  });
+});
