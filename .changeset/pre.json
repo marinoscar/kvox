@@ -37,6 +37,7 @@
     "kvox-api-transcripts",
     "kvox-bare-host",
     "kvox-contract-wire-schemas",
+    "kvox-copilot-provider-card",
     "kvox-db-domain-schema",
     "kvox-db-stable-migration-names",
     "kvox-desktop-guide",
