@@ -37,7 +37,7 @@ All six web slices are merged. `packages/kvox-web/README.md` and each slice's ow
 - The ten ports ([Ports to implement](#ports-to-implement)) and the web host ([Wiring the web](#wiring-the-web)).
 - The four host tables `users`, `organizations`, `storage_objects`, `jobs`, and the seed rows ([Database](#database)).
 - Duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings) and [section 6.1](../specs/kvox-ports.md#61-what-the-bare-host-and-the-desktop-guide-added-issues-505-506)): declare the system `ai` settings namespace (with `graphEnabled` and `reasoningEffort` once the graph is mounted); install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies; with the graph, register `@fastify/multipart`, read an unwritten `defaults: undefined` setting as `undefined`, tick four housekeeping enqueuers, and answer the graph's structured-output schemas from `KVOX_AI`.
-- The renderer's shell: router, navigation, settings hub. Slices export cards, destinations and routes as data; you place them. The theme, the mark and the font are not yours to write: they are `@marinoscar/kvox-web/brand` ([Look and feel](#look-and-feel)).
+- The renderer's router and settings hub. Slices export cards, destinations and routes as data; you place them. The shell around them is not yours to write either: it is `KvoxAppShell` ([The app shell](#the-app-shell)). The theme, the mark and the font are not yours to write: they are `@marinoscar/kvox-web/brand` ([Look and feel](#look-and-feel)).
 - The transcription provider, ffmpeg, fonts for PDF export.
 
 ### Rules a Desktop host still honours
@@ -826,6 +826,22 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 ```
 
 The `brand` entry is the one place in `@marinoscar/kvox-web` that imports the platform (exactly `@marinoscar/platform-web/shell/headless`); install `@marinoscar/platform-web` at the version the package pins. It does not touch the five coupled breakpoint gates, which stay the shell's. The web edition consumes the same entry (`apps/web/src/theme/index.ts` re-exports the two themes, `Layout.tsx` draws `BrandLockup`), and a test (`packages/kvox-web/test/brand/bareHost.test.tsx`) renders `ShellRoot`, `createKvoxTheme('dark')` and `BrandLockup` with no API and no `public/` folder. Reference: the `brand` section of [the package README](../../packages/kvox-web/README.md#the-brand-subpath).
+
+## The app shell
+
+Desktop has no custom app bar. The rail, the app bar with the KVox lockup, the light/dark toggle, the user menu and the phone bar are **`KvoxAppShell`** from **`@marinoscar/kvox-web/shell`** (issue #629), the component the web edition renders. The navigation is `createKvoxNavigation`, the routes are `renderKvoxRoutes`, the in-app links are `defaultKvoxLinks` and the "add your key" state is `AiKeyRequired`; copying any of them into the Desktop repository is a second source and forbidden by [ADR-0001](../decisions/0001-packages-first.md).
+
+| You need | Use |
+|---|---|
+| A signed-in user with no API | `LocalIdentityProvider` from `@marinoscar/platform-web/identity/headless` (`userId`, `displayName`, `permissions` from the connection). The user menu then has no sign-out and no organization switcher. |
+| The rail collapse state | `ShellPreferencesProvider` with a `ShellPreferencesPort` (`@marinoscar/platform-web/shell/headless`) backed by the Desktop shell settings, or `createLocalStorageShellPreferencesPort()`. Without a provider the rail would read `/user-settings` on the API. |
+| The rows | `createKvoxNavigation({ include: ['notes', 'graph', 'review', 'ask', 'templates'], settingsPath: '/settings', settingsSections })`: Notes, Knowledge, Review, Ask, Templates, Settings pinned at the foot. |
+| Hiding Knowledge, Review and Ask while connected knowledge is off | `registerSettingsFeature('graph', () => graphEnabled)` at module scope. The rows carry `feature: 'graph'`; the shell hides them. No host-side `if`. |
+| Host user menu rows | `<KvoxAppShell userMenuItems={[{ key: 'data-folder', label: 'Open data folder', onClick }, { key: 'about', label: 'About KVox', onClick }]} />` |
+| Routes | `renderKvoxRoutes([...kvoxNotesRoutes, ...kvoxGraphRoutes, ...kvoxAskRoutes])` inside the shell's layout route. |
+| The AI key state | `<AiKeyRequired settingsPath="/settings#ai-provider" />` as the `KeyRequired` slot of the slices. |
+
+The shell reads no breakpoint (the five gates stay the platform's) and makes no network call of its own; a test (`packages/kvox-web/test/shell/KvoxAppShell.local-host.test.tsx`) renders it under `LocalIdentityProvider` with a rejecting `fetch`. Reference: the `shell` section of [the package README](../../packages/kvox-web/README.md#the-shell-subpath).
 
 ## Offline constraints, feature by feature
 

@@ -43,12 +43,12 @@ import {
   type KvoxFeatures,
   type KvoxHttpMethod,
   type KvoxHttpPort,
-  type KvoxLinks,
   type KvoxRequestInit,
   type KvoxResponseWithMeta,
   type KvoxViewer,
   type KvoxWebHost,
 } from '@marinoscar/kvox-web/core/headless';
+import { defaultKvoxLinks } from '@marinoscar/kvox-web/shell';
 import { API_BASE_URL, api } from '../services/api';
 import { appPostSse } from '../platform/platformHost';
 import { useGraphFeature } from '../platform/GraphFeatureBinding';
@@ -167,13 +167,6 @@ const kvoxSse: KvoxWebHost['sse'] = {
     }),
 };
 
-const kvoxLinks: KvoxLinks = {
-  transcript: (id) => `/transcripts/${id}`,
-  note: (id) => `/notes/${id}`,
-  entity: (id) => `/graph/entities/${id}`,
-  conversation: (id) => `/ask/${id}`,
-};
-
 /**
  * The id of the most recent notification whose event key starts with `prefix`
  * (`KvoxWebHost.useLatestEventId`): the notification stream as the fast path of a
@@ -214,7 +207,7 @@ export function useAppKvoxHost(): KvoxWebHost {
       http: appKvoxHttp,
       sse: kvoxSse,
       viewer: () => viewer,
-      links: kvoxLinks,
+      links: defaultKvoxLinks,
       features: () => features,
       useLatestEventId: useLatestAppEventId,
     };

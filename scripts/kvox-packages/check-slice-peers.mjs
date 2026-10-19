@@ -152,6 +152,11 @@ export const HOST_NEUTRAL_ALLOWED = Object.freeze({
 export const HOST_NEUTRAL_SLICE_ALLOWED = Object.freeze({
   'kvox-web': Object.freeze({
     brand: Object.freeze(['@marinoscar/platform-web/shell/headless']),
+    shell: Object.freeze([
+      '@marinoscar/platform-web/identity/headless',
+      '@marinoscar/platform-web/shell/headless',
+      '@marinoscar/platform-web/shell/ui',
+    ]),
     // The Copilot settings card (issue #631) is built on `AccountSignInProviderCard`, the
     // presentational card the platform ships for providers that sign in with an account.
     // `@marinoscar/platform-web` is an optional peer of the `ui` entry alone.

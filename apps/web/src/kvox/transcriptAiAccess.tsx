@@ -8,7 +8,7 @@
 
 import type { TranscriptAiAccess, TranscriptAiState } from '@marinoscar/kvox-web/transcripts/ui';
 
-import { AiKeyRequired } from '../components/ai/AiKeyRequired';
+import { WebAiKeyRequired } from './aiKeyRequired';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 
 function useTranscriptAiState(): TranscriptAiState {
@@ -19,5 +19,5 @@ function useTranscriptAiState(): TranscriptAiState {
 /** The viewer's AI availability and the "add your key" state, as the transcripts slice takes them. */
 export const appTranscriptAiAccess: TranscriptAiAccess = {
   useAiState: useTranscriptAiState,
-  KeyRequired: AiKeyRequired,
+  KeyRequired: WebAiKeyRequired,
 };

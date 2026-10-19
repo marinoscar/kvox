@@ -250,6 +250,9 @@
       "entries": {
         "ui": ["@marinoscar/platform-web", "@mui/material"]
       }
+    },
+    "shell": {
+      "peers": ["@marinoscar/platform-web", "@mui/icons-material", "@mui/material", "react", "react-router-dom"]
     }
   },
   "kvox-contract": {

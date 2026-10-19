@@ -13,7 +13,8 @@ import { server } from '../../mocks/server';
 import { mockGraphAiConfig } from '../../mocks/graphData';
 import { AppGraphFeatureProvider } from '../../../platform/GraphFeatureBinding';
 import { BOTTOM_BAR_DESTINATIONS, DESTINATIONS } from '../../../config/destinations';
-import { KVOX_BOTTOM_BAR_NAVIGATION, KVOX_NAVIGATION } from '../../../config/shell';
+import { withoutPinned } from '@marinoscar/kvox-web/shell';
+import { KVOX_NAVIGATION } from '../../../config/shell';
 import { ADMIN_SECTIONS } from '../../../config/adminSections';
 import { USER_SETTINGS_SECTIONS } from '../../../config/userSettingsSections';
 // A side-effect import: registers the `graph` settings feature the destinations gate on.
@@ -31,7 +32,7 @@ import '../../../config/settingsFeatures';
  *   - the phone bar is Home · Transcripts · Notes · Knowledge with connected
  *     knowledge on, Home · Transcripts · Notes with it off, and NEVER carries
  *     Settings, Console or a "More" tab (the package would draw all six and
- *     overflow, which is why the bar is bound to `KVOX_BOTTOM_BAR_NAVIGATION`);
+ *     overflow, which is why the bar is bound to `withoutPinned(KVOX_NAVIGATION)`);
  *   - `knowledge` stays hidden while the switch is unknown: loading, failed and
  *     signed-out all read "off", so the row never shows and then vanishes;
  *   - the rail keeps Settings and Console pinned at its foot, and the Console
@@ -64,13 +65,13 @@ function serveAiTasksConfig(state: Switch) {
   );
 }
 
-describe('phone bottom bar (KVOX_BOTTOM_BAR_NAVIGATION)', () => {
+describe('phone bottom bar (withoutPinned(KVOX_NAVIGATION))', () => {
   beforeEach(() => {
     localStorage.clear();
     setViewportWidth(PHONE);
   });
 
-  function renderBar(route = '/', navigation = KVOX_BOTTOM_BAR_NAVIGATION) {
+  function renderBar(route = '/', navigation = withoutPinned(KVOX_NAVIGATION)) {
     return render(
       <AppGraphFeatureProvider>
         <ShellBottomNav navigation={navigation} />
@@ -130,7 +131,7 @@ describe('phone bottom bar (KVOX_BOTTOM_BAR_NAVIGATION)', () => {
     serveAiTasksConfig('on');
     render(
       <AppGraphFeatureProvider>
-        <ShellBottomNav navigation={KVOX_BOTTOM_BAR_NAVIGATION} />
+        <ShellBottomNav navigation={withoutPinned(KVOX_NAVIGATION)} />
       </AppGraphFeatureProvider>,
       {
         wrapperOptions: {
@@ -147,15 +148,15 @@ describe('phone bottom bar (KVOX_BOTTOM_BAR_NAVIGATION)', () => {
   });
 
   it('is exactly the non-pinned destinations, and never more than four', () => {
-    expect(KVOX_BOTTOM_BAR_NAVIGATION.destinations).toBe(BOTTOM_BAR_DESTINATIONS);
-    expect(KVOX_BOTTOM_BAR_NAVIGATION.destinations.map((d) => d.key)).toEqual([
+    expect(withoutPinned(KVOX_NAVIGATION).destinations).toEqual(BOTTOM_BAR_DESTINATIONS);
+    expect(withoutPinned(KVOX_NAVIGATION).destinations.map((d) => d.key)).toEqual([
       'home',
       'transcripts',
       'notes',
       'knowledge',
     ]);
-    expect(KVOX_BOTTOM_BAR_NAVIGATION.destinations.some((d) => d.pinned)).toBe(false);
-    expect(KVOX_BOTTOM_BAR_NAVIGATION.destinations.length).toBeLessThanOrEqual(4);
+    expect(withoutPinned(KVOX_NAVIGATION).destinations.some((d) => d.pinned)).toBe(false);
+    expect(withoutPinned(KVOX_NAVIGATION).destinations.length).toBeLessThanOrEqual(4);
   });
 
   it('lights the owning tab on a child route', async () => {

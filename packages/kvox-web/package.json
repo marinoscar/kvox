@@ -106,6 +106,10 @@
       "types": "./dist/copilot/ui/index.d.ts",
       "default": "./dist/copilot/ui/index.js"
     },
+    "./shell": {
+      "types": "./dist/shell/index.d.ts",
+      "default": "./dist/shell/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

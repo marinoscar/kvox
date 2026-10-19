@@ -291,10 +291,11 @@ one fails here.
 
 **The bottom bar's contents are data, not a gate.** The packaged bar draws
 every visible destination (pinned ones included) and overflows into a "More"
-sheet past four. This app binds the bar to `KVOX_BOTTOM_BAR_NAVIGATION`, the
-navigation with the pinned destinations filtered out (`docs/specs/ux-refresh.md`
-§1), so the phone bar stays Home · Transcripts · Notes · Knowledge. That is a
-filter over a list; it adds no breakpoint read and no sixth gate.
+sheet past four (since platform 0.1.0-next.7, pinned ones at the end). `KvoxAppShell`
+(`@marinoscar/kvox-web/shell`) binds the bar to the navigation with the pinned
+destinations filtered out (`withoutPinned`; `docs/specs/ux-refresh.md` §1), so the
+phone bar stays Home · Transcripts · Notes · Knowledge. That is a filter over a
+list; it adds no breakpoint read and no sixth gate.
 
 ### Why `sm` (600px), never `md` (900px)
 

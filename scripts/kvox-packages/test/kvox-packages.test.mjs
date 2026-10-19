@@ -131,6 +131,48 @@ test('host-neutral: the brand allowance is for the brand slice only, and for tha
   }
 });
 
+/** Adds a `shell` slice (no slice dependencies, no peers) to the kvox-web of a fixture copy. */
+function addShellSlice(dir) {
+  const graph = JSON.parse(readFileSync(join(dir, 'packages/kvox-slices.json'), 'utf8'));
+  graph['kvox-web'].shell = [];
+  writeFileSync(join(dir, 'packages/kvox-slices.json'), JSON.stringify(graph));
+  const peers = JSON.parse(readFileSync(join(dir, 'packages/kvox-slice-peers.json'), 'utf8'));
+  peers['kvox-web'].shell = { peers: [] };
+  writeFileSync(join(dir, 'packages/kvox-slice-peers.json'), JSON.stringify(peers));
+}
+
+test('host-neutral: the kvox-web shell slice may import the platform shell and identity entries', () => {
+  const dir = fixtureCopy();
+  try {
+    addShellSlice(dir);
+    plant(dir, 'host-neutral/kvox-web-shell-allowed.ts', 'packages/kvox-web/src/shell/shell.ts');
+    assert.deepEqual(
+      checkSlicePeers({ root: dir }).filter((v) => v.rule === 'host-neutral'),
+      [],
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('host-neutral: the shell allowance is for the shell slice only, and for those specifiers only', () => {
+  const dir = fixtureCopy();
+  try {
+    addShellSlice(dir);
+    plant(dir, 'host-neutral/kvox-web-shell-allowed.ts', 'packages/kvox-web/src/core/shell.ts');
+    plant(dir, 'host-neutral/kvox-web-shell-forbidden.ts', 'packages/kvox-web/src/shell/forbidden.ts');
+    const messages = checkSlicePeers({ root: dir })
+      .filter((v) => v.rule === 'host-neutral')
+      .map((v) => v.message);
+    assert.ok(messages.some((m) => m.includes('src/core/shell.ts') && m.includes('shell/ui')));
+    assert.ok(messages.some((m) => m.includes('src/shell/forbidden.ts') && m.includes('platform-web/core')));
+    assert.ok(messages.some((m) => m.includes('src/shell/forbidden.ts') && m.includes('identity/ui')));
+    assert.ok(!messages.some((m) => m.includes('src/shell/shell.ts')));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /** Adds a kvox-ai package (one universal `runtime` slice peering on the platform) to a fixture copy. */
 function addKvoxAi(dir, pkg = 'kvox-ai') {
   mkdirSync(join(dir, `packages/${pkg}/src/runtime`), { recursive: true });

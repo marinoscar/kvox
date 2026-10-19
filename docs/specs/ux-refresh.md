@@ -17,6 +17,15 @@
 > describes, the same position `docs/specs/notes.md`'s own issue #60 occupies
 > for epic #45.
 >
+> **Where the destinations live now (issue #629).** The rows, their gates and
+> their route prefixes are the slices' data (`kvoxTranscriptsDestinations`,
+> `kvoxNotesDestinations`, `kvoxGraphDestinations`, and for a host that lists
+> them as rows of their own `kvoxReviewDestinations`, `kvoxAskDestinations` and
+> `kvoxNoteTemplatesDestinations`), composed in order by `createKvoxNavigation`
+> of `@marinoscar/kvox-web/shell`, and drawn by `KvoxAppShell`. `apps/web` adds
+> Home, Settings and Console in `config/destinations.ts`. The rules below are
+> unchanged; only where they are written down moved.
+>
 > This document explains **why** each of the six pieces below is shaped the
 > way it is, and names the alternatives that were tried or considered and
 > rejected. It is not a restatement of the navigation destinations section of
@@ -67,17 +76,19 @@ because each surface has a different place to put one:
 ### The phone bar is bound to the non-pinned destinations (issue #484)
 
 The packaged `ShellBottomNav` draws **every visible destination, pinned ones
-included**, and past its `maxItems` (default 4) it keeps the first three and
-adds a "More" sheet; in the package `pinned` is rail-only. Handed the full
-table, the phone would show Home · Transcripts · Notes · More, with Knowledge,
-Settings and Console behind a sheet. That contradicts the rule above (a mode is
-never a peer on the bar), so `Layout.tsx` mounts the bar with a second
-navigation, `KVOX_BOTTOM_BAR_NAVIGATION` in `config/shell.ts`: the same value
-with `destinations` replaced by `BOTTOM_BAR_DESTINATIONS`. It is a **data
+included** (since platform 0.1.0-next.7 the pinned ones at the end of the bar and of
+its "More" sheet), and past its `maxItems` (default 4) it keeps the first three and
+adds a "More" sheet. Handed the full table, the phone would show Home ·
+Transcripts · Notes · More, with Knowledge, Settings and Console behind a sheet.
+That contradicts the rule above (a mode is never a peer on the bar), so the bar is
+given a second navigation: the same value with the pinned destinations taken out,
+`withoutPinned(navigation)` of `@marinoscar/kvox-web/shell` (issue #629), which
+`KvoxAppShell` derives itself, so a host never builds it. It was
+`KVOX_BOTTOM_BAR_NAVIGATION` in `config/shell.ts` until #629. It is a **data
 filter, not a breakpoint**: `ShellBottomNav` keeps its own `down('sm')`
 self-gate, so there are still exactly five gates (`docs/specs/settings-ui.md`
-§5) and none of them is in this app. Both navigations are module-scope
-constants because the shell keys on their identity. With four non-pinned
+§5) and none of them is in this app or in the shell package. The result is cached
+per navigation because the shell keys on identity. With four non-pinned
 destinations the bar never overflows, so there is never a "More" tab.
 `__tests__/components/common/ShellBinding.test.tsx` pins it against the real
 package bar: four tabs with connected knowledge on, three with it off,

@@ -24,3 +24,4 @@ export type {
 export { AskEntityButtonSlot } from './slots/AskEntityButtonSlot.js';
 export { AskEntityPanelSlot } from './slots/AskEntityPanelSlot.js';
 export { kvoxAskRoutes } from './routes.js';
+export { kvoxAskDestinationRoutes, kvoxAskDestinations } from './navigation.js';

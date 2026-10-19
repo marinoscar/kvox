@@ -28,7 +28,7 @@ import type {
   NotesLibrarySlots,
 } from '@marinoscar/kvox-web/notes/ui';
 
-import { AiKeyRequired } from '../components/ai/AiKeyRequired';
+import { WebAiKeyRequired } from './aiKeyRequired';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import { useNotesAiState } from './noteAiAccess';
 
@@ -67,7 +67,7 @@ function useNotePageAiState(): NotesAiState {
  */
 export const appNotePageAiAccess: NotesAiAccess = {
   useAiState: useNotePageAiState,
-  KeyRequired: AiKeyRequired,
+  KeyRequired: WebAiKeyRequired,
 };
 
 /** The slot of the notes library: knowledge-graph entity hits above the ranked results (#373). */

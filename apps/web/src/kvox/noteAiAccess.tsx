@@ -11,7 +11,7 @@
 import { useMemo } from 'react';
 import type { NotesAiAccess, NotesAiModel, NotesAiState } from '@marinoscar/kvox-web/notes/ui';
 
-import { AiKeyRequired } from '../components/ai/AiKeyRequired';
+import { WebAiKeyRequired } from './aiKeyRequired';
 import { useAiTasksConfig } from '../hooks/useAiTasksConfig';
 import type { UseAiTasksConfigReturn } from '../hooks/useAiTasksConfig';
 
@@ -36,5 +36,5 @@ function useAppNotesAiState(): NotesAiState {
 /** The viewer's AI availability and the "add your key" state, as the notes slice takes them. */
 export const appNotesAiAccess: NotesAiAccess = {
   useAiState: useAppNotesAiState,
-  KeyRequired: AiKeyRequired,
+  KeyRequired: WebAiKeyRequired,
 };
