@@ -98,6 +98,10 @@
     "./brand/assets/apple-touch-icon-180.png": "./dist/brand/assets/apple-touch-icon-180.png",
     "./brand/fonts/inter.css": "./dist/brand/fonts/inter.css",
     "./brand/fonts/Inter-latin-variable.woff2": "./dist/brand/fonts/Inter-latin-variable.woff2",
+    "./shell": {
+      "types": "./dist/shell/index.d.ts",
+      "default": "./dist/shell/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

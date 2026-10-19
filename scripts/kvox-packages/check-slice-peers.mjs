@@ -151,6 +151,11 @@ export const HOST_NEUTRAL_ALLOWED = Object.freeze({
 export const HOST_NEUTRAL_SLICE_ALLOWED = Object.freeze({
   'kvox-web': Object.freeze({
     brand: Object.freeze(['@marinoscar/platform-web/shell/headless']),
+    shell: Object.freeze([
+      '@marinoscar/platform-web/identity/headless',
+      '@marinoscar/platform-web/shell/headless',
+      '@marinoscar/platform-web/shell/ui',
+    ]),
   }),
 });
 /** Specifier prefix rule 6 forbids. */

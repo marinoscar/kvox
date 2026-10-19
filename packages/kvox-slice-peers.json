@@ -244,7 +244,10 @@
         "ui": ["@mui/icons-material", "@mui/material", "react-markdown", "react-router-dom"]
       }
     },
-    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] }
+    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] },
+    "shell": {
+      "peers": ["@marinoscar/platform-web", "@mui/icons-material", "@mui/material", "react", "react-router-dom"]
+    }
   },
   "kvox-contract": {
     "errors": { "peers": ["zod"] },
