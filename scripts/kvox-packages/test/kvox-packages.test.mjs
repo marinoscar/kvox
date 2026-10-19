@@ -180,6 +180,23 @@ test('host-neutral: kvox-ai and kvox-eval may import the lean @marinoscar/platfo
   }
 });
 
+test('host-neutral: kvox-web may import @marinoscar/platform-web/ai/ui and nothing else of the platform', () => {
+  const allowed = fixtureCopy();
+  const forbidden = fixtureCopy();
+  try {
+    plant(allowed, 'host-neutral/kvox-web-platform-ai-ui-allowed.ts', 'packages/kvox-web/src/core/card.ts');
+    assert.deepEqual(hostNeutralOf(allowed), []);
+    plant(forbidden, 'host-neutral/kvox-web-platform-other-forbidden.ts', 'packages/kvox-web/src/core/hub.ts');
+    const violations = hostNeutralOf(forbidden);
+    assert.equal(violations.length, 1);
+    assert.match(violations[0].message, /'@marinoscar\/platform-web\/settings\/ui'/);
+    assert.match(violations[0].message, /may import only '@marinoscar\/platform-web\/ai\/ui'/);
+  } finally {
+    rmSync(allowed, { recursive: true, force: true });
+    rmSync(forbidden, { recursive: true, force: true });
+  }
+});
+
 test('host-neutral: kvox-eval may import platform-ai-providers/openai', () => {
   const dir = fixtureCopy();
   try {

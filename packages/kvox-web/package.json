@@ -98,6 +98,14 @@
     "./brand/assets/apple-touch-icon-180.png": "./dist/brand/assets/apple-touch-icon-180.png",
     "./brand/fonts/inter.css": "./dist/brand/fonts/inter.css",
     "./brand/fonts/Inter-latin-variable.woff2": "./dist/brand/fonts/Inter-latin-variable.woff2",
+    "./copilot/headless": {
+      "types": "./dist/copilot/headless/index.d.ts",
+      "default": "./dist/copilot/headless/index.js"
+    },
+    "./copilot/ui": {
+      "types": "./dist/copilot/ui/index.d.ts",
+      "default": "./dist/copilot/ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

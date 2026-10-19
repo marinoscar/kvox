@@ -21,7 +21,8 @@
     "notes": ["core", "transcripts", "search"],
     "graph": ["core", "transcripts", "notes", "search"],
     "ask": ["core", "transcripts", "notes", "graph"],
-    "brand": []
+    "brand": [],
+    "copilot": []
   },
   "kvox-contract": {
     "errors": [],
