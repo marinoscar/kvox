@@ -19,7 +19,9 @@
     "./src/graph/testing/index.ts",
     "./src/ask/headless/index.ts",
     "./src/ask/ui/index.ts",
-    "./src/brand/index.ts"
+    "./src/brand/index.ts",
+    "./src/copilot/headless/index.ts",
+    "./src/copilot/ui/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

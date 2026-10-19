@@ -481,7 +481,50 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog
 
 ### The opt-in setting
 
-Add a Copilot switch to the Desktop settings, default **off**. Turning it on must show, before it takes effect, that notes and transcript text are sent to GitHub, and link the GitHub terms of service (section J, the training opt-out) so the user can check their plan. Turning it off removes the adapter from `adapters` and from the model picker. Do not enable it by default, in a migration or in an installer.
+Add a Copilot switch to the Desktop settings, default **off**. Turning it on must show, before it takes effect, that notes and transcript text are sent to GitHub, and link GitHub's terms and the Copilot data and privacy page so the user can check their plan. Turning it off removes the adapter from `adapters` and from the model picker. Do not enable it by default, in a migration or in an installer.
+
+Do not write this UI: render the packaged card. `CopilotProviderCard` of `@marinoscar/kvox-web/copilot/ui` carries the switch, the consent dialog (written once in `COPILOT_CONSENT_COPY`, versioned by `COPILOT_CONSENT_VERSION` of `@marinoscar/kvox-contract/copilot`, so a change to the text asks every user again), the runtime download with its size and progress, the device-code or browser sign-in, the signed-in account, the model choice and the list of features that run on Copilot (Ask shown as unavailable, with the reason from `status.unavailableTasks`). It makes no network call; the renderer maps six routes:
+
+```tsx
+// Illustrative, not compiled
+import { CopilotProviderCard } from '@marinoscar/kvox-web/copilot/ui';
+import { useCopilotProvider, type CopilotProviderPort } from '@marinoscar/kvox-web/copilot/headless';
+import { COPILOT_EGRESS_HOSTS } from '@marinoscar/kvox-ai/copilot';
+
+const port: CopilotProviderPort = {
+  getStatus: () => ipc.copilot.status(),                       // CopilotStatus (wire shape: @marinoscar/kvox-contract/copilot)
+  getSettings: () => ipc.copilot.settings(),                   // CopilotSettings
+  update: (patch) => ipc.copilot.update(patch),                // resolves to the stored CopilotSettings
+  startSignIn: () => ipc.copilot.signIn.start(),               // CopilotSignInChallenge
+  waitForSignIn: (signal) => ipc.copilot.signIn.wait(signal),  // resolves when the user has finished
+  signOut: () => ipc.copilot.signOut(),
+  downloadRuntime: (signal) => ipc.copilot.downloadRuntime(signal),
+};
+
+function CopilotSettings() {
+  const c = useCopilotProvider(port);
+  if (!c.status || !c.settings) return null;
+  return (
+    <CopilotProviderCard
+      status={c.status}
+      settings={c.settings}
+      onUpdate={c.update}
+      onSignIn={c.startSignIn}
+      onWaitForSignIn={c.waitForSignIn}
+      onSignOut={c.signOut}
+      onDownloadRuntime={c.downloadRuntime}
+      onCancelRuntimeDownload={c.cancelRuntimeDownload}
+      onOpenExternal={(url) => ipc.shell.openExternal(url)}
+      allowedHosts={COPILOT_EGRESS_HOSTS}
+    />
+  );
+}
+```
+
+- The status fields come from the main process: `signedIn` and `login` from `copilot.authStatus()`, `runtime` from `prepareCopilotRuntime` (and the download's progress), `models` from `adapter.listModels(...)` with `adapter.kvox.catalog` for `structuredOutput`, and `unavailableTasks` from `routeKvoxTasks(...).unavailable`.
+- `@marinoscar/kvox-web/copilot/ui` is built on `AccountSignInProviderCard` of `@marinoscar/platform-web/ai/ui`, so the renderer also installs `@marinoscar/platform-web` at the pinned platform version (an optional peer of that one entry). The headless entry needs only the contract.
+- Consent is stored with the setting: the card calls `onUpdate({ enabled: true, consentedAt, consentVersion })` only after the user accepts. Persist all four fields; an enabled setting whose `consentVersion` is not the current `COPILOT_CONSENT_VERSION` is shown the consent again, and the main process should not build the adapter for it.
+- Turning the switch off calls `onUpdate({ enabled: false })`; "Withdraw consent" also clears `consentedAt` and `consentVersion`.
 
 ### Sign-in
 

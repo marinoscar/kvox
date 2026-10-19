@@ -57,9 +57,10 @@
 //                    A slice that did could not be installed on Desktop, where
 //                    the platform does not exist. The one place that imports
 //                    the platform is the app folder apps/api/src/platform-kvox.
-//                    The one exception in kvox-web is the brand slice, which
-//                    may import exactly @marinoscar/platform-web/shell/headless
-//                    (HOST_NEUTRAL_SLICE_ALLOWED).
+//                    The exceptions in kvox-web are the brand slice, which
+//                    may import exactly @marinoscar/platform-web/shell/headless,
+//                    and the copilot slice, which may import exactly
+//                    @marinoscar/platform-web/ai/ui (HOST_NEUTRAL_SLICE_ALLOWED).
 //                    packages/kvox-ai/src/** may import exactly one platform
 //                    specifier, the lean
 //                    @marinoscar/platform-ai-providers (the provider-adapter
@@ -151,6 +152,10 @@ export const HOST_NEUTRAL_ALLOWED = Object.freeze({
 export const HOST_NEUTRAL_SLICE_ALLOWED = Object.freeze({
   'kvox-web': Object.freeze({
     brand: Object.freeze(['@marinoscar/platform-web/shell/headless']),
+    // The Copilot settings card (issue #631) is built on `AccountSignInProviderCard`, the
+    // presentational card the platform ships for providers that sign in with an account.
+    // `@marinoscar/platform-web` is an optional peer of the `ui` entry alone.
+    copilot: Object.freeze(['@marinoscar/platform-web/ai/ui']),
   }),
 });
 /** Specifier prefix rule 6 forbids. */

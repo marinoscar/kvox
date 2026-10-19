@@ -21,7 +21,8 @@
     "notes": ["core", "transcripts", "search"],
     "graph": ["core", "transcripts", "notes", "search"],
     "ask": ["core", "transcripts", "notes", "graph"],
-    "brand": []
+    "brand": [],
+    "copilot": []
   },
   "kvox-contract": {
     "errors": [],
@@ -31,7 +32,8 @@
     "search": ["errors"],
     "notes": ["errors", "transcripts"],
     "graph": ["errors", "ontology", "notes"],
-    "ask": ["errors", "graph"]
+    "ask": ["errors", "graph"],
+    "copilot": []
   },
   "kvox-db": {
     "bin": ["check", "lock", "promote", "sync"],

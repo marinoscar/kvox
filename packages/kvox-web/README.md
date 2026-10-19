@@ -27,6 +27,8 @@ Status: filled (Epic 7, issues 7.1 to 7.6). All six slices are in: `core`, `tran
 - `@marinoscar/kvox-web/brand`: the single source of the KVox look for every host: `createKvoxTheme`, `kvoxLightTheme`, `kvoxDarkTheme`, `kvoxTokens`, `kvoxLightPalette`, `kvoxDarkPalette`, `kvoxComponentOverrides`, `KVOX_BRAND`, and the inline-SVG `BrandMark` and `BrandLockup`. Needs MUI and `@marinoscar/platform-web`. [README](src/brand/README.md).
 - The brand files, for a host's manifest, window icon and installer: `@marinoscar/kvox-web/brand/assets/mark.svg`, `@marinoscar/kvox-web/brand/assets/favicon.svg`, `@marinoscar/kvox-web/brand/assets/favicon.ico`, `@marinoscar/kvox-web/brand/assets/icon-192.png`, `@marinoscar/kvox-web/brand/assets/icon-512.png`, `@marinoscar/kvox-web/brand/assets/icon-1024.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-192.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-512.png`, `@marinoscar/kvox-web/brand/assets/badge-96.png`, `@marinoscar/kvox-web/brand/assets/apple-touch-icon-180.png` (`mark.svg` is the 512 master).
 - The self-hosted Inter, with a relative `@font-face` URL: `@marinoscar/kvox-web/brand/fonts/inter.css` and `@marinoscar/kvox-web/brand/fonts/Inter-latin-variable.woff2`.
+- `@marinoscar/kvox-web/copilot/headless`: `useCopilotProvider` over a `CopilotProviderPort` (status, setting, sign-in, sign-out, runtime download), `COPILOT_CONSENT_COPY` (the consent text as data), `buildCopilotCapabilities`, `hasCopilotConsent` and `copilotSignInReasonText`. No MUI. [README](src/copilot/README.md).
+- `@marinoscar/kvox-web/copilot/ui`: `CopilotProviderCard`, the GitHub Copilot settings card (opt-in switch with a versioned consent dialog, runtime download, device-code or browser sign-in, model choice, capability list), and its parts `CopilotConsentBody`, `CopilotSignInDialog` and `CopilotRuntimeSection`. Built on `AccountSignInProviderCard` of `@marinoscar/platform-web/ai/ui`; makes no network call.
 
 ## Install and peer dependencies
 
@@ -48,7 +50,7 @@ Optional peers, installed for the entries that need them. A host that uses only 
 
 | Package | Range | Needed by |
 |---|---|---|
-| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui`, `brand` |
+| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui`, `brand`, `copilot/ui` |
 | `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui` |
 | `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui` |
 | `@tanstack/react-virtual` | `^3.14.12` | `transcripts/ui` |
@@ -60,7 +62,7 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `graphology` | `^0.26.0` | `graph/ui` (one copy only) |
 | `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
-| `@marinoscar/platform-web` | `0.1.0-next.6` | `brand` (`createKvoxTheme` builds on `createShellTheme` of `@marinoscar/platform-web/shell/headless`); no other entry |
+| `@marinoscar/platform-web` | `0.1.0-next.7` (exact) | `brand` (`createKvoxTheme` builds on `createShellTheme` of `@marinoscar/platform-web/shell/headless`); `copilot/ui` (`AccountSignInProviderCard` and `aiErrorText` from `@marinoscar/platform-web/ai/ui`); no other entry |
 
 The per-slice data is `packages/kvox-slice-peers.json` (a slice's `entries` list the peers only one entry may import); `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
@@ -181,7 +183,7 @@ The `brand` entry and its asset and font exports are new; an app that had its ow
 - [Package documentation standard and checks](../../docs/PACKAGES.md): how this README, the TSDoc and the catalog are checked
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
-- [brand README](src/brand/README.md), [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md) and [ask README](src/ask/README.md): the slices
+- [brand README](src/brand/README.md), [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md) [ask README](src/ask/README.md) and [copilot README](src/copilot/README.md): the slices
 
 ### Desktop
 

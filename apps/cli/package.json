@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@app/shared": "*",
-    "@marinoscar/platform-cli": "0.1.0-next.6",
+    "@marinoscar/platform-cli": "0.1.0-next.7",
     "react": "^19.2.8"
   },
   "devDependencies": {

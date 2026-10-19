@@ -17,6 +17,7 @@ Entry points (a slice README per folder):
 - `@marinoscar/kvox-contract/notes`: notes, templates, source documents and exports ([slice README](src/notes/README.md#purpose-and-scope)).
 - `@marinoscar/kvox-contract/graph`: entities, proposals, extraction, read model, export and import ([slice README](src/graph/README.md#purpose-and-scope)).
 - `@marinoscar/kvox-contract/ask`: Ask conversations and messages ([slice README](src/ask/README.md#purpose-and-scope)).
+- `@marinoscar/kvox-contract/copilot`: the GitHub Copilot opt-in setting, status and sign-in challenge, with `COPILOT_CONSENT_VERSION` ([slice README](src/copilot/README.md#purpose-and-scope)).
 - `@marinoscar/kvox-contract/ontology`: the ontology as code ([slice README](src/ontology/README.md#purpose-and-scope)).
 - `@marinoscar/kvox-contract/errors`: the error and reason catalogue ([slice README](src/errors/README.md#purpose-and-scope)).
 - `@marinoscar/kvox-contract/schemas/transcript-export.v1.json`: the public JSON Schema of the transcript export document (a data file, not code).
