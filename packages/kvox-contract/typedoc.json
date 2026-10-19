@@ -11,6 +11,7 @@
     "./src/graph/index.ts",
     "./src/ask/index.ts",
     "./src/ontology/index.ts",
+    "./src/copilot/index.ts",
     "./src/errors/index.ts"
   ],
   "entryPointStrategy": "resolve",

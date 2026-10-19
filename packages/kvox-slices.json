@@ -31,7 +31,8 @@
     "search": ["errors"],
     "notes": ["errors", "transcripts"],
     "graph": ["errors", "ontology", "notes"],
-    "ask": ["errors", "graph"]
+    "ask": ["errors", "graph"],
+    "copilot": []
   },
   "kvox-db": {
     "bin": ["check", "lock", "promote", "sync"],

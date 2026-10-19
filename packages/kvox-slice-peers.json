@@ -254,7 +254,8 @@
     "search": { "peers": ["zod"] },
     "notes": { "peers": ["zod"] },
     "graph": { "peers": ["zod"] },
-    "ask": { "peers": ["zod"] }
+    "ask": { "peers": ["zod"] },
+    "copilot": { "peers": ["zod"] }
   },
   "kvox-db": {
     "bin": { "peers": ["prisma"] },
