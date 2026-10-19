@@ -1,5 +1,7 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.6
+
 ## 0.1.0-next.5
 
 ## 0.1.0-next.4

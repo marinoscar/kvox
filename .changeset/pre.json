@@ -54,6 +54,7 @@
     "kvox-web-core",
     "kvox-web-graph-tsdoc",
     "kvox-web-graph",
+    "kvox-web-home",
     "kvox-web-notes",
     "kvox-web-search",
     "kvox-web-shell",
