@@ -1,3 +1,4 @@
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import HubIcon from '@mui/icons-material/Hub';
 
 import type { KvoxDestination, KvoxDestinationRoutes } from '../../core/ui/index.js';
@@ -55,4 +56,42 @@ export const kvoxGraphDestinations: readonly KvoxDestination<'knowledge', 'graph
  */
 export const kvoxGraphDestinationRoutes: KvoxDestinationRoutes<'knowledge'> = {
   knowledge: ['/graph', '/ask'],
+};
+
+/**
+ * The Review destination of the graph slice, as data, for a host that lists the
+ * proposal inbox as a row of its own (KVox Desktop's rail).
+ *
+ * @remarks
+ * KVox web does NOT spread this: there the review inbox is reached from the
+ * Knowledge pages, and `/graph/review` is owned by the `knowledge` row. A host
+ * that lists both rows gets the longest-prefix answer (`/graph/review` lights
+ * Review, the rest of `/graph` lights Knowledge). `createKvoxNavigation` from
+ * `@marinoscar/kvox-web/shell` composes it when asked for `'review'`.
+ *
+ * Same gates as the Knowledge row: `graph:read` and the `graph` feature.
+ *
+ * @stability experimental
+ * @extensionPoint destination
+ */
+export const kvoxReviewDestinations: readonly KvoxDestination<'review', 'graph'>[] = [
+  {
+    key: 'review',
+    label: 'Review',
+    compactLabel: 'Review',
+    Icon: FactCheckIcon,
+    path: '/graph/review',
+    permission: 'graph:read',
+    feature: 'graph',
+  },
+];
+
+/**
+ * The route prefix the Review destination owns, keyed by destination key.
+ *
+ * @stability experimental
+ * @extensionPoint destination
+ */
+export const kvoxReviewDestinationRoutes: KvoxDestinationRoutes<'review'> = {
+  review: ['/graph/review'],
 };

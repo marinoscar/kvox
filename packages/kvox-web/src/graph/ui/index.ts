@@ -63,7 +63,12 @@ export {
   useGraphSpeakerPeople,
 } from './slots/GraphTranscriptSlots.js';
 
-export { kvoxGraphDestinationRoutes, kvoxGraphDestinations } from './navigation.js';
+export {
+  kvoxGraphDestinationRoutes,
+  kvoxGraphDestinations,
+  kvoxReviewDestinationRoutes,
+  kvoxReviewDestinations,
+} from './navigation.js';
 export { kvoxGraphUserSettingsSections } from './settings.js';
 export type { KvoxGraphUserSettingsSections } from './settings.js';
 export { kvoxGraphRoutes } from './routes.js';

@@ -36,7 +36,12 @@ export type {
   NotesSlotBoundaryProps,
   NotesSlotBoundaryState,
 } from './slots.js';
-export { kvoxNotesDestinationRoutes, kvoxNotesDestinations } from './navigation.js';
+export {
+  kvoxNoteTemplatesDestinationRoutes,
+  kvoxNoteTemplatesDestinations,
+  kvoxNotesDestinationRoutes,
+  kvoxNotesDestinations,
+} from './navigation.js';
 export { kvoxNotesUserSettingsSections } from './settings.js';
 export type { KvoxNotesUserSettingsSections } from './settings.js';
 export { kvoxNotesRoutes } from './routes.js';
