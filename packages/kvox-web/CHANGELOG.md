@@ -1,5 +1,11 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.3
+
+### Minor Changes
+
+- 94dfce2: Add `@marinoscar/kvox-web/brand`: the single source of the KVox look for every host. It exports `createKvoxTheme(mode, extend?)` (the shell's `createShellTheme` with the KVox palette and component overrides), the ready-made `kvoxLightTheme` and `kvoxDarkTheme`, the colour tokens `kvoxTokens` with `kvoxLightPalette`, `kvoxDarkPalette` and `kvoxComponentOverrides`, `KVOX_BRAND` (product name, tagline, theme and background colour, written from `packages/shared/identity.json` at build time), and the inline-SVG `BrandMark` and `BrandLockup` (no network request, no `public/` folder). The package also ships the brand files as exports: `brand/assets/mark.svg`, `favicon.svg`, `favicon.ico`, `icon-192.png`, `icon-512.png`, `icon-1024.png`, `icon-maskable-192.png`, `icon-maskable-512.png`, `badge-96.png`, `apple-touch-icon-180.png`, and the self-hosted Inter (`brand/fonts/inter.css` with a relative `@font-face` URL, and `Inter-latin-variable.woff2`). `@marinoscar/platform-web` is now a peer of this entry (and of no other): it imports exactly `@marinoscar/platform-web/shell/headless`, which the `host-neutral` rule and the `kvox-web.host-neutral` conformance scan allow for the `brand` slice alone.
+
 ## 0.1.0-next.2
 
 ## 0.1.0-next.1
