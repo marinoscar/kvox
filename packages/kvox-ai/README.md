@@ -12,7 +12,7 @@ Status: implemented by issue #579 ([ADR-0005](../../docs/decisions/0005-ai-archi
 
 Entry points:
 
-- `@marinoscar/kvox-ai`: the package root, which re-exports every slice. Slice READMEs: [types](src/types/README.md), [features](src/features/README.md), [tasks](src/tasks/README.md), [structured](src/structured/README.md), [chat](src/chat/README.md), [tokens](src/tokens/README.md), [embedding](src/embedding/README.md), [runtime](src/runtime/README.md), [errors](src/errors/README.md), [port](src/port/README.md), [direct](src/direct/README.md).
+- `@marinoscar/kvox-ai`: the package root, which re-exports every slice. Slice READMEs: [types](src/types/README.md), [features](src/features/README.md), [tasks](src/tasks/README.md), [routing](src/routing/README.md), [structured](src/structured/README.md), [chat](src/chat/README.md), [tokens](src/tokens/README.md), [embedding](src/embedding/README.md), [runtime](src/runtime/README.md), [errors](src/errors/README.md), [port](src/port/README.md), [direct](src/direct/README.md).
 
 - `@marinoscar/kvox-ai/testing`: `createScriptedRuntime` and `describeKvoxAiConformance` (not re-exported by the root). Slice README: [testing](src/testing/README.md).
 
@@ -40,7 +40,7 @@ Only a host that offers the Copilot provider (KVox Desktop) installs the SDK:
 npm install @github/copilot-sdk
 ```
 
-`@github/copilot-sdk` (`^1.0.22`) is an OPTIONAL peer (`peerDependenciesMeta`), needed only by `@marinoscar/kvox-ai/copilot`, and only by `createSdkCopilotTransport`, which `require`s it lazily on its first call. The package root never imports it, so the web edition never installs it. Without the SDK the adapter, the catalog, the error mapping and the mock transport still work; the real transport answers `AI_PROVIDER_UNAVAILABLE` ("The GitHub Copilot SDK is not installed"). The SDK downloads or bundles a per-platform Copilot runtime (about 133 to 174 MB unpacked): a Desktop host packages it with the app ([KVox Desktop guide](../../docs/guides/kvox-desktop.md#the-copilot-provider-adapter)).
+`@github/copilot-sdk` (`^1.0.22`) is an OPTIONAL peer (`peerDependenciesMeta`), needed only by `@marinoscar/kvox-ai/copilot`, and only by `createSdkCopilotTransport`, which `require`s it lazily on its first call. The package root never imports it, so the web edition never installs it. Without the SDK the adapter, the catalog, the error mapping and the mock transport still work; the real transport answers `AI_PROVIDER_UNAVAILABLE` ("The GitHub Copilot SDK is not installed"). The SDK downloads nothing: the per-platform Copilot runtime (about 133 to 174 MB unpacked) is an optional npm dependency of the SDK, which `prepareCopilotRuntime` locates; a Desktop host packages it with the app ([KVox Desktop guide](../../docs/guides/kvox-desktop.md#the-copilot-provider-adapter)).
 
 The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 

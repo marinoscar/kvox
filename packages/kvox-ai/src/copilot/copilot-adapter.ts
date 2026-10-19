@@ -29,11 +29,14 @@ import {
   COPILOT_SIGN_IN_MESSAGE,
   copilotErrorFromData,
   copilotErrorFromThrown,
+  copilotSignInCancelled,
+  copilotSignInFailed,
   redactTokens,
   type CopilotErrorData,
 } from './copilot-errors.js';
 import type {
   CopilotReasoningEffort,
+  CopilotSignInChallenge,
   CopilotSessionConfig,
   CopilotSessionEvent,
   CopilotSessionHandle,
@@ -202,6 +205,52 @@ export interface CopilotProviderAdapter extends AiProviderAdapter {
    * @returns the sign-in state and login (never a token).
    */
   authStatus(): Promise<CopilotSignInState>;
+  /**
+   * Signing in to GitHub Copilot (the SDK's experimental flow, run by the Copilot
+   * runtime; no token ever reaches KVox code).
+   *
+   * @example
+   * ```ts
+   * const challenge = await copilot.signIn.start();       // { kind: 'browser', url } : open it
+   * const { login } = await copilot.signIn.wait(abort.signal); // resolves once the user has finished
+   * ```
+   */
+  readonly signIn: {
+    /**
+     * Begins a sign-in.
+     *
+     * @returns what the user must do: an address to open, or a code to type.
+     * @throws an `AiError` when the runtime cannot start a sign-in.
+     */
+    start(): Promise<CopilotSignInChallenge>;
+    /**
+     * Waits until the user has signed in.
+     *
+     * @param signal - aborts the wait and cancels the sign-in (rejects as `sign_in_cancelled`).
+     * @returns the signed-in state (`signedIn: true` and the login, never a token).
+     * @throws `AiError` `AI_KEY_REQUIRED` with `details.signInReason` `sign_in_expired`,
+     * `sign_in_cancelled` or `sign_in_failed`; another `AiError` when the runtime fails.
+     */
+    wait(signal?: AbortSignal): Promise<CopilotSignedInState>;
+  };
+  /**
+   * Signs the Copilot runtime's stored account out. Resolves also when nobody was
+   * signed in. A GitHub CLI login or a token in the environment is not the
+   * runtime's to remove: check {@link CopilotProviderAdapter.authStatus} afterwards.
+   *
+   * @throws an `AiError` when the runtime cannot sign out.
+   */
+  signOut(): Promise<void>;
+}
+
+/**
+ * The state `signIn.wait` resolves to: signed in, as whom.
+ *
+ * @stability experimental
+ */
+export interface CopilotSignedInState extends CopilotSignInState {
+  /** Always `true`. */
+  signedIn: true;
 }
 
 /**
@@ -587,7 +636,60 @@ export function createCopilotAdapter(options: CreateCopilotAdapterOptions): Copi
         throw copilotErrorFromThrown(err);
       }
     },
+
+    signIn: {
+      async start() {
+        try {
+          return challengeOf(await transport.startSignIn());
+        } catch (err) {
+          throw copilotErrorFromThrown(err);
+        }
+      },
+      async wait(signal) {
+        if (isAborted(signal)) throw copilotSignInCancelled();
+        let status;
+        try {
+          status = await raced(transport.waitForSignIn(signal), signal);
+        } catch (err) {
+          if (isAborted(signal)) throw copilotSignInCancelled();
+          throw copilotErrorFromThrown(err);
+        }
+        if (status.isAuthenticated !== true) {
+          throw copilotSignInFailed('sign_in_failed', 'The GitHub Copilot sign-in did not finish.');
+        }
+        // Only the two fields: whatever else a transport hands back stays here.
+        return { signedIn: true, login: typeof status.login === 'string' ? redactTokens(status.login).slice(0, 200) : null };
+      },
+    },
+
+    async signOut() {
+      try {
+        await transport.signOut();
+      } catch (err) {
+        throw copilotErrorFromThrown(err);
+      }
+    },
   };
+}
+
+/** Whether the signal has aborted (read fresh: TypeScript narrows a property read once). */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+/** The challenge with only its documented fields, strings redacted (a transport's extras never leave). */
+function challengeOf(challenge: CopilotSignInChallenge): CopilotSignInChallenge {
+  const text = (value: unknown): string => (typeof value === 'string' ? redactTokens(value).slice(0, 2_000) : '');
+  if (challenge?.kind === 'device') {
+    return {
+      kind: 'device',
+      userCode: text(challenge.userCode),
+      verificationUri: text(challenge.verificationUri),
+      expiresAt: text(challenge.expiresAt),
+    };
+  }
+  if (challenge?.kind === 'browser') return { kind: 'browser', url: text(challenge.url) };
+  throw new AiError('AI_PROVIDER_UNAVAILABLE', 'GitHub Copilot returned a sign-in this version of KVox cannot show.');
 }
 
 // ---------------------------------------------------------------------------
