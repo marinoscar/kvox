@@ -34,7 +34,7 @@ Every slice is universal, so every peer is required, including those only `ask-r
 | `@marinoscar/kvox-contract` | `>=0.0.0-0 \|\| >=0.1.0-0` | `fixtures`, `kg` (the ontology registry), `ask` (the Ask wire types) |
 | `@marinoscar/kvox-api` | `>=0.0.0-0 \|\| >=0.1.0-0` | `kg` (the extraction pipeline, `graph-extraction` and `graph`), `live` and `cli` (`KvoxAiPort`, `KvoxAiError`) |
 | `@marinoscar/kvox-ai` | `>=0.0.0-0 \|\| >=0.1.0-0` | `live` (`createKvoxAi`, `createDirectRuntime`) |
-| `@marinoscar/platform-ai-providers` | `0.1.0-next.6` (exact) | `live` and `cli`: `createOpenAiAdapter` and `createOpenAiCompatibleAdapter` from the `/openai` subpath; `parity`, `ask-run`: the provider event types. Only the package root and `/openai` are imported; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
+| `@marinoscar/platform-ai-providers` | `0.1.0-next.7` (exact) | `live` and `cli`: `createOpenAiAdapter` and `createOpenAiCompatibleAdapter` from the `/openai` subpath; `parity`, `ask-run`: the provider event types. Only the package root and `/openai` are imported; `@marinoscar/platform-api` is not a peer and importing it is a violation. |
 | `openai` | `^7.23.0` | `live`: the OpenAI SDK that the lean `/openai` factories build their client from. Required, because `live` constructs the SDK client. |
 | `@electric-sql/pglite` | `0.5.10` (exact) | `ask-run`: the in-memory PostgreSQL |
 | `@electric-sql/pglite-pgvector` | `0.0.11` (exact) | `ask-run`: the `vector` extension the migrations create |

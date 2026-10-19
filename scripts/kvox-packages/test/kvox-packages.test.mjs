@@ -180,20 +180,21 @@ test('host-neutral: kvox-ai and kvox-eval may import the lean @marinoscar/platfo
   }
 });
 
-test('host-neutral: kvox-web may import @marinoscar/platform-web/ai/ui and nothing else of the platform', () => {
-  const allowed = fixtureCopy();
-  const forbidden = fixtureCopy();
+test('host-neutral: only the kvox-web copilot slice may import @marinoscar/platform-web/ai/ui, and nothing else of the platform', () => {
+  const dir = fixtureCopy();
   try {
-    plant(allowed, 'host-neutral/kvox-web-platform-ai-ui-allowed.ts', 'packages/kvox-web/src/core/card.ts');
-    assert.deepEqual(hostNeutralOf(allowed), []);
-    plant(forbidden, 'host-neutral/kvox-web-platform-other-forbidden.ts', 'packages/kvox-web/src/core/hub.ts');
-    const violations = hostNeutralOf(forbidden);
-    assert.equal(violations.length, 1);
-    assert.match(violations[0].message, /'@marinoscar\/platform-web\/settings\/ui'/);
-    assert.match(violations[0].message, /may import only '@marinoscar\/platform-web\/ai\/ui'/);
+    plant(dir, 'host-neutral/kvox-web-platform-ai-ui-allowed.ts', 'packages/kvox-web/src/copilot/ui/card.ts');
+    plant(dir, 'host-neutral/kvox-web-platform-other-forbidden.ts', 'packages/kvox-web/src/copilot/ui/hub.ts');
+    plant(dir, 'host-neutral/kvox-web-platform-ai-ui-allowed.ts', 'packages/kvox-web/src/core/card.ts');
+    const violations = hostNeutralOf(dir);
+    assert.equal(violations.length, 2);
+    const text = violations.map((v) => v.message).join('\n');
+    assert.match(text, /copilot\/ui\/hub\.ts imports '@marinoscar\/platform-web\/settings\/ui'/);
+    assert.match(text, /may import only '@marinoscar\/platform-web\/ai\/ui'/);
+    assert.match(text, /core\/card\.ts imports '@marinoscar\/platform-web\/ai\/ui'/);
+    assert.doesNotMatch(text, /copilot\/ui\/card\.ts/);
   } finally {
-    rmSync(allowed, { recursive: true, force: true });
-    rmSync(forbidden, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

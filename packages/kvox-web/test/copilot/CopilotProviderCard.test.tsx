@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
@@ -12,6 +12,7 @@ import 'vitest-axe/extend-expect';
 import { COPILOT_CONSENT_VERSION } from '@marinoscar/kvox-contract/copilot';
 import type { CopilotSignInChallenge } from '@marinoscar/kvox-contract/copilot';
 
+import { kvoxDarkTheme, kvoxLightTheme } from '../../src/brand/index.js';
 import { COPILOT_CONSENT_COPY } from '../../src/copilot/headless/index.js';
 import { CopilotProviderCard } from '../../src/copilot/ui/index.js';
 import type { CopilotProviderCardProps } from '../../src/copilot/ui/index.js';
@@ -33,7 +34,7 @@ function props(overrides: Partial<CopilotProviderCardProps> = {}): CopilotProvid
 }
 
 function renderCard(p: CopilotProviderCardProps, mode: 'light' | 'dark' = 'light') {
-  const theme = createTheme({ palette: { mode } });
+  const theme = mode === 'dark' ? kvoxDarkTheme : kvoxLightTheme;
   const ui = (next: CopilotProviderCardProps): ReactElement => (
     <ThemeProvider theme={theme}>
       <CopilotProviderCard {...next} />
