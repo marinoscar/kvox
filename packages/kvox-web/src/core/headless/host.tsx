@@ -202,6 +202,12 @@ export interface KvoxViewer {
   userId: string;
   /** The permission strings the user holds. */
   permissions: ReadonlySet<string>;
+  /**
+   * The name to greet the user by (their effective display name), or `null` when they
+   * have none. Optional: a host that does not know it leaves it out and Home greets
+   * without a name.
+   */
+  displayName?: string | null;
 }
 
 /**

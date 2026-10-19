@@ -11,7 +11,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { render } from '../../utils/test-utils';
-import { SharedWithMe } from '../../../components/home/SharedWithMe';
+import { SharedWithMe } from '@marinoscar/kvox-web/home/ui';
 import { AXE_OPTIONS, transcript } from './homeFixtures';
 
 /**

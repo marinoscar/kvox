@@ -27,7 +27,9 @@
  * separate step a user performs.
  */
 
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
@@ -38,28 +40,58 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import MicIcon from '@mui/icons-material/Mic';
 import SearchIcon from '@mui/icons-material/Search';
 import type { ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 
-import { NewTranscriptButton } from './NewTranscriptButton';
+import type { KvoxJourneyStep } from '../../headless/index.js';
 
+/**
+ * Props of {@link JourneyEmptyState}.
+ *
+ * @stability experimental
+ */
 export interface JourneyEmptyStateProps {
-  /** `GET /api/transcription/config` said this deployment can transcribe. */
-  transcriptionAvailable: boolean;
-  /** The capability probe has not answered yet. */
-  isCheckingTranscription?: boolean;
+  /**
+   * The steps to offer, already filtered for the viewer (see
+   * `resolveJourneySteps`). The first one that is not done is the primary
+   * action; the rest are secondary. None: the stage cards stand alone.
+   */
+  steps?: readonly KvoxJourneyStep[];
+  /** The four stage cards. Default {@link JOURNEY_STAGES}. */
+  stages?: readonly JourneyStage[];
+  /** The sentence under "Start here". Default {@link JOURNEY_INTRO}. */
+  intro?: string;
 }
 
-interface JourneyStage {
+/**
+ * One card of the journey.
+ *
+ * @stability experimental
+ */
+export interface JourneyStage {
+  /** A stable key, unique within the journey. */
   key: string;
+  /** The stage's name. */
   label: string;
+  /** One sentence about it. */
   description: string;
+  /** The stage's icon. */
   icon: ReactNode;
   /** Drawn, but explicitly not available yet. See the file header. */
   comingSoon?: boolean;
 }
 
 /**
+ * The sentence under "Start here" when the host gives none.
+ *
+ * @stability experimental
+ */
+export const JOURNEY_INTRO = 'You have no transcripts yet. Here is what happens once you do.';
+
+/**
  * The journey, in order. Exported so the page's test asserts the SEQUENCE
  * rather than four independent strings — the order is the meaning here.
+ *
+ * @stability experimental
  */
 export const JOURNEY_STAGES: readonly JourneyStage[] = [
   {
@@ -120,10 +152,69 @@ function StageCard({ stage }: { stage: JourneyStage }) {
   );
 }
 
+/**
+ * One step: its control, then what it has to say. A done step is a quiet
+ * statement instead of a control.
+ */
+function StepItem({ step, primary }: { step: KvoxJourneyStep; primary: boolean }) {
+  const { action } = step;
+
+  const control = step.done ? (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+      <CheckCircleIcon fontSize="small" color="success" aria-hidden />
+      <Typography variant="body2">{`${step.title} (done)`}</Typography>
+    </Stack>
+  ) : action.to === undefined && action.onClick === undefined ? null : (
+    <Button
+      variant={primary ? 'contained' : 'outlined'}
+      size="large"
+      startIcon={action.icon}
+      disabled={action.disabled === true}
+      aria-describedby={action.describedBy}
+      sx={{ width: { xs: '100%', sm: 'auto' } }}
+      {...(action.to === undefined
+        ? { onClick: action.onClick }
+        : { component: RouterLink, to: action.to, onClick: action.onClick })}
+    >
+      {action.label}
+    </Button>
+  );
+
+  return (
+    <Box role="group" aria-label={step.title} sx={{ minWidth: 0 }}>
+      {control}
+      {typeof step.body === 'string' ? (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 1, maxWidth: '36ch', overflowWrap: 'break-word' }}
+        >
+          {step.body}
+        </Typography>
+      ) : (
+        step.body
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The first-run walkthrough: "Start here", the stage cards of the product's flow and the
+ * steps the person can take now.
+ *
+ * @param props - see {@link JourneyEmptyStateProps}.
+ * @returns the section.
+ *
+ * @stability experimental
+ */
 export function JourneyEmptyState({
-  transcriptionAvailable,
-  isCheckingTranscription = false,
+  steps = [],
+  stages = JOURNEY_STAGES,
+  intro = JOURNEY_INTRO,
 }: JourneyEmptyStateProps) {
+  // The first step still to do is THE action; the others sit beside it.
+  const primaryKey = steps.find((step) => !step.done)?.key;
+
   return (
     <Box component="section" aria-labelledby="home-journey" sx={{ mb: { xs: 3, sm: 4 } }}>
       <Typography
@@ -135,7 +226,7 @@ export function JourneyEmptyState({
         Start here
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        You have no transcripts yet. Here is what happens once you do.
+        {intro}
       </Typography>
 
       {/* Two-up at `sm` rather than four-up: the four stages read as a
@@ -143,7 +234,7 @@ export function JourneyEmptyState({
           into a row of unrelated tiles. Four across only from `lg`, where each
           card still has room for its sentence. */}
       <Grid container spacing={1.5} component="ol" sx={{ listStyle: 'none', p: 0, m: 0 }}>
-        {JOURNEY_STAGES.map((stage) => (
+        {stages.map((stage) => (
           <Grid
             key={stage.key}
             component="li"
@@ -155,12 +246,22 @@ export function JourneyEmptyState({
         ))}
       </Grid>
 
-      <Box sx={{ mt: 2.5 }}>
-        <NewTranscriptButton
-          available={transcriptionAvailable}
-          isChecking={isCheckingTranscription}
-        />
-      </Box>
+      {steps.length > 0 && (
+        <Box
+          sx={{
+            mt: 2.5,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            flexWrap: { xs: 'nowrap', sm: 'wrap' },
+            gap: 1.5,
+            alignItems: { xs: 'stretch', sm: 'flex-start' },
+          }}
+        >
+          {steps.map((step) => (
+            <StepItem key={step.key} step={step} primary={step.key === primaryKey} />
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }

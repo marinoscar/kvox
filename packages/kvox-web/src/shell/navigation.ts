@@ -10,6 +10,7 @@ import {
   kvoxAskDestinationRoutes,
   kvoxAskDestinations,
 } from '../ask/ui/index.js';
+import { kvoxHomeDestination, kvoxHomeDestinationRoutes } from '../home/ui/index.js';
 import {
   kvoxGraphDestinationRoutes,
   kvoxGraphDestinations,
@@ -34,6 +35,7 @@ import {
  * @stability experimental
  */
 export type KvoxNavigationSlice =
+  | 'home'
   | 'transcripts'
   | 'notes'
   | 'graph'
@@ -48,6 +50,7 @@ export type KvoxNavigationSlice =
  * @stability experimental
  */
 export type KvoxSliceDestinationKey =
+  | 'home'
   | 'transcripts'
   | 'notes'
   | 'knowledge'
@@ -65,11 +68,14 @@ export type KvoxSliceDestinationKey =
 export interface CreateKvoxNavigationOptions<K extends string = never> {
   /**
    * The slice destinations to list. The order of this array is not significant:
-   * rows always come as Transcripts, Notes, Knowledge, Review, Ask, Templates.
-   * Default `['transcripts', 'notes', 'graph']`, the rows KVox web
-   * draws; Desktop asks for `['notes', 'graph', 'review', 'ask', 'templates']`.
+   * rows always come as Home, Transcripts, Notes, Knowledge, Review, Ask,
+   * Templates. Default `['transcripts', 'notes', 'graph']`; KVox web asks for
+   * `['home', 'transcripts', 'notes', 'graph']`, Desktop for
+   * `['home', 'notes', 'graph', 'review', 'ask', 'templates']`.
    *
    * @remarks
+   * `'home'` is the Home row (no gate; it owns exactly `/`), listed first. It is
+   * opt-in, so a host that draws its own Home row keeps working unchanged.
    * `'graph'` is the Knowledge row (gated on `graph:read` and the `graph`
    * feature). `'review'` and `'ask'` are rows of their own and carry the same
    * gates; when `'ask'` is listed, `/ask` stops belonging to Knowledge so exactly
@@ -210,6 +216,10 @@ export function createKvoxNavigation<K extends string = never>(
 
   const slices: ShellDestination<string>[] = [];
   const routes: Record<string, readonly string[]> = {};
+  if (include.has('home')) {
+    slices.push(...asShell([kvoxHomeDestination]));
+    Object.assign(routes, kvoxHomeDestinationRoutes);
+  }
   if (include.has('transcripts')) {
     slices.push(...asShell(kvoxTranscriptsDestinations));
     Object.assign(routes, kvoxTranscriptsDestinationRoutes);

@@ -16,7 +16,7 @@
  * opens here on Home, addressed by `?review=<proposalId>` and cleared on close.
  *
  * NO BREAKPOINT READ: rows stack by `sx` alone, like every Home section
- * (`HomePage`'s header). The review sheet it opens reads `down('sm')` for
+ * (`KvoxHomePage`'s header). The review sheet it opens reads `down('sm')` for
  * its own shape — the sheet's rule, not a Home gate — and mounts only while
  * open.
  */
@@ -30,14 +30,23 @@ import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAiTasksConfig } from '../../hooks/useAiTasksConfig';
-import { useIsMounted } from '@marinoscar/kvox-web/core/headless';
-import { formatRelativeTime, useKvoxHost, useVisiblePolling } from '@marinoscar/kvox-web/core/headless';
-import { listProposals } from '@marinoscar/kvox-web/graph/headless';
-import type { ProposalSummary } from '@marinoscar/kvox-web/graph/headless';
-import { ProposalReviewSheet } from '@marinoscar/kvox-web/graph/ui';
+import { useIsMounted } from '../../../core/headless/index.js';
+import { formatRelativeTime, useKvoxHost, useVisiblePolling } from '../../../core/headless/index.js';
+import { listProposals } from '../../../graph/headless/index.js';
+import type { ProposalSummary } from '../../../graph/headless/index.js';
+import { ProposalReviewSheet } from '../../../graph/ui/index.js';
 
+/**
+ * How often, in milliseconds, "Waiting for review" re-reads the drafts.
+ *
+ * @stability experimental
+ */
 export const GRAPH_REVIEW_POLL_MS = 60_000;
+/**
+ * How many drafts "Waiting for review" lists.
+ *
+ * @stability experimental
+ */
 export const GRAPH_REVIEW_LIMIT = 5;
 
 function rowTitle(proposal: ProposalSummary): string {
@@ -45,13 +54,21 @@ function rowTitle(proposal: ProposalSummary): string {
   return proposal.noteTitle ?? 'Untitled note';
 }
 
+/**
+ * "Waiting for review": connected-knowledge drafts nobody has reviewed. Renders nothing unless the host says connected knowledge is on and a draft exists.
+ *
+ * @returns the section, the review sheet, or nothing.
+ *
+ * @stability experimental
+ */
 export function GraphReviewCard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMounted = useIsMounted();
   const host = useKvoxHost();
-  const { config } = useAiTasksConfig();
-  const graphOn = config?.graphEnabled === true;
+  // The deployment switch comes from the host (`features().graphEnabled`), the
+  // same answer the Knowledge row of the navigation is gated on.
+  const graphOn = host.features().graphEnabled === true;
 
   const [drafts, setDrafts] = useState<ProposalSummary[] | null>(null);
   const [more, setMore] = useState(false);
@@ -64,10 +81,9 @@ export function GraphReviewCard() {
       setDrafts(result.items);
       setMore(result.nextCursor !== null);
       setFailed(false);
-    } catch (err) {
+    } catch {
       if (!isMounted()) return;
       setFailed(true);
-      if (import.meta.env.DEV) console.warn('Waiting for review: the drafts could not be read', err);
     }
   }, [host, isMounted]);
 

@@ -21,14 +21,27 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 
-import { TranscriptSummaryCard } from './TranscriptSummaryCard';
-import type { HomeTranscriptItem } from './TranscriptSummaryCard';
+import { TranscriptSummaryCard } from './TranscriptSummaryCard.js';
+import type { HomeTranscriptItem } from './TranscriptSummaryCard.js';
 
+/**
+ * Props of {@link SharedWithMe}.
+ *
+ * @stability experimental
+ */
 export interface SharedWithMeProps {
   /** At most eight, already ordered newest-first by the API. */
   items: HomeTranscriptItem[];
 }
 
+/**
+ * "Shared with me": transcripts other people shared.
+ *
+ * @param props - see {@link SharedWithMeProps}.
+ * @returns the section, or nothing when nothing was shared.
+ *
+ * @stability experimental
+ */
 export function SharedWithMe({ items }: SharedWithMeProps) {
   if (items.length === 0) return null;
 

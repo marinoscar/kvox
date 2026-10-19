@@ -151,6 +151,8 @@ export interface FakeViewerInit {
   userId?: string;
   /** The permission strings the user holds. Default none. */
   permissions?: Iterable<string>;
+  /** The name Home greets the user by. Default none. */
+  displayName?: string | null;
 }
 
 /**
@@ -287,7 +289,11 @@ export function createFakeKvoxWebHost(options: FakeKvoxWebHostOptions = {}): Fak
     viewer =
       value === null
         ? null
-        : { userId: value.userId ?? 'user-1', permissions: new Set(value.permissions ?? []) };
+        : {
+            userId: value.userId ?? 'user-1',
+            permissions: new Set(value.permissions ?? []),
+            ...(value.displayName === undefined ? {} : { displayName: value.displayName }),
+          };
   };
   setViewer(options.viewer === undefined ? {} : options.viewer);
 

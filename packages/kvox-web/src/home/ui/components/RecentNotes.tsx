@@ -31,7 +31,7 @@
  * =============================================================================
  *
  * `total === 0` means this account has never generated a note, and it reaches
- * this component only when it HAS transcripts (`HomePage` renders the journey
+ * this component only when it HAS transcripts (`KvoxHomePage` renders the journey
  * walkthrough instead for an account with neither). That is precisely the user
  * the "Turn a transcript into a note" card is for: they have the raw material
  * and no idea the next step exists.
@@ -53,9 +53,14 @@ import AddIcon from '@mui/icons-material/Add';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNavigate } from 'react-router-dom';
 
-import { NoteSummaryCard } from './NoteSummaryCard';
-import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
+import { NoteSummaryCard } from './NoteSummaryCard.js';
+import type { NoteListItem } from '../../../notes/headless/index.js';
 
+/**
+ * Props of {@link RecentNotes}.
+ *
+ * @stability experimental
+ */
 export interface RecentNotesProps {
   /** Already ordered newest-first by the API. */
   items: NoteListItem[];
@@ -95,6 +100,14 @@ function SectionHeading({ onViewAll }: { onViewAll: (() => void) | null }) {
   );
 }
 
+/**
+ * "Recent notes": the newest notes, or an invitation to write the first one.
+ *
+ * @param props - see {@link RecentNotesProps}.
+ * @returns the section.
+ *
+ * @stability experimental
+ */
 export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesProps) {
   const navigate = useNavigate();
 
@@ -104,7 +117,7 @@ export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesP
   // client has to resolve these at all and what should replace it.
 
   if (isLoading) {
-    // THIS SECTION'S OWN SKELETON, not the page's. `HomePage` gates its
+    // THIS SECTION'S OWN SKELETON, not the page's. `KvoxHomePage` gates its
     // full-page skeleton on the TRANSCRIPT summary alone, deliberately: the two
     // summaries are two parallel requests, and holding the whole landing screen
     // blank until the slower of them lands would make the page as slow as its

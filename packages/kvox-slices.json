@@ -23,7 +23,8 @@
     "ask": ["core", "transcripts", "notes", "graph"],
     "brand": [],
     "copilot": [],
-    "shell": ["core", "brand", "transcripts", "notes", "graph", "ask"]
+    "shell": ["core", "brand", "transcripts", "notes", "graph", "ask", "home"],
+    "home": ["core", "transcripts", "notes", "graph"]
   },
   "kvox-contract": {
     "errors": [],

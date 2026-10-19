@@ -88,10 +88,15 @@ import {
   UploadSessionGoneError,
   UploadSessionMismatchError,
   useUploadManager,
-} from '@marinoscar/kvox-web/transcripts/headless';
-import type { ManagedUpload, TranscriptListItem, UploadSessionRecord } from '@marinoscar/kvox-web/transcripts/headless';
-import type { NoteListItem } from '@marinoscar/kvox-web/notes/headless';
+} from '../../../transcripts/headless/index.js';
+import type { ManagedUpload, TranscriptListItem, UploadSessionRecord } from '../../../transcripts/headless/index.js';
+import type { NoteListItem } from '../../../notes/headless/index.js';
 
+/**
+ * Props of {@link InProgressSection}.
+ *
+ * @stability experimental
+ */
 export interface InProgressSectionProps {
   /** The summary's `inProgress` list — server-side work, never local uploads. */
   items: TranscriptListItem[];
@@ -103,6 +108,13 @@ export interface InProgressSectionProps {
    * it rather than being made to pass `[]`.
    */
   notes?: NoteListItem[];
+  /**
+   * Whether to list the uploads running in THIS tab and the interrupted upload sessions.
+   * Default `true`, which needs the `KvoxUploadManagerProvider` of the transcripts slice
+   * above the section. A host with no transcripts (and so no upload manager) passes
+   * `false` and the section lists only server-side work and generating notes.
+   */
+  uploads?: boolean;
 }
 
 /** Phases that still need the network. A settled upload belongs in Recent. */
@@ -114,6 +126,8 @@ const LIVE_PHASES = new Set(['idle', 'uploading', 'paused', 'completing', 'faile
  * Exported for its own test: the rule is one line and the failure it prevents
  * (the same recording listed twice, once with a progress bar and once without)
  * is the kind of thing that only shows up with a real upload running.
+ *
+ * @stability experimental
  */
 export function dedupeServerItems(
   items: TranscriptListItem[],
@@ -378,9 +392,31 @@ function GeneratingNoteRow({ note }: { note: NoteListItem }) {
   );
 }
 
-export function InProgressSection({ items, notes = [] }: InProgressSectionProps) {
-  const { uploads, sessions } = useUploadManager();
+/**
+ * What is moving right now: uploads in this tab, transcripts being processed and notes being generated.
+ *
+ * @param props - see {@link InProgressSectionProps}.
+ * @returns the section, or nothing when nothing is moving.
+ *
+ * @stability experimental
+ */
+export function InProgressSection({ uploads = true, ...props }: InProgressSectionProps) {
+  // Two components rather than a conditional hook: the upload manager is read by
+  // `WithUploads` alone, so a host without one never mounts it.
+  return uploads ? <WithUploads {...props} /> : <InProgressList {...props} uploads={[]} sessions={[]} />;
+}
 
+function WithUploads(props: Omit<InProgressSectionProps, 'uploads'>) {
+  const { uploads, sessions } = useUploadManager();
+  return <InProgressList {...props} uploads={uploads} sessions={sessions} />;
+}
+
+interface InProgressListProps extends Omit<InProgressSectionProps, 'uploads'> {
+  uploads: ManagedUpload[];
+  sessions: UploadSessionRecord[];
+}
+
+function InProgressList({ items, notes = [], uploads, sessions }: InProgressListProps) {
   const liveUploads = uploads.filter((upload) => LIVE_PHASES.has(upload.progress.phase));
   // A session whose upload is running again in THIS tab is not interrupted any
   // more; without this the same recording shows a progress bar and a "Resume

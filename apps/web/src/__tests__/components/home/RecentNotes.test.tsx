@@ -12,7 +12,7 @@ vi.mock('react-router-dom', async () => {
 
 import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
-import { RecentNotes } from '../../../components/home/RecentNotes';
+import { RecentNotes } from '@marinoscar/kvox-web/home/ui';
 import { AXE_OPTIONS, note } from './homeFixtures';
 
 /**

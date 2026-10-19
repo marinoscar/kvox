@@ -11,7 +11,7 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-import { GraphReviewCard } from '../../../components/home/GraphReviewCard';
+import { GraphReviewCard } from '@marinoscar/kvox-web/home/ui';
 import { invalidateGraphOntology } from '@marinoscar/kvox-web/graph/headless';
 import {
   mockGraphAiConfig,
@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 function renderCard(route = '/') {
-  return render(<GraphReviewCard />, { wrapperOptions: { user: graphUser, route } });
+  return render(<GraphReviewCard />, { wrapperOptions: { user: graphUser, route, graphFeature: true } });
 }
 
 describe('GraphReviewCard', () => {

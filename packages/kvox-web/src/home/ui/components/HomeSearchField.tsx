@@ -2,7 +2,7 @@
  * The home page's search entry point — issue #172, epic #166 ("Home at Scale").
  *
  * `VISION.md` describes one flow — Capture → Correct → Transform → Use → **Find
- * it again later** — and `HomePage`'s own header restates the last stage as
+ * it again later** — and `KvoxHomePage`'s own header restates the last stage as
  * question 4 that a person arrives with. Until this issue the landing screen
  * answered it with nothing at all: a user who knew exactly what they were
  * looking for had to first navigate to a library destination and find the
@@ -17,7 +17,7 @@
  * you type and drops a list of matches under the field. It is rejected, and not
  * on taste:
  *
- *   1. It is A REQUEST PER KEYSTROKE FROM THE LANDING SCREEN. `HomePage`'s rule
+ *   1. It is A REQUEST PER KEYSTROKE FROM THE LANDING SCREEN. `KvoxHomePage`'s rule
  *      is "one request per CONTENT TYPE, all fired in parallel, and no
  *      per-section list fetches" — a rule that exists so a phone on a cellular
  *      link makes two round trips to render this page. A type-ahead is an
@@ -89,9 +89,9 @@
  * `NewTranscriptButton` makes for hiding itself from a user without
  * `transcripts:write`.
  *
- * It is read with `usePermissions()` here rather than threaded from `HomePage`,
+ * It is read with the host viewer here rather than threaded from `KvoxHomePage`,
  * which is the opposite of what `HomeHero` does for `canCreateNote` — and the
- * difference is real: `HomePage` ALREADY computes `notes:write` for
+ * difference is real: `KvoxHomePage` ALREADY computes `notes:write` for
  * `RecentNotes`, so a second read of it would be a second place for one screen
  * to disagree with itself about one user. `transcripts:read` is computed
  * nowhere on that page, so threading it would add a prop, a default, and a
@@ -102,7 +102,7 @@
  * NO BREAKPOINT GATE, AND NO DISABLED SUBMIT
  * =============================================================================
  *
- * Not one `useMediaQuery` — see `HomePage`'s header. The field is full width on
+ * Not one `useMediaQuery` — see `KvoxHomePage`'s header. The field is full width on
  * a phone and capped from `sm` up, and that is a pair of `sx` breakpoint objects
  * resolved in CSS, so the five coupled gates in `docs/specs/settings-ui.md` §5
  * remain exactly five.
@@ -123,7 +123,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { useHasPermission } from '../../../core/headless/index.js';
 
 /**
  * The submitted term as a path, or `null` when there is nothing to search for.
@@ -143,6 +143,8 @@ import { usePermissions } from '@marinoscar/platform-web/identity/headless';
  *
  * ⚠ THE ONE-LINE SEAM. When issue #164 (Content Search) ships, this returns
  * `/search?q=…` and every caller, test and comment above stays as it is.
+ *
+ * @stability experimental
  */
 export function searchPathFor(term: string): string | null {
   const trimmed = term.trim();
@@ -150,9 +152,16 @@ export function searchPathFor(term: string): string | null {
   return `/transcripts?q=${encodeURIComponent(trimmed)}`;
 }
 
+/**
+ * The transcript search box of the hero. Draws nothing for a viewer without `transcripts:read`.
+ *
+ * @returns the search form, or nothing.
+ *
+ * @stability experimental
+ */
 export function HomeSearchField() {
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const canSearch = useHasPermission('transcripts:read');
   const [term, setTerm] = useState('');
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -168,7 +177,7 @@ export function HomeSearchField() {
 
   // See the header: no reachable destination, so no control. Hooks stay above
   // this line.
-  if (!hasPermission('transcripts:read')) return null;
+  if (!canSearch) return null;
 
   return (
     <Box

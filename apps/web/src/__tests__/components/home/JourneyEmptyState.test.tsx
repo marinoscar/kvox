@@ -13,10 +13,13 @@ vi.mock('react-router-dom', async () => {
 import type React from 'react';
 
 import { render, mockAdminUser } from '../../utils/test-utils';
+import { useKvoxPermissionCheck } from '@marinoscar/kvox-web/core/headless';
+import { resolveJourneySteps } from '@marinoscar/kvox-web/home/headless';
 import {
   JourneyEmptyState,
   JOURNEY_STAGES,
-} from '../../../components/home/JourneyEmptyState';
+} from '@marinoscar/kvox-web/home/ui';
+import { useRecordAudioStep } from '../../../components/home/recordAudioStep';
 import { AXE_OPTIONS, homeUser } from './homeFixtures';
 
 /**
@@ -34,6 +37,31 @@ import { AXE_OPTIONS, homeUser } from './homeFixtures';
  * is the only one left, and the day it ships these numbers move again --
  * which is the point of asserting the exact set rather than a bare count.
  */
+
+/**
+ * The journey as KVox web binds it: its own "Record or upload audio" step, filtered
+ * for the viewer the way the packaged page filters it (`resolveJourneySteps`).
+ */
+function WebJourney({
+  transcriptionAvailable,
+  isCheckingTranscription = false,
+}: {
+  transcriptionAvailable: boolean;
+  isCheckingTranscription?: boolean;
+}) {
+  const recordStep = useRecordAudioStep({
+    available: transcriptionAvailable,
+    isChecking: isCheckingTranscription,
+  });
+  const hasPermission = useKvoxPermissionCheck();
+  const steps = resolveJourneySteps({
+    journeySteps: [],
+    extraSteps: [recordStep],
+    progress: { notes: 0 },
+    context: { hasPermission, graphEnabled: false },
+  });
+  return <JourneyEmptyState steps={steps} />;
+}
 
 function renderJourney(ui: React.ReactElement, user = homeUser) {
   return render(ui, { wrapperOptions: { user } });
@@ -68,45 +96,45 @@ describe('JOURNEY_STAGES', () => {
 
 describe('JourneyEmptyState', () => {
   it('heads the section so a new user knows where to begin', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByRole('heading', { name: 'Start here' })).toBeInTheDocument();
   });
 
   it('says plainly that there is nothing yet', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByText(/you have no transcripts yet/i)).toBeInTheDocument();
   });
 
   it('draws all four stages', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(4);
   });
 
   it('names Capture and Correct as the two that work', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByRole('heading', { name: 'Capture' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Correct' })).toBeInTheDocument();
   });
 
   it('draws Transform and Find too', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByRole('heading', { name: 'Transform' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Find' })).toBeInTheDocument();
   });
 
   it('marks exactly one of them "Coming soon"', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 
   it('does not mark Capture as coming soon', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     const capture = screen.getByRole('heading', { name: 'Capture' }).parentElement!;
     expect(within(capture).queryByText('Coming soon')).not.toBeInTheDocument();
@@ -115,34 +143,34 @@ describe('JourneyEmptyState', () => {
   // Pinned as its own case rather than folded into the count above (#107): the
   // count would still pass if Transform kept its label and Find lost one.
   it('no longer marks Transform as coming soon, now that notes ship', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     const transform = screen.getByRole('heading', { name: 'Transform' }).parentElement!;
     expect(within(transform).queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
   it('marks Find as coming soon', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     const find = screen.getByRole('heading', { name: 'Find' }).parentElement!;
     expect(within(find).getByText('Coming soon')).toBeInTheDocument();
   });
 
   it('renders the stages as an ordered list — the order is the meaning', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByRole('list').tagName).toBe('OL');
   });
 
   it('includes the New transcript button', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeEnabled();
   });
 
   it('sends that button into the New-transcript flow', async () => {
     const user = userEvent.setup();
-    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    renderJourney(<WebJourney transcriptionAvailable />);
 
     await user.click(screen.getByRole('button', { name: 'New transcript' }));
 
@@ -150,26 +178,26 @@ describe('JourneyEmptyState', () => {
   });
 
   it('disables the button when transcription is not configured', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable={false} />);
+    renderJourney(<WebJourney transcriptionAvailable={false} />);
 
     expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
   });
 
   it('offers an admin the way to fix that', () => {
-    renderJourney(<JourneyEmptyState transcriptionAvailable={false} />, mockAdminUser);
+    renderJourney(<WebJourney transcriptionAvailable={false} />, mockAdminUser);
 
     expect(screen.getByRole('button', { name: 'Set up transcription' })).toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {
-    const { container } = renderJourney(<JourneyEmptyState transcriptionAvailable />);
+    const { container } = renderJourney(<WebJourney transcriptionAvailable />);
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
   it('has no accessibility violations when transcription is unavailable', async () => {
     const { container } = renderJourney(
-      <JourneyEmptyState transcriptionAvailable={false} />,
+      <WebJourney transcriptionAvailable={false} />,
       mockAdminUser,
     );
 

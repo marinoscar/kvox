@@ -111,7 +111,6 @@
  */
 
 import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
-import HomeIcon from '@mui/icons-material/Home';
 import { createKvoxNavigation } from '@marinoscar/kvox-web/shell';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
@@ -152,17 +151,10 @@ export const UNOWNED_ROUTES: readonly string[] = [
 ];
 
 /**
- * This app's own destinations: the ones the packaged slices do not declare. Unpinned
- * ones lead the navigation (Home), pinned ones close it (Settings, then Console).
+ * This app's own destinations: the ones the packaged slices do not declare. Both are
+ * pinned and close the navigation (Settings, then Console).
  */
-const APP_DESTINATIONS: readonly ShellDestination<'home' | 'settings' | 'console'>[] = [
-  {
-    key: 'home',
-    label: 'Home',
-    compactLabel: 'Home',
-    Icon: HomeIcon,
-    path: '/',
-  },
+const APP_DESTINATIONS: readonly ShellDestination<'settings' | 'console'>[] = [
   {
     key: 'settings',
     label: 'User Settings',
@@ -191,17 +183,19 @@ const APP_DESTINATIONS: readonly ShellDestination<'home' | 'settings' | 'console
 ];
 
 /**
- * The navigation of this app (`@marinoscar/kvox-web/shell`, issue #629): Home,
- * then the slices' own rows (Transcripts, Notes, Knowledge), then the pinned
+ * The navigation of this app (`@marinoscar/kvox-web/shell`, issue #629): the
+ * slices' own rows (Home, Transcripts, Notes, Knowledge), then the pinned
  * Settings and Console. The slice rows, their gates (`transcripts:read`,
  * `notes:read`, `graph:read` plus `feature: 'graph'`) and their route prefixes are
- * the slices' data; this file contributes Home, Settings and Console and the
- * prefix the Console owns.
+ * the slices' data (Home is the packaged one since issue #632); this file contributes
+ * Settings and Console and the prefix the Console owns.
  */
-const KVOX = createKvoxNavigation<'home' | 'settings' | 'console'>({
+const KVOX = createKvoxNavigation<'settings' | 'console'>({
+  // Home is the packaged one (issue #632): `kvoxHomeDestination` leads the rows.
+  include: ['home', 'transcripts', 'notes', 'graph'],
   extra: APP_DESTINATIONS,
   // Console navigates to `/admin/settings` and owns the whole `/admin` subtree.
-  extraRoutes: { home: ['/'], settings: ['/settings'], console: ['/admin'] },
+  extraRoutes: { settings: ['/settings'], console: ['/admin'] },
 });
 
 /**

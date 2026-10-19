@@ -13,8 +13,8 @@ vi.mock('react-router-dom', async () => {
 
 import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
-import { NeedsAttention } from '../../../components/home/NeedsAttention';
-import type { NeedsAttentionProps } from '../../../components/home/NeedsAttention';
+import { NeedsAttention } from '@marinoscar/kvox-web/home/ui';
+import type { NeedsAttentionProps } from '@marinoscar/kvox-web/home/ui';
 import { AXE_OPTIONS, note, transcript } from './homeFixtures';
 
 /**

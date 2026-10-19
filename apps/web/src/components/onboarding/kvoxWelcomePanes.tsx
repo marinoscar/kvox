@@ -57,7 +57,7 @@ export interface WelcomePane {
  * The product's thesis, restated.
  *
  * ⚠ THE FOUR LINES ARE `JOURNEY_STAGES`' OWN DESCRIPTIONS, WORD FOR WORD
- * (`components/home/JourneyEmptyState.tsx`), and they are RESTATED rather than imported on
+ * (`JourneyEmptyState` of `@marinoscar/kvox-web/home/ui`), and they are RESTATED rather than imported on
  * purpose: that module pulls in `NewTranscriptButton`, which pulls in the transcription
  * capability probe, and the shell must not acquire a request path because a dialog wanted
  * four strings. Reword this list only together with that one, never against it.

@@ -79,7 +79,7 @@ Keep this list current when you add one.
 | Web theme, `palette.primary.main` (light) | `packages/kvox-web/src/brand/tokens.ts` (`@marinoscar/kvox-web/brand`), through the generated `identity.generated.ts` (`npm run brand:sync -w @marinoscar/kvox-web`) | `themeColor` |
 | Brand icons and favicon — generated pixels, not read at runtime | `packages/kvox-web/src/brand/assets/*.png` and `favicon.ico` (mirrored into `apps/web/public/`) via `packages/kvox-web/scripts/generate-icons.py` | `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Web app manifest (`name`, `short_name`, `description`, `theme_color`, `background_color`) | `apps/web/pwa/manifest.ts` | `APP_NAME`, `THEME_COLOR`, `BACKGROUND_COLOR` |
-| Signed-in home page subtitle | `apps/web/src/components/home/HomeHero.tsx` | `TAGLINE` |
+| Signed-in home page subtitle | `apps/web/src/pages/HomePage.tsx` (passed as the `tagline` of the packaged `KvoxHomePage`) | `TAGLINE` |
 
 `background_color` above is `BACKGROUND_COLOR`'s only runtime consumer (issue
 #217, epic #215) — it is read directly at build time, so unlike the icon
