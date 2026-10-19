@@ -1,4 +1,5 @@
 import DescriptionIcon from '@mui/icons-material/Description';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
 
 import type { KvoxDestination, KvoxDestinationRoutes } from '../../core/ui/index.js';
 
@@ -47,4 +48,41 @@ export const kvoxNotesDestinations: readonly KvoxDestination<'notes'>[] = [
  */
 export const kvoxNotesDestinationRoutes: KvoxDestinationRoutes<'notes'> = {
   notes: ['/notes'],
+};
+
+/**
+ * The Templates destination of the notes slice, as data, for a host that lists
+ * the note-template manager as a row of its own (KVox Desktop's rail).
+ *
+ * @remarks
+ * KVox web does NOT spread this: there the manager is the Note Templates card of
+ * the settings hub, and `/settings/note-templates` is owned by the pinned
+ * `settings` row. A host that lists both rows gets the longest-prefix answer.
+ * `createKvoxNavigation` from `@marinoscar/kvox-web/shell` composes it when asked
+ * for `'templates'`.
+ *
+ * No permission, like the route and the hub card: `note_templates:*` is seeded to
+ * every role and the page's real gate is the viewer's AI key.
+ *
+ * @stability experimental
+ * @extensionPoint destination
+ */
+export const kvoxNoteTemplatesDestinations: readonly KvoxDestination<'templates'>[] = [
+  {
+    key: 'templates',
+    label: 'Templates',
+    compactLabel: 'Templates',
+    Icon: NoteAddIcon,
+    path: '/settings/note-templates',
+  },
+];
+
+/**
+ * The route prefix the Templates destination owns, keyed by destination key.
+ *
+ * @stability experimental
+ * @extensionPoint destination
+ */
+export const kvoxNoteTemplatesDestinationRoutes: KvoxDestinationRoutes<'templates'> = {
+  templates: ['/settings/note-templates'],
 };

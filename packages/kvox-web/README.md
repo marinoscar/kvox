@@ -4,7 +4,7 @@ The React side of the KVox domain: pages, components and hooks built on MUI, exp
 
 ## Purpose and scope
 
-The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, shell or settings hub; it does own the KVox look (the `brand` entry: theme, tokens, mark, fonts), so every host paints the same. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop). The one exception is the `brand` entry, which imports exactly `@marinoscar/platform-web/shell/headless` (`createShellTheme`).
+The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, shell or settings hub; it does own the KVox look (the `brand` entry: theme, tokens, mark, fonts), so every host paints the same. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop). The exceptions are the `brand` entry, which imports exactly `@marinoscar/platform-web/shell/headless` (`createShellTheme`), and the `shell` entry, which imports the platform's `shell/ui`, `shell/headless` and `identity/headless`.
 
 Status: filled (Epic 7, issues 7.1 to 7.6). All six slices are in: `core`, `transcription`, `search`, `transcripts`, `notes`, `graph` and `ask`. The web edition's `apps/web/src` keeps only composition (routes, registries, the shell, the host binding and the non-domain pages).
 
@@ -25,6 +25,7 @@ Status: filled (Epic 7, issues 7.1 to 7.6). All six slices are in: `core`, `tran
 - `@marinoscar/kvox-web/ask/headless`: the client of `/api/ask/**`, the answer stream over `host.sse`, the conversation, conversation-list, stream and AI-configuration hooks, and the pure error-copy, citation-parsing, model-choice and suggestion helpers. [README](src/ask/README.md).
 - `@marinoscar/kvox-web/ask/ui`: `AskPage`, `AskThread`, `AskComposer`, `ConversationList`, `EntityAskPanel`, `EntityAskButton`, the slot components `AskEntityPanelSlot` and `AskEntityButtonSlot` for the graph entity page, and `kvoxAskRoutes`.
 - `@marinoscar/kvox-web/brand`: the single source of the KVox look for every host: `createKvoxTheme`, `kvoxLightTheme`, `kvoxDarkTheme`, `kvoxTokens`, `kvoxLightPalette`, `kvoxDarkPalette`, `kvoxComponentOverrides`, `KVOX_BRAND`, and the inline-SVG `BrandMark` and `BrandLockup`. Needs MUI and `@marinoscar/platform-web`. [README](src/brand/README.md).
+- `@marinoscar/kvox-web/shell`: the KVox app shell for every host: `KvoxAppShell` (the platform shell with the brand lockup, rail, phone bar and user menu), `createKvoxNavigation` (the slices' destinations, composed), `renderKvoxRoutes`, `defaultKvoxLinks` and `AiKeyRequired`. Needs MUI, `react-router-dom` and `@marinoscar/platform-web`. [README](src/shell/README.md).
 - The brand files, for a host's manifest, window icon and installer: `@marinoscar/kvox-web/brand/assets/mark.svg`, `@marinoscar/kvox-web/brand/assets/favicon.svg`, `@marinoscar/kvox-web/brand/assets/favicon.ico`, `@marinoscar/kvox-web/brand/assets/icon-192.png`, `@marinoscar/kvox-web/brand/assets/icon-512.png`, `@marinoscar/kvox-web/brand/assets/icon-1024.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-192.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-512.png`, `@marinoscar/kvox-web/brand/assets/badge-96.png`, `@marinoscar/kvox-web/brand/assets/apple-touch-icon-180.png` (`mark.svg` is the 512 master).
 - The self-hosted Inter, with a relative `@font-face` URL: `@marinoscar/kvox-web/brand/fonts/inter.css` and `@marinoscar/kvox-web/brand/fonts/Inter-latin-variable.woff2`.
 - `@marinoscar/kvox-web/copilot/headless`: `useCopilotProvider` over a `CopilotProviderPort` (status, setting, sign-in, sign-out, runtime download), `COPILOT_CONSENT_COPY` (the consent text as data), `buildCopilotCapabilities`, `hasCopilotConsent` and `copilotSignInReasonText`. No MUI. [README](src/copilot/README.md).
@@ -104,8 +105,10 @@ None at the package level. The host object is the whole configuration; the optio
 - `KvoxSettingsCard`, `KvoxDestination`, `KvoxRouteDef` (`core/ui`): the types of the data a slice exports and the app spreads into `ADMIN_SECTIONS`, `USER_SETTINGS_SECTIONS`, `DESTINATIONS` and its routes.
 - `kvoxTranscriptionAdminSections`, `kvoxTranscriptionRoutes` and the `renderSecretField` slot of `TranscriptionSettingsPage` (`transcription/ui`).
 - `kvoxSearchUserSettingsSections` and `kvoxSearchRoutes` (`search/ui`): the Search Indexing card (no permission, by design) and its route.
+- `createKvoxNavigation`, `KvoxAppShell`, `renderKvoxRoutes`, `defaultKvoxLinks` and `AiKeyRequired` (`shell`): the composition of the slices' destinations and the shell that draws them. Listed in the [shell README](src/shell/README.md).
 - `kvoxTranscriptsDestinations`, `kvoxTranscriptsDestinationRoutes` and `kvoxTranscriptsRoutes` (`transcripts/ui`), the slots of `TranscriptPage` (`TranscriptPageSlots`: `NotesSection`, `useSpeakerPeople`, `SelectionActions`, `HeaderActions`) and of the library (`TranscriptsLibrarySlots`: `SearchPrefix`), and the `sharing` (`TranscriptSharingAdapter`) and `ai` (`TranscriptAiAccess`) adapters. Each is listed in the [transcripts README](src/transcripts/README.md).
 - `kvoxNotesDestinations`, `kvoxNotesDestinationRoutes`, `kvoxNotesUserSettingsSections` and `kvoxNotesRoutes` (`notes/ui`), the slots of `NotePage` (`NotePageSlots`: `Provider`, `useAsideWidth`, `HeaderActions`, `ProposalActions`, `SelectionActions`) and of the library (`NotesLibrarySlots`: `SearchPrefix`), and the `ai` (`NotesAiAccess`) adapter. Each is listed in the [notes README](src/notes/README.md).
+- `kvoxReviewDestinations` and `kvoxReviewDestinationRoutes` (`graph/ui`), `kvoxAskDestinations` and `kvoxAskDestinationRoutes` (`ask/ui`), `kvoxNoteTemplatesDestinations` and `kvoxNoteTemplatesDestinationRoutes` (`notes/ui`): the Review, Ask and Templates rows for a host that lists them (Desktop); web does not spread them.
 - `kvoxGraphDestinations`, `kvoxGraphDestinationRoutes`, `kvoxGraphUserSettingsSections` and `kvoxGraphRoutes` (`graph/ui`), the slot components that fill the transcript and note pages and both libraries (`graphTranscriptPageSlots` with `useGraphSpeakerPeople` and `GraphTranscriptSelectionActions`; `graphNotePageSlots` with `GraphNotePageProvider`, `useGraphNoteAsideWidth`, `GraphNoteHeaderActions`, `GraphNoteProposalActions` and `GraphNoteSelectionActions`; `graphTranscriptsLibrarySlots`, `graphNotesLibrarySlots`, `GraphSearchPrefix`), and the Ask slots of `GraphEntityPage` (`GraphEntityPageSlots`). Each is listed in the [graph README](src/graph/README.md).
 - `kvoxAskRoutes` (`ask/ui`), the slot components `AskEntityButtonSlot` and `AskEntityPanelSlot` that fill `GraphEntityPageSlots.AskButton` and `AskPanel`, and the `remarkAskCitations` plugin (`ask/headless`). The ask slice adds a route under the graph slice's `knowledge` destination and no destination of its own. Each is listed in the [ask README](src/ask/README.md).
 
@@ -150,6 +153,44 @@ The Inter font is self-hosted and the `@font-face` URL is relative to `inter.css
 
 **Identity.** `KVOX_BRAND` and the light primary come from `packages/shared/identity.json` through the committed `src/brand/identity.generated.ts`, written by `npm run brand:sync -w @marinoscar/kvox-web` (a published package cannot import the private `@app/shared`). `scripts/rename.mjs` runs the write, regenerates the icons and re-syncs the mirror; `npm run check:kvox-brand` fails CI on drift. See [RENAMING.md](../../docs/RENAMING.md).
 
+### The shell subpath
+
+`@marinoscar/kvox-web/shell` is the one KVox app shell; `apps/web` and KVox Desktop both render `KvoxAppShell` and bind only host facts. `createKvoxNavigation` composes the destinations the slices declare (Transcripts, Notes, Knowledge, and on request Review, Ask and Templates) with the host's own, `renderKvoxRoutes` turns a slice's route data into `<Route>` elements behind the platform's permission guard, `defaultKvoxLinks` is the `KvoxWebHost.links` both hosts use, and `AiKeyRequired` is the shared "add your key" state (the host passes the settings path).
+
+```tsx
+// Web (a server session): the layout route element.
+<KvoxAppShell
+  navigation={KVOX_NAVIGATION}
+  actions={<NotificationBell />}
+  banners={<MaintenanceBanner />}
+  overlays={<WelcomeDialog />}
+  renderUserMenuItems={(close) => <GettingStartedMenuItem onDone={close} />}
+/>
+
+// Desktop (a local single user, no API): identity and preferences are the host's.
+const { navigation } = createKvoxNavigation({
+  include: ['notes', 'graph', 'review', 'ask', 'templates'],
+  settingsPath: '/settings',
+  settingsSections: DESKTOP_SETTINGS_SECTIONS,
+}); // module scope
+
+registerSettingsFeature('graph', () => graphEnabled); // hides Knowledge, Review and Ask while off
+
+<ShellRoot themes={THEMES} storageKey="theme_mode">
+  <LocalIdentityProvider userId={connection.userId} displayName={osUserName} permissions={connection.permissions}>
+    <ShellPreferencesProvider port={shellPreferencesPort}>
+      <Routes>
+        <Route element={<KvoxAppShell navigation={navigation} userMenuItems={DESKTOP_MENU_ITEMS} />}>
+          {renderKvoxRoutes([...kvoxNotesRoutes, ...kvoxGraphRoutes, ...kvoxAskRoutes])}
+        </Route>
+      </Routes>
+    </ShellPreferencesProvider>
+  </LocalIdentityProvider>
+</ShellRoot>
+```
+
+The shell reads no breakpoint and makes no request of its own. The phone bar is given the navigation without its pinned destinations (a pinned destination is a mode, never a peer on the bar; `withoutPinned`), so a host builds no second navigation. See the [shell README](src/shell/README.md).
+
 The `core/ui` and other slice pages read the MUI theme of the host and define none themselves.
 
 `core/ui` ships the library chrome (`LibraryPageFrame`, `FeedCountLine`, `FeedDateSeparator`, `ActiveStatusFilterChip`), `KvoxLoadingSpinner` and `KvoxCopyButton` (the shared copy control). Pages read the MUI theme of the host; the package defines none. `LibraryPageFrame` reads `down('sm')` to place its create action; that read is a page-level choice, not one of the five coupled shell breakpoint gates (`apps/web/src/__tests__/config/breakpointGates.test.ts` scans this package too).
@@ -183,7 +224,7 @@ The `brand` entry and its asset and font exports are new; an app that had its ow
 - [Package documentation standard and checks](../../docs/PACKAGES.md): how this README, the TSDoc and the catalog are checked
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
-- [brand README](src/brand/README.md), [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md) [ask README](src/ask/README.md) and [copilot README](src/copilot/README.md): the slices
+- [brand README](src/brand/README.md), [shell README](src/shell/README.md), [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md), [ask README](src/ask/README.md) and [copilot README](src/copilot/README.md): the slices
 
 ### Desktop
 

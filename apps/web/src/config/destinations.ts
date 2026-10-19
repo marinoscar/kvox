@@ -7,10 +7,13 @@
  * user settings registries, into the `ShellNavigation` the shell takes. Route
  * matching (`owns`, `resolveActiveDestination`) and visibility
  * (`isDestinationVisible`) are the package's, so every surface asks one function.
- * The packaged bottom bar draws pinned destinations too (and overflows into
- * "More"); `pinned` is rail-only in the package, so this app keeps its rule that
- * the phone bar never carries a mode by binding the bar to
- * `BOTTOM_BAR_DESTINATIONS` (`KVOX_BOTTOM_BAR_NAVIGATION` in `config/shell.ts`).
+ * The packaged bottom bar draws pinned destinations too (at the end, and it
+ * overflows into "More"), so this app keeps its rule that the phone bar never
+ * carries a mode by giving the bar the non-pinned destinations
+ * (`BOTTOM_BAR_DESTINATIONS`, which `KvoxAppShell` derives with `withoutPinned`).
+ * The navigation itself is composed by `createKvoxNavigation`
+ * (`@marinoscar/kvox-web/shell`, issue #629): this file adds Home, Settings and
+ * Console to the rows the slices declare.
  *
  * Issue #55, epic #51.
  * Issue #55, epic #51. This file is the SINGLE source of truth for the app's
@@ -109,15 +112,7 @@
 
 import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
 import HomeIcon from '@mui/icons-material/Home';
-import {
-  kvoxTranscriptsDestinationRoutes,
-  kvoxTranscriptsDestinations,
-} from '@marinoscar/kvox-web/transcripts/ui';
-import { kvoxNotesDestinationRoutes, kvoxNotesDestinations } from '@marinoscar/kvox-web/notes/ui';
-import {
-  kvoxGraphDestinationRoutes,
-  kvoxGraphDestinations,
-} from '@marinoscar/kvox-web/graph/ui';
+import { createKvoxNavigation } from '@marinoscar/kvox-web/shell';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
@@ -140,49 +135,6 @@ export type DestinationKey =
 export type Destination = ShellDestination<DestinationKey>;
 
 /**
- * Route prefixes each destination owns. Child routes are covered by their
- * parent prefix (`/admin/settings/users`, `/settings/profile`, …) and do not
- * need their own entries.
- *
- * `console` owns the bare `/admin` rather than `/admin/settings`, even though
- * `/admin/settings` is where it NAVIGATES. The two are different questions:
- * `path` is where the row sends you, `DESTINATION_ROUTES` is what makes the row
- * light up. `/admin/users` still exists as a redirect route (#92) and a
- * bookmark still lands on it for one render — with only `/admin/settings` in
- * this list that render would highlight nothing, and the route-ownership test
- * would fail it as "neither owned nor deliberately unowned".
- */
-export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string[]>> = {
-  // Just the root since #438. `/graph` and `/ask` were owned here between
-  // #373/#380 and #438 — see the file header.
-  home: ['/'],
-  // ONE PREFIX EACH SINCE #106. Each owns its whole subtree — `/transcripts`
-  // covers the library, `/transcripts/new`, `/transcripts/:id` and
-  // `/transcripts/:id/history` (#30, #31, epic #19); `/notes` covers `/notes`,
-  // `/notes/new`, `/notes/:id` and `/notes/:id/history` (#57, epic #45) —
-  // because a reader drilled into one transcript, or watching one note being
-  // written, has not left the surface they started on.
-  //
-  // These were a single `library: ['/transcripts', '/notes']` entry between
-  // #57 and #106. Splitting them is what makes the two rows light up
-  // independently; a merged entry would leave the bar highlighting the same tab
-  // for both halves of the app.
-  // The transcripts slice's prefix (#500, epic #498), spread at the same key.
-  ...kvoxTranscriptsDestinationRoutes,
-  // The notes slice's prefix (#502, epic #498), spread at the same key.
-  ...kvoxNotesDestinationRoutes,
-  // The graph slice's prefixes (#503, epic #498), spread at the same key.
-  // `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
-  // `/graph/overview` and `/graph/imports/:id` (#373–#375, #387); `/ask` covers
-  // `/ask` and `/ask/:conversationId` (#380). Owned here whether or not the
-  // tab is DRAWN: with connected knowledge off the row is hidden, and a user
-  // who reaches one of these pages anyway simply sees no highlighted row.
-  ...kvoxGraphDestinationRoutes,
-  settings: ['/settings'],
-  console: ['/admin'],
-};
-
-/**
  * Routes deliberately owned by NO destination.
  *
  * These are reached from outside the authenticated shell entirely — the login
@@ -200,8 +152,61 @@ export const UNOWNED_ROUTES: readonly string[] = [
 ];
 
 /**
+ * This app's own destinations: the ones the packaged slices do not declare. Unpinned
+ * ones lead the navigation (Home), pinned ones close it (Settings, then Console).
+ */
+const APP_DESTINATIONS: readonly ShellDestination<'home' | 'settings' | 'console'>[] = [
+  {
+    key: 'home',
+    label: 'Home',
+    compactLabel: 'Home',
+    Icon: HomeIcon,
+    path: '/',
+  },
+  {
+    key: 'settings',
+    label: 'User Settings',
+    compactLabel: 'Settings',
+    Icon: SettingsIcon,
+    path: '/settings',
+    // A MODE since #438, on #106's Console precedent — see the file header.
+    // Declared BEFORE `console`, so the rail's foot reads Settings then Console:
+    // every user's own settings first, the operator surface only some users
+    // have last, and a non-admin's foot is just Settings under its divider.
+    pinned: true,
+  },
+  {
+    key: 'console',
+    label: 'Console',
+    compactLabel: 'Console',
+    Icon: AdminIcon,
+    path: '/admin/settings',
+    anyPermission: ['system_settings:read', 'users:read'],
+    // A MODE, not a fifth peer destination — see `pinned`. Pinned at the rail's
+    // foot (#105), listed inline in the user menu, and omitted from the bottom
+    // bar entirely (#106). The permission gate above still runs first: a user
+    // who cannot reach Console gets no pinned row AND no stray divider.
+    pinned: true,
+  },
+];
+
+/**
+ * The navigation of this app (`@marinoscar/kvox-web/shell`, issue #629): Home,
+ * then the slices' own rows (Transcripts, Notes, Knowledge), then the pinned
+ * Settings and Console. The slice rows, their gates (`transcripts:read`,
+ * `notes:read`, `graph:read` plus `feature: 'graph'`) and their route prefixes are
+ * the slices' data; this file contributes Home, Settings and Console and the
+ * prefix the Console owns.
+ */
+const KVOX = createKvoxNavigation<'home' | 'settings' | 'console'>({
+  extra: APP_DESTINATIONS,
+  // Console navigates to `/admin/settings` and owns the whole `/admin` subtree.
+  extraRoutes: { home: ['/'], settings: ['/settings'], console: ['/admin'] },
+});
+
+/**
  * The six destinations, in navigation order: Home, Transcripts, Notes,
- * Knowledge, Settings, Console.
+ * Knowledge, Settings, Console (composed by `createKvoxNavigation` above).
  *
  * FOUR NON-PINNED DESTINATIONS IS THE BOTTOM BAR'S CEILING, and since #106 the
  * app sits exactly at it BY DESIGN rather than by coincidence. Five labelled
@@ -250,57 +255,23 @@ export const UNOWNED_ROUTES: readonly string[] = [
  * `AdminOnly` with it) for non-navigation uses, but a role check here is what
  * produced the split-brain described in the file header.
  */
-export const DESTINATIONS: readonly Destination[] = [
-  {
-    key: 'home',
-    label: 'Home',
-    compactLabel: 'Home',
-    Icon: HomeIcon,
-    path: '/',
-  },
-  // Issue #30 (epic #19), restored to a destination of its own by #106; the
-  // record is the transcripts slice's since #500 (epic #498), spread at the same
-  // index: ONE permission (`transcripts:read`, what `transcripts.controller.ts`
-  // enforces), not pinned, `GraphicEq` icon, "Transcripts" for both labels.
-  ...kvoxTranscriptsDestinations,
-  // Issue #57 (epic #45), promoted from a tab to a destination by #106; the
-  // record is the notes slice's since #502 (epic #498), spread at the same
-  // index: ONE permission (`notes:read`, what `notes.controller.ts` enforces),
-  // not pinned, the page icon, "Notes" for both labels.
-  ...kvoxNotesDestinations,
-  // Issue #438 — see the file header; the record is the graph slice's since
-  // #503 (epic #498), spread at the same index: ONE permission (`graph:read`,
-  // the one every `/api/graph/*` read and every `/api/ask/*` route enforces,
-  // seeded to all three roles) PLUS the `graph` runtime feature
-  // (`ai.graphEnabled`), so a deployment that has connected knowledge switched
-  // off shows no tab. The hub glyph the graph surfaces already use.
-  ...kvoxGraphDestinations,
-  {
-    key: 'settings',
-    label: 'User Settings',
-    compactLabel: 'Settings',
-    Icon: SettingsIcon,
-    path: '/settings',
-    // A MODE since #438, on #106's Console precedent — see the file header.
-    // Declared BEFORE `console`, so the rail's foot reads Settings then Console:
-    // every user's own settings first, the operator surface only some users
-    // have last, and a non-admin's foot is just Settings under its divider.
-    pinned: true,
-  },
-  {
-    key: 'console',
-    label: 'Console',
-    compactLabel: 'Console',
-    Icon: AdminIcon,
-    path: '/admin/settings',
-    anyPermission: ['system_settings:read', 'users:read'],
-    // A MODE, not a fifth peer destination — see `pinned`. Pinned at the rail's
-    // foot (#105), listed inline in the user menu, and omitted from the bottom
-    // bar entirely (#106). The permission gate above still runs first: a user
-    // who cannot reach Console gets no pinned row AND no stray divider.
-    pinned: true,
-  },
-];
+export const DESTINATIONS: readonly Destination[] = KVOX.navigation.destinations as readonly Destination[];
+
+/**
+ * Route prefixes each destination owns. Child routes are covered by their
+ * parent prefix (`/admin/settings/users`, `/settings/profile`, …) and do not
+ * need their own entries.
+ *
+ * `console` owns the bare `/admin` rather than `/admin/settings`, even though
+ * `/admin/settings` is where it NAVIGATES. The two are different questions:
+ * `path` is where the row sends you, `DESTINATION_ROUTES` is what makes the row
+ * light up. `/admin/users` still exists as a redirect route (#92) and a
+ * bookmark still lands on it for one render — with only `/admin/settings` in
+ * this list that render would highlight nothing, and the route-ownership test
+ * would fail it as "neither owned nor deliberately unowned".
+ */
+export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string[]>> =
+  KVOX.navigation.destinationRoutes as Readonly<Record<DestinationKey, readonly string[]>>;
 
 /**
  * The destinations the phone bottom bar draws — every NON-PINNED one.
@@ -316,6 +287,5 @@ export const DESTINATIONS: readonly Destination[] = [
  * connected knowledge off), and never a "More" tab, because the list never
  * exceeds the bar's default of four.
  */
-export const BOTTOM_BAR_DESTINATIONS: readonly Destination[] = DESTINATIONS.filter(
-  (d) => !d.pinned,
-);
+export const BOTTOM_BAR_DESTINATIONS: readonly Destination[] =
+  KVOX.bottomBarNavigation.destinations as readonly Destination[];

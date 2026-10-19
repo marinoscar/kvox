@@ -68,6 +68,25 @@ describe('scanKvoxWebSources finds a violation', () => {
     }
   });
 
+  it('lets the shell slice import the platform shell and identity entries and nothing else', () => {
+    const p = (path: string) => `@marinoscar/${'platform'}-web/${path}`;
+    const dir = sandbox({
+      'shell/shell.ts': `import { ShellLayout } from '${p('shell/ui')}';\nexport { ShellLayout };\n`,
+      'shell/nav.ts': `import type { ShellNavigation } from '${p('shell/headless')}';\nexport type { ShellNavigation };\n`,
+      'shell/routes.ts': `import { RequirePermission } from '${p('identity/headless')}';\nexport { RequirePermission };\n`,
+      'shell/other.ts': `import { api } from '${p('core')}';\nexport { api };\n`,
+      'notes/ui/shell.ts': `import { ShellLayout } from '${p('shell/ui')}';\nexport { ShellLayout };\n`,
+    });
+    try {
+      const problems = scanKvoxWebSources(dir);
+      expect(problems).toHaveLength(2);
+      expect(problems.join('\n')).toMatch(/shell\/other\.ts imports .*web\/core/);
+      expect(problems.join('\n')).toMatch(/notes\/ui\/shell\.ts imports .*shell\/ui/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('allows the Copilot card to import the platform account sign-in card, and nothing else, there only', () => {
     const card = `@marinoscar/${'platform'}-web/ai/ui`;
     const other = `@marinoscar/${'platform'}-web/settings/ui`;
