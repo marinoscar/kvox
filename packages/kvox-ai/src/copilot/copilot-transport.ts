@@ -1,6 +1,12 @@
 import { AiError } from '@marinoscar/platform-ai-providers';
 
-import { redactTokens } from './copilot-errors.js';
+import {
+  copilotErrorFromThrown,
+  copilotSignInCancelled,
+  copilotSignInExpired,
+  copilotSignInFailed,
+  redactTokens,
+} from './copilot-errors.js';
 
 // =============================================================================
 // The Copilot transport: our own structural view of the Copilot SDK (issue #581)
@@ -23,6 +29,15 @@ import { redactTokens } from './copilot-errors.js';
 // `CopilotSession` `.sessionId`, `.on(handler)`, `.send(options)`, `.abort()`,
 // `.disconnect()` and `.rpc.tools.getCurrentMetadata()`.
 //
+// SIGN-IN (#630) uses the SDK's EXPERIMENTAL account RPCs, which live on a
+// SESSION (`session.rpc.accounts.login.begin/advance/cancel` and
+// `session.rpc.accounts.set({ command: { kind: 'logout' } })`), not on the client.
+// So a sign-in or sign-out opens a short-lived, zero-tool session of its own and
+// deletes it afterwards. The flow is a browser authorization (OAuth code with
+// PKCE and a loopback redirect, run by the runtime): the transport only ever sees
+// the authorize URL; the token is exchanged and stored inside the runtime. See
+// SPIKE.md for what was verified against SDK 1.0.22 and what was not.
+//
 // ⚠ NO TOKEN CROSSES THIS FILE. The client is built with `useLoggedInUser: true`
 // (the user's own Copilot sign-in, kept by the Copilot runtime) and NEVER with
 // `gitHubToken`. Nothing here reads, holds or returns a credential.
@@ -44,6 +59,36 @@ export interface CopilotAuthStatus {
   /** How the runtime is signed in (`user`, `gh-cli`, `env`, ...), when it says. */
   authType?: string;
 }
+
+/**
+ * What the user must do to finish signing in to GitHub Copilot. Never carries a
+ * token: a one-time code (`device`) or an address to open (`browser`).
+ *
+ * @remarks
+ * SDK 1.0.22 only offers a `browser` flow (an OAuth authorization in the user's
+ * browser, finished through a loopback redirect the runtime listens on); the
+ * `device` shape is part of the contract so a host handles a runtime that
+ * switches to the device flow without a code change.
+ *
+ * @stability experimental
+ */
+export type CopilotSignInChallenge =
+  | {
+      /** The user types a code on a verification page. */
+      kind: 'device';
+      /** The one-time code to type (not a credential). */
+      userCode: string;
+      /** The page to open and type the code on. */
+      verificationUri: string;
+      /** When the code stops working, as an ISO 8601 timestamp. */
+      expiresAt: string;
+    }
+  | {
+      /** The user finishes in the browser; the runtime receives the result itself. */
+      kind: 'browser';
+      /** The authorization address to open in the user's browser (https, on github.com). */
+      url: string;
+    };
 
 /**
  * One model of the Copilot listing, as far as the adapter reads it.
@@ -230,6 +275,26 @@ export interface CopilotTransport {
    * @param sessionId - the session to delete.
    */
   deleteSession(sessionId: string): Promise<void>;
+  /**
+   * Begins signing in to GitHub Copilot. A second call replaces a flow still in progress.
+   *
+   * @returns what the user must do (an address to open, or a code to type); never a token.
+   */
+  startSignIn(): Promise<CopilotSignInChallenge>;
+  /**
+   * Waits for the sign-in that {@link CopilotTransport.startSignIn} began.
+   *
+   * @remarks
+   * Rejects with an `AiError` (`AI_KEY_REQUIRED`, `details.signInReason`
+   * `sign_in_expired` or `sign_in_cancelled`) when the sign-in expires or is
+   * cancelled, and cancels the runtime's flow when `signal` aborts.
+   *
+   * @param signal - aborts the wait and cancels the sign-in.
+   * @returns the sign-in status once signed in (never a token).
+   */
+  waitForSignIn(signal?: AbortSignal): Promise<CopilotAuthStatus>;
+  /** Signs the Copilot runtime's stored account out. Resolves when it is done (also when nobody was signed in). */
+  signOut(): Promise<void>;
   /** Stops the Copilot runtime, when the transport owns one. */
   stop?(): Promise<void>;
 }
@@ -252,6 +317,23 @@ export interface CreateSdkCopilotTransportOptions {
   workingDirectory: string;
   /** The runtime's log level. Default `none`. */
   logLevel?: 'none' | 'error' | 'warning' | 'info' | 'debug' | 'all';
+  /**
+   * How long `waitForSignIn` waits for the user before the sign-in expires
+   * (`sign_in_expired`) and the runtime's flow is cancelled. Default 10 minutes.
+   */
+  signInTimeoutMs?: number;
+}
+
+/** One step of the SDK's interactive login (`AuthLoginStep`), the members read here. */
+interface SdkLoginStep {
+  kind: string;
+  url?: unknown;
+  message?: unknown;
+  result?: {
+    status?: unknown;
+    login?: unknown;
+    accounts?: Array<{ selectionId?: unknown }>;
+  };
 }
 
 /** The members of the SDK's `CopilotSession` the transport calls (structural; the SDK is untyped here). */
@@ -266,6 +348,14 @@ interface SdkSession {
       initializeAndValidate?: () => Promise<unknown>;
       getCurrentMetadata: () => Promise<{ tools: Array<{ name: string }> | null }>;
     };
+    accounts?: {
+      login: {
+        begin(params: { kind: 'githubDotCom' }): Promise<{ flowId: string; step: SdkLoginStep }>;
+        advance(params: { flowId: string; input?: string }): Promise<SdkLoginStep>;
+        cancel(params: { flowId: string }): Promise<void>;
+      };
+      set(params: { command: { kind: 'logout' } }): Promise<{ moreUsers?: unknown }>;
+    };
   };
 }
 
@@ -275,7 +365,7 @@ interface SdkClient {
   stop(): Promise<unknown>;
   getAuthStatus(): Promise<CopilotAuthStatus>;
   listModels(): Promise<CopilotModelInfo[]>;
-  createSession(config: CopilotSessionConfig): Promise<SdkSession>;
+  createSession(config: object): Promise<SdkSession>;
   deleteSession(sessionId: string): Promise<void>;
 }
 
@@ -319,6 +409,9 @@ export function createSdkCopilotTransport(options: CreateSdkCopilotTransportOpti
 
   let client: SdkClient | undefined;
   let started: Promise<void> | undefined;
+  /** The sign-in in progress: its zero-tool session and the runtime's flow id. */
+  let flow: { session: SdkSession; flowId: string } | undefined;
+  const signInTimeoutMs = options.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS;
 
   /** The one client, built on first use. */
   const clientOf = (): SdkClient => {
@@ -342,6 +435,67 @@ export function createSdkCopilotTransport(options: CreateSdkCopilotTransportOpti
     });
     await started;
     return c;
+  };
+
+  /** A zero-tool session for the account RPCs (they live on a session). Deleted by {@link discardSession}. */
+  const accountSession = async (): Promise<SdkSession> => {
+    const session = await (await ready()).createSession(accountSessionConfig(options.workingDirectory));
+    if (session.rpc.accounts === undefined) {
+      await discardSession(session);
+      throw new AiError('AI_PROVIDER_UNAVAILABLE', 'This GitHub Copilot SDK release has no sign-in API.');
+    }
+    return session;
+  };
+
+  /** Releases an account session and its stored state; never throws. */
+  const discardSession = async (session: SdkSession): Promise<void> => {
+    try {
+      await session.disconnect();
+    } catch {
+      // Best effort: the session is deleted next.
+    }
+    try {
+      await (await ready()).deleteSession(session.sessionId);
+    } catch {
+      // Best effort: an account session holds no prompt.
+    }
+  };
+
+  /** The status after a completed sign-in: the runtime's own answer when it gives one, else the login the flow reported. */
+  const signedInStatus = async (flowLogin: string | undefined): Promise<CopilotAuthStatus> => {
+    let login = flowLogin;
+    let authType: string | undefined;
+    try {
+      const status = await (await ready()).getAuthStatus();
+      if (typeof status.login === 'string') login = status.login;
+      if (typeof status.authType === 'string') authType = status.authType;
+    } catch {
+      // The flow itself said "completed"; the login it reported stands.
+    }
+    return { isAuthenticated: true, ...(login !== undefined ? { login } : {}), ...(authType !== undefined ? { authType } : {}) };
+  };
+
+  /** Ends the flow in progress: tells the runtime to cancel it, then drops its session. Never throws. */
+  const endFlow = async (cancel: boolean): Promise<void> => {
+    const current = flow;
+    flow = undefined;
+    if (current === undefined) return;
+    if (cancel) {
+      try {
+        await current.session.rpc.accounts?.login.cancel({ flowId: current.flowId });
+      } catch {
+        // Already finished or cancelled.
+      }
+    }
+    await discardSession(current.session);
+  };
+
+  /** Advances the flow once (blocks until the runtime has a next step). */
+  const advance = async (current: { session: SdkSession; flowId: string }, input?: string): Promise<SdkLoginStep> => {
+    return current.session.rpc.accounts!.login.advance({
+      flowId: current.flowId,
+      ...(input !== undefined ? { input } : {}),
+    });
   };
 
   return {
@@ -381,14 +535,186 @@ export function createSdkCopilotTransport(options: CreateSdkCopilotTransportOpti
     async deleteSession(sessionId) {
       await (await ready()).deleteSession(sessionId);
     },
+    async startSignIn() {
+      await endFlow(true);
+      let session: SdkSession | undefined;
+      try {
+        session = await accountSession();
+        const begun = await session.rpc.accounts!.login.begin({ kind: 'githubDotCom' });
+        const step = begun.step;
+        if (step.kind !== 'open-url') throw signInStepError(step);
+        const url = authorizeUrlOf(step.url);
+        flow = { session, flowId: begun.flowId };
+        return { kind: 'browser', url };
+      } catch (err) {
+        if (session !== undefined) await discardSession(session);
+        throw copilotErrorFromThrown(err);
+      }
+    },
+    async waitForSignIn(signal) {
+      const current = flow;
+      if (current === undefined) {
+        throw copilotSignInFailed('sign_in_not_started', 'No GitHub Copilot sign-in is in progress. Start one first.');
+      }
+      if (signal?.aborted === true) {
+        await endFlow(true);
+        throw copilotSignInCancelled();
+      }
+
+      let stopped: 'cancelled' | 'expired' | undefined;
+      const stop = (why: 'cancelled' | 'expired'): void => {
+        if (stopped !== undefined) return;
+        stopped = why;
+        // The runtime rejects the pending `advance` with "Login cancelled".
+        void current.session.rpc.accounts?.login.cancel({ flowId: current.flowId }).catch(() => undefined);
+      };
+      const onAbort = (): void => stop('cancelled');
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const timer = setTimeout(() => stop('expired'), signInTimeoutMs);
+      timer.unref?.();
+
+      try {
+        // `advance` blocks until the user finishes in the browser (or the flow is cancelled).
+        // An `awaiting` step is followed by another `advance`, a beat apart so a runtime that
+        // answers at once cannot spin this loop.
+        let step = await advance(current);
+        for (let turns = 0; turns < MAX_LOGIN_TURNS; turns += 1) {
+          if (stopped !== undefined) break;
+          if (step.kind === 'awaiting' || step.kind === 'open-url') {
+            await pause(AWAITING_PAUSE_MS);
+            step = await advance(current);
+            continue;
+          }
+          if (step.kind !== 'completed') throw signInStepError(step);
+
+          const outcome = step.result;
+          if (outcome?.status === 'completed') {
+            return await signedInStatus(typeof outcome.login === 'string' ? outcome.login : undefined);
+          }
+          if (outcome?.status === 'needs-account-selection') {
+            // The runtime saved the credentials and asks which account to use. One account is no choice.
+            const accounts = outcome.accounts ?? [];
+            const only = accounts.length === 1 ? accounts[0].selectionId : undefined;
+            if (typeof only !== 'string') {
+              throw copilotSignInFailed(
+                'sign_in_needs_account_selection',
+                'GitHub Copilot sign-in needs an account to be chosen; KVox cannot choose one for you.',
+              );
+            }
+            step = await advance(current, only);
+            continue;
+          }
+          // `needs-plaintext-consent` and `declined`: KVox never agrees, on the user's behalf, to
+          // keep a GitHub token in a plain file.
+          throw copilotSignInFailed(
+            outcome?.status === 'needs-plaintext-consent' ? 'sign_in_needs_plaintext_consent' : 'sign_in_failed',
+            'GitHub Copilot could not store the sign-in securely on this device, so the sign-in was not completed.',
+          );
+        }
+        if (stopped === undefined) throw copilotSignInFailed('sign_in_failed', 'The GitHub Copilot sign-in did not finish.');
+        throw stopped === 'expired' ? copilotSignInExpired() : copilotSignInCancelled();
+      } catch (err) {
+        if (stopped === 'expired') throw copilotSignInExpired();
+        if (stopped === 'cancelled') throw copilotSignInCancelled();
+        if (AiError.isAiError(err)) throw err;
+        const raw = err instanceof Error ? err.message : '';
+        if (/cancel/i.test(raw)) throw copilotSignInCancelled();
+        if (/expired|timed?\s?out/i.test(raw)) throw copilotSignInExpired();
+        throw copilotErrorFromThrown(err);
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+        // Cancelling a finished flow is refused by the runtime and ignored; an unfinished one is released.
+        await endFlow(true);
+      }
+    },
+    async signOut() {
+      await endFlow(true);
+      const session = await accountSession();
+      try {
+        // Logs out the active account; repeat while the runtime still holds others.
+        for (let i = 0; i < MAX_SIGN_OUTS; i += 1) {
+          const result = await session.rpc.accounts!.set({ command: { kind: 'logout' } });
+          if (result.moreUsers !== true) break;
+        }
+      } catch (err) {
+        throw copilotErrorFromThrown(err);
+      } finally {
+        await discardSession(session);
+      }
+    },
     async stop() {
       if (client === undefined) return;
       const c = client;
       client = undefined;
       started = undefined;
+      flow = undefined;
       await c.stop();
     },
   };
+}
+
+/** The default wait for the user to finish signing in. */
+const SIGN_IN_TIMEOUT_MS = 10 * 60_000;
+
+/** The pause between `awaiting` steps. */
+const AWAITING_PAUSE_MS = 250;
+
+/** The most steps one wait follows before it gives up (a runtime that never settles). */
+const MAX_LOGIN_TURNS = 4_000;
+
+/** The most accounts one sign-out removes. */
+const MAX_SIGN_OUTS = 10;
+
+/**
+ * The settings of a session that only carries account calls: nothing the model could use, nothing discovered.
+ * No model: the account RPCs need none.
+ */
+function accountSessionConfig(workingDirectory: string): object {
+  return {
+    availableTools: [],
+    enableSkills: false,
+    skipCustomInstructions: true,
+    skipEmbeddingRetrieval: true,
+    infiniteSessions: { enabled: false },
+    enableSessionStore: false,
+    enableConfigDiscovery: false,
+    requestExtensions: false,
+    requestCanvasRenderer: false,
+    enableMcpApps: false,
+    workingDirectory,
+    onPermissionRequest: () => ({ kind: 'reject' }),
+  };
+}
+
+/** The authorize address, or a refusal: only an https address on github.com is handed to a browser. */
+function authorizeUrlOf(value: unknown): string {
+  if (typeof value === 'string') {
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && url.hostname === 'github.com') return url.toString();
+    } catch {
+      // Falls through to the refusal.
+    }
+  }
+  throw new AiError('AI_PROVIDER_UNAVAILABLE', 'GitHub Copilot returned a sign-in address that is not on github.com; it was not used.');
+}
+
+/** The error of a login step that is not a way forward. */
+function signInStepError(step: SdkLoginStep): AiError {
+  if (step.kind === 'error') return copilotErrorFromThrown(new Error(typeof step.message === 'string' ? step.message : 'the sign-in failed'));
+  if (step.kind === 'input-required' || step.kind === 'needs-interaction') {
+    return copilotSignInFailed('sign_in_needs_input', 'GitHub Copilot asked for input KVox cannot provide; the sign-in was not completed.');
+  }
+  return copilotSignInFailed('sign_in_failed', 'The GitHub Copilot sign-in did not finish.');
+}
+
+/** A pause that does not hold the process open. */
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
 }
 
 /** Loads the SDK, or explains that it is missing. */

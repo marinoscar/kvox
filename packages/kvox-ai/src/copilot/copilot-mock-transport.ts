@@ -1,9 +1,11 @@
+import { copilotSignInCancelled, copilotSignInExpired, copilotSignInFailed } from './copilot-errors.js';
 import type {
   CopilotAuthStatus,
   CopilotModelInfo,
   CopilotSessionConfig,
   CopilotSessionEvent,
   CopilotSessionHandle,
+  CopilotSignInChallenge,
   CopilotTransport,
 } from './copilot-transport.js';
 
@@ -26,7 +28,10 @@ import type {
 //     `<current_datetime>`-prefixed prompt, as the runtime does, and records what
 //     the hook handed back (`sentPrompt`);
 //   • `liveTools` makes the session report tools (the tripwire test);
-//   • it records every session's config, prompts and cleanup.
+//   • it records every session's config, prompts and cleanup;
+//   • its sign-in is SCRIPTED (`scriptSignIn`): a challenge, then success, expiry,
+//     cancel, a runtime error, or "never finishes" (for the abort signal), and
+//     `signOut` returns it to signed out (#630).
 //
 // Exported from `@marinoscar/kvox-ai/copilot` so a host's tests and the eval
 // parity suite can use it. It holds no token and makes no network call.
@@ -166,6 +171,44 @@ export interface CopilotMockSend {
 }
 
 /**
+ * How the mock's sign-in goes. Every field is optional.
+ *
+ * @stability experimental
+ */
+export interface CopilotMockSignInScript {
+  /** What `startSignIn` answers. Default: a `device` challenge (code `ABCD-1234`, five minutes). */
+  challenge?: CopilotSignInChallenge;
+  /**
+   * How `waitForSignIn` ends. `success` (default) signs the mock user in as `login`;
+   * `expired` rejects as an expired sign-in; `cancelled` as a cancelled one; `pending`
+   * never finishes by itself (an aborted signal cancels it).
+   */
+  outcome?: 'success' | 'expired' | 'cancelled' | 'pending';
+  /** The login a successful sign-in reports. Default: the transport's login. */
+  login?: string;
+  /** `startSignIn` rejects with this. */
+  startError?: unknown;
+  /** `waitForSignIn` rejects with this (instead of the outcome). */
+  waitError?: unknown;
+}
+
+/**
+ * What the mock saw of the sign-in.
+ *
+ * @stability experimental
+ */
+export interface CopilotMockSignInCalls {
+  /** `startSignIn` calls. */
+  started: number;
+  /** `waitForSignIn` calls. */
+  waited: number;
+  /** `signOut` calls. */
+  signedOut: number;
+  /** Waits cancelled through their abort signal. */
+  aborted: number;
+}
+
+/**
  * The mock transport and its controls.
  *
  * @stability experimental
@@ -197,12 +240,24 @@ export interface CopilotMockTransport extends CopilotTransport {
    */
   setSignedIn(signedIn: boolean): void;
   /**
+   * Scripts the sign-in: the challenge, and how the wait ends (replaces the previous script).
+   *
+   * @param script - the script.
+   */
+  scriptSignIn(script: CopilotMockSignInScript): void;
+  /**
+   * What the mock saw of the sign-in.
+   *
+   * @returns the counters.
+   */
+  signInCalls(): CopilotMockSignInCalls;
+  /**
    * Makes the next `createSession` reject with `error`.
    *
    * @param error - what it rejects with.
    */
   failNextCreate(error: unknown): void;
-  /** Forgets the sessions, the queue, `onSend` and a pending create failure. */
+  /** Forgets the sessions, the queue, `onSend`, a pending create failure and the sign-in script and counters. */
   reset(): void;
 }
 
@@ -253,7 +308,11 @@ const DEFAULT_MODELS: CopilotModelInfo[] = [
  */
 export function createCopilotMockTransport(options: CopilotMockTransportOptions = {}): CopilotMockTransport {
   let signedIn = options.signedIn ?? true;
-  const login = options.login ?? 'octocat';
+  let login = options.login ?? 'octocat';
+  const initialLogin = login;
+  let script: CopilotMockSignInScript = {};
+  let flowStarted = false;
+  let calls: CopilotMockSignInCalls = { started: 0, waited: 0, signedOut: 0, aborted: 0 };
   const models = options.models ?? DEFAULT_MODELS;
   const liveTools = options.liveTools ?? [];
   let records: CopilotMockSession[] = [];
@@ -445,6 +504,53 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       if (record === undefined) throw new Error(`No session ${sessionId}.`);
       record.deleted = true;
     },
+    async startSignIn() {
+      calls.started += 1;
+      if (script.startError !== undefined) throw script.startError;
+      flowStarted = true;
+      return script.challenge ?? { kind: 'device', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresAt: new Date(Date.now() + 300_000).toISOString() };
+    },
+    async waitForSignIn(signal) {
+      calls.waited += 1;
+      if (!flowStarted) throw copilotSignInFailed('sign_in_not_started', 'No GitHub Copilot sign-in is in progress. Start one first.');
+      if (signal?.aborted === true) {
+        flowStarted = false;
+        calls.aborted += 1;
+        throw copilotSignInCancelled();
+      }
+      const outcome = script.outcome ?? 'success';
+      // Asynchronous, as the real flow is: the user finishes in a browser.
+      if (outcome === 'pending' && script.waitError === undefined) {
+        await new Promise<void>((_, reject) => {
+          signal?.addEventListener(
+            'abort',
+            () => {
+              flowStarted = false;
+              calls.aborted += 1;
+              reject(copilotSignInCancelled());
+            },
+            { once: true },
+          );
+        });
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      flowStarted = false;
+      if (script.waitError !== undefined) throw script.waitError;
+      if (outcome === 'expired') throw copilotSignInExpired();
+      if (outcome === 'cancelled') throw copilotSignInCancelled();
+      signedIn = true;
+      login = script.login ?? initialLogin;
+      return { isAuthenticated: true, login, authType: 'user' };
+    },
+    async signOut() {
+      calls.signedOut += 1;
+      flowStarted = false;
+      signedIn = false;
+    },
+    scriptSignIn(next) {
+      script = { ...next };
+    },
+    signInCalls: () => ({ ...calls }),
     sessions: () => records.map((record) => ({ ...record, prompts: record.prompts.map((p) => ({ ...p })) })),
     queue(reply) {
       replies.push(reply);
@@ -463,6 +569,9 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       replies = [];
       answerer = null;
       createError = null;
+      script = {};
+      flowStarted = false;
+      calls = { started: 0, waited: 0, signedOut: 0, aborted: 0 };
     },
   };
 }

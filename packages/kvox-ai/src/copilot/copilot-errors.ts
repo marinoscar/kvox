@@ -25,6 +25,12 @@ import { AiError, type AiErrorCode } from '@marinoscar/platform-ai-providers';
 //   thrown: our own AiError passes through; "not authenticated" is
 //   AI_KEY_REQUIRED (sign in); anything else AI_PROVIDER_UNAVAILABLE.
 //
+//   sign-in (#630): a sign-in that expired, was cancelled or did not finish is
+//   AI_KEY_REQUIRED (the user is still not signed in) and carries
+//   `details.signInReason` (`sign_in_expired`, `sign_in_cancelled`, ...), so a
+//   host switches on that, not on the text. (`details.reason` is the platform's
+//   own and always equals the code, so it cannot carry this.)
+//
 // ⚠ NOTHING SECRET LEAVES. Every message is `redactTokens`-ed and capped at 300
 // characters; `details` carries only `errorType`, `statusCode` and `errorCode`
 // (redacted). The runtime's own message is the only free text kept, because it
@@ -41,6 +47,21 @@ import { AiError, type AiErrorCode } from '@marinoscar/platform-ai-providers';
  * @stability experimental
  */
 export const COPILOT_SIGN_IN_MESSAGE = 'Sign in to GitHub Copilot to use it in KVox.';
+
+/**
+ * The `details.signInReason` of a Copilot sign-in that did not end signed in. The
+ * strings are permanent: a host switches on them.
+ *
+ * @stability experimental
+ */
+export type CopilotSignInFailureReason =
+  | 'sign_in_expired'
+  | 'sign_in_cancelled'
+  | 'sign_in_failed'
+  | 'sign_in_not_started'
+  | 'sign_in_needs_plaintext_consent'
+  | 'sign_in_needs_account_selection'
+  | 'sign_in_needs_input';
 
 /** The longest runtime message an error carries. */
 const MESSAGE_LIMIT = 300;
@@ -158,6 +179,44 @@ export function copilotErrorFromThrown(err: unknown): AiError {
     return new AiError('AI_KEY_REQUIRED', COPILOT_SIGN_IN_MESSAGE);
   }
   return new AiError('AI_PROVIDER_UNAVAILABLE', copilotMessage(raw));
+}
+
+/**
+ * The error of a sign-in whose time ran out before the user finished in the browser.
+ *
+ * @returns `AI_KEY_REQUIRED` with `details.signInReason` `sign_in_expired`.
+ * @stability experimental
+ */
+export function copilotSignInExpired(): AiError {
+  return new AiError('AI_KEY_REQUIRED', 'The GitHub Copilot sign-in expired. Start the sign-in again.', {
+    details: { signInReason: 'sign_in_expired' satisfies CopilotSignInFailureReason },
+  });
+}
+
+/**
+ * The error of a sign-in that was cancelled (the user closed it, or the caller aborted the wait).
+ *
+ * @returns `AI_KEY_REQUIRED` with `details.signInReason` `sign_in_cancelled`.
+ * @stability experimental
+ */
+export function copilotSignInCancelled(): AiError {
+  return new AiError('AI_KEY_REQUIRED', 'The GitHub Copilot sign-in was cancelled.', {
+    details: { signInReason: 'sign_in_cancelled' satisfies CopilotSignInFailureReason },
+  });
+}
+
+/**
+ * The error of a sign-in that ended without a signed-in account for a reason of
+ * our own (nothing to wait for, a decision the runtime asks of the user that KVox
+ * never takes for them, a status that is not signed in).
+ *
+ * @param reason - the `details.signInReason`.
+ * @param message - a fixed sentence (never runtime text).
+ * @returns `AI_KEY_REQUIRED` carrying the reason.
+ * @stability experimental
+ */
+export function copilotSignInFailed(reason: CopilotSignInFailureReason, message: string): AiError {
+  return new AiError('AI_KEY_REQUIRED', message, { details: { signInReason: reason } });
 }
 
 /** `GitHub Copilot: <redacted, capped message>`. */

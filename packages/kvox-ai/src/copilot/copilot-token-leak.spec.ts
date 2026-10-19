@@ -301,3 +301,151 @@ describe('the adapter never reads ctx.apiKey', () => {
     for (const error of h.captured.errors) expect(surfaceOf(error)).not.toContain('SENTINELapiKEY');
   });
 });
+
+// =============================================================================
+// The sign-in path (#630): the runtime keeps the GitHub token; KVox code never sees it
+// =============================================================================
+
+describe('the planted token never leaves the sign-in path', () => {
+  const challengeWithExtras = {
+    kind: 'device',
+    userCode: 'ABCD-1234',
+    verificationUri: 'https://github.com/login/device',
+    expiresAt: '2026-01-01T00:05:00.000Z',
+    accessToken: GHO,
+    deviceCode: GHU,
+  };
+
+  /** Runs every sign-in operation, capturing results and errors. */
+  async function drive(adapter: ReturnType<typeof createCopilotAdapter>): Promise<{ results: unknown[]; errors: unknown[] }> {
+    const results: unknown[] = [];
+    const errors: unknown[] = [];
+    const attempt = async (run: () => Promise<unknown>): Promise<void> => {
+      try {
+        results.push(await run());
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    await attempt(() => adapter.signIn.start());
+    await attempt(() => adapter.signIn.wait());
+    await attempt(() => adapter.signOut());
+    await attempt(() => adapter.authStatus());
+    return { results, errors };
+  }
+
+  function sweepAll(what: string, out: { results: unknown[]; errors: unknown[] }): void {
+    expectClean(`${what} results`, JSON.stringify(out.results));
+    for (const error of out.errors) expectClean(`${what} error`, surfaceOf(error));
+  }
+
+  it.each(TOKENS)('in errors the runtime throws while starting, waiting and signing out (%s)', async (token) => {
+    const mock = createCopilotMockTransport({ signedIn: false });
+    const boom = (): Error => new Error(`runtime said ${token} and Bearer ${token}`);
+    const transport: CopilotTransport = {
+      ...mock,
+      startSignIn: async () => Promise.reject(boom()),
+      waitForSignIn: async () => Promise.reject(boom()),
+      signOut: async () => Promise.reject(boom()),
+      getAuthStatus: async () => Promise.reject(boom()),
+    };
+    const out = await drive(createCopilotAdapter({ optIn: true, transport }));
+    expect(out.errors).toHaveLength(4);
+    sweepAll('thrown', out);
+  });
+
+  it('in a challenge, a wait result and an auth status that carry extra fields', async () => {
+    const mock = createCopilotMockTransport({ signedIn: false });
+    const transport: CopilotTransport = {
+      ...mock,
+      startSignIn: async () => challengeWithExtras as never,
+      waitForSignIn: async () => ({ isAuthenticated: true, login: 'octocat', token: GHO, statusMessage: `signed in with ${GHU}` }) as never,
+      signOut: async () => undefined,
+    };
+    const adapter = createCopilotAdapter({ optIn: true, transport });
+    const out = await drive(adapter);
+    sweepAll('extras', out);
+    expect(out.results[0]).toEqual({ kind: 'device', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresAt: '2026-01-01T00:05:00.000Z' });
+    expect(out.results[1]).toEqual({ signedIn: true, login: 'octocat' });
+  });
+
+  it('in a challenge string or a login that is itself token-shaped', async () => {
+    const mock = createCopilotMockTransport({ signedIn: false });
+    const transport: CopilotTransport = {
+      ...mock,
+      startSignIn: async () => ({ kind: 'browser', url: `https://github.com/login?code=${GHO}&x=Bearer ${GHU}` }),
+      waitForSignIn: async () => ({ isAuthenticated: true, login: GHU }),
+    };
+    const out = await drive(createCopilotAdapter({ optIn: true, transport }));
+    sweepAll('shaped', out);
+  });
+
+  it('in expiry, cancel and failure errors scripted on the mock', async () => {
+    for (const script of [
+      { outcome: 'expired' as const },
+      { outcome: 'cancelled' as const },
+      { waitError: new Error(`failed: ${GHO}`) },
+      { startError: new Error(`failed: ${GHU}`) },
+    ]) {
+      const mock = createCopilotMockTransport({ signedIn: false });
+      mock.scriptSignIn(script);
+      sweepAll(`mock ${JSON.stringify(Object.keys(script))}`, await drive(createCopilotAdapter({ optIn: true, transport: mock })));
+    }
+  });
+
+  describe('over the SDK transport (stand-in SDK)', () => {
+    afterEach(() => {
+      jest.dontMock('@github/copilot-sdk');
+      jest.resetModules();
+    });
+
+    /** A stand-in whose runtime talks tokens everywhere it can. */
+    function standIn(behaviour: 'step-with-token' | 'advance-throws' | 'complete-with-token'): ReturnType<typeof createCopilotAdapter> {
+      const advance = jest.fn(async () => {
+        if (behaviour === 'advance-throws') throw new Error(`network error carrying ${GHO}`);
+        return { kind: 'completed', result: { status: 'completed', login: 'octocat', token: GHU, accessToken: GHO, host: 'github.com' } };
+      });
+      const session = {
+        sessionId: 'acct-leak',
+        disconnect: jest.fn(async () => undefined),
+        rpc: {
+          accounts: {
+            login: {
+              begin: jest.fn(async () => ({
+                flowId: 'f',
+                step:
+                  behaviour === 'step-with-token'
+                    ? { kind: 'error', message: `authorization failed for ${GHO}`, token: GHU }
+                    : { kind: 'open-url', url: 'https://github.com/login/oauth/authorize?client_id=x', token: GHU },
+              })),
+              advance,
+              cancel: jest.fn(async () => undefined),
+            },
+            set: jest.fn(async () => {
+              throw new Error(`logout failed ${GHU}`);
+            }),
+          },
+        },
+      };
+      const client = {
+        start: jest.fn(async () => undefined),
+        stop: jest.fn(async () => undefined),
+        getAuthStatus: jest.fn(async () => ({ isAuthenticated: true, login: 'octocat', authType: 'user', statusMessage: `token ${GHO}`, token: GHU })),
+        listModels: jest.fn(async () => []),
+        createSession: jest.fn(async () => session),
+        deleteSession: jest.fn(async () => undefined),
+      };
+      jest.resetModules();
+      jest.doMock('@github/copilot-sdk', () => ({ CopilotClient: class { constructor() { return client as never; } } }), { virtual: true });
+      const { createSdkCopilotTransport } = jest.requireActual('./copilot-transport.js') as typeof import('./copilot-transport.js');
+      const { createCopilotAdapter: build } = jest.requireActual('./copilot-adapter.js') as typeof import('./copilot-adapter.js');
+      return build({ optIn: true, transport: createSdkCopilotTransport({ baseDirectory: '/data/copilot', workingDirectory: '/tmp/empty' }) });
+    }
+
+    it.each(['step-with-token', 'advance-throws', 'complete-with-token'] as const)('with a runtime that leaks into %s', async (behaviour) => {
+      const out = await drive(standIn(behaviour));
+      sweepAll(behaviour, out);
+      if (behaviour === 'complete-with-token') expect(out.results[1]).toEqual({ signedIn: true, login: 'octocat' });
+    });
+  });
+});
