@@ -31,7 +31,7 @@
  */
 
 import { Components, Theme, alpha } from '@mui/material/styles';
-import { BRAND_TOKENS } from './tokens';
+import { BRAND_TOKENS } from './tokens.js';
 
 /**
  * Elevation at or above which a dark-mode `Paper` moves onto the tonal

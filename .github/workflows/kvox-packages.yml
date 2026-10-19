@@ -83,6 +83,9 @@ jobs:
       # Rules graph, peers-data, manifest, imports and host-neutral for the
       # packages, then app-installs for the two apps that depend on them.
       - run: npm run check:kvox-slice-peers
+      # The brand identity file is in step with packages/shared/identity.json, and
+      # apps/web/public mirrors the package's brand assets byte for byte (issue #628).
+      - run: npm run check:kvox-brand
       # The check scripts themselves, against fixtures (including a file that
       # breaks the host-neutral rule).
       - run: npm run test:kvox-scripts

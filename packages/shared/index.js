@@ -66,7 +66,7 @@
 //
 // Two reasons, both practical:
 //
-//   - `apps/web/scripts/generate-icons.py` is Python. It paints THEME_COLOR and
+//   - `packages/kvox-web/scripts/generate-icons.py` is Python. It paints THEME_COLOR and
 //     BACKGROUND_COLOR into committed PNGs and cannot parse JavaScript, so
 //     before this manifest existed it carried its OWN copy of both hex values
 //     with nothing keeping the two in sync. JSON is the one format every
@@ -143,7 +143,7 @@ exports.TAGLINE = identity.tagline;
  * ONE THING TO KNOW BEFORE YOU CHANGE IT: the icons are generated PIXELS, not a
  * value read at runtime, so editing this line does not restyle them — they will
  * keep the old colour until you re-run
- * `python3 apps/web/scripts/generate-icons.py`. See this folder's README.
+ * `python3 packages/kvox-web/scripts/generate-icons.py`. See this folder's README.
  *
  * Keep the value a 6-digit `#rrggbb` literal. A manifest's `theme_color` is
  * parsed by the platform rather than by a CSS engine, and the 3-digit shorthand

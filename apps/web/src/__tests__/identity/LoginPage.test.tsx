@@ -26,18 +26,19 @@ describe('LoginPage (identity/LoginPage.tsx)', () => {
       render(<LoginPage />, { wrapperOptions: { authenticated: false } });
 
       const logo = await screen.findByTestId('login-logo');
-      const mark = logo.querySelector('img');
+      // Inline SVG since #628: no `<img>`, no request for `/favicon.svg`.
+      const mark = logo.querySelector('svg');
       expect(mark).not.toBeNull();
-      expect(mark).toHaveAttribute('src', '/favicon.svg');
+      expect(logo.querySelector('img')).toBeNull();
       expect(mark).toHaveAttribute('width', '56');
     });
 
-    it('keeps the mark decorative: hidden from assistive technology, no alt text', async () => {
+    it('keeps the mark decorative: hidden from assistive technology, no accessible name', async () => {
       render(<LoginPage />, { wrapperOptions: { authenticated: false } });
 
-      const mark = (await screen.findByTestId('login-logo')).querySelector('img');
+      const mark = (await screen.findByTestId('login-logo')).querySelector('svg');
       expect(mark).toHaveAttribute('aria-hidden', 'true');
-      expect(mark).toHaveAttribute('alt', '');
+      expect(mark).not.toHaveAttribute('aria-label');
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
 

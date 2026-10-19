@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { BrandLockup } from '@marinoscar/kvox-web/brand';
 import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import {
   NotificationBell,
@@ -22,15 +22,9 @@ import { APP_NAME } from '@app/shared';
 import { KVOX_BOTTOM_BAR_NAVIGATION, KVOX_NAVIGATION } from '../../config/shell';
 import { OnboardingBanner } from '../onboarding/OnboardingBanner';
 import { adminWelcomePane, userWelcomePane } from '../onboarding/kvoxWelcomePanes';
-import { BrandMark } from './BrandMark';
 
 /** The mark and the wordmark: one clickable lockup (the AppBar sends it home). */
-const BRAND = (
-  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-    <BrandMark />
-    {APP_NAME}
-  </Box>
-);
+const BRAND = <BrandLockup />;
 
 /**
  * The app shell: a thin binding of the packaged `ShellLayout`

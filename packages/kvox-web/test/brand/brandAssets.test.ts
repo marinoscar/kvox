@@ -1,12 +1,13 @@
 /**
- * The brand mark, asserted where a test can actually reach it — issue #111.
+ * The brand mark's vector assets, asserted where a test can actually reach them —
+ * issue #111, moved into the package with the assets by issue #628.
  *
  * =============================================================================
  * THE MARK IS DESCRIBED THREE TIMES, AND ONLY ONE PAIR IS CHECKABLE HERE
  * =============================================================================
  *
- * `apps/web/public/icons/source.svg`, `apps/web/public/favicon.svg` and
- * `apps/web/scripts/generate-icons.py` each describe the same K monogram. The
+ * `src/brand/assets/mark.svg`, `src/brand/assets/favicon.svg` and
+ * `packages/kvox-web/scripts/generate-icons.py` each describe the same K monogram. The
  * duplication is deliberate and is explained at length in all three files: the
  * generator draws with Pillow rather than rasterising the SVGs, because
  * rendering an SVG needs rsvg / cairosvg / a headless browser — the image
@@ -36,173 +37,32 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { THEME_COLOR } from '@app/shared';
+import { KVOX_BRAND } from '../../src/brand/identity.js';
+import { TOLERANCE, barsOf, normaliseSvg, parseSvg, plateOf, stemOf } from './svgGeometry.js';
 
-const PUBLIC_DIR = join(__dirname, '..', '..', '..', 'public');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ASSETS_DIR = join(HERE, '..', '..', 'src', 'brand', 'assets');
 
-/** Every coordinate agrees to this many normalised units (0.05% of the box). */
-const TOLERANCE = 0.0005;
-
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fill: string | null;
+function parse(file: string) {
+  return parseSvg(readFileSync(join(ASSETS_DIR, file), 'utf8'));
 }
 
-interface Line {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  /** Whether a round cap applies, from the `<line>` itself or its `<g>`. */
-  roundCap: boolean;
-}
-
-/**
- * ⚠ THE LEADING `\\s` IS LOAD-BEARING. Without it, looking up `x` matches
- * inside `rx="112.64"` — the plate's own corner radius — and every rect
- * reports a non-zero origin, which silently reclassifies the plate as part of
- * the mark and the stem as a sixth bar. The bug is invisible until something
- * counts the bars.
- */
-function attr(tag: string, name: string): string | null {
-  const match = new RegExp(`\\s${name}="([^"]*)"`).exec(tag);
-  return match ? match[1] : null;
-}
-
-function num(tag: string, name: string): number {
-  const raw = attr(tag, name);
-  // `x`/`y` are omitted when zero in SVG, which is legal and is what the plate
-  // rect does. Treating a missing coordinate as NaN would fail the plate on a
-  // technicality rather than on a disagreement.
-  return raw === null ? 0 : Number.parseFloat(raw);
-}
-
-function parse(file: string): { rects: Rect[]; lines: Line[] } {
-  const svg = readFileSync(join(PUBLIC_DIR, file), 'utf8');
-  // The comment block above the markup mentions `rect` and `line` in prose, so
-  // only the element form counts.
-  const body = svg.slice(svg.indexOf('<svg'));
-
-  const rects = [...body.matchAll(/<rect\b[^>]*>/g)].map((m) => ({
-    x: num(m[0], 'x'),
-    y: num(m[0], 'y'),
-    width: num(m[0], 'width'),
-    height: num(m[0], 'height'),
-    fill: attr(m[0], 'fill'),
-  }));
-
-  // `stroke-linecap` INHERITS, so where it is written is a formatting choice,
-  // not a semantic one: today both files put it once on the `<g>` around the
-  // two arms, and moving it onto each `<line>` would be the identical drawing.
-  // A test that counted occurrences of the attribute would fail on that purely
-  // cosmetic edit while still passing if somebody put a round cap on some
-  // unrelated element and left the arms butt-ended — wrong in both directions.
-  // So resolve it the way a renderer does: own attribute first, then the
-  // enclosing group. The markup is flat and hand-written (one level of `<g>`,
-  // no nesting), which is what makes this single-level walk sufficient.
-  const lines: Line[] = [];
-  let groupCap: string | null = null;
-  for (const [tag] of body.matchAll(/<\/?(?:g|line)\b[^>]*>/g)) {
-    if (tag.startsWith('</g')) {
-      groupCap = null;
-    } else if (tag.startsWith('<g')) {
-      groupCap = attr(tag, 'stroke-linecap');
-    } else {
-      lines.push({
-        x1: num(tag, 'x1'),
-        y1: num(tag, 'y1'),
-        x2: num(tag, 'x2'),
-        y2: num(tag, 'y2'),
-        roundCap: (attr(tag, 'stroke-linecap') ?? groupCap) === 'round',
-      });
-    }
-  }
-
-  return { rects, lines };
-}
-
-/**
- * The plate is the only rect that spans the whole canvas; everything else is
- * part of the mark. Classifying by SIZE rather than by fill, because since
- * #146 the bars carry their own `g fill` and a fill-based split would put
- * them on the plate's side of it.
- */
-function plateOf(rects: Rect[]): Rect {
-  const plates = rects.filter((r) => r.x === 0 && r.y === 0);
-  expect(plates).toHaveLength(1);
-  return plates[0];
-}
-
-/** The stem is the tallest of the remaining rects — the bars are all shorter. */
-function stemOf(rects: Rect[]): Rect {
-  const marks = rects.filter((r) => !(r.x === 0 && r.y === 0));
-  const tallest = [...marks].sort((a, b) => b.height - a.height)[0];
-  expect(tallest).toBeDefined();
-  return tallest;
-}
-
-/** The five waveform bars: every mark rect that is not the stem. */
-function barsOf(rects: Rect[]): Rect[] {
-  const stem = stemOf(rects);
-  return rects
-    .filter((r) => !(r.x === 0 && r.y === 0) && r !== stem)
-    .sort((a, b) => a.x - b.x);
-}
-
-/**
- * Every coordinate as a fraction of the mark box, so the two crops compare.
- *
- * Returns the stem, both arms and the stroke width in one flat list, in a
- * stable order, because what matters is that the two files agree about all of
- * it — not which member disagreed first.
- */
 function normalise(file: string): number[] {
-  const { rects, lines } = parse(file);
-  const stem = stemOf(rects);
-
-  // ⚠ THE MARK IS NOT SQUARE since #146, so the normalising unit is its WIDTH
-  // — stem left edge to the last bar's right edge — not the stem's height.
-  // Using the height would still compare the two files consistently, but it
-  // would stop matching the ratios the generator and both SVG headers state,
-  // and a reader checking one against the other would be quietly misled.
-  const bars = barsOf(rects);
-  const lastBar = bars[bars.length - 1];
-  const origin = { x: stem.x, y: stem.y };
-  const box = lastBar.x + lastBar.width - stem.x;
-  const fx = (v: number) => (v - origin.x) / box;
-  const fy = (v: number) => (v - origin.y) / box;
-
-  const sorted = [...lines].sort((a, b) => a.y2 - b.y2);
-
-  return [
-    fx(stem.x),
-    fy(stem.y),
-    stem.width / box,
-    stem.height / box,
-    ...sorted.flatMap((l) => [fx(l.x1), fy(l.y1), fx(l.x2), fy(l.y2)]),
-    ...barsOf(rects).flatMap((b) => [
-      fx(b.x),
-      fy(b.y),
-      b.width / box,
-      b.height / box,
-    ]),
-  ];
+  return normaliseSvg(readFileSync(join(ASSETS_DIR, file), 'utf8'));
 }
 
 describe('the brand mark', () => {
-  const FILES = ['icons/source.svg', 'favicon.svg'] as const;
+  const FILES = ['mark.svg', 'favicon.svg'] as const;
 
   it.each(FILES)('%s carries exactly one plate in the brand colour', (file) => {
     const plate = plateOf(parse(file).rects);
 
     // Exactly one, because `scripts/rename.mjs` anchors a rebrand on a single
     // match per file and silently rewrites nothing if it finds two.
-    expect(plate.fill).toBe(THEME_COLOR);
+    expect(plate.fill).toBe(KVOX_BRAND.themeColor);
   });
 
   it.each(FILES)('%s draws the K as one stem and two round-capped arms', (file) => {
@@ -261,7 +121,7 @@ describe('the brand mark', () => {
   });
 
   it('describes the same shape in both files, once each is normalised', () => {
-    const source = normalise('icons/source.svg');
+    const source = normalise('mark.svg');
     const favicon = normalise('favicon.svg');
 
     expect(source).toHaveLength(favicon.length);
@@ -314,7 +174,7 @@ describe('the brand mark', () => {
    * proof the first can hold while the second fails silently.
    */
   it.each(FILES)('%s is well-formed XML', (file) => {
-    const svg = readFileSync(join(PUBLIC_DIR, file), 'utf8');
+    const svg = readFileSync(join(ASSETS_DIR, file), 'utf8');
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
     const errors = doc.getElementsByTagName('parsererror');
 

@@ -69,7 +69,8 @@ export interface WebAppManifest {
  * disagree with the wordmark the running app renders.
  *
  * The icon paths point at files committed under `apps/web/public/icons/`
- * (issue #216), which Vite copies into `dist/` verbatim, so the `src` values
+ * (issue #216; a mirror of `@marinoscar/kvox-web/brand`'s assets since #628, see
+ * `scripts/sync-brand-assets.mjs`), which Vite copies into `dist/` verbatim, so the `src` values
  * are correct in dev and in the production image without any rewriting.
  * `src/__tests__/pwa/manifest.test.ts` asserts each one still exists on disk —
  * a rename over in #216 would otherwise break installability silently.

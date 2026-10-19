@@ -12,7 +12,7 @@
  */
 
 import { PaletteOptions, alpha } from '@mui/material/styles';
-import { BRAND_TOKENS } from './tokens';
+import { BRAND_TOKENS } from './tokens.js';
 
 const tokens = BRAND_TOKENS.dark;
 

@@ -13,7 +13,7 @@
 import { Box } from '@mui/material';
 import { LoginPage as PackagedLoginPage } from '@marinoscar/platform-web/identity/ui';
 import type { LoginPageSlots } from '@marinoscar/platform-web/identity/ui';
-import { BrandMark } from '../components/common/BrandMark';
+import { BrandMark } from '@marinoscar/kvox-web/brand';
 
 /** The space between the mark and the heading the package draws under it. */
 function KvoxLogo() {

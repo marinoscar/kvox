@@ -82,6 +82,22 @@
       "types": "./dist/ask/ui/index.d.ts",
       "default": "./dist/ask/ui/index.js"
     },
+    "./brand": {
+      "types": "./dist/brand/index.d.ts",
+      "default": "./dist/brand/index.js"
+    },
+    "./brand/assets/mark.svg": "./dist/brand/assets/mark.svg",
+    "./brand/assets/favicon.svg": "./dist/brand/assets/favicon.svg",
+    "./brand/assets/favicon.ico": "./dist/brand/assets/favicon.ico",
+    "./brand/assets/icon-192.png": "./dist/brand/assets/icon-192.png",
+    "./brand/assets/icon-512.png": "./dist/brand/assets/icon-512.png",
+    "./brand/assets/icon-1024.png": "./dist/brand/assets/icon-1024.png",
+    "./brand/assets/icon-maskable-192.png": "./dist/brand/assets/icon-maskable-192.png",
+    "./brand/assets/icon-maskable-512.png": "./dist/brand/assets/icon-maskable-512.png",
+    "./brand/assets/badge-96.png": "./dist/brand/assets/badge-96.png",
+    "./brand/assets/apple-touch-icon-180.png": "./dist/brand/assets/apple-touch-icon-180.png",
+    "./brand/fonts/inter.css": "./dist/brand/fonts/inter.css",
+    "./brand/fonts/Inter-latin-variable.woff2": "./dist/brand/fonts/Inter-latin-variable.woff2",
     "./package.json": "./package.json"
   },
   "files": [
@@ -94,11 +110,14 @@
     "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "node ../../scripts/kvox-packages/copy-license.mjs",
     "build": "tsc -p tsconfig.build.json",
+    "postbuild": "node scripts/copy-brand-assets.mjs",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
     "docs": "typedoc --options typedoc.json",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "brand:sync": "node scripts/sync-brand-identity.mjs",
+    "brand:check": "node scripts/sync-brand-identity.mjs --check"
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",

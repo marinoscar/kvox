@@ -9,9 +9,9 @@
 > contrast measured rather than eyeballed. Implemented across
 > `apps/web/src/config/destinations.ts`, `packages/kvox-web/src/core/ui/library/`,
 > `apps/web/src/pages/HomePage.tsx`, `packages/kvox-web/src/transcripts/headless/hooks/usePlaybackEngine.ts`,
-> `packages/kvox-web/src/notes/ui/components/`, `apps/web/src/theme/tokens.ts`,
+> `packages/kvox-web/src/notes/ui/components/`, `packages/kvox-web/src/brand/tokens.ts` (moved from `apps/web/src/theme/` by #628; the theme, mark and font are now `@marinoscar/kvox-web/brand`),
 > `packages/kvox-web/src/transcripts/headless/utils/transcriptDisplay.ts`, and
-> `apps/web/scripts/generate-icons.py` plus the two hand-written brand SVGs.
+> `packages/kvox-web/scripts/generate-icons.py` plus the two hand-written brand SVGs.
 > Issue #113 — this document — is the epic's last, per AGENTS.md's
 > Issue-Driven Development rule that documentation lands after the code it
 > describes, the same position `docs/specs/notes.md`'s own issue #60 occupies
@@ -626,7 +626,7 @@ web viewer and another in a PDF exported from the same transcript.
 The mark is a K monogram followed by a five-bar waveform, drawn as fractions
 of its own bounding box in three places that must describe the same shape:
 `apps/web/public/icons/source.svg`, `apps/web/public/favicon.svg`, and the
-constants at the top of `apps/web/scripts/generate-icons.py`.
+constants at the top of `packages/kvox-web/scripts/generate-icons.py`.
 
 ### The ratio table
 

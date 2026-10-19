@@ -30,14 +30,14 @@ Everything here is grounded in code that exists: the packages (`packages/kvox-{c
 
 All six web slices are merged. `packages/kvox-web/README.md` and each slice's own README (`packages/kvox-web/src/<slice>/README.md`) are the source of truth for what is exported.
 
-**What is host-neutral.** All slice code. A slice imports `@marinoscar/kvox-contract` and `@marinoscar/kvox-api/{ports,core}`, never a `@marinoscar/platform-*` package (the `host-neutral` rule, enforced by `npm run check:kvox-slice-peers`). The web slices read their host only through `KvoxWebHost`.
+**What is host-neutral.** All slice code. A slice imports `@marinoscar/kvox-contract` and `@marinoscar/kvox-api/{ports,core}`, never a `@marinoscar/platform-*` package (the `host-neutral` rule, enforced by `npm run check:kvox-slice-peers`), with one exception: the `brand` entry imports `@marinoscar/platform-web/shell/headless` for the theme ([Look and feel](#look-and-feel)). The web slices read their host only through `KvoxWebHost`.
 
 **What is not, and is yours.**
 
 - The ten ports ([Ports to implement](#ports-to-implement)) and the web host ([Wiring the web](#wiring-the-web)).
 - The four host tables `users`, `organizations`, `storage_objects`, `jobs`, and the seed rows ([Database](#database)).
 - Duties no port states (found by the bare host, written down in [kvox-ports.md](../specs/kvox-ports.md#38-kvox_settings) and [section 6.1](../specs/kvox-ports.md#61-what-the-bare-host-and-the-desktop-guide-added-issues-505-506)): declare the system `ai` settings namespace (with `graphEnabled` and `reasoningEffort` once the graph is mounted); install a global `ZodValidationPipe`; serve the upload-completion route; register a content-type parser for binary bodies; with the graph, register `@fastify/multipart`, read an unwritten `defaults: undefined` setting as `undefined`, tick four housekeeping enqueuers, and answer the graph's structured-output schemas from `KVOX_AI`.
-- The renderer's shell: router, theme, navigation, settings hub. Slices export cards, destinations and routes as data; you place them.
+- The renderer's shell: router, navigation, settings hub. Slices export cards, destinations and routes as data; you place them. The theme, the mark and the font are not yours to write: they are `@marinoscar/kvox-web/brand` ([Look and feel](#look-and-feel)).
 - The transcription provider, ffmpeg, fonts for PDF export.
 
 ### Rules a Desktop host still honours
@@ -752,6 +752,37 @@ A card's `permission` is the exact string the API enforces, so the Desktop setti
 **Permissions and the graph switch.** `useHasPermission` reads the same `viewer()` you provide. `features().graphEnabled` should mirror the main process's `ai.graphEnabled` and the adapter's `capabilities().graphEnabled`; when it is `false` or `undefined` the graph UI stays hidden.
 
 **Tests.** `@marinoscar/kvox-web/core/testing` gives `createFakeKvoxWebHost({ routes, sse, ssePost, viewer, features, links, upload })` (route keys `"METHOD /path"`, `:param`, trailing `/*`), `renderWithKvoxHost(ui, host)` and `describeKvoxWebConformance`.
+
+## Look and feel
+
+Desktop looks like KVox because it uses the same package the web app does: **`@marinoscar/kvox-web/brand`** (issue #628). Do not write a theme, copy a logo or load a font in the Desktop repository; any of those is a second source of the brand, and the packages-first rule ([ADR-0001](../decisions/0001-packages-first.md)) forbids it. A host with no API and no `public/` folder gets everything below from the package:
+
+| You need | Use | Notes |
+|---|---|---|
+| The MUI themes | `createKvoxTheme('light' \| 'dark', extend?)`, or the constants `kvoxLightTheme` and `kvoxDarkTheme` | The packaged shell's base (Inter, 600-weight headings, an 8px radius) with the KVox palette and component overrides: the indigo primary, sentence-case buttons, tonal dark surfaces, the bordered shadowless dark card. Build each mode once and keep it at module level. Needs `@marinoscar/platform-web` (`createKvoxTheme` calls its `createShellTheme`) and `@mui/material`. |
+| The shell root | `ShellRoot` from `@marinoscar/platform-web/shell/ui` with `themes={{ light, dark }}` | It holds the viewer's light, dark or system choice and mounts MUI's `ThemeProvider` and `CssBaseline`. |
+| The colours as data | `kvoxTokens`, `kvoxLightPalette`, `kvoxDarkPalette` | For a non-MUI surface (a window background, a splash screen). |
+| The product name and brand colour | `KVOX_BRAND` (`productName`, `tagline`, `themeColor`, `backgroundColor`) | Written from `packages/shared/identity.json` at build time. Not the `KVOX_BRAND` token of `@marinoscar/kvox-api/core`, which is a different value (the document brand of the API). |
+| The mark in the UI | `BrandMark` and `BrandLockup` | Inline SVG: no `<img>`, no network, no `public/` folder. `BrandLockup` is the mark and the name as the web app bar draws them. |
+| The font | `import '@marinoscar/kvox-web/brand/fonts/inter.css'` | The `@font-face` URL is relative, so electron-vite emits the woff2 into the renderer bundle. No CDN, which keeps the renderer's CSP at `font-src 'self' data:`. |
+| Installer and window icons | `@marinoscar/kvox-web/brand/assets/icon-1024.png` (source for `.icns` and `.ico`), `icon-512.png`, `mark.svg`, `favicon.svg` | Package exports; point `electron-builder.yml`'s `icon:` at the resolved file or copy it from `node_modules/@marinoscar/kvox-web/dist/brand/assets/` in a prebuild step. |
+
+```tsx
+// Illustrative — not compiled (the renderer's entry)
+import '@marinoscar/kvox-web/brand/fonts/inter.css';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { BrandLockup, createKvoxTheme } from '@marinoscar/kvox-web/brand';
+
+const THEMES = { light: createKvoxTheme('light'), dark: createKvoxTheme('dark') };
+
+export const Root = ({ children }: { children: React.ReactNode }) => (
+  <ShellRoot themes={THEMES} storageKey="theme_mode">
+    {children}
+  </ShellRoot>
+);
+```
+
+The `brand` entry is the one place in `@marinoscar/kvox-web` that imports the platform (exactly `@marinoscar/platform-web/shell/headless`); install `@marinoscar/platform-web` at the version the package pins. It does not touch the five coupled breakpoint gates, which stay the shell's. The web edition consumes the same entry (`apps/web/src/theme/index.ts` re-exports the two themes, `Layout.tsx` draws `BrandLockup`), and a test (`packages/kvox-web/test/brand/bareHost.test.tsx`) renders `ShellRoot`, `createKvoxTheme('dark')` and `BrandLockup` with no API and no `public/` folder. Reference: the `brand` section of [the package README](../../packages/kvox-web/README.md#the-brand-subpath).
 
 ## Offline constraints, feature by feature
 

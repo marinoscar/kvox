@@ -9,7 +9,8 @@
   the palette rather than white-on-indigo alone — "K" for knowledge, the
   waveform for the voice it is made from.
 
-  Nothing loads this file at runtime. It exists so a fork can open the mark in
+  Nothing loads this file at runtime (`@marinoscar/kvox-web/brand/assets/mark.svg`
+  is for a host's installer or packaging step). It exists so a fork can open the mark in
   a vector editor, replace it with a real logo, and have something to match the
   raster icons against.
 
@@ -36,12 +37,12 @@
   headless browser — precisely the image toolchain this template refuses to
   require of a fork).
 
-  It is NOT rasterised by the build. `apps/web/scripts/generate-icons.py` draws
+  It is NOT rasterised by the build. `packages/kvox-web/scripts/generate-icons.py` draws
   the same geometry in Pillow. The two therefore describe the mark twice and
   MUST be kept in step: edit here, mirror the constants in that script, re-run
-  it. `src/__tests__/pwa/brandMark.test.ts` compares this file against
-  `favicon.svg` in normalised mark space, which is the only one of the three
-  pairs a test can check without an image toolchain.
+  it. `packages/kvox-web/test/brand/BrandMark.test.tsx` compares this file
+  against `favicon.svg` and the inline `BrandMark` in normalised mark space,
+  which is all a test can check without an image toolchain.
 
   ⚠ THE MARK IS NOT SQUARE: it is 1.0 wide by 0.7380 tall, and every ratio in
   the generator is a fraction of its WIDTH.
@@ -58,7 +59,7 @@
   The colour is `themeColor` from `packages/shared/identity.json`, which is the
   source of truth. This file holds a COPY of it, because an SVG attribute
   cannot read a manifest. `scripts/rename.mjs` rewrites it, and the
-  template-identity guard fails if it ever drifts. There is exactly ONE such
+  template-identity guard and the brand tests fail if it ever drifts. There is exactly ONE such
   fill here, which is what that codemod anchors on. The amber is NOT in the
   manifest: a fork rebrands the plate, and the accent is a property of this
   mark's drawing.

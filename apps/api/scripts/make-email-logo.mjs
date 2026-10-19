@@ -6,7 +6,7 @@
 //     node apps/api/scripts/make-email-logo.mjs
 //
 // Reads the brand master `apps/web/public/icons/icon-192.png` (written by
-// `apps/web/scripts/generate-icons.py`, which is itself driven by
+// `packages/kvox-web/scripts/generate-icons.py`, which is itself driven by
 // `packages/shared/identity.json`) and writes a half-size copy to
 // `apps/api/assets/email/logo.png` — the ONE file a rebranding fork has to
 // replace, and the only image this application ever puts in a message.
@@ -29,7 +29,7 @@
 //
 // WHY THIS IS ZERO-DEPENDENCY NODE RATHER THAN PILLOW/sharp/ImageMagick
 // -----------------------------------------------------------------------------
-// The same rule `apps/web/scripts/generate-icons.py` states in its own header:
+// The same rule `packages/kvox-web/scripts/generate-icons.py` states in its own header:
 // this repository is a TEMPLATE, and a fork that rebrands it must not be made
 // to install an image toolchain. That script already asks for Pillow, run by
 // hand, once; this one asks for nothing at all, because `node:zlib` is all an

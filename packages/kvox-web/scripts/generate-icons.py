@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-Generate every brand raster under `apps/web/public/`.
+Generate every brand raster into `packages/kvox-web/src/brand/assets/`.
+
+The rasters are part of the `@marinoscar/kvox-web/brand` package (issue #628), the
+single copy of the brand. The web app's `public/` folder holds a mirror of
+them that `node apps/web/scripts/sync-brand-assets.mjs` writes (and
+`--check` verifies); run that after this script.
 
 The brand COLOURS come from `packages/shared/identity.json` — the one manifest
 the application, the CLI and the web app manifest all read — so a rebrand
 cannot leave the icons behind. The mark GEOMETRY lives in the constants below.
 
-    python3 apps/web/scripts/generate-icons.py
+    python3 packages/kvox-web/scripts/generate-icons.py
+    node apps/web/scripts/sync-brand-assets.mjs
 
 WHY A COMMITTED SCRIPT AND COMMITTED PNGs, RATHER THAN A BUILD STEP
 =============================================================================
@@ -52,26 +58,28 @@ marks in this product category; and rasterising the SVG, which is the CI
 dependency this template exists to avoid.
 
 The mark itself also exists as hand-editable vector art in
-`apps/web/public/icons/source.svg`, and a second time, at the tighter favicon
-crop, in `apps/web/public/favicon.svg`. Those SVGs and the geometry constants
+`packages/kvox-web/src/brand/assets/mark.svg`, and a second time, at the tighter
+favicon crop, in `.../assets/favicon.svg`; `BrandMark.tsx` draws it a third time
+as inline SVG from `mark-geometry.ts`. Those SVGs and the geometry constants
 in this file describe the same mark and must be kept in step — this script
 deliberately does NOT rasterise the SVG, because doing so would reintroduce
 exactly the rendering dependency (rsvg / cairosvg / a headless browser) the
-committed-PNG approach exists to avoid. `src/__tests__/pwa/brandMark.test.ts`
-is the guard that the two vectors have not drifted apart from each other.
+committed-PNG approach exists to avoid. `packages/kvox-web/test/brand/` is the
+guard that the vectors and the inline mark have not drifted apart.
 
-WHAT IT WRITES
+WHAT IT WRITES (all under `packages/kvox-web/src/brand/assets/`)
 =============================================================================
-    public/icons/icon-192.png              192  manifest, purpose: any
-    public/icons/icon-512.png              512  manifest, purpose: any
-    public/icons/icon-maskable-192.png     192  manifest, purpose: maskable
-    public/icons/icon-maskable-512.png     512  manifest, purpose: maskable
-    public/icons/badge-96.png               96  notification badge, monochrome
-    public/icons/apple-touch-icon-180.png  180  iOS Home Screen
-    public/favicon.ico                   16/32/48 frames
+    icon-192.png                 192  manifest, purpose: any
+    icon-512.png                 512  manifest, purpose: any
+    icon-1024.png               1024  desktop installers (.icns / .ico source)
+    icon-maskable-192.png        192  manifest, purpose: maskable
+    icon-maskable-512.png        512  manifest, purpose: maskable
+    badge-96.png                  96  notification badge, monochrome
+    apple-touch-icon-180.png     180  iOS Home Screen
+    favicon.ico             16/32/48  frames
 
-`public/favicon.svg` and `public/icons/source.svg` are hand-written vector and
-are NOT touched by this script.
+`favicon.svg` and `mark.svg` in the same folder are hand-written vector and are
+NOT touched by this script.
 
 Running it is idempotent: same inputs, byte-comparable outputs, every file
 rewritten from scratch.
@@ -105,14 +113,14 @@ from PIL import Image, ImageDraw
 # =============================================================================
 # Everything is resolved from THIS FILE's own location, never from the current
 # working directory. The documented invocation is
-# `python3 apps/web/scripts/generate-icons.py` from the repository root, but the
+# `python3 packages/kvox-web/scripts/generate-icons.py` from the repository root, but the
 # script must write the same bytes to the same places when it is run from
-# `apps/web/scripts/`, from a sibling checkout, or from anywhere else.
-SCRIPT_DIR = Path(__file__).resolve().parent    # apps/web/scripts
-WEB_DIR = SCRIPT_DIR.parent                     # apps/web
-REPO_ROOT = WEB_DIR.parent.parent               # <repo root>
-PUBLIC_DIR = WEB_DIR / "public"
-ICONS_DIR = PUBLIC_DIR / "icons"
+# `packages/kvox-web/scripts/`, from a sibling checkout, or from anywhere else.
+SCRIPT_DIR = Path(__file__).resolve().parent    # <package>/scripts
+PACKAGE_DIR = SCRIPT_DIR.parent                 # <package>
+REPO_ROOT = PACKAGE_DIR.parent.parent           # <repo root>
+# The package owns the rasters (issue #628); apps/web/public mirrors them.
+ASSETS_DIR = PACKAGE_DIR / "src" / "brand" / "assets"
 IDENTITY_MANIFEST = REPO_ROOT / "packages" / "shared" / "identity.json"
 
 FAVICON_ICO_SIZES = (16, 32, 48)
@@ -397,29 +405,30 @@ def render_apple_touch(size: int) -> Image.Image:
 
 
 def main() -> None:
-    ICONS_DIR.mkdir(parents=True, exist_ok=True)
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     outputs: list[tuple[Path, Image.Image]] = [
-        (ICONS_DIR / "icon-192.png", render_standard(192)),
-        (ICONS_DIR / "icon-512.png", render_standard(512)),
-        (ICONS_DIR / "icon-maskable-192.png", render_maskable(192)),
-        (ICONS_DIR / "icon-maskable-512.png", render_maskable(512)),
-        (ICONS_DIR / "badge-96.png", render_badge(96)),
-        (ICONS_DIR / "apple-touch-icon-180.png", render_apple_touch(180)),
+        (ASSETS_DIR / "icon-192.png", render_standard(192)),
+        (ASSETS_DIR / "icon-512.png", render_standard(512)),
+        (ASSETS_DIR / "icon-1024.png", render_standard(1024)),
+        (ASSETS_DIR / "icon-maskable-192.png", render_maskable(192)),
+        (ASSETS_DIR / "icon-maskable-512.png", render_maskable(512)),
+        (ASSETS_DIR / "badge-96.png", render_badge(96)),
+        (ASSETS_DIR / "apple-touch-icon-180.png", render_apple_touch(180)),
     ]
 
     for path, image in outputs:
         image.save(path, format="PNG", optimize=True)
-        print(f"wrote {path.relative_to(WEB_DIR)}  {image.size[0]}x{image.size[1]}  {image.mode}")
+        print(f"wrote {path.relative_to(REPO_ROOT)}  {image.size[0]}x{image.size[1]}  {image.mode}")
 
     # The .ico carries three frames because the contexts that still read it
     # differ: 16px is the browser tab, 32px the bookmark bar and taskbar, 48px
     # a Windows desktop shortcut. Each frame is rendered and downsampled
     # independently rather than letting the ICO encoder shrink one big frame —
     # the 16px bars survive the difference visibly. They also use the tighter
-    # favicon crop, which `public/favicon.svg` matches.
+    # favicon crop, which `assets/favicon.svg` matches.
     frames = [render_standard(size, MARK_RATIO_FAVICON) for size in FAVICON_ICO_SIZES]
-    ico_path = PUBLIC_DIR / "favicon.ico"
+    ico_path = ASSETS_DIR / "favicon.ico"
     frames[-1].save(
         ico_path,
         format="ICO",
@@ -427,11 +436,11 @@ def main() -> None:
         append_images=frames[:-1],
     )
     print(
-        f"wrote {ico_path.relative_to(WEB_DIR)}  "
+        f"wrote {ico_path.relative_to(REPO_ROOT)}  "
         f"{'/'.join(str(size) for size in FAVICON_ICO_SIZES)}px frames"
     )
 
-    print("\nfavicon.svg and icons/source.svg are hand-written vector — not regenerated.")
+    print("\nfavicon.svg and mark.svg are hand-written vector — not regenerated.")
 
 
 if __name__ == "__main__":

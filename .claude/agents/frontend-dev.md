@@ -113,27 +113,25 @@ function ProtectedRoute({ children, requiredRole?: string }) {
 ## MUI Theming
 
 ### Theme Configuration
-The palette is NOT written inline. Both modes are built from one token map,
-`apps/web/src/theme/tokens.ts`, and the brand colour itself comes from
-`THEME_COLOR` in `@app/shared` — `packages/shared/identity.json` is the rebrand
-codemod's contract, and the manifest and icon PNGs cannot import a palette, so a
-hex literal here would restyle the app and leave the installed-app surfaces on
-the old colour.
+The palette is NOT written inline, and it is not in `apps/web` either (#628). The
+app's look is the package `@marinoscar/kvox-web/brand`
+(`packages/kvox-web/src/brand/`): both modes are built from one token map,
+`tokens.ts`, `createKvoxTheme` wraps the shell's `createShellTheme`, and
+`BrandMark`/`BrandLockup`, the brand SVG/PNG files and the Inter font ship with it,
+so the desktop app paints the same. `apps/web/src/theme/index.ts` only re-exports
+`kvoxLightTheme`/`kvoxDarkTheme`. The brand colour comes from
+`packages/shared/identity.json` (the rebrand codemod's contract) through the
+generated `identity.generated.ts` (`npm run brand:sync -w @marinoscar/kvox-web`),
+because the manifest and icon PNGs cannot import a palette and a published package
+cannot import `@app/shared`. Change a token in the package, never with a hex
+literal in the app.
 
 ```typescript
-import { THEME_COLOR } from '@app/shared';
+import { createKvoxTheme } from '@marinoscar/kvox-web/brand';
 
-const theme = createTheme({
-  palette: {
-    mode: 'light', // or 'dark' or from user settings
-    primary: { main: THEME_COLOR },
-    secondary: { main: BRAND_TOKENS.light.secondary.main },
-  },
-  // Responsive breakpoints
-  breakpoints: {
-    values: { xs: 0, sm: 600, md: 900, lg: 1200, xl: 1536 },
-  },
-});
+// Module constants: build each mode once. `extend` takes extra MUI ThemeOptions.
+const lightTheme = createKvoxTheme('light');
+const darkTheme = createKvoxTheme('dark');
 ```
 
 ### Theme Mode Implementation

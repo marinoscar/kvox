@@ -18,7 +18,8 @@
     "./src/graph/ui/index.ts",
     "./src/graph/testing/index.ts",
     "./src/ask/headless/index.ts",
-    "./src/ask/ui/index.ts"
+    "./src/ask/ui/index.ts",
+    "./src/brand/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-web",

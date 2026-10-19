@@ -71,6 +71,8 @@ surfaces that work the same way, added since that table was written:
   writing out a GitHub URL, so the published API reference always points at
   the fork's own repository.
 
+- **The KVox look lives in `@marinoscar/kvox-web/brand`** (`packages/kvox-web/src/brand/`), not in `apps/web`. The MUI tokens, palettes, component overrides, themes, `BrandMark`, `BrandLockup`, the SVG and PNG brand files and the Inter font are all there, and KVox Desktop consumes the same package. The package cannot import the private `@app/shared`, so it holds `src/brand/identity.generated.ts`, a copy of `productName`, `tagline`, `themeColor` and `backgroundColor` written from `identity.json` by `npm run brand:sync -w @marinoscar/kvox-web`. The codemod runs that write for you (and `npm run check:kvox-brand` fails CI if you edit `identity.json` by hand and forget it), so the light `primary.main`, the mark's plate and `KVOX_BRAND` follow a rename; a rebrand never edits a theme file.
+
 Nothing in this group needs the codemod. If all you're changing is the
 product name, colours, or repo slug, `identity.json` plus a rebuild is
 functionally the whole change for anything a browser or a running server
@@ -93,7 +95,8 @@ edits:
 | `infra/compose/test.compose.yml`, `apps/api/.env.test`, `scripts/dev.ps1` (test database name and container name) | Same reasoning as the OTEL default — Compose/env-file values, not code. |
 | **After the codemod: `npm run platform:infra:sync`** | `infra/` is generated from `@marinoscar/platform-infra` with the identity in `identity.json` (#483). The codemod edits the same rendered literals in place, so the files and `infra/platform-infra.lock.json` disagree until the sync re-renders them from the new identity; CI's `sync --check` fails until it is run and committed. |
 | `package.json`'s `"name"` field | npm reads this before any of the repository's own code runs, so it is necessarily a second copy of the slug. |
-| `apps/web/public/favicon.svg` and `apps/web/public/icons/source.svg` (the `fill` attribute on the background rect) | These are the two hand-editable *vector* masters. `generate-icons.py` reads the manifest for the *rasters* but deliberately does not rasterise these two SVGs — see [The binary-name decision](#the-binary-name-decision)'s sibling note in `packages/shared/README.md` on why an SVG toolchain is refused. |
+| `packages/kvox-web/src/brand/assets/favicon.svg` and `packages/kvox-web/src/brand/assets/mark.svg` (the `fill` attribute on the background rect) | These are the two hand-editable *vector* masters, now owned by the brand package (#628). `generate-icons.py` reads the manifest for the *rasters* (and writes them into the same folder) but deliberately does not rasterise these two SVGs — see [The binary-name decision](#the-binary-name-decision)'s sibling note in `packages/shared/README.md` on why an SVG toolchain is refused. |
+| **After the anchors: the mirror** | `apps/web/public/` serves a byte-for-byte mirror of the package's brand files (`favicon.svg`, `favicon.ico`, `icons/*`, `fonts/*`; `icons/source.svg` is `assets/mark.svg`). The codemod re-runs `node apps/web/scripts/sync-brand-assets.mjs` after the SVG anchors and the icon regeneration, so the mirror never carries the old colour; if you edit a brand file by hand, run it yourself (`npm run brand:check -w web` and a web test fail on drift). |
 | `cliName` in `packages/shared/identity.json` and `apps/cli/package.json`'s `bin` key | Only touched when `--cli-name` is passed — see the next section. |
 
 ### Never renamed
@@ -154,8 +157,8 @@ Planned edits (Prior Name -> Acme Hub):
   ~ apps/api/.env.test  2x  "prior_name_test"
   ~ scripts/dev.ps1  1x  "\"prior_name_test\""
   ~ package.json  1x  "\"name\": \"prior-name\","
-  ~ apps/web/public/favicon.svg  1x  "fill=\"#0044cc\""
-  ~ apps/web/public/icons/source.svg  1x  "fill=\"#0044cc\""
+  ~ packages/kvox-web/src/brand/assets/favicon.svg  1x  "fill=\"#0044cc\""
+  ~ packages/kvox-web/src/brand/assets/mark.svg  1x  "fill=\"#0044cc\""
 
   ~ packages/shared/identity.json  (structured write)
       productName: "Acme Hub"
@@ -239,7 +242,7 @@ human, in this order:
 
    This rewrites `apps/api/assets/email/logo.png` — the raster every
    invitation and reminder email embeds by CID (`templates/brand-logo.ts`)
-   — from the just-regenerated `apps/web/public/icons/icon-192.png`.
+   — from the just-regenerated `apps/web/public/icons/icon-192.png` (the mirror of the package's `assets/icon-192.png`).
    `generate-icons.py` doesn't produce it: the API's Docker image contains
    no `apps/web`, only `apps/api/assets/`, which `apps/api/Dockerfile`
    already copies (the arrangement issue #28 set up for the bundled PDF
@@ -321,12 +324,12 @@ it, in order of preference:
    than adding it silently.
 
 **`python3` or Pillow is missing when regenerating icons.** The rename
-script tries to run `apps/web/scripts/generate-icons.py` for you after a
+script tries to run `packages/kvox-web/scripts/generate-icons.py` for you after a
 colour change and prints a fallback command if that fails:
 
 ```bash
 pip install --user 'Pillow>=10'
-python3 apps/web/scripts/generate-icons.py
+python3 packages/kvox-web/scripts/generate-icons.py
 ```
 
 The icon PNGs are committed pixels precisely so that a fork is never forced

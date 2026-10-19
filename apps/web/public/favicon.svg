@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The same K-AND-WAVEFORM MARK as `icons/source.svg` (issue #146) — a white K
+  The same K-AND-WAVEFORM MARK as `mark.svg` (issue #146) — a white K
   of one stem and two round-capped diagonal arms, followed by five amber bars
   whose first two nestle into the K's mouth — on a 32 canvas with the tighter
   favicon crop (mark width 80% of the canvas instead of 68%): at tab size the
@@ -8,13 +8,13 @@
   `favicon.ico`'s frames use the identical crop, so the vector and raster
   favicons agree.
 
-  TWO DESCRIPTIONS, ONE MARK. `apps/web/scripts/generate-icons.py` draws this
+  TWO DESCRIPTIONS, ONE MARK. `packages/kvox-web/scripts/generate-icons.py` draws this
   geometry in Pillow and deliberately does NOT rasterise this file, because
   rendering an SVG needs a toolchain (rsvg / cairosvg / a headless browser)
   this template refuses to require of a fork's CI. So the mark is described
-  three times — here, in `icons/source.svg`, and in that script — and all
-  three must be edited together. `src/__tests__/pwa/brandMark.test.ts` compares
-  the two SVGs in NORMALISED mark space rather than by a raw scale factor,
+  three times — here, in `mark.svg`, and in that script — and all
+  three must be edited together. `packages/kvox-web/test/brand/BrandMark.test.tsx` compares
+  the two SVGs and the inline `BrandMark` in NORMALISED mark space rather than by a raw scale factor,
   because the two crops differ (0.80 here, 0.68 there) and a 512/32 comparison
   would therefore fail on two files that agree perfectly about the shape.
 

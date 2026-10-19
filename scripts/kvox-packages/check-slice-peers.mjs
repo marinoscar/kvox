@@ -57,6 +57,9 @@
 //                    A slice that did could not be installed on Desktop, where
 //                    the platform does not exist. The one place that imports
 //                    the platform is the app folder apps/api/src/platform-kvox.
+//                    The one exception in kvox-web is the brand slice, which
+//                    may import exactly @marinoscar/platform-web/shell/headless
+//                    (HOST_NEUTRAL_SLICE_ALLOWED).
 //                    packages/kvox-ai/src/** may import exactly one platform
 //                    specifier, the lean
 //                    @marinoscar/platform-ai-providers (the provider-adapter
@@ -136,6 +139,19 @@ export const HOST_NEUTRAL_PACKAGES = Object.freeze(['kvox-api', 'kvox-web', 'kvo
 export const HOST_NEUTRAL_ALLOWED = Object.freeze({
   'kvox-ai': Object.freeze(['@marinoscar/platform-ai-providers']),
   'kvox-eval': Object.freeze(['@marinoscar/platform-ai-providers', '@marinoscar/platform-ai-providers/openai']),
+});
+/**
+ * The platform specifiers ONE slice of a host-neutral package may import, matched
+ * EXACTLY (rule 6), per package and slice. The `brand` slice of `kvox-web` builds
+ * `createKvoxTheme` on `createShellTheme` of the platform's headless shell entry
+ * (issue #628), so `@marinoscar/platform-web` is a peer of that entry alone; every
+ * other kvox-web slice stays free of the platform, and so does any other
+ * specifier of the brand slice.
+ */
+export const HOST_NEUTRAL_SLICE_ALLOWED = Object.freeze({
+  'kvox-web': Object.freeze({
+    brand: Object.freeze(['@marinoscar/platform-web/shell/headless']),
+  }),
 });
 /** Specifier prefix rule 6 forbids. */
 export const PLATFORM_PREFIX = '@marinoscar/platform-';
@@ -567,8 +583,10 @@ function checkImports(root, packages, graph, peers, violations) {
 function checkHostNeutral(root, violations) {
   for (const pkg of HOST_NEUTRAL_PACKAGES) {
     const src = join(root, 'packages', pkg, 'src');
-    const allowed = HOST_NEUTRAL_ALLOWED[pkg] ?? [];
+    const packageAllowed = HOST_NEUTRAL_ALLOWED[pkg] ?? [];
     for (const file of sourceFiles(src)) {
+      const slice = toPosix(relative(src, file)).split('/')[0];
+      const allowed = [...packageAllowed, ...(HOST_NEUTRAL_SLICE_ALLOWED[pkg]?.[slice] ?? [])];
       for (const specifier of importSpecifiers(readFileSync(file, 'utf8'))) {
         if (specifier.startsWith(PLATFORM_PREFIX) && !allowed.includes(specifier)) {
           violations.push({

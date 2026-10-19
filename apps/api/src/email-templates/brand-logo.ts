@@ -27,7 +27,7 @@ import type { EmailBrandMark } from '@marinoscar/platform-api/email';
 // file and re-reading a diff of base64.
 //
 // It is currently an exact 2x reduction of `apps/web/public/icons/icon-192.png`
-// (the master `apps/web/scripts/generate-icons.py` writes from
+// (the master `packages/kvox-web/scripts/generate-icons.py` writes from
 // `packages/shared/identity.json`), reproduced by:
 //
 //     node apps/api/scripts/make-email-logo.mjs
