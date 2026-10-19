@@ -76,8 +76,8 @@ Keep this list current when you add one.
 | API reference page `<title>` | `apps/api/src/openapi/register-docs-routes.ts` | `${APP_NAME} API Reference` |
 | Email wordmark, footer, and subject lines | `apps/api/src/email/templates/layout.ts` (re-exported to the five templates) | `APP_NAME` |
 | CLI banner, `--help`, device name | `apps/cli/src/branding.ts` (`CLI_DISPLAY_NAME`) | `${APP_NAME} CLI` |
-| Web theme, `palette.primary.main` (light) | `apps/web/src/theme/light.ts` | `THEME_COLOR` |
-| Brand icons and favicon — generated pixels, not read at runtime | `apps/web/public/icons/*.png`, `apps/web/public/favicon.ico` via `apps/web/scripts/generate-icons.py` | `THEME_COLOR`, `BACKGROUND_COLOR` |
+| Web theme, `palette.primary.main` (light) | `packages/kvox-web/src/brand/tokens.ts` (`@marinoscar/kvox-web/brand`), through the generated `identity.generated.ts` (`npm run brand:sync -w @marinoscar/kvox-web`) | `themeColor` |
+| Brand icons and favicon — generated pixels, not read at runtime | `packages/kvox-web/src/brand/assets/*.png` and `favicon.ico` (mirrored into `apps/web/public/`) via `packages/kvox-web/scripts/generate-icons.py` | `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Web app manifest (`name`, `short_name`, `description`, `theme_color`, `background_color`) | `apps/web/pwa/manifest.ts` | `APP_NAME`, `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Signed-in home page subtitle | `apps/web/src/components/home/HomeHero.tsx` | `TAGLINE` |
 
@@ -88,8 +88,10 @@ rebuilding is the whole change for this one field.
 
 ## Brand icons
 
-Everything under `apps/web/public/icons/`, plus `public/favicon.svg` and
-`public/favicon.ico`. Issue #216 added them so that a notification can set an
+Everything under `packages/kvox-web/src/brand/assets/` (the `@marinoscar/kvox-web/brand`
+package, #628), mirrored by `node apps/web/scripts/sync-brand-assets.mjs` into
+`apps/web/public/icons/`, `public/favicon.svg` and `public/favicon.ico` (the file names
+below are the web URLs; `icons/source.svg` is the package's `assets/mark.svg`). Issue #216 added them so that a notification can set an
 `icon` and a `badge`, a manifest has something to point at, and iOS can install
 the app to the Home Screen.
 
@@ -114,7 +116,7 @@ has **no alpha channel at all** because iOS composites transparency to black.
 ### Regenerating them
 
 ```bash
-python3 apps/web/scripts/generate-icons.py
+python3 packages/kvox-web/scripts/generate-icons.py
 ```
 
 Requires Python 3 and Pillow (`pip install --user 'Pillow>=10'`) and nothing

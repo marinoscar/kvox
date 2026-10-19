@@ -12,7 +12,9 @@ import type { KvoxWebHost } from '../headless/host.js';
 // `describe`, `it` and `expect`, so it runs under Vitest and Jest.
 //
 //   kvox-web.host-neutral  A static scan of the package sources: no file imports
-//                          a platform package; no `*/headless` file
+//                          a platform package (the one exception: the `brand`
+//                          slice imports `@marinoscar/platform-web/shell/headless`
+//                          for `createKvoxTheme`); no `*/headless` file
 //                          imports `@mui/*`, `@emotion/*` or `react-router-dom`,
 //                          or reaches into a `*/ui` folder. Needs `srcDir`.
 //   kvox-web.host          The shape of a host: every port present, links that
@@ -64,6 +66,10 @@ export interface KvoxWebConformanceOptions {
 // to prove no file imports the platform, and this file would be the one match.
 const PLATFORM_PREFIX = `@marinoscar/${'platform'}-`;
 
+// The platform specifiers the `brand` slice may import: `createKvoxTheme` builds on
+// the shell's headless `createShellTheme` (issue #628). Exact matches only.
+const BRAND_PLATFORM_IMPORTS: readonly string[] = [`${PLATFORM_PREFIX}web/shell/headless`];
+
 const IMPORT_RE =
   /(?:\bimport|\bexport)\s[^;'"`]*?\bfrom\s*['"]([^'"\n]+)['"]|\bimport\s*['"]([^'"\n]+)['"]|\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
@@ -98,7 +104,8 @@ export function scanKvoxWebSources(srcDir: string): string[] {
     const text = stripComments(readFileSync(file, 'utf8'));
     for (const match of text.matchAll(IMPORT_RE)) {
       const specifier = match[1] ?? match[2] ?? match[3] ?? '';
-      if (specifier.startsWith(PLATFORM_PREFIX)) {
+      const brandAllowed = parts[0] === 'brand' && BRAND_PLATFORM_IMPORTS.includes(specifier);
+      if (specifier.startsWith(PLATFORM_PREFIX) && !brandAllowed) {
         problems.push(`${rel} imports ${specifier}: a kvox-web file must not depend on the platform`);
       }
       if (!inHeadless) continue;

@@ -4,7 +4,7 @@ The React side of the KVox domain: pages, components and hooks built on MUI, exp
 
 ## Purpose and scope
 
-The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, theme, shell or settings hub. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop).
+The web slices of the domain. Every slice reads its host (the app that mounts it) through ONE port, `KvoxWebHost`, and exports its settings cards, destinations and routes as DATA that the app spreads into its own registries. The package does not own the app's router, shell or settings hub; it does own the KVox look (the `brand` entry: theme, tokens, mark, fonts), so every host paints the same. It imports no `@marinoscar/platform-*` package (rule `host-neutral`, [PACKAGES.md](../../docs/PACKAGES.md#the-host-neutral-rule)), so it runs in a host that is not the KVox web edition (KVox Desktop). The one exception is the `brand` entry, which imports exactly `@marinoscar/platform-web/shell/headless` (`createShellTheme`).
 
 Status: filled (Epic 7, issues 7.1 to 7.6). All six slices are in: `core`, `transcription`, `search`, `transcripts`, `notes`, `graph` and `ask`. The web edition's `apps/web/src` keeps only composition (routes, registries, the shell, the host binding and the non-domain pages).
 
@@ -24,6 +24,9 @@ Status: filled (Epic 7, issues 7.1 to 7.6). All six slices are in: `core`, `tran
 - `@marinoscar/kvox-web/graph/testing`: `mockGraphCanvas`, the stand-in for the WebGL canvases. Test code only.
 - `@marinoscar/kvox-web/ask/headless`: the client of `/api/ask/**`, the answer stream over `host.sse`, the conversation, conversation-list, stream and AI-configuration hooks, and the pure error-copy, citation-parsing, model-choice and suggestion helpers. [README](src/ask/README.md).
 - `@marinoscar/kvox-web/ask/ui`: `AskPage`, `AskThread`, `AskComposer`, `ConversationList`, `EntityAskPanel`, `EntityAskButton`, the slot components `AskEntityPanelSlot` and `AskEntityButtonSlot` for the graph entity page, and `kvoxAskRoutes`.
+- `@marinoscar/kvox-web/brand`: the single source of the KVox look for every host: `createKvoxTheme`, `kvoxLightTheme`, `kvoxDarkTheme`, `kvoxTokens`, `kvoxLightPalette`, `kvoxDarkPalette`, `kvoxComponentOverrides`, `KVOX_BRAND`, and the inline-SVG `BrandMark` and `BrandLockup`. Needs MUI and `@marinoscar/platform-web`. [README](src/brand/README.md).
+- The brand files, for a host's manifest, window icon and installer: `@marinoscar/kvox-web/brand/assets/mark.svg`, `@marinoscar/kvox-web/brand/assets/favicon.svg`, `@marinoscar/kvox-web/brand/assets/favicon.ico`, `@marinoscar/kvox-web/brand/assets/icon-192.png`, `@marinoscar/kvox-web/brand/assets/icon-512.png`, `@marinoscar/kvox-web/brand/assets/icon-1024.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-192.png`, `@marinoscar/kvox-web/brand/assets/icon-maskable-512.png`, `@marinoscar/kvox-web/brand/assets/badge-96.png`, `@marinoscar/kvox-web/brand/assets/apple-touch-icon-180.png` (`mark.svg` is the 512 master).
+- The self-hosted Inter, with a relative `@font-face` URL: `@marinoscar/kvox-web/brand/fonts/inter.css` and `@marinoscar/kvox-web/brand/fonts/Inter-latin-variable.woff2`.
 
 ## Install and peer dependencies
 
@@ -45,7 +48,7 @@ Optional peers, installed for the entries that need them. A host that uses only 
 
 | Package | Range | Needed by |
 |---|---|---|
-| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui` |
+| `@mui/material` | `^9.1.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui`, `brand` |
 | `@mui/icons-material` | `^9.1.0` | `core/ui`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui` |
 | `react-router-dom` | `^7.17.0` | `core/ui`, `core/testing`, `transcription/ui`, `search/ui`, `transcripts/ui`, `notes/ui`, `graph/ui`, `ask/ui` |
 | `@tanstack/react-virtual` | `^3.14.12` | `transcripts/ui` |
@@ -57,7 +60,7 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `graphology` | `^0.26.0` | `graph/ui` (one copy only) |
 | `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
-| `@marinoscar/platform-web` | `0.1.0-next.5` | no entry: host wiring in the app only |
+| `@marinoscar/platform-web` | `0.1.0-next.6` | `brand` (`createKvoxTheme` builds on `createShellTheme` of `@marinoscar/platform-web/shell/headless`); no other entry |
 
 The per-slice data is `packages/kvox-slice-peers.json` (a slice's `entries` list the peers only one entry may import); `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
@@ -114,6 +117,39 @@ Packaged pages check no permission themselves except where a slice README says s
 
 ## UI
 
+### The brand subpath
+
+`@marinoscar/kvox-web/brand` is the one definition of the KVox look; `apps/web` and KVox Desktop both consume it. It holds the colour tokens (`kvoxTokens`, both modes, plus the two brand colours of the mark), the MUI palettes and component overrides, the two assembled themes and `createKvoxTheme(mode, extend?)` (the shell's base from `createShellTheme`, with the KVox palette and component overrides on top), `KVOX_BRAND` (`productName`, `tagline`, `themeColor`, `backgroundColor`), `BrandMark` (inline SVG: no `<img>`, no network, no `public/` folder; `size`, `title`, `sx`) and `BrandLockup` (the mark and the product name as the web app bar draws them).
+
+A host with no API and no `public/` folder gets the whole look from the entry and one CSS import:
+
+```tsx
+// Electron renderer (electron-vite) or web (Vite): the relative @font-face url makes the bundler emit the font locally.
+import '@marinoscar/kvox-web/brand/fonts/inter.css';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { BrandLockup, createKvoxTheme } from '@marinoscar/kvox-web/brand';
+
+const THEMES = { light: createKvoxTheme('light'), dark: createKvoxTheme('dark') }; // module constants
+
+export function Root() {
+  return (
+    <ShellRoot themes={THEMES} storageKey="theme_mode">
+      <BrandLockup />
+    </ShellRoot>
+  );
+}
+```
+
+Assets are plain package exports a bundler or a packager resolves: `@marinoscar/kvox-web/brand/assets/icon-1024.png` is the source for a Desktop `.icns` and `.ico` (`electron-builder` `icon:` path, resolved with `require.resolve` or copied from `node_modules/@marinoscar/kvox-web/dist/brand/assets/`), `.../assets/icon-512.png` the Linux and window icon, `.../assets/mark.svg` the vector master. They are not typed modules: declare `*.svg`/`*.png` for your bundler (`vite/client` does).
+
+The Inter font is self-hosted and the `@font-face` URL is relative to `inter.css`; nothing loads from a CDN (the web CSP is `font-src 'self' data:` and Desktop forbids remote assets).
+
+**Where the files live.** The package holds the only copy: `src/brand/assets` and `src/brand/fonts`, copied into `dist/brand` by the build (`scripts/copy-brand-assets.mjs`). The PNGs are written by `packages/kvox-web/scripts/generate-icons.py` (Python and Pillow, committed output, byte-reproducible); the SVGs are hand-written. `apps/web/public/` serves a byte-for-byte mirror (manifest, `index.html` and service worker need fixed URLs), written by `node apps/web/scripts/sync-brand-assets.mjs` and checked by `npm run brand:check -w web` and a web test.
+
+**Identity.** `KVOX_BRAND` and the light primary come from `packages/shared/identity.json` through the committed `src/brand/identity.generated.ts`, written by `npm run brand:sync -w @marinoscar/kvox-web` (a published package cannot import the private `@app/shared`). `scripts/rename.mjs` runs the write, regenerates the icons and re-syncs the mirror; `npm run check:kvox-brand` fails CI on drift. See [RENAMING.md](../../docs/RENAMING.md).
+
+The `core/ui` and other slice pages read the MUI theme of the host and define none themselves.
+
 `core/ui` ships the library chrome (`LibraryPageFrame`, `FeedCountLine`, `FeedDateSeparator`, `ActiveStatusFilterChip`), `KvoxLoadingSpinner` and `KvoxCopyButton` (the shared copy control). Pages read the MUI theme of the host; the package defines none. `LibraryPageFrame` reads `down('sm')` to place its create action; that read is a page-level choice, not one of the five coupled shell breakpoint gates (`apps/web/src/__tests__/config/breakpointGates.test.ts` scans this package too).
 
 ## Infra
@@ -130,22 +166,22 @@ None. No slice logs or measures anything in the browser.
 
 ## Conformance suite
 
-`describeKvoxWebConformance(harness, options)` from `@marinoscar/kvox-web/core/testing` registers two suites: `kvox-web.host-neutral` (a static scan of the package sources: no `@marinoscar/platform-*` import anywhere, and no headless file importing `@mui/*`, `@emotion/*`, a router or a `ui` folder) and `kvox-web.host` (the shape of a host: every port present, links that return paths, a viewer that is null or has a permission set). `packages/kvox-web/test/core/conformance.test.ts` runs both against the package and its fake host; `npm run check:kvox-slice-peers` enforces the same import rules.
+`describeKvoxWebConformance(harness, options)` from `@marinoscar/kvox-web/core/testing` registers two suites: `kvox-web.host-neutral` (a static scan of the package sources: no `@marinoscar/platform-*` import anywhere except `@marinoscar/platform-web/shell/headless` in the `brand` slice, and no headless file importing `@mui/*`, `@emotion/*`, a router or a `ui` folder) and `kvox-web.host` (the shape of a host: every port present, links that return paths, a viewer that is null or has a permission set). `packages/kvox-web/test/core/conformance.test.ts` runs both against the package and its fake host; `npm run check:kvox-slice-peers` enforces the same import rules.
 
 ## Upgrade notes
 
-None. This package has not been published yet (see the [release runbook](../../docs/runbooks/release-kvox-packages.md)), so there is nothing to migrate from. The `./core` entry of the scaffold (`KVOX_WEB_CORE`) is replaced by `./core/headless`, `./core/ui` and `./core/testing`.
+The `brand` entry and its asset and font exports are new; an app that had its own theme replaces it with `createKvoxTheme` (the web app's `src/theme/index.ts` now re-exports `kvoxLightTheme` and `kvoxDarkTheme`). This package has not been published yet (see the [release runbook](../../docs/runbooks/release-kvox-packages.md)), so there is nothing to migrate from. The `./core` entry of the scaffold (`KVOX_WEB_CORE`) is replaced by `./core/headless`, `./core/ui` and `./core/testing`.
 
 ## Troubleshooting
 
-`KvoxHostMissingError` means a packaged page or hook rendered without a `KvoxWebHostProvider` above it. `Invalid hook call` means two copies of React: run `node scripts/kvox-packages/check-single-instance.mjs` and align the ranges. If the host context is "missing" although a provider is mounted, two copies of this package were loaded (a bundler that pre-bundled each entry separately): load them as one. `ERR_MODULE_NOT_FOUND` from Node means a relative import lost its `.js` extension.
+`KvoxHostMissingError` means a packaged page or hook rendered without a `KvoxWebHostProvider` above it. `Invalid hook call` means two copies of React: run `node scripts/kvox-packages/check-single-instance.mjs` and align the ranges. If the host context is "missing" although a provider is mounted, two copies of this package were loaded (a bundler that pre-bundled each entry separately): load them as one. `ERR_MODULE_NOT_FOUND` from Node means a relative import lost its `.js` extension. Text in the system sans instead of Inter means `@marinoscar/kvox-web/brand/fonts/inter.css` is not imported (or its `url()` was rewritten). A host that renders `BrandMark` before `@marinoscar/platform-web` is installed fails at import: `brand` needs that peer. `brand:check` failing means `identity.json` changed without `npm run brand:sync -w @marinoscar/kvox-web`.
 
 ## Links
 
 - [Package documentation standard and checks](../../docs/PACKAGES.md): how this README, the TSDoc and the catalog are checked
 - [Release runbook](../../docs/runbooks/release-kvox-packages.md): versions, publishing, rollback
 - [DEVELOPMENT.md](../../docs/DEVELOPMENT.md): build, test and lint commands
-- [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md) and [ask README](src/ask/README.md): the slices
+- [brand README](src/brand/README.md), [core README](src/core/README.md), [transcription README](src/transcription/README.md), [search README](src/search/README.md), [transcripts README](src/transcripts/README.md), [notes README](src/notes/README.md), [graph README](src/graph/README.md) and [ask README](src/ask/README.md): the slices
 
 ### Desktop
 

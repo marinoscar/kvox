@@ -829,7 +829,7 @@ describe('no stale identity literal outside the allowlist (issue #343, epic #341
 // The two hand-written SVGs
 // =============================================================================
 //
-// `apps/web/scripts/generate-icons.py` explicitly does NOT rasterise these two
+// `packages/kvox-web/scripts/generate-icons.py` explicitly does NOT rasterise these two
 // files — rendering an SVG needs a toolchain this template refuses to require
 // — so nothing else keeps their hardcoded colour in step with a rebrand. A
 // rename that missed them would leave the browser tab (favicon) or the PWA's
@@ -837,7 +837,7 @@ describe('no stale identity literal outside the allowlist (issue #343, epic #341
 //
 // This deliberately does NOT scan the repository generally for THEME_COLOR:
 // `#1976d2` (and `#ffffff`) legitimately appear elsewhere on purpose —
-// `OAuthButton.tsx`, `theme/light.ts`, `theme/dark.ts`,
+// `OAuthButton.tsx`, the brand package's `light.ts` and `dark.ts`,
 // `email/templates/layout.ts`, and three contrast-ratio test utilities (~15
 // hits today) — so a general scan would be unworkable noise, not a guard.
 // `scripts/rename.mjs`'s own `residualScan` makes the identical decision for
@@ -846,7 +846,14 @@ describe('no stale identity literal outside the allowlist (issue #343, epic #341
 describe('the hand-written brand SVGs carry the current THEME_COLOR', () => {
   const identity = readManifest();
 
-  it.each(['apps/web/public/favicon.svg', 'apps/web/public/icons/source.svg'])(
+  // The package copies are the ones `rename.mjs` rewrites (#628); the
+  // `apps/web/public` files are their mirror, rewritten by the same run.
+  it.each([
+    'packages/kvox-web/src/brand/assets/favicon.svg',
+    'packages/kvox-web/src/brand/assets/mark.svg',
+    'apps/web/public/favicon.svg',
+    'apps/web/public/icons/source.svg',
+  ])(
     '%s has fill="<THEME_COLOR>" on its background rect',
     (relPath) => {
       const content = readFileSync(join(REPO_ROOT, relPath), 'utf8');

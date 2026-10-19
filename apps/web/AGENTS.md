@@ -33,6 +33,7 @@ Change all five together or none; the boundary is `sm` (600px), never `md`. Sinc
 
 ## Frontend conventions
 
+- Brand lives in `kvox-web/brand`.
 - The UI presents; the API authorizes. Hiding a card or button is not security.
 - Use MUI theming and the responsive shell; write components and hooks with tests.
 - Never call an AI provider from the browser; go through `/api`.

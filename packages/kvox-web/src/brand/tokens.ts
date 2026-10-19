@@ -17,9 +17,14 @@
  * WHY LIGHT `primary.main` IS `THEME_COLOR` AND NOT A LITERAL
  * -----------------------------------------------------------------------------
  *
+ * (Since the map moved into `@marinoscar/kvox-web/brand`, `THEME_COLOR` below reads
+ * as `KVOX_BRAND.themeColor`: `identity.generated.ts`, written from `identity.json` by
+ * `scripts/sync-brand-identity.mjs`, because a published package cannot import the
+ * private `@app/shared`. The argument is unchanged.)
+ *
  * `packages/shared/identity.json` is the rebrand codemod's contract: it is the
  * single field `scripts/rename.mjs` rewrites and the single field
- * `apps/web/scripts/generate-icons.py` paints into the committed PNGs. The
+ * `packages/kvox-web/scripts/generate-icons.py` paints into the committed PNGs. The
  * installed-app surfaces — the web app manifest's `theme_color`, the icon
  * rasters, the two hand-written SVGs — execute no React code and can never
  * import a palette, so if the brand colour's source of truth lived in this file
@@ -82,11 +87,11 @@
  * reintroduces exactly that.
  */
 
-import { THEME_COLOR } from '@app/shared';
+import { KVOX_BRAND } from './identity.js';
 
 export const BRAND_TOKENS = {
   light: {
-    primary: { main: THEME_COLOR, light: '#818cf8', dark: '#4338ca', contrastText: '#ffffff' },
+    primary: { main: KVOX_BRAND.themeColor, light: '#818cf8', dark: '#4338ca', contrastText: '#ffffff' },
     secondary: { main: '#b45309', light: '#d97706', dark: '#92400e', contrastText: '#ffffff' },
     background: { default: '#f6f7fb', paper: '#ffffff' },
     elevated: '#ffffff',
