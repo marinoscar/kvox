@@ -1,5 +1,11 @@
 # @marinoscar/kvox-web
 
+## 0.1.0-next.6
+
+### Minor Changes
+
+- 5239fa9: Add `@marinoscar/kvox-web/home/headless` and `/home/ui`: the KVox Home page both hosts draw. `KvoxHomePage` is the web app's Home moved into the package (greeting and actions, the counts strip, in progress, needs attention, waiting for review, recent transcripts and notes, knowledge, shared with me, and the first-run journey), now driven by `KvoxWebHost` and the slice hooks instead of the web app's auth context. Host-specific blocks are slots: `heroActions`, `extraSteps` and `journeySteps` (a `KvoxJourneyStep` carries a `permission` and a `feature` and is not drawn when the viewer lacks either), `sections` (a host without transcription leaves out `recentTranscripts` and the page never asks for a transcript summary), `tagline`, `journeyStages` and `journeyIntro`. The `ui` entry also exports `kvoxHomeDestination`, `kvoxHomeDestinationRoutes` and `kvoxHomeRoutes`, the sections as components and their pure helpers; the `headless` entry exports the journey and new-account rules. `createKvoxNavigation` accepts `'home'` in `include` and lists the Home row first. `KvoxViewer` gains an optional `displayName`, `useTranscriptSummary` an `enabled` option, and the fake host's viewer a `displayName`.
+
 ## 0.1.0-next.5
 
 ### Minor Changes
