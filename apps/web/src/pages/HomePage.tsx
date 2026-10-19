@@ -1,10 +1,9 @@
 /**
- * `/` — the signed-in home page, KVox web's binding of the packaged one.
+ * `/` — the signed-in home page, the web edition's binding of the packaged one.
  *
- * The page itself is `KvoxHomePage` of `@marinoscar/kvox-web/home/ui` (issue #632,
- * epic marinoscar/kvox-desktop#26): KVox Desktop draws the same Home from the same
- * code. Its header carries the rules (one content request per content type, no
- * breakpoint read) and the history; this file is only what is KVox WEB's:
+ * The page itself is `KvoxHomePage` of `@marinoscar/kvox-web/home/ui` (issue #632):
+ * the desktop host draws the same Home from the same code. Its header carries the rules (one content request per content type, no
+ * breakpoint read) and the history; this file is only what is the web edition's:
  *
  *   - the transcription capability probe, `GET /api/transcription/config`. It is not
  *     content but a deployment CAPABILITY: it decides whether "New transcript" works

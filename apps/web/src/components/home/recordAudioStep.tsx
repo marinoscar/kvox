@@ -1,8 +1,8 @@
 /**
- * KVox web's own step of the first-run journey: "Record or upload audio".
+ * The web edition's own step of the first-run journey: "Record or upload audio".
  *
  * The packaged Home (`KvoxHomePage` of `@marinoscar/kvox-web/home/ui`) does not know
- * about transcription: not every host has it (KVox Desktop has none in v1). The web
+ * about transcription: not every host has it (the desktop host has none in v1). The web
  * edition hands the step over as `extraSteps`, so the journey ends in the same
  * "New transcript" call to action, with the same disabled state and the same
  * explanation, as it did when the page lived in this app.

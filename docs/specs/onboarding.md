@@ -205,7 +205,7 @@ against fixture rows.
 
 - **Home** is packaged (issue #632): the first-run journey ("Start here", the four
   stage cards and the call to action) and the rest of the page are `KvoxHomePage` of
-  `@marinoscar/kvox-web/home/ui`, so KVox web and KVox Desktop show the same empty
+  `@marinoscar/kvox-web/home/ui`, so the web edition and the desktop host show the same empty
   state. It is a different thing from the checklist above: the journey explains the
   product to an account with nothing yet and ends in the steps a host offers
   (`extraSteps`: web's "Record or upload audio", Desktop's "Import a document"), while
