@@ -21,7 +21,7 @@ Entry points:
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.6 zod
+npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.7 zod
 ```
 
 Every slice except `copilot` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):

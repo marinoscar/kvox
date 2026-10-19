@@ -21,7 +21,7 @@ Entry points:
 ## Install and peer dependencies
 
 ```bash
-npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-ai-providers@0.1.0-next.6 openai zod \
+npm install @marinoscar/kvox-eval@next @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/kvox-contract@next @marinoscar/platform-ai-providers@0.1.0-next.7 openai zod \
   @electric-sql/pglite@0.5.10 @electric-sql/pglite-pgvector@0.0.11 @electric-sql/pglite-socket@0.2.13 \
   @prisma/client @prisma/adapter-pg pg @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
