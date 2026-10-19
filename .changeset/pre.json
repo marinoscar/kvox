@@ -17,6 +17,7 @@
     "fix-neighbors-relation-example",
     "fix-speaker-link-one-connection",
     "graph-tx-reads-one-connection",
+    "kvox-ai-copilot-signin-runtime-routing",
     "kvox-ai-copilot",
     "kvox-ai-create",
     "kvox-ai-lean-providers",
