@@ -24,7 +24,7 @@ export interface CopilotRuntimeSectionProps {
   onCancel?: () => void;
   /** A download error already worded, or `null`. */
   error: string | null;
-  /** A start or cancel call is in flight. */
+  /** A download call is in flight; disables the Download button only, never Cancel. */
   busy: boolean;
 }
 
@@ -58,7 +58,8 @@ export function CopilotRuntimeSection({
         />
         {onCancel ? (
           <div>
-            <Button size="small" onClick={onCancel} disabled={busy}>
+            {/* Never gated on `busy`: a port's download resolves only when it finishes, which is when Cancel is needed. */}
+            <Button size="small" onClick={onCancel}>
               Cancel
             </Button>
           </div>

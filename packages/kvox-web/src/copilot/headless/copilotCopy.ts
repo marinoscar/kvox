@@ -17,7 +17,7 @@
 // It does not state what GitHub does with the text after receipt: that is
 // GitHub's terms and the user's Copilot data settings, and the links say so.
 
-import { COPILOT_CONSENT_VERSION } from '@marinoscar/kvox-contract/copilot';
+import { COPILOT_CONSENT_VERSION, type CopilotStatus } from '@marinoscar/kvox-contract/copilot';
 
 /**
  * The approximate size of the Copilot runtime a host may need to download.
@@ -132,6 +132,34 @@ export const COPILOT_CONSENT_COPY: CopilotConsentCopy = Object.freeze({
  */
 export function copilotRuntimeDownloadNote(sizeText: string = COPILOT_RUNTIME_SIZE_TEXT): string {
   return `GitHub Copilot needs a runtime of ${sizeText} that KVox downloads to this device the first time you use it.`;
+}
+
+/**
+ * Why sign-in is not available yet, worded, or `null` when the runtime is ready.
+ *
+ * @remarks
+ * Sign-in needs a working runtime. The card shows this under the disabled Sign
+ * in button and its sign-in guard throws the same text, so a host that builds
+ * its own UI on the headless entry says the same thing.
+ *
+ * @param runtime - The runtime part of the status.
+ * @param sizeText - The download size to state while the runtime is missing; defaults to {@link COPILOT_RUNTIME_SIZE_TEXT}.
+ * @stability experimental
+ */
+export function copilotSignInUnavailableReason(
+  runtime: CopilotStatus['runtime'],
+  sizeText: string = COPILOT_RUNTIME_SIZE_TEXT,
+): string | null {
+  switch (runtime.state) {
+    case 'ready':
+      return null;
+    case 'downloading':
+      return 'Wait for the Copilot runtime to finish downloading.';
+    case 'error':
+      return 'The Copilot runtime is not working. Download it again first.';
+    default:
+      return `Download the Copilot runtime first (${sizeText}).`;
+  }
 }
 
 /**

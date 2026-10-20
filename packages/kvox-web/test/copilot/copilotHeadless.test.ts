@@ -8,6 +8,7 @@ import {
   buildCopilotCapabilities,
   copilotRuntimeDownloadNote,
   copilotSignInReasonText,
+  copilotSignInUnavailableReason,
   hasCopilotConsent,
 } from '../../src/copilot/headless/index.js';
 
@@ -39,6 +40,30 @@ describe('copilotRuntimeDownloadNote', () => {
   it('states the given size, else the approximation', () => {
     expect(copilotRuntimeDownloadNote('151 MB')).toContain('151 MB');
     expect(copilotRuntimeDownloadNote()).toContain('about 130 to 175 MB');
+  });
+});
+
+describe('copilotSignInUnavailableReason', () => {
+  it('is null while the runtime is ready', () => {
+    expect(copilotSignInUnavailableReason({ state: 'ready', version: '1.0.98', progress: null })).toBeNull();
+  });
+
+  it('words each state that is not ready', () => {
+    expect(copilotSignInUnavailableReason({ state: 'downloading', version: null, progress: 0.4 }, '151 MB')).toBe(
+      'Wait for the Copilot runtime to finish downloading.',
+    );
+    expect(copilotSignInUnavailableReason({ state: 'error', version: null, progress: null }, '151 MB')).toBe(
+      'The Copilot runtime is not working. Download it again first.',
+    );
+    expect(copilotSignInUnavailableReason({ state: 'missing', version: null, progress: null }, '151 MB')).toBe(
+      'Download the Copilot runtime first (151 MB).',
+    );
+  });
+
+  it('states the approximate size when none is given', () => {
+    expect(copilotSignInUnavailableReason({ state: 'missing', version: null, progress: null })).toBe(
+      'Download the Copilot runtime first (about 130 to 175 MB).',
+    );
   });
 });
 

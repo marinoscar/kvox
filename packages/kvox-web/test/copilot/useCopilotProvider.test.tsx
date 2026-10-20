@@ -109,6 +109,45 @@ describe('useCopilotProvider', () => {
     expect(getStatus.mock.calls.length).toBe(calls);
   });
 
+  it('a start-only port: re-reads the status as soon as downloadRuntime resolves, then polls until ready', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const getStatus = vi
+      .fn()
+      // Mount: the runtime is missing.
+      .mockResolvedValueOnce(makeStatus({ runtime: { state: 'missing', version: null, progress: null } }))
+      // Right after downloadRuntime resolves: the download has only started.
+      .mockResolvedValueOnce(makeStatus({ runtime: { state: 'downloading', version: null, progress: 0.2 } }))
+      // First poll.
+      .mockResolvedValueOnce(makeStatus({ runtime: { state: 'downloading', version: null, progress: 0.7 } }))
+      .mockResolvedValue(makeStatus());
+    // Resolves at once: the port only starts the download.
+    const port = makePort({ getStatus, downloadRuntime: vi.fn().mockResolvedValue(undefined) });
+    const { result } = renderHook(() => useCopilotProvider(port, { pollIntervalMs: 500 }));
+    await waitFor(() => expect(result.current.status?.runtime.state).toBe('missing'));
+    expect(getStatus).toHaveBeenCalledTimes(1);
+
+    await act(() => result.current.downloadRuntime());
+    expect(port.downloadRuntime).toHaveBeenCalledTimes(1);
+    expect(getStatus).toHaveBeenCalledTimes(2);
+    expect(result.current.status?.runtime).toMatchObject({ state: 'downloading', progress: 0.2 });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(result.current.status?.runtime.progress).toBe(0.7);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(result.current.status?.runtime.state).toBe('ready');
+
+    const calls = getStatus.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(getStatus.mock.calls.length).toBe(calls);
+  });
+
   it('cancelRuntimeDownload aborts the signal given to the port and is not an error', async () => {
     let signal: AbortSignal | undefined;
     const port = makePort({
