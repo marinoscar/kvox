@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { AiError } from '@marinoscar/platform-ai-providers';
 
 import { COPILOT_EGRESS_HOSTS } from './copilot-egress.js';
-import { COPILOT_RUNTIME_VERSION, prepareCopilotRuntime } from './copilot-runtime.js';
+import {
+  COPILOT_RUNTIME_VERSION,
+  prepareCopilotRuntime,
+  type CopilotRuntimeDownload,
+  type CopilotRuntimeOptions,
+} from './copilot-runtime.js';
 
 // =============================================================================
 // prepareCopilotRuntime (issue #630): directories, bundled first, opt-in download
@@ -400,15 +405,248 @@ describe('prepareCopilotRuntime', () => {
       });
     });
   });
+
+  describe('installed (offline reuse of an earlier download)', () => {
+    const EXTRACTED = 'wrapper';
+    const archiveDownload = (extract: NonNullable<CopilotRuntimeDownload['extract']>): CopilotRuntimeDownload => ({
+      allowedHosts: [HOST],
+      url: `https://${HOST}/rt.tgz`,
+      sha256: sha(BODY),
+      extract,
+    });
+    const fileDownload = (): CopilotRuntimeDownload => ({ allowedHosts: [HOST], url: URL_OK, sha256: sha(BODY) });
+    const extractor = async (_archive: string, dest: string): Promise<string> => {
+      await mkdir(join(dest, 'prebuilds'), { recursive: true });
+      await writeFile(join(dest, 'prebuilds', 'copilot-runtime'), EXTRACTED);
+      return join('prebuilds', 'copilot-runtime');
+    };
+    const noFetch = (): { stub: jest.Mock; fetch: typeof globalThis.fetch } => {
+      const stub = jest.fn();
+      return { stub, fetch: stub as unknown as typeof globalThis.fetch };
+    };
+    const install = (download: CopilotRuntimeDownload) =>
+      prepareCopilotRuntime({
+        dataDirectory: data,
+        download,
+        fetch: jest.fn().mockResolvedValue(reply(BODY)) as unknown as typeof globalThis.fetch,
+      });
+    const dataDirExists = (): Promise<boolean> =>
+      stat(data).then(
+        () => true,
+        () => false,
+      );
+
+    describe('a hit', () => {
+      it('reuses a single-file install with no download, no fetch, and the same download object as `installed`', async () => {
+        const download = fileDownload();
+        const first = await install(download);
+        const { stub, fetch } = noFetch();
+
+        const again = await prepareCopilotRuntime({ dataDirectory: data, installed: download, fetch });
+
+        expect(again).toMatchObject({
+          source: 'cached',
+          verified: true,
+          runtimePath: first.runtimePath,
+          version: COPILOT_RUNTIME_VERSION,
+        });
+        expect(stub).not.toHaveBeenCalled();
+        expect(await readFile(again.runtimePath)).toEqual(BODY);
+      });
+
+      it('reuses an install given as only the pin (sha256, no URL or hosts)', async () => {
+        const first = await install(fileDownload());
+        const { stub, fetch } = noFetch();
+        const again = await prepareCopilotRuntime({ dataDirectory: data, installed: { sha256: `sha256:${sha(BODY).toUpperCase()}` }, fetch });
+        expect(again).toMatchObject({ source: 'cached', runtimePath: first.runtimePath });
+        expect(stub).not.toHaveBeenCalled();
+      });
+
+      it('reuses an extracted (archive) install with no download, no fetch and no extractor call', async () => {
+        const download = archiveDownload(extractor);
+        const first = await install(download);
+        const { stub, fetch } = noFetch();
+        const extract = jest.fn();
+
+        const again = await prepareCopilotRuntime({ dataDirectory: data, installed: { ...download, extract }, fetch });
+
+        expect(again).toMatchObject({ source: 'cached', verified: true, runtimePath: first.runtimePath });
+        expect(await readFile(again.runtimePath, 'utf8')).toBe(EXTRACTED);
+        expect(stub).not.toHaveBeenCalled();
+        expect(extract).not.toHaveBeenCalled();
+      });
+
+      it('reuses an install of a custom version', async () => {
+        const first = await install({ ...fileDownload(), version: '9.9.9' });
+        const again = await prepareCopilotRuntime({ dataDirectory: data, installed: { sha256: sha(BODY), version: '9.9.9' } });
+        expect(again).toMatchObject({ source: 'cached', version: '9.9.9', runtimePath: first.runtimePath });
+      });
+    });
+
+    describe('a miss is runtime_missing, with no fetch', () => {
+      const miss = async (installed: CopilotRuntimeOptions['installed']): Promise<void> => {
+        const { stub, fetch } = noFetch();
+        const err = await refusal(prepareCopilotRuntime({ dataDirectory: data, installed, fetch }));
+        expect(err.code).toBe('AI_PROVIDER_UNAVAILABLE');
+        expect(detailsOf(err)).toMatchObject({ check: 'runtime_missing' });
+        expect(stub).not.toHaveBeenCalled();
+      };
+
+      it('when nothing is installed', async () => {
+        await miss({ sha256: sha(BODY) });
+      });
+
+      it('when the installed record has a different SHA-256', async () => {
+        await install(fileDownload());
+        await miss({ sha256: sha('another runtime') });
+      });
+
+      it('when the installed version directory is another version', async () => {
+        await install(fileDownload());
+        await miss({ sha256: sha(BODY), version: '0.0.1' });
+      });
+
+      it('when the installed single file no longer hashes to the pin', async () => {
+        const first = await install(fileDownload());
+        await writeFile(first.runtimePath, 'tampered');
+        await miss({ sha256: sha(BODY) });
+      });
+
+      it('when the installed runtime file was removed', async () => {
+        const first = await install(fileDownload());
+        await rm(first.runtimePath);
+        await miss({ sha256: sha(BODY) });
+      });
+
+      it('when `installed` carries no sha256', async () => {
+        await install(fileDownload());
+        await miss({ version: COPILOT_RUNTIME_VERSION });
+        await miss({});
+      });
+    });
+
+    describe('option mistakes are AI_INVALID_REQUEST, thrown before any directory is created', () => {
+      it.each([
+        ['a version that escapes', { sha256: 'a'.repeat(64), version: '../x' }],
+        ['a version with a separator', { sha256: 'a'.repeat(64), version: 'a/b' }],
+        ['a version that escapes and no sha256', { version: '../x' }],
+        ['a malformed sha256', { sha256: 'abc' }],
+        ['a non-hex sha256', { sha256: 'z'.repeat(64) }],
+      ])('refuses %s', async (_name, installed) => {
+        const { stub, fetch } = noFetch();
+        const err = await refusal(prepareCopilotRuntime({ dataDirectory: data, installed, fetch }));
+        expect(err.code).toBe('AI_INVALID_REQUEST');
+        expect(stub).not.toHaveBeenCalled();
+        expect(await dataDirExists()).toBe(false);
+      });
+    });
+
+    describe('precedence', () => {
+      it('the bundled runtime wins over a matching install, with no fetch', async () => {
+        const download = fileDownload();
+        await install(download);
+        const path = await bundled();
+        const { stub, fetch } = noFetch();
+
+        const rt = await prepareCopilotRuntime({
+          dataDirectory: data,
+          bundledRuntimePath: path,
+          bundledSha256: sha('bundled runtime'),
+          installed: download,
+          fetch,
+        });
+
+        expect(rt).toMatchObject({ source: 'bundled', runtimePath: path, verified: true });
+        expect(stub).not.toHaveBeenCalled();
+      });
+
+      it('a bundled checksum mismatch is still an error, not a fall back to `installed`', async () => {
+        const download = fileDownload();
+        await install(download);
+        const err = await refusal(
+          prepareCopilotRuntime({
+            dataDirectory: data,
+            bundledRuntimePath: await bundled(),
+            bundledSha256: sha('something else'),
+            installed: download,
+          }),
+        );
+        expect(detailsOf(err)).toMatchObject({ check: 'checksum_mismatch' });
+      });
+
+      it('with `download` present, `installed` is ignored: the download path decides (its own cache applies)', async () => {
+        const download = fileDownload();
+        const first = await install(download);
+        const { stub, fetch } = noFetch();
+
+        const again = await prepareCopilotRuntime({
+          dataDirectory: data,
+          download,
+          installed: { sha256: sha('a different pin'), version: '0.0.1' },
+          fetch,
+        });
+
+        expect(again).toMatchObject({ source: 'cached', runtimePath: first.runtimePath, version: COPILOT_RUNTIME_VERSION });
+        expect(stub).not.toHaveBeenCalled();
+      });
+
+      it('with `download` present and nothing installed, a matching `installed` does not stop the download', async () => {
+        const fetch = jest.fn().mockResolvedValue(reply(BODY));
+        const rt = await prepareCopilotRuntime({
+          dataDirectory: data,
+          download: fileDownload(),
+          installed: { sha256: sha(BODY) },
+          fetch: fetch as unknown as typeof globalThis.fetch,
+        });
+        expect(rt.source).toBe('downloaded');
+        expect(fetch).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
 });
 
 describe('COPILOT_EGRESS_HOSTS', () => {
-  it('lists the three hosts the issue names, lowercase, with no scheme or wildcard', () => {
-    expect([...COPILOT_EGRESS_HOSTS]).toEqual(['api.githubcopilot.com', 'github.com', 'api.github.com']);
-    for (const host of COPILOT_EGRESS_HOSTS) expect(host).toMatch(/^[a-z0-9.-]+$/);
+  it('lists the original three hosts and the three per-plan Copilot API hosts (issue #646), in order', () => {
+    expect([...COPILOT_EGRESS_HOSTS]).toEqual([
+      'api.githubcopilot.com',
+      'api.individual.githubcopilot.com',
+      'api.business.githubcopilot.com',
+      'api.enterprise.githubcopilot.com',
+      'github.com',
+      'api.github.com',
+    ]);
+  });
+
+  it.each([
+    'api.githubcopilot.com',
+    'github.com',
+    'api.github.com',
+    'api.individual.githubcopilot.com',
+    'api.business.githubcopilot.com',
+    'api.enterprise.githubcopilot.com',
+  ])('contains %s', (host) => {
+    expect(COPILOT_EGRESS_HOSTS).toContain(host);
+  });
+
+  it('has no wildcard, no proxy host and no telemetry host', () => {
+    for (const host of COPILOT_EGRESS_HOSTS) {
+      expect(host).not.toContain('*');
+      expect(host).not.toMatch(/^proxy\./);
+      expect(host).not.toContain('proxy');
+      expect(host).not.toContain('telemetry');
+    }
+  });
+
+  it('is plain lowercase hostnames: no scheme, port, path, wildcard or duplicates', () => {
+    for (const host of COPILOT_EGRESS_HOSTS) {
+      expect(host).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/);
+      expect(host).toBe(host.toLowerCase());
+    }
+    expect(new Set(COPILOT_EGRESS_HOSTS).size).toBe(COPILOT_EGRESS_HOSTS.length);
   });
 
   it('is frozen, so a host cannot widen it by accident', () => {
     expect(Object.isFrozen(COPILOT_EGRESS_HOSTS)).toBe(true);
+    expect(() => (COPILOT_EGRESS_HOSTS as string[]).push('evil.example.test')).toThrow(TypeError);
   });
 });

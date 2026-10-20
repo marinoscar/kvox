@@ -494,7 +494,7 @@ import { COPILOT_EGRESS_HOSTS } from '@marinoscar/kvox-ai/copilot';
 const port: CopilotProviderPort = {
   getStatus: () => ipc.copilot.status(),                       // CopilotStatus (wire shape: @marinoscar/kvox-contract/copilot)
   getSettings: () => ipc.copilot.settings(),                   // CopilotSettings
-  update: (patch) => ipc.copilot.update(patch),                // resolves to the stored CopilotSettings
+  update: (patch) => ipc.copilot.update(patch),                // resolves to the stored CopilotSettings; validate the body with CopilotSettingsPatchSchema
   startSignIn: () => ipc.copilot.signIn.start(),               // CopilotSignInChallenge
   waitForSignIn: (signal) => ipc.copilot.signIn.wait(signal),  // resolves when the user has finished
   signOut: () => ipc.copilot.signOut(),
@@ -556,7 +556,8 @@ import { prepareCopilotRuntime, createSdkCopilotTransport, COPILOT_EGRESS_HOSTS 
 const rt = await prepareCopilotRuntime({
   dataDirectory: join(app.getPath('userData'), 'copilot'),
   bundledRuntimePath: join(process.resourcesPath, 'copilot', 'copilot-runtime'), // preferred
-  // download: { allowedHosts: ['downloads.example.com'], url, sha256, extract },   // only after the user opts in
+  installed: pin,                                                                  // ordinary start: reuse an earlier download, offline
+  // download: pin,                                                                // only after the user opts in; `pin` = { allowedHosts, url, sha256, version, extract }
 });
 const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, workingDirectory: rt.workingDirectory });
 ```
@@ -564,9 +565,10 @@ const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, w
 - Directories under `dataDirectory`: `home/` (Copilot's private home: the runtime writes session state there, and the adapter deletes every session it creates), `work/` (EMPTY on every call) and `runtime/<version>/`.
 - Bundled first. A bundled runtime that is missing or fails its SHA-256 (`bundledSha256`, or a sibling `<path>.sha256`) is an error, never a quiet switch to a download.
 - A download needs the user's opt-in (passing `download` is the opt-in) and comes only from `download.allowedHosts` (https, exact hostname, default port, every redirect checked). The SDK publishes no checksum, so YOU supply it: `url` plus a pinned `sha256`, or a `manifestUrl` that serves `{ version, url, sha256 }`. Pin it at build time; a manifest on the same host proves the transfer, not the host. The official artifact is a `.tgz`: pass an `extract` hook that returns the launcher path.
+- Order: bundled, then `download`, then `installed`. `installed` (the pin of an earlier download, which may be the same object as `download`) reuses that install with no network, so an ordinary start (no `download`) finds a runtime the user already downloaded; a miss is `runtime_missing`. Detail: [the slice README](../../packages/kvox-ai/src/copilot/README.md#the-runtime).
 - Failures are `AiError`s with `details.check`: `runtime_missing`, `checksum_mismatch`, `download_failed`, `download_too_large`, `download_host_refused`.
 - `createSdkCopilotTransport` takes no `runtimePath` option today. The spike read that the SDK honours a `COPILOT_CLI_PATH` environment variable of the runtime process (not exercised); wiring `rt.runtimePath` to the SDK is the host's step.
-- Egress: allow `COPILOT_EGRESS_HOSTS` (`api.githubcopilot.com`, `github.com`, `api.github.com`) and nothing else for Copilot. The list is inferred from the runtime's strings, not measured; confirm it with a capture on Windows and Linux before you tighten a firewall. Do not tell users Copilot sends no telemetry: the runtime has a product-telemetry service with no documented switch, and the allowlist is the control. Findings and their basis: [SPIKE.md](../../packages/kvox-ai/src/copilot/SPIKE.md).
+- Egress: allow `COPILOT_EGRESS_HOSTS` (`github.com`, `api.github.com`, `api.githubcopilot.com` and the three plan hosts `api.individual`, `api.business` and `api.enterprise` `.githubcopilot.com`; a signed-in account is served from its plan's host, [why](../../packages/kvox-ai/src/copilot/README.md#egress-hosts)) and nothing else for Copilot. The list is inferred from the runtime's strings, not measured; confirm it with a capture on Windows and Linux before you tighten a firewall. Do not tell users Copilot sends no telemetry: the runtime has a product-telemetry service with no documented switch, and the allowlist is the control. Findings and their basis: [SPIKE.md](../../packages/kvox-ai/src/copilot/SPIKE.md).
 
 ### Routing the tasks
 

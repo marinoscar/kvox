@@ -14,6 +14,23 @@ import { z } from 'zod';
 export const COPILOT_CONSENT_VERSION = '1' as const;
 
 /**
+ * The validators and descriptions of a Copilot setting, defined once so the full and the patch schema cannot drift.
+ * The description is applied last, on the outermost schema, in both.
+ */
+const copilotSettingFields = {
+  enabled: z.boolean(),
+  consentedAt: z.string().datetime().nullable(),
+  consentVersion: z.string().nullable(),
+  model: z.string().nullable(),
+};
+const copilotSettingDescriptions = {
+  enabled: 'Whether the user opted in to GitHub Copilot.',
+  consentedAt: 'When the user accepted the consent text (ISO 8601), or null.',
+  consentVersion: 'The consent text version the user accepted; bumped to ask again.',
+  model: 'The chosen Copilot model id, or null for the default.',
+} as const;
+
+/**
  * The user's own GitHub Copilot setting: opt-in, off by default.
  *
  * @remarks
@@ -23,14 +40,55 @@ export const COPILOT_CONSENT_VERSION = '1' as const;
  * as not consented. `model` is the Copilot model id the user picked, or `null`
  * for the host's default.
  *
+ * ⚠ Every field carries a default, and Zod 4 applies a default even under
+ * `.partial()`. Validate a PATCH body with {@link CopilotSettingsPatchSchema},
+ * never with `CopilotSettingsSchema.partial()`.
+ *
  * @stability experimental
  */
 export const CopilotSettingsSchema = z.object({
-  enabled: z.boolean().default(false).describe('Whether the user opted in to GitHub Copilot.'),
-  consentedAt: z.string().datetime().nullable().default(null).describe('When the user accepted the consent text (ISO 8601), or null.'),
-  consentVersion: z.string().nullable().default(null).describe('The consent text version the user accepted; bumped to ask again.'),
-  model: z.string().nullable().default(null).describe('The chosen Copilot model id, or null for the default.'),
+  enabled: copilotSettingFields.enabled.default(false).describe(copilotSettingDescriptions.enabled),
+  consentedAt: copilotSettingFields.consentedAt.default(null).describe(copilotSettingDescriptions.consentedAt),
+  consentVersion: copilotSettingFields.consentVersion.default(null).describe(copilotSettingDescriptions.consentVersion),
+  model: copilotSettingFields.model.default(null).describe(copilotSettingDescriptions.model),
 });
+
+/**
+ * A partial update of the Copilot setting: only the keys that were sent.
+ *
+ * @remarks
+ * Exists because `CopilotSettingsSchema.partial()` does not make a patch: Zod 4
+ * applies a field's default even when the field is optional, so
+ * `CopilotSettingsSchema.partial().strict().parse({ model: 'gpt-4.1' })` returns
+ * `{ enabled: false, consentedAt: null, consentVersion: null, model: 'gpt-4.1' }`,
+ * which switches Copilot off and erases the consent. This schema has the same
+ * four fields with the same validation and descriptions, each optional and with
+ * NO default, so parsing returns exactly the keys sent. Unknown keys are refused.
+ *
+ * @example
+ * ```ts
+ * // A host route for PATCH /copilot/settings
+ * const patch: CopilotSettingsPatch = CopilotSettingsPatchSchema.parse(request.body);
+ * const stored = await settings.update(userId, patch); // only the sent keys change
+ * ```
+ *
+ * @stability experimental
+ */
+export const CopilotSettingsPatchSchema = z
+  .object({
+    enabled: copilotSettingFields.enabled.optional().describe(copilotSettingDescriptions.enabled),
+    consentedAt: copilotSettingFields.consentedAt.optional().describe(copilotSettingDescriptions.consentedAt),
+    consentVersion: copilotSettingFields.consentVersion.optional().describe(copilotSettingDescriptions.consentVersion),
+    model: copilotSettingFields.model.optional().describe(copilotSettingDescriptions.model),
+  })
+  .strict();
+
+/**
+ * A validated Copilot setting patch: any subset of the four fields.
+ *
+ * @stability experimental
+ */
+export type CopilotSettingsPatch = z.infer<typeof CopilotSettingsPatchSchema>;
 
 /**
  * A stored or submitted Copilot setting.
