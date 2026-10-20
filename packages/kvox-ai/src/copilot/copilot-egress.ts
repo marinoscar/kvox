@@ -25,6 +25,13 @@
 // GitHub-authenticated sessions, for which the spike (SPIKE.md) found no
 // documented off switch. Where that goes is not stated in the SDK; it is
 // inferred to be one of the hosts below, so the egress allowlist is the control.
+//
+//   • The three per-plan API hosts follow from a mechanism, not from a string
+//     for each host: the runtime reads `endpoints.api` from the signed-in
+//     account's `copilot_internal/user` answer, so the host depends on the plan
+//     (individual, business, enterprise). The three hostnames come from issue
+//     #646 (the model listing was refused in KVox Desktop without them); they
+//     are not strings read from the runtime.
 // =============================================================================
 
 /**
@@ -49,10 +56,27 @@
  */
 export const COPILOT_EGRESS_HOSTS: readonly string[] = Object.freeze([
   // Model traffic: chat completions and the model listing of the Copilot API.
-  // Inferred from the runtime's strings ("https://api.githubcopilot.com"); the
-  // individual-plan and business-plan variants of this host (proxy.*,
-  // api.business.*) were NOT found in 1.0.98.
+  // Inferred from the runtime's strings ("https://api.githubcopilot.com"); that
+  // is only the DEFAULT base, used before an account is known. A signed-in
+  // account is served from its own plan host (the next three entries).
   'api.githubcopilot.com',
+
+  // The API host of an individual plan (Copilot Free, Pro, Pro+). A signed-in
+  // runtime takes its API base from `endpoints.api` in the account's answer from
+  // `api.github.com/copilot_internal/user`; the strings `endpoints.api`,
+  // `endpoints.proxy` and `endpoints.telemetry` are in 1.0.98. Without this host
+  // the model listing and every call are refused (seen in KVox Desktop).
+  'api.individual.githubcopilot.com',
+
+  // The `endpoints.api` host of a Copilot Business account. Inferred from the
+  // same mechanism; the host name follows the individual one.
+  'api.business.githubcopilot.com',
+
+  // The `endpoints.api` host of a Copilot Enterprise account. Inferred likewise.
+  // Not listed, deliberately: the `endpoints.proxy` hosts (`proxy.*.githubcopilot.com`,
+  // inline completions, which KVox never uses) and the `endpoints.telemetry`
+  // hosts (KVox sends no telemetry). Exact hostnames, no wildcards.
+  'api.enterprise.githubcopilot.com',
 
   // Sign-in. The device flow posts to `/login/device/code` and polls
   // `/login/oauth/access_token` (both strings are in the runtime); the user

@@ -43,6 +43,10 @@ import { copilotErrorFromThrown, redactTokens } from './copilot-errors.js';
 // RULES:
 //   • A bundled runtime is preferred. A bundled runtime that is missing or fails
 //     its checksum is an error, never a silent fall back to a download.
+//   • The order is: bundled, then `download` (which reuses an earlier install of
+//     the same SHA-256 before it fetches), then `installed` (reuse only, offline).
+//     A start without `download` is the ordinary one, so `installed` is how a
+//     host finds what the user already downloaded; it never touches the network.
 //   • A download happens only when `download` is present (the user's explicit
 //     opt-in) and only from `download.allowedHosts`: https only, no credentials
 //     in the URL, the default port, an exact hostname match (no wildcard), and
@@ -188,6 +192,18 @@ export interface CopilotRuntimeOptions {
   bundledVersion?: string;
   /** The first-opt-in download; absent means "never download". */
   download?: CopilotRuntimeDownload;
+  /**
+   * A runtime an earlier download installed, found offline: the pin of that
+   * download (its `sha256`, `version` and whether it was an archive, `extract`).
+   * Never downloads and never touches the network.
+   *
+   * @remarks
+   * Consulted only when there is no `bundledRuntimePath` and no `download`; a
+   * host can pass the same object it passes as `download` on the opt-in start.
+   * `sha256` is required for reuse: without it nothing can be matched and the
+   * call ends in `runtime_missing`.
+   */
+  installed?: Pick<CopilotRuntimeDownload, 'sha256' | 'version' | 'extract'>;
   /** Replaces the global `fetch` (tests, a proxy-aware client). */
   fetch?: typeof fetch;
   /** Replaces the file-system calls (tests). */
@@ -228,8 +244,9 @@ const defaultFs: CopilotRuntimeFs = {
 
 /**
  * Creates Copilot's private directories (an EMPTY working directory), resolves
- * the runtime (bundled first, else an opt-in download from allowed hosts only),
- * verifies its SHA-256 and returns what `createSdkCopilotTransport` needs.
+ * the runtime (bundled first, else an opt-in download from allowed hosts only,
+ * else an earlier download found offline), verifies its SHA-256 and returns what
+ * `createSdkCopilotTransport` needs.
  *
  * @remarks
  * Layout under `dataDirectory`: `home/` (`baseDirectory`), `work/`
@@ -237,6 +254,13 @@ const defaultFs: CopilotRuntimeFs = {
  * downloaded runtime and its `installed.json` record). A download that is
  * already installed (same SHA-256 recorded, file present) is reused without
  * touching the network; a downloaded single file is re-hashed on reuse.
+ *
+ * Order: `bundledRuntimePath`, then `download`, then `installed`. A host starts
+ * without `download` (it is opt-in), so it passes `installed` (the pin of the
+ * earlier download, or that same `download` object) to find what the user
+ * already downloaded; only a hit is returned, as `source: 'cached'`, and no
+ * fetch is ever made on that path. A miss, or an `installed` without `sha256`,
+ * is `runtime_missing`, which the host may answer by offering the download.
  *
  * Failures are `AiError`s: `AI_INVALID_REQUEST` for options that are wrong or a
  * host that is not allowed (thrown before any network call), and
@@ -282,6 +306,7 @@ async function prepare(o: CopilotRuntimeOptions): Promise<PreparedCopilotRuntime
   // Option mistakes are reported before a single directory is touched, and
   // before any network call.
   const plan = o.download ? planDownload(o.download) : undefined;
+  const reuse = !o.download && o.installed ? planInstalled(o.installed) : undefined;
   const bundledSha = o.bundledSha256 !== undefined ? normalizeSha(o.bundledSha256, 'bundledSha256') : undefined;
   const bundledVersion = o.bundledVersion ?? COPILOT_RUNTIME_VERSION;
   if (o.bundledRuntimePath !== undefined) assertSegment(bundledVersion, 'bundledVersion');
@@ -304,9 +329,17 @@ async function prepare(o: CopilotRuntimeOptions): Promise<PreparedCopilotRuntime
   }
 
   if (!plan || !o.download) {
+    if (reuse) {
+      const cached = await cachedRuntime(fs, join(dataDirectory, RUNTIME_DIR, reuse.version), reuse.sha256, reuse.extracted);
+      if (cached) {
+        return { runtimePath: cached, baseDirectory, workingDirectory, version: reuse.version, source: 'cached', verified: true };
+      }
+    }
     throw new AiError(
       'AI_PROVIDER_UNAVAILABLE',
-      'GitHub Copilot: no runtime is available. Ship it with the app (bundledRuntimePath) or opt in to the download.',
+      o.installed
+        ? 'GitHub Copilot: no downloaded runtime is installed. Ship it with the app (bundledRuntimePath) or offer the download.'
+        : 'GitHub Copilot: no runtime is available. Ship it with the app (bundledRuntimePath) or opt in to the download.',
       { details: { check: 'runtime_missing' } },
     );
   }
@@ -381,6 +414,20 @@ function planDownload(d: CopilotRuntimeDownload): Plan {
   const version = d.version ?? COPILOT_RUNTIME_VERSION;
   assertSegment(version, 'download.version');
   return { hosts, url: assertAllowedUrl(d.url, hosts), sha256: normalizeSha(d.sha256, 'download.sha256'), version, maxBytes };
+}
+
+interface ReusePlan {
+  version: string;
+  sha256: string;
+  extracted: boolean;
+}
+
+/** Checks `installed`; undefined (not reusable) when it carries no SHA-256. */
+function planInstalled(i: NonNullable<CopilotRuntimeOptions['installed']>): ReusePlan | undefined {
+  const version = i.version ?? COPILOT_RUNTIME_VERSION;
+  assertSegment(version, 'installed.version');
+  if (i.sha256 === undefined) return undefined;
+  return { version, sha256: normalizeSha(i.sha256, 'installed.sha256'), extracted: i.extract !== undefined };
 }
 
 /** https, no credentials, default port, exact host match. Throws before any network call. */

@@ -69,11 +69,24 @@ const rt = await prepareCopilotRuntime({
 const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, workingDirectory: rt.workingDirectory });
 ```
 
+The runtime is found in this order: `bundledRuntimePath`, then `download`, then `installed`. A host starts WITHOUT `download` most of the time (the download is opt-in), so it passes `installed` too, and the runtime the user already downloaded is found with no network. The same pin object serves both starts:
+
+```ts
+const pin = { allowedHosts: ['downloads.example.com'], url, sha256, version, extract }; // pinned at build time
+
+// Ordinary start: no download. `installed` reuses what an earlier opt-in left on disk.
+const rt = await prepareCopilotRuntime({ dataDirectory, installed: pin });
+
+// Opt-in start (the user pressed Download): fetches, verifies, installs.
+const fetched = await prepareCopilotRuntime({ dataDirectory, download: pin, onProgress });
+```
+
 - **Directories** under `dataDirectory` (absolute): `home/` is `baseDirectory`; `work/` is `workingDirectory` and is emptied on EVERY call, so nothing is ever discovered from it; `runtime/<version>/` holds a downloaded runtime and its `installed.json` record.
 - **Bundled is preferred.** With `bundledRuntimePath` (the launcher the host ships, unpacked from the asar) the app's own signature covers it. `bundledSha256`, else a sibling `<path>.sha256` file, is checked when present; `verified` is `false` only when a bundled file had no expected value. A bundled runtime that is missing, empty or fails its checksum is an error, never a silent fall back to a download. `bundledVersion` defaults to `COPILOT_RUNTIME_VERSION` (`1.0.98`, what SDK 1.0.22 pins).
 - **Download is opt-in.** It happens only when `download` is passed (its presence is the user's opt-in), no bundled path is given, and only from `download.allowedHosts`: `https`, no credentials in the URL, the default port, an exact hostname match (no wildcard), and every redirect hop checked the same way. A refused host throws before any network call; an empty list refuses everything.
 - **Checksum.** There is none to trust by default, so the host supplies the SHA-256: `download.url` with `download.sha256` (a pin the host controls, the strong form), or `download.manifestUrl` (JSON `{ version, url, sha256 }`, `CopilotRuntimeManifest`, same host rules). Exactly one of the two forms. A manifest on the same origin as the file proves the transfer was intact, not that the host serving both is honest. The npm registry's `dist.integrity` is a sha512 of a different artifact and does not fit.
 - **`download.extract(archivePath, destinationDirectory)`** unpacks a downloaded archive (the official artifact is a `.tgz`, and node has no tar) and returns the launcher's path, absolute or relative to that directory. Without it the downloaded file IS the runtime.
+- **Installed (offline reuse).** `installed` is the pin of an earlier download: `sha256`, `version` and `extract` (whether it was an archive). A host may pass the same object it passes as `download`; the other `download` members are ignored. It is consulted only when there is no `bundledRuntimePath` and no `download`, and it NEVER fetches: a hit under `runtime/<version>/` with that SHA-256 recorded returns `source: 'cached'`, `verified: true`. A miss, or an `installed` without `sha256` (nothing to match), is `runtime_missing`, which the host answers by offering the download. When `download` is also passed, `download` wins (it reuses a matching install before it fetches).
 - **Install.** The file is written beside its destination, hashed as it is written, compared, and only then renamed into place; a mismatch or an interrupted download deletes the partial file. `maxBytes` (default 768 MiB), `onProgress` and `signal` apply. An install with the same SHA-256 recorded is reused (`source: 'cached'`) without the network; a single downloaded file is re-hashed on reuse.
 - **Errors** are `AiError`s. `AI_INVALID_REQUEST` for wrong options or a host that is not allowed (`details.check`: `download_host_refused` and others). `AI_PROVIDER_UNAVAILABLE` with `details.check` `runtime_missing`, `checksum_mismatch`, `download_failed` or `download_too_large`. No message carries a token or a URL's query string.
 
@@ -85,11 +98,16 @@ const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, w
 
 | Host | For |
 |---|---|
-| `api.githubcopilot.com` | Model traffic: chat completions and the model listing. |
+| `api.githubcopilot.com` | The DEFAULT Copilot API base, used before an account is known. |
+| `api.individual.githubcopilot.com` | Model traffic of an individual plan (Free, Pro, Pro+): chat completions and the model listing. |
+| `api.business.githubcopilot.com` | The same, for a Copilot Business account. |
+| `api.enterprise.githubcopilot.com` | The same, for a Copilot Enterprise account. |
 | `github.com` | Sign-in (`/login/oauth/...`, and `github.com/login/device` for a device flow). |
 | `api.github.com` | Account and entitlement calls, the Copilot token exchange. |
 
-It is INFERRED, not measured: no traffic was captured against a signed-in runtime. The entries come from static strings in the Linux x64 runtime of SDK 1.0.22 (runtime 1.0.98); a string proves the runtime can contact a host, not that it does for the calls KVox makes. Treat it as the list to start from and confirm it with a capture on each platform you ship before you tighten a firewall to it; the Windows and macOS runtimes were not inspected. Left off on purpose: a GitHub Enterprise Cloud tenant's `*.ghe.com` hosts (a host that serves such tenants adds its own) and any OpenTelemetry endpoint the host configures. The OAuth redirect listener is `127.0.0.1` on a random port, local to the machine.
+**Why three plan hosts.** A signed-in runtime does not use `api.githubcopilot.com`. It reads its API base from `endpoints.api` in the account's answer from `api.github.com/copilot_internal/user`, so the host depends on the plan. Without the plan host the model listing and every call are refused (seen in KVox Desktop, issue #646). The runtime's `endpoints.proxy` hosts (inline completions, which KVox never uses) and `endpoints.telemetry` hosts (KVox sends no telemetry) are deliberately NOT listed. All entries are exact hostnames; there is no wildcard.
+
+It is INFERRED, not measured: no traffic was captured against a signed-in runtime. The other entries come from static strings in the Linux x64 runtime of SDK 1.0.22 (runtime 1.0.98); the three plan hosts follow from the `endpoints.api` mechanism and the hostnames come from the issue, not from strings read in the runtime. A string proves the runtime can contact a host, not that it does for the calls KVox makes. Treat it as the list to start from and confirm it with a capture on each platform you ship before you tighten a firewall to it; the Windows and macOS runtimes were not inspected. Left off on purpose: a GitHub Enterprise Cloud tenant's `*.ghe.com` hosts (a host that serves such tenants adds its own) and any OpenTelemetry endpoint the host configures. The OAuth redirect listener is `127.0.0.1` on a random port, local to the machine.
 
 **Telemetry.** No dedicated telemetry host was found. SDK-level OpenTelemetry is off unless the client is given `telemetry`, and KVox passes none. The runtime itself carries a GitHub product-telemetry service, and the spike found no documented switch to turn it off; `copilotSessionConfig` sets none. Do not tell users that Copilot sends no telemetry. A host not on the allowlist cannot receive it, so the allowlist is the control that works. Where session telemetry goes is not stated in the SDK; it is inferred to be one of the hosts above.
 
