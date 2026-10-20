@@ -350,16 +350,65 @@ describe('CopilotProviderCard: sign-in', () => {
     expect(p.onWaitForSignIn).not.toHaveBeenCalled();
   });
 
-  it('refuses to sign in while the runtime is missing and does not start a flow', async () => {
+  it.each([
+    ['missing', /^Download the Copilot runtime first \(about 130 to 175 MB\)\.$/],
+    ['downloading', /^Wait for the Copilot runtime to finish downloading\.$/],
+    ['error', /^The Copilot runtime is not working\. Download it again first\.$/],
+  ] as const)('runtime %s: Sign in is disabled and the reason is shown and described-by', async (state, text) => {
+    const p = props({
+      settings: consentedSettings(),
+      status: makeStatus({ runtime: { state, version: null, progress: null } }),
+    });
+    renderCard(p);
+    const button = screen.getByRole('button', { name: 'Sign in with GitHub Copilot' });
+    expect(button).toBeDisabled();
+    const reason = screen.getByText(text);
+    expect(reason).toBeVisible();
+    expect(reason.id).not.toBe('');
+    expect(button.getAttribute('aria-describedby')?.split(/\s+/)).toContain(reason.id);
+    expect(button).toHaveAccessibleDescription(text);
+    fireEvent.click(button);
+    expect(p.onSignIn).not.toHaveBeenCalled();
+  });
+
+  it('states the host’s download size in the reason while the runtime is missing', () => {
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+        runtimeDownloadSize: '151 MB',
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' })).toHaveAccessibleDescription(
+      'Download the Copilot runtime first (151 MB).',
+    );
+  });
+
+  it('runtime ready: Sign in is enabled with no reason', () => {
+    renderCard(props({ settings: consentedSettings() }));
+    const button = screen.getByRole('button', { name: 'Sign in with GitHub Copilot' });
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText(/Download the Copilot runtime first/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Wait for the Copilot runtime/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is not working/)).not.toBeInTheDocument();
+  });
+
+  it('enables Sign in once the runtime becomes ready', async () => {
     const user = userEvent.setup();
     const p = props({
       settings: consentedSettings(),
-      status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+      status: makeStatus({ runtime: { state: 'downloading', version: null, progress: 0.5 } }),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(() => new Promise<void>(() => undefined)),
     });
-    renderCard(p);
-    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
-    expect(await screen.findByText(/Download the Copilot runtime first/)).toBeInTheDocument();
-    expect(p.onSignIn).not.toHaveBeenCalled();
+    const { rerenderCard } = renderCard(p);
+    expect(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' })).toBeDisabled();
+    rerenderCard({ ...p, status: makeStatus() });
+    const button = screen.getByRole('button', { name: 'Sign in with GitHub Copilot' });
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(p.onSignIn).toHaveBeenCalledTimes(1);
   });
 
   it('shows the signed-in chip with the login, the models and the model choice', async () => {
@@ -522,6 +571,41 @@ describe('CopilotProviderCard: runtime', () => {
     expect(bar).toHaveAttribute('aria-valuenow', '42');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancelRuntimeDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('downloading: Cancel stays enabled while the download call is still pending', async () => {
+    const user = userEvent.setup();
+    const onCancelRuntimeDownload = vi.fn();
+    // A port that resolves only when the download has finished.
+    const onDownloadRuntime = vi.fn(() => new Promise<void>(() => undefined));
+    const p = props({
+      settings: consentedSettings(),
+      status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+      onDownloadRuntime,
+      onCancelRuntimeDownload,
+    });
+    const { rerenderCard } = renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Download runtime' }));
+    expect(onDownloadRuntime).toHaveBeenCalledTimes(1);
+    rerenderCard({ ...p, status: makeStatus({ runtime: { state: 'downloading', version: null, progress: 0.3 } }) });
+
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    expect(cancel).toBeEnabled();
+    await user.click(cancel);
+    expect(onCancelRuntimeDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing: the Download button is disabled while the download call is pending', async () => {
+    const user = userEvent.setup();
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+        onDownloadRuntime: vi.fn(() => new Promise<void>(() => undefined)),
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Download runtime' }));
+    expect(screen.getByRole('button', { name: 'Download runtime' })).toBeDisabled();
   });
 
   it('downloading with unknown progress shows an indeterminate bar', () => {

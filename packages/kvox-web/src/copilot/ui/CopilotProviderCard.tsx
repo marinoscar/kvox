@@ -16,6 +16,7 @@ import {
   COPILOT_RUNTIME_SIZE_TEXT,
   buildCopilotCapabilities,
   copilotSignInReasonText,
+  copilotSignInUnavailableReason,
   hasCopilotConsent,
 } from '../headless/index.js';
 import { CopilotConsentBody } from './CopilotConsentBody.js';
@@ -125,6 +126,7 @@ export function CopilotProviderCard({
   );
 
   const sizeText = runtimeDownloadSize ?? COPILOT_RUNTIME_SIZE_TEXT;
+  const signInUnavailable = copilotSignInUnavailableReason(status.runtime, sizeText);
   const open = useCallback((url: string) => openExternalUrl(url, onOpenExternal), [onOpenExternal]);
 
   // A device code stops being usable at `expiresAt`: stop waiting and offer a new one.
@@ -150,15 +152,8 @@ export function CopilotProviderCard({
   }, [expiresAt, expired]);
 
   const runSignIn = useCallback(async () => {
-    if (status.runtime.state !== 'ready') {
-      throw new Error(
-        status.runtime.state === 'downloading'
-          ? 'Wait for the Copilot runtime to finish downloading.'
-          : status.runtime.state === 'error'
-            ? 'The Copilot runtime is not working. Download it again first.'
-            : `Download the Copilot runtime first (${sizeText}).`,
-      );
-    }
+    // The button is disabled while this is set; the guard stays as defence in depth.
+    if (signInUnavailable !== null) throw new Error(signInUnavailable);
     controller.current?.abort();
     let challenge: CopilotSignInChallenge;
     try {
@@ -181,7 +176,7 @@ export function CopilotProviderCard({
     } finally {
       if (controller.current === own) controller.current = null;
     }
-  }, [status.runtime.state, sizeText, onSignIn, onWaitForSignIn, open]);
+  }, [signInUnavailable, onSignIn, onWaitForSignIn, open]);
 
   const cancelSignIn = () => {
     controller.current?.abort();
@@ -272,6 +267,7 @@ export function CopilotProviderCard({
         }}
         status={{ signedIn: status.signedIn, login: status.login }}
         onSignIn={runSignIn}
+        signInUnavailableReason={signInUnavailable ?? undefined}
         onSignOut={onSignOut}
         capabilities={buildCopilotCapabilities(status)}
         models={status.models.map((m) => ({ id: m.id, label: m.label }))}

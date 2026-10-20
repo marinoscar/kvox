@@ -11,13 +11,13 @@ KVox-specific Copilot text and behaviour, written once for every host (the web a
 - `headless/useCopilotProvider.ts`: `useCopilotProvider(port)` and the `CopilotProviderPort` type.
 - `ui/CopilotProviderCard.tsx`: the card, on `AccountSignInProviderCard` of `@marinoscar/platform-web/ai/ui`; `ui/CopilotConsentBody.tsx`, `ui/CopilotSignInDialog.tsx` (device code with copy, or the browser hand-off, with expiry) and `ui/CopilotRuntimeSection.tsx` (missing, downloading with Cancel, error).
 
-Behaviour the tests pin: nothing is saved until the user accepts the consent; accepting calls `onUpdate({ enabled: true, consentedAt, consentVersion })`; a stored `consentVersion` that differs from `COPILOT_CONSENT_VERSION` asks again; turning the switch off calls `onUpdate({ enabled: false })` and hides status and models; Ask is listed unavailable with the reason from `status.unavailableTasks`; a device code that passes `expiresAt` stops the wait and offers a new code; the card makes no network call and uses no hard-coded colour.
+Behaviour the tests pin: nothing is saved until the user accepts the consent; accepting calls `onUpdate({ enabled: true, consentedAt, consentVersion })`; a stored `consentVersion` that differs from `COPILOT_CONSENT_VERSION` asks again; turning the switch off calls `onUpdate({ enabled: false })` and hides status and models; Ask is listed unavailable with the reason from `status.unavailableTasks`; a device code that passes `expiresAt` stops the wait and offers a new code; Sign in stays disabled, with the reason from `copilotSignInUnavailableReason` shown under it, until the runtime is `ready`; Cancel is always available while the runtime downloads, even while `onDownloadRuntime` is pending; the card makes no network call and uses no hard-coded colour.
 
 Status: experimental (issue marinoscar/kvox#631). The consent wording is for the owner's review; changing what it says means bumping `COPILOT_CONSENT_VERSION` in the same commit.
 
 ## Entry point
 
-- `@marinoscar/kvox-web/copilot/headless`: `useCopilotProvider`, `CopilotProviderPort`, `UseCopilotProviderOptions`, `UseCopilotProviderResult`, `COPILOT_CONSENT_COPY`, `COPILOT_TERMS_LINKS`, `COPILOT_RUNTIME_SIZE_TEXT`, `copilotRuntimeDownloadNote`, `COPILOT_SIGN_IN_REASON_TEXT`, `copilotSignInReasonText`, `buildCopilotCapabilities`, `COPILOT_UNAVAILABLE_NOTES`, `hasCopilotConsent`.
+- `@marinoscar/kvox-web/copilot/headless`: `useCopilotProvider`, `CopilotProviderPort`, `UseCopilotProviderOptions`, `UseCopilotProviderResult`, `COPILOT_CONSENT_COPY`, `COPILOT_TERMS_LINKS`, `COPILOT_RUNTIME_SIZE_TEXT`, `copilotRuntimeDownloadNote`, `COPILOT_SIGN_IN_REASON_TEXT`, `copilotSignInReasonText`, `copilotSignInUnavailableReason`, `buildCopilotCapabilities`, `COPILOT_UNAVAILABLE_NOTES`, `hasCopilotConsent`.
 - `@marinoscar/kvox-web/copilot/ui`: `CopilotProviderCard`, `CopilotConsentBody`, `CopilotSignInDialog`, `CopilotRuntimeSection` and their props types.
 
 The slice depends on no other slice. Wire shapes come from `@marinoscar/kvox-contract/copilot`.
