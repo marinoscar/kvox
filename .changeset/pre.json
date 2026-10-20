@@ -52,6 +52,7 @@
     "kvox-transcript-json-import",
     "kvox-web-ask",
     "kvox-web-brand",
+    "kvox-web-copilot-signin-unavailable",
     "kvox-web-core",
     "kvox-web-graph-tsdoc",
     "kvox-web-graph",
