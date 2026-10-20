@@ -14,6 +14,7 @@
     "@marinoscar/kvox-web": "0.0.0"
   },
   "changesets": [
+    "copilot-runtime-reuse-plan-hosts-patch-schema",
     "fix-neighbors-relation-example",
     "fix-speaker-link-one-connection",
     "graph-tx-reads-one-connection",
