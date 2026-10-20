@@ -1,5 +1,7 @@
 # @marinoscar/kvox-api
 
+## 0.1.0-next.8
+
 ## 0.1.0-next.7
 
 ## 0.1.0-next.6
