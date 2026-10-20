@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-db",
-  "version": "0.1.0-next.6",
+  "version": "0.1.0-next.7",
   "description": "Prisma schema fragments, SQL migrations and the kvox-db command of the KVox domain (CommonJS).",
   "license": "MIT",
   "type": "commonjs",
