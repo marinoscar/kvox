@@ -617,6 +617,82 @@ kv:ProjectShape
     ] ;
     sh:targetClass kv:Project .
 
+kv:RiskShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom prov:wasRevisionOf ) ;
+    sh:property [
+        sh:class kv:Risk ;
+        sh:name "Supersedes" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:SUPERSEDES
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Due at" ;
+        sh:path kv:dueAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid from" ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid until" ;
+        sh:path prov:endedAtTime
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "low" "medium" "high" ) ;
+        sh:maxCount 1 ;
+        sh:name "Severity" ;
+        sh:path kv:Risk.severity
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "open" "mitigated" "closed" "superseded" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "risk" "issue" "blocker" ) ;
+        sh:maxCount 1 ;
+        sh:name "Kind" ;
+        sh:path kv:Risk.riskKind
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "Statement" ;
+        sh:path kv:Risk.statement
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Mitigation" ;
+        sh:path kv:Risk.mitigation
+    ], [
+        sh:maxCount 1 ;
+        sh:name "About" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] ) ;
+        sh:path kv:ABOUT
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Risk .
+
 kv:TopicShape
     a sh:NodeShape ;
     sh:closed true ;

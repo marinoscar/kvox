@@ -79,7 +79,7 @@ describe('computeEffectiveSchema', () => {
     it('includes both core and work types', () => {
       const keys = schema.entityTypes.map((t) => t.key).sort();
       expect(keys).toEqual(
-        ['Claim', 'Commitment', 'Decision', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Product', 'Project', 'Topic'].sort(),
+        ['Claim', 'Commitment', 'Decision', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Product', 'Project', 'Risk', 'Topic'].sort(),
       );
     });
 
@@ -121,6 +121,27 @@ describe('computeEffectiveSchema', () => {
       }
     });
 
+    it('carries Risk (work item type): statuses, subjects, attributes, ABOUT and SUPERSEDES (#664)', () => {
+      const risk = schema.entityType('Risk');
+      expect(risk).toMatchObject({
+        domain: 'work',
+        storage: 'item',
+        itemKind: 'risk',
+        statuses: ['open', 'mitigated', 'closed', 'superseded'],
+        subjectTypes: ['Person', 'Organization', 'Project', 'Product', 'Topic'],
+        subjectRequired: false,
+      });
+      expect(risk?.attributes.map((a) => [a.key, a.kind, a.extractable])).toEqual([
+        ['severity', 'select', true],
+        ['riskKind', 'select', true],
+        ['mitigation', 'text', true],
+      ]);
+      expect(risk?.attributes.find((a) => a.key === 'severity')?.options?.choices?.map((c) => c.value)).toEqual(['low', 'medium', 'high']);
+      expect(risk?.attributes.find((a) => a.key === 'riskKind')?.options?.choices?.map((c) => c.value)).toEqual(['risk', 'issue', 'blocker']);
+      expect(schema.relationType('ABOUT')?.from).toContain('Risk');
+      expect(schema.relationType('SUPERSEDES')?.allowedPairs).toContainEqual(['Risk', 'Risk']);
+    });
+
     it('carries identity: true on HAS_ROLE.businessUnit only, omitting the key elsewhere (#440)', () => {
       const props = schema.relationType('HAS_ROLE')!.props;
       expect(props.find((p) => p.key === 'businessUnit')?.identity).toBe(true);
@@ -131,9 +152,10 @@ describe('computeEffectiveSchema', () => {
       expect(payload.entityTypes.some((t) => t.attributes.some((a) => 'identity' in a))).toBe(false);
     });
 
-    it('restores SUPERSEDES to its full three pairs', () => {
+    it('restores SUPERSEDES to its full four pairs', () => {
       const supersedes = schema.relationType('SUPERSEDES');
-      expect(supersedes?.allowedPairs?.length).toBe(3);
+      expect(supersedes?.allowedPairs?.length).toBe(4);
+      expect(supersedes?.allowedPairs).toContainEqual(['Risk', 'Risk']);
     });
   });
 

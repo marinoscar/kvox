@@ -59,6 +59,8 @@ export const FACT_KIND_DEFINITIONS: Record<string, string> = {
     'A task with an owner (named or clearly implied) and optionally a counterparty and a due date. `status` is open unless the source says it is done or dropped.',
   decision:
     'A choice that was made; name the rejected option only when the source states it. A reversal is a new decision.',
+  risk:
+    'A risk, issue or blocker the source frames as a threat or a problem. `status` is open unless the source says it is mitigated or closed; set `severity` and `riskKind` only when the source indicates them.',
   claim: 'A dated statement of fact about an entity that is neither a decision nor a commitment.',
   person_fact:
     'A statement about a person as an individual (an interest, preference, personal detail or communication style), never about their job. Mark `sensitivity` honestly: `sensitive` for health, legal, financial or similarly weighty information, `personal` otherwise, `business` only when it is work-relevant.',

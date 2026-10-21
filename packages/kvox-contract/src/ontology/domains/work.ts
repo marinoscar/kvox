@@ -160,6 +160,66 @@ export const Decision = defineEntityType({
 });
 
 /**
+ * Wire constant: risk.
+ *
+ * @stability experimental
+ */
+export const Risk = defineEntityType({
+  key: 'Risk',
+  domain: 'work',
+  label: 'Risk',
+  pluralLabel: 'Risks',
+  description:
+    'A risk, issue or blocker that someone raised about a project, product or organization, e.g. "licence budget not approved could delay the rollout".',
+  disambiguation: [
+    'A task someone will do is a Commitment.',
+    'A choice made is a Decision.',
+    'A neutral statement of fact is a Claim.',
+    'Only create a Risk when the source frames something as a threat, blocker or problem.',
+  ],
+  attributes: {
+    severity: {
+      kind: 'select',
+      label: 'Severity',
+      description: 'How serious the source makes the risk sound, only if it says so.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'low', label: 'Low' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' },
+        ],
+      },
+    },
+    riskKind: {
+      kind: 'select',
+      label: 'Kind',
+      description:
+        'Whether it is a possible future problem (risk), a problem that is already happening (issue) or something that stops work now (blocker).',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'risk', label: 'Risk' },
+          { value: 'issue', label: 'Issue' },
+          { value: 'blocker', label: 'Blocker' },
+        ],
+      },
+    },
+    mitigation: {
+      kind: 'text',
+      label: 'Mitigation',
+      description: 'What was said about reducing or removing the risk, only if the source states it.',
+      extractable: true,
+    },
+  },
+  sensitivityDefault: 'business',
+  itemKind: 'risk',
+  statuses: ['open', 'mitigated', 'closed', 'superseded'],
+  subjectTypes: ['Person', 'Organization', 'Project', 'Product', 'Topic'],
+  subjectRequired: false,
+});
+
+/**
  * Wire constant: work domain.
  *
  * @stability experimental
@@ -169,7 +229,7 @@ export const workDomain = defineDomain({
   label: 'Work',
   alwaysOn: false,
   defaultEnabled: true,
-  entityTypes: [Project, Product, Commitment, Decision],
+  entityTypes: [Project, Product, Commitment, Decision, Risk],
   relationTypes: [
     defineRelationType({
       key: 'WORKS_FOR',

@@ -194,7 +194,7 @@ export class GraphReadController {
       'it attended, discussed or is part of. Each event carries up to five evidence ids and ' +
       'the total.\n\n' +
       '- **`as_of`** drops events after that instant.\n' +
-      '- **`kinds`** keeps a subset of `commitment, decision, claim, person_fact, relation, meeting`.\n' +
+      '- **`kinds`** keeps a subset of `commitment, decision, claim, person_fact, risk, relation, meeting`.\n' +
       '- `sensitive` person facts appear only with **`includeSensitive=true`**.\n\n' +
       'Keyset-paginated by `nextCursor`. A query that runs longer than 3 s is a **503** with ' +
       '`details.reason: "graph_query_timeout"`.',

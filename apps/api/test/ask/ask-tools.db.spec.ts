@@ -74,6 +74,7 @@ describeWithDb('Ask toolset (real Postgres)', () => {
       new internals.EvidenceTool(evidence, p),
       new internals.EntityBriefTool(brief, p),
       new internals.ListCommitmentsTool(p),
+      new internals.ListRisksTool(p, ontology),
       preferences,
     );
   });
@@ -193,6 +194,50 @@ describeWithDb('Ask toolset (real Postgres)', () => {
     expect(await statements({ entity: h, dueBefore: '2026-11-01' })).toEqual(['due soon', 'owed to sarah']);
     expect(await statements({ entity: h, status: 'done' })).toEqual(['done already']);
     expect(await statements({ entity: h, status: 'any', direction: 'owned_by' })).toHaveLength(5);
+  });
+
+  it('list_risks lists open risks by severity then recency, filters by subject, status and severity, and is owner-scoped', async () => {
+    const a = await owner('a');
+    const b = await owner('b');
+    const rollout = await a.g.entity('Project', 'Copilot rollout');
+    const other = await a.g.entity('Project', 'Other project');
+    const bRollout = await b.g.entity('Project', 'Copilot rollout');
+    const mk = (statement: string, subjectId: string, opts: Record<string, unknown> = {}) =>
+      a.g.item('risk', { statement, subjectId, ...opts });
+    const day = (d: string) => new Date(`${d}T00:00:00Z`);
+    await mk('low newest', rollout, { props: { severity: 'low' }, occurredAt: day('2026-09-30') });
+    await mk('high older', rollout, { props: { severity: 'high' }, occurredAt: day('2026-08-01') });
+    await mk('high newer', rollout, { props: { severity: 'high', riskKind: 'blocker', mitigation: 'Escalate to the CFO' }, occurredAt: day('2026-09-01') });
+    await mk('medium', rollout, { props: { severity: 'medium' }, occurredAt: day('2026-09-15') });
+    await mk('unstated, undated', rollout, {});
+    await mk('mitigated one', rollout, { status: 'mitigated', props: { severity: 'high' } });
+    await mk('draft', rollout, { reviewStatus: 'unreviewed', props: { severity: 'high' } });
+    await mk('elsewhere', other, { props: { severity: 'high' } });
+    await b.g.item('risk', { statement: 'B private risk', subjectId: bRollout, props: { severity: 'high' } });
+
+    const h = a.ctx.handles.register({ kind: 'ent', id: rollout, label: 'Copilot rollout' });
+    const statements = async (args: Record<string, unknown>) => {
+      const out = await call(a.ctx, 'list_risks', args);
+      expect(out.ok).toBe(true);
+      expect(out.json).not.toContain('B private');
+      return (JSON.parse(out.json) as { items: { statement: string }[] }).items.map((i) => i.statement);
+    };
+
+    expect(await statements({ subject: h })).toEqual(['high newer', 'high older', 'medium', 'low newest', 'unstated, undated']);
+    expect(await statements({ subject: h, severity: 'high' })).toEqual(['high newer', 'high older']);
+    expect(await statements({ subject: h, status: 'mitigated' })).toEqual(['mitigated one']);
+    expect(await statements({ subject: h, status: 'any' })).toHaveLength(6);
+    expect(await statements({})).toContain('elsewhere');
+    expect(await statements({ subject: h, limit: 2 })).toEqual(['high newer', 'high older']);
+
+    const detail = JSON.parse((await call(a.ctx, 'list_risks', { subject: h, severity: 'high' })).json) as {
+      items: { severity: string; kind: string | null; mitigation?: string; subject: { label: string } }[];
+    };
+    expect(detail.items[0]).toMatchObject({ severity: 'high', kind: 'blocker', mitigation: 'Escalate to the CFO', subject: { label: 'Copilot rollout' } });
+
+    // A forged handle to B's project returns nothing of B's.
+    const forged = a.ctx.handles.register({ kind: 'ent', id: bRollout, label: 'forged' });
+    expect(await statements({ subject: forged, status: 'any' })).toEqual([]);
   });
 
   it('GraphEvidenceService.listForSubject: newest source first, owner-scoped', async () => {

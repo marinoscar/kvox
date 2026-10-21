@@ -80,4 +80,9 @@ export const SHIPPED_KEYS: readonly string[] = Object.freeze([
   'Product.category',
   'Product.vendorName',
   'BROADER',
+  // 1.3.0 — work: Risk item type (#664)
+  'Risk',
+  'Risk.severity',
+  'Risk.riskKind',
+  'Risk.mitigation',
 ]);

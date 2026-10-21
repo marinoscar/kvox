@@ -134,7 +134,7 @@ describe('item-column edges', () => {
     expect(byType.CREATED_IN).toEqual({ type: 'CREATED_IN', column: 'meeting_id', kinds: ['commitment'] });
     expect(byType.DECIDED_IN).toEqual({ type: 'DECIDED_IN', column: 'meeting_id', kinds: ['decision'] });
     expect(byType.ABOUT.column).toBe('subject_id');
-    expect(byType.ABOUT.kinds).toEqual(['claim', 'commitment', 'decision', 'person_fact']);
+    expect(byType.ABOUT.kinds).toEqual(['claim', 'commitment', 'decision', 'person_fact', 'risk']);
   });
 });
 

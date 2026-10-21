@@ -61,6 +61,7 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'core: Topic entity type (skos:Concept) and BROADER relation (Topic -> Topic, skos:broader) (#662)',
       'work: Product entity type (schema:Product) with category and vendorName (#662)',
       'DISCUSSED widened to Meeting -> Project | Topic | Product | Organization; PART_OF gains Topic -> Project; Commitment and Decision subjectTypes gain Product and Topic (#662)',
+      'work: Risk item type (itemKind risk; open, mitigated, closed, superseded) with severity, riskKind and mitigation; SUPERSEDES allows Risk -> Risk (#664)',
     ]) as string[],
   }),
 ]);

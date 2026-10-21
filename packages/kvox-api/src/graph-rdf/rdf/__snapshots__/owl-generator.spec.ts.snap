@@ -20,10 +20,10 @@ kv:
 
 kv:ABOUT
     a owl:ObjectProperty ;
-    rdfs:comment "The entity an item (a claim, decision, commitment or person fact) is about: its subject." ;
+    rdfs:comment "The entity an item (a claim, decision, commitment, risk or person fact) is about: its subject." ;
     rdfs:domain [
         a owl:Class ;
-        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact kv:Risk )
     ] ;
     rdfs:label "About" ;
     rdfs:range [
@@ -349,6 +349,39 @@ kv:REPORTS_TO
     rdfs:label "Reports to" ;
     rdfs:range kv:Person .
 
+kv:Risk
+    a owl:Class ;
+    rdfs:comment "A risk, issue or blocker that someone raised about a project, product or organization, e.g. \\"licence budget not approved could delay the rollout\\"." ;
+    rdfs:label "Risk" .
+
+kv:Risk.mitigation
+    a owl:DatatypeProperty ;
+    rdfs:comment "What was said about reducing or removing the risk, only if the source states it." ;
+    rdfs:domain kv:Risk ;
+    rdfs:label "Mitigation" ;
+    rdfs:range xsd:string .
+
+kv:Risk.riskKind
+    a owl:DatatypeProperty ;
+    rdfs:comment "Whether it is a possible future problem (risk), a problem that is already happening (issue) or something that stops work now (blocker)." ;
+    rdfs:domain kv:Risk ;
+    rdfs:label "Kind" ;
+    rdfs:range xsd:string .
+
+kv:Risk.severity
+    a owl:DatatypeProperty ;
+    rdfs:comment "How serious the source makes the risk sound, only if it says so." ;
+    rdfs:domain kv:Risk ;
+    rdfs:label "Severity" ;
+    rdfs:range xsd:string .
+
+kv:Risk.statement
+    a owl:DatatypeProperty ;
+    rdfs:comment "What the item states, in one sentence." ;
+    rdfs:domain kv:Risk ;
+    rdfs:label "Statement" ;
+    rdfs:range xsd:string .
+
 kv:SPOUSE_OF
     a owl:ObjectProperty,
         owl:SymmetricProperty ;
@@ -360,15 +393,15 @@ kv:SPOUSE_OF
 
 kv:SUPERSEDES
     a owl:ObjectProperty ;
-    rdfs:comment "A newer decision, claim or commitment that replaces an older one of the same type." ;
+    rdfs:comment "A newer decision, claim, commitment or risk that replaces an older one of the same type." ;
     rdfs:domain [
         a owl:Class ;
-        owl:unionOf ( kv:Claim kv:Commitment kv:Decision )
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:Risk )
     ] ;
     rdfs:label "Supersedes" ;
     rdfs:range [
         a owl:Class ;
-        owl:unionOf ( kv:Claim kv:Commitment kv:Decision )
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:Risk )
     ] ;
     rdfs:subPropertyOf prov:wasRevisionOf .
 
@@ -450,7 +483,7 @@ kv:dueAt
     rdfs:comment "When an item, typically a commitment, is due." ;
     rdfs:domain [
         a owl:Class ;
-        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact kv:Risk )
     ] ;
     rdfs:label "Due at" ;
     rdfs:range xsd:dateTime .
@@ -476,7 +509,7 @@ kv:status
     rdfs:comment "An item's lifecycle status: one of the statuses its type declares." ;
     rdfs:domain [
         a owl:Class ;
-        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact kv:Risk )
     ] ;
     rdfs:label "Status" ;
     rdfs:range xsd:string .

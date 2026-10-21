@@ -31,7 +31,7 @@ export const GRAPH_EXPAND_MAX_SEEDS = 50;
 export const GRAPH_EVIDENCE_BATCH_MAX = 50;
 
 const PRECISIONS = ['day', 'month', 'year', 'unknown'] as const;
-const ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
+const ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const;
 
 const asOfParam = z
   .union([z.iso.date(), z.iso.datetime({ offset: true })])
@@ -132,6 +132,7 @@ export const graphEntityDetailSchema = z
         decision: z.number().int(),
         claim: z.number().int(),
         person_fact: z.number().int(),
+        risk: z.number().int(),
       }),
       openCommitments: z.number().int(),
     }),
@@ -158,7 +159,7 @@ export type GraphEntityDetail = z.infer<typeof graphEntityDetailSchema>;
 export const graphNodeSchema = z.object({
   id: z.uuid(),
   nodeKind: z.enum(['entity', 'item']),
-  type: z.string().describe("Entity type key, or item kind ('commitment' | 'decision' | 'claim' | 'person_fact')."),
+  type: z.string().describe("Entity type key, or item kind ('commitment' | 'decision' | 'claim' | 'person_fact' | 'risk')."),
   label: z.string().describe('Entity label, or item title ?? the first 80 characters of its statement.'),
   depth: z.number().int().min(0).max(2),
   degree: z.number().int().describe('Readable, as-of-valid edges in your whole graph (for node size).'),
@@ -299,7 +300,7 @@ export type ExpandRequest = z.infer<typeof expandRequestSchema>;
  *
  * @stability experimental
  */
-export const TIMELINE_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'relation', 'meeting'] as const;
+export const TIMELINE_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'risk', 'relation', 'meeting'] as const;
 /**
  * The `TimelineKind` type (timeline kind).
  *
