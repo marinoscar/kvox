@@ -330,26 +330,31 @@ export async function bulkRandomGraph(
   entities: number,
   relationsPerEntity: number,
 ): Promise<string> {
+  // kg_mentions_one_source_chk: every mention needs exactly one of note_id / transcript_id.
+  const sourceNote = await prisma.note.create({
+    data: { ownerId, title: 'Perf source', body: 'Body', status: 'ready', sourceType: 'document', currentVersion: 1 },
+  });
   await prisma.$transaction(
-    [
-      prisma.$executeRaw`CREATE TEMP TABLE IF NOT EXISTS _perf (rn int, id uuid) ON COMMIT DROP`,
-      prisma.$executeRaw`INSERT INTO _perf SELECT g, gen_random_uuid() FROM generate_series(1, ${entities}::int) g`,
-      prisma.$executeRaw`INSERT INTO kg_entities (id, owner_id, type, label, props, review_status, ontology_version, updated_at)
+    async (tx) => {
+      await tx.$executeRaw`CREATE TEMP TABLE IF NOT EXISTS _perf (rn int, id uuid) ON COMMIT DROP`;
+      await tx.$executeRaw`INSERT INTO _perf SELECT g, gen_random_uuid() FROM generate_series(1, ${entities}::int) g`;
+      await tx.$executeRaw`INSERT INTO kg_entities (id, owner_id, type, label, props, review_status, ontology_version, updated_at)
         SELECT id, ${ownerId}::uuid, CASE WHEN rn % 10 = 0 THEN 'Organization' ELSE 'Person' END, 'Perf ' || rn,
-               '{}'::jsonb, 'accepted', '1.0.0', now() FROM _perf`,
-      prisma.$executeRaw`INSERT INTO kg_evidence (id, owner_id, subject_kind, subject_id, quote)
-        SELECT gen_random_uuid(), ${ownerId}::uuid, 'entity', id, 'q' FROM _perf`,
-      prisma.$executeRaw`INSERT INTO kg_mentions (id, owner_id, entity_id, status)
-        SELECT gen_random_uuid(), ${ownerId}::uuid, id, 'linked' FROM _perf CROSS JOIN generate_series(1, 2)`,
-      prisma.$executeRaw`INSERT INTO kg_relations (id, owner_id, type, from_id, to_id, props, review_status, ontology_version, updated_at)
+               '{}'::jsonb, 'accepted', '1.0.0', now() FROM _perf`;
+      await tx.$executeRaw`INSERT INTO kg_evidence (id, owner_id, subject_kind, subject_id, quote)
+        SELECT gen_random_uuid(), ${ownerId}::uuid, 'entity', id, 'q' FROM _perf`;
+      await tx.$executeRaw`INSERT INTO kg_mentions (id, owner_id, entity_id, note_id, status)
+        SELECT gen_random_uuid(), ${ownerId}::uuid, id, ${sourceNote.id}::uuid, 'linked' FROM _perf CROSS JOIN generate_series(1, 2)`;
+      await tx.$executeRaw`INSERT INTO kg_relations (id, owner_id, type, from_id, to_id, props, review_status, ontology_version, updated_at)
         SELECT gen_random_uuid(), ${ownerId}::uuid, 'DISCUSSED', a.id, b.id, '{}'::jsonb, 'accepted', '1.0.0', now()
         FROM _perf a
         CROSS JOIN generate_series(1, ${relationsPerEntity}::int) k
         JOIN _perf b ON b.rn = ((a.rn * 7919 + k * 104729) % ${entities}::int) + 1
-        WHERE b.id <> a.id`,
-      prisma.$executeRaw`INSERT INTO kg_evidence (id, owner_id, subject_kind, subject_id, quote)
-        SELECT gen_random_uuid(), ${ownerId}::uuid, 'relation', r.id, 'q' FROM kg_relations r WHERE r.owner_id = ${ownerId}::uuid`,
-    ],
+        WHERE b.id <> a.id`;
+      await tx.$executeRaw`INSERT INTO kg_evidence (id, owner_id, subject_kind, subject_id, quote)
+        SELECT gen_random_uuid(), ${ownerId}::uuid, 'relation', r.id, 'q' FROM kg_relations r WHERE r.owner_id = ${ownerId}::uuid`;
+    },
+    { timeout: 120_000 },
   );
   const [row] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id::text AS id FROM kg_entities WHERE owner_id = ${ownerId}::uuid AND label = 'Perf 4242'`;

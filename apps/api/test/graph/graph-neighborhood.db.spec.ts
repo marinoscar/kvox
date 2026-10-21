@@ -264,14 +264,16 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     const { user, g } = await owner('enrich');
     const a = await g.entity('Person', 'Ana');
     const b = await g.entity('Organization', 'Acme');
+    // g.relation() already writes one evidence row (created now), so 1 + 2 = 3 below.
     const rel = await g.relation('DISCUSSED', a, b);
     const t = (d: string) => new Date(d);
     await g.evidence('relation', rel, { createdAt: t('2026-01-01T00:00:00Z') });
     await g.evidence('relation', rel, { createdAt: t('2026-03-01T00:00:00Z') });
     // evidence of other subjects must not leak into the edge
     await g.evidence('entity', a);
+    const note = await g.note();
     const mention = (entityId: string, status: 'linked' | 'new' | 'suggested' | 'ignored', at: string) =>
-      prisma.kgMention.create({ data: { ownerId: user.id, entityId, status: status as never, createdAt: t(at) } });
+      prisma.kgMention.create({ data: { ownerId: user.id, entityId, noteId: note.id, status, createdAt: t(at) } });
     await mention(a, 'linked', '2026-02-01T00:00:00Z');
     await mention(a, 'new', '2026-04-01T00:00:00Z');
     await mention(a, 'ignored', '2026-09-01T00:00:00Z');
@@ -285,8 +287,10 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     expect(nb.mentionCount).toBe(0);
     expect(nb.lastSeenAt).toBeNull();
     const edge = slice.edges.find((e) => e.id === rel)!;
-    expect(edge.evidenceCount).toBe(2);
-    expect(edge.lastEvidenceAt).toBe('2026-03-01T00:00:00.000Z');
+    const evRows = await prisma.kgEvidence.findMany({ where: { subjectKind: 'relation', subjectId: rel } });
+    expect(evRows).toHaveLength(3);
+    expect(edge.evidenceCount).toBe(3);
+    expect(edge.lastEvidenceAt).toBe(new Date(Math.max(...evRows.map((r) => r.createdAt.getTime()))).toISOString());
   });
 
   it('gives a virtual item edge the item evidence, and never counts a sensitive fact', async () => {
@@ -294,6 +298,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     const joe = await g.entity('Person', 'Joe');
     const fact = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal', statement: 'Plays chess' });
     const secret = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive', statement: 'Private matter' });
+    // g.item() already writes one evidence row per accepted item (created now), so 1 + 2 = 3 readable rows.
     await g.evidence('item', fact, { createdAt: new Date('2026-05-01T00:00:00Z') });
     await g.evidence('item', fact, { createdAt: new Date('2026-06-01T00:00:00Z') });
     await g.evidence('item', secret);
@@ -302,10 +307,13 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     expect(ids(slice)).toEqual([joe, fact].sort());
     const virt = slice.edges.filter((e) => e.virtual);
     expect(virt).toHaveLength(1);
-    expect(virt[0].evidenceCount).toBe(2);
-    expect(virt[0].lastEvidenceAt).toBe('2026-06-01T00:00:00.000Z');
+    expect(virt[0].evidenceCount).toBe(3);
+    const evRows = await prisma.kgEvidence.findMany({ where: { subjectKind: 'item', subjectId: fact } });
+    expect(evRows).toHaveLength(3);
+    const latest = new Date(Math.max(...evRows.map((r) => r.createdAt.getTime()))).toISOString();
+    expect(virt[0].lastEvidenceAt).toBe(latest);
     const item = slice.nodes.find((n) => n.id === fact)!;
-    expect(item.lastSeenAt).toBe('2026-06-01T00:00:00.000Z');
+    expect(item.lastSeenAt).toBe(latest);
     expect(item.mentionCount).toBeUndefined();
   });
 
