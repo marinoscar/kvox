@@ -30,13 +30,15 @@ The slice depends on no other slice. Wire shapes come from `@marinoscar/kvox-con
 
 `CopilotProviderCard` takes `status`, `settings`, `onUpdate`, `onSignIn`, `onWaitForSignIn`, `onSignOut` and the optional `onOpenExternal` (Desktop: `shell.openExternal` over IPC; the default is `window.open` with `noopener`, and only `https` addresses are ever opened), `allowedHosts` (the footer line "Besides this device, KVox may connect only to ..."), `onDownloadRuntime`, `onCancelRuntimeDownload` and `runtimeDownloadSize` (the exact size to state; the default is the approximation `COPILOT_RUNTIME_SIZE_TEXT`). `onWaitForSignIn` must reject when its `signal` aborts and should leave the status fresh once it resolves; `useCopilotProvider` does both for the status. `useCopilotProvider(port, { pollIntervalMs })` polls the status every second (default) while `runtime.state` is `downloading`.
 
+`selected` and `onDecline` are for a host that offers the choice of provider itself (for example one provider among several, as KVox Desktop does): with `selected` defined the card renders no enable switch and is on exactly while `selected` is true; while it is true and the consent is not current the consent dialog opens, and its Not now calls `onDecline` (hidden without one), for example to go back to the previous provider. Accepting still calls `onUpdate({ enabled: true, consentedAt, consentVersion })` and Withdraw consent still calls `onUpdate({ enabled: false, consentedAt: null, consentVersion: null })`; the host maps both onto its own choice. With `selected` undefined the card keeps its switch and Not now turns it off (issue marinoscar/kvox#652).
+
 The `CopilotProviderPort` is `getStatus`, `getSettings`, `update(patch)` (resolves to the stored setting), `startSignIn`, `waitForSignIn(signal)`, `signOut` and `downloadRuntime(signal)` (resolves when the download has finished).
 
 ## Extension-point catalog
 
 - `COPILOT_CONSENT_COPY`: the consent text as data. A host with another design system renders it itself; a host may not reword it in place (it would no longer match `COPILOT_CONSENT_VERSION`).
 - `CopilotProviderPort`: the host's six routes.
-- `CopilotProviderCardProps.onOpenExternal`, `allowedHosts`, `onDownloadRuntime`, `onCancelRuntimeDownload`, `runtimeDownloadSize`: the optional props above.
+- `CopilotProviderCardProps.onOpenExternal`, `allowedHosts`, `onDownloadRuntime`, `onCancelRuntimeDownload`, `runtimeDownloadSize`, `selected`, `onDecline`: the optional props above.
 
 ### Desktop
 

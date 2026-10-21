@@ -424,6 +424,169 @@ describe('CopilotProviderCard: sign-in', () => {
   });
 });
 
+describe('CopilotProviderCard: the host selects the provider', () => {
+  function expectNoSwitch() {
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Enable GitHub Copilot')).not.toBeInTheDocument();
+  }
+
+  it('selected undefined: the card keeps its own switch', () => {
+    renderCard(props());
+    expect(screen.getByRole('switch', { name: 'Enable GitHub Copilot' })).toBeInTheDocument();
+  });
+
+  it('selected false: renders only the header, with no switch', () => {
+    renderCard(props({ selected: false, settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN }) }));
+    expect(screen.getByRole('heading', { name: 'GitHub Copilot' })).toBeInTheDocument();
+    expectNoSwitch();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Withdraw consent' })).not.toBeInTheDocument();
+  });
+
+  it('selected true and not consented: no switch, and the consent dialog opens at once', async () => {
+    const p = props({ selected: true, onDecline: vi.fn() });
+    renderCard(p);
+    expectNoSwitch();
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(within(dialog).getByText(/note and transcript text, is sent to GitHub Copilot/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
+    expect(p.onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('selected true: Not now calls onDecline and saves nothing', async () => {
+    const user = userEvent.setup();
+    const onDecline = vi.fn();
+    const p = props({ selected: true, onDecline });
+    renderCard(p);
+    await user.click(await screen.findByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(onDecline).toHaveBeenCalledTimes(1));
+    expect(p.onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('selected true: Not now waits for an async onDecline', async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => undefined;
+    const onDecline = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    const p = props({ selected: true, onDecline });
+    renderCard(p);
+    const notNow = await screen.findByRole('button', { name: 'Not now' });
+    await user.click(notNow);
+    expect(onDecline).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(notNow).toBeDisabled());
+    await act(async () => finish());
+    expect(p.onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('selected true without onDecline: the consent dialog offers no Not now', async () => {
+    renderCard(props({ selected: true }));
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(within(dialog).queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Agree and turn on' })).toBeInTheDocument();
+  });
+
+  it('selected true: Accept calls onUpdate with the consent', async () => {
+    const user = userEvent.setup();
+    const onDecline = vi.fn();
+    const p = props({ selected: true, onDecline });
+    renderCard(p);
+    await user.click(await screen.findByRole('button', { name: 'Agree and turn on' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledTimes(1));
+    expect(p.onUpdate).toHaveBeenCalledWith({
+      enabled: true,
+      consentedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      consentVersion: COPILOT_CONSENT_VERSION,
+    });
+    expect(onDecline).not.toHaveBeenCalled();
+  });
+
+  it('selected true: a stale consent version asks again even when the setting is off', async () => {
+    renderCard(props({ selected: true, settings: consentedSettings({ enabled: false, consentVersion: '0' }) }));
+    expect(await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title })).toBeInTheDocument();
+    expectNoSwitch();
+  });
+
+  it('selected true and consented: the sign-in flow runs as usual', async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => undefined;
+    const p = props({
+      selected: true,
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(() => new Promise<void>((resolve) => (finish = resolve))),
+    });
+    renderCard(p);
+    expectNoSwitch();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign in to GitHub Copilot' });
+    expect(within(dialog).getByText('ABCD-1234')).toBeInTheDocument();
+    finish();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('selected true and consented: Sign in is disabled with the runtime reason while the runtime is missing', () => {
+    const p = props({
+      selected: true,
+      settings: consentedSettings({ enabled: false }),
+      status: makeStatus({ runtime: { state: 'missing', version: null, progress: null } }),
+    });
+    renderCard(p);
+    const button = screen.getByRole('button', { name: 'Sign in with GitHub Copilot' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription('Download the Copilot runtime first (about 130 to 175 MB).');
+    fireEvent.click(button);
+    expect(p.onSignIn).not.toHaveBeenCalled();
+  });
+
+  it('selected true and signed in: Withdraw consent still calls onUpdate with the cleared consent', async () => {
+    const user = userEvent.setup();
+    const p = props({ selected: true, settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN }) });
+    renderCard(p);
+    expectNoSwitch();
+    expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Withdraw consent' }));
+    await waitFor(() =>
+      expect(p.onUpdate).toHaveBeenCalledWith({ enabled: false, consentedAt: null, consentVersion: null }),
+    );
+  });
+
+  it('deselecting stops a sign-in in progress', async () => {
+    const user = userEvent.setup();
+    let signal: AbortSignal | undefined;
+    const p = props({
+      selected: true,
+      settings: consentedSettings(),
+      onSignIn: vi.fn().mockResolvedValue(DEVICE),
+      onWaitForSignIn: vi.fn(
+        (s: AbortSignal) =>
+          new Promise<void>((_resolve, reject) => {
+            signal = s;
+            s.addEventListener('abort', () => reject(new Error('sign_in_cancelled')));
+          }),
+      ),
+    });
+    const { rerenderCard } = renderCard(p);
+    await user.click(screen.getByRole('button', { name: 'Sign in with GitHub Copilot' }));
+    await screen.findByRole('dialog', { name: 'Sign in to GitHub Copilot' });
+
+    rerenderCard({ ...p, selected: false });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it.each(['light', 'dark'] as const)('has no axe violations in %s mode, selected and signed in', async (mode) => {
+    const { container } = renderCard(
+      props({ selected: true, settings: consentedSettings({ model: 'gpt-5' }), status: makeStatus({ ...SIGNED_IN }) }),
+      mode,
+    );
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
 describe('CopilotProviderCard: device code expiry', () => {
   it('stops waiting when the code expires and offers a new code', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
