@@ -62,10 +62,10 @@ export interface CopilotProviderCardProps {
    * The host's choice of provider. When defined, the card renders no enable switch (the host
    * offers the choice, for example one provider among several) and is on exactly while
    * `selected` is true. While `selected` is true and the consent is not current, the card shows
-   * the consent dialog; accepting it still calls `onUpdate({ enabled: true, consentedAt,
-   * consentVersion })`, and Withdraw consent still calls `onUpdate({ enabled: false,
-   * consentedAt: null, consentVersion: null })`, for the host to map. Undefined (the default):
-   * the card renders its own switch.
+   * the consent dialog; accepting it still calls `onUpdate` with `enabled: true` and the
+   * consent fields, and Withdraw consent still calls `onUpdate` with `enabled: false` and the
+   * consent fields cleared, for the host to map. Undefined (the default): the card renders its
+   * own switch.
    */
   selected?: boolean;
   /**
