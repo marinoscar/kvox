@@ -450,7 +450,7 @@ export const workDomain = defineDomain({
       label: 'Knows about',
       description:
         'A person has expertise in a topic or product: "Maria is our expert on AI governance" is Maria KNOWS_ABOUT AI governance {level: expert}.' +
-        ' Personal hobbies and lasting private interests are INTERESTED_IN (personal domain), not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.',
+        ' Hobbies and lasting private interests are not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.',
       from: ['Person'],
       to: ['Topic', 'Product'],
       temporal: false,
