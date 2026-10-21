@@ -148,8 +148,11 @@ export interface GraphCanvasControls {
  * @stability experimental
  */
 export interface CameraSnapshot {
+  /** The camera centre's x, in framed-graph coordinates. */
   x: number;
+  /** The camera centre's y, in framed-graph coordinates. */
   y: number;
+  /** The zoom ratio: 1 frames the whole graph, smaller zooms in. */
   ratio: number;
 }
 
@@ -159,10 +162,13 @@ export interface CameraSnapshot {
  * @stability experimental
  */
 export interface NodeContextMenuEvent {
+  /** The id of the node the menu is for. */
   id: string;
   /** Where to anchor the menu, in client (page) coordinates. */
   clientX: number;
+  /** Where to anchor the menu, in client (page) coordinates. */
   clientY: number;
+  /** The gesture that asked for it. */
   source: 'long-press' | 'right-click';
 }
 

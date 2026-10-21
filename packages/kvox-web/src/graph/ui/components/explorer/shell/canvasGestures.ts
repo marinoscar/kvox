@@ -161,9 +161,13 @@ export function capPixelRatio(sigma: PixelRatioTarget, cap: number): () => void 
  * @stability experimental
  */
 export interface Insets {
+  /** Px covered at the top edge. */
   top: number;
+  /** Px covered at the right edge. */
   right: number;
+  /** Px covered at the bottom edge. */
   bottom: number;
+  /** Px covered at the left edge. */
   left: number;
 }
 
