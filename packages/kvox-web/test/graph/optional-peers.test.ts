@@ -4,7 +4,8 @@ import { describe, it, expect, vi } from 'vitest';
  * The drawing libraries are optional peers of the `graph/ui` entry ONLY, and
  * sigma is reached only through the lazy canvas.
  *
- * `sigma`, `@react-sigma/core` and `graphology-layout-forceatlas2` are not
+ * `sigma`, `@react-sigma/core`, `graphology-layout-forceatlas2` and
+ * `graphology-layout-noverlap` (the layout worker's overlap pass) are not
  * installed by a host that uses just `graph/headless` (KVox Desktop's main
  * process, a CLI), and `graphology` is not either, so that entry has to load
  * with every one of them missing. The `ui` entry needs `graphology` (the
@@ -23,6 +24,7 @@ vi.mock('sigma/settings', () => missing('sigma/settings'));
 vi.mock('@react-sigma/core', () => missing('@react-sigma/core'));
 vi.mock('@react-sigma/core/lib/style.css', () => missing('@react-sigma/core/lib/style.css'));
 vi.mock('graphology-layout-forceatlas2', () => missing('graphology-layout-forceatlas2'));
+vi.mock('graphology-layout-noverlap', () => missing('graphology-layout-noverlap'));
 
 describe('graph/headless without the drawing libraries', () => {
   it('loads and exports its client and hooks', async () => {
