@@ -33,6 +33,8 @@ None. `KvoxPortsModule.forRoot` takes the port bindings and, optionally, the mod
 
 `KvoxPortsModule` and `KvoxPortBindings` are the extension points of this slice: a host calls `forRoot` with a binding per port. `KVOX_BRAND` is the optional token under which `forRoot({ brand })` provides the product name and footer line to the PDF exporter. `KVOX_AUTH_PERMISSIONS` is the token under which a slice module provides its permission map, and `setKvoxAuthDocumenter` is the hook a host uses to describe authenticated routes in its API document. See the [ports catalog](../ports/README.md#extension-point-catalog) for the tokens.
 
+`core/document/` and `core/pdf/pdf-brand-mark.ts` give the document exporters the brand: `KVOX_DOCUMENT_THEME` (the print palette, derived from `@marinoscar/kvox-contract/brand`), `mixHex`, `docxColor`, `brandMarkPng` (a pure-JS raster of the logo), `brandMarkSvgBuffer` and `drawBrandMark` (the logo as pdfkit vectors).
+
 ### Desktop
 
 `KvoxPortsModule.forRoot({ ports, brand })` is how Desktop binds its adapters, and `KVOX_BRAND` is how it names itself in a PDF footer; the guide shows the whole application module. See [the KVox Desktop guide](../../../../docs/guides/kvox-desktop.md#wiring-the-api).

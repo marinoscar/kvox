@@ -51,6 +51,8 @@ export interface ReducerContext {
   focusId: string | null;
   /** The edge under the pointer. */
   hoveredEdgeId?: string | null;
+  /** Nodes marked in "Select" mode: drawn highlighted and never dimmed. */
+  markedIds?: ReadonlySet<string>;
   /** Ring colour. */
   accent: string;
   /** Fallback for a colour `alpha()` cannot parse. */
@@ -96,8 +98,17 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
     }
 
     const isStub = data.isStub === true;
+    const marked = ctx.markedIds?.has(node) === true;
+    if (marked) {
+      out.highlighted = true;
+      out.zIndex = 4;
+    }
     if (!lit) {
       if (isStub || (ctx.compact && data.isSeed === true)) out.forceLabel = true;
+      return out;
+    }
+    if (marked) {
+      out.forceLabel = true;
       return out;
     }
     if (lit.nodes.has(node)) {

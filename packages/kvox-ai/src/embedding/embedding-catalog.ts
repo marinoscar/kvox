@@ -45,40 +45,68 @@ export const EMBEDDING_DIMENSIONS = 1536;
 export const KVOX_EMBEDDING_PROVIDER = 'openai';
 
 /**
- * The embedding model and its limits.
+ * One embedding model a host can choose, as a static description.
+ *
+ * @remarks
+ * `dimensions` is the model's NATIVE output width; `storageDimensions` is the
+ * width of the database column ({@link EMBEDDING_DIMENSIONS}). A model narrower
+ * than the column is zero-padded by the AI port (see `createKvoxAi`), so one
+ * `vector(1536)` column holds every catalog entry; the model id recorded on each
+ * row keeps the spaces apart.
  *
  * @stability experimental
  */
-export const KVOX_EMBEDDING: KvoxEmbeddingCapability & {
-  /** The provider that serves the embedding model. */
+export interface KvoxEmbeddingModel extends KvoxEmbeddingCapability {
+  /** The provider that serves the model (`local` for an on-device model). */
   provider: string;
-} = {
+  /** The model's native output width (what the runtime returns per vector). */
+  dimensions: number;
+  /** The width of every STORED vector: always {@link EMBEDDING_DIMENSIONS}. */
+  storageDimensions: typeof EMBEDDING_DIMENSIONS;
+  /** True when the model needs no user key (an on-device model): readiness then ignores the chat provider and keys. */
+  keyless: boolean;
+  /** Prepended to a text embedded for a search QUERY (asymmetric retrieval models). */
+  queryPrefix?: string;
+  /** Prepended to a text embedded as a DOCUMENT. */
+  documentPrefix?: string;
+  /** The cosine similarity below which a semantic hit is noise, when the model needs a floor. */
+  minSimilarity?: number;
+}
+
+/**
+ * The embedding model and its limits (the web edition's: OpenAI, 1536 wide).
+ *
+ * @stability experimental
+ */
+export const KVOX_EMBEDDING: KvoxEmbeddingModel = {
   provider: KVOX_EMBEDDING_PROVIDER,
   model: 'text-embedding-3-small',
   dimensions: EMBEDDING_DIMENSIONS,
+  storageDimensions: EMBEDDING_DIMENSIONS,
   maxInputTokens: 8191,
   maxBatchSize: 128,
+  keyless: false,
 };
 
 /**
- * The embeddings provider answered with a batch this app cannot store: a different
- * number of vectors than texts (`count`), or a vector that is not exactly
- * `EMBEDDING_DIMENSIONS` finite numbers (`dimension`).
+ * The on-device embedding model KVox Desktop plugs in: bge-small-en-v1.5, 384
+ * wide, stored zero-padded in the 1536-wide column.
  *
- * A plain `Error` subclass, so the queue treats it as retryable like any provider
- * fault; the search indexer reads `kind` to report its `dimension_mismatch` status
- * reason. It carries counts and widths only, never a vector or a text.
-  *
-  * @stability experimental
+ * @remarks
+ * The id names the int8-QUANTIZED build: its vectors differ from fp32's, and the
+ * id is permanent once vectors are stored under it. `minSimilarity` 0.45 was
+ * measured with the query prefix: relevant pairs 0.51-0.80, unrelated 0.28-0.55.
+ *
+ * @stability experimental
  */
-export class EmbeddingShapeError extends Error {
-  constructor(
-    /** `count`: a different number of vectors than texts; `dimension`: a vector of the wrong width. */
-    readonly kind: 'count' | 'dimension',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'EmbeddingShapeError';
-    Object.setPrototypeOf(this, EmbeddingShapeError.prototype);
-  }
-}
+export const KVOX_LOCAL_EMBEDDING: KvoxEmbeddingModel = {
+  provider: 'local',
+  model: 'bge-small-en-v1.5-int8',
+  dimensions: 384,
+  storageDimensions: EMBEDDING_DIMENSIONS,
+  maxInputTokens: 512,
+  maxBatchSize: 32,
+  keyless: true,
+  queryPrefix: 'Represent this sentence for searching relevant passages: ',
+  minSimilarity: 0.45,
+};

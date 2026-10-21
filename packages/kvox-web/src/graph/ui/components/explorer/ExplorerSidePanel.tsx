@@ -2,10 +2,14 @@
  * `ExplorerSidePanel` — what the selected node or edge is, and what can be
  * done with it (#374; spec §22.2).
  *
- * A right-hand `Paper` from `sm` up; a bottom `Drawer` on a phone. That
- * `down('sm')` is a PAGE-LEVEL read deciding where one page puts one panel —
- * not a sixth app-chrome breakpoint gate (CLAUDE.md, Settings UI Pattern rule
- * 5: the `LibraryPageFrame` precedent).
+ * CONTENT ONLY since GIC-08 (#669): it renders inline, inside the Insight
+ * Canvas shell's `inspector` slot, which supplies the container — the bottom
+ * sheet on a phone, the right overlay on a tablet, the right pane on a laptop —
+ * and so owns every breakpoint decision. This component reads none. GIC-11
+ * replaces it with the tabbed inspector, keeping the slot.
+ *
+ * `actionsFirst` puts the actions right under the title, so the sheet's peek
+ * (title + actions) shows them.
  *
  * The edge view shows the relation's validity to the precision it is known
  * to ("2019 – Mar 2026") and its confidence, and points at the entity page's
@@ -16,14 +20,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
 
 import type { GraphValidRange } from '../../../headless/clients/graph.js';
@@ -71,6 +71,8 @@ export interface ExplorerSidePanelProps {
   onHide: (id: string) => void;
   onMakeSeed: (id: string) => void;
   onClose: () => void;
+  /** Put the actions right under the title (the bottom sheet's peek shows the title and the actions). */
+  actionsFirst?: boolean;
 }
 
 /** "2019 – Mar 2026", "Since Sep 2026", "Until 2021", or null when undated. */
@@ -84,47 +86,13 @@ export function formatValidity(valid: GraphValidRange | null): string | null {
 }
 
 export function ExplorerSidePanel(props: ExplorerSidePanelProps) {
-  const { selection, onClose } = props;
-  const theme = useTheme();
-  const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
-
-  if (isCompactWindow) {
-    return (
-      <Drawer
-        anchor="bottom"
-        open={selection !== null}
-        onClose={onClose}
-        slotProps={{
-          paper: {
-            sx: { borderTopLeftRadius: 12, borderTopRightRadius: 12, maxHeight: '60vh' },
-            'aria-label': selection ? panelTitle(selection) : 'Selection',
-          },
-        }}
-      >
-        {selection && <PanelBody {...props} selection={selection} />}
-      </Drawer>
-    );
-  }
-
+  const { selection } = props;
   if (!selection) return null;
+  // A named group, not a landmark: the shell's region around it carries the landmark.
   return (
-    <Paper
-      variant="outlined"
-      component="aside"
-      aria-label={panelTitle(selection)}
-      sx={{
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        width: 300,
-        maxWidth: 'calc(100% - 24px)',
-        maxHeight: 'calc(100% - 24px)',
-        overflowY: 'auto',
-        zIndex: 2,
-      }}
-    >
+    <Box role="group" aria-label={panelTitle(selection)}>
       <PanelBody {...props} selection={selection} />
-    </Paper>
+    </Box>
   );
 }
 
@@ -140,6 +108,7 @@ function PanelBody({
   onHide,
   onMakeSeed,
   onClose,
+  actionsFirst = false,
 }: ExplorerSidePanelProps & { selection: ExplorerSelection }) {
   return (
     <Box sx={{ p: 2 }}>
@@ -159,6 +128,7 @@ function PanelBody({
           onExpand={onExpand}
           onHide={onHide}
           onMakeSeed={onMakeSeed}
+          actionsFirst={actionsFirst}
         />
       ) : (
         <EdgeBody selection={selection} />
@@ -174,6 +144,7 @@ function NodeBody({
   onExpand,
   onHide,
   onMakeSeed,
+  actionsFirst,
 }: {
   selection: NodeSelection;
   atCap: boolean;
@@ -181,6 +152,7 @@ function NodeBody({
   onExpand: (id: string) => void;
   onHide: (id: string) => void;
   onMakeSeed: (id: string) => void;
+  actionsFirst: boolean;
 }) {
   const expandDisabled = atCap || expanding;
   const expandButton = (
@@ -193,7 +165,12 @@ function NodeBody({
       {expanding ? 'Expanding…' : selection.expanded ? 'Expand again' : 'Expand'}
     </Button>
   );
-  return (
+  const makeSeed = (
+    <Button size="small" onClick={() => onMakeSeed(selection.id)}>
+      Make seed
+    </Button>
+  );
+  const details = (
     <>
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap', rowGap: 1 }}>
         <Chip size="small" label={selection.typeLabel} />
@@ -208,36 +185,49 @@ function NodeBody({
           {formatPrecisionDate(selection.occurredAt, 'day')}
         </Typography>
       )}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
-        {atCap ? (
-          <Tooltip title={CAP_TOOLTIP}>
-            {/* A disabled button fires no events; the span carries the tooltip. */}
-            <span>{expandButton}</span>
-          </Tooltip>
-        ) : (
-          expandButton
-        )}
-        {selection.nodeKind === 'entity' && (
-          <Button
-            size="small"
-            variant="outlined"
-            component={RouterLink}
-            to={`/graph/entities/${encodeURIComponent(selection.id)}`}
-          >
-            Open page
+    </>
+  );
+  const actions = (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: actionsFirst ? 0 : 2, mb: actionsFirst ? 1.5 : 0 }}>
+      {atCap ? (
+        <Tooltip title={CAP_TOOLTIP}>
+          {/* A disabled button fires no events; the span carries the tooltip. */}
+          <span>{expandButton}</span>
+        </Tooltip>
+      ) : (
+        expandButton
+      )}
+      {selection.nodeKind === 'entity' && (
+        <Button
+          size="small"
+          variant="outlined"
+          component={RouterLink}
+          to={`/graph/entities/${encodeURIComponent(selection.id)}`}
+        >
+          Open page
+        </Button>
+      )}
+      {!selection.isSeed && (
+        <>
+          <Button size="small" onClick={() => onHide(selection.id)}>
+            Hide
           </Button>
-        )}
-        {!selection.isSeed && (
-          <>
-            <Button size="small" onClick={() => onHide(selection.id)}>
-              Hide
-            </Button>
-            <Button size="small" onClick={() => onMakeSeed(selection.id)}>
-              Make seed
-            </Button>
-          </>
-        )}
-      </Box>
+          {!actionsFirst && makeSeed}
+        </>
+      )}
+    </Box>
+  );
+  return actionsFirst ? (
+    <>
+      {actions}
+      {details}
+      {/* The sheet's peek holds three actions; the fourth waits below them. */}
+      {!selection.isSeed && <Box sx={{ mt: 1 }}>{makeSeed}</Box>}
+    </>
+  ) : (
+    <>
+      {details}
+      {actions}
     </>
   );
 }

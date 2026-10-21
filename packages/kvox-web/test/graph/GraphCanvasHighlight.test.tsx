@@ -24,11 +24,39 @@ import { ACME_ID, ANA_ID, JOE_ID, Q3_MEETING_ID, expandFixture, hubFixture } fro
 type Reducer = (key: string, data: Record<string, unknown>) => Record<string, unknown>;
 type Handlers = Record<string, (event: Record<string, unknown>) => void>;
 
-const sigma = vi.hoisted(() => ({
-  settings: {} as Record<string, unknown>,
-  containerSettings: {} as Record<string, unknown>,
-  handlers: {} as Record<string, (event: Record<string, unknown>) => void>,
-}));
+const sigma = vi.hoisted(() => {
+  const camera = {
+    getState: () => ({ x: 0.5, y: 0.5, ratio: 1 }),
+    setState: () => {},
+    animate: () => Promise.resolve(),
+    on: () => {},
+    removeListener: () => {},
+  };
+  const container = document.createElement('div');
+  const touchCaptor = { on: () => {}, removeListener: () => {} };
+  // STABLE across renders, like the real instance (effects depend on it).
+  const instance = {
+    refresh: () => {},
+    getBBox: () => ({}),
+    getCustomBBox: () => ({}),
+    setCustomBBox: () => {},
+    viewportToGraph: () => ({ x: 0, y: 0 }),
+    // Every node is drawn far from any test point, so a touch pick finds none.
+    graphToViewport: () => ({ x: 1e6, y: 1e6 }),
+    viewportToFramedGraph: () => ({ x: 0, y: 0 }),
+    scaleSize: (size: number) => size,
+    getDimensions: () => ({ width: 0, height: 0 }),
+    getContainer: () => container,
+    getCamera: () => camera,
+    getTouchCaptor: () => touchCaptor,
+  };
+  return {
+    instance,
+    settings: {} as Record<string, unknown>,
+    containerSettings: {} as Record<string, unknown>,
+    handlers: {} as Record<string, (event: Record<string, unknown>) => void>,
+  };
+});
 
 vi.mock('@react-sigma/core/lib/style.css', () => ({}));
 vi.mock('@react-sigma/core', () => ({
@@ -36,13 +64,7 @@ vi.mock('@react-sigma/core', () => ({
     sigma.containerSettings = settings;
     return <div data-testid="sigma">{children}</div>;
   },
-  useSigma: () => ({
-    refresh: () => {},
-    getBBox: () => ({}),
-    getCustomBBox: () => ({}),
-    setCustomBBox: () => {},
-    viewportToGraph: () => ({ x: 0, y: 0 }),
-  }),
+  useSigma: () => sigma.instance,
   useSetSettings: () => (next: Record<string, unknown>) => {
     sigma.settings = { ...sigma.settings, ...next };
   },
@@ -94,24 +116,9 @@ function mountCanvas(state: ExplorerState, over: Partial<Parameters<typeof Graph
 
 const data = (state: ExplorerState, id: string) => state.graph.getNodeAttributes(id) as unknown as Record<string, unknown>;
 
-/** `(hover: none)` is what a touch screen answers. */
-function setHoverNone(matches: boolean) {
-  window.matchMedia = ((query: string) => ({
-    matches: query.replace(/\s/g, '').includes('(hover:none)') ? matches : false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
-
 beforeEach(() => {
   sigma.settings = {};
   sigma.handlers = {};
-  setHoverNone(false);
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -184,49 +191,47 @@ describe('GraphCanvas — hover', () => {
   });
 });
 
-describe('GraphCanvas — touch: the first tap does what hover does', () => {
-  it('the first tap lights the node and selects nothing; the second tap selects it', () => {
-    setHoverNone(true);
+describe('GraphCanvas — touch: the page decides the first tap (one input-modality source)', () => {
+  it('lights the previewed node and its neighbours and dims the rest; a tap is reported, not held back', () => {
     const state = explorer();
-    const { props } = mountCanvas(state);
-
-    act(() => handler('clickNode')({ node: JOE_ID }));
-    expect(props.onNodeClick).not.toHaveBeenCalled();
+    const { props } = mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID });
     expect(nodeReducer()(JOE_ID, data(state, JOE_ID)).highlighted).toBe(true);
+    expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).forceLabel).toBe(true);
     expect(nodeReducer()('lone', data(state, 'lone')).label).toBe('');
 
+    // The first-tap-versus-select rule lives in the page (`useInputModality` decides); the canvas just reports.
     act(() => handler('clickNode')({ node: JOE_ID }));
-    expect(props.onNodeClick).toHaveBeenCalledTimes(1);
     expect(props.onNodeClick).toHaveBeenCalledWith(JOE_ID);
   });
 
-  it('tapping another node moves the highlight instead of selecting', () => {
-    setHoverNone(true);
+  it('moves the highlight with the preview', () => {
     const state = explorer();
-    const { props } = mountCanvas(state);
-    act(() => handler('clickNode')({ node: JOE_ID }));
-    act(() => handler('clickNode')({ node: ACME_ID }));
-    expect(props.onNodeClick).not.toHaveBeenCalled();
+    const { rerender, props } = mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID });
+    rerender(<GraphCanvas {...props} inputModality="touch" previewId={ACME_ID} />);
     expect(nodeReducer()(ACME_ID, data(state, ACME_ID)).highlighted).toBe(true);
     expect(nodeReducer()(JOE_ID, data(state, JOE_ID)).highlighted).toBeUndefined();
   });
 
-  it('tapping the stage clears the highlight and the selection', () => {
-    setHoverNone(true);
+  it('tapping the stage reports it so the page clears the preview and the selection', () => {
     const state = explorer();
-    const { props } = mountCanvas(state);
-    act(() => handler('clickNode')({ node: JOE_ID }));
-    act(() => handler('clickStage')({}));
+    const { props } = mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID });
+    act(() => handler('clickStage')({ event: { x: 0, y: 0 } }));
     expect(props.onStageClick).toHaveBeenCalled();
-    expect(nodeReducer()('lone', data(state, 'lone')).label).toBe('Lone');
   });
 
   it('ignores hover events on a touch screen', () => {
-    setHoverNone(true);
     const state = explorer();
-    mountCanvas(state);
+    mountCanvas(state, { inputModality: 'touch' });
     act(() => handler('enterNode')({ node: JOE_ID }));
     expect(nodeReducer()('lone', data(state, 'lone')).label).toBe('Lone');
+  });
+
+  it('draws the nodes marked in Select mode highlighted, never dimmed', () => {
+    const state = explorer();
+    mountCanvas(state, { inputModality: 'touch', previewId: JOE_ID, markedIds: new Set(['lone']) });
+    const marked = nodeReducer()('lone', data(state, 'lone'));
+    expect(marked.highlighted).toBe(true);
+    expect(marked.label).toBe('Lone');
   });
 });
 
@@ -244,14 +249,14 @@ describe('GraphCanvas — "+N more" stubs', () => {
   });
 
   it('a stub on a touch screen also expands on the first tap', () => {
-    setHoverNone(true);
     const state = createExplorerState();
     state.seedIds = [JOE_ID];
     mergeSlice(state, hubFixture({ nodeIds: [JOE_ID], cap: 300 })!, { neighbourLimit: 30 });
     const stub = stubId(JOE_ID, 'Meeting');
-    const { props } = mountCanvas(state);
+    const { props } = mountCanvas(state, { inputModality: 'touch' });
     act(() => handler('clickNode')({ node: stub }));
     expect(props.onNodeDoubleClick).toHaveBeenCalledWith(stub);
+    expect(props.onNodeClick).not.toHaveBeenCalled();
   });
 });
 

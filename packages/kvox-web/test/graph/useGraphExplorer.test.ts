@@ -133,6 +133,49 @@ describe('useGraphExplorer — expand', () => {
     expect(bodies[1].relationTypes).toEqual(RELATION_TYPES.filter((t) => t !== 'PART_OF'));
   });
 
+  it('asks for the budget cap and holds to it when told a smaller `nodeCap` (GIC-08)', async () => {
+    server.use(
+      http.post('*/api/graph/explore/expand', async ({ request }) => {
+        bodies.push((await request.json()) as ExpandFixtureRequest);
+        return HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) });
+      }),
+    );
+    const { result } = renderHookWithProviders(() =>
+      useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: 120 }),
+    );
+    await act(() => result.current.load([JOE_ID]));
+    expect(bodies[0]!.cap).toBe(120);
+    // DOI truncation shows the best 30; the budget's cap (not 300) is what the stub expansions run into.
+    expect(realNodeCount(result.current.state)).toBe(1 + EXPLORER_NEIGHBOUR_LIMIT);
+    expect(result.current.capped).toBe(false);
+    const more = stubId(JOE_ID, 'Person');
+    for (let i = 0; i < 6 && !result.current.capped; i += 1) {
+      await act(() => result.current.expand(more));
+    }
+    expect(realNodeCount(result.current.state)).toBe(120);
+    expect(result.current.capped).toBe(true);
+
+    const sent = bodies.length;
+    const kept = result.current.state.graph
+      .nodes()
+      .find((id) => id !== JOE_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
+    await act(() => result.current.expand(kept));
+    expect(bodies).toHaveLength(sent);
+  });
+
+  it('follows a changing `nodeCap` without dropping nodes', async () => {
+    const { result, rerender } = renderHookWithProviders(
+      (props: { cap: number }) =>
+        useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: props.cap }),
+      { initialProps: { cap: 300 } },
+    );
+    await act(() => result.current.load([JOE_ID]));
+    const before = result.current.state.graph.order;
+    rerender({ cap: 120 });
+    expect(result.current.state.cap).toBe(120);
+    expect(result.current.state.graph.order).toBe(before);
+  });
+
   it('sends NO request at the cap and says so', async () => {
     server.use(
       http.post('*/api/graph/explore/expand', async ({ request }) => {

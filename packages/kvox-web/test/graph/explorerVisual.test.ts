@@ -395,6 +395,21 @@ describe('reducers', () => {
   const nodeData = (state: ExplorerState, id: string) => state.graph.getNodeAttributes(id) as unknown as Record<string, unknown>;
   const edgeData = (state: ExplorerState, id: string) => state.graph.getEdgeAttributes(id) as unknown as Record<string, unknown>;
 
+  it('a node marked in Select mode is highlighted and never dimmed, whatever the focus', () => {
+    const state = loaded();
+    // A node with no edge to the focus, so it would be dimmed.
+    const marked = 'lone-marked';
+    state.graph.addNode(marked, { ...state.graph.getNodeAttributes(state.graph.nodes()[0]!), label: 'Lone' });
+    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), markedIds: new Set([marked]) });
+    const out = node(marked, nodeData(state, marked));
+    expect(out.highlighted).toBe(true);
+    expect(out.forceLabel).toBe(true);
+    expect(out.color).toBe(state.graph.getNodeAttribute(marked, 'color'));
+    // Unmarked, the same node is dimmed.
+    const plain = buildNodeReducer(context(state, { focusId: JOE_ID }));
+    expect(plain(marked, nodeData(state, marked)).label).toBe('');
+  });
+
   it('with no focus: draws every node as a pictogram, hides nothing, dims nothing, labels no edge', () => {
     const state = loaded();
     const node = buildNodeReducer(context(state));

@@ -12,7 +12,8 @@
     "./src/ask/index.ts",
     "./src/ontology/index.ts",
     "./src/copilot/index.ts",
-    "./src/errors/index.ts"
+    "./src/errors/index.ts",
+    "./src/brand/index.ts"
   ],
   "entryPointStrategy": "resolve",
   "name": "@marinoscar/kvox-contract",

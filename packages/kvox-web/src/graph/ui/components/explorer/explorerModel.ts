@@ -156,9 +156,11 @@ export interface ExplorerState {
   hiddenRelationTypes: Set<string>;
   /** `true` when the last slice reported that more was reachable than it returned. */
   truncated: boolean;
+  /** Most nodes the graph may hold: `EXPLORER_NODE_CAP`, or the smaller budget of a phone or a coarse pointer (GIC-08, `explorerBudgets`). */
+  cap: number;
 }
 
-export function createExplorerState(): ExplorerState {
+export function createExplorerState(cap: number = EXPLORER_NODE_CAP): ExplorerState {
   return {
     graph: new MultiDirectedGraph<ExplorerNodeAttributes, ExplorerEdgeAttributes>(),
     seedIds: [],
@@ -167,6 +169,7 @@ export function createExplorerState(): ExplorerState {
     hiddenTypes: new Set(),
     hiddenRelationTypes: new Set(),
     truncated: false,
+    cap,
   };
 }
 
@@ -471,11 +474,12 @@ function sliceNodeAttrs(node: SliceNode) {
 /**
  * Add a slice's nodes and edges. IDEMPOTENT — a node or edge already present
  * keeps its position and has its data refreshed. NEVER EXCEEDS
- * `EXPLORER_NODE_CAP` real nodes (a stub does not count): when the new nodes do
- * not fit, the slice's own seeds go first, then the highest degree of interest,
- * and the rest are dropped (`capped: true`). With `neighbourLimit`, the best
- * that many new neighbours are shown and the others collapse into "+N more"
- * stubs. An edge is added only when both ends are on the graph.
+ * `state.cap` real nodes (a stub does not count; `EXPLORER_NODE_CAP` unless a
+ * budget lowers it): when the new nodes do not fit, the slice's own seeds go
+ * first, then the highest degree of interest, and the rest are dropped
+ * (`capped: true`). With `neighbourLimit`, the best that many new neighbours
+ * are shown and the others collapse into "+N more" stubs. An edge is added
+ * only when both ends are on the graph.
  */
 export function mergeSlice(
   state: ExplorerState,
@@ -805,7 +809,7 @@ export function seedFromNodes(
   palette: ExplorerPalette = DEFAULT_EXPLORER_PALETTE,
 ): void {
   const { graph } = state;
-  for (const node of nodes.slice(0, EXPLORER_NODE_CAP)) {
+  for (const node of nodes.slice(0, state.cap)) {
     if (graph.hasNode(node.id)) continue;
     const nodeKind = /^[a-z]/.test(node.type) ? 'item' : 'entity';
     const style = nodeStyle({ nodeKind, type: node.type, label: node.label, degree: node.degree }, palette);
@@ -837,7 +841,7 @@ export function seedFromNodes(
 
 /** Room for more real nodes: a "+N more" stub is not a node and does not count. */
 export function remainingCapacity(state: ExplorerState): number {
-  return Math.max(0, EXPLORER_NODE_CAP - realNodeCount(state));
+  return Math.max(0, state.cap - realNodeCount(state));
 }
 
 /**

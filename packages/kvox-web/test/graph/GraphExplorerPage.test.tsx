@@ -31,6 +31,7 @@ import {
 } from './graphData.js';
 import { server } from './msw-compat.js';
 import { setViewportWidth } from '../../src/core/testing/index.js';
+import { mockTouchInput } from './shellMedia.js';
 import { graphReader } from './graphTestUsers.js';
 import { render } from './helpers.js';
 
@@ -54,12 +55,21 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
   GraphCanvas: function FakeGraphCanvas(props: GraphCanvasProps) {
     useImperativeHandle(props.controlsRef, () => mocks.controls, []);
     return (
-      <div data-testid="fake-canvas" data-layout={props.layout}>
+      <div
+        data-testid="fake-canvas"
+        data-layout={props.layout}
+        data-preview={props.previewId ?? ''}
+        data-modality={props.inputModality}
+        data-pixel-ratio-cap={props.budgets?.pixelRatioCap ?? ''}
+        data-reveal-right={props.revealInsets?.right ?? 0}
+        data-reveal-bottom={props.revealInsets?.bottom ?? 0}
+      >
         {[...props.visibleIds].sort().map((id) => (
           <button
             key={id}
             type="button"
             data-selected={props.selectedId === id}
+            data-marked={props.markedIds?.has(id) ?? false}
             // Like the real canvas: activating a "+N more" stub expands it.
             onClick={() =>
               props.graph.getNodeAttribute(id, 'isStub') === true
@@ -67,6 +77,10 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
                 : props.onNodeClick(id)
             }
             onDoubleClick={() => props.onNodeDoubleClick(id)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              props.onNodeContextMenu?.({ id, clientX: 12, clientY: 34, source: 'right-click' });
+            }}
           >
             {String(props.graph.getNodeAttribute(id, 'label'))}
           </button>
@@ -279,7 +293,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     const canvas = await canvasReady();
 
     await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    const panel = await screen.findByRole('complementary', { name: 'Acme Corp' });
+    const panel = await screen.findByRole('group', { name: 'Acme Corp' });
     expect(within(panel).getByText('Organization')).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: 'Open page' })).toHaveAttribute(
       'href',
@@ -299,7 +313,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
 
     // Click the stage to deselect.
     await user.click(within(canvas).getByRole('button', { name: 'stage' }));
-    expect(screen.queryByRole('complementary', { name: 'Acme Corp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Acme Corp' })).not.toBeInTheDocument();
   });
 
   it('hides a node', async () => {
@@ -307,10 +321,10 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
-    const panel = await screen.findByRole('complementary', { name: 'Ana Diaz' });
+    const panel = await screen.findByRole('group', { name: 'Ana Diaz' });
     await user.click(within(panel).getByRole('button', { name: 'Hide' }));
     expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('complementary', { name: 'Ana Diaz' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Ana Diaz' })).not.toBeInTheDocument();
   });
 
   it('expands on double-click', async () => {
@@ -325,7 +339,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: `edge ${gid(411)}` }));
-    const panel = await screen.findByRole('complementary', { name: 'Reports to' });
+    const panel = await screen.findByRole('group', { name: 'Reports to' });
     expect(within(panel).getByText('Joe Rivera → Ana Diaz')).toBeInTheDocument();
     expect(within(panel).getByText('Since Sep 2026')).toBeInTheDocument();
     expect(within(panel).getByText('Confidence 90%')).toBeInTheDocument();
@@ -353,7 +367,7 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: `edge ${gid(410)}` }));
-    const panel = await screen.findByRole('complementary', { name: 'Has role' });
+    const panel = await screen.findByRole('group', { name: 'Has role' });
     expect(within(panel).getByText('Role')).toBeInTheDocument();
     expect(within(panel).getByText('Managing Director')).toBeInTheDocument();
     expect(within(panel).getByText('Business unit')).toBeInTheDocument();
@@ -366,7 +380,9 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     renderExplorer();
     const canvas = await canvasReady();
     await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
-    const sheet = await screen.findByRole('presentation');
+    // GIC-08: the inspector is the shell's bottom sheet below 600px, opened at peek.
+    const sheet = await screen.findByRole('region', { name: 'Inspector' });
+    expect(sheet).toHaveAttribute('data-snap', 'peek');
     expect(within(sheet).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
     act(() => setViewportWidth(1024));
   });
@@ -396,7 +412,7 @@ describe('GraphExplorerPage — the 300-node cap', () => {
     expect(screen.getByLabelText('300 of 300 nodes')).toBeInTheDocument();
 
     await user.click(within(canvas).getByRole('button', { name: 'Joe Rivera' }));
-    const panel = await screen.findByRole('complementary', { name: 'Joe Rivera' });
+    const panel = await screen.findByRole('group', { name: 'Joe Rivera' });
     expect(within(panel).getByRole('button', { name: 'Expand again' })).toBeDisabled();
 
     // Dismissible.
@@ -413,20 +429,38 @@ describe('GraphExplorerPage — filters and time', () => {
     const canvas = await canvasReady();
     expect(within(canvas).getByRole('button', { name: 'Q3 planning' })).toBeInTheDocument();
 
-    await user.click(await screen.findByRole('button', { name: 'Meetings', pressed: true }));
+    // Two controls toggle a type (the filter chip and the legend row); the chip is the one in the filters.
+    const chip = (pressed: boolean) =>
+      screen.getAllByRole('button', { name: 'Meetings', pressed }).find((el) => el.classList.contains('MuiChip-root'))!;
+    await screen.findAllByRole('button', { name: 'Meetings', pressed: true });
+    await user.click(chip(true));
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument(),
     );
     const shown = currentUrl().searchParams.get('types')?.split(',') ?? [];
     expect(shown).not.toContain('Meeting');
     expect(shown).toContain('Person');
-    expect(screen.getByRole('button', { name: 'Meetings', pressed: false })).toBeInTheDocument();
+    expect(chip(false)).toBeInTheDocument();
 
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     await user.click(await screen.findByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1].types).not.toContain('Meeting');
     expect(bodies[1].types).toContain('Person');
+  });
+
+  it('places the legend in the facets and a legend row toggles the same ?types= parameter', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    const legend = await screen.findByRole('region', { name: 'Legend' });
+    expect(within(legend).getByRole('button', { name: 'Meetings', pressed: true })).toBeInTheDocument();
+
+    await user.click(within(legend).getByRole('button', { name: 'Meetings', pressed: true }));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')?.split(',') ?? []).not.toContain('Meeting'));
+    expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument();
+    // Hidden, it stays in the legend so it can be turned back on.
+    expect(within(screen.getByRole('region', { name: 'Legend' })).getByRole('button', { name: 'Meetings', pressed: false })).toBeInTheDocument();
   });
 
   it('sends ?types= with the very first request', async () => {
@@ -531,7 +565,7 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
     fireEvent.keyDown(app, { key: 'ArrowRight' });
     const live = document.querySelector('[aria-live="polite"]')!;
     expect(live.textContent).toMatch(/^Joe Rivera, Person, \d+ connections$/);
-    expect(screen.getByRole('complementary', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Joe Rivera' })).toBeInTheDocument();
 
     fireEvent.keyDown(app, { key: 'ArrowLeft' });
     expect(live.textContent).not.toMatch(/^Joe Rivera/);
@@ -543,7 +577,7 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
     expect(bodies).toHaveLength(2);
 
     fireEvent.keyDown(app, { key: 'Escape' });
-    expect(screen.queryByRole('complementary', { name: 'Joe Rivera' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Joe Rivera' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(app, { key: 'ArrowRight' });
     fireEvent.keyDown(app, { key: 'o' });
@@ -605,5 +639,216 @@ describe('GraphExplorerPage — no WebGL', () => {
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'List view' })).toBeDisabled();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+describe('GraphExplorerPage — the touch model (GIC-08)', () => {
+  it('first tap previews, second tap on the same node opens the inspector at peek', async () => {
+    mockTouchInput();
+    act(() => setViewportWidth(390));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    expect(canvas).toHaveAttribute('data-modality', 'touch');
+
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    expect(canvas).toHaveAttribute('data-preview', ACME_ID);
+    expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toMatch(/Acme Corp.*Tap again/);
+
+    // A different node moves the preview and still opens nothing.
+    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    expect(canvas).toHaveAttribute('data-preview', ANA_ID);
+    expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
+
+    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    const sheet = await screen.findByRole('region', { name: 'Inspector' });
+    expect(sheet).toHaveAttribute('data-snap', 'peek');
+    expect(within(sheet).getByRole('heading', { name: 'Ana Diaz' })).toBeInTheDocument();
+    expect(canvas).toHaveAttribute('data-preview', '');
+  });
+
+  it('a stage tap clears the preview and closes the sheet', async () => {
+    mockTouchInput();
+    act(() => setViewportWidth(390));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await screen.findByRole('region', { name: 'Inspector' });
+    await user.click(within(canvas).getByRole('button', { name: 'stage' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument());
+  });
+
+  it('a pointer still opens on one click, and shows no Select toggle', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    expect(canvas).toHaveAttribute('data-preview', '');
+    expect(await screen.findByRole('group', { name: 'Acme Corp' })).toBeInTheDocument();
+  });
+
+  it('Select mode marks nodes by tapping instead of previewing or opening them', async () => {
+    mockTouchInput();
+    act(() => setViewportWidth(820));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByRole('button', { name: 'Select', pressed: true })).toBeInTheDocument();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-marked', 'true');
+    expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-marked', 'true');
+    expect(canvas).toHaveAttribute('data-preview', '');
+    expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument();
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('the context menu offers Open details, Expand, Pin and Hide, and Pin sticks', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+
+    const menu = await screen.findByRole('menu', { name: 'Actions for Ana Diaz' });
+    for (const name of ['Open details', 'Expand', 'Pin', 'Hide', 'Make seed']) {
+      expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
+    }
+    await user.click(within(menu).getByRole('menuitem', { name: 'Pin' }));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    expect(await screen.findByRole('menuitem', { name: 'Unpin' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Open details' }));
+    expect(await screen.findByRole('group', { name: 'Ana Diaz' })).toBeInTheDocument();
+  });
+
+  it('the context menu hides a node', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Hide' }));
+    await waitFor(() => expect(within(canvas).queryByRole('button', { name: 'Ana Diaz' })).not.toBeInTheDocument());
+  });
+
+  it('has no axe violations on a phone with the sheet open', async () => {
+    act(() => setViewportWidth(390));
+    const user = userEvent.setup();
+    const { container } = renderExplorer();
+    const canvas = await canvasReady();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await screen.findByRole('region', { name: 'Inspector' });
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+/**
+ * An open shows the best 30 neighbours and a "+N more" stub (#667); expanding that stub shows 30 more.
+ * Do it `times` times, waiting for each count, so the graph reaches (or stops at) `cap` real nodes.
+ */
+async function expandStubTimes(user: ReturnType<typeof userEvent.setup>, canvas: HTMLElement, times: number, cap: number) {
+  for (let i = 0; i < times; i += 1) {
+    await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
+    await screen.findByLabelText(`${Math.min(cap, 31 + 30 * (i + 1))} of ${cap} nodes`);
+  }
+}
+
+describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
+  it('a coarse pointer caps the graph at 120 nodes, asks for 120 and names it in the CapWarning', async () => {
+    mockTouchInput();
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    // The DOI truncation reads the budget's cap (120), not a hardcoded 300.
+    expect(await screen.findByLabelText('31 of 120 nodes')).toBeInTheDocument();
+    expect(bodies[0]?.cap).toBe(120);
+
+    await expandStubTimes(user, canvas, 4, 120);
+    expect(await screen.findByText(/^Showing 120 nodes/)).toBeInTheDocument();
+    expect(screen.queryByText(CAP_WARNING_TEXT)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('120 of 120 nodes')).toBeInTheDocument();
+    expect(canvas).toHaveAttribute('data-pixel-ratio-cap', '2');
+  });
+
+  it('a compact window caps at 120 even with a mouse', async () => {
+    act(() => setViewportWidth(390));
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    expect(bodies[0]?.cap).toBe(120);
+    await expandStubTimes(user, canvas, 4, 120);
+    expect(await screen.findByText(/^Showing 120 nodes/)).toBeInTheDocument();
+  });
+
+  it('keeps 300 on a roomy window with a precise pointer', async () => {
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    renderExplorer();
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
+    expect(bodies[0]?.cap).toBe(300);
+    expect(canvas).toHaveAttribute('data-pixel-ratio-cap', '');
+  });
+
+  it('offers the list as the default on a phone when the graph has over 120 nodes, and view=graph overrides it', async () => {
+    useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 200) }));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    // 31 nodes, then three stub expansions: 121 real nodes, one over the compact budget.
+    await expandStubTimes(user, canvas, 3, 300);
+
+    // Narrowing the window (a rotation, a resize) keeps the 121 nodes: the list is now the default.
+    act(() => setViewportWidth(390));
+    expect(await screen.findByRole('region', { name: 'Graph as a list' })).toBeInTheDocument();
+    expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
+    expect(screen.getByText(/more than 120 nodes/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Graph view' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('view')).toBe('graph'));
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument();
+  });
+
+  it('never defaults to the list on a phone for a graph within the budget', async () => {
+    act(() => setViewportWidth(390));
+    renderExplorer();
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Graph as a list' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the selection and the inspector across a rotation 820 to 1180 to 1440', async () => {
+    act(() => setViewportWidth(820));
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
+    await screen.findByRole('region', { name: 'Inspector' });
+    expect(canvas).toHaveAttribute('data-reveal-right', '360');
+
+    act(() => setViewportWidth(1180));
+    // Still medium at 1180: the inspector stays an overlay and the SAME canvas element stays mounted.
+    expect(screen.getByTestId('fake-canvas')).toBe(canvas);
+    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+
+    act(() => setViewportWidth(1440));
+    expect(screen.getByTestId('fake-canvas')).toBe(canvas);
+    expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
+    expect(canvas).toHaveAttribute('data-reveal-right', '0');
+    expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-selected', 'true');
   });
 });

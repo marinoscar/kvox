@@ -5,7 +5,7 @@ import { PassThrough } from 'node:stream';
 import { DEFAULT_KVOX_BRAND, assertFontsPresent, defaultPdfFontDir } from '../../core/index.js';
 import { NoteExporterRegistry } from './note-exporter.registry.js';
 import { PdfNoteExporter, noteFooterText } from './pdf.exporter.js';
-import { collect, extractPdfText, noteDocument } from '../testing/export-fixtures.js';
+import { RICH_NOTE_BODY, collect, extractPdfText, noteDocument } from '../testing/export-fixtures.js';
 
 // The product name comes from the host's brand port, never a literal; the default brand is the
 // one a host that binds none gets.
@@ -144,6 +144,105 @@ describe('PdfNoteExporter', () => {
     const text = await extractPdfText(await collect(exporter, noteDocument({ body: '' })));
 
     expect(text).toContain('Concise Meeting Notes');
+  });
+
+  describe('rich bodies', () => {
+    const render = async (body: string): Promise<string> =>
+      extractPdfText(await collect(exporter, noteDocument({ body })));
+
+    const pageTotals = (text: string): { pages: number; totals: Set<string> } => {
+      const matches = [...text.matchAll(/Page (\d+) of (\d+)/g)];
+
+      return { pages: matches.length, totals: new Set(matches.map((m) => m[2]!)) };
+    };
+
+    it('renders the rich fixture: table cells, tasks, autolink, no raw delimiters', async () => {
+      const text = await render(RICH_NOTE_BODY);
+
+      for (const expected of ['Item', 'Owner', 'Cost', 'Status', 'Hosting', 'Licences', '1,200', 'declined']) {
+        expect(text).toContain(expected);
+      }
+
+      expect(text).not.toContain('|---');
+      expect(text).not.toContain('| :---');
+      expect(text).toContain('Send the minutes');
+      expect(text).toContain('Book the venue');
+      expect(text).toContain('Confirm the budget with finance');
+      expect(text).toContain('https://example.test/risks');
+      expect(text).toContain('[roadmap]'.slice(1, -1));
+      expect(text).toContain('Revisit in Q4');
+      expect(text).toContain('Provenance travels with the export.');
+      expect(text).toContain('export const answer: number = 42;');
+      expect(text).toContain('Exported Sep 14, 2026');
+    });
+
+    it('paginates a code block of more than 1000 lines with a consistent total', async () => {
+      const code = Array.from({ length: 1200 }, (_, i) => `line ${i} of the code`).join('\n');
+      const text = await render(['```txt', code, '```'].join('\n'));
+      const { pages, totals } = pageTotals(text);
+
+      expect(pages).toBeGreaterThan(10);
+      expect(totals.size).toBe(1);
+      expect(Number([...totals][0])).toBe(pages);
+      expect(text).toContain('line 0 of the code');
+      expect(text).toContain('line 1199 of the code');
+    });
+
+    it('paginates a 300-row table and repeats the header on every page', async () => {
+      const rows = Array.from({ length: 300 }, (_, i) => `| row${i} | value${i} |`).join('\n');
+      const text = await render(`| Alpha | Beta |\n| --- | --- |\n${rows}`);
+      const { pages, totals } = pageTotals(text);
+
+      expect(pages).toBeGreaterThan(3);
+      expect(totals.size).toBe(1);
+      expect(text.match(/Alpha/g)!.length).toBeGreaterThanOrEqual(pages - 1);
+      expect(text).toContain('row0');
+      expect(text).toContain('row299');
+      expect(text).toContain('value299');
+    });
+
+    it('renders a 20-column table', async () => {
+      const header = Array.from({ length: 20 }, (_, i) => `H${i}`);
+      const row = Array.from({ length: 20 }, (_, i) => `c${i}`);
+      const text = await render(
+        [`| ${header.join(' | ')} |`, `|${' --- |'.repeat(20)}`, `| ${row.join(' | ')} |`].join('\n'),
+      );
+
+      expect(text).toContain('H19');
+      expect(text).toContain('c19');
+    });
+
+    it('renders a table with no body rows and one with an empty header', async () => {
+      const headerOnly = await render('| Only | Header |\n| --- | --- |');
+
+      expect(headerOnly).toContain('Only');
+
+      const blankHeader = await render('|  |  |\n| --- | --- |\n| a | b |\n\nAfter the table.');
+
+      expect(blankHeader).toContain('After the table.');
+    });
+
+    it('wraps a very long unbroken URL and word instead of overflowing or looping', async () => {
+      const url = `https://example.test/${'segment/'.repeat(80)}end`;
+      const word = 'x'.repeat(400);
+      const text = await render(`See <${url}> now.\n\n${word}\n\n- ${word}`);
+      const flat = text.replace(/\s+/g, '');
+
+      expect(flat).toContain(url);
+      expect(flat).toContain(word);
+    });
+
+    it('survives deeply nested lists and quotes, and a quote that crosses a page', async () => {
+      const nested = Array.from({ length: 10 }, (_, i) => `${'  '.repeat(i)}- level ${i}`).join('\n');
+      const longQuote = Array.from({ length: 120 }, (_, i) => `> quoted line ${i}\n>`).join('\n');
+      const text = await render(`${nested}\n\n${longQuote}`);
+      const { pages, totals } = pageTotals(text);
+
+      expect(text).toContain('level 9');
+      expect(text).toContain('quoted line 119');
+      expect(pages).toBeGreaterThan(1);
+      expect(totals.size).toBe(1);
+    });
   });
 
   it('destroys the destination when the render fails, so nothing half-written is stored', async () => {
