@@ -1,27 +1,27 @@
 /**
- * `ExplorerToolbar` — filters, time and view controls above the canvas (#374;
- * spec §22.2).
+ * `ExplorerToolbar` — the top bar of the Insight Canvas: title, the view
+ * controls and the node count (#374; spec §22.2; reshaped by GIC-08, #669).
  *
- * Every filter here is SERVER-SIDE: toggling one prunes what no longer
- * qualifies and narrows every later expand, so a hidden type is never fetched.
- * Chips are toggle buttons (`aria-pressed`) rather than checkboxes because
- * they read as a row of on/off filters, which is what they are.
+ * The FILTERS moved to `ExplorerFilters` (the shell's `facets` slot). What is
+ * left here is how the graph is viewed:
  *
- * Two rows: filters (domains, types, the relation menu) scroll horizontally on
- * a phone rather than wrapping into a wall of chips; time and view controls sit
- * below.
+ *   - expanded and medium: Fit, Reset, List view and the count, inline;
+ *   - compact (phone): the title, the "Select" toggle (touch), the count and one
+ *     overflow menu (Fit, Reset, List view), so the bar never wraps.
+ *
+ * "Select" is the touch replacement for shift-click and lasso: with it on, a
+ * tap marks a node instead of previewing or opening it.
  */
 
-import CheckIcon from '@mui/icons-material/Check';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
-import FilterListIcon from '@mui/icons-material/FilterList';
+import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
@@ -29,24 +29,22 @@ import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import ToggleButton from '@mui/material/ToggleButton';
 import Typography from '@mui/material/Typography';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
-import { AsOfSlider } from './AsOfSlider.js';
-import type { DomainOption, FilterOption } from '../../../headless/utils/explorerFilters.js';
 import { EXPLORER_NODE_CAP } from './explorerModel.js';
+import type { InputModality } from './shell/useInputModality.js';
+import type { WindowClass } from './shell/useWindowClass.js';
 
+/**
+ * Props of {@link ExplorerToolbar}.
+ *
+ * @stability experimental
+ */
 export interface ExplorerToolbarProps {
-  domains: DomainOption[];
-  nodeTypes: FilterOption[];
-  relationTypes: FilterOption[];
-  hiddenTypes: ReadonlySet<string>;
-  hiddenRelationTypes: ReadonlySet<string>;
-  onToggleType: (key: string) => void;
-  onToggleDomain: (domain: DomainOption) => void;
-  onToggleRelationType: (key: string) => void;
-  asOf: string | null;
-  asOfMin: string;
-  onAsOfChange: (value: string | null) => void;
+  /** The heading and anything that belongs beside it. */
+  title: ReactNode;
+  windowClass: WindowClass;
+  inputModality: InputModality;
   onFit: () => void;
   onReset: () => void;
   listView: boolean;
@@ -54,140 +52,139 @@ export interface ExplorerToolbarProps {
   listViewForced: boolean;
   onToggleListView: () => void;
   nodeCount: number;
+  /** The cap in force (the budget's); defaults to `EXPLORER_NODE_CAP`. */
+  nodeCap?: number;
+  /** "Select" mode (touch): a tap marks nodes. */
+  selectMode: boolean;
+  onToggleSelectMode: () => void;
+  /** Nodes marked in Select mode. */
+  markedCount: number;
+  onClearMarked: () => void;
   disabled?: boolean;
 }
 
+/**
+ * The explorer's top bar: title, view controls, Select mode and the node count; collapses its controls into one menu on a phone.
+ *
+ * @stability experimental
+ */
 export function ExplorerToolbar(props: ExplorerToolbarProps) {
   const {
-    domains,
-    nodeTypes,
-    relationTypes,
-    hiddenTypes,
-    hiddenRelationTypes,
-    onToggleType,
-    onToggleDomain,
-    onToggleRelationType,
-    asOf,
-    asOfMin,
-    onAsOfChange,
+    title,
+    windowClass,
+    inputModality,
     onFit,
     onReset,
     listView,
     listViewForced,
     onToggleListView,
     nodeCount,
+    nodeCap = EXPLORER_NODE_CAP,
+    selectMode,
+    onToggleSelectMode,
+    markedCount,
+    onClearMarked,
     disabled,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const compact = windowClass === 'compact';
+  const touch = inputModality === 'touch';
 
-  const domainShown = (domain: DomainOption) =>
-    domain.nodeTypes.every((key) => !hiddenTypes.has(key)) &&
-    domain.relationTypes.every((key) => !hiddenRelationTypes.has(key));
+  const count = (
+    <Typography
+      variant="body2"
+      color="text.secondary"
+      sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+      aria-label={`${nodeCount} of ${nodeCap} nodes`}
+    >
+      {nodeCount} / {nodeCap}
+    </Typography>
+  );
 
-  const hiddenRelationCount = relationTypes.filter((r) => hiddenRelationTypes.has(r.key)).length;
+  const selectToggle = touch && !listView && (
+    <ToggleButton
+      value="select"
+      size="small"
+      selected={selectMode}
+      aria-pressed={selectMode}
+      onChange={onToggleSelectMode}
+      disabled={disabled}
+      sx={{ textTransform: 'none', px: 1.25, minHeight: 44, whiteSpace: 'nowrap' }}
+    >
+      <CheckBoxOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
+      Select
+    </ToggleButton>
+  );
+
+  const marked = markedCount > 0 && (
+    <Chip
+      size="small"
+      color="primary"
+      label={`${markedCount} selected`}
+      onDelete={onClearMarked}
+      aria-label={`${markedCount} selected. Press delete to clear the selection.`}
+    />
+  );
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.5, minWidth: 0 }}>
-      <Box
-        role="group"
-        aria-label="Filter the graph"
-        sx={{
-          display: 'flex',
-          gap: 1,
-          alignItems: 'center',
-          overflowX: 'auto',
-          flexWrap: { xs: 'nowrap', md: 'wrap' },
-          pb: 0.5,
-          minWidth: 0,
-        }}
-      >
-        {domains.map((domain) => {
-          const shown = domainShown(domain);
-          return (
-            <Chip
-              key={`domain-${domain.key}`}
-              label={domain.label}
-              icon={shown ? <CheckIcon fontSize="small" /> : undefined}
-              color={shown ? 'primary' : 'default'}
-              variant="outlined"
-              onClick={() => onToggleDomain(domain)}
-              aria-pressed={shown}
-              aria-label={`${domain.label} domain`}
-              disabled={disabled}
-            />
-          );
-        })}
-        {domains.length > 0 && <Divider orientation="vertical" flexItem />}
-        {nodeTypes.map((type) => {
-          const shown = !hiddenTypes.has(type.key);
-          return (
-            <Chip
-              key={type.key}
-              label={type.label}
-              size="small"
-              icon={shown ? <CheckIcon fontSize="small" /> : undefined}
-              color={shown ? 'primary' : 'default'}
-              variant="outlined"
-              onClick={() => onToggleType(type.key)}
-              aria-pressed={shown}
-              disabled={disabled}
-            />
-          );
-        })}
-        {relationTypes.length > 0 && (
-          <>
-            <Button
-              size="small"
-              startIcon={<FilterListIcon />}
-              onClick={(event) => setMenuAnchor(event.currentTarget)}
-              aria-haspopup="menu"
-              aria-expanded={Boolean(menuAnchor)}
-              disabled={disabled}
-              sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, minWidth: 0, flex: '1 1 auto' }}>{title}</Box>
+      {marked}
+      {selectToggle}
+      {compact ? (
+        <>
+          {count}
+          <IconButton
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={Boolean(menuAnchor)}
+            onClick={(event) => setMenuAnchor(event.currentTarget)}
+            sx={{ width: 44, height: 44 }}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+            <MenuItem
+              disabled={listView}
+              onClick={() => {
+                setMenuAnchor(null);
+                onFit();
+              }}
             >
-              {hiddenRelationCount > 0 ? `Relations (${hiddenRelationCount} hidden)` : 'Relations'}
-            </Button>
-            <Menu
-              anchorEl={menuAnchor}
-              open={Boolean(menuAnchor)}
-              onClose={() => setMenuAnchor(null)}
-              slotProps={{ paper: { sx: { maxHeight: 360 } } }}
+              <ListItemIcon>
+                <CenterFocusStrongIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Fit</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={disabled}
+              onClick={() => {
+                setMenuAnchor(null);
+                onReset();
+              }}
             >
-              {relationTypes.map((rel) => {
-                const shown = !hiddenRelationTypes.has(rel.key);
-                return (
-                  <MenuItem
-                    key={rel.key}
-                    role="menuitemcheckbox"
-                    aria-checked={shown}
-                    onClick={() => onToggleRelationType(rel.key)}
-                    dense
-                  >
-                    <ListItemIcon>
-                      <Checkbox edge="start" size="small" checked={shown} tabIndex={-1} disableRipple />
-                    </ListItemIcon>
-                    <ListItemText>{rel.label}</ListItemText>
-                  </MenuItem>
-                );
-              })}
-            </Menu>
-          </>
-        )}
-      </Box>
-
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 1,
-          alignItems: 'center',
-          flexWrap: { xs: 'wrap', sm: 'nowrap' },
-          minWidth: 0,
-        }}
-      >
-        <Box sx={{ flex: '1 1 260px', minWidth: 0, display: 'flex' }}>
-          <AsOfSlider minDate={asOfMin} value={asOf} onChange={onAsOfChange} disabled={disabled} />
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', ml: 'auto' }}>
+              <ListItemIcon>
+                <RestartAltIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Reset</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={listViewForced}
+              selected={listView}
+              onClick={() => {
+                setMenuAnchor(null);
+                onToggleListView();
+              }}
+            >
+              <ListItemIcon>
+                <ViewListIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{listView ? 'Graph view' : 'List view'}</ListItemText>
+            </MenuItem>
+          </Menu>
+        </>
+      ) : (
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <Button size="small" startIcon={<CenterFocusStrongIcon />} onClick={onFit} disabled={listView}>
             Fit
           </Button>
@@ -206,30 +203,20 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
             <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />
             List view
           </ToggleButton>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', ml: 0.5 }}
-            aria-label={`${nodeCount} of ${EXPLORER_NODE_CAP} nodes`}
-          >
-            {nodeCount} / {EXPLORER_NODE_CAP}
-          </Typography>
+          <Box sx={{ ml: 0.5 }}>{count}</Box>
         </Box>
-      </Box>
+      )}
     </Box>
   );
 }
 
-/** The toolbar's shape while the ontology and first slice load. */
+/** The bar's shape while the ontology and first slice load. */
 export function ExplorerToolbarSkeleton() {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.5 }} aria-hidden>
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        {[72, 88, 64, 80, 76].map((width, index) => (
-          <Skeleton key={index} variant="rounded" width={width} height={24} />
-        ))}
-      </Box>
-      <Skeleton variant="rounded" height={32} />
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }} aria-hidden>
+      <Skeleton variant="rounded" width={72} height={32} />
+      <Box sx={{ flex: 1 }} />
+      <Skeleton variant="rounded" width={180} height={32} />
     </Box>
   );
 }

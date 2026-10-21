@@ -57,6 +57,8 @@ export interface UseGraphExplorerOptions {
   relationTypes: readonly string[];
   /** Colour tokens for nodes and edges; defaults to MUI's light palette. Pass the theme to restyle on a mode change. */
   palette?: ExplorerPalette;
+  /** Most nodes the graph may hold; defaults to `EXPLORER_NODE_CAP`. A phone or a coarse pointer passes the smaller `explorerBudgets` cap (GIC-08). Existing nodes are never dropped when it shrinks. */
+  nodeCap?: number;
 }
 
 /**
@@ -117,9 +119,10 @@ function allowedList(universe: readonly string[], hidden: ReadonlySet<string>): 
  */
 export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExplorerResult {
   const host = useKvoxHost();
-  const { nodeTypes, relationTypes, palette } = options;
+  const { nodeTypes, relationTypes, palette, nodeCap = EXPLORER_NODE_CAP } = options;
 
-  const stateRef = useRef<ExplorerState>(createExplorerState());
+  const stateRef = useRef<ExplorerState>(createExplorerState(nodeCap));
+  stateRef.current.cap = nodeCap;
   const [version, setVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [expandingId, setExpandingId] = useState<string | null>(null);
@@ -188,11 +191,11 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       const requested = [...new Set(expandFrom)].slice(0, EXPLORER_MAX_REQUEST_SEEDS);
       try {
         const slice = await expandGraph(host, 
-          { nodeIds: requested, ...filtersFor(base), cap: EXPLORER_NODE_CAP },
+          { nodeIds: requested, ...filtersFor(base), cap: stateRef.current.cap },
           controller.signal,
         );
         if (!isMounted() || controller.signal.aborted) return;
-        const next = createExplorerState();
+        const next = createExplorerState(stateRef.current.cap);
         next.asOf = base.asOf;
         next.hiddenTypes = new Set(base.hiddenTypes);
         next.hiddenRelationTypes = new Set(base.hiddenRelationTypes);
@@ -218,7 +221,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
 
   const load = useCallback(
     async (seedIds: readonly string[]) => {
-      const base = createExplorerState();
+      const base = createExplorerState(stateRef.current.cap);
       base.asOf = stateRef.current.asOf;
       base.hiddenTypes = new Set(stateRef.current.hiddenTypes);
       base.hiddenRelationTypes = new Set(stateRef.current.hiddenRelationTypes);
@@ -233,7 +236,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
   const loadHandoff = useCallback(
     async (handoff: ExplorerHandoff) => {
       // Render the overview's nodes NOW, at their overview positions.
-      const next = createExplorerState();
+      const next = createExplorerState(stateRef.current.cap);
       seedFromNodes(next, handoff.seedIds, handoff.nodes, optionsRef.current.palette);
       stateRef.current = next;
       setCapped(false);
@@ -248,7 +251,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
         setNotFound(false);
         try {
           const slice = await expandGraph(host, 
-            { nodeIds: seeds, ...filtersFor(stateRef.current), cap: EXPLORER_NODE_CAP },
+            { nodeIds: seeds, ...filtersFor(stateRef.current), cap: stateRef.current.cap },
             controller.signal,
           );
           if (!isMounted() || controller.signal.aborted) return;
@@ -385,7 +388,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
 
   const reset = useCallback(() => {
     controllerRef.current?.abort();
-    const next = createExplorerState();
+    const next = createExplorerState(stateRef.current.cap);
     next.hiddenTypes = new Set(stateRef.current.hiddenTypes);
     next.hiddenRelationTypes = new Set(stateRef.current.hiddenRelationTypes);
     next.asOf = stateRef.current.asOf;
