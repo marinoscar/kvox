@@ -359,20 +359,22 @@ describe('search on the kvox-api test host', () => {
 
         for (const note of own.notes) await handler.process(indexJob('note', note.id));
 
-        // A foreign-model vector sitting exactly on the logistics axis for every chunk.
-        const ghost = `[${sparseVector({ 2: 1 }).join(',')}]`;
-
+        // Relabel every vector of these notes as a foreign model: the vectors still sit
+        // exactly where the query points, but none of them belongs to the active model.
         await db.prisma.$executeRaw`
-          INSERT INTO search_embeddings (id, chunk_id, model, dimensions, embedding, created_at)
-          SELECT gen_random_uuid(), c.id, 'ghost-model', ${SEARCH_EMBEDDING_DIMENSIONS}, ${ghost}::vector, now()
-          FROM search_chunks c WHERE c.document_id = ANY(${own.notes.map((n) => n.id)}::uuid[])`;
+          UPDATE search_embeddings e SET model = 'ghost-model'
+          FROM search_chunks c
+          WHERE c.id = e.chunk_id AND c.document_id = ANY(${own.notes.map((n) => n.id)}::uuid[])`;
 
         const result = await first
           .get(SearchService)
           .search({ q: 'venue catering offsite', limit: 20 }, principalOf(own.ownerId));
 
-        // 'ghost-model' would match perfectly (cosine 1); the active model has nothing on that axis.
-        expect(result.results).toEqual([]);
+        // Unfiltered, the probe would see the ghost rows and the vector arm would run (and
+        // match at cosine 1). Filtered on the active model there is nothing to compare with,
+        // so the semantic arm stands down; any hit comes from full text alone.
+        expect(result.semantic).toBe(false);
+        expect(result.semanticReason).toBe('no_indexed_content');
       } finally {
         await first.close();
       }
