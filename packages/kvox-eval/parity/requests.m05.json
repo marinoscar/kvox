@@ -18,7 +18,7 @@
     "model": "gpt-parity-extract",
     "request": {
       "input": "# Meeting\nDate: 2026-02-05\nTitle: Hosting vendor selection for the pilot\n\n# Context\nBackground the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as `C`.\nChoosing where the Northwind pilot services will be hosted.\n\n# Known entities\nk1 | Person | Alex Rivera | aka: Alex\nk2 | Person | Jonah Jiménez | aka: JJ, Jonah Jimenez\nk3 | Person | Priya Raman | aka: Priya\nk4 | Organization | Northwind Robotics | aka: NWR, Northwind\nk5 | Organization | Larkspur Labs | aka: Larkspur\nk6 | Project | Pick-path pilot | aka: the pilot, NWR pilot\n\n# Speakers\nA = Alex Rivera (k1)\nB = Priya Raman (k3)\nC = Jonah Jiménez (k2)\nD = Theo Lindqvist\n\n# Note (version 1)\n# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Northwind pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Theo Lindqvist, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JJ argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Northwind requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Priya judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Theo Lindqvist** — send committed-use pricing by Friday February 13, to Alex with Priya copied.\n- **JJ** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Theo is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n\n\n# Transcript\ns1 [00:00:00] Alex Rivera: Thanks for joining, Theo. For context, we need somewhere to host the services for the Northwind pick-path pilot, and we're deciding this week.\ns2 [00:00:09] Theo Lindqvist: Happy to help. I'm Theo Lindqvist, account manager at Estuary Cloud. I look after most of our consulting partners.\ns3 [00:00:17] Priya Raman: Our shortlist is Estuary's managed Kubernetes or running it ourselves on a small cluster.\ns4 [00:00:23] Jonah Jiménez: I'd rather not run our own cluster for a pilot. JJ's opinion, for what it's worth, is that we'd spend a week on plumbing we don't need.\ns5 [00:00:34] Alex Rivera: That was going to be my question for you, JJ. How much effort is managed Kubernetes on Estuary?\ns6 [00:00:42] Jonah Jiménez: A couple of days to set up the pipelines. We've done it before on another client.\ns7 [00:00:49] Theo Lindqvist: And we can give you a dedicated namespace with support included for the length of the pilot.\ns8 [00:00:56] Priya Raman: What about data residency? Northwind is strict about keeping floor data in the EU.\ns9 [00:01:03] Theo Lindqvist: Our Frankfurt region covers that. All data stays in the EU.\ns10 [00:01:08] Jonah Jiménez: Has Frankfurt been stable? I remember some noise about outages.\ns11 [00:01:12] Theo Lindqvist: There were two short outages in Frankfurt last year, both under an hour. Nothing this year.\ns12 [00:01:19] Priya Raman: That's acceptable for a pilot.\ns13 [00:01:22] Alex Rivera: Then I think we're agreed. We'll host the pilot on Estuary Cloud managed Kubernetes in the Frankfurt region.\ns14 [00:01:30] Priya Raman: Agreed.\ns15 [00:01:31] Jonah Jiménez: Agreed. I'll start on the pipelines Monday.\ns16 [00:01:34] Alex Rivera: Theo, the missing piece is pricing. What's the timeline on a committed-use quote?\ns17 [00:01:40] Theo Lindqvist: I'll send you committed-use pricing by Friday February 13.\ns18 [00:01:44] Alex Rivera: Good. Please send it to me and copy Priya.\ns19 [00:01:49] Theo Lindqvist: Will do. And a small thing about me, I'm much better on email than on calls, I'm on the road a lot.\ns20 [00:01:58] Alex Rivera: Email it is. JJ, anything else you need from Theo?\ns21 [00:02:03] Jonah Jiménez: Just the namespace and credentials once the contract is signed.\ns22 [00:02:07] Theo Lindqvist: Those usually take a day after signature.\ns23 [00:02:11] Priya Raman: Then the critical path is really the pricing and our own sign-off.\ns24 [00:02:16] Alex Rivera: Right. Let's reconvene when the pricing is in. Thanks Theo.",
-      "instructions": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.\n\n## Rules\n1. Cite only ids you were given: `s#` for a transcript line, `N` for the note, `C` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.\n2. Never propose a row you cannot cite.\n3. When a mention is one of the known entities, use its `k#` id as `ref` (or as an endpoint). Otherwise give it a new ref `e1`, `e2`, … and use that ref in relations and facts. The meeting itself is `meeting`.\n4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.\n5. A Commitment needs an owner named or clearly implied by the source; otherwise it is not a Commitment.\n6. A reversed decision is a new Decision; never restate the earlier one as changed.\n7. Resolve relative dates (\"next Friday\", \"in Q2\") against the meeting date 2026-02-05. Dates are YYYY-MM-DD. When the source is not precise about a date, write `precision: \"unknown\"` (and null dates) rather than guessing.\n8. Mark a person fact's `sensitivity` honestly: `sensitive` means health, legal, financial or similarly weighty personal information.\n9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type's disambiguation lines below; put recurring topics in `meeting.topics` instead.\n10. Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing `C`, and prefer the Context's spelling of a name over the transcript's.\n11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the Context, note or transcript states them — e.g. \"Joe, VP of Supply Chain at Microsoft\" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft {title: \"VP\", businessUnit: \"Supply Chain\"}.\n12. Propose at most 28 entities, 28 relations and 24 facts. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.\n\n## Entity types\n\n### Person (Person)\nA human being: one specific, individual person named or unambiguously identified in the source.\n- Never a role (\"the CIO\"), never a team, never an organization acting collectively.\n- Positive: \"Sarah Chen\"; \"the Acme CIO whose name was given as Marcus Webb.\"\n- Negative: \"the data team at EY\" is an Organization, or a Person if and only if one specific human is meant.\n- Negative: \"whoever's on call\" names no specific human, so there is nothing to create.\n\n### Organization (Organization)\nA company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision.\n- Positive: \"EY\" (a company); \"the data team at EY\" when a commitment is owed to that team specifically rather than to an individual within it.\n- Negative: a team mentioned only in passing, with no commitment or decision naming it as a party, is not an Organization; do not create one speculatively.\n- Never a single human being acting for the organization: that is a Person.\nAttributes:\n- website (url): The organization's website address, only if the source states it explicitly.\n\n### Topic (Topic)\nA recurring subject of discussion that is not itself a unit of work, e.g. \"AI governance\", \"licensing cost\", \"change management\".\n- Something with an owner, a start and an expected end that work attaches to is a Project, not a Topic.\n- A named product, tool or technology is a Product (when the work domain is on), not a Topic.\n- Prefer reusing an existing Topic label over creating a near-synonym.\n\n### Project (Project)\nA named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. \"Q2 pilot\" or \"the vendor migration\".\n- A recurring meeting topic with no start or end and nothing attaching to it as a unit of work is a topic, not a Project.\n- Do not create a Project for every recurring conversation subject; create one only when it anchors work.\nAttributes:\n- status (select, planned|active|done|cancelled): Where the project stands, only if the source says so.\n- startDate (date): The date the project started or is planned to start, if stated.\n- endDate (date): The date the project ended or is expected to end, if stated.\n\n### Product (Product)\nA named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. \"Microsoft Copilot\", \"Salesforce\", \"SAP S/4HANA\".\n- The rollout or adoption effort is a Project (\"Copilot rollout\"); the thing being rolled out is the Product (\"Microsoft Copilot\").\n- The vendor company is an Organization linked by OFFERED_BY, never folded into the product label.\nAttributes:\n- category (select, software|platform|ai_model|hardware|service|other): What kind of product this is, only if the source says so.\n- vendorName (text): The name of the vendor that offers the product, only if the source states it. A resolution hint, not a link.\n\n### Claim (Claim)\nA dated statement of fact about an entity that is neither a decision nor a commitment, e.g. \"the budget was cut 20%\" or \"the pilot moved to Q2\".\n- A choice that was made is a Decision, not a Claim.\n- A task with an owner is a Commitment, not a Claim.\n- A fact about a Person as an individual rather than about their work is a PersonFact.\n\n### Person fact (PersonFact)\nA statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style.\n- A fact about the person's job, employer or role is a Claim (or a relation), not a PersonFact.\n- Health, legal, financial or similarly weighty personal information is sensitive and must be marked so.\n\n### Commitment (Commitment)\nA task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. \"Sarah will send the updated proposal by Friday\".\n- No owner named or clearly implied means it is not a Commitment: \"we should probably look into that\" is a Claim at most, or nothing.\n- Never force-fit a sentence into a Commitment because it sounds task-shaped.\n\n### Decision (Decision)\nA choice that was made: what was chosen and, when the source states it, the option that was rejected.\n- A later reversal is a new Decision that supersedes the old one; never edit the earlier Decision.\n- A statement of fact that involves no choice is a Claim, not a Decision.\nAttributes:\n- rejectedOption (text): The option that was considered and rejected, only if the source states it.\n\n## Relation types\n- BROADER: Topic → Topic — A topic that is a narrower part of a broader theme: \"licensing cost\" BROADER \"AI governance\" rolls the narrower topic up into the theme.\n- WORKS_FOR: Person → Organization, temporal — A person is employed by, or works on behalf of, an organization — the one way a person's employer is recorded: \"Joe works for Microsoft\" is Joe WORKS_FOR Microsoft (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.\n- HAS_ROLE: Person → Organization, temporal — A person holds a titled role, optionally within a business unit, at an organization for a period of time: \"Joe, VP of Supply Chain at Microsoft\" is Joe HAS_ROLE Microsoft {title: \"VP\", businessUnit: \"Supply Chain\"}.\n  - title (text): The job title the person holds in this role, e.g. \"Staff Engineer\".\n  - businessUnit (text): The business unit, division, practice or department within the organization this role sits in, e.g. \"Supply Chain\", only if the source states it.\n- REPORTS_TO: Person → Person, temporal — A person reports to another person, their manager, for a period of time.\n- ATTENDED: Person → Meeting — A person took part in a meeting.\n- DISCUSSED: Meeting → Project|Topic|Product|Organization — A meeting discussed a project, topic, product or organization as a substantive subject.\n- PART_OF: Project|Meeting|Topic → Organization|Project — A project belongs to an organization, a meeting belongs to a project, or a topic is scoped under a project.\n\n## Fact kinds\n- claim (Claim): A dated statement of fact about an entity that is neither a decision nor a commitment.\n- person_fact (PersonFact): A statement about a person as an individual (an interest, preference, personal detail or communication style), never about their job. Mark `sensitivity` honestly: `sensitive` for health, legal, financial or similarly weighty information, `personal` otherwise, `business` only when it is work-relevant.\n- commitment (Commitment): A task with an owner (named or clearly implied) and optionally a counterparty and a due date. `status` is open unless the source says it is done or dropped.\n- decision (Decision): A choice that was made; name the rejected option only when the source states it. A reversal is a new decision.",
+      "instructions": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.\n\n## Rules\n1. Cite only ids you were given: `s#` for a transcript line, `N` for the note, `C` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.\n2. Never propose a row you cannot cite.\n3. When a mention is one of the known entities, use its `k#` id as `ref` (or as an endpoint). Otherwise give it a new ref `e1`, `e2`, … and use that ref in relations and facts. The meeting itself is `meeting`.\n4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.\n5. A Commitment needs an owner named or clearly implied by the source; otherwise it is not a Commitment.\n6. A reversed decision is a new Decision; never restate the earlier one as changed.\n7. Resolve relative dates (\"next Friday\", \"in Q2\") against the meeting date 2026-02-05. Dates are YYYY-MM-DD. When the source is not precise about a date, write `precision: \"unknown\"` (and null dates) rather than guessing.\n8. Mark a person fact's `sensitivity` honestly: `sensitive` means health, legal, financial or similarly weighty personal information.\n9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type's disambiguation lines below; put recurring topics in `meeting.topics` instead.\n10. Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing `C`, and prefer the Context's spelling of a name over the transcript's.\n11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the Context, note or transcript states them — e.g. \"Joe, VP of Supply Chain at Microsoft\" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft {title: \"VP\", businessUnit: \"Supply Chain\"}.\n12. Propose at most 28 entities, 28 relations and 24 facts. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.\n\n## Entity types\n\n### Person (Person)\nA human being: one specific, individual person named or unambiguously identified in the source.\n- Never a role (\"the CIO\"), never a team, never an organization acting collectively.\n- Positive: \"Sarah Chen\"; \"the Acme CIO whose name was given as Marcus Webb.\"\n- Negative: \"the data team at EY\" is an Organization, or a Person if and only if one specific human is meant.\n- Negative: \"whoever's on call\" names no specific human, so there is nothing to create.\n\n### Organization (Organization)\nA company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision.\n- Positive: \"EY\" (a company); \"the data team at EY\" when a commitment is owed to that team specifically rather than to an individual within it.\n- Negative: a team mentioned only in passing, with no commitment or decision naming it as a party, is not an Organization; do not create one speculatively.\n- Never a single human being acting for the organization: that is a Person.\nAttributes:\n- website (url): The organization's website address, only if the source states it explicitly.\n\n### Topic (Topic)\nA recurring subject of discussion that is not itself a unit of work, e.g. \"AI governance\", \"licensing cost\", \"change management\".\n- Something with an owner, a start and an expected end that work attaches to is a Project, not a Topic.\n- A named product, tool or technology is a Product (when the work domain is on), not a Topic.\n- Prefer reusing an existing Topic label over creating a near-synonym.\n\n### Project (Project)\nA named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. \"Q2 pilot\" or \"the vendor migration\".\n- A recurring meeting topic with no start or end and nothing attaching to it as a unit of work is a topic, not a Project.\n- Do not create a Project for every recurring conversation subject; create one only when it anchors work.\nAttributes:\n- status (select, planned|active|done|cancelled): Where the project stands, only if the source says so.\n- startDate (date): The date the project started or is planned to start, if stated.\n- endDate (date): The date the project ended or is expected to end, if stated.\n\n### Product (Product)\nA named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. \"Microsoft Copilot\", \"Salesforce\", \"SAP S/4HANA\".\n- The rollout or adoption effort is a Project (\"Copilot rollout\"); the thing being rolled out is the Product (\"Microsoft Copilot\").\n- The vendor company is an Organization linked by OFFERED_BY, never folded into the product label.\nAttributes:\n- category (select, software|platform|ai_model|hardware|service|other): What kind of product this is, only if the source says so.\n- vendorName (text): The name of the vendor that offers the product, only if the source states it. A resolution hint, not a link.\n\n### Claim (Claim)\nA dated statement of fact about an entity that is neither a decision nor a commitment, e.g. \"the budget was cut 20%\" or \"the pilot moved to Q2\".\n- A choice that was made is a Decision, not a Claim.\n- A task with an owner is a Commitment, not a Claim.\n- A fact about a Person as an individual rather than about their work is a PersonFact.\n\n### Person fact (PersonFact)\nA statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style.\n- A fact about the person's job, employer or role is a Claim (or a relation), not a PersonFact.\n- Health, legal, financial or similarly weighty personal information is sensitive and must be marked so.\n\n### Commitment (Commitment)\nA task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. \"Sarah will send the updated proposal by Friday\".\n- No owner named or clearly implied means it is not a Commitment: \"we should probably look into that\" is a Claim at most, or nothing.\n- Never force-fit a sentence into a Commitment because it sounds task-shaped.\n\n### Decision (Decision)\nA choice that was made: what was chosen and, when the source states it, the option that was rejected.\n- A later reversal is a new Decision that supersedes the old one; never edit the earlier Decision.\n- A statement of fact that involves no choice is a Claim, not a Decision.\nAttributes:\n- rejectedOption (text): The option that was considered and rejected, only if the source states it.\n\n### Risk (Risk)\nA risk, issue or blocker that someone raised about a project, product or organization, e.g. \"licence budget not approved could delay the rollout\".\n- A task someone will do is a Commitment.\n- A choice made is a Decision.\n- A neutral statement of fact is a Claim.\n- Only create a Risk when the source frames something as a threat, blocker or problem.\nAttributes:\n- severity (select, low|medium|high): How serious the source makes the risk sound, only if it says so.\n- riskKind (select, risk|issue|blocker): Whether it is a possible future problem (risk), a problem that is already happening (issue) or something that stops work now (blocker).\n- mitigation (text): What was said about reducing or removing the risk, only if the source states it.\n\n## Relation types\n- BROADER: Topic → Topic — A topic that is a narrower part of a broader theme: \"licensing cost\" BROADER \"AI governance\" rolls the narrower topic up into the theme.\n- WORKS_FOR: Person → Organization, temporal — A person is employed by, or works on behalf of, an organization — the one way a person's employer is recorded: \"Joe works for Microsoft\" is Joe WORKS_FOR Microsoft (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.\n- HAS_ROLE: Person → Organization, temporal — A person holds a titled role, optionally within a business unit, at an organization for a period of time: \"Joe, VP of Supply Chain at Microsoft\" is Joe HAS_ROLE Microsoft {title: \"VP\", businessUnit: \"Supply Chain\"}.\n  - title (text): The job title the person holds in this role, e.g. \"Staff Engineer\".\n  - businessUnit (text): The business unit, division, practice or department within the organization this role sits in, e.g. \"Supply Chain\", only if the source states it.\n- REPORTS_TO: Person → Person, temporal — A person reports to another person, their manager, for a period of time.\n- ATTENDED: Person → Meeting — A person took part in a meeting.\n- DISCUSSED: Meeting → Project|Topic|Product|Organization — A meeting discussed a project, topic, product or organization as a substantive subject.\n- PART_OF: Project|Meeting|Topic → Organization|Project — A project belongs to an organization, a meeting belongs to a project, or a topic is scoped under a project.\n\n## Fact kinds\n- claim (Claim): A dated statement of fact about an entity that is neither a decision nor a commitment.\n- person_fact (PersonFact): A statement about a person as an individual (an interest, preference, personal detail or communication style), never about their job. Mark `sensitivity` honestly: `sensitive` for health, legal, financial or similarly weighty information, `personal` otherwise, `business` only when it is work-relevant.\n- commitment (Commitment): A task with an owner (named or clearly implied) and optionally a counterparty and a due date. `status` is open unless the source says it is done or dropped.\n- decision (Decision): A choice that was made; name the rejected option only when the source states it. A reversal is a new decision.\n- risk (Risk): A risk, issue or blocker the source frames as a threat or a problem. `status` is open unless the source says it is mitigated or closed; set `severity` and `riskKind` only when the source indicates them.",
       "maxOutputTokens": 16000,
       "reasoning": {
         "effort": "medium"
@@ -863,7 +863,7 @@
                             "type": "null"
                           }
                         ],
-                        "description": "Commitment status."
+                        "description": "Status, only if the source says so; open otherwise."
                       },
                       "subject": {
                         "anyOf": [
@@ -1016,6 +1016,219 @@
                       "status": {
                         "description": "Always null for this kind.",
                         "type": "null"
+                      },
+                      "subject": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "What it is about (Person|Organization|Project|Product|Topic): a `k#` or `e#`, or null."
+                      },
+                      "title": {
+                        "description": "A short title.",
+                        "type": "string"
+                      },
+                      "validFrom": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "YYYY-MM-DD, or null."
+                      },
+                      "validTo": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "YYYY-MM-DD, or null."
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "statement",
+                      "subject",
+                      "owner",
+                      "counterparty",
+                      "status",
+                      "occurredAt",
+                      "dueAt",
+                      "validFrom",
+                      "validTo",
+                      "precision",
+                      "sensitivity",
+                      "props",
+                      "evidence"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "description": "Risk: A risk, issue or blocker that someone raised about a project, product or organization, e.g. \"licence budget not approved could delay the rollout\".",
+                    "properties": {
+                      "counterparty": {
+                        "description": "Always null for this kind.",
+                        "type": "null"
+                      },
+                      "dueAt": {
+                        "description": "Always null for this kind.",
+                        "type": "null"
+                      },
+                      "evidence": {
+                        "description": "Where this row is stated. At least one.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "quote": {
+                              "description": "An exact quote of at most 200 characters from that line, the note or the Context.",
+                              "type": "string"
+                            },
+                            "source": {
+                              "description": "An `s#` transcript line id, `N` for the note or `C` for the Context — only ids you were given.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "quote"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "kind": {
+                        "const": "risk",
+                        "type": "string"
+                      },
+                      "occurredAt": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "When it happened or was stated (YYYY-MM-DD), or null."
+                      },
+                      "owner": {
+                        "description": "Always null for this kind.",
+                        "type": "null"
+                      },
+                      "precision": {
+                        "description": "How exact the source is about the dates. `unknown` rather than a guess.",
+                        "enum": [
+                          "day",
+                          "month",
+                          "year",
+                          "unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "props": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "mitigation": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "What was said about reducing or removing the risk, only if the source states it."
+                          },
+                          "riskKind": {
+                            "anyOf": [
+                              {
+                                "const": "risk",
+                                "type": "string"
+                              },
+                              {
+                                "const": "issue",
+                                "type": "string"
+                              },
+                              {
+                                "const": "blocker",
+                                "type": "string"
+                              },
+                              {
+                                "const": null,
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Whether it is a possible future problem (risk), a problem that is already happening (issue) or something that stops work now (blocker)."
+                          },
+                          "severity": {
+                            "anyOf": [
+                              {
+                                "const": "low",
+                                "type": "string"
+                              },
+                              {
+                                "const": "medium",
+                                "type": "string"
+                              },
+                              {
+                                "const": "high",
+                                "type": "string"
+                              },
+                              {
+                                "const": null,
+                                "type": "null"
+                              }
+                            ],
+                            "description": "How serious the source makes the risk sound, only if it says so."
+                          }
+                        },
+                        "required": [
+                          "severity",
+                          "riskKind",
+                          "mitigation"
+                        ],
+                        "type": "object"
+                      },
+                      "sensitivity": {
+                        "description": "Always null for this kind.",
+                        "type": "null"
+                      },
+                      "statement": {
+                        "description": "The fact as one self-contained sentence.",
+                        "type": "string"
+                      },
+                      "status": {
+                        "anyOf": [
+                          {
+                            "const": "open",
+                            "type": "string"
+                          },
+                          {
+                            "const": "mitigated",
+                            "type": "string"
+                          },
+                          {
+                            "const": "closed",
+                            "type": "string"
+                          },
+                          {
+                            "const": null,
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Status, only if the source says so; open otherwise."
                       },
                       "subject": {
                         "anyOf": [
