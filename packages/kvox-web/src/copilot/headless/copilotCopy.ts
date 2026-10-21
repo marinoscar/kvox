@@ -71,6 +71,12 @@ export interface CopilotConsentCopy {
   links: readonly CopilotCopyLink[];
   /** The label of the accept button. */
   acceptLabel: string;
+  /**
+   * The label of the accept button when the host offers the choice of provider itself (the
+   * card's `selected` mode), where there is no switch to turn on. It changes only the button,
+   * not what the user agrees to.
+   */
+  acceptSelectedLabel: string;
 }
 
 /**
@@ -121,7 +127,38 @@ export const COPILOT_CONSENT_COPY: CopilotConsentCopy = Object.freeze({
   ]),
   links: COPILOT_TERMS_LINKS,
   acceptLabel: 'Agree and turn on',
+  acceptSelectedLabel: 'Agree and use GitHub Copilot',
 } satisfies CopilotConsentCopy);
+
+/**
+ * The words of the Copilot settings card itself, outside the consent dialog.
+ *
+ * @stability experimental
+ */
+export interface CopilotProviderCopy {
+  /** The card title. */
+  displayName: string;
+  /** The description under the title, beside the card's own enable switch. */
+  description: string;
+  /**
+   * The description when the host offers the choice of provider itself (the card's `selected`
+   * mode): the same sentence without the switch wording.
+   */
+  selectedDescription: string;
+}
+
+/**
+ * The title and description of the Copilot settings card.
+ *
+ * @stability experimental
+ */
+export const COPILOT_PROVIDER_COPY: CopilotProviderCopy = Object.freeze({
+  displayName: 'GitHub Copilot',
+  description:
+    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
+  selectedDescription:
+    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription.',
+} satisfies CopilotProviderCopy);
 
 /**
  * The sentence about the runtime download shown in the consent text while the
