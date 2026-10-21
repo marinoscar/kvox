@@ -204,6 +204,8 @@ interface Settlement {
 /** The embeddings model a run embeds with. */
 interface EmbeddingTarget {
   model: string;
+  /** The model's true width when the port zero-pads to the storage width; recorded in `search_embeddings.dimensions`. */
+  nativeDimensions?: number;
 }
 
 /**
@@ -328,7 +330,10 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
       return;
     }
 
-    const capability: EmbeddingTarget = { model: gate.model };
+    const capability: EmbeddingTarget = {
+      model: gate.model,
+      ...(gate.nativeDimensions !== undefined && { nativeDimensions: gate.nativeDimensions }),
+    };
 
     // -------------------------------------------------------------------------
     // 3. Chunk, and ask the one question that makes an unedited document free.
@@ -393,6 +398,14 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
         capability,
         chunkIds: chunkRows,
       });
+
+      // ⚠ STALE-MODEL VECTORS ARE DELETED ONLY NOW: every chunk of the current
+      // text has a vector under the active model, so search never sees the
+      // document with fewer vectors than before (a delete before or between
+      // batches would make it vanish from the semantic arm mid-reindex). The
+      // search SQL filters on `e.model` regardless, so rows left behind by a
+      // failed run are harmless, merely dead weight the next success removes.
+      await this.deleteStaleVectors(documentType, documentId, capability.model);
 
       await this.prisma.searchIndexState.update({
         where: { documentType_documentId: { documentType, documentId } },
@@ -768,7 +781,7 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
       // `KvoxRateLimitError` on the OWNER's bucket.
       const result = await this.ai.embed(
         { userId: ownerId, orgId: null, feature: SEARCH_EMBED_FEATURE },
-        { inputs: batch.map((chunk) => chunk.text) },
+        { inputs: batch.map((chunk) => chunk.text), purpose: 'document' },
       );
 
       if (result.vectors.length !== batch.length) {
@@ -800,12 +813,31 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
         }
       }
 
-      await this.writeVectors(batch, result.vectors, capability.model);
+      await this.writeVectors(batch, result.vectors, capability);
 
       embedded += batch.length;
     }
 
     return embedded;
+  }
+
+  /**
+   * Delete this document's vectors stored under any model other than the active one.
+   * Runs after all new vectors are written; see the call site.
+   */
+  private async deleteStaleVectors(
+    documentType: SearchDocumentType,
+    documentId: string,
+    model: string,
+  ): Promise<void> {
+    await this.prisma.$executeRaw(Prisma.sql`
+      DELETE FROM search_embeddings e
+      USING search_chunks c
+      WHERE e.chunk_id = c.id
+        AND c.document_type = ${documentType}
+        AND c.document_id = ${documentId}::uuid
+        AND e.model <> ${model}
+    `);
   }
 
   /**
@@ -835,8 +867,12 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
   private async writeVectors(
     batch: readonly { id: string }[],
     vectors: readonly number[][],
-    model: string,
+    capability: EmbeddingTarget,
   ): Promise<void> {
+    const { model } = capability;
+    // The column documents the model's TRUE width; the vector column stays 1536 (zero-padded by the port).
+    const dimensions = capability.nativeDimensions ?? SEARCH_EMBEDDING_DIMENSIONS;
+
     // One interactive transaction per batch: the statements run in order on one
     // connection and commit together, exactly as the array form did.
     await this.prisma.$transaction(async (tx) => {
@@ -853,7 +889,7 @@ export class SearchIndexHandler implements KvoxJobHandler, OnModuleInit {
             ${randomUUID()}::uuid,
             ${chunk.id}::uuid,
             ${model},
-            ${SEARCH_EMBEDDING_DIMENSIONS},
+            ${dimensions},
             ${literal}::vector,
             now()
           )

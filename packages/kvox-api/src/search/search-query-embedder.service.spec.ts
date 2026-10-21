@@ -30,6 +30,7 @@ import {
   type KvoxAiPort,
 } from '../ports/index.js';
 import { QUERY_EMBED_TIMEOUT_MS, SearchQueryEmbedder } from './search-query-embedder.service.js';
+import { MIN_SEMANTIC_SIMILARITY } from './search-semantic.js';
 import {
   SEARCH_EMBEDDING_DIMENSIONS,
   DEFAULT_SEARCH_TYPE_PERMISSIONS,
@@ -111,6 +112,9 @@ describe('SearchQueryEmbedder', () => {
         ok: true,
         provider: 'openai',
         model: 'text-embedding-3-small-2026',
+        // The SQL filter id is the GATE's model, never the reported one.
+        indexModel: 'text-embedding-3-small',
+        minSimilarity: MIN_SEMANTIC_SIMILARITY,
         vector: vector(0.25),
       });
     });
@@ -126,7 +130,17 @@ describe('SearchQueryEmbedder', () => {
 
       expect(ctx).toMatchObject({ userId: USER_ID, orgId: null, feature: 'search.embed' });
       expect(ctx.signal).toBeInstanceOf(AbortSignal);
-      expect(request).toEqual({ inputs: ['the call about refunds'] });
+      expect(request).toEqual({ inputs: ['the call about refunds'], purpose: 'query' });
+    });
+
+    it('carries the capability floor when the model declares one', async () => {
+      const harness = makeHarness({
+        capabilities: {
+          embeddings: { model: 'bge', dimensions: SEARCH_EMBEDDING_DIMENSIONS, nativeDimensions: 384, minSimilarity: 0.55 },
+        },
+      });
+
+      expect(await plan(harness)).toMatchObject({ ok: true, indexModel: 'bge', minSimilarity: 0.55 });
     });
 
     it('bounds its patience far below a streamed completion', async () => {
@@ -156,7 +170,7 @@ describe('SearchQueryEmbedder', () => {
       const [ctx, request] = harness.embed.mock.calls[0];
 
       expect(Object.keys(ctx).sort()).toEqual(['feature', 'orgId', 'signal', 'userId']);
-      expect(Object.keys(request)).toEqual(['inputs']);
+      expect(Object.keys(request).sort()).toEqual(['inputs', 'purpose']);
     });
   });
 
