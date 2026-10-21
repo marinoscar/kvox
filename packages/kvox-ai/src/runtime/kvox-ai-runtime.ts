@@ -101,6 +101,8 @@ export interface KvoxAiRuntimeEmbedRequest {
   input: string[];
   /** The width asked of the model, when it can shorten its vectors. */
   dimensions?: number;
+  /** Whether the texts are search queries or documents (a prefix is already applied by the port). */
+  purpose?: 'query' | 'document';
 }
 
 /**

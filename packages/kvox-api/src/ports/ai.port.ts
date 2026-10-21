@@ -77,8 +77,12 @@ export interface KvoxAiContext {
 export interface KvoxEmbeddingsInfo {
   /** The embeddings model id. */
   model: string;
-  /** The width of every vector it returns. */
+  /** The width of every STORED vector it returns (the column width; a narrower model is zero-padded). */
   dimensions: number;
+  /** The model's native output width, when it is narrower than `dimensions`. */
+  nativeDimensions?: number;
+  /** The cosine similarity below which a semantic hit is noise, when the model needs a floor. */
+  minSimilarity?: number;
 }
 
 /**
@@ -554,10 +558,10 @@ export interface KvoxAiPort {
    * One vector per input, in order, each `dimensions` wide.
    *
    * @param ctx - who and what for.
-   * @param req - the texts to embed.
+   * @param req - the texts to embed; `purpose` (default `document`) selects the model's query or document prefix.
    * @throws KvoxAiError on any failure.
    */
-  embed(ctx: KvoxAiContext, req: { inputs: string[] }): Promise<KvoxEmbedResult>;
+  embed(ctx: KvoxAiContext, req: { inputs: string[]; purpose?: 'query' | 'document' }): Promise<KvoxEmbedResult>;
 
   /**
    * A local token estimate (no network). Budgets are checked against it.

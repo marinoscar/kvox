@@ -20,7 +20,7 @@ Files, as package exports (built into `dist/brand/assets` and `dist/brand/fonts`
 
 ## Configuration
 
-None at runtime. Build time: `src/brand/identity.generated.ts` is written from `packages/shared/identity.json` by `scripts/sync-brand-identity.mjs` (`npm run brand:sync`, checked by `brand:check`).
+None at runtime. Build time: `packages/kvox-contract/src/brand/identity.generated.ts` is written from `packages/shared/identity.json` by `scripts/sync-brand-identity.mjs` (`npm run brand:sync`, checked by `brand:check`).
 
 ## Extension-point catalog
 

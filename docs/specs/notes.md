@@ -1802,13 +1802,22 @@ Three real differences, not merely a smaller document:
    explicit "A note is markdown" scope line) — so `markdown.exporter.ts`'s
    render is close to a literal passthrough (front matter plus the
    provenance line); `pdf.exporter.ts` and `word.exporter.ts` need an actual
-   markdown parser (`packages/kvox-api/src/notes/export/markdown-ast.ts`, wrapping a
-   small, audited parsing library — headings, lists, emphasis, code) to lay
-   out, a capability `packages/kvox-api/src/transcripts/export/` has never needed,
+   markdown parser (`packages/kvox-api/src/notes/export/markdown-ast.ts`, a
+   hand-written parser: every maintained markdown library is ESM-only and the
+   API runs as CommonJS) to lay out, a capability
+   `packages/kvox-api/src/transcripts/export/` has never needed,
    because its PDF and Markdown renderers build their own layout directly
    from segments and speakers and never interpret markdown syntax written by
-   anyone else. Since issue #334 (§10), `pdf.exporter.ts` and
-   `word.exporter.ts` read `doc.bodyFormat` and call `parseBody(doc.body,
+   anyone else. The parsed subset is the one the editor produces and the
+   viewer renders: ATX and setext headings, paragraphs with hard line breaks,
+   bullet, ordered and task lists, blockquotes, fenced code, thematic breaks
+   and GFM tables with column alignment; inline bold, italic, strike, code,
+   links, `<autolinks>`, bare `http(s)`/`www` URLs and `<br>`. An image renders
+   as a link and is never fetched, so an export makes no network request.
+   HTML comments are dropped; anything else the parser does not know (raw
+   HTML, footnotes, reference links, indented code) passes through as literal
+   text, so a line is never lost. Both renderers read `doc.bodyFormat` and call
+   `parseBody(doc.body,
    doc.bodyFormat)` rather than `parseMarkdown(doc.body)` directly:
    `plain_text` walks a separate, structurally identical parser
    (`parsePlainText`) that recognises nothing but blank-line paragraph
@@ -1825,6 +1834,34 @@ Three real differences, not merely a smaller document:
    or two of prose is a far more natural `.docx` document than a
    multi-thousand-segment transcript would be. Whether this exporter is
    later generalised for transcript export as well is out of scope for #54.
+
+**The branded layout.** Both documents are drawn from one parse and one style
+module, `packages/kvox-api/src/notes/export/note-document-style.ts`, which
+holds the palette (`NOTE_THEME`, an alias of `KVOX_DOCUMENT_THEME`), the type
+scale, spacing, heading colours and rules, bullet and ordered markers, table
+column weights and alignment, the kicker and footer text and the task glyphs, so
+the PDF and the Word file cannot drift apart in look.
+
+- **First page:** a masthead (logo, product name, export date), a kicker (the
+  template name), the title and a provenance card (source, author, model,
+  version).
+- **Body:** brand-coloured headings, tables with a primary header row that
+  repeats on every page the table spans, task-list checkboxes, quotes and code
+  panels with a language label.
+- **Running header and footer:** pages after the first carry the logo, product
+  name and note title; every page carries "Page x of y", the exported version
+  and the product name.
+- **Word specifics:** real paragraph styles, the logo as SVG with a PNG
+  fallback, and a numbering instance per ordered list, so each list restarts
+  at its own start number instead of continuing the previous list.
+
+**The brand is not hard-coded.** The palette tokens, the logo geometry and the
+product identity come from `@marinoscar/kvox-contract/brand`
+(`BRAND_TOKENS`, `brandMarkSvg`, `KVOX_IDENTITY`), rendered for print by the
+core helpers (`KVOX_DOCUMENT_THEME`, `brandMarkPng`, `drawBrandMark`; see the
+[core README](../../packages/kvox-api/src/core/README.md)). A rebrand through
+`identity.json` therefore reaches the web app and both exports; the product
+name in the masthead and footer is the host's `KVOX_BRAND`.
 
 **What notes' PDF export *does* reuse wholesale**: the bundled Noto fonts
 (`apps/api/assets/fonts`, resolved by `apps/api/src/pdf/pdf-fonts.ts`,

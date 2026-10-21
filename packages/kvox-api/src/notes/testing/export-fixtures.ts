@@ -62,6 +62,61 @@ export const FIXTURE_BODY = [
   'Closing paragraph.',
 ].join('\n');
 
+/**
+ * A realistic meeting note that uses every Markdown feature the web app renders (and the
+ * exporters must reflect): headings h1 to h4, bold / italic / strike / inline code, links and an
+ * autolink, an aligned 4-column table, a task list, nested ordered and bullet lists, a blockquote,
+ * a fenced code block with a language, a rule and a hard line break.
+ *
+ * @stability experimental
+ */
+export const RICH_NOTE_BODY = [
+  '# Q3 Planning Sync',
+  '',
+  'Attendees: Ana, Ben and Chen.  ',
+  'Notes by **Ana**, reviewed by *Ben*; the ~~old~~ plan was replaced.',
+  '',
+  '## Agenda',
+  '',
+  '### Roadmap',
+  '',
+  '#### Open risks',
+  '',
+  'Read the [roadmap](https://example.test/roadmap) or <https://example.test/risks>, and run `npm run export` first.',
+  '',
+  '## Budget',
+  '',
+  '| Item | Owner | Cost | Status |',
+  '| :--- | :---: | ---: | --- |',
+  '| Hosting | Ben | 1,200 | approved |',
+  '| Licences | Chen | 800 | pending |',
+  '| Travel | Ana | 450 | declined |',
+  '',
+  '## Action items',
+  '',
+  '- [x] Send the minutes',
+  '- [ ] Book the venue',
+  '- [ ] Confirm the **budget** with finance',
+  '',
+  '## Decisions',
+  '',
+  '1. Ship the export feature',
+  '   - PDF first',
+  '   - Word second',
+  '2. Defer sharing',
+  '   1. Revisit in Q4',
+  '',
+  '> Provenance travels with the export.',
+  '',
+  '```ts',
+  'export const answer: number = 42;',
+  '```',
+  '',
+  '---',
+  '',
+  'Next sync on Friday.',
+].join('\n');
+
 /** The fixture document. Override anything a particular assertion is about. */
 /**
  * noteDocument.

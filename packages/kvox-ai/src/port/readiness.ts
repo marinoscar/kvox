@@ -1,4 +1,4 @@
-import { KVOX_EMBEDDING, KVOX_EMBEDDING_PROVIDER } from '../embedding/index.js';
+import { KVOX_EMBEDDING, KVOX_EMBEDDING_PROVIDER, type KvoxEmbeddingModel } from '../embedding/index.js';
 import { KVOX_EMBEDDING_FEATURES, KVOX_FEATURE_TASK, type KvoxAiFeatureId } from '../features/index.js';
 import type { KvoxAiModelState, KvoxAiRuntime, KvoxModelCatalog, KvoxTaskModelSource } from '../runtime/index.js';
 import { chooseTaskModel, toPlatformReasoningEffort, type PlatformReasoningEffort } from '../tasks/index.js';
@@ -65,8 +65,16 @@ export function deriveReadiness(input: {
   requested: string | null;
   hasKey: boolean;
   catalog?: KvoxModelCatalog;
+  /**
+   * The embedding model the host chose. Default: {@link KVOX_EMBEDDING}. For a
+   * `keyless` entry, an embeddings feature is ready exactly when `hasKey` is true
+   * (the caller asked the runtime about the ENTRY's provider), whatever the chat
+   * provider or its key.
+   */
+  embedding?: KvoxEmbeddingModel;
 }): KvoxAiReadiness {
   const { state, feature, hasKey } = input;
+  const entry = input.embedding ?? KVOX_EMBEDDING;
   const asked = input.requested;
   const notConfigured = state.provider === null || state.models.length === 0;
   const task = KVOX_FEATURE_TASK[feature];
@@ -79,9 +87,17 @@ export function deriveReadiness(input: {
 
   if (embedding) {
     // The catalog, not the policy, picks an embeddings model.
-    model = KVOX_EMBEDDING.model;
+    model = entry.model;
     source = 'default';
-    reason = state.provider === null ? 'ai_not_configured' : !hasKey ? 'ai_key_missing' : null;
+    reason = entry.keyless
+      ? hasKey
+        ? null
+        : 'ai_not_configured'
+      : state.provider === null
+        ? 'ai_not_configured'
+        : !hasKey
+          ? 'ai_key_missing'
+          : null;
   } else if (task !== null) {
     // Order, as the retired resolver had it: graph switch, configured, key,
     // permitted, any model, capability.
@@ -122,7 +138,7 @@ export function deriveReadiness(input: {
   return {
     ok: reason === null,
     reason,
-    provider: state.provider,
+    provider: embedding && entry.keyless ? entry.provider : state.provider,
     model,
     source,
     contextWindowTokens:
@@ -198,7 +214,10 @@ export interface KvoxAiReadinessReader {
  *
  * @remarks
  * The key is asked of the active provider, or of the catalog embeddings provider
- * while none is active (the web edition's one provider either way).
+ * while none is active (the web edition's one provider either way). For a
+ * `keyless` embedding entry and an embeddings feature, the runtime is asked about
+ * the entry's own provider and `hasKey` is reused to mean "the model is present"
+ * (an on-device runtime answers true when its model files exist).
  *
  * @param options - the runtime (key presence), the task-model source and an optional catalog.
  * @returns the reader.
@@ -208,15 +227,21 @@ export function createKvoxAiReadiness(options: {
   runtime: Pick<KvoxAiRuntime, 'readiness'>;
   taskModels: KvoxTaskModelSource;
   catalog?: KvoxModelCatalog;
+  /** The embedding model the host chose. Default: {@link KVOX_EMBEDDING}. */
+  embedding?: KvoxEmbeddingModel;
 }): KvoxAiReadinessReader {
+  const entry = options.embedding ?? KVOX_EMBEDDING;
   return {
     async readiness(userId, feature, requested) {
       const state = await options.taskModels.load(userId);
+      // A keyless embedding model asks the runtime about ITS provider: for an
+      // on-device runtime `hasKey` means "the model files are present".
+      const keylessEmbedding = entry.keyless && KVOX_EMBEDDING_FEATURES.includes(feature);
       // Existence only: the runtime never returns the key.
       const { hasKey } = await options.runtime.readiness({
         userId,
         feature,
-        provider: state.provider ?? KVOX_EMBEDDING_PROVIDER,
+        provider: keylessEmbedding ? entry.provider : (state.provider ?? KVOX_EMBEDDING_PROVIDER),
       });
       return deriveReadiness({
         state,
@@ -224,6 +249,7 @@ export function createKvoxAiReadiness(options: {
         requested: requested ?? null,
         hasKey,
         ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
+        ...(options.embedding !== undefined ? { embedding: options.embedding } : {}),
       });
     },
   };

@@ -15,3 +15,5 @@ export * from './module/kvox-ports.module.js';
 export * from './brand/kvox-brand.js';
 export * from './pdf/pdf-fonts.js';
 export * from './purge/owner-purge.js';
+export * from './pdf/pdf-brand-mark.js';
+export * from './document/index.js';

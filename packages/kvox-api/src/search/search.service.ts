@@ -155,7 +155,7 @@ import {
 } from './search-query.js';
 import { reciprocalRankFusion } from './search-fusion.js';
 import { SearchQueryEmbedder } from './search-query-embedder.service.js';
-import { semanticAxis, type SemanticQueryPlan } from './search-semantic.js';
+import { MIN_SEMANTIC_SIMILARITY, semanticAxis, type SemanticQueryPlan, type SemanticQueryPlanOk } from './search-semantic.js';
 import {
   HEADLINE_OPTIONS,
   MAX_SNIPPETS_PER_RESULT,
@@ -377,37 +377,8 @@ function vectorLiteral(vector: readonly number[]): string {
   return `[${vector.join(',')}]`;
 }
 
-/**
- * The cosine similarity a document's best chunk must reach to enter the
- * semantic candidate list at all.
- *
- * ⚠ WITHOUT A FLOOR, "NO RESULTS" STOPS BEING AN ANSWER THIS ENDPOINT CAN GIVE.
- * The lexical arm is self-limiting - a document either contains a lexeme or it
- * does not - but nearest-neighbour search has no such boundary: EVERY embedded
- * document has a distance from the query vector, so an unfloored vector arm
- * returns the caller's entire indexed corpus on every search, ordered by how
- * little it has to do with the question. Three things break at once, and none
- * of them looks like a bug in the fusion: a query about nothing returns 200
- * documents instead of an empty list; `matchedDocuments` becomes "how much have
- * you indexed" rather than "how much matched"; and `truncated` is permanently
- * `true` for anybody with more than {@link MAX_CANDIDATE_DOCUMENTS} documents,
- * which makes the honest count the DTO exists to publish permanently a floor.
- *
- * ⚠ IT IS A CUTOFF, NOT A TUNING KNOB, AND IT IS THE ONE ARBITRARY NUMBER ON
- * THIS PATH. It does not order anything - RRF does that, from ranks - and
- * raising or lowering it cannot make a relevant document outrank an irrelevant
- * one. All it decides is where "related enough to mention" sits. 0.25 is
- * deliberately permissive: for the normalised embeddings this application
- * stores, unrelated text pairs sit near zero and anything a person would call
- * "about the same thing" sits well above it, so the floor removes the long tail
- * without adjudicating the head. If it is ever tuned, it must be tuned against
- * measured recall on a real corpus - and it belongs in
- * `RANKING_MODEL_VERSION`'s list of things a change to invalidates cursors
- * over, because it changes which documents are reachable at all.
- *
- * @stability experimental
- */
-export const MIN_SEMANTIC_SIMILARITY = 0.25;
+// `MIN_SEMANTIC_SIMILARITY` (the default floor) lives in `search-semantic.ts`; re-exported for importers.
+export { MIN_SEMANTIC_SIMILARITY };
 
 /**
  * Transcript candidates by MEANING: one row per VISIBLE transcript with at
@@ -453,7 +424,12 @@ export const MIN_SEMANTIC_SIMILARITY = 0.25;
  * `1 - distance` rather than `min(distance)` so both arms rank by a score where
  * bigger is better and the outer query is one shared `ORDER BY ... DESC`.
  */
-function transcriptVectorCandidatesSql(vector: string, viewer: BoundViewer): KvoxSql {
+function transcriptVectorCandidatesSql(
+  vector: string,
+  model: string,
+  minSimilarity: number,
+  viewer: BoundViewer,
+): KvoxSql {
   return Prisma.sql`
     SELECT
       'transcript'::text AS type,
@@ -466,9 +442,10 @@ function transcriptVectorCandidatesSql(vector: string, viewer: BoundViewer): Kvo
     JOIN search_chunks c ON c.id = e.chunk_id
     JOIN transcripts t ON t.id = c.document_id
     WHERE c.document_type = 'transcript'
+      AND e.model = ${model}
       AND ${transcriptVisibleSql('t', viewer)}
     GROUP BY t.id, t.title, t.status, t.updated_at
-    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${MIN_SEMANTIC_SIMILARITY}
+    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${minSimilarity}
   `;
 }
 
@@ -480,7 +457,7 @@ function transcriptVectorCandidatesSql(vector: string, viewer: BoundViewer): Kvo
  * does" would be this application's first path to reading somebody else's note,
  * built by a query that does not even mention notes' own access service.
  */
-function noteVectorCandidatesSql(vector: string, userId: string): KvoxSql {
+function noteVectorCandidatesSql(vector: string, model: string, minSimilarity: number, userId: string): KvoxSql {
   return Prisma.sql`
     SELECT
       'note'::text AS type,
@@ -493,9 +470,10 @@ function noteVectorCandidatesSql(vector: string, userId: string): KvoxSql {
     JOIN search_chunks c ON c.id = e.chunk_id
     JOIN notes n ON n.id = c.document_id
     WHERE c.document_type = 'note'
+      AND e.model = ${model}
       AND ${noteVisibleSql('n', userId)}
     GROUP BY n.id, n.title, n.status, n.updated_at
-    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${MIN_SEMANTIC_SIMILARITY}
+    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${minSimilarity}
   `;
 }
 
@@ -516,7 +494,7 @@ function noteVectorCandidatesSql(vector: string, userId: string): KvoxSql {
  * probe about a different question. `LIMIT 1` inside each arm plus `EXISTS`
  * around the union means Postgres stops at the first hit rather than counting.
  */
-function anyVisibleEmbeddingsSql(viewer: BoundViewer, types: readonly SearchType[]): KvoxSql {
+function anyVisibleEmbeddingsSql(viewer: BoundViewer, model: string, types: readonly SearchType[]): KvoxSql {
   const arms: KvoxSql[] = [];
 
   // ⚠ EACH ARM IS PARENTHESISED. A bare `... LIMIT 1 UNION ALL SELECT ...` is a
@@ -530,6 +508,7 @@ function anyVisibleEmbeddingsSql(viewer: BoundViewer, types: readonly SearchType
        JOIN search_chunks c ON c.id = e.chunk_id
        JOIN transcripts t ON t.id = c.document_id
        WHERE c.document_type = 'transcript'
+         AND e.model = ${model}
          AND ${transcriptVisibleSql('t', viewer)}
        LIMIT 1)
     `);
@@ -542,6 +521,7 @@ function anyVisibleEmbeddingsSql(viewer: BoundViewer, types: readonly SearchType
        JOIN search_chunks c ON c.id = e.chunk_id
        JOIN notes n ON n.id = c.document_id
        WHERE c.document_type = 'note'
+         AND e.model = ${model}
          AND ${noteVisibleSql('n', viewer.userId)}
        LIMIT 1)
     `);
@@ -758,7 +738,7 @@ export class SearchService {
         ? this.degradedCandidates(q, viewer, searchedTypes)
         : this.rankedCandidates(q, viewer, searchedTypes),
       plan.ok
-        ? this.vectorCandidates(vectorLiteral(plan.vector), viewer, searchedTypes)
+        ? this.vectorCandidates(plan, viewer, searchedTypes)
         : Promise.resolve<CandidateRow[]>([]),
     ]);
 
@@ -827,7 +807,7 @@ export class SearchService {
     if (!resolution.ok) return this.semanticOff(resolution);
 
     const [row] = await viewer.run((tx) =>
-      tx.$queryRaw<Array<{ present: boolean }>>(anyVisibleEmbeddingsSql(viewer, types)),
+      tx.$queryRaw<Array<{ present: boolean }>>(anyVisibleEmbeddingsSql(viewer, resolution.indexModel, types)),
     );
 
     if (!row?.present) return this.semanticOff({ ok: false, reason: 'no_indexed_content' });
@@ -918,14 +898,15 @@ export class SearchService {
    * positions and nothing else.
    */
   private vectorCandidates(
-    vector: string,
+    plan: SemanticQueryPlanOk,
     viewer: BoundViewer,
     types: readonly SearchType[],
   ): Promise<CandidateRow[]> {
+    const vector = vectorLiteral(plan.vector);
     const arms: KvoxSql[] = [];
 
-    if (types.includes('transcript')) arms.push(transcriptVectorCandidatesSql(vector, viewer));
-    if (types.includes('note')) arms.push(noteVectorCandidatesSql(vector, viewer.userId));
+    if (types.includes('transcript')) arms.push(transcriptVectorCandidatesSql(vector, plan.indexModel, plan.minSimilarity, viewer));
+    if (types.includes('note')) arms.push(noteVectorCandidatesSql(vector, plan.indexModel, plan.minSimilarity, viewer.userId));
 
     return viewer.run((tx) => tx.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT d.type, d.id, d.title, d.status, d.updated_at, d.score

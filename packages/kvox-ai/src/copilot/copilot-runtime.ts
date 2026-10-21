@@ -5,6 +5,12 @@ import { isAbsolute, join, resolve, sep } from 'node:path';
 
 import { AiError } from '@marinoscar/platform-ai-providers';
 
+import {
+  assertAllowedUrl as assertAllowedUrlShared,
+  downloadVerifiedFile,
+  fetchWithAllowedHosts,
+  type VerifiedDownloadErrors,
+} from '../download/index.js';
 import { copilotErrorFromThrown, redactTokens } from './copilot-errors.js';
 
 // =============================================================================
@@ -78,8 +84,6 @@ const RUNTIME_DIR = 'runtime';
 /** The record a finished install leaves in its directory. */
 const RECORD_FILE = 'installed.json';
 
-/** The most redirect hops followed. */
-const MAX_REDIRECTS = 5;
 /** The default largest download: the runtime is 133-174 MB unpacked. */
 const DEFAULT_MAX_BYTES = 768 * 1024 * 1024;
 /** A version or file name that is safe as one path segment. */
@@ -430,20 +434,19 @@ function planInstalled(i: NonNullable<CopilotRuntimeOptions['installed']>): Reus
   return { version, sha256: normalizeSha(i.sha256, 'installed.sha256'), extracted: i.extract !== undefined };
 }
 
+const downloadErrors: VerifiedDownloadErrors = {
+  invalid: (text, check) => invalid(text, check),
+  refusedHost: (text, host) => refusedHost(text, host),
+  failed: (text) => downloadFailed(text),
+  mismatch: () => mismatch('The downloaded Copilot runtime does not match its checksum; it was deleted.'),
+  tooLarge: () => tooLarge(),
+  scrub: (text) => redactTokens(text),
+  isOwn: (err) => AiError.isAiError(err),
+};
+
 /** https, no credentials, default port, exact host match. Throws before any network call. */
 function assertAllowedUrl(raw: string, hosts: ReadonlySet<string>): URL {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw invalid('A download URL is not a valid URL.', 'url');
-  }
-  const host = url.hostname.toLowerCase();
-  if (url.protocol !== 'https:') throw refusedHost(`Refusing a non-https download (host ${safeHost(host)}).`, host);
-  if (url.username !== '' || url.password !== '') throw refusedHost('Refusing a download URL that carries credentials.', host);
-  if (url.port !== '') throw refusedHost(`Refusing a download from a non-default port (host ${safeHost(host)}).`, host);
-  if (!hosts.has(host)) throw refusedHost(`Refusing to download from ${safeHost(host)}: not in allowedHosts.`, host);
-  return url;
+  return assertAllowedUrlShared(raw, hosts, downloadErrors);
 }
 
 interface Target {
@@ -473,38 +476,13 @@ async function resolveTarget(plan: Plan, d: CopilotRuntimeDownload, fetchImpl: t
 }
 
 /** fetch with manual redirects: every hop is checked against the allowed hosts before it is requested. */
-async function fetchChecked(
+function fetchChecked(
   fetchImpl: typeof fetch,
   first: URL,
   hosts: ReadonlySet<string>,
   signal: AbortSignal | undefined,
 ): Promise<Response> {
-  let url = first;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    let res: Response;
-    try {
-      res = await fetchImpl(url.href, { redirect: 'manual', ...(signal ? { signal } : {}) });
-    } catch (err) {
-      if (signal?.aborted) throw downloadFailed('The download was cancelled.');
-      throw downloadFailed(`The download from ${safeHost(url.hostname)} failed: ${errorText(err)}`);
-    }
-    if (res.status >= 300 && res.status < 400) {
-      const location = res.headers.get('location');
-      await res.body?.cancel().catch(() => undefined);
-      if (!location) throw downloadFailed('A redirect carried no location.');
-      let next: URL;
-      try {
-        next = new URL(location, url);
-      } catch {
-        throw downloadFailed('A redirect carried an invalid location.');
-      }
-      // Refuses a redirect to another host (or http) before it is requested.
-      url = assertAllowedUrl(next.href, hosts);
-      continue;
-    }
-    return res;
-  }
-  throw downloadFailed('Too many redirects.');
+  return fetchWithAllowedHosts(fetchImpl, first, hosts, signal, downloadErrors);
 }
 
 // --- download: install --------------------------------------------------------------
@@ -577,55 +555,19 @@ async function cachedRuntime(fs: CopilotRuntimeFs, dir: string, sha: string, ext
 async function downloadTo(i: InstallInput, partial: string): Promise<void> {
   const { fs, target, download } = i;
   const hosts = new Set(download.allowedHosts.map((h) => h.trim().toLowerCase()));
-  const maxBytes = download.maxBytes ?? DEFAULT_MAX_BYTES;
-  const res = await fetchChecked(i.fetchImpl, target.url, hosts, download.signal);
-  if (!res.ok || !res.body) throw downloadFailed(`The runtime download failed (status ${res.status}).`);
-
-  const lengthHeader = Number(res.headers.get('content-length'));
-  const total = Number.isFinite(lengthHeader) && lengthHeader > 0 ? lengthHeader : undefined;
-  if (total !== undefined && total > maxBytes) {
-    await res.body.cancel().catch(() => undefined);
-    throw tooLarge();
-  }
-  const progress = (received: number): void => {
-    try {
-      download.onProgress?.({ received, ...(total !== undefined ? { total } : {}) });
-    } catch {
-      /* a progress callback must never break the download */
-    }
-  };
-  progress(0);
-
-  const hash = createHash('sha256');
-  const file = await fs.open(partial, 'wx');
-  let received = 0;
-  try {
-    const reader = res.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      received += value.byteLength;
-      if (received > maxBytes) {
-        await reader.cancel().catch(() => undefined);
-        throw tooLarge();
-      }
-      hash.update(value);
-      await file.write(value);
-      progress(received);
-    }
-  } catch (err) {
-    await file.close().catch(() => undefined);
-    await fs.rm(partial, { recursive: true, force: true }).catch(() => undefined);
-    if (AiError.isAiError(err)) throw err;
-    if (download.signal?.aborted) throw downloadFailed('The download was cancelled.');
-    throw downloadFailed(`The runtime download was interrupted: ${errorText(err)}`);
-  }
-  await file.close();
-
-  if (hash.digest('hex') !== target.sha256) {
-    await fs.rm(partial, { recursive: true, force: true });
-    throw mismatch('The downloaded Copilot runtime does not match its checksum; it was deleted.');
-  }
+  await downloadVerifiedFile({
+    url: target.url,
+    sha256: target.sha256,
+    maxBytes: download.maxBytes ?? DEFAULT_MAX_BYTES,
+    allowedHosts: hosts,
+    destination: partial,
+    ...(download.signal ? { signal: download.signal } : {}),
+    onProgress: (received, total) => download.onProgress?.({ received, ...(total !== undefined ? { total } : {}) }),
+    fetch: i.fetchImpl,
+    errors: downloadErrors,
+    subject: 'runtime',
+    fs,
+  });
 }
 
 // --- helpers ---------------------------------------------------------------------------
@@ -667,10 +609,6 @@ function relativeInside(root: string, candidate: string): string {
 /** A hostname for a message: letters, digits, dots, dashes only. */
 function safeHost(host: string): string {
   return redactTokens(host.replace(/[^A-Za-z0-9.-]/g, '?').slice(0, 100));
-}
-
-function errorText(err: unknown): string {
-  return redactTokens(err instanceof Error ? err.message : String(err)).slice(0, 200);
 }
 
 const message = (text: string): string => `GitHub Copilot: ${redactTokens(text)}`;

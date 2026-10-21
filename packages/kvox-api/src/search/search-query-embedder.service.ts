@@ -54,8 +54,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { KVOX_AI, type KvoxAiContext, type KvoxAiPort } from '../ports/index.js';
+import { MIN_SEMANTIC_SIMILARITY, type SemanticQueryPlan, type SemanticQueryPlanOff } from './search-semantic.js';
 import { embeddingGateFor } from './search-embedding-gate.js';
-import type { SemanticQueryPlan, SemanticQueryPlanOff } from './search-semantic.js';
 import {
   SEARCH_EMBEDDING_DIMENSIONS,
   SEARCH_MODULE_OPTIONS,
@@ -132,11 +132,12 @@ export class SearchQueryEmbedder {
 
     return {
       ok: true,
+      indexModel: gate.model,
       embed: async (text: string): Promise<SemanticQueryPlan> => {
         try {
           const result = await this.ai.embed(
             { ...ctx, signal: AbortSignal.timeout(QUERY_EMBED_TIMEOUT_MS) },
-            { inputs: [text] },
+            { inputs: [text], purpose: 'query' },
           );
 
           const [vector] = result.vectors;
@@ -165,7 +166,14 @@ export class SearchQueryEmbedder {
           // `result.model` is what the host REPORTED, never what was asked
           // for - a gateway that substituted a model is exactly the fact the
           // cursor fingerprint needs to carry.
-          return { ok: true, provider, model: result.model, vector };
+          return {
+            ok: true,
+            provider,
+            model: result.model,
+            indexModel: gate.model,
+            minSimilarity: gate.minSimilarity ?? MIN_SEMANTIC_SIMILARITY,
+            vector,
+          };
         } catch {
           // ⚠ EVERY THROW (a `KvoxAiError` of any class, a `KvoxRateLimitError`,
           // anything else), INCLUDING A RATE LIMIT. See the header: there is no
@@ -204,6 +212,8 @@ export class SearchQueryEmbedder {
 export interface EmbedderReady {
   /** Discriminant. */
   ok: true;
+  /** The model the index stores vectors under, for the SQL filter (the gate's model). */
+  indexModel: string;
   /** Embeds one query. NEVER throws: every failure is a plan with a reason. */
   embed: (text: string) => Promise<SemanticQueryPlan>;
 }

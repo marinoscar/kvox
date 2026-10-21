@@ -42,6 +42,44 @@ export {
 } from '@marinoscar/kvox-contract/search';
 
 /**
+ * The cosine similarity a document's best chunk must reach to enter the
+ * semantic candidate list at all.
+ *
+ * ⚠ WITHOUT A FLOOR, "NO RESULTS" STOPS BEING AN ANSWER THIS ENDPOINT CAN GIVE.
+ * The lexical arm is self-limiting - a document either contains a lexeme or it
+ * does not - but nearest-neighbour search has no such boundary: EVERY embedded
+ * document has a distance from the query vector, so an unfloored vector arm
+ * returns the caller's entire indexed corpus on every search, ordered by how
+ * little it has to do with the question. Three things break at once, and none
+ * of them looks like a bug in the fusion: a query about nothing returns 200
+ * documents instead of an empty list; `matchedDocuments` becomes "how much have
+ * you indexed" rather than "how much matched"; and `truncated` is permanently
+ * `true` for anybody with more than {@link MAX_CANDIDATE_DOCUMENTS} documents,
+ * which makes the honest count the DTO exists to publish permanently a floor.
+ *
+ * ⚠ IT IS A CUTOFF, NOT A TUNING KNOB, AND IT IS THE ONE ARBITRARY NUMBER ON
+ * THIS PATH. It does not order anything - RRF does that, from ranks - and
+ * raising or lowering it cannot make a relevant document outrank an irrelevant
+ * one. All it decides is where "related enough to mention" sits. 0.25 is
+ * deliberately permissive: for the normalised embeddings this application
+ * stores, unrelated text pairs sit near zero and anything a person would call
+ * "about the same thing" sits well above it, so the floor removes the long tail
+ * without adjudicating the head. If it is ever tuned, it must be tuned against
+ * measured recall on a real corpus - and it belongs in
+ * `RANKING_MODEL_VERSION`'s list of things a change to invalidates cursors
+ * over, because it changes which documents are reachable at all.
+ *
+ * ⚠ THIS IS THE DEFAULT, NOT THE ONLY FLOOR. Similarity baselines differ by model:
+ * bge-style models (and others trained with a contrastive temperature) place even
+ * unrelated text at 0.4-0.6 cosine, so 0.25 would admit the whole corpus. A host
+ * whose model needs another cut-off declares `capabilities().embeddings.minSimilarity`;
+ * the gate carries it and the SQL uses `minSimilarity ?? MIN_SEMANTIC_SIMILARITY`.
+ *
+ * @stability experimental
+ */
+export const MIN_SEMANTIC_SIMILARITY = 0.25;
+
+/**
  * The vector arm can run: a query vector that is safe to interpolate into a
  * `vector` literal - right width, every component finite - so the SQL builder
  * never has to re-check. See `SearchQueryEmbedder` for where that is enforced.
@@ -62,6 +100,15 @@ export interface SemanticQueryPlanOk {
    * label. See `search-cursor.ts`.
    */
   model: string;
+  /**
+   * The id the INDEX stores vectors under (`search_embeddings.model`): the
+   * gate's model, NOT {@link SemanticQueryPlanOk.model}. The vector SQL filters
+   * on this, because a gateway may report a dated id the indexer never wrote.
+   * It is not part of the cursor fingerprint (the reported `model` is).
+   */
+  indexModel: string;
+  /** The cosine floor for this model's candidates (the capability's, else the default). */
+  minSimilarity: number;
   /** `SEARCH_EMBEDDING_DIMENSIONS` finite numbers. */
   vector: number[];
 }

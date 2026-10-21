@@ -4,7 +4,7 @@ The embedding catalog: the one model the product embeds with, and its limits.
 
 ## Purpose and scope
 
-`EMBEDDING_DIMENSIONS` (1536, the other half of the `vector(1536)` columns: a contract, not a default), `KVOX_EMBEDDING` and `KVOX_EMBEDDING_PROVIDER` (model id, input ceiling, batch size of 128) and `EmbeddingShapeError` (a batch the product cannot store). Changing the width or the model id is a migration and a full re-index, never an edit.
+`EMBEDDING_DIMENSIONS` (1536, the other half of the `vector(1536)` columns: a contract, not a default), `KVOX_EMBEDDING` and `KVOX_EMBEDDING_PROVIDER` (model id, input ceiling, batch size of 128), the `KvoxEmbeddingModel` entry type a host chooses with `createKvoxAi({ embedding })`, and `KVOX_LOCAL_EMBEDDING` (the 384-wide on-device bge-small-en-v1.5-int8, zero-padded to 1536 by the port). Changing the width or the model id is a migration and a full re-index, never an edit.
 
 Status: moved from `apps/api/src/ai-port/embedding-catalog.ts` (issue #579).
 

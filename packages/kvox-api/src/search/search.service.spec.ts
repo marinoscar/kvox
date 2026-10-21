@@ -33,7 +33,12 @@ import { MAX_CANDIDATE_DOCUMENTS, type SearchQueryDto } from './dto/search.dto.j
 import { encodeSearchCursor, RANKING_MODEL_VERSION } from './search-cursor.js';
 import { RRF_K } from './search-fusion.js';
 import type { SearchQueryEmbedder } from './search-query-embedder.service.js';
-import type { SemanticQueryPlan, SemanticReason } from './search-semantic.js';
+import {
+  MIN_SEMANTIC_SIMILARITY,
+  type SemanticQueryPlan,
+  type SemanticQueryPlanOk,
+  type SemanticReason,
+} from './search-semantic.js';
 import { SNIPPET_START, SNIPPET_STOP } from './search-snippet.js';
 import {
   DEFAULT_SEARCH_TYPE_PERMISSIONS,
@@ -133,6 +138,7 @@ function stubEmbedder(
 
     return {
       ok: true as const,
+      indexModel: plan.ok ? plan.indexModel : INDEX_MODEL,
       embed: async (text: string) => {
         embedCalls.push(text);
 
@@ -144,11 +150,16 @@ function stubEmbedder(
   return { resolve, embedCalls } as unknown as SearchQueryEmbedder & { embedCalls: string[] };
 }
 
+const INDEX_MODEL = 'embed-index-model';
+
 /** A successful plan, with a vector the SQL builder will accept. */
 const embedded: SemanticQueryPlan = {
   ok: true,
   provider: 'openai',
   model: EMBEDDING_MODEL,
+  // The model the INDEX stores under (the gate's), deliberately unlike the reported one.
+  indexModel: INDEX_MODEL,
+  minSimilarity: 0.25,
   vector: QUERY_VECTOR,
 };
 
@@ -866,6 +877,34 @@ describe('SearchService', () => {
 
       expect(text).toContain('JOIN notes n');
       expect(text).not.toContain('share');
+    });
+
+    it('compares ONLY vectors of the active (gate) model, in both vector arms and the probe', async () => {
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query({ types: 'transcript,note' }), user());
+
+      const text = vectorSql(rawCalls)!.sql;
+
+      expect(text.match(/e\.model = /g)).toHaveLength(2);
+      expect(vectorSql(rawCalls)!.values).toContain(INDEX_MODEL);
+      expect(vectorSql(rawCalls)!.values).not.toContain(EMBEDDING_MODEL);
+
+      const probe = presenceSql(rawCalls)!;
+
+      expect(probe.sql.match(/e\.model = /g)).toHaveLength(2);
+      expect(probe.values).toContain(INDEX_MODEL);
+    });
+
+    it('applies the capability floor carried by the plan, not a constant', async () => {
+      const { service, rawCalls } = semanticHarness({
+        embedder: stubEmbedder({ ...(embedded as SemanticQueryPlanOk), minSimilarity: 0.55 }),
+      });
+
+      await service.search(query(), user());
+
+      expect(vectorSql(rawCalls)!.values).toContain(0.55);
+      expect(vectorSql(rawCalls)!.values).not.toContain(MIN_SEMANTIC_SIMILARITY);
     });
 
     it('uses the cosine operator the HNSW index was built for', async () => {
