@@ -13,7 +13,7 @@ import { COPILOT_CONSENT_VERSION } from '@marinoscar/kvox-contract/copilot';
 import type { CopilotSignInChallenge } from '@marinoscar/kvox-contract/copilot';
 
 import { kvoxDarkTheme, kvoxLightTheme } from '../../src/brand/index.js';
-import { COPILOT_CONSENT_COPY } from '../../src/copilot/headless/index.js';
+import { COPILOT_CONSENT_COPY, COPILOT_PROVIDER_COPY } from '../../src/copilot/headless/index.js';
 import { CopilotProviderCard } from '../../src/copilot/ui/index.js';
 import type { CopilotProviderCardProps } from '../../src/copilot/ui/index.js';
 import { consentedSettings, makeSettings, makeStatus, SIGNED_IN } from './copilotData.js';
@@ -484,7 +484,7 @@ describe('CopilotProviderCard: the host selects the provider', () => {
     renderCard(props({ selected: true }));
     const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
     expect(within(dialog).queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Agree and turn on' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Agree and use GitHub Copilot' })).toBeInTheDocument();
   });
 
   it('selected true: Accept calls onUpdate with the consent', async () => {
@@ -492,7 +492,7 @@ describe('CopilotProviderCard: the host selects the provider', () => {
     const onDecline = vi.fn();
     const p = props({ selected: true, onDecline });
     renderCard(p);
-    await user.click(await screen.findByRole('button', { name: 'Agree and turn on' }));
+    await user.click(await screen.findByRole('button', { name: 'Agree and use GitHub Copilot' }));
     await waitFor(() => expect(p.onUpdate).toHaveBeenCalledTimes(1));
     expect(p.onUpdate).toHaveBeenCalledWith({
       enabled: true,
@@ -584,6 +584,79 @@ describe('CopilotProviderCard: the host selects the provider', () => {
       mode,
     );
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+describe('CopilotProviderCard: wording per mode', () => {
+  it('selected undefined: the description keeps the switch wording and the accept button says turn on', async () => {
+    const user = userEvent.setup();
+    renderCard(props());
+    expect(screen.getByText(COPILOT_PROVIDER_COPY.description)).toBeInTheDocument();
+    expect(screen.getByText(/Opt-in; off until you turn it on\./)).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Enable GitHub Copilot' }));
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(within(dialog).getByRole('button', { name: 'Agree and turn on' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Agree and use GitHub Copilot' })).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])('selected %s: the description drops the switch wording', (selected) => {
+    renderCard(props({ selected, onDecline: vi.fn() }));
+    expect(screen.getByText(COPILOT_PROVIDER_COPY.selectedDescription)).toBeInTheDocument();
+    expect(screen.queryByText(/Opt-in; off until you turn it on/)).not.toBeInTheDocument();
+  });
+
+  it('selected true: the accept button says use GitHub Copilot, over the same consent points', async () => {
+    renderCard(props({ selected: true, onDecline: vi.fn() }));
+    const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
+    expect(within(dialog).getByRole('button', { name: 'Agree and use GitHub Copilot' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Agree and turn on' })).not.toBeInTheDocument();
+    for (const point of COPILOT_CONSENT_COPY.points) {
+      expect(within(dialog).getByText(point.heading)).toBeInTheDocument();
+      expect(within(dialog).getByText(point.text)).toBeInTheDocument();
+    }
+    // Accepting saves the unchanged consent version (pinned in 'selected true: Accept calls onUpdate').
+    expect(COPILOT_CONSENT_VERSION).toBe('1');
+  });
+});
+
+describe('CopilotProviderCard: the model shown', () => {
+  const modelBox = () => screen.getByRole('combobox', { name: /Model/ });
+
+  it.each([
+    ['switch', {}],
+    ['selected', { selected: true }],
+  ] as const)('%s mode: no saved model shows the first offered model', (_mode, extra) => {
+    renderCard(props({ ...extra, settings: consentedSettings({ model: null }), status: makeStatus({ ...SIGNED_IN }) }));
+    expect(modelBox()).toHaveTextContent('GPT-5');
+  });
+
+  it.each([
+    ['switch', {}],
+    ['selected', { selected: true }],
+  ] as const)('%s mode: a saved model that is no longer offered shows the first offered model', (_mode, extra) => {
+    renderCard(
+      props({ ...extra, settings: consentedSettings({ model: 'retired-model' }), status: makeStatus({ ...SIGNED_IN }) }),
+    );
+    expect(modelBox()).toHaveTextContent('GPT-5');
+  });
+
+  it.each([
+    ['switch', {}],
+    ['selected', { selected: true }],
+  ] as const)('%s mode: a saved model that is offered is shown', (_mode, extra) => {
+    renderCard(
+      props({ ...extra, settings: consentedSettings({ model: 'claude-sonnet' }), status: makeStatus({ ...SIGNED_IN }) }),
+    );
+    expect(modelBox()).toHaveTextContent('Claude Sonnet');
+  });
+
+  it('picking another model from the effective default calls onUpdate({ model })', async () => {
+    const user = userEvent.setup();
+    const p = props({ selected: true, settings: consentedSettings({ model: null }), status: makeStatus({ ...SIGNED_IN }) });
+    renderCard(p);
+    await user.click(modelBox());
+    await user.click(await screen.findByRole('option', { name: 'Claude Sonnet' }));
+    await waitFor(() => expect(p.onUpdate).toHaveBeenCalledWith({ model: 'claude-sonnet' }));
   });
 });
 

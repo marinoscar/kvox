@@ -4,6 +4,7 @@ import { COPILOT_CONSENT_VERSION } from '@marinoscar/kvox-contract/copilot';
 
 import {
   COPILOT_CONSENT_COPY,
+  COPILOT_PROVIDER_COPY,
   COPILOT_SIGN_IN_REASON_TEXT,
   buildCopilotCapabilities,
   copilotRuntimeDownloadNote,
@@ -33,6 +34,26 @@ describe('COPILOT_CONSENT_COPY', () => {
     expect(all).toMatch(/turn it off at any time/);
     expect(all).toMatch(/Ask is not available with Copilot/);
     expect(all).toMatch(/Add an OpenAI key to keep Ask/);
+  });
+
+  it('has an accept label per mode, and the selected-mode label leaves the version alone', () => {
+    expect(COPILOT_CONSENT_COPY.acceptLabel).toBe('Agree and turn on');
+    expect(COPILOT_CONSENT_COPY.acceptSelectedLabel).toBe('Agree and use GitHub Copilot');
+    // A new button label changes nothing the user agrees to, so the version stays at '1'.
+    expect(COPILOT_CONSENT_VERSION).toBe('1');
+    expect(COPILOT_CONSENT_COPY.version).toBe('1');
+  });
+});
+
+describe('COPILOT_PROVIDER_COPY', () => {
+  it('drops the switch wording from the selected-mode description only', () => {
+    expect(COPILOT_PROVIDER_COPY.displayName).toBe('GitHub Copilot');
+    expect(COPILOT_PROVIDER_COPY.description).toBe(
+      'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
+    );
+    expect(COPILOT_PROVIDER_COPY.selectedDescription).toBe(
+      'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription.',
+    );
   });
 });
 

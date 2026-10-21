@@ -13,6 +13,7 @@ import {
 
 import {
   COPILOT_CONSENT_COPY,
+  COPILOT_PROVIDER_COPY,
   COPILOT_RUNTIME_SIZE_TEXT,
   buildCopilotCapabilities,
   copilotSignInReasonText,
@@ -77,12 +78,16 @@ export interface CopilotProviderCardProps {
 
 const MAX_TIMER_MS = 2_147_483_647;
 
-const PROVIDER = {
-  id: 'copilot',
-  displayName: 'GitHub Copilot',
-  description:
-    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
-} as const;
+const PROVIDER_ID = 'copilot';
+
+/**
+ * The model the host runs: the saved pick while it is offered, else the first offered model
+ * (the hosts' default), else none.
+ */
+function effectiveModel(saved: string | null, models: CopilotStatus['models']): string | null {
+  if (saved !== null && models.some((m) => m.id === saved)) return saved;
+  return models[0]?.id ?? null;
+}
 
 function asError(error: unknown, fallback: string): Error {
   return new Error(copilotSignInReasonText(error) ?? aiErrorText(error, fallback));
@@ -147,6 +152,12 @@ export function CopilotProviderCard({
     [],
   );
 
+  const provider = {
+    id: PROVIDER_ID,
+    displayName: COPILOT_PROVIDER_COPY.displayName,
+    // With the host offering the choice there is no switch, so the switch wording is dropped.
+    description: hostSelects ? COPILOT_PROVIDER_COPY.selectedDescription : COPILOT_PROVIDER_COPY.description,
+  };
   const sizeText = runtimeDownloadSize ?? COPILOT_RUNTIME_SIZE_TEXT;
   const signInUnavailable = copilotSignInUnavailableReason(status.runtime, sizeText);
   const open = useCallback((url: string) => openExternalUrl(url, onOpenExternal), [onOpenExternal]);
@@ -254,7 +265,7 @@ export function CopilotProviderCard({
   return (
     <>
       <AccountSignInProviderCard
-        provider={PROVIDER}
+        provider={provider}
         enabled={hostSelects ? selected : settings.enabled || pendingEnable}
         onEnabledChange={
           hostSelects
@@ -278,7 +289,7 @@ export function CopilotProviderCard({
           required: true,
           acceptedAt: consented ? settings.consentedAt : null,
           title: COPILOT_CONSENT_COPY.title,
-          acceptLabel: COPILOT_CONSENT_COPY.acceptLabel,
+          acceptLabel: hostSelects ? COPILOT_CONSENT_COPY.acceptSelectedLabel : COPILOT_CONSENT_COPY.acceptLabel,
           body: (
             <CopilotConsentBody
               showRuntimeDownload={status.runtime.state === 'missing'}
@@ -311,7 +322,8 @@ export function CopilotProviderCard({
         onSignOut={onSignOut}
         capabilities={buildCopilotCapabilities(status)}
         models={status.models.map((m) => ({ id: m.id, label: m.label }))}
-        model={settings.model}
+        // A null or no-longer-offered pick shows the model the host actually runs.
+        model={effectiveModel(settings.model, status.models)}
         onModelChange={async (id) => {
           await onUpdate({ model: id });
         }}
