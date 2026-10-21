@@ -236,6 +236,7 @@
           "@react-sigma/core",
           "graphology",
           "graphology-layout-forceatlas2",
+          "graphology-layout-noverlap",
           "react-router-dom",
           "sigma"
         ]

@@ -22,7 +22,7 @@ The app spreads `kvoxGraphDestinations` into its destination table directly afte
 
 ## Peer dependencies
 
-`@marinoscar/kvox-contract`, `react` and `react-dom` for the headless entry. `ui` adds `@mui/material`, `@mui/icons-material` and `react-router-dom`, and the drawing libraries, all optional peers of the package and needed by this entry only: `sigma`, `@react-sigma/core`, `graphology` and `graphology-layout-forceatlas2`. `testing` needs only `react`.
+`@marinoscar/kvox-contract`, `react` and `react-dom` for the headless entry. `ui` adds `@mui/material`, `@mui/icons-material` and `react-router-dom`, and the drawing libraries, all optional peers of the package and needed by this entry only: `sigma`, `@react-sigma/core`, `graphology`, `graphology-layout-forceatlas2` and `graphology-layout-noverlap`. `testing` needs only `react`.
 
 Keep ONE copy of `graphology` in the host: sigma tests graphs with `instanceof`, so two copies draw nothing. `node scripts/kvox-packages/check-single-instance.mjs --guard graphology` checks it. The module-level hand-off between the overview and the explorer (`setExplorerHandoff`) is likewise per package copy, so a duplicated `@marinoscar/kvox-web` would lose it.
 
@@ -55,6 +55,17 @@ Data: the slice has no storage of its own. The module-level caches are per packa
 - `kvoxGraphUserSettingsSections.knowledge`: the Knowledge graph card, with `permission: 'graph:write'`, the exact string the attribute-definition write routes enforce.
 - `kvoxGraphRoutes`: `/graph`, `/graph/entities/:id`, `/graph/explore`, `/graph/overview`, `/graph/review` on `graph:read` (a viewer without it is sent home), `/graph/imports/:proposalId` on `graph:write` (sent to `/graph`) and `/settings/knowledge-graph` on `graph:write` (sent to `/settings`). The pages are lazy; the entity page takes slots, so an app that offers Ask replaces its `Component` (the web edition does, in `apps/web/src/kvox/graphRoutes.ts`).
 - Working example: the web edition wires the slots in `apps/web/src/kvox/` (`noteSlots.tsx`: the AI provider in front of `GraphNotePageProvider`; `transcriptSlots.tsx`; `GraphEntityPageWithSlots.tsx`, which passes the ask slice's `AskEntityButtonSlot` and `AskEntityPanelSlot`; `graphRoutes.ts`).
+
+### Explorer layout (#668)
+
+`GraphCanvas` lays the graph out with `layout/` (next to `GraphCanvas.tsx`), not on its render thread:
+
+- **Worker.** `layout/layout.worker.ts` is a same-origin MODULE worker, built with `new Worker(new URL('./layout.worker.js', import.meta.url), { type: 'module' })` in `layout/layoutClient.ts`, so Vite and electron-vite emit it as its own file and `worker-src 'self'` allows it. Never a `blob:` URL (`graphology-layout-forceatlas2/worker` builds one). It runs ForceAtlas2 in fixed chunks, then `graphology-layout-noverlap`, and posts transferable `Float32Array` frames. Without `Worker`, or if the worker errors, `layoutEngine.ts` runs on the main thread in 8 ms slices per animation frame; the result is the same for a run that is not cut short by its time box.
+- **Incremental.** After an expand only nodes never laid out move (they are ringed around their parent by `explorerModel`); every other node is `fixed`. "Re-layout all" in the Layout menu moves every unpinned node.
+- **Layouts.** `?layout=force` (Force), `concentric` (rings by hop from the seeds, ordered by a node's `doi` attribute when present, otherwise by `degree`) and `static` (visual tests). With no parameter an ego view of fewer than 40 nodes opens concentric, otherwise Force, decided once.
+- **Pins.** A dragged node, or the selected node with `P`, is pinned; pins persist per view in `sessionStorage` (`kvox.graph.pins:<view>`) and are released with `P` or "Unpin all".
+- **Motion.** Positions tween over 300 ms; under `prefers-reduced-motion` only the final picture is shown, in one jump.
+- **Budgets.** The layout time box is `shell/explorerBudgets.ts`' `layoutTimeBoxMs` (1.5 s compact or coarse pointer, 3 s otherwise); `layout/layoutBudgets.ts` keeps only the tuning constants.
 
 ### Manual relation edits (#586)
 
