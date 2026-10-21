@@ -88,5 +88,6 @@ export type {
 export type { NeighborhoodCanvasProps } from './components/explorer/NeighborhoodCanvas.js';
 export { GraphLegend, useLegendTypeFilter } from './components/explorer/GraphLegend.js';
 export type { GraphLegendProps, LegendTypeFilter } from './components/explorer/GraphLegend.js';
+export type { ExplorerMode } from './components/explorer/explorerEncoding.js';
 export { legendModel } from './components/explorer/explorerModel.js';
 export type { LegendModel, LegendRelation, LegendType } from './components/explorer/explorerModel.js';
