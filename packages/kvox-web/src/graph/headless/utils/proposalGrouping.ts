@@ -33,6 +33,7 @@ export const GROUP_LABELS: Record<ProposalGroupKey, string> = {
   Meeting: 'Meeting',
   Decision: 'Decisions',
   Commitment: 'Commitments',
+  Risk: 'Risks',
   Claim: 'Claims',
   PersonFact: 'Person facts',
   Other: 'Other',
