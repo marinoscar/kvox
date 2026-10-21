@@ -33,6 +33,12 @@ A company, client, vendor or institution, or an internal team specifically when 
 Attributes:
 - website (url): The organization's website address, only if the source states it explicitly.
 
+### Topic (Topic)
+A recurring subject of discussion that is not itself a unit of work, e.g. "AI governance", "licensing cost", "change management".
+- Something with an owner, a start and an expected end that work attaches to is a Project, not a Topic.
+- A named product, tool or technology is a Product (when the work domain is on), not a Topic.
+- Prefer reusing an existing Topic label over creating a near-synonym.
+
 ### Claim (Claim)
 A dated statement of fact about an entity that is neither a decision nor a commitment, e.g. "the budget was cut 20%" or "the pilot moved to Q2".
 - A choice that was made is a Decision, not a Claim.
@@ -45,7 +51,7 @@ A statement about a Person as an individual rather than about their work: an int
 - Health, legal, financial or similarly weighty personal information is sensitive and must be marked so.
 
 ## Relation types
-(none — propose no relations)
+- BROADER: Topic → Topic — A topic that is a narrower part of a broader theme: "licensing cost" BROADER "AI governance" rolls the narrower topic up into the theme.
 
 ## Fact kinds
 - claim (Claim): A dated statement of fact about an entity that is neither a decision nor a commitment.

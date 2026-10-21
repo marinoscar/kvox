@@ -54,6 +54,15 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'relation prop `identity` flag: HAS_ROLE.businessUnit takes part in the role\'s identity (a unit change is a new role; an omitted unit matches any) (#440)',
     ]) as string[],
   }),
+  Object.freeze({
+    version: '1.3.0',
+    date: '2026-10-21',
+    changes: Object.freeze([
+      'core: Topic entity type (skos:Concept) and BROADER relation (Topic -> Topic, skos:broader) (#662)',
+      'work: Product entity type (schema:Product) with category and vendorName (#662)',
+      'DISCUSSED widened to Meeting -> Project | Topic | Product | Organization; PART_OF gains Topic -> Project; Commitment and Decision subjectTypes gain Product and Topic (#662)',
+    ]) as string[],
+  }),
 ]);
 
 /**
@@ -61,4 +70,4 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
  *
  * @stability experimental
  */
-export const ONTOLOGY_VERSION: string = '1.2.0';
+export const ONTOLOGY_VERSION: string = '1.3.0';

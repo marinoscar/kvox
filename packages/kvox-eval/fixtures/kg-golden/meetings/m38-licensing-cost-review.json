@@ -1,0 +1,303 @@
+{
+  "id": "m38",
+  "title": "Quarterly licensing cost review",
+  "tags": [
+    "internal",
+    "note-only",
+    "topics-products"
+  ],
+  "recordedAt": "2026-07-20T10:00:00Z",
+  "contextText": "Licensing cost review with finance; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Quarterly licensing cost review\n\n**Date:** July 20\n**Attendees:** Hana Kovac, Marcus Oyelaran, Elin Dahl\n\n## Summary\n\nReview of what Wexcombe Insurance pays for software licences, prepared by Tarnmoor Advisory with the finance team. The focus was where seats are paid for but not used, and which products overlap.\n\n## What we reviewed\n\n- Lumen Assist is billed per seat, and the first wave has used fewer seats than were bought.\n- Fabricant Studio, the low-code platform used by the operations team, has three departments paying separately for the same tier.\n- Ledgerline, the general ledger software, is not in scope but its renewal falls in the same quarter.\n- Trellis Cloud, the hosting platform behind several internal tools, is the largest single line after Lumen Assist.\n\n## Cost themes\n\n- Licensing cost is the umbrella topic for this review.\n- Seat utilisation is a narrower part of licensing cost: unused seats are the quickest saving.\n- Vendor consolidation is also part of licensing cost, because fewer vendors means better volume terms.\n- Budget forecasting needs a monthly refresh once the second wave of the assistant starts.\n\n## Decisions\n\n- Unused Lumen Assist seats will be released at the end of the month and rebought only on demand.\n\n## Action items\n\n- **Marcus Oyelaran** will merge the three Fabricant Studio contracts into one.\n- **Elin Dahl** will build the monthly budget forecasting view for the committee.\n\n## Next steps\n\nThe findings go to the steering committee at its next meeting, and finance will bring the Ledgerline renewal options to the following one.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-person-hana-kovac",
+      "type": "Person",
+      "label": "Hana Kovac",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": [
+        "m37"
+      ]
+    },
+    {
+      "id": "g-org-wexcombe-insurance",
+      "type": "Organization",
+      "label": "Wexcombe Insurance",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-tarnmoor-advisory",
+      "type": "Organization",
+      "label": "Tarnmoor Advisory",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-product-lumen-assist",
+      "type": "Product",
+      "label": "Lumen Assist",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-topic-licensing-cost",
+      "type": "Topic",
+      "label": "Licensing cost",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Quarterly licensing cost review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quarterly licensing cost review"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Kovac",
+        "aliases": [],
+        "existingId": "g-person-hana-kovac",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Oyelaran",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+          }
+        ]
+      },
+      {
+        "key": "elin",
+        "type": "Person",
+        "label": "Elin Dahl",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Kovac, Marcus Oyelaran, Elin Dahl"
+          }
+        ]
+      },
+      {
+        "key": "wexcombe",
+        "type": "Organization",
+        "label": "Wexcombe Insurance",
+        "aliases": [],
+        "existingId": "g-org-wexcombe-insurance",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "what Wexcombe Insurance pays for software licences"
+          }
+        ]
+      },
+      {
+        "key": "tarnmoor",
+        "type": "Organization",
+        "label": "Tarnmoor Advisory",
+        "aliases": [],
+        "existingId": "g-org-tarnmoor-advisory",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "prepared by Tarnmoor Advisory"
+          }
+        ]
+      },
+      {
+        "key": "lumen",
+        "type": "Product",
+        "label": "Lumen Assist",
+        "aliases": [],
+        "existingId": "g-product-lumen-assist",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lumen Assist is billed per seat"
+          }
+        ]
+      },
+      {
+        "key": "fabricant",
+        "type": "Product",
+        "label": "Fabricant Studio",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fabricant Studio, the low-code platform"
+          }
+        ]
+      },
+      {
+        "key": "ledgerline",
+        "type": "Product",
+        "label": "Ledgerline",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ledgerline, the general ledger software"
+          }
+        ]
+      },
+      {
+        "key": "trellis",
+        "type": "Product",
+        "label": "Trellis Cloud",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Trellis Cloud, the hosting platform"
+          }
+        ]
+      },
+      {
+        "key": "licensing",
+        "type": "Topic",
+        "label": "Licensing cost",
+        "aliases": [],
+        "existingId": "g-topic-licensing-cost",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Licensing cost is the umbrella topic for this review"
+          }
+        ]
+      },
+      {
+        "key": "seats",
+        "type": "Topic",
+        "label": "Seat utilisation",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Seat utilisation is a narrower part of licensing cost"
+          }
+        ]
+      },
+      {
+        "key": "consolidation",
+        "type": "Topic",
+        "label": "Vendor consolidation",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Vendor consolidation is also part of licensing cost"
+          }
+        ]
+      },
+      {
+        "key": "forecasting",
+        "type": "Topic",
+        "label": "Budget forecasting",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Budget forecasting needs a monthly refresh"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "BROADER",
+        "from": "seats",
+        "to": "licensing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Seat utilisation is a narrower part of licensing cost"
+          }
+        ]
+      },
+      {
+        "type": "BROADER",
+        "from": "consolidation",
+        "to": "licensing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Vendor consolidation is also part of licensing cost"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": []
+  }
+}

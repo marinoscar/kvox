@@ -42,7 +42,7 @@ kv:AssertionShape
         sh:name "Role" ;
         sh:path kv:HAS_ROLE.title
     ], [
-        sh:in ( kv:ATTENDED kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:PARENT_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:WORKS_FOR ) ;
+        sh:in ( kv:ATTENDED kv:BROADER kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:PARENT_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:WORKS_FOR ) ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:path rdf:predicate
@@ -114,7 +114,7 @@ kv:ClaimShape
         sh:minCount 1 ;
         sh:name "About" ;
         sh:nodeKind sh:IRI ;
-        sh:or ( [ sh:class kv:Interest ] [ sh:class kv:Meeting ] [ sh:class kv:Milestone ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] [ sh:class kv:Trip ] ) ;
+        sh:or ( [ sh:class kv:Interest ] [ sh:class kv:Meeting ] [ sh:class kv:Milestone ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] [ sh:class kv:Trip ] ) ;
         sh:path kv:ABOUT
     ], [
         sh:minCount 1 ;
@@ -185,7 +185,7 @@ kv:CommitmentShape
         sh:maxCount 1 ;
         sh:name "About" ;
         sh:nodeKind sh:IRI ;
-        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] ) ;
         sh:path kv:ABOUT
     ], [
         sh:maxCount 1 ;
@@ -261,7 +261,7 @@ kv:DecisionShape
         sh:maxCount 1 ;
         sh:name "About" ;
         sh:nodeKind sh:IRI ;
-        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] ) ;
         sh:path kv:ABOUT
     ], [
         sh:minCount 1 ;
@@ -302,11 +302,6 @@ kv:MeetingShape
     sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
     sh:property [
         sh:class kv:Project ;
-        sh:name "Discussed" ;
-        sh:nodeKind sh:IRI ;
-        sh:path kv:DISCUSSED
-    ], [
-        sh:class kv:Project ;
         sh:name "Part of" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:PART_OF
@@ -343,6 +338,11 @@ kv:MeetingShape
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
         sh:path prov:wasDerivedFrom
+    ], [
+        sh:name "Discussed" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Product ] [ sh:class kv:Project ] [ sh:class kv:Topic ] ) ;
+        sh:path kv:DISCUSSED
     ] ;
     sh:targetClass kv:Meeting .
 
@@ -539,6 +539,37 @@ kv:PersonShape
     ] ;
     sh:targetClass kv:Person .
 
+kv:ProductShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "software" "platform" "ai_model" "hardware" "service" "other" ) ;
+        sh:maxCount 1 ;
+        sh:name "Category" ;
+        sh:path kv:Product.category
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Vendor" ;
+        sh:path kv:Product.vendorName
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Product .
+
 kv:ProjectShape
     a sh:NodeShape ;
     sh:closed true ;
@@ -585,6 +616,41 @@ kv:ProjectShape
         sh:path prov:wasDerivedFrom
     ] ;
     sh:targetClass kv:Project .
+
+kv:TopicShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom skos:broader ) ;
+    sh:property [
+        sh:class kv:Project ;
+        sh:name "Part of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PART_OF
+    ], [
+        sh:class kv:Topic ;
+        sh:name "Broader" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:BROADER
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Summary" ;
+        sh:path kv:Topic.summary
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Topic .
 
 kv:TripShape
     a sh:NodeShape ;

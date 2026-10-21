@@ -1,0 +1,262 @@
+{
+  "id": "m37",
+  "title": "Lumen Assist rollout steering committee",
+  "tags": [
+    "internal",
+    "note-only",
+    "topics-products"
+  ],
+  "recordedAt": "2026-07-06T14:00:00Z",
+  "contextText": "Steering committee for the assistant rollout; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Lumen Assist rollout steering committee\n\n**Date:** July 6\n**Attendees:** Priya Anand, Lars Meyer, Hana Kovac\n\n## Summary\n\nSteering committee for Wexcombe Insurance's rollout of the Lumen Assist AI assistant, run by Tarnmoor Advisory. The group reviewed the first pilot wave, the supporting tools and the topics that keep coming back in every status meeting.\n\n## Pilot status\n\n- About two hundred claims handlers now have Lumen Assist, an AI assistant for drafting and summarising, and early feedback is positive.\n- Quillbase, the document store the assistant reads from, still has gaps: older policy wording was never migrated.\n- Orbitdesk, the service desk platform, will carry all support tickets about the rollout so that nothing is tracked in email.\n- Kestrel Search, the enterprise search tool, is being tested as the way handlers find source documents before they ask the assistant anything.\n\n## Topics that keep coming back\n\n- Change management is the main risk. Handlers who were not briefed in person adopted the assistant far more slowly.\n- Adoption metrics sit under change management: the committee wants one weekly number, not five dashboards.\n- Licensing cost is rising faster than planned, and Hana asked that it be handled as a standing item.\n- Licensing cost is part of the wider AI governance topic, together with who may use which model on which data.\n\n## Decisions\n\n- The pilot continues to a second wave in August with the same group of handlers.\n\n## Action items\n\n- **Hana Kovac** will circulate a one-page adoption metrics definition after the meeting.\n- **Lars Meyer** will list the missing policy wording that has to move into Quillbase.\n\n## Next steps\n\nThe committee meets again in three weeks to review the second wave plan and the licence forecast.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Lumen Assist rollout steering committee",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lumen Assist rollout steering committee"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Anand",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+          }
+        ]
+      },
+      {
+        "key": "lars",
+        "type": "Person",
+        "label": "Lars Meyer",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Kovac",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Lars Meyer, Hana Kovac"
+          }
+        ]
+      },
+      {
+        "key": "wexcombe",
+        "type": "Organization",
+        "label": "Wexcombe Insurance",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wexcombe Insurance's rollout of the Lumen Assist AI assistant"
+          }
+        ]
+      },
+      {
+        "key": "tarnmoor",
+        "type": "Organization",
+        "label": "Tarnmoor Advisory",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "run by Tarnmoor Advisory"
+          }
+        ]
+      },
+      {
+        "key": "lumen",
+        "type": "Product",
+        "label": "Lumen Assist",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "ai_model"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lumen Assist, an AI assistant for drafting and summarising"
+          }
+        ]
+      },
+      {
+        "key": "quillbase",
+        "type": "Product",
+        "label": "Quillbase",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quillbase, the document store the assistant reads from"
+          }
+        ]
+      },
+      {
+        "key": "orbitdesk",
+        "type": "Product",
+        "label": "Orbitdesk",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Orbitdesk, the service desk platform"
+          }
+        ]
+      },
+      {
+        "key": "kestrel",
+        "type": "Product",
+        "label": "Kestrel Search",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kestrel Search, the enterprise search tool"
+          }
+        ]
+      },
+      {
+        "key": "change",
+        "type": "Topic",
+        "label": "Change management",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Change management is the main risk"
+          }
+        ]
+      },
+      {
+        "key": "adoption",
+        "type": "Topic",
+        "label": "Adoption metrics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Adoption metrics sit under change management"
+          }
+        ]
+      },
+      {
+        "key": "licensing",
+        "type": "Topic",
+        "label": "Licensing cost",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Licensing cost is rising faster than planned"
+          }
+        ]
+      },
+      {
+        "key": "aigov",
+        "type": "Topic",
+        "label": "AI governance",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the wider AI governance topic"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "BROADER",
+        "from": "adoption",
+        "to": "change",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Adoption metrics sit under change management"
+          }
+        ]
+      },
+      {
+        "type": "BROADER",
+        "from": "licensing",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Licensing cost is part of the wider AI governance topic"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": []
+  }
+}

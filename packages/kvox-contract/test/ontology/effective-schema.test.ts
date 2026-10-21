@@ -15,7 +15,7 @@ describe('computeEffectiveSchema', () => {
 
     it('contains only core types', () => {
       const keys = schema.entityTypes.map((t) => t.key).sort();
-      expect(keys).toEqual(['Claim', 'Meeting', 'Organization', 'Person', 'PersonFact'].sort());
+      expect(keys).toEqual(['Claim', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Topic'].sort());
     });
 
     it('has no relation referencing Project, Commitment or Decision', () => {
@@ -58,13 +58,28 @@ describe('computeEffectiveSchema', () => {
     });
   });
 
+  describe('work disabled (#662)', () => {
+    const schema = computeEffectiveSchema({ enabledDomains: [], userAttributes: [] });
+
+    it('has Topic and BROADER but no Product, DISCUSSED or Product endpoint anywhere', () => {
+      expect(schema.entityType('Topic')).toBeDefined();
+      expect(schema.relationType('BROADER')).toBeDefined();
+      expect(schema.entityType('Product')).toBeUndefined();
+      expect(schema.relationType('DISCUSSED')).toBeUndefined();
+      for (const r of schema.relationTypes) {
+        expect(r.from).not.toContain('Product');
+        expect(r.to).not.toContain('Product');
+      }
+    });
+  });
+
   describe('core + work', () => {
     const schema = computeEffectiveSchema({ enabledDomains: ['work'], userAttributes: [] });
 
     it('includes both core and work types', () => {
       const keys = schema.entityTypes.map((t) => t.key).sort();
       expect(keys).toEqual(
-        ['Claim', 'Commitment', 'Decision', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Project'].sort(),
+        ['Claim', 'Commitment', 'Decision', 'Meeting', 'Organization', 'Person', 'PersonFact', 'Product', 'Project', 'Topic'].sort(),
       );
     });
 
@@ -88,7 +103,22 @@ describe('computeEffectiveSchema', () => {
       expect(partOf?.allowedPairs).toEqual([
         ['Project', 'Organization'],
         ['Meeting', 'Project'],
+        ['Topic', 'Project'],
       ]);
+    });
+
+    it('carries Topic (core, skos:Concept), Product (work, schema:Product), BROADER and the widened DISCUSSED (#662)', () => {
+      expect(schema.entityType('Topic')).toMatchObject({ domain: 'core', alignment: 'skos:Concept' });
+      expect(schema.entityType('Topic')?.attributes.map((a) => a.key)).toEqual(['summary']);
+      expect(schema.entityType('Product')).toMatchObject({ domain: 'work', alignment: 'schema:Product' });
+      expect(schema.entityType('Product')?.attributes.map((a) => a.key)).toEqual(['category', 'vendorName']);
+      expect(schema.relationType('BROADER')).toMatchObject({ from: ['Topic'], to: ['Topic'], alignment: 'skos:broader', temporal: false, exclusive: 'none' });
+      expect(schema.relationType('DISCUSSED')?.to).toEqual(['Project', 'Topic', 'Product', 'Organization']);
+      const about = schema.relationType('ABOUT')!;
+      expect(about.to).toEqual(expect.arrayContaining(['Topic', 'Product']));
+      for (const key of ['Commitment', 'Decision']) {
+        expect(schema.entityType(key)?.subjectTypes).toEqual(['Person', 'Organization', 'Project', 'Product', 'Topic']);
+      }
     });
 
     it('carries identity: true on HAS_ROLE.businessUnit only, omitting the key elsewhere (#440)', () => {

@@ -123,9 +123,11 @@ describe('buildExtractionContext (#363)', () => {
 
     it('drops a disabled domain entirely', () => {
       const ctx = makeContext({ effectiveSchema: schemaFor(['core']) });
-      expect(ctx.offered.entityTypes.map((t) => t.key)).toEqual(['Person', 'Organization']);
+      expect(ctx.offered.entityTypes.map((t) => t.key)).toEqual(['Person', 'Organization', 'Topic']);
       expect(ctx.offered.itemTypes.map((t) => t.key)).toEqual(['Claim', 'PersonFact']);
-      expect(ctx.offered.relationTypes).toEqual([]);
+      // Topic and BROADER are core (#662): the only thing offered with work off.
+      expect(ctx.offered.relationTypes.map((r) => r.type.key)).toEqual(['BROADER']);
+      expect(ctx.offered.entityTypes.map((t) => t.key)).not.toContain('Product');
     });
   });
 

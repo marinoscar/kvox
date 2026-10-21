@@ -1,0 +1,359 @@
+{
+  "id": "m39",
+  "title": "AI governance workshop",
+  "tags": [
+    "internal",
+    "note-only",
+    "topics-products"
+  ],
+  "recordedAt": "2026-08-03T09:30:00Z",
+  "contextText": "Workshop on how AI use is governed; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# AI governance workshop\n\n**Date:** August 3\n**Attendees:** Priya Anand, Hana Kovac, Joaquin Reyes\n\n## Summary\n\nHalf-day workshop on AI governance for Wexcombe Insurance, facilitated by Tarnmoor Advisory. The group agreed what has to be controlled before the second wave of Lumen Assist starts, and which tools help.\n\n## Controls discussed\n\n- Sable Guard, the data loss prevention software, would block policyholder data from leaving through prompts.\n- Helmgate, the identity and access platform, decides which handlers may use which model.\n- Northgrid Insights, the analytics software, would report usage by team without exposing prompt content.\n- Parcelport, the managed integration service, connects the assistant to the claims system and must log every call.\n- Lumen Assist stays the only approved assistant until the controls are in place.\n\n## Themes\n\n- AI governance is the overall topic and the committee's standing agenda item.\n- Data classification is a narrower part of AI governance: every document needs a label before an assistant may read it.\n- Model risk is part of AI governance, covering wrong or invented answers in claims decisions.\n- Human oversight is a narrower part of AI governance: a handler always confirms before a claim outcome is sent.\n- Prompt logging was debated at length; the compromise is to keep metadata only.\n\n## Decisions\n\n- No claim outcome may be sent on an assistant answer without a named handler's confirmation.\n\n## Action items\n\n- **Joaquin Reyes** will draft the data classification scheme with three levels.\n- **Priya Anand** will take the human oversight rule to the steering committee.\n\n## Next steps\n\nTarnmoor Advisory will write up the workshop and circulate it within the week.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-person-priya-anand",
+      "type": "Person",
+      "label": "Priya Anand",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": [
+        "m37"
+      ]
+    },
+    {
+      "id": "g-person-hana-kovac",
+      "type": "Person",
+      "label": "Hana Kovac",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": [
+        "m37",
+        "m38"
+      ]
+    },
+    {
+      "id": "g-org-wexcombe-insurance",
+      "type": "Organization",
+      "label": "Wexcombe Insurance",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-tarnmoor-advisory",
+      "type": "Organization",
+      "label": "Tarnmoor Advisory",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-product-lumen-assist",
+      "type": "Product",
+      "label": "Lumen Assist",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-topic-ai-governance",
+      "type": "Topic",
+      "label": "AI governance",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "AI governance workshop",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "AI governance workshop"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Anand",
+        "aliases": [],
+        "existingId": "g-person-priya-anand",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Hana Kovac, Joaquin Reyes"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Kovac",
+        "aliases": [],
+        "existingId": "g-person-hana-kovac",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Hana Kovac, Joaquin Reyes"
+          }
+        ]
+      },
+      {
+        "key": "joaquin",
+        "type": "Person",
+        "label": "Joaquin Reyes",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Anand, Hana Kovac, Joaquin Reyes"
+          }
+        ]
+      },
+      {
+        "key": "wexcombe",
+        "type": "Organization",
+        "label": "Wexcombe Insurance",
+        "aliases": [],
+        "existingId": "g-org-wexcombe-insurance",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "AI governance for Wexcombe Insurance"
+          }
+        ]
+      },
+      {
+        "key": "tarnmoor",
+        "type": "Organization",
+        "label": "Tarnmoor Advisory",
+        "aliases": [],
+        "existingId": "g-org-tarnmoor-advisory",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "facilitated by Tarnmoor Advisory"
+          }
+        ]
+      },
+      {
+        "key": "lumen",
+        "type": "Product",
+        "label": "Lumen Assist",
+        "aliases": [],
+        "existingId": "g-product-lumen-assist",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Lumen Assist stays the only approved assistant"
+          }
+        ]
+      },
+      {
+        "key": "sable",
+        "type": "Product",
+        "label": "Sable Guard",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sable Guard, the data loss prevention software"
+          }
+        ]
+      },
+      {
+        "key": "helmgate",
+        "type": "Product",
+        "label": "Helmgate",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "platform"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Helmgate, the identity and access platform"
+          }
+        ]
+      },
+      {
+        "key": "northgrid",
+        "type": "Product",
+        "label": "Northgrid Insights",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northgrid Insights, the analytics software"
+          }
+        ]
+      },
+      {
+        "key": "parcelport",
+        "type": "Product",
+        "label": "Parcelport",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "service"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Parcelport, the managed integration service"
+          }
+        ]
+      },
+      {
+        "key": "aigov",
+        "type": "Topic",
+        "label": "AI governance",
+        "aliases": [],
+        "existingId": "g-topic-ai-governance",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "AI governance is the overall topic"
+          }
+        ]
+      },
+      {
+        "key": "classification",
+        "type": "Topic",
+        "label": "Data classification",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Data classification is a narrower part of AI governance"
+          }
+        ]
+      },
+      {
+        "key": "modelrisk",
+        "type": "Topic",
+        "label": "Model risk",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Model risk is part of AI governance"
+          }
+        ]
+      },
+      {
+        "key": "oversight",
+        "type": "Topic",
+        "label": "Human oversight",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Human oversight is a narrower part of AI governance"
+          }
+        ]
+      },
+      {
+        "key": "logging",
+        "type": "Topic",
+        "label": "Prompt logging",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Prompt logging was debated at length"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "BROADER",
+        "from": "classification",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Data classification is a narrower part of AI governance"
+          }
+        ]
+      },
+      {
+        "type": "BROADER",
+        "from": "modelrisk",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Model risk is part of AI governance"
+          }
+        ]
+      },
+      {
+        "type": "BROADER",
+        "from": "oversight",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Human oversight is a narrower part of AI governance"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": []
+  }
+}

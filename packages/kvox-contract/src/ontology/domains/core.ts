@@ -20,7 +20,7 @@ import { defineDomain, defineEntityType, defineRelationType } from '../define.js
  * The effective schema prunes each list to the caller's enabled domains, so a
  * `personal` type here is invisible to a user who never turned `personal` on.
  */
-const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project', 'Interest', 'Trip', 'Milestone'];
+const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project', 'Interest', 'Trip', 'Milestone', 'Topic', 'Product'];
 
 /** Every declared type, across all domains, for SUPPORTED_BY. */
 const ALL_TYPES = [
@@ -35,7 +35,38 @@ const ALL_TYPES = [
   'Interest',
   'Trip',
   'Milestone',
+  'Topic',
+  'Product',
 ];
+
+/**
+ * Wire constant: topic.
+ *
+ * @stability experimental
+ */
+export const Topic = defineEntityType({
+  key: 'Topic',
+  domain: 'core',
+  label: 'Topic',
+  pluralLabel: 'Topics',
+  description:
+    'A recurring subject of discussion that is not itself a unit of work, e.g. "AI governance", "licensing cost", "change management".',
+  disambiguation: [
+    'Something with an owner, a start and an expected end that work attaches to is a Project, not a Topic.',
+    'A named product, tool or technology is a Product (when the work domain is on), not a Topic.',
+    'Prefer reusing an existing Topic label over creating a near-synonym.',
+  ],
+  attributes: {
+    summary: {
+      kind: 'text',
+      label: 'Summary',
+      description: 'A short summary of the topic, written by the user.',
+      extractable: false,
+    },
+  },
+  sensitivityDefault: 'business',
+  alignment: 'skos:Concept',
+});
 
 /**
  * Wire constant: person.
@@ -199,7 +230,7 @@ export const coreDomain = defineDomain({
   label: 'Core',
   alwaysOn: true,
   defaultEnabled: true,
-  entityTypes: [Person, Organization, Meeting, Claim, PersonFact],
+  entityTypes: [Person, Organization, Meeting, Claim, PersonFact, Topic],
   relationTypes: [
     defineRelationType({
       key: 'ABOUT',
@@ -270,6 +301,20 @@ export const coreDomain = defineDomain({
       props: {},
       representation: { kind: 'evidence' },
       extractable: false,
+    }),
+    defineRelationType({
+      key: 'BROADER',
+      domain: 'core',
+      label: 'Broader',
+      description: 'A topic that is a narrower part of a broader theme: "licensing cost" BROADER "AI governance" rolls the narrower topic up into the theme.',
+      from: ['Topic'],
+      to: ['Topic'],
+      temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+      alignment: 'skos:broader',
     }),
   ],
   mixins: [],

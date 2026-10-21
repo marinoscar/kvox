@@ -75,7 +75,7 @@ kvox-eval ask --only q01,q22 --category negative --min-match 0.7
 kvox-eval ask --provider openai-compatible --base-url http://localhost:8000/v1 --model local-model
 ```
 
-Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out` (writes `report.json` and `answers.md`; `replay.json` for `--replay`), `--min-match <0..1>`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive-fact leak) or the answer match fell below `--min-match` (or a replay expectation failed), 2 configuration (no key, a refused provider, a bad flag, an unknown question id) or every model call failed. One failed model call marks that turn failed and the run goes on. The seeded graph is 36 meetings, 94 entities, 265 relations, 187 items and 731 evidence rows, 0 refused. Semantic search is off (no embeddings). `--replay` reproduces `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
+Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out` (writes `report.json` and `answers.md`; `replay.json` for `--replay`), `--min-match <0..1>`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive-fact leak) or the answer match fell below `--min-match` (or a replay expectation failed), 2 configuration (no key, a refused provider, a bad flag, an unknown question id) or every model call failed. One failed model call marks that turn failed and the run goes on. The seeded graph is 39 meetings, 127 entities, 272 relations, 187 items and 782 evidence rows, 0 refused. Semantic search is off (no embeddings). `--replay` reproduces `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
 
 From code:
 

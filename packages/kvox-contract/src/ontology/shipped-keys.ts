@@ -73,4 +73,11 @@ export const SHIPPED_KEYS: readonly string[] = Object.freeze([
   'HAS_MILESTONE',
   // 1.2.0 — work
   'HAS_ROLE.businessUnit',
+  // 1.3.0 — core + work (Graph Insight Canvas, #662)
+  'Topic',
+  'Topic.summary',
+  'Product',
+  'Product.category',
+  'Product.vendorName',
+  'BROADER',
 ]);

@@ -181,7 +181,11 @@ export function AddToGraphDialog({
     if (!entityType && entityTypes.length > 0) setEntityType(entityTypes[0].key);
   }, [entityType, entityTypes]);
   useEffect(() => {
-    if (!relationType && relationTypes.length > 0) setRelationType(relationTypes[0].key);
+    // Core relations (BROADER) are taxonomic; the first domain relation (WORKS_FOR) is the better
+    // starting point for relating the people and organizations a note is about.
+    if (!relationType && relationTypes.length > 0) {
+      setRelationType((relationTypes.find((type) => type.domain !== 'core') ?? relationTypes[0]).key);
+    }
   }, [relationType, relationTypes]);
 
   const itemTypeKey = ITEM_KINDS.find((entry) => entry.value === itemKind)!.typeKey;
