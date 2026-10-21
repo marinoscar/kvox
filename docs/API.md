@@ -6856,7 +6856,8 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
     "edges": [
       { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {} },
       { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false, "props": {} },
-      { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } }
+      { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } },
+      { "id": "8b40…", "type": "INVOLVED_IN", "source": "0b6f…", "target": "c2a9…", "valid": null, "confidence": 0.88, "virtual": false, "props": { "role": "approver", "stance": "skeptical" } }
     ],
     "truncated": false,
     "cap": 150
