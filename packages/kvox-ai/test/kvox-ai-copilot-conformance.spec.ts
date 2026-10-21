@@ -33,7 +33,9 @@ import {
 //
 //   structuredAnswer({ value })     an answer whose text is the JSON, finishing as asked
 //   streamAnswer(events)            the deltas as text, the completion's finish reason; an in-band
-//                                   error event becomes a session.error after the partial text
+//                                   error event becomes a session.error after the partial text; a
+//                                   function call becomes a `toolCalls` reply (the text before it is
+//                                   the preamble; the Copilot runtime cannot say text after a call)
 //   failNext(AiError)               AI_RATE_LIMITED   -> session.error rate_limit / 429
 //                                   AI_KEY_INVALID    -> session.error authentication / 401
 //                                   AI_KEY_REQUIRED   -> the runtime reports nobody signed in
@@ -48,8 +50,6 @@ import {
 // round trip, so `failNext` means "the next round trip of any kind" as the kit says.
 //
 // OPT-OUTS (each with its reason, never a skip):
-//   chat_tool_calls  Copilot ships with tool calling off (the #581 decision): the adapter refuses
-//                    tools and the Ask loop stays on OpenAI.
 //   rate_limit_job   the case needs the provider's retry hint to reach the queue. SDK 1.0.22 puts no
 //                    retry-after on session.error or model.call_failure, so the adapter cannot
 //                    produce one (it honours a numeric hint when a later release adds it: proved in
@@ -66,8 +66,8 @@ function modelState(): KvoxAiModelState {
         id: MODEL,
         label: MODEL,
         structuredOutput: true,
-        // Copilot ships with tool calling off (#581): the Ask loop stays on OpenAI.
-        toolCalling: false,
+        // Copilot serves the Ask loop through the adapter's session bridge (#654).
+        toolCalling: true,
         contextWindow: 128_000,
         maxOutputTokens: 16_384,
         structuredOutputMode: 'native',
@@ -140,6 +140,22 @@ function replyForStream(events: AiStreamEvent[]): CopilotMockReply {
   }
   const completed = events.find((event): event is Extract<AiStreamEvent, { type: 'response.completed' }> => event.type === 'response.completed');
   const finish = completed?.response.finishReason;
+  const calls = events.flatMap((event) =>
+    event.type === 'output_item.done' && event.item.type === 'function_call' ? [event.item] : [],
+  );
+  if (calls.length > 0) {
+    // What the model said BEFORE its first call is the preamble; the runtime says nothing after a call.
+    const firstCall = events.findIndex((event) => event.type === 'output_item.done' && event.item.type === 'function_call');
+    const preamble = events
+      .slice(0, firstCall)
+      .flatMap((event) => (event.type === 'output_text.delta' ? [event.delta] : []))
+      .join('');
+    return {
+      kind: 'toolCalls',
+      ...(preamble.length > 0 ? { text: preamble, chunkSize: Math.max(8, preamble.length) } : {}),
+      calls: calls.map((item) => ({ name: item.name, toolCallId: item.callId, arguments: item.arguments })),
+    };
+  }
   return {
     kind: 'answer',
     text: deltas.join(''),
@@ -188,7 +204,10 @@ function conformanceUnderTest(options: { requestTimeoutMs?: number } = {}): Kvox
     }
   });
 
-  const copilot = wrapRecordingAdapter(createCopilotAdapter({ optIn: true, transport: copilotTransport }));
+  // A short idle timeout: the kit's tool step is never answered, so its session is held until it expires.
+  const copilot = wrapRecordingAdapter(
+    createCopilotAdapter({ optIn: true, transport: copilotTransport, bridge: { idleTimeoutMs: 100, batchGraceMs: 100 } }),
+  );
 
   // The embeddings model is OpenAI's (KVOX_EMBEDDING): a stand-in serves it, and takes an armed failure or hang.
   const embedder = {
@@ -251,8 +270,6 @@ describeKvoxAiConformance(
   { describe, it, expect },
   {
     optOut: {
-      chat_tool_calls:
-        'Copilot ships with tool calling off (the #581 decision): the adapter refuses tools, so the Ask loop stays on OpenAI.',
       rate_limit_job:
         'The case needs the provider retry hint to reach the queue; Copilot SDK 1.0.22 exposes no retry-after on session.error or model.call_failure, so the adapter cannot produce one.',
     },

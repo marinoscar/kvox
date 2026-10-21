@@ -27,21 +27,24 @@ describe('COPILOT_CONSENT_COPY', () => {
     expect(hrefs.every((h) => h.startsWith('https://'))).toBe(true);
   });
 
-  it('says what is sent, that it is opt-in and off-able, and that Ask is unavailable', () => {
+  it('says what is sent, that it is opt-in and off-able, and what runs on Copilot', () => {
     const all = COPILOT_CONSENT_COPY.points.map((p) => `${p.heading} ${p.text}`).join('\n');
     expect(all).toMatch(/note and transcript text, is sent to GitHub Copilot/);
     expect(all).toMatch(/opt-in and off by default/);
     expect(all).toMatch(/turn it off at any time/);
-    expect(all).toMatch(/Ask is not available with Copilot/);
-    expect(all).toMatch(/Add an OpenAI key to keep Ask/);
+    expect(all).toMatch(/Notes, knowledge extraction, name checks and Ask run on GitHub Copilot/);
+    expect(all).toMatch(/Search by meaning needs embeddings, which GitHub Copilot does not offer/);
+    expect(all).not.toMatch(/Ask is not available/);
+    expect(all).not.toMatch(/Add an OpenAI key to keep Ask/);
   });
 
   it('has an accept label per mode, and the selected-mode label leaves the version alone', () => {
     expect(COPILOT_CONSENT_COPY.acceptLabel).toBe('Agree and turn on');
     expect(COPILOT_CONSENT_COPY.acceptSelectedLabel).toBe('Agree and use GitHub Copilot');
-    // A new button label changes nothing the user agrees to, so the version stays at '1'.
-    expect(COPILOT_CONSENT_VERSION).toBe('1');
-    expect(COPILOT_CONSENT_COPY.version).toBe('1');
+    // A new button label changes nothing the user agrees to, so the version stays at '2'
+    // (bumped from '1' when Ask moved onto Copilot, marinoscar/kvox#654).
+    expect(COPILOT_CONSENT_VERSION).toBe('2');
+    expect(COPILOT_CONSENT_COPY.version).toBe('2');
   });
 });
 
@@ -49,10 +52,10 @@ describe('COPILOT_PROVIDER_COPY', () => {
   it('drops the switch wording from the selected-mode description only', () => {
     expect(COPILOT_PROVIDER_COPY.displayName).toBe('GitHub Copilot');
     expect(COPILOT_PROVIDER_COPY.description).toBe(
-      'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
+      'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
     );
     expect(COPILOT_PROVIDER_COPY.selectedDescription).toBe(
-      'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription.',
+      'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription.',
     );
   });
 });
@@ -131,7 +134,8 @@ describe('buildCopilotCapabilities', () => {
       ['Ask', false],
       ['Search by meaning', false],
     ]);
-    expect(rows[3]?.note).toMatch(/Add an OpenAI key to keep Ask/);
+    expect(rows[3]?.note).toBe('Needs a model with tool calling.');
+    expect(rows[3]?.note).not.toMatch(/OpenAI/);
   });
 
   it('makes a row unavailable when any one of its tasks is', () => {
@@ -139,6 +143,13 @@ describe('buildCopilotCapabilities', () => {
       unavailableTasks: [{ task: 'graph.digest', reason: 'needs_tool_calling' }],
     });
     expect(rows.find((r) => r.label === 'Knowledge extraction')?.available).toBe(false);
+  });
+
+  it('shows Ask as available when unavailableTasks has no ask.respond', () => {
+    const rows = buildCopilotCapabilities({
+      unavailableTasks: [{ task: 'search.embed', reason: 'needs_embeddings' }],
+    });
+    expect(rows.find((r) => r.label === 'Ask')).toEqual({ label: 'Ask', available: true });
   });
 
   it('lists only the four always-on rows when nothing is unavailable', () => {

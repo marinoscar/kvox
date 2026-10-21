@@ -83,7 +83,7 @@ No telemetry, no crash upload. The loopback server requires a per-launch token. 
 |---|---|---|
 | OpenAI | Paste the API key in settings; it is stored in the OS keychain | First release |
 | OpenAI-compatible | Set the base URL (and key if needed) | First release |
-| GitHub Copilot | Opt-in switch in settings, then sign in to GitHub. Built as a provider adapter (#581, #630), published on `next`: sign-in and sign-out, runtime preparation, egress hosts and capability routing. Serves notes and graph extraction; Ask and embeddings stay on OpenAI | Built in the packages; not yet exercised against a real signed-in account. Shipping it waits on the terms-of-use decision |
+| GitHub Copilot | Opt-in switch in settings, then sign in to GitHub. Built as a provider adapter (#581, #630), published on `next`: sign-in and sign-out, runtime preparation, egress hosts and capability routing. Serves notes, graph extraction and Ask (Ask through the adapter's tool bridge, #654); embeddings stay on OpenAI | Built in the packages; not yet exercised against a real signed-in account. Shipping it waits on the terms-of-use decision |
 
 ## Repository layout
 

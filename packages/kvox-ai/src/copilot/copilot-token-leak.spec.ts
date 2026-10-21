@@ -246,6 +246,20 @@ describe('the planted token never leaves the Copilot adapter', () => {
     h.sweep('in-band error');
   });
 
+  it.each(TOKENS)('keeps a token out of the warning about a tool the session lists (%s)', async (token) => {
+    const h = harness((mock) => ({
+      ...mock,
+      async createSession(config) {
+        const session = await mock.createSession(config);
+        return { ...session, currentToolNames: async () => [`${token}-listed`, `x${'y'.repeat(200)}`] };
+      },
+    }));
+    twice(h.mock, { kind: 'answer', text: 'ok' });
+    await h.run();
+    expect(h.captured.logs.some((log) => log.level === 'warn')).toBe(true);
+    h.sweep('listed tool');
+  });
+
   it('keeps a token out of the tripwire failure', async () => {
     const h = harness();
     h.mock.queue({ kind: 'events', events: [{ type: 'tool.execution_start', data: { toolName: GHO, arguments: { token: GHU } } }] });
@@ -447,5 +461,85 @@ describe('the planted token never leaves the sign-in path', () => {
       sweepAll(behaviour, out);
       if (behaviour === 'complete-with-token') expect(out.results[1]).toEqual({ signedIn: true, login: 'octocat' });
     });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// The tool bridge (#654): the same sweep over a step that calls tools
+// -----------------------------------------------------------------------------
+
+describe('the planted token never leaves the Copilot adapter through the tool bridge', () => {
+  const lookup = { type: 'function' as const, name: 'lookup', description: 'Looks things up.', parameters: z.object({}) };
+
+  /** Streams one tool-loop step, capturing everything that comes out. */
+  async function runStep(h: ReturnType<typeof harness>, input: AiResponseRequest['input']): Promise<void> {
+    try {
+      for await (const event of h.adapter.responses.stream({ model: MODEL, input, tools: [lookup] }, ctx)) h.captured.events.push(event);
+    } catch (error) {
+      h.captured.errors.push(error);
+    }
+  }
+
+  const continuation = [
+    { type: 'message' as const, role: 'user' as const, content: [{ type: 'text' as const, text: 'Hi' }] },
+    { type: 'function_call' as const, callId: 'c1', name: 'lookup', arguments: '{}' },
+    { type: 'function_call_output' as const, callId: 'c1', output: 'ok' },
+  ];
+
+  it.each(TOKENS)('in a continuation failure and in the log of a held session that expires (%s)', async (token) => {
+    const h = harness();
+    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', toolCallId: 'c1' }] });
+    h.mock.queue({ kind: 'sessionError', errorType: 'query', statusCode: 500, message: `upstream said ${token}` });
+    await runStep(h, [continuation[0]]);
+    await runStep(h, continuation);
+    expect(h.captured.events.some((event) => event.type === 'error')).toBe(true);
+    h.sweep('continuation failure');
+  });
+
+  it.each(TOKENS)('in the tripwire detail of a foreign tool, in a tool name and in an event (%s)', async (token) => {
+    const named = harness();
+    named.mock.queue({ kind: 'toolCalls', calls: [{ name: `${token}-tool` }] });
+    await runStep(named, [continuation[0]]);
+    named.sweep('foreign tool name in the tool requests');
+
+    const event = harness();
+    event.mock.queue({ kind: 'events', events: [{ type: 'tool.execution_start', data: { toolName: `${token}-tool` } }] });
+    await runStep(event, [continuation[0]]);
+    event.sweep('foreign tool name in a tool event');
+
+    const permission = harness();
+    permission.mock.queue({
+      kind: 'events',
+      events: [{ type: 'permission.requested', data: { permissionRequest: { kind: `shell-${token}`, toolName: token } } }],
+    });
+    await runStep(permission, [continuation[0]]);
+    permission.sweep('foreign permission request');
+    expect(permission.captured.errors.length + permission.captured.events.length).toBeGreaterThan(0);
+  });
+
+  it('in the failure of every cleanup step of a held session', async () => {
+    const h = harness((mock) => ({
+      ...mock,
+      async createSession(config) {
+        const session = await mock.createSession(config);
+        return {
+          ...session,
+          abort: async () => {
+            throw new Error(`abort failed ${GHO}`);
+          },
+          disconnect: async () => {
+            throw new Error(`disconnect failed ${GHU}`);
+          },
+        };
+      },
+      deleteSession: async () => {
+        throw new Error(`delete failed ${GHO}`);
+      },
+    }));
+    h.mock.queue({ kind: 'toolCalls', calls: [{ name: 'lookup', toolCallId: 'c1' }] });
+    await runStep(h, [continuation[0]]);
+    await h.adapter.bridge.closeAll();
+    expect(h.captured.logs.some((entry) => entry.level === 'warn')).toBe(true);
+    h.sweep('held session cleanup');
   });
 });
