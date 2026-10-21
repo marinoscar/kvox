@@ -16,7 +16,7 @@ exports[`generateOwl parses with n3 and matches the snapshot 1`] = `
 kv:
     a owl:Ontology ;
     rdfs:label "<APP_NAME> ontology" ;
-    owl:versionInfo "1.2.0" .
+    owl:versionInfo "1.3.0" .
 
 kv:ABOUT
     a owl:ObjectProperty ;
@@ -28,7 +28,7 @@ kv:ABOUT
     rdfs:label "About" ;
     rdfs:range [
         a owl:Class ;
-        owl:unionOf ( kv:Interest kv:Meeting kv:Milestone kv:Organization kv:Person kv:Project kv:Trip )
+        owl:unionOf ( kv:Interest kv:Meeting kv:Milestone kv:Organization kv:Person kv:Product kv:Project kv:Topic kv:Trip )
     ] .
 
 kv:ASSIGNED_TO
@@ -51,6 +51,14 @@ kv:Assertion
     rdfs:comment "A relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge, prov:startedAtTime/prov:endedAtTime its validity range, and prov:wasDerivedFrom its citations." ;
     rdfs:label "Assertion" ;
     rdfs:subClassOf rdf:Statement .
+
+kv:BROADER
+    a owl:ObjectProperty ;
+    rdfs:comment "A topic that is a narrower part of a broader theme: \\"licensing cost\\" BROADER \\"AI governance\\" rolls the narrower topic up into the theme." ;
+    rdfs:domain kv:Topic ;
+    rdfs:label "Broader" ;
+    rdfs:range kv:Topic ;
+    rdfs:subPropertyOf skos:broader .
 
 kv:CREATED_IN
     a owl:ObjectProperty ;
@@ -92,10 +100,13 @@ kv:DECIDED_IN
 
 kv:DISCUSSED
     a owl:ObjectProperty ;
-    rdfs:comment "A meeting discussed a project as a substantive topic." ;
+    rdfs:comment "A meeting discussed a project, topic, product or organization as a substantive subject." ;
     rdfs:domain kv:Meeting ;
     rdfs:label "Discussed" ;
-    rdfs:range kv:Project .
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Organization kv:Product kv:Project kv:Topic )
+    ] .
 
 kv:Decision
     a owl:Class ;
@@ -255,10 +266,10 @@ kv:PARENT_OF
 
 kv:PART_OF
     a owl:ObjectProperty ;
-    rdfs:comment "A project belongs to an organization, or a meeting belongs to a project." ;
+    rdfs:comment "A project belongs to an organization, a meeting belongs to a project, or a topic is scoped under a project." ;
     rdfs:domain [
         a owl:Class ;
-        owl:unionOf ( kv:Meeting kv:Project )
+        owl:unionOf ( kv:Meeting kv:Project kv:Topic )
     ] ;
     rdfs:label "Part of" ;
     rdfs:range [
@@ -282,6 +293,26 @@ kv:PersonFact.statement
     rdfs:comment "What the item states, in one sentence." ;
     rdfs:domain kv:PersonFact ;
     rdfs:label "Statement" ;
+    rdfs:range xsd:string .
+
+kv:Product
+    a owl:Class ;
+    rdfs:comment "A named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. \\"Microsoft Copilot\\", \\"Salesforce\\", \\"SAP S/4HANA\\"." ;
+    rdfs:label "Product" ;
+    rdfs:subClassOf schema:Product .
+
+kv:Product.category
+    a owl:DatatypeProperty ;
+    rdfs:comment "What kind of product this is, only if the source says so." ;
+    rdfs:domain kv:Product ;
+    rdfs:label "Category" ;
+    rdfs:range xsd:string .
+
+kv:Product.vendorName
+    a owl:DatatypeProperty ;
+    rdfs:comment "The name of the vendor that offers the product, only if the source states it. A resolution hint, not a link." ;
+    rdfs:domain kv:Product ;
+    rdfs:label "Vendor" ;
     rdfs:range xsd:string .
 
 kv:Project
@@ -347,6 +378,19 @@ kv:TRAVELED_ON
     rdfs:domain kv:Person ;
     rdfs:label "Traveled on" ;
     rdfs:range kv:Trip .
+
+kv:Topic
+    a owl:Class ;
+    rdfs:comment "A recurring subject of discussion that is not itself a unit of work, e.g. \\"AI governance\\", \\"licensing cost\\", \\"change management\\"." ;
+    rdfs:label "Topic" ;
+    rdfs:subClassOf skos:Concept .
+
+kv:Topic.summary
+    a owl:DatatypeProperty ;
+    rdfs:comment "A short summary of the topic, written by the user." ;
+    rdfs:domain kv:Topic ;
+    rdfs:label "Summary" ;
+    rdfs:range xsd:string .
 
 kv:Trip
     a owl:Class ;
