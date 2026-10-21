@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-api",
-  "version": "0.1.0-next.8",
+  "version": "0.1.0-next.10",
   "description": "The NestJS side of the KVox domain: host ports, in-memory fakes and, later, the domain slices (CommonJS).",
   "license": "MIT",
   "type": "commonjs",
@@ -125,7 +125,7 @@
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
-    "@marinoscar/platform-api": "0.1.0-next.8",
+    "@marinoscar/platform-api": "0.1.0-next.9",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/event-emitter": "^3.0.1",
@@ -202,8 +202,8 @@
     }
   },
   "devDependencies": {
-    "@marinoscar/kvox-db": "0.1.0-next.8",
-    "@marinoscar/platform-db": "0.1.0-next.8",
+    "@marinoscar/kvox-db": "0.1.0-next.10",
+    "@marinoscar/platform-db": "0.1.0-next.9",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/testing": "^11.1.12",

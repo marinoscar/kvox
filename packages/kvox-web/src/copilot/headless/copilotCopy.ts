@@ -13,7 +13,8 @@
 //     Copilot, which runs the model;
 //   - the user signs in with their own GitHub account and Copilot subscription;
 //   - it is opt-in, off by default, and can be turned off at any time;
-//   - Ask needs tool calling, which Copilot does not offer here.
+//   - notes, knowledge extraction, name checks and Ask run on Copilot; search
+//     by meaning needs embeddings, which Copilot does not offer.
 // It does not state what GitHub does with the text after receipt: that is
 // GitHub's terms and the user's Copilot data settings, and the links say so.
 
@@ -71,6 +72,12 @@ export interface CopilotConsentCopy {
   links: readonly CopilotCopyLink[];
   /** The label of the accept button. */
   acceptLabel: string;
+  /**
+   * The label of the accept button when the host offers the choice of provider itself (the
+   * card's `selected` mode), where there is no switch to turn on. It changes only the button,
+   * not what the user agrees to.
+   */
+  acceptSelectedLabel: string;
 }
 
 /**
@@ -115,13 +122,44 @@ export const COPILOT_CONSENT_COPY: CopilotConsentCopy = Object.freeze({
       text: 'This is opt-in and off by default. You can turn it off at any time in these settings, which also removes GitHub Copilot and its models from KVox.',
     },
     {
-      heading: 'Ask is not available with Copilot',
-      text: 'Ask needs a model that can use tools, and GitHub Copilot does not offer that here. Add an OpenAI key to keep Ask.',
+      heading: 'What runs on GitHub Copilot',
+      text: 'Notes, knowledge extraction, name checks and Ask run on GitHub Copilot. Search by meaning needs embeddings, which GitHub Copilot does not offer.',
     },
   ]),
   links: COPILOT_TERMS_LINKS,
   acceptLabel: 'Agree and turn on',
+  acceptSelectedLabel: 'Agree and use GitHub Copilot',
 } satisfies CopilotConsentCopy);
+
+/**
+ * The words of the Copilot settings card itself, outside the consent dialog.
+ *
+ * @stability experimental
+ */
+export interface CopilotProviderCopy {
+  /** The card title. */
+  displayName: string;
+  /** The description under the title, beside the card's own enable switch. */
+  description: string;
+  /**
+   * The description when the host offers the choice of provider itself (the card's `selected`
+   * mode): the same sentence without the switch wording.
+   */
+  selectedDescription: string;
+}
+
+/**
+ * The title and description of the Copilot settings card.
+ *
+ * @stability experimental
+ */
+export const COPILOT_PROVIDER_COPY: CopilotProviderCopy = Object.freeze({
+  displayName: 'GitHub Copilot',
+  description:
+    'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
+  selectedDescription:
+    'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription.',
+} satisfies CopilotProviderCopy);
 
 /**
  * The sentence about the runtime download shown in the consent text while the

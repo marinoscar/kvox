@@ -1,6 +1,6 @@
 {
   "name": "@marinoscar/kvox-web",
-  "version": "0.1.0-next.8",
+  "version": "0.1.0-next.10",
   "description": "The React side of the KVox domain: pages, components and hooks, one subpath per slice (ESM).",
   "license": "MIT",
   "type": "module",
@@ -141,7 +141,7 @@
   },
   "peerDependencies": {
     "@marinoscar/kvox-contract": ">=0.0.0-0 || >=0.1.0-0",
-    "@marinoscar/platform-web": "0.1.0-next.8",
+    "@marinoscar/platform-web": "0.1.0-next.9",
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
     "@react-sigma/core": "^5.0.6",

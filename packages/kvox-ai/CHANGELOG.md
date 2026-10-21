@@ -1,5 +1,13 @@
 # @marinoscar/kvox-ai
 
+## 0.1.0-next.10
+
+### Minor Changes
+
+- 4c5b970: Ask runs on GitHub Copilot through native tool calling (#654). `@marinoscar/kvox-ai/copilot`: when a request carries function tools, the adapter declares them as the session's custom tools (an allowlist of exactly their names; no built-in Copilot tool is ever available; every own tool is declared with `overridesBuiltInTool: true` so Ask's names (`search`, `timeline`, ...) cannot clash with a runtime built-in; a tool the session lists beyond the request's own is only logged once as a `warn` (names only, redacted) because the live list is unverified, while a call of any other tool still aborts the call with `AI_CAPABILITY_UNSUPPORTED` and `details.tools`), ends a step in which the model calls tools with those calls (`finishReason: 'tool_calls'`) and keeps the session open. The loop's next request, the full history plus the tool outputs as before, continues the same session as the next step; when no session matches (idle timeout, restart, an edited request, the forced `toolChoice: 'none'` answer) a fresh session is given the transcript as text, so a step never fails for lack of state. The loop, its prompts and its tools stay in the API package. A held session is deleted when its turn ends, on abort or error, after an idle timeout (`bridge.idleTimeoutMs`, 120 s) and when the registry (`bridge.maxHeldSessions`, 8) overflows; the new `adapter.bridge.closeAll()` is for the Desktop host's shutdown. `adapter.kvox.toolCalling` is now `true`, and the model catalog and `classifyModel` honour an explicit "no tool calling" in the live model listing, so `routeKvoxTasks` sends Ask to Copilot. `CopilotSessionConfig` gains `tools` (each `CopilotToolDefinition` carries `overridesBuiltInTool: true`), `CopilotModelInfo` gains `capabilities.supports`, and the mock transport can script tool calls (`toolCalls` replies, `emit`) and name `builtInTools` that reject a clashing custom tool.
+
+## 0.1.0-next.9
+
 ## 0.1.0-next.8
 
 ## 0.1.0-next.7
