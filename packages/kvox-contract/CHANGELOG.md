@@ -1,5 +1,7 @@
 # @marinoscar/kvox-contract
 
+## 0.1.0-next.9
+
 ## 0.1.0-next.8
 
 ## 0.1.0-next.7
