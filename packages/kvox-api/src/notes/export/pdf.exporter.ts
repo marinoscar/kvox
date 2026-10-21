@@ -67,6 +67,7 @@ import {
 } from '../../transcripts/index.js';
 import { NOTES_MODULE_OPTIONS, type ResolvedNotesOptions } from '../notes.options.js';
 import { parseBody, type MdBlock, type MdSpan } from './markdown-ast.js';
+import { noteFooterText } from './note-document-style.js';
 import {
   provenanceEntries,
   type NoteExportDocument,
@@ -460,24 +461,7 @@ export function decoratePages(
   pdf.flushPages();
 }
 
-/**
- * The footer line.
- *
- * ⚠ THE PRODUCT NAME COMES FROM THE HOST'S BRAND (`KVOX_BRAND`), NEVER A LITERAL: a fork
- * renames it in one place and a rebranded deployment never ships PDFs footed with
- * somebody else's name.
- *
- * A pure function so the string can be asserted without rendering a PDF and
- * then trying to read glyph-encoded text back out of it.
- */
-export function noteFooterText(
-  page: number,
-  total: number,
-  version: number,
-  appName: string = DEFAULT_KVOX_BRAND.appName,
-): string {
-  return `Page ${page} of ${total} · Version ${version} · Exported from ${appName}`;
-}
+export { noteFooterText };
 
 /** Start a new page when there is not enough room left for a whole block. */
 function ensureRoom(pdf: Pdf, needed = MIN_BLOCK_ROOM): void {
