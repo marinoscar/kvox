@@ -1,0 +1,319 @@
+{
+  "id": "m44",
+  "title": "Win-loss debrief: Marlow Systems",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market"
+  ],
+  "recordedAt": "2026-09-29T16:00:00Z",
+  "contextText": "Win-loss debrief; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Win-loss debrief: Marlow Systems\n\n**Date:** September 29\n**Attendees:** Noor Haidari, Callum Reid, Beatriz Alves\n\n## Summary\n\nA debrief on three recent tenders in the grain and commodities segment, held by the Win-loss analysis team. The aim was to record who the competing vendors were, which customers sit behind them, and who inside the team is following each account.\n\n## Market picture\n\n- Hollis Grain Co is a customer of Marlow Systems and is currently evaluating Marlow Platform, the vendor's new planning product, as a replacement for its spreadsheets.\n- Marlow Platform is offered by Marlow Systems.\n- Tessel Analytics competes with Marlow Systems for commodity accounts and was the second bidder in two of the three tenders.\n- Tessel Analytics is a partner of Alder Consulting, which brought it into the Hollis Grain Co tender.\n\n## The analysis\n\n- The Win-loss analysis concerns Marlow Platform, because the team wants to understand why buyers choose it.\n- Noor Haidari leads the Win-loss analysis and presents the findings to sales leadership.\n- Callum Reid is a stakeholder in the Win-loss analysis, as the sales director whose team lost the tenders, and he said he is resistant to the idea of changing the bid process based on three cases.\n- Beatriz Alves knows Marlow Platform well from a previous role and is regarded as the team's expert on it.\n\n## Observations\n\n- Hollis Grain Co has not said whether it will move beyond the evaluation.\n- The debrief did not cover pricing or discounts.\n- Beatriz Alves left early, so she did not comment on the proposed process changes.\n\n## Open points\n\nThe sample is small, and the team still needs the loss reasons for the third tender. No date has been set for presenting to sales leadership.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Win-loss debrief: Marlow Systems",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Win-loss debrief: Marlow Systems"
+          }
+        ]
+      },
+      {
+        "key": "noor",
+        "type": "Person",
+        "label": "Noor Haidari",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+          }
+        ]
+      },
+      {
+        "key": "callum",
+        "type": "Person",
+        "label": "Callum Reid",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+          }
+        ]
+      },
+      {
+        "key": "beatriz",
+        "type": "Person",
+        "label": "Beatriz Alves",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Noor Haidari, Callum Reid, Beatriz Alves"
+          }
+        ]
+      },
+      {
+        "key": "hollis",
+        "type": "Organization",
+        "label": "Hollis Grain Co",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hollis Grain Co is a customer of Marlow Systems"
+          }
+        ]
+      },
+      {
+        "key": "marlow",
+        "type": "Organization",
+        "label": "Marlow Systems",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a customer of Marlow Systems"
+          }
+        ]
+      },
+      {
+        "key": "tessel",
+        "type": "Organization",
+        "label": "Tessel Analytics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tessel Analytics competes with Marlow Systems"
+          }
+        ]
+      },
+      {
+        "key": "alder",
+        "type": "Organization",
+        "label": "Alder Consulting",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a partner of Alder Consulting"
+          }
+        ]
+      },
+      {
+        "key": "platform",
+        "type": "Product",
+        "label": "Marlow Platform",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marlow Platform, the vendor's new planning product"
+          }
+        ]
+      },
+      {
+        "key": "winloss",
+        "type": "Project",
+        "label": "Win-loss analysis",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Win-loss analysis concerns Marlow Platform"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "CUSTOMER_OF",
+        "from": "hollis",
+        "to": "marlow",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hollis Grain Co is a customer of Marlow Systems"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "hollis",
+        "to": "platform",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "evaluating"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "is currently evaluating Marlow Platform"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "platform",
+        "to": "marlow",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marlow Platform is offered by Marlow Systems"
+          }
+        ]
+      },
+      {
+        "type": "COMPETITOR_OF",
+        "from": "tessel",
+        "to": "marlow",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tessel Analytics competes with Marlow Systems for commodity accounts"
+          }
+        ]
+      },
+      {
+        "type": "PARTNER_OF",
+        "from": "tessel",
+        "to": "alder",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tessel Analytics is a partner of Alder Consulting"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "winloss",
+        "to": "platform",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Win-loss analysis concerns Marlow Platform"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "noor",
+        "to": "winloss",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "lead"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Noor Haidari leads the Win-loss analysis"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "callum",
+        "to": "winloss",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "stakeholder",
+          "stance": "resistant"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Callum Reid is a stakeholder in the Win-loss analysis"
+          }
+        ]
+      },
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "beatriz",
+        "to": "platform",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "expert"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Beatriz Alves knows Marlow Platform well from a previous role and is regarded as the team's expert on it"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": [
+      {
+        "quote": "Beatriz Alves left early, so she did not comment on the proposed process changes",
+        "why": "No position was stated: no stance for Beatriz Alves."
+      }
+    ]
+  }
+}

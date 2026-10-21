@@ -10,6 +10,10 @@
  * (work) entity types and the extractable `BROADER` relation (Topic -> Topic);
  * m37-m39 carry their gold labels, so the ">= 10 of every entity type" and
  * ">= 3 of every extractable relation" rules below hold for them too.
+ *
+ * Issue #663 added the stakeholder and market relations (INVOLVED_IN, USES,
+ * OFFERED_BY, CUSTOMER_OF, PARTNER_OF, COMPETITOR_OF, CONCERNS, KNOWS_ABOUT);
+ * m40-m44 carry their gold labels, the same rule applying to them.
  */
 
 import { readdirSync, readFileSync } from 'fs';
