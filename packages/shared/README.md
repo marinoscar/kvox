@@ -76,7 +76,7 @@ Keep this list current when you add one.
 | API reference page `<title>` | `apps/api/src/openapi/register-docs-routes.ts` | `${APP_NAME} API Reference` |
 | Email wordmark, footer, and subject lines | `apps/api/src/email/templates/layout.ts` (re-exported to the five templates) | `APP_NAME` |
 | CLI banner, `--help`, device name | `apps/cli/src/branding.ts` (`CLI_DISPLAY_NAME`) | `${APP_NAME} CLI` |
-| Web theme, `palette.primary.main` (light) | `packages/kvox-web/src/brand/tokens.ts` (`@marinoscar/kvox-web/brand`), through the generated `identity.generated.ts` (`npm run brand:sync -w @marinoscar/kvox-web`) | `themeColor` |
+| Web theme, `palette.primary.main` (light) | `packages/kvox-contract/src/brand/tokens.ts` (`@marinoscar/kvox-contract/brand`, re-exported by `@marinoscar/kvox-web/brand`), through the generated `identity.generated.ts` in the same folder (`npm run brand:sync -w @marinoscar/kvox-web`) | `themeColor` |
 | Brand icons and favicon — generated pixels, not read at runtime | `packages/kvox-web/src/brand/assets/*.png` and `favicon.ico` (mirrored into `apps/web/public/`) via `packages/kvox-web/scripts/generate-icons.py` | `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Web app manifest (`name`, `short_name`, `description`, `theme_color`, `background_color`) | `apps/web/pwa/manifest.ts` | `APP_NAME`, `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Signed-in home page subtitle | `apps/web/src/pages/HomePage.tsx` (passed as the `tagline` of the packaged `KvoxHomePage`) | `TAGLINE` |

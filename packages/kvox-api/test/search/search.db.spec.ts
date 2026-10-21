@@ -80,7 +80,7 @@ function topicVector(text: string): number[] {
 }
 
 /** An AI port whose embeddings are the topic map; `embeddings: null` removes them. */
-function topicAi(options: { embeddings: boolean } = { embeddings: true }): KvoxAiPort & { embedCalls: string[][] } {
+function topicAi(options: { embeddings: boolean; model?: string } = { embeddings: true }): KvoxAiPort & { embedCalls: string[][] } {
   const embedCalls: string[][] = [];
   const unsupported = async (): Promise<never> => {
     throw new Error('search calls only capabilities and embed');
@@ -93,7 +93,7 @@ function topicAi(options: { embeddings: boolean } = { embeddings: true }): KvoxA
         available: true,
         structuredOutput: false,
         toolCalling: false,
-        embeddings: options.embeddings ? { model: MODEL, dimensions: SEARCH_EMBEDDING_DIMENSIONS } : null,
+        embeddings: options.embeddings ? { model: options.model ?? MODEL, dimensions: SEARCH_EMBEDDING_DIMENSIONS } : null,
         graphEnabled: false,
       };
     },
@@ -101,7 +101,7 @@ function topicAi(options: { embeddings: boolean } = { embeddings: true }): KvoxA
       embedCalls.push([...request.inputs]);
 
       return {
-        model: MODEL,
+        model: options.model ?? MODEL,
         dimensions: SEARCH_EMBEDDING_DIMENSIONS,
         vectors: request.inputs.map(topicVector),
       };
@@ -347,6 +347,66 @@ describe('search on the kvox-api test host', () => {
 
       expect(result.degraded).toBe('stopwords');
       expect(result.semantic).toBe(false);
+    });
+  });
+  describe('model isolation (#660)', () => {
+    it('never returns a row stored under another model, and re-indexing under a new model drops the old rows', async () => {
+      const own = await seedSearchCorpus(db.prisma as never);
+      const first = await bootSearch(db, topicAi({ embeddings: true, model: 'model-a' }));
+
+      try {
+        const handler = first.get(SearchIndexHandler, { strict: false });
+
+        for (const note of own.notes) await handler.process(indexJob('note', note.id));
+
+        // Relabel every vector of these notes as a foreign model: the vectors still sit
+        // exactly where the query points, but none of them belongs to the active model.
+        await db.prisma.$executeRaw`
+          UPDATE search_embeddings e SET model = 'ghost-model'
+          FROM search_chunks c
+          WHERE c.id = e.chunk_id AND c.document_id = ANY(${own.notes.map((n) => n.id)}::uuid[])`;
+
+        const result = await first
+          .get(SearchService)
+          .search({ q: 'venue catering offsite', limit: 20 }, principalOf(own.ownerId));
+
+        // Unfiltered, the probe would see the ghost rows and the vector arm would run (and
+        // match at cosine 1). Filtered on the active model there is nothing to compare with,
+        // so the semantic arm stands down; any hit comes from full text alone.
+        expect(result.semantic).toBe(false);
+        expect(result.semanticReason).toBe('no_indexed_content');
+      } finally {
+        await first.close();
+      }
+
+      const second = await bootSearch(db, topicAi({ embeddings: true, model: 'model-b' }));
+
+      try {
+        const handler = second.get(SearchIndexHandler, { strict: false });
+
+        for (const note of own.notes) await handler.process(indexJob('note', note.id));
+
+        const models = await db.prisma.$queryRaw<Array<{ model: string }>>`
+          SELECT DISTINCT e.model AS model FROM search_embeddings e JOIN search_chunks c ON c.id = e.chunk_id
+          WHERE c.document_id = ANY(${own.notes.map((n) => n.id)}::uuid[])`;
+
+        expect(models.map((row) => row.model)).toEqual(['model-b']);
+      } finally {
+        await second.close();
+      }
+    });
+
+    it('a 384-wide vector zero-padded to 1536 has the same cosine as the unpadded pair', async () => {
+      const a = Array.from({ length: 384 }, (_, i) => Math.sin(i + 1));
+      const b = Array.from({ length: 384 }, (_, i) => Math.cos(i * 0.5));
+      const pad = (v: number[]) => `[${[...v, ...new Array(SEARCH_EMBEDDING_DIMENSIONS - v.length).fill(0)].join(',')}]`;
+      const raw = (v: number[]) => `[${v.join(',')}]`;
+
+      const [row] = await db.prisma.$queryRaw<Array<{ padded: number; native: number }>>`
+        SELECT (${pad(a)}::vector <=> ${pad(b)}::vector)::float8 AS padded,
+               (${raw(a)}::vector(384) <=> ${raw(b)}::vector(384))::float8 AS native`;
+
+      expect(row!.padded).toBeCloseTo(row!.native, 9);
     });
   });
 });

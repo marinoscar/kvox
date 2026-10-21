@@ -19,7 +19,9 @@ import { SEARCH_EMBEDDING_DIMENSIONS } from './search.options.js';
 //
 // ⚠ A WIDTH OTHER THAN 1536 IS A REFUSAL, NEVER A TRUNCATION OR A PAD. The index
 // column is `vector(1536)` and a vector of any other length is not comparable
-// with the ones already stored.
+// with the ones already stored. The AI port may zero-pad a declared narrower
+// model exactly (it then reports `dimensions: 1536` and the model's true width
+// as `nativeDimensions`); search itself never pads or truncates.
 // =============================================================================
 
 /** The reasons a gate can refuse with. All are published `SEMANTIC_REASONS`.
@@ -38,8 +40,12 @@ export interface EmbeddingGateOpen {
   ok: true;
   /** The embeddings model to embed with. */
   model: string;
-  /** The width of its vectors: always 1536. */
+  /** The STORAGE width of its vectors: always 1536. */
   dimensions: number;
+  /** The model's true width when the port zero-pads it to 1536; recorded in `search_embeddings.dimensions`. */
+  nativeDimensions?: number;
+  /** The model's own cosine floor for the semantic arm; absent means the default. */
+  minSimilarity?: number;
 }
 
 /**
@@ -102,5 +108,11 @@ export function embeddingGateFor(capabilities: KvoxAiCapabilities): EmbeddingGat
     };
   }
 
-  return { ok: true, model: embeddings.model, dimensions: embeddings.dimensions };
+  return {
+    ok: true,
+    model: embeddings.model,
+    dimensions: embeddings.dimensions,
+    ...(embeddings.nativeDimensions !== undefined && { nativeDimensions: embeddings.nativeDimensions }),
+    ...(embeddings.minSimilarity !== undefined && { minSimilarity: embeddings.minSimilarity }),
+  };
 }
