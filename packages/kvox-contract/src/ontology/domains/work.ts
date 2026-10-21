@@ -280,6 +280,200 @@ export const workDomain = defineDomain({
       representation: { kind: 'edge' },
       extractable: true,
     }),
+    // ---- Stakeholder and market relations (1.3.0, #663) ----
+    defineRelationType({
+      key: 'INVOLVED_IN',
+      domain: 'work',
+      label: 'Involved in',
+      description:
+        'A person has a stated role in a project, and optionally a stance toward it: "Joe is the budget approver for the Copilot rollout and is skeptical of it" is Joe INVOLVED_IN Copilot rollout {role: approver, stance: skeptical}.' +
+        ' Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person\'s position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it.',
+      from: ['Person'],
+      to: ['Project'],
+      temporal: true,
+      exclusive: 'none',
+      props: {
+        role: {
+          kind: 'select',
+          label: 'Role',
+          description: 'The role the person plays in the project, as the source states it.',
+          required: true,
+          extractable: true,
+          options: {
+            choices: [
+              { value: 'sponsor', label: 'Sponsor' },
+              { value: 'owner', label: 'Owner' },
+              { value: 'lead', label: 'Lead' },
+              { value: 'contributor', label: 'Contributor' },
+              { value: 'stakeholder', label: 'Stakeholder' },
+              { value: 'approver', label: 'Approver' },
+              { value: 'end_user', label: 'End user' },
+              { value: 'advisor', label: 'Advisor' },
+            ],
+          },
+        },
+        stance: {
+          kind: 'select',
+          label: 'Stance',
+          description:
+            "The person's position toward the project, only when the source states it or it is unmistakably implied; never inferred from tone alone.",
+          extractable: true,
+          options: {
+            choices: [
+              { value: 'champion', label: 'Champion' },
+              { value: 'supportive', label: 'Supportive' },
+              { value: 'neutral', label: 'Neutral' },
+              { value: 'skeptical', label: 'Skeptical' },
+              { value: 'resistant', label: 'Resistant' },
+            ],
+          },
+        },
+      },
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'USES',
+      domain: 'work',
+      label: 'Uses',
+      description:
+        'An organization or a project adopts, evaluates or runs a product, at a stage: "Company A is piloting Copilot" is Company A USES Copilot {stage: piloting}.' +
+        ' A move to a later stage (piloting to adopted) is a new USES with the new stage, which closes the earlier one; never edit the old stage. The vendor of the product is OFFERED_BY, not USES; a project about a product without adopting it is CONCERNS. Set stage only when the source states it; "evaluating" is for a stated assessment, not for a passing mention.',
+      from: ['Organization', 'Project'],
+      to: ['Product'],
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from_to',
+      props: {
+        stage: {
+          kind: 'select',
+          label: 'Stage',
+          description: 'How far the adoption has gone, only if the source states it.',
+          extractable: true,
+          identity: true,
+          options: {
+            choices: [
+              { value: 'evaluating', label: 'Evaluating' },
+              { value: 'piloting', label: 'Piloting' },
+              { value: 'rolling_out', label: 'Rolling out' },
+              { value: 'adopted', label: 'Adopted' },
+              { value: 'retired', label: 'Retired' },
+            ],
+          },
+        },
+      },
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'OFFERED_BY',
+      domain: 'work',
+      label: 'Offered by',
+      description:
+        'The vendor of a product: "Copilot is Microsoft\'s" is Microsoft Copilot OFFERED_BY Microsoft.' +
+        ' A product has one current vendor; a change of vendor (an acquisition) is a new OFFERED_BY that closes the old one. A customer that merely uses the product is USES or CUSTOMER_OF, never OFFERED_BY.',
+      from: ['Product'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+      alignment: 'schema:manufacturer',
+    }),
+    defineRelationType({
+      key: 'CUSTOMER_OF',
+      domain: 'work',
+      label: 'Customer of',
+      description:
+        'An organization buys from another organization: "Company A is a Microsoft customer" is Company A CUSTOMER_OF Microsoft. Direction matters: customer first, supplier second.' +
+        ' Using a specific product is USES; CUSTOMER_OF is the commercial relationship between the two organizations. A partner, reseller or integrator is PARTNER_OF, not CUSTOMER_OF.',
+      from: ['Organization'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'PARTNER_OF',
+      domain: 'work',
+      label: 'Partner of',
+      description:
+        'Two organizations are business partners (alliance, reseller, integrator): "Accenture is Company A\'s partner". Direction does not matter: record it once.' +
+        ' A buyer and supplier is CUSTOMER_OF; organizations that compete are COMPETITOR_OF.',
+      from: ['Organization'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'none',
+      symmetric: true,
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'COMPETITOR_OF',
+      domain: 'work',
+      label: 'Competitor of',
+      description:
+        'Two organizations compete in the same market: "Google and Microsoft compete on productivity suites". Direction does not matter: record it once.' +
+        ' Only when the source says or clearly implies the organizations compete; two organizations merely mentioned together are not competitors.',
+      from: ['Organization'],
+      to: ['Organization'],
+      temporal: true,
+      exclusive: 'none',
+      symmetric: true,
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'CONCERNS',
+      domain: 'work',
+      label: 'Concerns',
+      description:
+        'What a project is about: "The Copilot rollout concerns Microsoft Copilot and licensing cost" gives the project CONCERNS the product and CONCERNS the topic.' +
+        ' A meeting covering a subject is DISCUSSED; CONCERNS ties a project to its own subject matter. A project that adopts or runs a product is USES; use CONCERNS for the product the effort is about.',
+      from: ['Project'],
+      to: ['Product', 'Topic'],
+      temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    }),
+    defineRelationType({
+      key: 'KNOWS_ABOUT',
+      domain: 'work',
+      label: 'Knows about',
+      description:
+        'A person has expertise in a topic or product: "Maria is our expert on AI governance" is Maria KNOWS_ABOUT AI governance {level: expert}.' +
+        ' Personal hobbies and lasting private interests are INTERESTED_IN (personal domain), not KNOWS_ABOUT. Set level only when the source states it ("expert", "hands-on", "just heard of it"); attending a meeting about a topic does not make someone know about it.',
+      from: ['Person'],
+      to: ['Topic', 'Product'],
+      temporal: false,
+      exclusive: 'none',
+      props: {
+        level: {
+          kind: 'select',
+          label: 'Level',
+          description: 'How deep the knowledge is, only if the source states it.',
+          extractable: true,
+          options: {
+            choices: [
+              { value: 'aware', label: 'Aware' },
+              { value: 'practitioner', label: 'Practitioner' },
+              { value: 'expert', label: 'Expert' },
+            ],
+          },
+        },
+      },
+      representation: { kind: 'edge' },
+      extractable: true,
+      alignment: 'schema:knowsAbout',
+    }),
     defineRelationType({
       key: 'ASSIGNED_TO',
       domain: 'work',

@@ -206,6 +206,43 @@ describe('temporal-closing stage', () => {
     expect(db.closings()).toEqual([]);
   });
 
+  describe('USES stage changes (#663)', () => {
+    const PRODUCT = GLOBEX; // any uuid: the stage never checks the endpoint's type
+    const OTHER_PRODUCT = JANE;
+    const uses = (stage: string | null, over: Partial<TemporalEdge> = {}) =>
+      edge({ type: 'USES', fromId: ACME, toId: PRODUCT, props: stage ? { stage } : {}, ...over });
+    const proposed = (db: FakeProposalDb, props: Record<string, unknown>, to = PRODUCT) => {
+      db.add('entity', entityPayload('e2', 'Organization', 'Acme'), { resolution: linked(ACME) });
+      return db.add('relation', rel({ type: 'USES', from: { ref: 'e2' }, to: { entityId: to }, props }));
+    };
+
+    it('adopted closes piloting for the same organization and product', async () => {
+      const { db, stage } = build([uses('piloting')]);
+      proposed(db, { stage: 'adopted' });
+      await stage.run(db.ctx());
+      const closings = db.closings();
+      expect(closings).toHaveLength(1);
+      expect(closings[0]).toMatchObject({ decision: 'pending', origin: 'ai' });
+      expect(closings[0].payload).toMatchObject({ relationId: EDGE, relationType: 'USES', closeAt: '2026-03-01' });
+    });
+
+    it('a restatement of the same stage, or one that omits it, closes nothing', async () => {
+      for (const props of [{ stage: 'piloting' }, {}]) {
+        const { db, stage } = build([uses('piloting')]);
+        proposed(db, props);
+        await stage.run(db.ctx());
+        expect(db.closings()).toEqual([]);
+      }
+    });
+
+    it('a different product closes nothing (exclusive within one organization and product)', async () => {
+      const { db, stage } = build([uses('piloting')]);
+      proposed(db, { stage: 'adopted' }, OTHER_PRODUCT);
+      await stage.run(db.ctx());
+      expect(db.closings()).toEqual([]);
+    });
+  });
+
   it('an older, open fact is committed already closed at the next edge’s start (candidateTo)', async () => {
     const { db, stage } = build([edge({ from: '2019' })]);
     db.add('relation', rel({ to: { entityId: GLOBEX }, validFrom: '2015-01-01', precision: 'year' }));
