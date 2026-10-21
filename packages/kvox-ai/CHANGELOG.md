@@ -1,5 +1,12 @@
 # @marinoscar/kvox-ai
 
+## 0.1.0-next.11
+
+### Minor Changes
+
+- c66c19d: The embedding model is a catalog entry the host chooses. `@marinoscar/kvox-ai` adds `KvoxEmbeddingModel` and `KVOX_LOCAL_EMBEDDING` (bge-small-en-v1.5-int8, 384 wide, keyless), `createKvoxAi({ embedding })` (default unchanged: OpenAI text-embedding-3-small, 1536), zero-padding of a narrower model to the 1536-wide column, and a `purpose` on embed requests that selects the query or document prefix. `EmbeddingShapeError` (unused) is removed. `@marinoscar/kvox-api` adds optional `nativeDimensions` and `minSimilarity` to `KvoxEmbeddingsInfo` and `purpose` to the port's `embed` request.
+- c66c19d: New entry point `@marinoscar/kvox-ai/local-embeddings`: the on-device embedding model for `KVOX_LOCAL_EMBEDDING` (bge-small-en-v1.5, int8, MIT). `downloadLocalEmbeddingModel`, `localEmbeddingModelStatus` and `removeLocalEmbeddingModel` install the three pinned files (revision-pinned Hugging Face URLs, exact size and SHA-256, https and exact-host allowlist checked on every redirect hop); `createLocalEmbedder` runs the model on `onnxruntime-web` and `@huggingface/tokenizers` (optional peers, loaded lazily; it blocks the event loop, so run it off the event loop); `createLocalEmbeddingRuntime` wraps a host's embed transport as a `KvoxAiRuntime`. The verified download that `prepareCopilotRuntime` used is now shared (`download` slice) with identical behaviour.
+
 ## 0.1.0-next.10
 
 ### Minor Changes

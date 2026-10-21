@@ -1,5 +1,17 @@
 # @marinoscar/kvox-api
 
+## 0.1.0-next.11
+
+### Minor Changes
+
+- c66c19d: New `@marinoscar/kvox-contract/brand` entry point: `KVOX_IDENTITY`, `BRAND_TOKENS`, the `MARK_*` logo geometry and `brandMarkSvg()`, moved out of `@marinoscar/kvox-web/brand` (which re-exports them, so its imports do not change). `@marinoscar/kvox-api` core gains `KVOX_DOCUMENT_THEME`, `mixHex`, `docxColor`, `brandMarkPng`, `brandMarkSvgBuffer` and the vector `drawBrandMark` for on-brand PDF and Word exports.
+- c66c19d: The embedding model is a catalog entry the host chooses. `@marinoscar/kvox-ai` adds `KvoxEmbeddingModel` and `KVOX_LOCAL_EMBEDDING` (bge-small-en-v1.5-int8, 384 wide, keyless), `createKvoxAi({ embedding })` (default unchanged: OpenAI text-embedding-3-small, 1536), zero-padding of a narrower model to the 1536-wide column, and a `purpose` on embed requests that selects the query or document prefix. `EmbeddingShapeError` (unused) is removed. `@marinoscar/kvox-api` adds optional `nativeDimensions` and `minSimilarity` to `KvoxEmbeddingsInfo` and `purpose` to the port's `embed` request.
+- c66c19d: Note PDF and Word exports are redesigned. Both now share one style module and open with a masthead (logo, product name, export date), a kicker, the title and a provenance card; headings take the brand colour, tables repeat their header row on every page, task lists show checkboxes, and quotes and code get their own panels, under a running header and a "Page x of y" footer. The export parser now reads GFM tables, task lists, autolinks, hard breaks and setext headings, drops HTML comments, and renders images as links (nothing is fetched). Word exports use real styles, and ordered lists restart per list and honour their start number instead of continuing the previous list.
+
+### Patch Changes
+
+- c66c19d: Semantic search only compares vectors of the active embedding model (the vector candidates and the indexed-content probe filter on `search_embeddings.model`); the similarity floor is per model (`capabilities().embeddings.minSimilarity`, default 0.25); queries embed with `purpose: 'query'` and chunks with `purpose: 'document'`; `search_embeddings.dimensions` records the model's native width; re-indexing deletes a document's vectors of other models.
+
 ## 0.1.0-next.10
 
 ## 0.1.0-next.9
