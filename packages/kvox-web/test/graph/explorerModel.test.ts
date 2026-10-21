@@ -20,6 +20,7 @@ import {
   visibleNodeIds,
   type ExplorerPalette,
 } from '../../src/graph/ui/components/explorer/explorerModel.js';
+import { CATEGORICAL_PALETTE, NODE_SIZE_MIN, encodingFor } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
 import type { GraphSlice } from '../../src/graph/headless/clients/graph.js';
 import {
   ACME_ID,
@@ -262,46 +263,48 @@ describe('keyboardOrder', () => {
 });
 
 describe('nodeStyle', () => {
-  const palette: ExplorerPalette = {
+  const darkPalette: ExplorerPalette = {
     palette: {
-      primary: { main: '#111111' },
-      secondary: { main: '#222222' },
-      success: { main: '#333333' },
-      info: { main: '#444444' },
-      warning: { main: '#555555' },
-      error: { main: '#666666' },
-      text: { secondary: '#777777', disabled: '#888888' },
+      ...DEFAULT_EXPLORER_PALETTE.palette,
+      mode: 'dark',
+      text: { secondary: '#aaaaaa', disabled: '#888888' },
     },
   };
 
-  it('colours by type from the theme', () => {
-    const style = (type: string, nodeKind: 'entity' | 'item' = 'entity') =>
-      nodeStyle({ type, nodeKind, label: 'x', degree: 0 }, palette).color;
-    expect(style('Person')).toBe('#111111');
-    expect(style('Organization')).toBe('#222222');
-    expect(style('Project')).toBe('#333333');
-    expect(style('Meeting')).toBe('#444444');
-    expect(style('commitment', 'item')).toBe('#555555');
-    expect(style('decision', 'item')).toBe('#666666');
-    expect(style('SomethingNew')).toBe('#777777');
+  it('colours by type from the validated palette, not the theme: the light or dark variant follows the mode', () => {
+    const color = (type: string, palette = DEFAULT_EXPLORER_PALETTE) =>
+      nodeStyle({ type, nodeKind: 'entity', label: 'x', degree: 0 }, palette).color;
+    expect(color('Person')).toBe(CATEGORICAL_PALETTE.light[0]);
+    expect(color('Person', darkPalette)).toBe(CATEGORICAL_PALETTE.dark[0]);
+    expect(color('Interest')).not.toBe(color('Trip'));
+    // Types that were all grey before now have a colour of their own.
+    expect(new Set(['Interest', 'Trip', 'Milestone', 'claim', 'Topic', 'Product', 'Risk'].map((t) => color(t))).size).toBe(7);
   });
 
-  it('sizes by 4 + 2·log2(1 + degree), items three-quarters of that', () => {
-    expect(nodeStyle({ type: 'Person', nodeKind: 'entity', label: 'x', degree: 0 }).size).toBe(4);
-    expect(nodeStyle({ type: 'Person', nodeKind: 'entity', label: 'x', degree: 3 }).size).toBe(8);
-    expect(nodeStyle({ type: 'commitment', nodeKind: 'item', label: 'x', degree: 3 }).size).toBe(6);
+  it('carries the type pictogram and a glyph colour that reads on the fill', () => {
+    const style = nodeStyle({ type: 'Risk', nodeKind: 'entity', label: 'x', degree: 0 });
+    expect(style.image.startsWith('data:image/svg+xml;base64,')).toBe(true);
+    expect(style.iconColor).toBe(encodingFor('Risk').iconColor);
+  });
+
+  it('sizes by the square root of mentionCount, falling back to degree; an item is four-fifths', () => {
+    const size = (input: Parameters<typeof nodeStyle>[0]) => nodeStyle(input).size;
+    expect(size({ type: 'Person', nodeKind: 'entity', label: 'x', degree: 0 })).toBe(NODE_SIZE_MIN);
+    expect(size({ type: 'Person', nodeKind: 'entity', label: 'x', degree: 9 })).toBeCloseTo(NODE_SIZE_MIN + 4.8, 2);
+    expect(size({ type: 'Person', nodeKind: 'entity', label: 'x', degree: 9, mentionCount: 16 })).toBeCloseTo(NODE_SIZE_MIN + 6.4, 2);
+    expect(size({ type: 'commitment', nodeKind: 'item', label: 'x', degree: 9 })).toBeCloseTo((NODE_SIZE_MIN + 4.8) * 0.8, 1);
     expect(nodeStyle({ type: 'Person', nodeKind: 'entity', label: 'Joe', degree: 1 }).label).toBe('Joe');
   });
 
   it('restyles an existing graph for a new theme without moving it', () => {
     const state = loaded();
     const before = positionsOf(state);
-    restyle(state, palette);
-    expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe('#111111');
+    restyle(state, darkPalette);
+    expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe(CATEGORICAL_PALETTE.dark[0]);
     expect(state.graph.getEdgeAttribute(gid(410), 'color')).toBe('#888888');
     expect(positionsOf(state)).toEqual(before);
     restyle(state, DEFAULT_EXPLORER_PALETTE);
-    expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe(DEFAULT_EXPLORER_PALETTE.palette.primary.main);
+    expect(state.graph.getNodeAttribute(JOE_ID, 'color')).toBe(CATEGORICAL_PALETTE.light[0]);
   });
 });
 

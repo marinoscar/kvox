@@ -2,7 +2,13 @@ import { act, waitFor } from '@testing-library/react';
 import { http, HttpResponse, delay } from './msw-compat.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { EXPLORER_NODE_CAP } from '../../src/graph/ui/components/explorer/explorerModel.js';
+import {
+  EXPLORER_NEIGHBOUR_LIMIT,
+  EXPLORER_NODE_CAP,
+  realNodeCount,
+  remainingCapacity,
+  stubId,
+} from '../../src/graph/ui/components/explorer/explorerModel.js';
 import { useGraphExplorer } from '../../src/graph/ui/hooks/useGraphExplorer.js';
 import {
   ACME_ID,
@@ -12,6 +18,7 @@ import {
   Q3_MEETING_ID,
   expandFixture,
   gid,
+  hubFixture,
   manyNodesSlice,
   type ExpandFixtureRequest,
 } from './graphData.js';
@@ -135,15 +142,25 @@ describe('useGraphExplorer — expand', () => {
     );
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
-    expect(result.current.state.graph.order).toBe(EXPLORER_NODE_CAP);
+    // An open shows the best 30 neighbours; the other 370 wait behind one "+N more" stub.
+    expect(realNodeCount(result.current.state)).toBe(1 + EXPLORER_NEIGHBOUR_LIMIT);
+    expect(result.current.capped).toBe(false);
+
+    // Expand the stub until the cap stops it.
+    const more = stubId(JOE_ID, 'Person');
+    for (let i = 0; i < 12 && !result.current.capped; i += 1) {
+      await act(() => result.current.expand(more));
+    }
+    expect(realNodeCount(result.current.state)).toBe(EXPLORER_NODE_CAP);
     expect(result.current.capped).toBe(true);
 
     act(() => result.current.dismissCap());
     expect(result.current.capped).toBe(false);
 
-    const kept = result.current.state.graph.nodes().find((id) => id !== JOE_ID)!;
+    const sent = bodies.length;
+    const kept = result.current.state.graph.nodes().find((id) => id !== JOE_ID && !result.current.state.graph.getNodeAttribute(id, 'isStub'))!;
     await act(() => result.current.expand(kept));
-    expect(bodies).toHaveLength(1);
+    expect(bodies).toHaveLength(sent);
     expect(result.current.capped).toBe(true);
 
     // Hiding a node frees a slot and lifts the refusal.
@@ -163,6 +180,86 @@ describe('useGraphExplorer — expand', () => {
     expect(result.current.error).toBe('Graph query timed out');
     expect(result.current.notFound).toBe(false);
     expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
+  });
+});
+
+describe('useGraphExplorer — a 200-neighbour hub (#667)', () => {
+  beforeEach(() => {
+    server.use(
+      http.post('*/api/graph/explore/expand', async ({ request }) => {
+        const body = (await request.json()) as ExpandFixtureRequest;
+        bodies.push(body);
+        return HttpResponse.json({ data: hubFixture(body) });
+      }),
+    );
+  });
+
+  const stub = (type: string) => stubId(JOE_ID, type);
+
+  it('opens with at most 30 neighbours and one "+N more" stub per type', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+
+    const graph = result.current.state.graph;
+    const neighbours = graph.filterNodes((id, a) => id !== JOE_ID && !a.isStub);
+    expect(neighbours).toHaveLength(EXPLORER_NEIGHBOUR_LIMIT);
+    expect(graph.filterNodes((_id, a) => Boolean(a.isStub)).sort()).toEqual(
+      ['Meeting', 'Organization', 'Person'].map(stub).sort(),
+    );
+    expect(graph.getNodeAttribute(stub('Person'), 'stubCount')).toBeGreaterThan(0);
+  });
+
+  it('expanding a stub asks for types=[that type] of its parent, and replaces the stub with nodes', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    const shownBefore = result.current.state.graph.filterNodes(
+      (_id, a) => a.entityType === 'Organization' && !a.isStub,
+    ).length;
+    const remaining = result.current.state.graph.getNodeAttribute(stub('Organization'), 'stubCount') as number;
+    expect(shownBefore + remaining).toBe(50);
+
+    await act(() => result.current.expand(stub('Organization')));
+
+    expect(bodies[1]).toMatchObject({ nodeIds: [JOE_ID], types: ['Organization'] });
+    const graph = result.current.state.graph;
+    const shownAfter = graph.filterNodes((_id, a) => a.entityType === 'Organization' && !a.isStub).length;
+    expect(shownAfter).toBe(Math.min(50, shownBefore + EXPLORER_NEIGHBOUR_LIMIT));
+    // The other types' stubs are untouched.
+    expect(graph.hasNode(stub('Person'))).toBe(true);
+    expect(graph.hasNode(stub('Meeting'))).toBe(true);
+    // 50 organizations: 30 + 20 more fit under one stub's expansion, so the stub is gone when none remain.
+    expect(graph.hasNode(stub('Organization'))).toBe(shownAfter < 50);
+  });
+
+  it('expanding a stub repeatedly shows every neighbour of that type, then no stub', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    for (let i = 0; i < 6 && result.current.state.graph.hasNode(stub('Meeting')); i += 1) {
+      await act(() => result.current.expand(stub('Meeting')));
+    }
+    const graph = result.current.state.graph;
+    expect(graph.hasNode(stub('Meeting'))).toBe(false);
+    expect(graph.filterNodes((_id, a) => a.entityType === 'Meeting' && !a.isStub)).toHaveLength(30);
+  });
+
+  it('carries the active filters and the remaining capacity on a stub expansion', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    act(() => result.current.setHiddenRelationTypes(['PART_OF']));
+    const room = EXPLORER_NODE_CAP - realNodeCount(result.current.state);
+    await act(() => result.current.expand(stub('Person')));
+    const body = bodies[bodies.length - 1];
+    expect(body.types).toEqual(['Person']);
+    expect(body.relationTypes).toEqual(RELATION_TYPES.filter((t) => t !== 'PART_OF'));
+    expect(body.cap).toBe(room);
+  });
+
+  it('the stubs do not count toward the node cap', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    const state = result.current.state;
+    expect(state.graph.order).toBeGreaterThan(realNodeCount(state));
+    expect(remainingCapacity(state)).toBe(EXPLORER_NODE_CAP - 1 - EXPLORER_NEIGHBOUR_LIMIT);
   });
 });
 
@@ -227,10 +324,30 @@ describe('useGraphExplorer — filters, hide, seeds, hand-off', () => {
     expect(result.current.state.graph.hasNode(ANA_ID)).toBe(false);
     expect(result.current.state.graph.hasNode(JOE_ID)).toBe(true);
 
-    // Re-enabling does not refetch retroactively.
-    act(() => result.current.setHiddenTypes([]));
+    // Hiding is local: no request. Re-enabling refetches what the filter removed (#667).
+    expect(bodies).toHaveLength(1);
+    const before = result.current.state.graph.getNodeAttributes(JOE_ID);
+    await act(async () => result.current.setHiddenTypes([]));
+    await waitFor(() => expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true));
+    expect(result.current.state.graph.hasNode(ANA_ID)).toBe(true);
+    expect(bodies).toHaveLength(2);
+    // The seeds and expanded nodes are asked again, with no type filter now that nothing is hidden.
+    expect(bodies[1]).toEqual({ nodeIds: [JOE_ID], cap: expect.any(Number) });
+    // Nothing that stayed moved.
+    const after = result.current.state.graph.getNodeAttributes(JOE_ID);
+    expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y });
+  });
+
+  it('re-enabling a relation type refetches too; hiding more does not', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    act(() => result.current.setHiddenRelationTypes(['ATTENDED']));
     expect(bodies).toHaveLength(1);
     expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(false);
+
+    await act(async () => result.current.setHiddenRelationTypes([]));
+    await waitFor(() => expect(result.current.state.graph.hasNode(Q3_MEETING_ID)).toBe(true));
+    expect(bodies).toHaveLength(2);
   });
 
   it('hides nodes and promotes seeds', async () => {

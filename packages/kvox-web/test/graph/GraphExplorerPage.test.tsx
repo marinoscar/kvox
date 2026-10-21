@@ -60,7 +60,12 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
             key={id}
             type="button"
             data-selected={props.selectedId === id}
-            onClick={() => props.onNodeClick(id)}
+            // Like the real canvas: activating a "+N more" stub expands it.
+            onClick={() =>
+              props.graph.getNodeAttribute(id, 'isStub') === true
+                ? props.onNodeDoubleClick(id)
+                : props.onNodeClick(id)
+            }
             onDoubleClick={() => props.onNodeDoubleClick(id)}
           >
             {String(props.graph.getNodeAttribute(id, 'label'))}
@@ -374,6 +379,18 @@ describe('GraphExplorerPage — the 300-node cap', () => {
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+
+    // An open shows the best 30 neighbours and one "+N more" stub, not the cap's worth;
+    // the stub is not a node, so the count is Joe plus 30 and there is no warning yet.
+    expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
+    expect(screen.queryByText(CAP_WARNING_TEXT)).not.toBeInTheDocument();
+
+    // Expanding the stub, again and again, reaches the cap.
+    for (let i = 0; i < 10; i += 1) {
+      await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
+      // Each expansion shows 30 more, until the cap stops it at 300.
+      await screen.findByLabelText(`${Math.min(300, 31 + 30 * (i + 1))} of 300 nodes`);
+    }
 
     expect(await screen.findByText(CAP_WARNING_TEXT)).toBeInTheDocument();
     expect(screen.getByLabelText('300 of 300 nodes')).toBeInTheDocument();

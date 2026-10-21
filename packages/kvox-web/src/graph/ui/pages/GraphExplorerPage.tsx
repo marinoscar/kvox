@@ -67,6 +67,7 @@ import {
 } from '../../headless/utils/explorerFilters.js';
 import {
   keyboardOrder,
+  realNodeCount,
   remainingCapacity,
   toListModel,
   visibleNodeIds,
@@ -258,7 +259,8 @@ export function GraphExplorerPage() {
     [state, version],
   );
   const atCap = remainingCapacity(state) === 0;
-  const nodeCount = graph.order;
+  // Real nodes: a "+N more" stub is not one, and is outside the cap.
+  const nodeCount = realNodeCount(state);
 
   const selection: ExplorerSelection | null = useMemo(() => {
     if (!selected) return null;
