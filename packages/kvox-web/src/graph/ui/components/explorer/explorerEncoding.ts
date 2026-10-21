@@ -29,7 +29,11 @@ import { humanizeKey } from '../../../headless/utils/graphDisplay.js';
 import type { GraphOntology } from '../../../headless/clients/graph.js';
 import { pictogramDataUri, type PictogramName } from './icons/pictograms.js';
 
-/** The theme variant the encoding is drawn for. */
+/**
+ * The theme variant the encoding is drawn for.
+ *
+ * @stability experimental
+ */
 export type ExplorerMode = 'light' | 'dark';
 
 /**
