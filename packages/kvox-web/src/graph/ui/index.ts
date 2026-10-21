@@ -86,3 +86,7 @@ export type {
   GraphCanvasProps,
 } from './components/explorer/GraphCanvas.js';
 export type { NeighborhoodCanvasProps } from './components/explorer/NeighborhoodCanvas.js';
+export { GraphLegend, useLegendTypeFilter } from './components/explorer/GraphLegend.js';
+export type { GraphLegendProps, LegendTypeFilter } from './components/explorer/GraphLegend.js';
+export { legendModel } from './components/explorer/explorerModel.js';
+export type { LegendModel, LegendRelation, LegendType } from './components/explorer/explorerModel.js';
