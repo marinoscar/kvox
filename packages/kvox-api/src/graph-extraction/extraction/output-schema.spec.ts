@@ -44,7 +44,7 @@ describe('buildExtractionOutputSchema (#363)', () => {
   it('offers exactly the offered types, relations and item kinds', () => {
     const schema = buildExtractionOutputSchema(makeContext());
     const types = enumValues((schema.properties as Node).entities, 'type');
-    expect(types.sort()).toEqual(['Organization', 'Person', 'Project']);
+    expect(types.sort()).toEqual(['Organization', 'Person', 'Product', 'Project', 'Topic']);
     const relations = enumValues((schema.properties as Node).relations, 'type');
     expect(relations).toEqual(expect.arrayContaining(['WORKS_FOR', 'ATTENDED', 'DISCUSSED']));
     expect(relations).not.toContain('ABOUT');

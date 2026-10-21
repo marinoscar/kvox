@@ -425,6 +425,23 @@ edited in place to record a change of mind, because that would erase exactly
 the "what did we used to think, and when did that change" history §3.4 exists
 to keep. *Domain:* `work` (§17.2).
 
+**Topic** — a recurring subject of discussion that is not itself a unit of
+work: "AI governance," "licensing cost," "change management." *Negative:*
+something with an owner, a start and an expected end that work attaches to is
+a `Project`; a named product or technology is a `Product`. Reuse an existing
+Topic label rather than create a near-synonym. Attribute: `summary` (user
+notes, never extracted). Aligned to `skos:Concept`; `BROADER` (§5.2) rolls
+topics up into themes. *Domain:* `core` (§17.2). Added in ontology 1.3.0.
+
+**Product** — a named product, service, tool, platform or technology that
+organizations offer, adopt or evaluate: "Microsoft Copilot," "Salesforce,"
+"SAP S/4HANA." *Negative:* the rollout or adoption effort is a `Project`
+("Copilot rollout"); the vendor company is an `Organization`, never folded
+into the product label. Attributes: `category` (software, platform, AI
+model, hardware, service, other), `vendorName` (a resolution hint only).
+Aligned to `schema:Product`. *Domain:* `work` (§17.2), so it disappears with
+the domain. Added in ontology 1.3.0.
+
 **Claim** — a dated statement of fact about an entity that is neither a
 decision nor a commitment: "Acme's CIO is leaving in March," "the budget was
 cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
@@ -467,9 +484,10 @@ than no relation at all.
 | `HAS_ROLE` | Person → Organization | Props: `{ title, businessUnit? }` (`businessUnit` optional, #440 / ontology 1.2.0); temporal (§5.4), one edge per role period; normally exclusive (soft). Identity is `title` plus `businessUnit`, the latter declared `identity: true` (#440): a relation prop with that flag takes part in identity like a `required` one, except a null/absent value on either side matches anything — so `{VP, Supply Chain}` → `{VP, Finance}` is a new role that closes the old one, while `{VP}` and `{VP, Supply Chain}` are one fact (the evidence attaches; a unit the stored edge lacks is not written onto it) |
 | `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
-| `DISCUSSED` | Meeting → Project | |
-| `ABOUT` | Claim \| Decision \| Commitment → Person \| Organization \| Project | |
-| `PART_OF` | Project → Organization; Meeting → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
+| `DISCUSSED` | Meeting → Project \| Topic \| Product \| Organization | Widened in ontology 1.3.0; same key |
+| `ABOUT` | Claim \| Decision \| Commitment → Person \| Organization \| Project \| Product \| Topic | Product and Topic added in 1.3.0 |
+| `PART_OF` | Project → Organization; Meeting → Project; Topic → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
+| `BROADER` | Topic → Topic | Non-temporal, no exclusivity; `skos:broader`. Rolls a narrower topic up into a theme (1.3.0) |
 | `DECIDED_IN` | Decision → Meeting | |
 | `CREATED_IN` | Commitment → Meeting | |
 | `ASSIGNED_TO` | Commitment → Person | The owner |
@@ -775,8 +793,11 @@ uncertain resolution (§7).
 
 ### 5.7 Deferred to v2
 
-- **A `Concept`/topic layer**, distinct from `Project`, aligned to SKOS
-  (§2). Today a meeting's subject lives as a free-text entry in
+- ~~**A `Concept`/topic layer**~~ — **no longer deferred.** Ontology 1.3.0
+  adds `Topic` (SKOS `Concept`) and `BROADER` (§5.1, §5.2) for the
+  cross-note insight goal of the Graph Insight Canvas epic (#661). The
+  original rationale, kept for the record: a topic layer, distinct from
+  `Project`, aligned to SKOS (§2). Today a meeting's subject lives as a free-text entry in
   `Meeting.topics[]` — a plain string property, not a graph node — which is
   enough to answer "what came up" without committing to a topic taxonomy
   this document has no evidence kvox's users need yet. See "Rejected

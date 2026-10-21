@@ -68,6 +68,16 @@ describe('generateOwl', () => {
     expect(objectsOf(quads, NS, `${RDFS}label`).map((o) => o.value)).toEqual([`${APP_NAME} ontology`]);
   });
 
+  it('aligns Topic to skos:Concept and Product to schema:Product (#662)', () => {
+    expect(objectsOf(quads, classIri(NS, 'Topic'), `${RDFS}subClassOf`).map((o) => o.value)).toEqual([
+      'http://www.w3.org/2004/02/skos/core#Concept',
+    ]);
+    expect(objectsOf(quads, classIri(NS, 'Product'), `${RDFS}subClassOf`).map((o) => o.value)).toEqual([`${SCHEMA}Product`]);
+    expect(objectsOf(quads, relationIri(NS, 'BROADER'), `${RDFS}subPropertyOf`).map((o) => o.value)).toEqual([
+      'http://www.w3.org/2004/02/skos/core#broader',
+    ]);
+  });
+
   it('declares every entity and item type as an owl:Class with label, comment and alignment', () => {
     for (const type of ONTOLOGY.entityTypes()) {
       const cls = classIri(NS, type.key);

@@ -77,7 +77,7 @@ never enables `personal` is offered none of it.
 
 ## Coverage the set must keep (asserted by the fixture test)
 
-- ≥ 30 fixtures; ≥ 10 gold instances of each entity type (Person, Organization,
+- ≥ 30 fixtures; ≥ 10 gold instances of each entity type (Person, Organization, Topic, Product,
   Project, Meeting); ≥ 15 of each item kind; ≥ 3 of every extractable relation
   type and of each item-column relation (owner, counterparty, supersedes …);
   ≥ 10 labels with `existingId`.
