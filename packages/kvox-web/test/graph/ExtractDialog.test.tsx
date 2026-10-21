@@ -143,7 +143,7 @@ describe('ExtractDialog — request body', () => {
       userGuidance: {
         pinnedEntityIds: [],
         instructions: 'Only the vendor migration',
-        entityTypes: ['Person', 'Organization', 'PersonFact', 'Project', 'Commitment', 'Decision'],
+        entityTypes: ['Person', 'Organization', 'PersonFact', 'Topic', 'Project', 'Product', 'Commitment', 'Decision'],
       },
     });
   });

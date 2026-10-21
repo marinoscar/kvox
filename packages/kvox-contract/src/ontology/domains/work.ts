@@ -61,6 +61,50 @@ export const Project = defineEntityType({
 });
 
 /**
+ * Wire constant: product.
+ *
+ * @stability experimental
+ */
+export const Product = defineEntityType({
+  key: 'Product',
+  domain: 'work',
+  label: 'Product',
+  pluralLabel: 'Products',
+  description:
+    'A named product, service, tool, platform or technology that organizations offer, adopt or evaluate, e.g. "Microsoft Copilot", "Salesforce", "SAP S/4HANA".',
+  disambiguation: [
+    'The rollout or adoption effort is a Project ("Copilot rollout"); the thing being rolled out is the Product ("Microsoft Copilot").',
+    'The vendor company is an Organization linked by OFFERED_BY, never folded into the product label.',
+  ],
+  attributes: {
+    category: {
+      kind: 'select',
+      label: 'Category',
+      description: 'What kind of product this is, only if the source says so.',
+      extractable: true,
+      options: {
+        choices: [
+          { value: 'software', label: 'Software' },
+          { value: 'platform', label: 'Platform' },
+          { value: 'ai_model', label: 'AI model or assistant' },
+          { value: 'hardware', label: 'Hardware' },
+          { value: 'service', label: 'Service' },
+          { value: 'other', label: 'Other' },
+        ],
+      },
+    },
+    vendorName: {
+      kind: 'text',
+      label: 'Vendor',
+      description: 'The name of the vendor that offers the product, only if the source states it. A resolution hint, not a link.',
+      extractable: true,
+    },
+  },
+  sensitivityDefault: 'business',
+  alignment: 'schema:Product',
+});
+
+/**
  * Wire constant: commitment.
  *
  * @stability experimental
@@ -80,7 +124,7 @@ export const Commitment = defineEntityType({
   sensitivityDefault: 'business',
   itemKind: 'commitment',
   statuses: ['open', 'done', 'dropped', 'superseded'],
-  subjectTypes: ['Person', 'Organization', 'Project'],
+  subjectTypes: ['Person', 'Organization', 'Project', 'Product', 'Topic'],
   subjectRequired: false,
 });
 
@@ -111,7 +155,7 @@ export const Decision = defineEntityType({
   sensitivityDefault: 'business',
   itemKind: 'decision',
   statuses: ['active', 'superseded'],
-  subjectTypes: ['Person', 'Organization', 'Project'],
+  subjectTypes: ['Person', 'Organization', 'Project', 'Product', 'Topic'],
   subjectRequired: false,
 });
 
@@ -125,7 +169,7 @@ export const workDomain = defineDomain({
   label: 'Work',
   alwaysOn: false,
   defaultEnabled: true,
-  entityTypes: [Project, Commitment, Decision],
+  entityTypes: [Project, Product, Commitment, Decision],
   relationTypes: [
     defineRelationType({
       key: 'WORKS_FOR',
@@ -207,9 +251,10 @@ export const workDomain = defineDomain({
       key: 'DISCUSSED',
       domain: 'work',
       label: 'Discussed',
-      description: 'A meeting discussed a project as a substantive topic.',
+      description:
+        'A meeting discussed a project, topic, product or organization as a substantive subject.',
       from: ['Meeting'],
-      to: ['Project'],
+      to: ['Project', 'Topic', 'Product', 'Organization'],
       temporal: false,
       exclusive: 'none',
       props: {},
@@ -220,12 +265,14 @@ export const workDomain = defineDomain({
       key: 'PART_OF',
       domain: 'work',
       label: 'Part of',
-      description: 'A project belongs to an organization, or a meeting belongs to a project.',
-      from: ['Project', 'Meeting'],
+      description:
+        'A project belongs to an organization, a meeting belongs to a project, or a topic is scoped under a project.',
+      from: ['Project', 'Meeting', 'Topic'],
       to: ['Organization', 'Project'],
       allowedPairs: [
         ['Project', 'Organization'],
         ['Meeting', 'Project'],
+        ['Topic', 'Project'],
       ],
       temporal: false,
       exclusive: 'none',

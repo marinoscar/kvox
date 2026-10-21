@@ -139,7 +139,17 @@ describe('the personal domain (#383)', () => {
       const personNow = now.entityTypes.find((t) => t.key === 'Person')!;
       expect(personNow.attributes.map((a) => a.key)).toEqual(['title']);
       expect(personNow.attributes[0]).toEqual({ ...person100.attributes[0], extractable: false, deprecated: true });
-      const entityTypes = now.entityTypes.map((t) => (t.key === 'Person' ? { ...t, attributes: person100.attributes } : t));
+      // 1.3.0 (#662) added Topic, Product and BROADER, widened endpoints
+      // (DISCUSSED, PART_OF, ABOUT, MENTIONS, SUPPORTED_BY, item subjectTypes)
+      // and reworded the DISCUSSED and PART_OF descriptions. Undo exactly that.
+      const NEW_TYPES = ['Topic', 'Product'];
+      const strip = (keys: string[] | null | undefined) => keys?.filter((k) => !NEW_TYPES.includes(k));
+      const entityTypes = now.entityTypes
+        .filter((t) => !NEW_TYPES.includes(t.key))
+        .map((t) => {
+          const base = t.key === 'Person' ? { ...t, attributes: person100.attributes } : t;
+          return base.subjectTypes == null ? base : { ...base, subjectTypes: strip(base.subjectTypes) };
+        });
 
       const hasRole100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'HAS_ROLE')!;
       const hasRoleNow = now.relationTypes.find((r) => r.key === 'HAS_ROLE')!;
@@ -147,13 +157,22 @@ describe('the personal domain (#383)', () => {
       expect(hasRoleNow.props[0]).toEqual({ ...hasRole100.props[0], label: 'Role' });
       expect(hasRoleNow.props[1]).toMatchObject({ key: 'businessUnit', required: false, extractable: true, sensitivity: 'business' });
       const worksFor100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'WORKS_FOR')!;
-      const relationTypes = now.relationTypes.map((r) =>
-        r.key === 'WORKS_FOR'
-          ? { ...r, description: worksFor100.description }
-          : r.key === 'HAS_ROLE'
-            ? { ...r, description: hasRole100.description, props: hasRole100.props }
-            : r,
-      );
+      const relationTypes = now.relationTypes
+        .filter((r) => r.key !== 'BROADER')
+        .map((r) => {
+          let out = { ...r, from: strip(r.from)!, to: strip(r.to)! };
+          if (r.allowedPairs) out = { ...out, allowedPairs: r.allowedPairs.filter((pair) => !pair.some((k) => NEW_TYPES.includes(k))) };
+          if (r.key === 'DISCUSSED') {
+            const d100 = PAYLOAD_1_0_0.relationTypes.find((x) => x.key === 'DISCUSSED')!;
+            out = { ...out, description: d100.description, to: out.to.filter((k) => k !== 'Organization') };
+          }
+          if (r.key === 'PART_OF') {
+            out = { ...out, description: PAYLOAD_1_0_0.relationTypes.find((x) => x.key === 'PART_OF')!.description };
+          }
+          if (r.key === 'WORKS_FOR') return { ...out, description: worksFor100.description };
+          if (r.key === 'HAS_ROLE') return { ...out, description: hasRole100.description, props: hasRole100.props };
+          return out;
+        });
 
       const comparable = {
         ...now,
@@ -162,6 +181,7 @@ describe('the personal domain (#383)', () => {
         entityTypes,
         relationTypes,
       };
+      expect(comparable).toEqual(PAYLOAD_1_0_0);
       expect(JSON.stringify(comparable)).toBe(JSON.stringify(PAYLOAD_1_0_0));
     });
 

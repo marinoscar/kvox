@@ -5,6 +5,11 @@
  * Every coverage requirement of the issue is asserted here rather than left
  * to review: a fixture edit that silently drops the only promotion, the only
  * note-only meeting or a supersedes chain fails this file.
+ *
+ * Ontology 1.3.0 (epic #661, issue #662) added the `Topic` (core) and `Product`
+ * (work) entity types and the extractable `BROADER` relation (Topic -> Topic);
+ * m37-m39 carry their gold labels, so the ">= 10 of every entity type" and
+ * ">= 3 of every extractable relation" rules below hold for them too.
  */
 
 import { readdirSync, readFileSync } from 'fs';
@@ -280,7 +285,7 @@ describe('kg golden set (issue #362)', () => {
     const tagged = (tag: string) => fixtures.filter((f) => f.tags.includes(tag));
 
     it('has ≥ 10 gold instances of every core + work entity-storage type', () => {
-      expect(ENTITY_STORAGE_TYPES.sort()).toEqual(['Meeting', 'Organization', 'Person', 'Project']);
+      expect(ENTITY_STORAGE_TYPES.sort()).toEqual(['Meeting', 'Organization', 'Person', 'Product', 'Project', 'Topic']);
       for (const t of ENTITY_STORAGE_TYPES) {
         expect({ t, n: entities.filter(({ e }) => e.type === t).length >= 10 }).toEqual({ t, n: true });
       }

@@ -94,6 +94,15 @@ describe('buildPropsJsonSchema: strict-mode rules', () => {
     expect(relationTypes.length).toBeGreaterThan(0);
   });
 
+  it('covers Topic, Product and BROADER, with only extractable props (#662)', () => {
+    expect(entityTypes).toEqual(expect.arrayContaining(['Topic', 'Product']));
+    expect(relationTypes).toContain('BROADER');
+    const topic = buildPropsJsonSchema(schema, 'Topic') as { properties: Record<string, unknown> };
+    expect(Object.keys(topic.properties)).toEqual([]);
+    const product = buildPropsJsonSchema(schema, 'Product') as { properties: Record<string, unknown> };
+    expect(Object.keys(product.properties).sort()).toEqual(['category', 'vendorName']);
+  });
+
   describe.each(entityTypes.map((key) => [key]))('entity type %s', (key: string) => {
     it('obeys the strict JSON Schema rules', () => {
       const output = buildPropsJsonSchema(schema, key);
