@@ -67,6 +67,7 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `@sigma/edge-curve` | `^3.1.0` | `graph/ui` (the canvas's curved parallel edges, loaded lazily) |
 | `graphology` | `^0.26.0` | `graph/ui` (one copy only) |
 | `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
+| `graphology-layout-noverlap` | `^0.4.2` | `graph/ui` (the canvas's layout worker, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |
 | `@marinoscar/platform-web` | `0.1.0-next.7` (exact) | `brand` (`createKvoxTheme` builds on `createShellTheme` of `@marinoscar/platform-web/shell/headless`); `copilot/ui` (`AccountSignInProviderCard` and `aiErrorText` from `@marinoscar/platform-web/ai/ui`); no other entry |
 

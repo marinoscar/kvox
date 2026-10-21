@@ -15,7 +15,7 @@
  *   falls through to the search with a hint to reopen it from the overview.
  *
  * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SHOWN node types —
- * absent means all), `view=list`, `layout=static` (tests/visual only), and
+ * absent means all), `view=list`, `layout=force|concentric|static` (static: tests/visual only), and
  * `cluster`. The URL is the source of truth for all of them; a control writes
  * the URL and an effect applies it.
  *
@@ -72,7 +72,6 @@ import {
 import { InsightCanvasLayout } from '../components/explorer/shell/InsightCanvasLayout.js';
 import { explorerBudgets } from '../components/explorer/shell/explorerBudgets.js';
 import { useInputModality } from '../components/explorer/shell/useInputModality.js';
-import { useReducedMotion } from '../components/explorer/shell/useReducedMotion.js';
 import { useWindowClass } from '../components/explorer/shell/useWindowClass.js';
 import {
   ExplorerSidePanel,
@@ -82,6 +81,8 @@ import { GraphLegend } from '../components/explorer/GraphLegend.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
+import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
+import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
 import { SeedSearch } from '../components/explorer/SeedSearch.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
@@ -132,6 +133,11 @@ export function parseSeeds(param: string | null): string[] {
   return [...new Set(ids)].slice(0, MAX_URL_SEEDS);
 }
 
+/** The layout an ego view of this size opens in: concentric below 40 nodes, otherwise Force. */
+function ownDefault(nodeCount: number): CanvasLayout {
+  return nodeCount > 0 && nodeCount < CONCENTRIC_EGO_MAX_NODES ? 'concentric' : 'forceatlas';
+}
+
 function fiveYearsAgo(): string {
   const now = new Date();
   return `${now.getUTCFullYear() - 5}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
@@ -157,8 +163,7 @@ export function GraphExplorerPage() {
   const clusterParam = searchParams.get('cluster');
   const viewParam = searchParams.get('view');
   const webgl = useMemo(() => isWebGLAvailable(), []);
-  const reducedMotion = useReducedMotion();
-  const layout = searchParams.get('layout') === 'static' || reducedMotion ? 'static' : 'forceatlas';
+  const layoutParam = searchParams.get('layout');
   // The shell's window class and input modality, and the budgets they imply (GIC-08).
   const windowClass = useWindowClass();
   const inputModality = useInputModality();
@@ -294,6 +299,7 @@ export function GraphExplorerPage() {
   const [contextTarget, setContextTarget] = useState<ExplorerContextTarget | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const canvasControls = useRef<GraphCanvasControls | null>(null);
+  const [pinnedCount, setPinnedCount] = useState(0);
 
   const graph = state.graph;
   const visibleIds = useMemo(
@@ -306,6 +312,28 @@ export function GraphExplorerPage() {
   // A phone offers the list as the default for a graph too big to read; `view=graph` overrides it.
   const autoList = viewParam === null && webgl && nodeCount > budgets.listViewDefaultAbove;
   const listView = !webgl || viewParam === 'list' || autoList;
+
+  // Layout (#668). The URL wins; without it an ego view of fewer than 40 nodes
+  // opens concentric and a larger one in Force. Decided ONCE, when the first
+  // slice arrives, so expanding past 40 nodes never switches the layout.
+  const [defaultLayout, setDefaultLayout] = useState<CanvasLayout | null>(null);
+  useEffect(() => {
+    if (defaultLayout === null && nodeCount > 0) setDefaultLayout(ownDefault(nodeCount));
+  }, [defaultLayout, nodeCount]);
+  const layout: CanvasLayout =
+    layoutParam === 'static'
+      ? 'static'
+      : layoutParam === 'concentric'
+        ? 'concentric'
+        : layoutParam === 'force'
+          ? 'forceatlas'
+          : (defaultLayout ?? ownDefault(nodeCount));
+  const onLayoutChange = useCallback(
+    (next: CanvasLayout) =>
+      updateParams((params) => params.set('layout', next === 'forceatlas' ? 'force' : next)),
+    [updateParams],
+  );
+  const pinsKey = `explore:${seedKey}:${asOf ?? ''}`;
 
   const selection: ExplorerSelection | null = useMemo(() => {
     if (!selected) return null;
@@ -406,7 +434,8 @@ export function GraphExplorerPage() {
         clientX: event.clientX,
         clientY: event.clientY,
         isSeed: state.seedIds.includes(event.id),
-        pinned: Boolean(graph.getNodeAttribute(event.id, 'fixed')),
+        // The layout's pin (sessionStorage-backed), not sigma's `fixed`: one pin function for every path.
+        pinned: canvasControls.current?.isPinned(event.id) ?? false,
       });
     },
     [graph, state],
@@ -415,7 +444,7 @@ export function GraphExplorerPage() {
   const onPin = useCallback(
     (id: string) => {
       if (!graph.hasNode(id)) return;
-      graph.setNodeAttribute(id, 'fixed', !graph.getNodeAttribute(id, 'fixed'));
+      canvasControls.current?.togglePin(id);
     },
     [graph],
   );
@@ -561,6 +590,10 @@ export function GraphExplorerPage() {
       case 'L':
         toggleListView();
         break;
+      case 'p':
+      case 'P':
+        if (selectedNode) canvasControls.current?.togglePin(selectedNode);
+        break;
       case 'Escape':
         deselect();
         break;
@@ -672,6 +705,13 @@ export function GraphExplorerPage() {
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
+          layoutControl={{
+            layout,
+            onLayoutChange,
+            onRelayoutAll: () => canvasControls.current?.relayoutAll(),
+            pinnedCount,
+            onUnpinAll: () => canvasControls.current?.unpinAll(),
+          }}
         />
       )}
       {!webgl && <Alert severity="info">{NO_WEBGL_TEXT}</Alert>}
@@ -800,6 +840,9 @@ export function GraphExplorerPage() {
                       previewId={previewId}
                       markedIds={markedVisible}
                       layout={layout}
+                      seedIds={state.seedIds}
+                      pinsKey={pinsKey}
+                      onPinnedCountChange={setPinnedCount}
                       inputModality={inputModality}
                       budgets={budgets}
                       revealInsets={canvasInsets}
