@@ -25,6 +25,23 @@
  * a millisecond, so two per animation frame never block input.
  *
  * jsdom has no WebGL: tests `vi.mock` this module rather than import it.
+ *
+ * THE TOUCH MODEL (GIC-08, #669; the pure parts are `shell/canvasGestures.ts`):
+ *   - `touch-action: none` on THIS element only, so pinch and pan belong to the
+ *     canvas while the rest of the page still scrolls;
+ *   - the first tap on a node previews it (`previewId`: its neighbours light up),
+ *     the second tap on the same node activates it. `onNodeClick` fires on every
+ *     tap or click and the PAGE decides which it is, from `inputModality`;
+ *   - a 500ms long-press on a node opens the context menu
+ *     (`onNodeContextMenu`, with a haptic tick) and arms dragging, so a node can
+ *     only be pinned by long-press then drag, never by accident while panning;
+ *   - on a coarse pointer a tap within `budgets.hitTargetPx / 2` of a node hits it
+ *     (an enlarged pick radius, 44px target);
+ *   - `budgets` also set the `devicePixelRatio` cap, label density,
+ *     `hideEdgesOnMove` and the layout time box, without rebuilding sigma, so a
+ *     rotation keeps the camera;
+ *   - `revealInsets` is the part of the canvas the inspector covers: selecting a
+ *     node pans it into the rest.
  */
 
 import '@react-sigma/core/lib/style.css';
@@ -40,8 +57,19 @@ import Box from '@mui/material/Box';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { MultiDirectedGraph, UndirectedGraph } from 'graphology';
 import forceAtlas2Module, { inferSettings } from 'graphology-layout-forceatlas2';
-import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import type { Settings } from 'sigma/settings';
+
+import { LABEL_DENSITY, type ExplorerBudgets } from './shell/explorerBudgets.js';
+import {
+  capPixelRatio,
+  createLongPress,
+  pickNearestNode,
+  revealDelta,
+  type Insets,
+  type LongPress,
+} from './shell/canvasGestures.js';
+import { useReducedMotion } from './shell/useReducedMotion.js';
 
 // The library is CommonJS and sets `module.exports` to the layout function, which
 // is what a bundler's and Node's default import both give; the typings declare it
@@ -108,6 +136,40 @@ export interface GraphCanvasControls {
   zoomOut: () => void;
   /** Animated camera reset — "Fit". */
   fit: () => void;
+  /** The camera as sigma holds it (framed-graph coordinates and zoom ratio). */
+  getCamera?: () => CameraSnapshot;
+  /** Puts the camera back exactly, without animation. */
+  setCamera?: (camera: CameraSnapshot) => void;
+}
+
+/**
+ * The camera's state: the centre in framed-graph coordinates and the zoom ratio.
+ *
+ * @stability experimental
+ */
+export interface CameraSnapshot {
+  /** The camera centre's x, in framed-graph coordinates. */
+  x: number;
+  /** The camera centre's y, in framed-graph coordinates. */
+  y: number;
+  /** The zoom ratio: 1 frames the whole graph, smaller zooms in. */
+  ratio: number;
+}
+
+/**
+ * What a long-press or a right-click on a node reports.
+ *
+ * @stability experimental
+ */
+export interface NodeContextMenuEvent {
+  /** The id of the node the menu is for. */
+  id: string;
+  /** Where to anchor the menu, in client (page) coordinates. */
+  clientX: number;
+  /** Where to anchor the menu, in client (page) coordinates. */
+  clientY: number;
+  /** The gesture that asked for it. */
+  source: 'long-press' | 'right-click';
 }
 
 /**
@@ -142,6 +204,18 @@ export interface GraphCanvasProps {
   controlsRef?: Ref<GraphCanvasControls>;
   /** An accessible name for the drawing surface itself. */
   ariaLabel?: string;
+  /** The node a first tap previewed on touch: highlighted with its neighbours, without being selected. */
+  previewId?: string | null;
+  /** Nodes marked in "Select" mode; drawn highlighted whatever else is dimmed. */
+  markedIds?: ReadonlySet<string>;
+  /** `touch` enables long-press and the enlarged pick radius and disables hover and double-click expand. Default `pointer`. */
+  inputModality?: 'touch' | 'pointer';
+  /** The performance budgets of the window (GIC-08). Omitted: sigma's defaults, as the overview uses it. */
+  budgets?: ExplorerBudgets;
+  /** The part of the canvas the inspector covers, in px; a selection is panned out from under it. */
+  revealInsets?: Insets;
+  /** A long-press (touch) or right-click (pointer) on a node. */
+  onNodeContextMenu?: (event: NodeContextMenuEvent) => void;
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
@@ -183,7 +257,14 @@ export function GraphCanvas(props: GraphCanvasProps) {
         // `@react-sigma/core`'s stylesheet paints white; the theme's ground instead.
         '& .react-sigma': { background: 'transparent' },
         pointerEvents: interactive ? undefined : 'none',
+        // The canvas owns pinch and pan; nothing else on the page is affected.
+        touchAction: interactive ? 'none' : undefined,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitTapHighlightColor: 'transparent',
       }}
+      onContextMenu={props.onNodeContextMenu && interactive ? (event) => event.preventDefault() : undefined}
       aria-label={ariaLabel}
       role={ariaLabel ? 'img' : undefined}
     >
@@ -199,11 +280,17 @@ function CanvasBehaviour({
   version,
   visibleIds,
   selectedId,
+  previewId = null,
+  markedIds,
   layout,
+  inputModality = 'pointer',
+  budgets,
+  revealInsets,
   onNodeClick,
   onNodeDoubleClick,
   onStageClick,
   onEdgeClick,
+  onNodeContextMenu,
   interactive = true,
   controlsRef,
 }: GraphCanvasProps) {
@@ -212,7 +299,10 @@ function CanvasBehaviour({
   const registerEvents = useRegisterEvents();
   const camera = useCamera({ duration: 300, factor: 1.5 });
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const dimColor = alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.4 : 0.6);
+  const touch = inputModality === 'touch';
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   useImperativeHandle(
     controlsRef,
@@ -220,8 +310,13 @@ function CanvasBehaviour({
       zoomIn: () => camera.zoomIn(),
       zoomOut: () => camera.zoomOut(),
       fit: () => camera.reset({ duration: 300 }),
+      getCamera: () => {
+        const { x, y, ratio } = sigma.getCamera().getState();
+        return { x, y, ratio };
+      },
+      setCamera: (state) => sigma.getCamera().setState(state),
     }),
-    [camera],
+    [camera, sigma],
   );
 
   // Labels are drawn onto a 2D canvas once; if the webfont lands after the
@@ -236,59 +331,185 @@ function CanvasBehaviour({
     };
   }, [sigma]);
 
-  // --- Reducers: visibility and selection dimming ---------------------------
+  // --- Budgets: none of these rebuild sigma, so a rotation keeps the camera -----
+  const pixelRatioCap = budgets?.pixelRatioCap ?? null;
   useEffect(() => {
+    if (pixelRatioCap === null) return undefined;
+    return capPixelRatio(sigma, pixelRatioCap);
+  }, [sigma, pixelRatioCap]);
+
+  const labelDensity = budgets ? LABEL_DENSITY[budgets.labelDensity] : null;
+  useEffect(() => {
+    if (labelDensity !== null) setSettings({ labelDensity });
+  }, [labelDensity, setSettings]);
+
+  const hideEdgesAbove = budgets?.hideEdgesOnMoveAbove ?? null;
+  useEffect(() => {
+    if (hideEdgesAbove === null) return;
+    setSettings({ hideEdgesOnMove: graph.size > hideEdgesAbove });
+  }, [graph, version, hideEdgesAbove, setSettings]);
+
+  // The camera, readable from the DOM: the rotation test and any tool that needs to know where we are looking.
+  useEffect(() => {
+    const container = sigma.getContainer();
+    const write = () => {
+      const { x, y, ratio } = sigma.getCamera().getState();
+      container.dataset.cameraX = x.toFixed(4);
+      container.dataset.cameraY = y.toFixed(4);
+      container.dataset.cameraRatio = ratio.toFixed(4);
+    };
+    write();
+    sigma.getCamera().on('updated', write);
+    return () => {
+      sigma.getCamera().removeListener('updated', write);
+    };
+  }, [sigma]);
+
+  // Read by `tests/visual` (touch emulation drives a canvas it cannot see into): where a node is drawn,
+  // in px from the canvas's top-left. A read-only probe on the container; nothing in the app calls it.
+  useEffect(() => {
+    const container = sigma.getContainer() as HTMLElement & { kvoxProbe?: unknown };
+    container.kvoxProbe = {
+      nodeViewport: (id: string) => {
+        if (!graph.hasNode(id)) return null;
+        const attributes = graph.getNodeAttributes(id) as { x: number; y: number; size: number };
+        const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
+        return { x: at.x, y: at.y, size: sigma.scaleSize(attributes.size) };
+      },
+    };
+    return () => {
+      delete container.kvoxProbe;
+    };
+  }, [sigma, graph]);
+
+  // --- Reducers: visibility, highlight and dimming ---------------------------
+  const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
+  // Hover is for a pointer; a touch preview takes its place on a phone.
+  const focusId = (touch ? null : hoverId) ?? previewId ?? selectedId;
+  useEffect(() => {
+    const marked = new Set(markedKey ? markedKey.split(',') : []);
     const neighbours = new Set<string>();
-    if (selectedId && graph.hasNode(selectedId)) {
-      neighbours.add(selectedId);
-      graph.forEachNeighbor(selectedId, (id) => neighbours.add(id));
+    if (focusId && graph.hasNode(focusId)) {
+      neighbours.add(focusId);
+      graph.forEachNeighbor(focusId, (id) => neighbours.add(id));
     }
-    const hasSelection = neighbours.size > 0;
+    const hasFocus = neighbours.size > 0;
     setSettings({
       nodeReducer: (node, data) => {
         if (!visibleIds.has(node)) return { ...data, hidden: true };
-        if (!hasSelection) return data;
-        if (node === selectedId) return { ...data, highlighted: true, zIndex: 2 };
+        if (marked.has(node)) return { ...data, highlighted: true, zIndex: 2 };
+        if (!hasFocus) return node === selectedId ? { ...data, highlighted: true, zIndex: 2 } : data;
+        if (node === focusId || node === selectedId) return { ...data, highlighted: true, zIndex: 2 };
         if (neighbours.has(node)) return { ...data, zIndex: 1 };
         return { ...data, color: dimColor, label: '', zIndex: 0 };
       },
       edgeReducer: (edge, data) => {
         const [source, target] = graph.extremities(edge);
         if (!visibleIds.has(source) || !visibleIds.has(target)) return { ...data, hidden: true };
-        if (!hasSelection) return data;
-        if (source === selectedId || target === selectedId) return { ...data, zIndex: 1 };
+        if (!hasFocus) return data;
+        if (source === focusId || target === focusId) return { ...data, zIndex: 1 };
         return { ...data, color: dimColor, zIndex: 0 };
       },
     });
     // `version` is a dependency on purpose: a merge changes neighbourhoods.
-  }, [graph, version, visibleIds, selectedId, dimColor, setSettings]);
+  }, [graph, version, visibleIds, focusId, selectedId, markedKey, dimColor, setSettings]);
 
-  // --- Events, including drag --------------------------------------------------
-  const handlers = useRef({ onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick });
-  handlers.current = { onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick };
+  // --- Keep the selection out from under the inspector --------------------------
+  const insetsKey = revealInsets
+    ? `${revealInsets.top},${revealInsets.right},${revealInsets.bottom},${revealInsets.left}`
+    : '';
+  useEffect(() => {
+    if (!revealInsets || !selectedId || !graph.hasNode(selectedId)) return undefined;
+    const frame = requestAnimationFrame(() => {
+      if (!graph.hasNode(selectedId)) return;
+      const { width, height } = sigma.getDimensions();
+      if (width === 0 || height === 0) return;
+      const attributes = graph.getNodeAttributes(selectedId) as { x: number; y: number };
+      const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
+      const delta = revealDelta(at, { width, height }, revealInsets);
+      if (!delta) return;
+      const centre = sigma.viewportToFramedGraph({ x: width / 2 - delta.x, y: height / 2 - delta.y });
+      const target = { x: centre.x, y: centre.y };
+      if (reducedMotion) sigma.getCamera().setState(target);
+      else void sigma.getCamera().animate(target, { duration: 250 });
+    });
+    return () => cancelAnimationFrame(frame);
+    // The insets are compared by value (`insetsKey`), not identity.
+  }, [sigma, graph, selectedId, insetsKey, reducedMotion]);
+
+  // --- Events, including drag and the touch model -----------------------------
+  const handlers = useRef({ onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick, onNodeContextMenu });
+  handlers.current = { onNodeClick, onNodeDoubleClick, onStageClick, onEdgeClick, onNodeContextMenu };
+  const hitRadius = touch ? (budgets?.hitTargetPx || 44) / 2 : 0;
+  const visibleRef = useRef(visibleIds);
+  visibleRef.current = visibleIds;
+  const longPressRef = useRef<LongPress | null>(null);
 
   useEffect(() => {
     if (!interactive) return;
     let dragged: string | null = null;
     let moved = false;
+
+    const nearest = (point: { x: number; y: number }): string | null => {
+      if (hitRadius <= 0) return null;
+      return pickNearestNode(
+        visibleRef.current,
+        (id) => {
+          if (!graph.hasNode(id)) return null;
+          const attributes = graph.getNodeAttributes(id) as { x: number; y: number; size: number };
+          const at = sigma.graphToViewport({ x: attributes.x, y: attributes.y });
+          return { x: at.x, y: at.y, size: sigma.scaleSize(attributes.size) };
+        },
+        point,
+        hitRadius,
+      );
+    };
+
     registerEvents({
       clickNode: ({ node }) => {
-        if (moved) return;
+        if (moved || longPressRef.current?.fired()) return;
         handlers.current.onNodeClick(node);
       },
       doubleClickNode: (event) => {
         // Sigma's default for a double-click is to zoom; here it expands.
         event.preventSigmaDefault();
+        if (touch) {
+          // Sigma reports a quick second tap as a double-tap INSTEAD of a tap. On touch that is the
+          // "second tap" that opens the inspector, and it must not also expand.
+          handlers.current.onNodeClick(event.node);
+          return;
+        }
         handlers.current.onNodeDoubleClick(event.node);
       },
-      clickStage: () => handlers.current.onStageClick(),
+      clickStage: (event) => {
+        if (longPressRef.current?.fired()) return;
+        const hit = touch ? nearest({ x: event.event.x, y: event.event.y }) : null;
+        if (hit) handlers.current.onNodeClick(hit);
+        else handlers.current.onStageClick();
+      },
       clickEdge: ({ edge }) => handlers.current.onEdgeClick?.(edge),
+      rightClickNode: ({ node, event }) => {
+        event.original.preventDefault();
+        const rect = sigma.getContainer().getBoundingClientRect();
+        handlers.current.onNodeContextMenu?.({
+          id: node,
+          clientX: rect.left + event.x,
+          clientY: rect.top + event.y,
+          source: 'right-click',
+        });
+      },
+      enterNode: ({ node }) => {
+        if (!touch) setHoverId(node);
+      },
+      leaveNode: () => setHoverId(null),
       downNode: ({ node }) => {
         dragged = node;
         moved = false;
       },
       mousemovebody: (event) => {
         if (!dragged) return;
+        // On touch a node moves only after a long-press: a plain drag pans the camera.
+        if (touch && !longPressRef.current?.fired()) return;
         moved = true;
         const position = sigma.viewportToGraph(event);
         graph.mergeNodeAttributes(dragged, { x: position.x, y: position.y, fixed: true });
@@ -304,22 +525,78 @@ function CanvasBehaviour({
         if (!sigma.getCustomBBox()) sigma.setCustomBBox(sigma.getBBox());
       },
     });
-  }, [graph, interactive, registerEvents, sigma]);
+
+    if (!touch) return undefined;
+
+    // Touch: long-press (context menu + arms dragging), cancelled by a second finger or a wander.
+    let pressed: string | null = null;
+    const longPress = createLongPress({
+      onLongPress: (point) => {
+        if (!pressed) return;
+        const rect = sigma.getContainer().getBoundingClientRect();
+        handlers.current.onNodeContextMenu?.({
+          id: pressed,
+          clientX: rect.left + point.x,
+          clientY: rect.top + point.y,
+          source: 'long-press',
+        });
+      },
+    });
+    longPressRef.current = longPress;
+    const touchCaptor = sigma.getTouchCaptor();
+    const onTouchDown = (event: { touches: Array<{ x: number; y: number }> }) => {
+      if (event.touches.length !== 1) {
+        longPress.cancel();
+        return;
+      }
+      const point = event.touches[0]!;
+      pressed = nearest(point);
+      moved = false;
+      if (pressed) {
+        // Keep the camera still while a node is held, so it does not slide under the finger.
+        if (!sigma.getCustomBBox()) sigma.setCustomBBox(sigma.getBBox());
+        dragged = pressed;
+        longPress.start(point);
+      }
+    };
+    const onTouchMove = (event: { touches: Array<{ x: number; y: number }> }) => {
+      if (event.touches.length !== 1) longPress.cancel();
+      else longPress.move(event.touches[0]!);
+    };
+    const onTouchUp = () => {
+      longPress.cancel();
+      dragged = null;
+    };
+    touchCaptor.on('touchdown', onTouchDown);
+    touchCaptor.on('touchmove', onTouchMove);
+    touchCaptor.on('touchup', onTouchUp);
+    return () => {
+      longPress.cancel();
+      longPressRef.current = null;
+      touchCaptor.removeListener('touchdown', onTouchDown);
+      touchCaptor.removeListener('touchmove', onTouchMove);
+      touchCaptor.removeListener('touchup', onTouchUp);
+    };
+  }, [graph, interactive, registerEvents, sigma, touch, hitRadius]);
 
   // --- Layout ----------------------------------------------------------------
+  const timeBoxMs = budgets?.layoutTimeBoxMs ?? null;
   useEffect(() => {
     if (layout !== 'forceatlas' || graph.order < 2) return undefined;
     const settings = inferSettings(graph);
     let done = 0;
     let frame = 0;
+    const startedAt = performance.now();
     const step = () => {
       forceAtlas2.assign(graph, { iterations: FA2_ITERATIONS_PER_FRAME, settings });
       done += FA2_ITERATIONS_PER_FRAME;
-      if (done < FA2_SETTLE_ITERATIONS) frame = requestAnimationFrame(step);
+      // Bounded by iterations (determinism) AND by the budget's time box (a slow phone stops early).
+      const overTime = timeBoxMs !== null && performance.now() - startedAt >= timeBoxMs;
+      if (done < FA2_SETTLE_ITERATIONS && !overTime) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [graph, version, layout]);
+  }, [graph, version, layout, timeBoxMs]);
 
   return null;
 }

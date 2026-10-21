@@ -35,8 +35,8 @@ const FIXED_ISO = '2024-03-01T09:00:00.000Z';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 export const JOE_ID = id(1);
-const ANA_ID = id(2);
-const ACME_ID = id(4);
+export const ANA_ID = id(2);
+export const ACME_ID = id(4);
 const Q3_ID = id(7);
 const TRANSCRIPT_ID = id(900);
 const SEGMENT_ID = id(901);
