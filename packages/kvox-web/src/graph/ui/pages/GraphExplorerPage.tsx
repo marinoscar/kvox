@@ -19,6 +19,20 @@
  * `cluster`. The URL is the source of truth for all of them; a control writes
  * the URL and an effect applies it.
  *
+ * LAYOUT (GIC-08, #669; epic #661): everything but the early states (not found,
+ * error, seed search) renders through `InsightCanvasLayout` — the responsive
+ * Insight Canvas shell. The filters are its `facets` slot, the title and view
+ * controls its `topBar`, the drawing its `canvas`, and `ExplorerSidePanel` its
+ * `inspector` (GIC-11 replaces it). The page reads the window class, the input
+ * modality and the budgets from the shell's hooks and owns none of the layout.
+ * `view=graph` is written when the user asks for the graph where the list was
+ * the default (a phone with more than 120 nodes).
+ *
+ * TOUCH: the first tap on a node previews it (its neighbours light up), the
+ * second tap on the same node opens the inspector; a long-press (touch) or a
+ * right-click (pointer) opens the node's menu; "Select" mode marks nodes by
+ * tapping. A pointer keeps hover = preview and click = open.
+ *
  * The canvas (sigma, WebGL) is lazy-loaded a second time inside this lazy
  * page, so the list view — and a browser without WebGL — never downloads it.
  * Every rule about the graph itself lives in `explorerModel.ts`.
@@ -30,7 +44,6 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '../visuallyHidden.js';
 import {
@@ -42,17 +55,32 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { CapWarning } from '../components/explorer/CapWarning.js';
+import {
+  ExplorerContextMenu,
+  type ExplorerContextTarget,
+} from '../components/explorer/ExplorerContextMenu.js';
+import {
+  ExplorerFilters,
+  ExplorerFiltersSkeleton,
+  activeFilterCount,
+} from '../components/explorer/ExplorerFilters.js';
+import { InsightCanvasLayout } from '../components/explorer/shell/InsightCanvasLayout.js';
+import { explorerBudgets } from '../components/explorer/shell/explorerBudgets.js';
+import { useInputModality } from '../components/explorer/shell/useInputModality.js';
+import { useReducedMotion } from '../components/explorer/shell/useReducedMotion.js';
+import { useWindowClass } from '../components/explorer/shell/useWindowClass.js';
 import {
   ExplorerSidePanel,
   type ExplorerSelection,
 } from '../components/explorer/ExplorerSidePanel.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
-import type { GraphCanvasControls } from '../components/explorer/GraphCanvas.js';
+import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
 import { SeedSearch } from '../components/explorer/SeedSearch.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
@@ -124,12 +152,14 @@ export function GraphExplorerPage() {
   const asOf = parseAsOfParam(searchParams.get('asOf'));
   const typesParam = searchParams.get('types');
   const clusterParam = searchParams.get('cluster');
+  const viewParam = searchParams.get('view');
   const webgl = useMemo(() => isWebGLAvailable(), []);
-  const listView = !webgl || searchParams.get('view') === 'list';
-  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const reducedMotion = useReducedMotion();
   const layout = searchParams.get('layout') === 'static' || reducedMotion ? 'static' : 'forceatlas';
-  // Page-level, not an app-chrome gate: how tall the canvas is on a phone.
-  const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
+  // The shell's window class and input modality, and the budgets they imply (GIC-08).
+  const windowClass = useWindowClass();
+  const inputModality = useInputModality();
+  const budgets = useMemo(() => explorerBudgets({ windowClass, inputModality }), [windowClass, inputModality]);
 
   const updateParams = useCallback(
     (mutate: (params: URLSearchParams) => void) => {
@@ -159,7 +189,12 @@ export function GraphExplorerPage() {
   const typeLabel = useCallback((key: string) => nodeTypeLabel(key, ontology), [ontology]);
 
   // --- The explorer ------------------------------------------------------------
-  const explorer = useGraphExplorer({ nodeTypes: nodeTypeKeys, relationTypes: relationKeys, palette: theme });
+  const explorer = useGraphExplorer({
+    nodeTypes: nodeTypeKeys,
+    relationTypes: relationKeys,
+    palette: theme,
+    nodeCap: budgets.visibleNodeCap,
+  });
   const {
     state,
     version,
@@ -249,6 +284,11 @@ export function GraphExplorerPage() {
 
   // --- Selection -------------------------------------------------------------------
   const [selected, setSelected] = useState<{ kind: 'node' | 'edge'; id: string } | null>(null);
+  // Touch: the node a first tap previewed (lit with its neighbours, not yet open).
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [marked, setMarked] = useState<Set<string>>(() => new Set());
+  const [contextTarget, setContextTarget] = useState<ExplorerContextTarget | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const canvasControls = useRef<GraphCanvasControls | null>(null);
 
@@ -259,6 +299,9 @@ export function GraphExplorerPage() {
   );
   const atCap = remainingCapacity(state) === 0;
   const nodeCount = graph.order;
+  // A phone offers the list as the default for a graph too big to read; `view=graph` overrides it.
+  const autoList = viewParam === null && webgl && nodeCount > budgets.listViewDefaultAbove;
+  const listView = !webgl || viewParam === 'list' || autoList;
 
   const selection: ExplorerSelection | null = useMemo(() => {
     if (!selected) return null;
@@ -316,7 +359,62 @@ export function GraphExplorerPage() {
     [graph, typeLabel],
   );
 
-  const deselect = useCallback(() => setSelected(null), []);
+  const deselect = useCallback(() => {
+    setSelected(null);
+    setPreviewId(null);
+  }, []);
+
+  /** A tap or click on a node, in the canvas's own words: what it MEANS depends on the input and the mode. */
+  const onNodeActivate = useCallback(
+    (id: string) => {
+      if (selectMode) {
+        setMarked((previous) => {
+          const next = new Set(previous);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+        return;
+      }
+      if (inputModality === 'touch') {
+        const open = previewId === id || (selected?.kind === 'node' && selected.id === id);
+        if (!open) {
+          setPreviewId(id);
+          if (graph.hasNode(id)) {
+            const attrs = graph.getNodeAttributes(id);
+            setAnnouncement(`${attrs.label}, ${typeLabel(attrs.entityType)}. Tap again to open details.`);
+          }
+          return;
+        }
+        setPreviewId(null);
+      }
+      selectNode(id, inputModality === 'touch');
+    },
+    [selectMode, inputModality, previewId, selected, graph, typeLabel, selectNode],
+  );
+
+  const onNodeContextMenu = useCallback(
+    (event: NodeContextMenuEvent) => {
+      if (!graph.hasNode(event.id)) return;
+      setContextTarget({
+        id: event.id,
+        label: graph.getNodeAttribute(event.id, 'label'),
+        clientX: event.clientX,
+        clientY: event.clientY,
+        isSeed: state.seedIds.includes(event.id),
+        pinned: Boolean(graph.getNodeAttribute(event.id, 'fixed')),
+      });
+    },
+    [graph, state],
+  );
+
+  const onPin = useCallback(
+    (id: string) => {
+      if (!graph.hasNode(id)) return;
+      graph.setNodeAttribute(id, 'fixed', !graph.getNodeAttribute(id, 'fixed'));
+    },
+    [graph],
+  );
 
   // --- Actions -------------------------------------------------------------------------
   const onExpand = useCallback((id: string) => void expand(id), [expand]);
@@ -324,6 +422,12 @@ export function GraphExplorerPage() {
   const onHide = useCallback(
     (id: string) => {
       hide(id);
+      setMarked((previous) => {
+        if (!previous.has(id)) return previous;
+        const next = new Set(previous);
+        next.delete(id);
+        return next;
+      });
       setSelected((current) => (current?.kind === 'node' && current.id === id ? null : current));
     },
     [hide],
@@ -345,6 +449,8 @@ export function GraphExplorerPage() {
 
   const onReset = useCallback(() => {
     setSelected(null);
+    setPreviewId(null);
+    setMarked(new Set());
     const current = state.seedIds.length > 0 ? state.seedIds : seeds;
     if (current.length > 0) void load(current);
   }, [load, seeds, state]);
@@ -352,10 +458,13 @@ export function GraphExplorerPage() {
   const toggleListView = useCallback(() => {
     if (!webgl) return;
     updateParams((params) => {
-      if (params.get('view') === 'list') params.delete('view');
-      else params.set('view', 'list');
+      if (listView) {
+        // Asking for the graph where the list was the default must say so, or the default wins again.
+        if (autoList) params.set('view', 'graph');
+        else params.delete('view');
+      } else params.set('view', 'list');
     });
-  }, [updateParams, webgl]);
+  }, [updateParams, webgl, listView, autoList]);
 
   const setShownTypes = useCallback(
     (hidden: Set<string>) => {
@@ -490,9 +599,23 @@ export function GraphExplorerPage() {
     (noRecent || Boolean(clusterParam && !handoff));
   const initialLoading = !hasGraph && !showSeedSearch && !explorer.notFound && !explorer.error;
 
-  let body;
+  const title = (
+    <>
+      <Typography variant="h5" component="h1">
+        Explore
+      </Typography>
+      {handoff?.title && (
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {handoff.title}
+        </Typography>
+      )}
+    </>
+  );
+
+  /** The early states have no graph yet, so no shell: a heading and one panel. */
+  let earlyBody: ReactNode = null;
   if (explorer.notFound && !hasGraph) {
-    body = (
+    earlyBody = (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="h6" component="h2" gutterBottom>
           {NOT_IN_GRAPH_TITLE}
@@ -506,7 +629,7 @@ export function GraphExplorerPage() {
       </Paper>
     );
   } else if (explorer.error && !hasGraph) {
-    body = (
+    earlyBody = (
       <Alert
         severity="error"
         action={
@@ -519,96 +642,93 @@ export function GraphExplorerPage() {
       </Alert>
     );
   } else if (showSeedSearch) {
-    body = <SeedSearch onChoose={chooseSeed} hint={clusterParam && !handoff ? CLUSTER_HINT : undefined} />;
-  } else {
-    const canvasHeight = isCompactWindow
-      ? 'max(360px, calc(100dvh - 340px))'
-      : 'max(440px, calc(100dvh - 260px))';
-    body = (
-      <>
-        {initialLoading || ontologyLoading ? (
-          <ExplorerToolbarSkeleton />
-        ) : (
-          <ExplorerToolbar
-            domains={domains}
-            nodeTypes={nodeTypes}
-            relationTypes={relationTypes}
-            hiddenTypes={hiddenTypes}
-            hiddenRelationTypes={hiddenRelations}
-            onToggleType={onToggleType}
-            onToggleDomain={onToggleDomain}
-            onToggleRelationType={onToggleRelationType}
-            asOf={asOf}
-            asOfMin={asOfMin}
-            onAsOfChange={onAsOfChange}
-            onFit={() => canvasControls.current?.fit()}
-            onReset={onReset}
-            listView={listView}
-            listViewForced={!webgl}
-            onToggleListView={toggleListView}
-            nodeCount={nodeCount}
-          />
-        )}
-        {!webgl && (
-          <Alert severity="info" sx={{ mb: 1.5 }}>
-            {NO_WEBGL_TEXT}
-          </Alert>
-        )}
-        <CapWarning capped={explorer.capped} truncated={explorer.truncated} onDismiss={explorer.dismissCap} />
-        {explorer.error && hasGraph && (
-          <Alert severity="error" sx={{ mb: 1.5 }}>
-            {explorer.error}
-          </Alert>
-        )}
-        {listView ? (
-          hasGraph ? (
-            <ExplorerListView
-              rows={listRows}
-              typeLabel={typeLabel}
-              atCap={atCap}
-              expandingId={explorer.expandingId}
-              onExpand={onExpand}
-              onHide={onHide}
-            />
-          ) : (
-            <CenteredSpinner label="Loading the graph" />
-          )
-        ) : (
-          <Box
-            tabIndex={0}
-            role="application"
-            aria-label={`Graph explorer, ${nodeCount} nodes. Press L for list view.`}
-            aria-busy={explorer.isLoading || undefined}
-            onKeyDown={onCanvasKeyDown}
-            sx={{
-              position: 'relative',
-              height: canvasHeight,
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 2,
-              overflow: 'hidden',
-              bgcolor: 'background.paper',
-              '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
-            }}
-          >
-            {hasGraph && (
-              <Suspense fallback={<CenteredSpinner label="Loading the graph" />}>
-                <GraphCanvas
-                  graph={graph}
-                  version={version}
-                  visibleIds={visibleIds}
-                  selectedId={selected?.kind === 'node' ? selected.id : null}
-                  layout={layout}
-                  onNodeClick={(id) => selectNode(id)}
-                  onNodeDoubleClick={onExpand}
-                  onStageClick={deselect}
-                  onEdgeClick={(id) => setSelected({ kind: 'edge', id })}
-                  height="100%"
-                  controlsRef={canvasControls}
-                />
-              </Suspense>
-            )}
-            {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+    earlyBody = <SeedSearch onChoose={chooseSeed} hint={clusterParam && !handoff ? CLUSTER_HINT : undefined} />;
+  }
+
+  const loadingFacets = initialLoading || ontologyLoading;
+  const compactLayout = windowClass === 'compact';
+
+  const topBar = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+      {loadingFacets ? (
+        <ExplorerToolbarSkeleton />
+      ) : (
+        <ExplorerToolbar
+          title={title}
+          windowClass={windowClass}
+          inputModality={inputModality}
+          onFit={() => canvasControls.current?.fit()}
+          onReset={onReset}
+          listView={listView}
+          listViewForced={!webgl}
+          onToggleListView={toggleListView}
+          nodeCount={nodeCount}
+          nodeCap={budgets.visibleNodeCap}
+          selectMode={selectMode}
+          onToggleSelectMode={() => setSelectMode((on) => !on)}
+          markedCount={marked.size}
+          onClearMarked={() => setMarked(new Set())}
+        />
+      )}
+      {!webgl && <Alert severity="info">{NO_WEBGL_TEXT}</Alert>}
+      {autoList && (
+        <Alert severity="info">
+          This graph has more than {budgets.listViewDefaultAbove} nodes, so it opens as a list on a small screen.
+        </Alert>
+      )}
+      <CapWarning
+        capped={explorer.capped}
+        truncated={explorer.truncated}
+        cap={budgets.visibleNodeCap}
+        onDismiss={explorer.dismissCap}
+      />
+      {explorer.error && hasGraph && <Alert severity="error">{explorer.error}</Alert>}
+    </Box>
+  );
+
+  const facets = loadingFacets ? (
+    <ExplorerFiltersSkeleton />
+  ) : (
+    <ExplorerFilters
+      domains={domains}
+      nodeTypes={nodeTypes}
+      relationTypes={relationTypes}
+      hiddenTypes={hiddenTypes}
+      hiddenRelationTypes={hiddenRelations}
+      onToggleType={onToggleType}
+      onToggleDomain={onToggleDomain}
+      onToggleRelationType={onToggleRelationType}
+      asOf={asOf}
+      asOfMin={asOfMin}
+      onAsOfChange={onAsOfChange}
+    />
+  );
+
+  const markedVisible = useMemo(
+    () => new Set([...marked].filter((id) => graph.hasNode(id))),
+    [marked, graph, version],
+  );
+
+  return (
+    <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
+      {earlyBody ? (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>{title}</Box>
+          {earlyBody}
+        </>
+      ) : (
+        <InsightCanvasLayout
+          windowClass={windowClass}
+          inputModality={inputModality}
+          fillHeight={!listView}
+          topBar={topBar}
+          facets={facets}
+          facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
+          inspectorOpen={!listView && selection !== null}
+          onInspectorOpenChange={(open) => {
+            if (!open) deselect();
+          }}
+          inspector={
             <ExplorerSidePanel
               selection={selection}
               atCap={atCap}
@@ -617,26 +737,80 @@ export function GraphExplorerPage() {
               onHide={onHide}
               onMakeSeed={onMakeSeed}
               onClose={deselect}
+              actionsFirst={compactLayout}
             />
-          </Box>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
-        <Typography variant="h5" component="h1">
-          Explore
-        </Typography>
-        {handoff?.title && (
-          <Typography variant="body2" color="text.secondary">
-            {handoff.title}
-          </Typography>
-        )}
-      </Box>
-      {body}
+          }
+          canvas={({ canvasInsets }) =>
+            listView ? (
+              hasGraph ? (
+                <Box sx={{ height: '100%', overflowY: 'auto', p: { xs: 1, sm: 1.5 } }}>
+                  <ExplorerListView
+                    rows={listRows}
+                    typeLabel={typeLabel}
+                    atCap={atCap}
+                    expandingId={explorer.expandingId}
+                    onExpand={onExpand}
+                    onHide={onHide}
+                  />
+                </Box>
+              ) : (
+                <CenteredSpinner label="Loading the graph" />
+              )
+            ) : (
+              <Box
+                tabIndex={0}
+                role="application"
+                aria-label={`Graph explorer, ${nodeCount} nodes. Press L for list view.`}
+                aria-busy={explorer.isLoading || undefined}
+                onKeyDown={onCanvasKeyDown}
+                sx={{
+                  position: 'relative',
+                  height: '100%',
+                  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+                }}
+              >
+                {hasGraph && (
+                  <Suspense fallback={<CenteredSpinner label="Loading the graph" />}>
+                    <GraphCanvas
+                      graph={graph}
+                      version={version}
+                      visibleIds={visibleIds}
+                      selectedId={selected?.kind === 'node' ? selected.id : null}
+                      previewId={previewId}
+                      markedIds={markedVisible}
+                      layout={layout}
+                      inputModality={inputModality}
+                      budgets={budgets}
+                      revealInsets={canvasInsets}
+                      onNodeClick={onNodeActivate}
+                      onNodeDoubleClick={onExpand}
+                      onNodeContextMenu={onNodeContextMenu}
+                      onStageClick={deselect}
+                      onEdgeClick={(id) => {
+                        setPreviewId(null);
+                        setSelected({ kind: 'edge', id });
+                      }}
+                      height="100%"
+                      controlsRef={canvasControls}
+                    />
+                  </Suspense>
+                )}
+                {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+              </Box>
+            )
+          }
+        />
+      )}
+      <ExplorerContextMenu
+        target={contextTarget}
+        atCap={atCap}
+        onClose={() => setContextTarget(null)}
+        onOpen={(id) => selectNode(id, true)}
+        onExpand={onExpand}
+        onPin={onPin}
+        onHide={onHide}
+        onMakeSeed={onMakeSeed}
+      />
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
       </Box>

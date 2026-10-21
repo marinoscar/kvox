@@ -114,9 +114,11 @@ export interface ExplorerState {
   hiddenRelationTypes: Set<string>;
   /** `true` when the last slice reported that more was reachable than it returned. */
   truncated: boolean;
+  /** Most nodes the graph may hold: `EXPLORER_NODE_CAP`, or the smaller budget of a phone or a coarse pointer (GIC-08, `explorerBudgets`). */
+  cap: number;
 }
 
-export function createExplorerState(): ExplorerState {
+export function createExplorerState(cap: number = EXPLORER_NODE_CAP): ExplorerState {
   return {
     graph: new MultiDirectedGraph<ExplorerNodeAttributes, ExplorerEdgeAttributes>(),
     seedIds: [],
@@ -125,6 +127,7 @@ export function createExplorerState(): ExplorerState {
     hiddenTypes: new Set(),
     hiddenRelationTypes: new Set(),
     truncated: false,
+    cap,
   };
 }
 
@@ -282,7 +285,7 @@ export interface MergeOptions {
 /**
  * Add a slice's nodes and edges. IDEMPOTENT — a node or edge already present
  * keeps its position and has its data refreshed. NEVER EXCEEDS
- * `EXPLORER_NODE_CAP`: when the new nodes do not fit, the slice's own seeds go
+ * `state.cap` (`EXPLORER_NODE_CAP` unless a budget lowers it): when the new nodes do not fit, the slice's own seeds go
  * first, then the best connected, and the lowest-degree ones are dropped
  * (`capped: true`). An edge is added only when both ends are on the graph.
  */
@@ -449,7 +452,7 @@ export function seedFromNodes(
   palette: ExplorerPalette = DEFAULT_EXPLORER_PALETTE,
 ): void {
   const { graph } = state;
-  for (const node of nodes.slice(0, EXPLORER_NODE_CAP)) {
+  for (const node of nodes.slice(0, state.cap)) {
     if (graph.hasNode(node.id)) continue;
     const nodeKind = /^[a-z]/.test(node.type) ? 'item' : 'entity';
     const style = nodeStyle({ nodeKind, type: node.type, label: node.label, degree: node.degree }, palette);
@@ -474,7 +477,7 @@ export function seedFromNodes(
 // -----------------------------------------------------------------------------
 
 export function remainingCapacity(state: ExplorerState): number {
-  return Math.max(0, EXPLORER_NODE_CAP - state.graph.order);
+  return Math.max(0, state.cap - state.graph.order);
 }
 
 /**

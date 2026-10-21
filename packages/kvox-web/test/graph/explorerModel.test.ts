@@ -113,6 +113,21 @@ describe('mergeSlice', () => {
     expect(state.graph.getNodeAttributes(ANA_ID)).toMatchObject({ x: 7, y: 9 });
   });
 
+  it('honours a smaller cap on the state (the phone budget, GIC-08)', () => {
+    const state = createExplorerState(120);
+    expect(state.cap).toBe(120);
+    expect(createExplorerState().cap).toBe(EXPLORER_NODE_CAP);
+    const { added, capped } = mergeSlice(state, manyNodesSlice(JOE_ID, 400));
+    expect(capped).toBe(true);
+    expect(added).toHaveLength(120);
+    expect(state.graph.order).toBe(120);
+    expect(state.graph.hasNode(JOE_ID)).toBe(true);
+    expect(remainingCapacity(state)).toBe(0);
+    // Raising it later (a rotation to a roomy window) frees room without dropping anything.
+    state.cap = 300;
+    expect(remainingCapacity(state)).toBe(180);
+  });
+
   it('never exceeds the cap, dropping the lowest-degree NEW nodes first', () => {
     const state = createExplorerState();
     const big = manyNodesSlice(JOE_ID, 400);

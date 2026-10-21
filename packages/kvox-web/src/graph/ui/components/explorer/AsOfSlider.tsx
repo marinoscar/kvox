@@ -96,7 +96,7 @@ export function AsOfSlider({ minDate, value, onChange, now, disabled }: AsOfSlid
   const label = (i: number) => (i >= last ? 'Now' : monthLabel(steps[i]));
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, minWidth: 0, flex: 1 }}>
       <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
         As of
       </Typography>
@@ -116,7 +116,7 @@ export function AsOfSlider({ minDate, value, onChange, now, disabled }: AsOfSlid
         valueLabelFormat={label}
         getAriaValueText={label}
         aria-label="Show the graph as of"
-        sx={{ minWidth: 120, flex: 1 }}
+        sx={{ minWidth: 100, flex: '1 1 100px' }}
       />
       <Typography
         variant="body2"
