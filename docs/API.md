@@ -6850,11 +6850,11 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
     "seedIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
     "asOf": "2026-09-26T12:00:00.000Z",
     "nodes": [
-      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null },
-      { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z" }
+      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-09-20T10:00:00.000Z" },
+      { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z", "lastSeenAt": "2026-09-02T09:00:00.000Z" }
     ],
     "edges": [
-      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {} },
+      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {}, "evidenceCount": 2, "lastEvidenceAt": "2026-09-02T09:00:00.000Z" },
       { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false, "props": {} },
       { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } }
     ],
@@ -6863,6 +6863,14 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
   }
 }
 ```
+
+Weights and recency (all optional; an older API omits them): a node carries
+`mentionCount` (readable `linked`/`new` mentions, entities only) and
+`lastSeenAt` (latest such mention, or for an item its latest evidence); an
+edge carries `evidenceCount` and `lastEvidenceAt` (a `virtual` item edge
+carries the item's). They are computed for the returned page only, and
+evidence of a `sensitive` fact is never counted. Truncation order is
+unchanged: depth, then degree, then id.
 
 **Errors:** `400` invalid parameter or unknown `type`/`relationTypes` key ·
 `401` · `403` without `graph:read` · `404` no such entity, not yours, or

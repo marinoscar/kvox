@@ -164,6 +164,19 @@ export const graphNodeSchema = z.object({
   degree: z.number().int().describe('Readable, as-of-valid edges in your whole graph (for node size).'),
   status: z.string().nullable().describe('Item status; null for entities.'),
   occurredAt: z.string().nullable(),
+  mentionCount: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Entities: readable (linked or new) mentions of the entity. Absent for items and from an older API.'),
+  lastSeenAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'ISO instant of the latest readable mention (entity) or latest evidence (item); null when there is none. Absent from an older API.',
+    ),
 });
 /**
  * The parsed shape of {@link graphNodeSchema}.
@@ -195,6 +208,19 @@ export const graphEdgeSchema = z.object({
     .describe(
       "The relation's own attribute values, keyed by prop key — e.g. HAS_ROLE `{ title: 'Managing Director', businessUnit: 'Consulting' }` (#440). Only props the relation type declares in your effective schema, never a deprecated or `sensitive` one, never a null value. `{}` for a derived (`virtual`) edge or a relation with none. Read labels from `GET /api/graph/ontology`'s relation-type `props`.",
     ),
+  evidenceCount: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Evidence rows behind the relation; for a virtual item edge, the item evidence count. Absent from an older API.',
+    ),
+  lastEvidenceAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('ISO instant of the latest evidence behind the edge; null when none. Absent from an older API.'),
 });
 /**
  * The parsed shape of {@link graphEdgeSchema}.
