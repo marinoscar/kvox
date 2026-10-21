@@ -11,18 +11,17 @@
  *     not the selection or one of its neighbours;
  *   - click / double-click / stage / edge events, and dragging (a dragged node
  *     becomes `fixed`, so the layout leaves it where it was put);
- *   - after each `version` change with `layout === 'forceatlas'`, a short
- *     (~1.5 s) ForceAtlas2 settle of a fixed iteration count. A `static` layout
- *     never moves a node, which is what the visual baselines and
- *     `prefers-reduced-motion` rely on.
+ *   - after each `version` change with `layout === 'forceatlas'`, an INCREMENTAL
+ *     ForceAtlas2 run (#668): nodes already laid out are fixed and only new ones
+ *     move; `concentric` rings the nodes by hop; `static` never moves a node,
+ *     which is what the visual baselines rely on. Pinned nodes persist per view
+ *     in `sessionStorage`.
  *
- * ⚠ THE FA2 SETTLE RUNS ON THE MAIN THREAD, IN FRAME-SIZED SLICES, NOT IN
- * `graphology-layout-forceatlas2/worker`. That supervisor spawns its worker
- * from a `blob:` URL, and production's CSP is `worker-src 'self'`
- * (`infra/nginx/csp.conf`): the worker would be refused in exactly the
- * environment that matters, and loosening the CSP for a layout is not a trade
- * worth making. At the explorer's 300-node cap one FA2 iteration is well under
- * a millisecond, so two per animation frame never block input.
+ * ⚠ THE LAYOUT RUNS IN A SAME-ORIGIN MODULE WORKER (`layout/layout.worker.ts`),
+ * NOT IN `graphology-layout-forceatlas2/worker`: that supervisor spawns its
+ * worker from a `blob:` URL, and production's CSP is `worker-src 'self'`
+ * (`infra/nginx/csp.conf`). Without `Worker` the same engine runs on the main
+ * thread in 8 ms slices (`layout/layoutClient.ts`).
  *
  * jsdom has no WebGL: tests `vi.mock` this module rather than import it.
  */
@@ -39,14 +38,13 @@ import {
 import Box from '@mui/material/Box';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { MultiDirectedGraph, UndirectedGraph } from 'graphology';
-import forceAtlas2Module, { inferSettings } from 'graphology-layout-forceatlas2';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import type { Settings } from 'sigma/settings';
 
-// The library is CommonJS and sets `module.exports` to the layout function, which
-// is what a bundler's and Node's default import both give; the typings declare it
-// as a property of the module instead, so it is read through this cast.
-const forceAtlas2 = forceAtlas2Module as unknown as typeof forceAtlas2Module.default;
+import { layoutBudgetMs } from './layout/layoutBudgets.js';
+import { useCanvasLayout, type CanvasLayout } from './layout/useCanvasLayout.js';
+import { useReducedMotion } from './layout/useReducedMotion.js';
 
 /**
  * Any graph the canvas can draw (the explorer's directed multigraph, the overview's undirected one).
@@ -55,13 +53,7 @@ const forceAtlas2 = forceAtlas2Module as unknown as typeof forceAtlas2Module.def
  */
 export type GraphCanvasGraph = MultiDirectedGraph | UndirectedGraph;
 
-/**
- * One ForceAtlas2 settle: a FIXED number of iterations, a few per animation
- * frame — about 1.5 s at 60 fps. Bounded by count rather than by the clock so
- * the same graph always settles to the same picture, however fast the machine.
- */
-export const FA2_SETTLE_ITERATIONS = 180;
-const FA2_ITERATIONS_PER_FRAME = 2;
+export { FA2_SETTLE_ITERATIONS } from './layout/layoutBudgets.js';
 
 /**
  * Sigma's default hover/selection label is a WHITE box with the label colour
@@ -108,6 +100,14 @@ export interface GraphCanvasControls {
   zoomOut: () => void;
   /** Animated camera reset — "Fit". */
   fit: () => void;
+  /** Moves every unpinned node again ("Re-layout all"). */
+  relayoutAll: () => void;
+  /** Pins a node where it is, or unpins it. */
+  togglePin: (id: string) => void;
+  /** Releases every pin. */
+  unpinAll: () => void;
+  /** Whether a node is pinned. */
+  isPinned: (id: string) => boolean;
 }
 
 /**
@@ -124,8 +124,14 @@ export interface GraphCanvasProps {
   visibleIds: ReadonlySet<string>;
   /** Id of the selected node, which is highlighted, or `null` for none. */
   selectedId: string | null;
-  /** `forceatlas` settles the layout with ForceAtlas2; `static` draws the stored `x`/`y` as they are (reduced motion, visual baselines). */
-  layout: 'forceatlas' | 'static';
+  /** `forceatlas` lays out only the new nodes with ForceAtlas2; `concentric` rings by hop from `seedIds`; `static` draws the stored `x`/`y` as they are (visual baselines). */
+  layout: CanvasLayout;
+  /** The seeds, the centre of the concentric layout. */
+  seedIds?: readonly string[];
+  /** Identifies the view for pin persistence in `sessionStorage`; absent: pins are not persisted. */
+  pinsKey?: string;
+  /** Called when the number of pinned nodes changes. */
+  onPinnedCountChange?: (count: number) => void;
   /** Called with the node id when a node is clicked. */
   onNodeClick: (id: string) => void;
   /** Called with the node id when a node is double-clicked. */
@@ -200,6 +206,9 @@ function CanvasBehaviour({
   visibleIds,
   selectedId,
   layout,
+  seedIds,
+  pinsKey,
+  onPinnedCountChange,
   onNodeClick,
   onNodeDoubleClick,
   onStageClick,
@@ -214,12 +223,35 @@ function CanvasBehaviour({
   const theme = useTheme();
   const dimColor = alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.4 : 0.6);
 
+  const reducedMotion = useReducedMotion();
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  const coarse = useMediaQuery('(pointer: coarse)');
+  const layoutControls = useCanvasLayout({
+    graph,
+    version,
+    layout,
+    seedIds,
+    pinsKey,
+    reducedMotion,
+    budgetMs: layoutBudgetMs(compact || coarse),
+  });
+  const layoutRef = useRef(layoutControls);
+  layoutRef.current = layoutControls;
+
+  useEffect(() => {
+    onPinnedCountChange?.(layoutControls.pinnedCount);
+  }, [layoutControls.pinnedCount, onPinnedCountChange]);
+
   useImperativeHandle(
     controlsRef,
     () => ({
       zoomIn: () => camera.zoomIn(),
       zoomOut: () => camera.zoomOut(),
       fit: () => camera.reset({ duration: 300 }),
+      relayoutAll: () => layoutRef.current.relayoutAll(),
+      togglePin: (id) => layoutRef.current.togglePin(id),
+      unpinAll: () => layoutRef.current.unpinAll(),
+      isPinned: (id) => layoutRef.current.isPinned(id),
     }),
     [camera],
   );
@@ -297,6 +329,10 @@ function CanvasBehaviour({
         event.original.stopPropagation();
       },
       mouseup: () => {
+        if (dragged && moved && graph.hasNode(dragged)) {
+          const { x, y } = graph.getNodeAttributes(dragged);
+          layoutRef.current.pin(dragged, { x: x as number, y: y as number });
+        }
         dragged = null;
       },
       mousedown: () => {
@@ -305,21 +341,6 @@ function CanvasBehaviour({
       },
     });
   }, [graph, interactive, registerEvents, sigma]);
-
-  // --- Layout ----------------------------------------------------------------
-  useEffect(() => {
-    if (layout !== 'forceatlas' || graph.order < 2) return undefined;
-    const settings = inferSettings(graph);
-    let done = 0;
-    let frame = 0;
-    const step = () => {
-      forceAtlas2.assign(graph, { iterations: FA2_ITERATIONS_PER_FRAME, settings });
-      done += FA2_ITERATIONS_PER_FRAME;
-      if (done < FA2_SETTLE_ITERATIONS) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [graph, version, layout]);
 
   return null;
 }

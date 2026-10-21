@@ -42,7 +42,15 @@ import { render } from './helpers.js';
 
 const mocks = vi.hoisted(() => ({
   webgl: true,
-  controls: { zoomIn: vi.fn(), zoomOut: vi.fn(), fit: vi.fn() },
+  controls: {
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    fit: vi.fn(),
+    relayoutAll: vi.fn(),
+    togglePin: vi.fn(),
+    unpinAll: vi.fn(),
+    isPinned: vi.fn(() => false),
+  },
 }));
 
 vi.mock('../../src/graph/ui/components/explorer/webgl.js', () => ({
@@ -575,6 +583,35 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
   it('uses the static layout for ?layout=static', async () => {
     renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=static`);
     expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'static');
+  });
+});
+
+describe('GraphExplorerPage — layout menu (#668)', () => {
+  it('opens an ego view of fewer than 40 nodes concentric', async () => {
+    renderExplorer();
+    expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric');
+  });
+
+  it('uses Force for ?layout=force and writes the choice from the menu to the URL', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'forceatlas');
+
+    await user.click(screen.getByRole('button', { name: 'Layout' }));
+    await user.click(screen.getByRole('menuitemradio', { name: /Concentric by hop/ }));
+    await waitFor(() => expect(currentUrl().searchParams.get('layout')).toBe('concentric'));
+    expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric');
+  });
+
+  it('"Re-layout all" and "Unpin all" reach the canvas', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    await screen.findByTestId('fake-canvas');
+    mocks.controls.relayoutAll.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Layout' }));
+    await user.click(screen.getByRole('menuitem', { name: /Re-layout all/ }));
+    expect(mocks.controls.relayoutAll).toHaveBeenCalledTimes(1);
   });
 });
 

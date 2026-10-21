@@ -53,6 +53,9 @@ import {
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls } from '../components/explorer/GraphCanvas.js';
+import { LayoutMenu } from '../components/explorer/LayoutMenu.js';
+import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
+import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
 import { SeedSearch } from '../components/explorer/SeedSearch.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
@@ -101,6 +104,11 @@ export function parseSeeds(param: string | null): string[] {
   return [...new Set(ids)].slice(0, MAX_URL_SEEDS);
 }
 
+/** The layout an ego view of this size opens in: concentric below 40 nodes, otherwise Force. */
+function ownDefault(nodeCount: number): CanvasLayout {
+  return nodeCount > 0 && nodeCount < CONCENTRIC_EGO_MAX_NODES ? 'concentric' : 'forceatlas';
+}
+
 function fiveYearsAgo(): string {
   const now = new Date();
   return `${now.getUTCFullYear() - 5}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
@@ -126,8 +134,7 @@ export function GraphExplorerPage() {
   const clusterParam = searchParams.get('cluster');
   const webgl = useMemo(() => isWebGLAvailable(), []);
   const listView = !webgl || searchParams.get('view') === 'list';
-  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-  const layout = searchParams.get('layout') === 'static' || reducedMotion ? 'static' : 'forceatlas';
+  const layoutParam = searchParams.get('layout');
   // Page-level, not an app-chrome gate: how tall the canvas is on a phone.
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -251,6 +258,7 @@ export function GraphExplorerPage() {
   const [selected, setSelected] = useState<{ kind: 'node' | 'edge'; id: string } | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const canvasControls = useRef<GraphCanvasControls | null>(null);
+  const [pinnedCount, setPinnedCount] = useState(0);
 
   const graph = state.graph;
   const visibleIds = useMemo(
@@ -259,6 +267,28 @@ export function GraphExplorerPage() {
   );
   const atCap = remainingCapacity(state) === 0;
   const nodeCount = graph.order;
+
+  // Layout (#668). The URL wins; without it an ego view of fewer than 40 nodes
+  // opens concentric and a larger one in Force. Decided ONCE, when the first
+  // slice arrives, so expanding past 40 nodes never switches the layout.
+  const [defaultLayout, setDefaultLayout] = useState<CanvasLayout | null>(null);
+  useEffect(() => {
+    if (defaultLayout === null && nodeCount > 0) setDefaultLayout(ownDefault(nodeCount));
+  }, [defaultLayout, nodeCount]);
+  const layout: CanvasLayout =
+    layoutParam === 'static'
+      ? 'static'
+      : layoutParam === 'concentric'
+        ? 'concentric'
+        : layoutParam === 'force'
+          ? 'forceatlas'
+          : (defaultLayout ?? ownDefault(nodeCount));
+  const onLayoutChange = useCallback(
+    (next: CanvasLayout) =>
+      updateParams((params) => params.set('layout', next === 'forceatlas' ? 'force' : next)),
+    [updateParams],
+  );
+  const pinsKey = `explore:${seedKey}:${asOf ?? ''}`;
 
   const selection: ExplorerSelection | null = useMemo(() => {
     if (!selected) return null;
@@ -448,6 +478,10 @@ export function GraphExplorerPage() {
       case 'L':
         toggleListView();
         break;
+      case 'p':
+      case 'P':
+        if (selectedNode) canvasControls.current?.togglePin(selectedNode);
+        break;
       case 'Escape':
         deselect();
         break;
@@ -599,6 +633,9 @@ export function GraphExplorerPage() {
                   visibleIds={visibleIds}
                   selectedId={selected?.kind === 'node' ? selected.id : null}
                   layout={layout}
+                  seedIds={state.seedIds}
+                  pinsKey={pinsKey}
+                  onPinnedCountChange={setPinnedCount}
                   onNodeClick={(id) => selectNode(id)}
                   onNodeDoubleClick={onExpand}
                   onStageClick={deselect}
@@ -608,6 +645,15 @@ export function GraphExplorerPage() {
                 />
               </Suspense>
             )}
+            <Box sx={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
+              <LayoutMenu
+                layout={layout}
+                onLayoutChange={onLayoutChange}
+                onRelayoutAll={() => canvasControls.current?.relayoutAll()}
+                pinnedCount={pinnedCount}
+                onUnpinAll={() => canvasControls.current?.unpinAll()}
+              />
+            </Box>
             {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
             <ExplorerSidePanel
               selection={selection}
