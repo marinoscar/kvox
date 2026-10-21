@@ -84,7 +84,7 @@ describe('createCopilotAdapter: the opt-in and the surface', () => {
     },
   );
 
-  it('describes itself as a stateless, tool-less, embeddings-less responses adapter', () => {
+  it('describes itself as a stateless, embeddings-less responses adapter that serves tools through the bridge', () => {
     const { adapter } = setup();
     expect(adapter).toMatchObject({
       id: COPILOT_PROVIDER_ID,
@@ -96,7 +96,8 @@ describe('createCopilotAdapter: the opt-in and the surface', () => {
     expect(adapter.responses).toBeDefined();
     expect(adapter.embeddings).toBeUndefined();
     expect(adapter.fileInputStrategy).toBeUndefined();
-    expect(adapter.kvox).toMatchObject({ toolCalling: false, embeddings: false });
+    expect(adapter.kvox).toMatchObject({ toolCalling: true, embeddings: false });
+    expect(adapter.bridge.heldSessions()).toBe(0);
   });
 });
 
@@ -237,19 +238,50 @@ describe('SUPPRESSION: the datetime prefix', () => {
 });
 
 describe('the built-in tool tripwire', () => {
-  it('fails with AI_CAPABILITY_UNSUPPORTED when the session lists a tool, before the prompt is sent', async () => {
-    const { mock, adapter } = setup({ liveTools: ['bash'] });
+  it('warns, once, when the session lists a tool and goes on: the prompt is sent and the call answers', async () => {
+    const { mock, adapter, logs } = setup({ liveTools: ['bash'] });
+    mock.queue({ kind: 'answer', text: 'Fine.' });
+
+    await expect(ask(adapter)).resolves.toMatchObject({ finishReason: 'stop', outputText: 'Fine.' });
+
+    expect(mock.sessions()[0].prompts).toHaveLength(1);
+    expect(mock.sessions()[0]).toMatchObject({ aborted: false, disconnected: true, deleted: true });
+    const warns = logs.filter((log) => log.level === 'warn');
+    expect(warns).toHaveLength(1);
+    expect(warns[0].entry).toEqual({
+      msg: "copilot session lists tools that are not the request's own",
+      provider: 'copilot',
+      tools: ['bash'],
+    });
+
+    // The same name on a later session is not logged again; a new name is.
+    mock.queue({ kind: 'answer', text: 'Again.' });
+    await ask(adapter);
+    expect(logs.filter((log) => log.level === 'warn')).toHaveLength(1);
+  });
+
+  it('goes on the same way on a stream, and logs every listed name in one entry', async () => {
+    const { mock, adapter, logs } = setup({ liveTools: ['view', 'edit'] });
+    mock.queue({ kind: 'answer', text: 'Streamed.' });
+
+    const events = await collect(adapter.responses.stream({ model: MODEL, input: 'Hi' }, ctx));
+
+    expect(events.map((event) => event.type)).toContain('response.completed');
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(logs.filter((log) => log.level === 'warn').map((log) => log.entry.tools)).toEqual([['view', 'edit']]);
+    expect(mock.sessions()[0].deleted).toBe(true);
+  });
+
+  it('warns about a listed tool and still aborts when the model then CALLS one, naming it in details.tools', async () => {
+    const { mock, adapter, logs } = setup({ liveTools: ['bash'] });
+    mock.queue({ kind: 'events', events: [{ type: 'tool.execution_start', data: { toolName: 'bash' } }] });
+
     const error = await failureOf(() => ask(adapter));
 
     expect(error.code).toBe('AI_CAPABILITY_UNSUPPORTED');
-    expect(mock.sessions()[0]).toMatchObject({ prompts: [], aborted: true, disconnected: true, deleted: true });
-  });
-
-  it('fails the stream the same way (before response.created, so it throws)', async () => {
-    const { mock, adapter } = setup({ liveTools: ['view', 'edit'] });
-    const error = await failureOf(() => collect(adapter.responses.stream({ model: MODEL, input: 'Hi' }, ctx)));
-    expect(error.code).toBe('AI_CAPABILITY_UNSUPPORTED');
-    expect(mock.sessions()[0].deleted).toBe(true);
+    expect(error.toJSON().details).toMatchObject({ tools: ['bash'] });
+    expect(logs.filter((log) => log.level === 'warn')).toHaveLength(1);
+    expect(mock.sessions()[0]).toMatchObject({ aborted: true, disconnected: true, deleted: true });
   });
 
   it('proceeds when the runtime reports no tool list yet (null) or an empty one', async () => {
@@ -278,6 +310,7 @@ describe('the built-in tool tripwire', () => {
       const error = await failureOf(() => ask(adapter));
 
       expect(error.code).toBe('AI_CAPABILITY_UNSUPPORTED');
+      expect(error.toJSON().details).toMatchObject({ tools: ['bash'] });
       expect(mock.sessions()[0]).toMatchObject({ aborted: true, disconnected: true, deleted: true });
     },
   );
@@ -292,6 +325,7 @@ describe('the built-in tool tripwire', () => {
     const error = await failureOf(() => ask(adapter));
 
     expect(error.code).toBe('AI_CAPABILITY_UNSUPPORTED');
+    expect(error.toJSON().details).toMatchObject({ tools: ['bash'] });
     expect(mock.sessions()[0]).toMatchObject({ aborted: true, deleted: true });
   });
 
@@ -539,7 +573,7 @@ describe('the session is disconnected and deleted on every exit', () => {
 describe('request refusals, all before any session is created', () => {
   const textPart = { type: 'text' as const, text: 'x' };
   const cases: Array<[string, Partial<AiResponseRequest>]> = [
-    ['tools', { tools: [{ type: 'function', name: 'lookup', description: 'd', parameters: z.object({}) }] }],
+    ['structured output together with tools', { tools: [{ type: 'function', name: 'lookup', description: 'd', parameters: z.object({}) }], structuredOutput: { name: 't', schema } }],
     ['a hosted tool', { tools: [{ type: 'web_search' }] }],
     ['previousResponseId', { previousResponseId: 'resp_1' }],
     ['an assistant message', { input: [{ type: 'message', role: 'assistant', content: [textPart] }] }],
@@ -668,12 +702,11 @@ describe('listModels and classifyModel', () => {
     expect((await failureOf(() => adapter.listModels(ctx))).code).toBe('AI_PROVIDER_UNAVAILABLE');
   });
 
-  it('classifies every model as text-in text-out with responses, streaming and structured output, never tools', () => {
+  it('classifies every model as text-in text-out with responses, streaming, structured output and tools (the bridge)', () => {
     const { adapter } = setup();
     for (const id of [MODEL, CLAUDE, 'gemini-2.5-pro', 'o3', 'something-new']) {
       const result = adapter.classifyModel(id);
-      expect(result?.capabilities).toEqual(['responses', 'streaming', 'structured_output']);
-      expect(result?.capabilities).not.toContain('tools');
+      expect(result?.capabilities).toEqual(['responses', 'streaming', 'structured_output', 'tools']);
       expect(result?.inputModalities).toEqual(['text']);
       expect(result?.outputModalities).toEqual(['text']);
     }
@@ -700,7 +733,7 @@ describe('the kvox model catalog', () => {
       contextWindow: 128_000,
       maxOutputTokens: 16_384,
       structuredOutput: true,
-      toolCalling: false,
+      toolCalling: true,
       structuredOutputMode: 'native',
     });
     expect(catalog.lookup('copilot', CLAUDE)).toMatchObject({ structuredOutputMode: 'prompted', contextWindow: 200_000 });
@@ -709,7 +742,7 @@ describe('the kvox model catalog', () => {
       contextWindow: null,
       maxOutputTokens: null,
       structuredOutput: true,
-      toolCalling: false,
+      toolCalling: true,
       structuredOutputMode: 'prompted',
     });
     expect(catalog.lookup('copilot', 'o4-mini')).toMatchObject({ structuredOutputMode: 'native' });
