@@ -79,6 +79,7 @@ interface ChunkRow {
 interface EmbeddingRow {
   chunkId: string;
   model: string;
+  dimensions?: number;
 }
 
 type StateRow = Record<string, unknown>;
@@ -213,13 +214,28 @@ function fakePrisma(initial: { chunks?: ChunkRow[]; embeddings?: EmbeddingRow[];
 
     // The tagged-template raw insert. `values[1]` is the chunk id and
     // `values[2]` the model — see `writeVectors`.
-    $executeRaw: jest.fn((_strings: TemplateStringsArray, ...values: unknown[]) => {
+    $executeRaw: jest.fn((strings: TemplateStringsArray | { sql: string; values: unknown[] }, ...values: unknown[]) => {
+      // The stale-vector delete is sent as a `Prisma.sql` object: (type, id, model).
+      if (!Array.isArray(strings)) {
+        const [documentType, documentId, keep] = (strings as { values: unknown[] }).values.map(String);
+        const owned = new Set(
+          chunks.filter((c) => c.documentType === documentType && c.documentId === documentId).map((c) => c.id),
+        );
+
+        for (let i = embeddings.length - 1; i >= 0; i -= 1) {
+          if (owned.has(embeddings[i]!.chunkId) && embeddings[i]!.model !== keep) embeddings.splice(i, 1);
+        }
+
+        return Promise.resolve(1);
+      }
+
       const chunkId = String(values[1]);
       const model = String(values[2]);
+      const dimensions = Number(values[3]);
+      const existing = embeddings.find((row) => row.chunkId === chunkId && row.model === model);
 
-      if (!embeddings.some((row) => row.chunkId === chunkId && row.model === model)) {
-        embeddings.push({ chunkId, model });
-      }
+      if (existing) existing.dimensions = dimensions;
+      else embeddings.push({ chunkId, model, dimensions });
 
       return Promise.resolve(1);
     }),
@@ -288,6 +304,8 @@ interface HarnessOptions {
   currentVersion?: number;
   /** What the AI port reports; omit for a ready owner. */
   scenario?: Scenario;
+  /** Extra fields on the reported embeddings model (nativeDimensions, minSimilarity). */
+  embeddingsExtra?: Record<string, unknown>;
   batchSize?: number;
 }
 
@@ -305,13 +323,19 @@ function harness(options: HarnessOptions = {}) {
     body: options.body ?? fiveParagraphBody(UNCHANGED_MARKS),
   });
 
-  const embed = jest.fn(async (_ctx: unknown, request: { inputs: string[] }) => ({
+  const embed = jest.fn(async (_ctx: unknown, request: { inputs: string[]; purpose?: string }) => ({
     model: MODEL,
     dimensions: DIMENSIONS,
     vectors: request.inputs.map(() => vector()),
   }));
 
-  const capabilities = jest.fn(async () => capabilitiesFor(options.scenario ?? 'ready'));
+  const capabilities = jest.fn(async () => {
+    const caps = capabilitiesFor(options.scenario ?? 'ready');
+
+    return options.embeddingsExtra && caps.embeddings
+      ? { ...caps, embeddings: { ...caps.embeddings, ...options.embeddingsExtra } }
+      : caps;
+  });
 
   const ai = { capabilities, embed };
 
@@ -406,7 +430,55 @@ describe('SearchIndexHandler', () => {
     const [ctx, request] = embed.mock.calls[0]!;
 
     expect(ctx).toEqual({ userId: OWNER_ID, orgId: null, feature: 'search.embed' });
-    expect(Object.keys(request)).toEqual(['inputs']);
+    expect(Object.keys(request).sort()).toEqual(['inputs', 'purpose']);
+    expect(request.purpose).toBe('document');
+  });
+
+  it('writes the model\'s native width in `dimensions` while the vector stays storage width', async () => {
+    const { handler, db } = harness({ embeddingsExtra: { nativeDimensions: 384 } });
+
+    await handler.process(job());
+
+    expect(db.embeddings.length).toBeGreaterThan(0);
+    expect(db.embeddings.every((row) => row.dimensions === 384)).toBe(true);
+  });
+
+  it('writes the storage width when the model declares no native width', async () => {
+    const { handler, db } = harness();
+
+    await handler.process(job());
+
+    expect(db.embeddings.every((row) => row.dimensions === DIMENSIONS)).toBe(true);
+  });
+
+  it('deletes the document\'s vectors of other models after writing the new ones, never before', async () => {
+    const { handler, db, embed } = harness();
+
+    await handler.process(job());
+
+    const chunkIds = db.chunks.map((c) => c.id);
+    // Same chunks, same text, but an older model's vectors are still attached.
+    db.embeddings.push(...chunkIds.map((chunkId) => ({ chunkId, model: 'old-model' })));
+    db.embeddings.push({ chunkId: 'other-doc-chunk', model: 'old-model' });
+
+    let sawNewBeforeDelete = false;
+    const original = db.prisma.$executeRaw.getMockImplementation()!;
+    db.prisma.$executeRaw.mockImplementation(((s: unknown, ...v: unknown[]) => {
+      if (!Array.isArray(s)) sawNewBeforeDelete = db.embeddings.some((r) => r.model === MODEL);
+
+      return (original as (...a: unknown[]) => Promise<number>)(s, ...v);
+    }) as never);
+
+    // Force a re-run under a new model: change the stored model so the fingerprint short-circuit falls through.
+    (db.state as Record<string, unknown>).model = 'old-model';
+    embed.mockClear();
+    await handler.process(job());
+
+    expect(sawNewBeforeDelete).toBe(true);
+    expect(db.embeddings.filter((r) => r.model === 'old-model' && chunkIds.includes(r.chunkId))).toEqual([]);
+    expect(db.embeddings.filter((r) => r.model === MODEL).length).toBe(chunkIds.length);
+    // Another document's rows are untouched.
+    expect(db.embeddings.some((r) => r.chunkId === 'other-doc-chunk')).toBe(true);
   });
 
   // ---------------------------------------------------------------------------
@@ -674,7 +746,7 @@ describe('SearchIndexHandler', () => {
 
     // A full, correctly-counted batch — every vector the WRONG WIDTH. The
     // count check is not what should catch this.
-    embed.mockImplementationOnce(async (_ctx: unknown, request: { inputs: string[] }) => ({
+    embed.mockImplementationOnce(async (_ctx: unknown, request: { inputs: string[]; purpose?: string }) => ({
       model: MODEL,
       dimensions: 768,
       vectors: request.inputs.map(() => new Array(768).fill(0.1) as number[]),

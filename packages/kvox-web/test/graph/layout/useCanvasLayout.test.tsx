@@ -12,7 +12,7 @@ import {
   type CanvasLayout,
   type CanvasLayoutControls,
 } from '../../../src/graph/ui/components/explorer/layout/useCanvasLayout.js';
-import { useReducedMotion } from '../../../src/graph/ui/components/explorer/layout/useReducedMotion.js';
+import { useReducedMotion } from '../../../src/graph/ui/components/explorer/shell/useReducedMotion.js';
 import { seededGraph } from './fixtures.js';
 
 let rafQueue: Array<() => void> = [];

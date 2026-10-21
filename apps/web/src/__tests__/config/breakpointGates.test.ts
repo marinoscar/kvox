@@ -54,6 +54,8 @@ const WHY = {
   page: 'a page picks its own compact layout for its body; it is page content, not navigation chrome',
   graph:
     'a knowledge-graph surface picks a compact layout for its own canvas or panel; page content, not navigation chrome',
+  explorerShell:
+    'the Insight Canvas shell (GIC-08) reads its OWN window class (600 and 1200), input modality and reduced-motion preference inside the page main to place the explorer panes; it mounts no navigation and moves none of the five platform gates',
   datatable:
     'the data table\'s viewport fallback when it cannot measure its container; the table is page content',
 } as const;
@@ -87,13 +89,13 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:ask/ui/components/EntityAskPanel.tsx': WHY.panel,
 
   '@marinoscar/kvox-web:graph/ui/components/overview/ClusterSidePanel.tsx': WHY.graph,
-  '@marinoscar/kvox-web:graph/ui/components/explorer/ExplorerSidePanel.tsx': WHY.graph,
+  '@marinoscar/kvox-web:graph/ui/components/explorer/shell/useWindowClass.ts': WHY.explorerShell,
+  '@marinoscar/kvox-web:graph/ui/components/explorer/shell/useInputModality.ts': WHY.explorerShell,
+  '@marinoscar/kvox-web:graph/ui/components/explorer/shell/useReducedMotion.ts': WHY.explorerShell,
   '@marinoscar/kvox-web:graph/ui/components/EvidenceChip.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/NeighborhoodWidget.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/EntityHeader.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/selection/GraphSelectionAdd.tsx': WHY.graph,
-  '@marinoscar/kvox-web:graph/ui/components/explorer/GraphCanvas.tsx': WHY.graph,
-  '@marinoscar/kvox-web:graph/ui/components/explorer/layout/useReducedMotion.ts': WHY.graph,
 
   'components/datatable/desktop/DesktopGridRenderer.tsx': WHY.datatable,
   'components/datatable/useContainerLayout.ts': WHY.datatable,
@@ -101,7 +103,6 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:notes/ui/pages/NewNotePage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphIndexPage.tsx': WHY.page,
   '@marinoscar/kvox-web:graph/ui/pages/GraphOverviewPage.tsx': WHY.page,
-  '@marinoscar/kvox-web:graph/ui/pages/GraphExplorerPage.tsx': WHY.page,
   '@marinoscar/kvox-web:ask/ui/pages/AskPage.tsx': WHY.page,
   // `up('md')`: whether the transcript page lays its player beside the text.
   '@marinoscar/kvox-web:transcripts/ui/pages/TranscriptPage.tsx': WHY.page,

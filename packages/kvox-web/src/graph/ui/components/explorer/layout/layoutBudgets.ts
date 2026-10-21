@@ -1,22 +1,10 @@
 /**
- * Layout time boxes and tuning constants (GIC-07, #668).
+ * Layout tuning constants (GIC-07, #668).
  *
  * @remarks
- * Deliberately a small module of its own: the responsive shell story (#669) is
- * expected to replace these with its `explorerBudgets`. Nothing here depends on
- * that story; the layout code reads only this file.
+ * The layout TIME BOX is not here: it is `explorerBudgets(...).layoutTimeBoxMs`
+ * (`shell/explorerBudgets.ts`, GIC-08), the one place the explorer's budgets live.
  */
-
-/** Time box of a layout run on a compact or coarse-pointer device, in milliseconds. */
-export const LAYOUT_BUDGET_COARSE_MS = 1500;
-
-/** Time box of a layout run everywhere else, in milliseconds. */
-export const LAYOUT_BUDGET_DEFAULT_MS = 3000;
-
-/** The time box for a device class. */
-export function layoutBudgetMs(coarse: boolean): number {
-  return coarse ? LAYOUT_BUDGET_COARSE_MS : LAYOUT_BUDGET_DEFAULT_MS;
-}
 
 /**
  * ForceAtlas2 iterations of one run: a FIXED count, so the same graph settles to

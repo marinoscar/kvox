@@ -98,7 +98,7 @@ import { KvoxUploadManagerProvider } from '@marinoscar/kvox-web/transcripts/head
 // its routes as data; the pages read the domain web host, bound exactly as
 // `App.tsx` binds it.
 import { AppKvoxHostProvider } from '../src/platform-kvox/KvoxHostBinding';
-import { renderKvoxRoutes } from '../src/platform-kvox/renderKvoxRoutes';
+import { renderKvoxRoutes } from '@marinoscar/kvox-web/shell';
 import { appTranscriptsRoutes } from '../src/kvox/transcriptsRoutes';
 import { appNotesRoutes } from '../src/kvox/notesRoutes';
 import { appGraphRoutes } from '../src/kvox/graphRoutes';

@@ -126,6 +126,39 @@ describe('useGraphExplorer — expand', () => {
     expect(bodies[1].relationTypes).toEqual(RELATION_TYPES.filter((t) => t !== 'PART_OF'));
   });
 
+  it('asks for the budget cap and holds to it when told a smaller `nodeCap` (GIC-08)', async () => {
+    server.use(
+      http.post('*/api/graph/explore/expand', async ({ request }) => {
+        bodies.push((await request.json()) as ExpandFixtureRequest);
+        return HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) });
+      }),
+    );
+    const { result } = renderHookWithProviders(() =>
+      useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: 120 }),
+    );
+    await act(() => result.current.load([JOE_ID]));
+    expect(bodies[0]!.cap).toBe(120);
+    expect(result.current.state.graph.order).toBe(120);
+    expect(result.current.capped).toBe(true);
+
+    const kept = result.current.state.graph.nodes().find((id) => id !== JOE_ID)!;
+    await act(() => result.current.expand(kept));
+    expect(bodies).toHaveLength(1);
+  });
+
+  it('follows a changing `nodeCap` without dropping nodes', async () => {
+    const { result, rerender } = renderHookWithProviders(
+      (props: { cap: number }) =>
+        useGraphExplorer({ nodeTypes: NODE_TYPES, relationTypes: RELATION_TYPES, nodeCap: props.cap }),
+      { initialProps: { cap: 300 } },
+    );
+    await act(() => result.current.load([JOE_ID]));
+    const before = result.current.state.graph.order;
+    rerender({ cap: 120 });
+    expect(result.current.state.cap).toBe(120);
+    expect(result.current.state.graph.order).toBe(before);
+  });
+
   it('sends NO request at the cap and says so', async () => {
     server.use(
       http.post('*/api/graph/explore/expand', async ({ request }) => {

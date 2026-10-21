@@ -160,7 +160,14 @@ describeWithDb('GET /api/search (real Postgres)', () => {
 
   /** Point the query vector at one topic for the next search. */
   const embedAt = (axes: Record<number, number>) => {
-    plan = { ok: true, provider: 'test', model: EMBEDDING_MODEL, vector: vectorOf(axes) };
+    plan = {
+      ok: true,
+      provider: 'test',
+      model: EMBEDDING_MODEL,
+      indexModel: EMBEDDING_MODEL,
+      minSimilarity: MIN_SEMANTIC_SIMILARITY,
+      vector: vectorOf(axes),
+    };
   };
 
   const embedder = {
@@ -172,12 +179,12 @@ describeWithDb('GET /api/search (real Postgres)', () => {
         // `embedding_failed` is reached by CALLING the provider, so the stub
         // must resolve and then fail — not decline up front, which is a
         // different reason with a different meaning.
-        return { ok: true as const, embed: async () => failing };
+        return { ok: true as const, indexModel: EMBEDDING_MODEL, embed: async () => failing };
       }
 
       const succeeding = plan;
 
-      return { ok: true as const, embed: async () => succeeding };
+      return { ok: true as const, indexModel: EMBEDDING_MODEL, embed: async () => succeeding };
     },
   } as unknown as SearchQueryEmbedder;
 

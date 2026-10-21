@@ -84,6 +84,10 @@ export type {
   GraphCanvasControls,
   GraphCanvasGraph,
   GraphCanvasProps,
+  CameraSnapshot,
+  NodeContextMenuEvent,
 } from './components/explorer/GraphCanvas.js';
 export type { CanvasLayout } from './components/explorer/layout/useCanvasLayout.js';
+export type { ExplorerBudgets } from './components/explorer/shell/explorerBudgets.js';
+export type { Insets } from './components/explorer/shell/canvasGestures.js';
 export type { NeighborhoodCanvasProps } from './components/explorer/NeighborhoodCanvas.js';
