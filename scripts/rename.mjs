@@ -514,13 +514,13 @@ function warnAboutCliRename(from, to) {
 
 /**
  * Re-derive the two brand files that copy the manifest or the package assets
- * (#628): `identity.generated.ts` (`KVOX_IDENTITY` in kvox-contract, from `identity.json`)
+ * (#628): `identity.generated.ts` (the contract package's `KVOX_IDENTITY`, from `identity.json`)
  * and the `apps/web/public` mirror (from the package assets, after the SVG
  * anchors and the icon regeneration above). Both are plain Node scripts.
  */
 function syncBrandFiles() {
   const scripts = [
-    ['packages/kvox-web/scripts/sync-brand-identity.mjs', 'the brand identity (kvox-contract identity.generated.ts)'],
+    ['packages/kvox-web/scripts/sync-brand-identity.mjs', 'the brand identity (the contract package identity.generated.ts)'],
     ['apps/web/scripts/sync-brand-assets.mjs', 'the apps/web/public mirror of the brand assets'],
   ];
   for (const [script, what] of scripts) {

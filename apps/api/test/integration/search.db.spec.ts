@@ -160,7 +160,14 @@ describeWithDb('GET /api/search (real Postgres)', () => {
 
   /** Point the query vector at one topic for the next search. */
   const embedAt = (axes: Record<number, number>) => {
-    plan = { ok: true, provider: 'test', model: EMBEDDING_MODEL, vector: vectorOf(axes) };
+    plan = {
+      ok: true,
+      provider: 'test',
+      model: EMBEDDING_MODEL,
+      indexModel: EMBEDDING_MODEL,
+      minSimilarity: MIN_SEMANTIC_SIMILARITY,
+      vector: vectorOf(axes),
+    };
   };
 
   const embedder = {
