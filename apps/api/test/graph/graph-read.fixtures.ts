@@ -339,6 +339,8 @@ export async function bulkRandomGraph(
                '{}'::jsonb, 'accepted', '1.0.0', now() FROM _perf`,
       prisma.$executeRaw`INSERT INTO kg_evidence (id, owner_id, subject_kind, subject_id, quote)
         SELECT gen_random_uuid(), ${ownerId}::uuid, 'entity', id, 'q' FROM _perf`,
+      prisma.$executeRaw`INSERT INTO kg_mentions (id, owner_id, entity_id, status)
+        SELECT gen_random_uuid(), ${ownerId}::uuid, id, 'linked' FROM _perf CROSS JOIN generate_series(1, 2)`,
       prisma.$executeRaw`INSERT INTO kg_relations (id, owner_id, type, from_id, to_id, props, review_status, ontology_version, updated_at)
         SELECT gen_random_uuid(), ${ownerId}::uuid, 'DISCUSSED', a.id, b.id, '{}'::jsonb, 'accepted', '1.0.0', now()
         FROM _perf a

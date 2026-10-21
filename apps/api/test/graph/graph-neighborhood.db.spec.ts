@@ -19,7 +19,7 @@
 //     bounds, `unknown` rows with `valid IS NULL`);
 //   - `sensitive` person facts are never in a slice; expand is all-or-nothing
 //     404; another owner's entity is a 404;
-//   - the perf fixture: a 2-hop, cap-300 walk on a 10k-entity / 40k-relation
+//   - the perf fixture: a 2-hop, cap-300 walk on a 20k-entity / 80k-relation
 //     owner (p95 logged, asserted < 500 ms — the epic #347 success criterion,
 //     measured against CI Postgres rather than a looser CI-flake margin).
 // =============================================================================
@@ -257,6 +257,59 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Enrichment (GIC-10, #671)
+  // ---------------------------------------------------------------------------
+
+  it('enriches nodes and edges with exact mention / evidence counts and times', async () => {
+    const { user, g } = await owner('enrich');
+    const a = await g.entity('Person', 'Ana');
+    const b = await g.entity('Organization', 'Acme');
+    const rel = await g.relation('DISCUSSED', a, b);
+    const t = (d: string) => new Date(d);
+    await g.evidence('relation', rel, { createdAt: t('2026-01-01T00:00:00Z') });
+    await g.evidence('relation', rel, { createdAt: t('2026-03-01T00:00:00Z') });
+    // evidence of other subjects must not leak into the edge
+    await g.evidence('entity', a);
+    const mention = (entityId: string, status: 'linked' | 'new' | 'suggested' | 'ignored', at: string) =>
+      prisma.kgMention.create({ data: { ownerId: user.id, entityId, status: status as never, createdAt: t(at) } });
+    await mention(a, 'linked', '2026-02-01T00:00:00Z');
+    await mention(a, 'new', '2026-04-01T00:00:00Z');
+    await mention(a, 'ignored', '2026-09-01T00:00:00Z');
+    await mention(a, 'suggested', '2026-10-01T00:00:00Z');
+
+    const slice = await nbhd(user.id, a);
+    const na = slice.nodes.find((n) => n.id === a)!;
+    const nb = slice.nodes.find((n) => n.id === b)!;
+    expect(na.mentionCount).toBe(2);
+    expect(na.lastSeenAt).toBe('2026-04-01T00:00:00.000Z');
+    expect(nb.mentionCount).toBe(0);
+    expect(nb.lastSeenAt).toBeNull();
+    const edge = slice.edges.find((e) => e.id === rel)!;
+    expect(edge.evidenceCount).toBe(2);
+    expect(edge.lastEvidenceAt).toBe('2026-03-01T00:00:00.000Z');
+  });
+
+  it('gives a virtual item edge the item evidence, and never counts a sensitive fact', async () => {
+    const { user, g } = await owner('enrich2');
+    const joe = await g.entity('Person', 'Joe');
+    const fact = await g.item('person_fact', { subjectId: joe, sensitivity: 'personal', statement: 'Plays chess' });
+    const secret = await g.item('person_fact', { subjectId: joe, sensitivity: 'sensitive', statement: 'Private matter' });
+    await g.evidence('item', fact, { createdAt: new Date('2026-05-01T00:00:00Z') });
+    await g.evidence('item', fact, { createdAt: new Date('2026-06-01T00:00:00Z') });
+    await g.evidence('item', secret);
+
+    const slice = await nbhd(user.id, joe);
+    expect(ids(slice)).toEqual([joe, fact].sort());
+    const virt = slice.edges.filter((e) => e.virtual);
+    expect(virt).toHaveLength(1);
+    expect(virt[0].evidenceCount).toBe(2);
+    expect(virt[0].lastEvidenceAt).toBe('2026-06-01T00:00:00.000Z');
+    const item = slice.nodes.find((n) => n.id === fact)!;
+    expect(item.lastSeenAt).toBe('2026-06-01T00:00:00.000Z');
+    expect(item.mentionCount).toBeUndefined();
+  });
+
+  // ---------------------------------------------------------------------------
   // Filters
   // ---------------------------------------------------------------------------
 
@@ -412,11 +465,13 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
   // Performance
   // ---------------------------------------------------------------------------
 
-  it('walks 2 hops at cap 300 on a 10k-entity / 40k-relation owner within budget', async () => {
+  it('walks 2 hops at cap 300 (enriched) on a 20k-entity / 80k-relation owner within budget', async () => {
     const { user } = await owner('perf');
-    const seed = await bulkRandomGraph(prisma, user.id, 10_000, 4);
+    const seed = await bulkRandomGraph(prisma, user.id, 20_000, 4);
     await prisma.$executeRawUnsafe('ANALYZE kg_entities');
     await prisma.$executeRawUnsafe('ANALYZE kg_relations');
+    await prisma.$executeRawUnsafe('ANALYZE kg_evidence');
+    await prisma.$executeRawUnsafe('ANALYZE kg_mentions');
 
     const timings: number[] = [];
     let last: GraphSlice | undefined;
@@ -431,6 +486,8 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     console.log(`[graph-neighborhood perf] 2-hop cap-300: p50=${timings[10].toFixed(1)}ms p95=${p95.toFixed(1)}ms nodes=${last?.nodes.length}`);
     expect(last!.nodes.length).toBeGreaterThan(10);
     expect(last!.nodes.length).toBeLessThanOrEqual(300);
+    expect(last!.nodes.every((n) => n.mentionCount !== undefined || n.nodeKind === 'item')).toBe(true);
+    expect(last!.edges.every((e) => e.evidenceCount === 1)).toBe(true);
     // Epic #347's success criterion: p95 < 500ms on CI Postgres for a 2-hop,
     // cap-300 walk over a 10k-entity fixture (measured locally ~44ms).
     expect(p95).toBeLessThan(500);
