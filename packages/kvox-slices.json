@@ -28,6 +28,7 @@
   },
   "kvox-contract": {
     "errors": [],
+    "brand": [],
     "ontology": [],
     "transcription": ["errors"],
     "transcripts": ["errors", "transcription"],

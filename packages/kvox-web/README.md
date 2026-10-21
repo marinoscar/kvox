@@ -154,7 +154,7 @@ The Inter font is self-hosted and the `@font-face` URL is relative to `inter.css
 
 **Where the files live.** The package holds the only copy: `src/brand/assets` and `src/brand/fonts`, copied into `dist/brand` by the build (`scripts/copy-brand-assets.mjs`). The PNGs are written by `packages/kvox-web/scripts/generate-icons.py` (Python and Pillow, committed output, byte-reproducible); the SVGs are hand-written. `apps/web/public/` serves a byte-for-byte mirror (manifest, `index.html` and service worker need fixed URLs), written by `node apps/web/scripts/sync-brand-assets.mjs` and checked by `npm run brand:check -w web` and a web test.
 
-**Identity.** `KVOX_BRAND` and the light primary come from `packages/shared/identity.json` through the committed `src/brand/identity.generated.ts`, written by `npm run brand:sync -w @marinoscar/kvox-web` (a published package cannot import the private `@app/shared`). `scripts/rename.mjs` runs the write, regenerates the icons and re-syncs the mirror; `npm run check:kvox-brand` fails CI on drift. See [RENAMING.md](../../docs/RENAMING.md).
+**Identity.** `KVOX_BRAND` and the light primary come from `packages/shared/identity.json` through the committed `packages/kvox-contract/src/brand/identity.generated.ts` (`KVOX_IDENTITY` of `@marinoscar/kvox-contract/brand`), written by `npm run brand:sync -w @marinoscar/kvox-web` (a published package cannot import the private `@app/shared`). `scripts/rename.mjs` runs the write, regenerates the icons and re-syncs the mirror; `npm run check:kvox-brand` fails CI on drift. See [RENAMING.md](../../docs/RENAMING.md).
 
 ### The home subpath
 

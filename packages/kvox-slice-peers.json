@@ -69,7 +69,10 @@
         "reflect-metadata",
         "rxjs",
         "zod"
-      ]
+      ],
+      "entries": {
+        "pdf": ["pdfkit"]
+      }
     },
     "testing": {
       "peers": ["@marinoscar/kvox-contract", "rxjs", "zod"]
@@ -244,7 +247,7 @@
         "ui": ["@mui/icons-material", "@mui/material", "react-markdown", "react-router-dom"]
       }
     },
-    "brand": { "peers": ["@marinoscar/platform-web", "@mui/material", "react"] },
+    "brand": { "peers": ["@marinoscar/kvox-contract", "@marinoscar/platform-web", "@mui/material", "react"] },
     "copilot": {
       "peers": ["@marinoscar/kvox-contract", "react", "react-dom"],
       "entries": {
@@ -270,7 +273,8 @@
     "notes": { "peers": ["zod"] },
     "graph": { "peers": ["zod"] },
     "ask": { "peers": ["zod"] },
-    "copilot": { "peers": ["zod"] }
+    "copilot": { "peers": ["zod"] },
+    "brand": { "peers": [] }
   },
   "kvox-db": {
     "bin": { "peers": ["prisma"] },

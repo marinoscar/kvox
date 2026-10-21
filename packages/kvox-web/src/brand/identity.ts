@@ -2,12 +2,14 @@
  * The identity values the brand paints: product name, tagline and the two
  * colours of `packages/shared/identity.json`.
  *
- * The values are not written here. `identity.generated.ts` holds them, produced
- * from the manifest by `scripts/sync-brand-identity.mjs`, because a published
- * package cannot import the private `@app/shared` workspace and the rebrand
- * codemod (`scripts/rename.mjs`) rewrites the manifest, not this package. The
- * type lives in its own file so the generated file stays a plain object literal.
+ * The values are not written here. `KVOX_IDENTITY` of `@marinoscar/kvox-contract/brand`
+ * holds them, produced from the manifest by `scripts/sync-brand-identity.mjs`, because
+ * a published package cannot import the private `@app/shared` workspace and the rebrand
+ * codemod (`scripts/rename.mjs`) rewrites the manifest, not this package. The contract
+ * carries them so the API's document exporters read the same values as the web theme.
  */
+
+import { KVOX_IDENTITY } from '@marinoscar/kvox-contract/brand';
 
 /**
  * The shape of {@link KVOX_BRAND}. Strings, not literals, so a rebrand needs no type edit.
@@ -25,4 +27,9 @@ export interface KvoxBrand {
   readonly backgroundColor: string;
 }
 
-export { KVOX_BRAND } from './identity.generated.js';
+/**
+ * The identity values of `packages/shared/identity.json` that the brand paints.
+ *
+ * @stability experimental
+ */
+export const KVOX_BRAND: KvoxBrand = KVOX_IDENTITY;
