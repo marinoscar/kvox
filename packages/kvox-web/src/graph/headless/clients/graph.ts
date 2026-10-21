@@ -344,6 +344,13 @@ export interface GraphEdge {
    * Optional here because an older API omits it — read it as `{}` when absent.
    */
   props?: Record<string, unknown>;
+  /**
+   * Evidence rows behind the edge (a virtual item edge carries the item's
+   * count). Optional: an older API omits it.
+   */
+  evidenceCount?: number;
+  /** ISO instant of the latest evidence behind the edge, or `null` when none; optional like {@link GraphEdge.evidenceCount}. */
+  lastEvidenceAt?: string | null;
 }
 
 // TODO(web-domain): align with @marinoscar/kvox-contract
