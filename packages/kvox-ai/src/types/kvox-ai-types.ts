@@ -284,8 +284,8 @@ export type KvoxChatEvent =
 export interface KvoxEmbeddingCapability {
   /** The embedding model id (permanent once vectors are stored under it). */
   model: string;
-  /** The width of every vector: the `vector(1536)` column. */
-  dimensions: 1536;
+  /** The width of the model's vectors (1536 for the web edition's model; a host's model may be narrower). */
+  dimensions: number;
   /** The longest input the model accepts, in tokens. */
   maxInputTokens: number;
   /** The most texts one call carries. */

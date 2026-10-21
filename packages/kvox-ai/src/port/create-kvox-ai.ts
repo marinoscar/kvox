@@ -26,7 +26,7 @@ import {
   toPlatformTools,
   toolCallIdsOf,
 } from '../chat/index.js';
-import { KVOX_EMBEDDING } from '../embedding/index.js';
+import { KVOX_EMBEDDING, type KvoxEmbeddingModel } from '../embedding/index.js';
 import { isAiError, isErrorLike, refusalFor, scrub, toKvoxAiError, type KvoxAiErrorContext } from '../errors/index.js';
 import type { KvoxAiFeatureId } from '../features/index.js';
 import type {
@@ -132,6 +132,30 @@ import { createKvoxAiReadiness, reasoningEffortFor, type KvoxAiReadinessReader }
 // Promise of one); the web edition traces only the promise methods.
 // =============================================================================
 
+// =============================================================================
+// Zero-padding embeddings to the column width
+// =============================================================================
+//
+// A model narrower than the `vector(1536)` column (the local 384-wide bge model)
+// is stored zero-padded. Appending zeros to BOTH vectors changes neither the dot
+// product nor either norm, so cosine similarity (`<=>` with `vector_cosine_ops`)
+// is exactly the unpadded value; L2 distance and inner product are exact too (the
+// extra coordinates contribute 0 - 0 and 0 * 0).
+//
+// ⚠ THAT HOLDS ONLY WITHIN ONE MODEL. A padded 384-wide vector compared with an
+// OpenAI vector is meaningless, so it is safe ONLY because the model id is
+// recorded on every `search_embeddings` row and the query filters on it
+// (step 3 of the local-embedding work adds that filter). The padding lives here,
+// in `embed()`, and nowhere else.
+// =============================================================================
+
+/** Zero-pads each vector to `width` (a vector already that wide is returned as is). */
+function padVectors(vectors: number[][], width: number): number[][] {
+  return vectors.map((vector) =>
+    vector.length === width ? vector : [...vector, ...new Array<number>(width - vector.length).fill(0)],
+  );
+}
+
 /**
  * The request-timeout backstop when the host gives none (or its reader fails):
  * ten minutes, because a streamed completion legitimately runs for minutes.
@@ -190,6 +214,11 @@ export interface CreateKvoxAiOptions {
   graphEnabled?: () => boolean | Promise<boolean>;
   /** Where the one recoverable problem is reported. Default: nowhere. */
   logger?: KvoxAiLogger;
+  /**
+   * The embedding model this host uses. Default: {@link KVOX_EMBEDDING} (OpenAI,
+   * 1536 wide). KVox Desktop passes `KVOX_LOCAL_EMBEDDING`.
+   */
+  embedding?: KvoxEmbeddingModel;
 }
 
 /** A `signal` plus what is needed to tell a timeout from a caller abort afterwards. */
@@ -234,6 +263,7 @@ class KvoxAi implements KvoxAiPort {
   private readonly taskModels: KvoxTaskModelSource;
   private readonly reader: KvoxAiReadinessReader;
   private readonly logger: KvoxAiLogger | undefined;
+  private readonly entry: KvoxEmbeddingModel;
 
   /** Reasoning items between two calls of one Ask turn (never logged, never stored). */
   private readonly reasoningReplay = new ReasoningReplayCache();
@@ -245,12 +275,14 @@ class KvoxAi implements KvoxAiPort {
     this.runtime = options.runtime;
     this.taskModels = options.taskModels;
     this.logger = options.logger;
+    this.entry = options.embedding ?? KVOX_EMBEDDING;
     this.reader =
       options.readiness ??
       createKvoxAiReadiness({
         runtime: options.runtime,
         taskModels: options.taskModels,
         ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
+        ...(options.embedding !== undefined ? { embedding: options.embedding } : {}),
       });
   }
 
@@ -273,7 +305,12 @@ class KvoxAi implements KvoxAiPort {
         ...(reason !== undefined ? { reason } : {}),
         structuredOutput: readiness.ok,
         toolCalling: readiness.ok && (flags.toolCalling ?? true),
-        embeddings: { model: KVOX_EMBEDDING.model, dimensions: KVOX_EMBEDDING.dimensions },
+        embeddings: {
+          model: this.entry.model,
+          dimensions: this.entry.storageDimensions,
+          nativeDimensions: this.entry.dimensions,
+          ...(this.entry.minSimilarity !== undefined ? { minSimilarity: this.entry.minSimilarity } : {}),
+        },
         graphEnabled,
       };
     } catch {
@@ -314,7 +351,7 @@ class KvoxAi implements KvoxAiPort {
       provider: readiness.provider,
       model: readiness.model,
       reasoningEffort: readiness.reasoningEffort,
-      contextWindowTokens: readiness.contextWindowTokens ?? KVOX_EMBEDDING.maxInputTokens,
+      contextWindowTokens: readiness.contextWindowTokens ?? this.entry.maxInputTokens,
       // An embeddings model generates nothing.
       maxOutputTokens: embeds ? 0 : (readiness.maxOutputTokens ?? 0),
       source: readiness.source,
@@ -704,7 +741,11 @@ class KvoxAi implements KvoxAiPort {
   // Embeddings and the token estimate
   // ---------------------------------------------------------------------------
 
-  async embed(ctx: KvoxAiContext, req: { inputs: string[] }): Promise<KvoxEmbedResult> {
+  async embed(
+    ctx: KvoxAiContext,
+    req: { inputs: string[]; purpose?: 'query' | 'document' },
+  ): Promise<KvoxEmbedResult> {
+    const entry = this.entry;
     // An embeddings call names its own feature when the context's is not one (the search indexer).
     const feature = featureOf(ctx.feature) ?? 'search_embed';
 
@@ -712,10 +753,10 @@ class KvoxAi implements KvoxAiPort {
     if (req.inputs.length === 0) {
       throw new KvoxAiError('other', 'An embedding batch must contain at least one text.');
     }
-    if (req.inputs.length > KVOX_EMBEDDING.maxBatchSize) {
+    if (req.inputs.length > entry.maxBatchSize) {
       throw new KvoxAiError(
         'other',
-        `An embedding batch holds at most ${KVOX_EMBEDDING.maxBatchSize} texts; got ${req.inputs.length}.`,
+        `An embedding batch holds at most ${entry.maxBatchSize} texts; got ${req.inputs.length}.`,
       );
     }
     const embed = this.runtime.embed?.bind(this.runtime);
@@ -726,16 +767,26 @@ class KvoxAi implements KvoxAiPort {
     const guard = await this.guard(ctx.signal);
     const failure: FailureContext = { feature, inJob: ctx.jobId !== undefined, guard };
 
+    const purpose = req.purpose ?? 'document';
+    const prefix = purpose === 'query' ? entry.queryPrefix : entry.documentPrefix;
+    const inputs = prefix === undefined ? req.inputs : req.inputs.map((text) => prefix + text);
+
     try {
       const result = await embed(
         {
           ...this.scope(ctx),
           feature,
-          provider: KVOX_EMBEDDING.provider,
-          model: KVOX_EMBEDDING.model,
+          provider: entry.provider,
+          model: entry.model,
           signal: guard.signal,
         },
-        { input: req.inputs, dimensions: KVOX_EMBEDDING.dimensions },
+        {
+          input: inputs,
+          // Only a model that natively fills the column is asked for its width
+          // (the unchanged OpenAI request); a narrower one is not asked to resize.
+          ...(entry.dimensions === entry.storageDimensions ? { dimensions: entry.dimensions } : {}),
+          ...(req.purpose !== undefined ? { purpose: req.purpose } : {}),
+        },
       );
 
       // MAKE the contract true, never assume it: a short or reordered batch would
@@ -749,17 +800,22 @@ class KvoxAi implements KvoxAiPort {
         );
       }
       for (const vector of result.vectors) {
-        if (vector.length !== KVOX_EMBEDDING.dimensions || !vector.every((c) => Number.isFinite(c))) {
+        if (vector.length !== entry.dimensions || !vector.every((c) => Number.isFinite(c))) {
           throw this.mark(
             new KvoxAiError(
               'other',
-              `The embeddings provider returned a ${vector.length}-dimension vector; this app stores exactly ${KVOX_EMBEDDING.dimensions} finite components.`,
+              `The embeddings provider returned a ${vector.length}-dimension vector; this app stores exactly ${entry.dimensions} finite components.`,
             ),
           );
         }
       }
 
-      return { model: result.model ?? KVOX_EMBEDDING.model, dimensions: KVOX_EMBEDDING.dimensions, vectors: result.vectors };
+      // The model id is the CATALOG id, so the indexer and the query agree on it,
+      // except for a keyed provider: the web edition fingerprints search cursors
+      // with the model the provider REPORTED (a gateway substitution must show),
+      // so there `result.model` is kept. A keyless entry is always its catalog id.
+      const model = entry.keyless ? entry.model : (result.model ?? entry.model);
+      return { model, dimensions: entry.storageDimensions, vectors: padVectors(result.vectors, entry.storageDimensions) };
     } catch (err) {
       throw this.fail(err, failure);
     }
