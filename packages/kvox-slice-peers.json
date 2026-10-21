@@ -299,7 +299,11 @@
     "port": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "zod"] },
     "direct": { "peers": ["@marinoscar/kvox-api", "@marinoscar/platform-ai-providers"] },
     "routing": { "peers": [] },
-    "copilot": { "peers": ["@github/copilot-sdk", "@marinoscar/platform-ai-providers", "zod"] }
+    "download": { "peers": [] },
+    "copilot": { "peers": ["@github/copilot-sdk", "@marinoscar/platform-ai-providers", "zod"] },
+    "local-embeddings": {
+      "peers": ["@huggingface/tokenizers", "@marinoscar/kvox-api", "@marinoscar/platform-ai-providers", "onnxruntime-web"]
+    }
   },
   "kvox-eval": {
     "ask": { "peers": ["@marinoscar/kvox-contract", "zod"] },

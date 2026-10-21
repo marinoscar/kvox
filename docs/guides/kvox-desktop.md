@@ -115,6 +115,7 @@ Add your embedded database (`@electric-sql/pglite` 0.5.10, `@electric-sql/pglite
 | Transcript PDF export | `pdfkit@>=0.17.0` | `exporters: { pdf: false }` |
 | Note PDF export | `pdfkit` | `exporters: { pdf: false }` |
 | Note Word export | `docx@>=9.0.0` | `exporters: { docx: false }` |
+| On-device embeddings (`@marinoscar/kvox-ai/local-embeddings`; model downloaded once, about 34.7 MB, then offline; run the embedder in a utility process, it blocks the event loop) | `onnxruntime-web@1.30.0`, `@huggingface/tokenizers@0.2.0` | do not import the entry; use `createKvoxAi` with the default embedding or none |
 | PDF as a note source | `unpdf@>=1.0.0` | `documentSources: { pdf: false }` |
 | Shared `EventEmitter2` as `KVOX_EVENTS` | `@nestjs/event-emitter@^3.0.1` | leave it out; `KvoxEventEmitterEvents` falls back to its own emitter |
 

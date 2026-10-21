@@ -61,7 +61,9 @@
     "port": ["types", "features", "tasks", "structured", "chat", "tokens", "embedding", "runtime", "errors", "testing"],
     "direct": ["runtime", "errors"],
     "routing": [],
-    "copilot": []
+    "download": [],
+    "copilot": ["download"],
+    "local-embeddings": ["download", "embedding", "runtime"]
   },
   "kvox-eval": {
     "ask": [],

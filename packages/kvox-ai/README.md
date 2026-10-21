@@ -18,13 +18,15 @@ Entry points:
 
 - `@marinoscar/kvox-ai/copilot`: the GitHub Copilot provider adapter (`createCopilotAdapter`, `createSdkCopilotTransport`, `createCopilotMockTransport`), issue #581. Not re-exported by the root: it is the only entry that loads the optional peer `@github/copilot-sdk`. Slice README: [copilot](src/copilot/README.md).
 
+- `@marinoscar/kvox-ai/local-embeddings`: the on-device embedding model `KVOX_LOCAL_EMBEDDING` (download, embedder, runtime), issue #660. Not re-exported by the root: it is the only entry that loads the optional peers `onnxruntime-web` and `@huggingface/tokenizers`. Slice README: [local-embeddings](src/local-embeddings/README.md).
+
 ## Install and peer dependencies
 
 ```bash
 npm install @marinoscar/kvox-ai@next @marinoscar/kvox-api@next @marinoscar/platform-ai-providers@0.1.0-next.7 zod
 ```
 
-Every slice except `copilot` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
+Every slice except `copilot` and `local-embeddings` is universal, so every peer in this table is required (the one optional peer, the Copilot SDK, is [below](#optional-the-github-copilot-adapter)):
 
 | Package | Range | Needed by |
 |---|---|---|
@@ -41,6 +43,10 @@ npm install @github/copilot-sdk
 ```
 
 `@github/copilot-sdk` (`^1.0.22`) is an OPTIONAL peer (`peerDependenciesMeta`), needed only by `@marinoscar/kvox-ai/copilot`, and only by `createSdkCopilotTransport`, which `require`s it lazily on its first call. The package root never imports it, so the web edition never installs it. Without the SDK the adapter, the catalog, the error mapping and the mock transport still work; the real transport answers `AI_PROVIDER_UNAVAILABLE` ("The GitHub Copilot SDK is not installed"). The SDK downloads nothing: the per-platform Copilot runtime (about 133 to 174 MB unpacked) is an optional npm dependency of the SDK, which `prepareCopilotRuntime` locates; a Desktop host packages it with the app ([KVox Desktop guide](../../docs/guides/kvox-desktop.md#the-copilot-provider-adapter)).
+
+### Optional: local embeddings
+
+`onnxruntime-web` (`1.30.0`, exact) and `@huggingface/tokenizers` (`0.2.0`, exact) are OPTIONAL peers, needed only by `@marinoscar/kvox-ai/local-embeddings`, and only by `createLocalEmbedder`, which `require`s them lazily. Install them in the process that embeds (KVox Desktop's utility process).
 
 The per-slice data is `packages/kvox-slice-peers.json`; `node scripts/kvox-packages/check-slice-peers.mjs --table` prints it.
 
