@@ -201,6 +201,7 @@ enum KgItemKind {
   decision
   claim
   person_fact
+  risk
 
   @@map("kg_item_kind")
 }
