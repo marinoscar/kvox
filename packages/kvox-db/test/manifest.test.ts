@@ -43,7 +43,7 @@ describe('migrations/manifest.json', () => {
       expect(fragments.has(entry.slice), `${entry.id} slice ${entry.slice}`).toBe(true);
       for (const table of entry.requiresHostTables) expect(KVOX_HOST_TABLES).toContain(table);
     }
-    expect(ids).toHaveLength(19);
+    expect(ids).toHaveLength(20);
   });
 
   it('derives requiresHostTables from the foreign keys in the SQL', () => {

@@ -157,7 +157,7 @@ Known package gaps the graph run found (not host duties): a proposal commit does
 
 ## PGlite
 
-PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6) applies the whole history, 37 platform and 19 domain migrations, in about three seconds: the partial unique indexes, GiST, HNSW, trigram and generated `tsvector` columns, `CREATE INDEX CONCURRENTLY` and the deferred constraint triggers included. `kvox-db check --database` passes against it and so does every test above. What a PGlite host must know (recorded in the `kvox-db` README as well):
+PGlite 0.5.10 (PostgreSQL 18.6, `vector` 0.8.7, `pg_trgm` 1.6) applies the whole history, 37 platform and 20 domain migrations, in about three seconds: the partial unique indexes, GiST, HNSW, trigram and generated `tsvector` columns, `CREATE INDEX CONCURRENTLY` and the deferred constraint triggers included. `kvox-db check --database` passes against it and so does every test above. What a PGlite host must know (recorded in the `kvox-db` README as well):
 
 - Load `uuid_ossp` with `vector` and `pg_trgm`: the platform's first migration creates it.
 - PGlite is one session. `src/db.ts` gives the client a pool of one and the socket one connection; never await a pool query while a transaction holds the connection.
