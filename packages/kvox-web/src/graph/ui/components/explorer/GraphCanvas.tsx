@@ -7,8 +7,13 @@
  * node and edge (written by `explorerModel`, or by the overview's model) and
  * computes no styling of its own. What it adds:
  *
- *   - reducers that hide nodes outside `visibleIds` and dim everything that is
- *     not the selection or one of its neighbours;
+ *   - reducers (`explorerReducers.ts`) that hide nodes outside `visibleIds`,
+ *     light the hovered node (on a touch screen, the first-tapped one, else the
+ *     selection) with its neighbours and dim the rest, draw rings, and label only
+ *     what is lit (#667);
+ *   - three sigma programs: nodes with a pictogram draw as a ringed disc with
+ *     the type's glyph (`@sigma/node-border` + `@sigma/node-image`), parallel
+ *     edges as curves (`@sigma/edge-curve`);
  *   - click / double-click / stage / edge events, and dragging (a dragged node
  *     becomes `fixed`, so the layout leaves it where it was put);
  *   - after each `version` change with `layout === 'forceatlas'`, an INCREMENTAL
@@ -52,10 +57,15 @@ import {
   useSetSettings,
   useSigma,
 } from '@react-sigma/core';
+import { createDrawCurvedEdgeLabel, createEdgeCurveProgram } from '@sigma/edge-curve';
+import { createNodeBorderProgram } from '@sigma/node-border';
+import { createNodeImageProgram } from '@sigma/node-image';
 import Box from '@mui/material/Box';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { MultiDirectedGraph, UndirectedGraph } from 'graphology';
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
+import { createNodeCompoundProgram } from 'sigma/rendering';
 import type { Settings } from 'sigma/settings';
 
 import { DEFAULT_LAYOUT_TIME_BOX_MS, LABEL_DENSITY, type ExplorerBudgets } from './shell/explorerBudgets.js';
@@ -69,6 +79,12 @@ import {
   type LongPress,
 } from './shell/canvasGestures.js';
 import { useReducedMotion } from './shell/useReducedMotion.js';
+import {
+  CURVED_ARROW_PROGRAM,
+  PICTOGRAM_PROGRAM,
+  buildEdgeReducer,
+  buildNodeReducer,
+} from './explorerReducers.js';
 
 /**
  * Any graph the canvas can draw (the explorer's directed multigraph, the overview's undirected one).
@@ -220,16 +236,75 @@ export interface GraphCanvasProps {
   onNodeContextMenu?: (event: NodeContextMenuEvent) => void;
 }
 
+/** The curved-edge shape: a bend of 0.25 by default, an arrow head at the target. */
+const CURVE_OPTIONS = {
+  curvatureAttribute: 'curvature',
+  defaultCurvature: 0.25,
+  arrowHead: {
+    extremity: 'target' as const,
+    lengthToThicknessRatio: 2.5,
+    widenessToThicknessRatio: 2,
+  },
+};
+
+/**
+ * The node and edge programs, built ONCE PER SIGMA INSTANCE (`@sigma/node-image`
+ * shares one texture atlas between its programs, so it must not be reused
+ * across instances).
+ *
+ * A `pictogram` node is two programs drawn together: a ringed disc
+ * (`@sigma/node-border`: an optional ring, an optional transparent gap, then the
+ * fill) and the type's glyph in pictogram mode, a mask tinted by `iconColor`.
+ * The ring and its gap are sized as a fraction of the node's radius.
+ */
+function buildPrograms(accent: string) {
+  const disc = createNodeBorderProgram({
+    borders: [
+      { size: { attribute: 'ringSize', defaultValue: 0 }, color: { attribute: 'ringColor', defaultValue: accent } },
+      { size: { attribute: 'gapSize', defaultValue: 0 }, color: { transparent: true } },
+      { size: { fill: true }, color: { attribute: 'color' } },
+    ],
+  });
+  const glyph = createNodeImageProgram({
+    drawingMode: 'color',
+    colorAttribute: 'iconColor',
+    imageAttribute: 'image',
+    keepWithinCircle: true,
+    padding: 0.2,
+    size: { mode: 'force', value: 64 },
+    objectFit: 'contain',
+    correctCentering: true,
+  });
+  return {
+    nodeProgramClasses: { [PICTOGRAM_PROGRAM]: createNodeCompoundProgram([disc, glyph]) },
+    edgeProgramClasses: {
+      [CURVED_ARROW_PROGRAM]: createEdgeCurveProgram({
+        ...CURVE_OPTIONS,
+        drawLabel: createDrawCurvedEdgeLabel({ ...CURVE_OPTIONS, arrowHead: null }),
+      }),
+    },
+  };
+}
+
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { graph, height, interactive = true, onEdgeClick, ariaLabel } = props;
+  const { graph, height, interactive = true, ariaLabel } = props;
   const theme = useTheme();
+  // The explorer's own window class (the `sm` boundary), read here, never the shell's gates.
+  // Without budgets (the overview) the window class thins the labels; WITH budgets they decide, through
+  // `setSettings` below, so a rotation across `sm` never rebuilds sigma and loses the camera.
+  const windowCompact = useMediaQuery(theme.breakpoints.down('sm'));
+  const compact = props.budgets ? false : windowCompact;
+  const accent = theme.palette.primary.main;
 
   // STABLE settings: `SigmaContainer` rebuilds sigma whenever these change, so
   // everything that varies per render (reducers, selection) goes through
   // `useSetSettings` inside the container instead.
   const settings = useMemo(
     () => ({
-      labelRenderedSizeThreshold: 8,
+      ...buildPrograms(accent),
+      // Compact: fewer labels (the focus and the seeds are forced back on).
+      labelRenderedSizeThreshold: compact ? 12 : 8,
+      labelDensity: compact ? 0.6 : 1,
       labelColor: { color: theme.palette.text.primary },
       labelFont: theme.typography.fontFamily as string,
       labelSize: 12,
@@ -240,14 +315,27 @@ export function GraphCanvas(props: GraphCanvasProps) {
         theme.palette.divider,
       ),
       defaultEdgeType: 'arrow',
-      renderEdgeLabels: false,
-      enableEdgeEvents: Boolean(onEdgeClick) && interactive,
+      // Edge labels are drawn only for the hovered edge and the focus's own edges
+      // (the reducer blanks every other label).
+      renderEdgeLabels: true,
+      edgeLabelColor: { color: theme.palette.text.secondary },
+      edgeLabelSize: 11,
+      enableEdgeEvents: interactive,
       enableCameraZooming: interactive,
       enableCameraPanning: interactive,
       zIndex: true,
       allowInvalidContainer: true,
     }),
-    [theme.palette.text.primary, theme.palette.background.paper, theme.palette.divider, theme.typography.fontFamily, onEdgeClick, interactive],
+    [
+      accent,
+      compact,
+      theme.palette.text.primary,
+      theme.palette.text.secondary,
+      theme.palette.background.paper,
+      theme.palette.divider,
+      theme.typography.fontFamily,
+      interactive,
+    ],
   );
 
   return (
@@ -305,8 +393,12 @@ function CanvasBehaviour({
   const camera = useCamera({ duration: 300, factor: 1.5 });
   const theme = useTheme();
   const dimColor = alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.4 : 0.6);
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  // ONE input-modality source: the shell's `useInputModality` decides, through `inputModality`
+  // (a touch screen has no hover; the first tap previews through `previewId`, the second selects).
   const touch = inputModality === 'touch';
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
 
   const reducedMotion = useReducedMotion();
   const layoutControls = useCanvasLayout({
@@ -365,9 +457,12 @@ function CanvasBehaviour({
   }, [sigma, pixelRatioCap]);
 
   const labelDensity = budgets ? LABEL_DENSITY[budgets.labelDensity] : null;
+  const labelThreshold = budgets ? (budgets.constrained ? 12 : 8) : null;
   useEffect(() => {
-    if (labelDensity !== null) setSettings({ labelDensity });
-  }, [labelDensity, setSettings]);
+    if (labelDensity !== null && labelThreshold !== null) {
+      setSettings({ labelDensity, labelRenderedSizeThreshold: labelThreshold });
+    }
+  }, [labelDensity, labelThreshold, setSettings]);
 
   const hideEdgesAbove = budgets?.hideEdgesOnMoveAbove ?? null;
   useEffect(() => {
@@ -408,37 +503,42 @@ function CanvasBehaviour({
     };
   }, [sigma, graph]);
 
-  // --- Reducers: visibility, highlight and dimming ---------------------------
+  // --- Reducers: visibility, highlight, rings, labels ---------------------------
+  // View state goes through the reducers, never into the graph's attributes.
   const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
   // Hover is for a pointer; a touch preview takes its place on a phone.
-  const focusId = (touch ? null : hoverId) ?? previewId ?? selectedId;
+  const focusId = (touch ? null : hoverId) ?? previewId;
+  const constrained = budgets?.constrained ?? compact;
   useEffect(() => {
-    const marked = new Set(markedKey ? markedKey.split(',') : []);
-    const neighbours = new Set<string>();
-    if (focusId && graph.hasNode(focusId)) {
-      neighbours.add(focusId);
-      graph.forEachNeighbor(focusId, (id) => neighbours.add(id));
-    }
-    const hasFocus = neighbours.size > 0;
+    const context = {
+      graph,
+      visibleIds,
+      selectedId,
+      focusId,
+      hoveredEdgeId,
+      markedIds: new Set(markedKey ? markedKey.split(',') : []),
+      accent: theme.palette.primary.main,
+      dimColor,
+      compact: constrained,
+    };
     setSettings({
-      nodeReducer: (node, data) => {
-        if (!visibleIds.has(node)) return { ...data, hidden: true };
-        if (marked.has(node)) return { ...data, highlighted: true, zIndex: 2 };
-        if (!hasFocus) return node === selectedId ? { ...data, highlighted: true, zIndex: 2 } : data;
-        if (node === focusId || node === selectedId) return { ...data, highlighted: true, zIndex: 2 };
-        if (neighbours.has(node)) return { ...data, zIndex: 1 };
-        return { ...data, color: dimColor, label: '', zIndex: 0 };
-      },
-      edgeReducer: (edge, data) => {
-        const [source, target] = graph.extremities(edge);
-        if (!visibleIds.has(source) || !visibleIds.has(target)) return { ...data, hidden: true };
-        if (!hasFocus) return data;
-        if (source === focusId || target === focusId) return { ...data, zIndex: 1 };
-        return { ...data, color: dimColor, zIndex: 0 };
-      },
+      nodeReducer: buildNodeReducer(context) as Settings['nodeReducer'],
+      edgeReducer: buildEdgeReducer(context) as Settings['edgeReducer'],
     });
     // `version` is a dependency on purpose: a merge changes neighbourhoods.
-  }, [graph, version, visibleIds, focusId, selectedId, markedKey, dimColor, setSettings]);
+  }, [
+    graph,
+    version,
+    visibleIds,
+    selectedId,
+    focusId,
+    hoveredEdgeId,
+    markedKey,
+    dimColor,
+    constrained,
+    theme.palette.primary.main,
+    setSettings,
+  ]);
 
   // --- Keep the selection out from under the inspector --------------------------
   const insetsKey = revealInsets
@@ -494,11 +594,28 @@ function CanvasBehaviour({
     registerEvents({
       clickNode: ({ node }) => {
         if (moved || longPressRef.current?.fired()) return;
+        // A "+N more" stub is activated, not selected: activating it expands its type.
+        if (graph.getNodeAttribute(node, 'isStub') === true) {
+          handlers.current.onNodeDoubleClick(node);
+          return;
+        }
         handlers.current.onNodeClick(node);
       },
+      enterNode: ({ node }) => {
+        if (!touch) setHoverId(node);
+      },
+      leaveNode: () => setHoverId(null),
+      enterEdge: ({ edge }) => {
+        if (!touch) setHoveredEdgeId(edge);
+      },
+      leaveEdge: () => setHoveredEdgeId(null),
       doubleClickNode: (event) => {
         // Sigma's default for a double-click is to zoom; here it expands.
         event.preventSigmaDefault();
+        if (graph.getNodeAttribute(event.node, 'isStub') === true) {
+          handlers.current.onNodeDoubleClick(event.node);
+          return;
+        }
         if (touch) {
           // Sigma reports a quick second tap as a double-tap INSTEAD of a tap. On touch that is the
           // "second tap" that opens the inspector, and it must not also expand.
@@ -510,7 +627,8 @@ function CanvasBehaviour({
       clickStage: (event) => {
         if (longPressRef.current?.fired()) return;
         const hit = touch ? nearest({ x: event.event.x, y: event.event.y }) : null;
-        if (hit) handlers.current.onNodeClick(hit);
+        if (hit && graph.getNodeAttribute(hit, 'isStub') === true) handlers.current.onNodeDoubleClick(hit);
+        else if (hit) handlers.current.onNodeClick(hit);
         else handlers.current.onStageClick();
       },
       clickEdge: ({ edge }) => handlers.current.onEdgeClick?.(edge),
@@ -524,10 +642,6 @@ function CanvasBehaviour({
           source: 'right-click',
         });
       },
-      enterNode: ({ node }) => {
-        if (!touch) setHoverId(node);
-      },
-      leaveNode: () => setHoverId(null),
       downNode: ({ node }) => {
         dragged = node;
         moved = false;

@@ -469,7 +469,14 @@ const EXPLORER_NODES: ExplorerNode[] = [
   xNode(id(8), 'Meeting', 'Weekly sync', 2),
 ];
 
-const xEdge = (n: number, type: string, source: string, target: string, virtual = false) => ({
+const xEdge = (
+  n: number,
+  type: string,
+  source: string,
+  target: string,
+  virtual = false,
+  props: Record<string, unknown> = {},
+) => ({
   id: virtual ? `virt:${source}:${type}` : id(n),
   type,
   source,
@@ -477,6 +484,7 @@ const xEdge = (n: number, type: string, source: string, target: string, virtual 
   valid: type === 'REPORTS_TO' ? { from: '2024-02-01T00:00:00.000Z', to: null, precision: 'month' } : null,
   confidence: virtual ? null : 0.9,
   virtual,
+  props,
 });
 
 const EXPLORER_EDGES = [
@@ -491,6 +499,10 @@ const EXPLORER_EDGES = [
   xEdge(417, 'WORKS_FOR', id(3), ACME_ID),
   xEdge(418, 'ATTENDED', ANA_ID, Q3_ID),
   xEdge(419, 'ATTENDED', id(3), id(8)),
+  // #667: a second relation between the same pair (drawn as two curves, not one on top of the other)…
+  xEdge(420, 'HAS_ROLE', JOE_ID, ACME_ID, false, { title: 'Managing Director' }),
+  // …and a stance accent (the champion's edge is green), visible once Acme is expanded and Atlas joins.
+  xEdge(421, 'INVOLVED_IN', JOE_ID, id(6), false, { role: 'sponsor', stance: 'champion' }),
 ];
 
 function explorerSlice(nodeIds: string[], cap: number) {

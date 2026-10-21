@@ -16,7 +16,14 @@
  *   - Filters are SERVER-SIDE: every request carries the allowed `types` and
  *     `relationTypes` (omitted while nothing is hidden), so a filtered-out type
  *     is never fetched. Changing a filter prunes what no longer qualifies
- *     (seeds excepted); re-enabling one does not refetch retroactively.
+ *     (seeds excepted); RE-ENABLING one refetches what the filter removed (#667):
+ *     the seeds and expanded nodes are expanded again under the new filter and
+ *     merged in, keeping every position.
+ *   - An open or expand shows the best `EXPLORER_NEIGHBOUR_LIMIT` (30) new
+ *     neighbours by degree of interest; the rest are "+N more" stubs, one per
+ *     parent and type. `expand(stubId)` expands that stub: it asks for
+ *     `types: [that type]` of the stub's parent, and the stub is replaced by the
+ *     nodes (and a smaller stub if more remain).
  *   - `setAsOf` rebuilds from scratch from the seeds and every expanded node
  *     (≤ 50), keeping the positions of nodes that survive.
  *   - A newer request aborts the one in flight.
@@ -26,9 +33,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   EXPLORER_MAX_REQUEST_SEEDS,
+  EXPLORER_NEIGHBOUR_LIMIT,
   EXPLORER_NODE_CAP,
   applyFilters,
   createExplorerState,
+  dropStub,
   makeSeed as makeSeedInModel,
   mergeSlice,
   positionsOf,
@@ -36,6 +45,7 @@ import {
   removeNode,
   restyle,
   seedFromNodes,
+  syncSeedFlags,
   type ExplorerPalette,
   type ExplorerState,
 } from '../components/explorer/explorerModel.js';
@@ -202,8 +212,10 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
         const { capped: wasCapped } = mergeSlice(next, orderSeedsFirst(slice, seedIds), {
           palette: optionsRef.current.palette,
           previousPositions: carryPositions ? positionsOf(base) : undefined,
+          neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
         });
         next.seedIds = [...new Set(seedIds)].filter((id) => next.graph.hasNode(id));
+        syncSeedFlags(next);
         for (const id of requested) if (next.graph.hasNode(id)) next.expanded.add(id);
         stateRef.current = next;
         setCapped(wasCapped);
@@ -256,7 +268,10 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
           );
           if (!isMounted() || controller.signal.aborted) return;
           const state = stateRef.current;
-          const { capped: wasCapped } = mergeSlice(state, slice, { palette: optionsRef.current.palette });
+          const { capped: wasCapped } = mergeSlice(state, slice, {
+            palette: optionsRef.current.palette,
+            neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
+          });
           for (const id of seeds) state.expanded.add(id);
           setCapped(wasCapped);
           setTruncated(slice.truncated);
@@ -278,6 +293,10 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     async (nodeId: string) => {
       const state = stateRef.current;
       if (!state.graph.hasNode(nodeId)) return;
+      // A "+N more" stub expands ITS TYPE of its parent, not itself.
+      const stub = state.graph.getNodeAttributes(nodeId);
+      const isStub = Boolean(stub.isStub && stub.stubParentId && stub.stubType);
+      const targetId = isStub ? stub.stubParentId! : nodeId;
       const capacity = remainingCapacity(state);
       if (capacity === 0) {
         setCapped(true);
@@ -287,16 +306,24 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
       setExpandingId(nodeId);
       setError(null);
       try {
+        const filters = filtersFor(state);
         const slice = await expandGraph(host, 
-          { nodeIds: [nodeId], ...filtersFor(state), cap: capacity },
+          {
+            nodeIds: [targetId],
+            ...filters,
+            ...(isStub ? { types: [stub.stubType!] } : {}),
+            cap: capacity,
+          },
           controller.signal,
         );
         if (!isMounted() || controller.signal.aborted || stateRef.current !== state) return;
+        if (isStub) dropStub(state, nodeId);
         const { capped: wasCapped } = mergeSlice(state, slice, {
-          parentId: nodeId,
+          parentId: targetId,
           palette: optionsRef.current.palette,
+          neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
         });
-        state.expanded.add(nodeId);
+        state.expanded.add(targetId);
         if (wasCapped) setCapped(true);
         setTruncated(slice.truncated);
         bump();
@@ -343,20 +370,63 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     bump();
   }, [bump]);
 
+  /**
+   * A filter was switched back on: ask again for what it had removed. The seeds
+   * and expanded nodes (at most 50) are expanded under the NEW filter and
+   * merged in, so nothing already drawn moves; a node that was already there is
+   * simply refreshed.
+   */
+  const refetchRemoved = useCallback(async () => {
+    const state = stateRef.current;
+    const roots = [...new Set([...state.seedIds, ...state.expanded])]
+      .filter((id) => state.graph.hasNode(id) && !state.graph.getNodeAttribute(id, 'isStub'))
+      .slice(0, EXPLORER_MAX_REQUEST_SEEDS);
+    if (roots.length === 0) return;
+    const capacity = remainingCapacity(state);
+    if (capacity === 0) {
+      setCapped(true);
+      return;
+    }
+    const controller = nextController();
+    setIsLoading(true);
+    try {
+      const slice = await expandGraph(host, { nodeIds: roots, ...filtersFor(state), cap: capacity }, controller.signal);
+      if (!isMounted() || controller.signal.aborted || stateRef.current !== state) return;
+      const { capped: wasCapped } = mergeSlice(state, slice, {
+        palette: optionsRef.current.palette,
+        neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
+      });
+      if (wasCapped) setCapped(true);
+      setTruncated(slice.truncated);
+      bump();
+    } catch (err) {
+      if (isAbortError(err) || controller.signal.aborted || !isMounted()) return;
+      setError(graphErrorMessage(err, 'Failed to load the graph'));
+    } finally {
+      if (isMounted() && controllerRef.current === controller) setIsLoading(false);
+    }
+  }, [bump, filtersFor, host, isMounted, nextController]);
+
   const setHiddenTypes = useCallback(
     (types: Iterable<string>) => {
-      stateRef.current.hiddenTypes = new Set(types);
+      const previous = stateRef.current.hiddenTypes;
+      const next = new Set(types);
+      stateRef.current.hiddenTypes = next;
       refilter();
+      if ([...previous].some((key) => !next.has(key))) void refetchRemoved();
     },
-    [refilter],
+    [refetchRemoved, refilter],
   );
 
   const setHiddenRelationTypes = useCallback(
     (types: Iterable<string>) => {
-      stateRef.current.hiddenRelationTypes = new Set(types);
+      const previous = stateRef.current.hiddenRelationTypes;
+      const next = new Set(types);
+      stateRef.current.hiddenRelationTypes = next;
       refilter();
+      if ([...previous].some((key) => !next.has(key))) void refetchRemoved();
     },
-    [refilter],
+    [refetchRemoved, refilter],
   );
 
   const hide = useCallback(
