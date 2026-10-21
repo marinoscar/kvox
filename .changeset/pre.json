@@ -14,7 +14,9 @@
     "@marinoscar/kvox-web": "0.0.0"
   },
   "changesets": [
+    "brand-subpath-document-theme",
     "copilot-runtime-reuse-plan-hosts-patch-schema",
+    "embedding-catalog-choice",
     "fix-neighbors-relation-example",
     "fix-speaker-link-one-connection",
     "graph-tx-reads-one-connection",
@@ -64,7 +66,10 @@
     "kvox-web-search",
     "kvox-web-shell",
     "kvox-web-transcripts",
+    "local-embeddings",
+    "note-export-redesign",
     "note-proposal-follow-extraction",
-    "notes-source-status-route"
+    "notes-source-status-route",
+    "search-model-filter"
   ]
 }
