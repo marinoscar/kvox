@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // A host with one primary provider that lacks a capability (GitHub Copilot has no
-// tool calling and no embeddings) used to carry its own routing table. This is
+// embeddings, and a model its live listing marks as tool-less cannot run Ask) used to
+// carry its own routing table. This is
 // that table, once: each KVox task goes to the primary provider when the primary
 // can serve it, else to the fallback when the fallback can, else it is reported
 // unavailable so the host can hide the feature with a reason.

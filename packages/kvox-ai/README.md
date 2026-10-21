@@ -78,7 +78,7 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource });
 
 ### GitHub Copilot on KVox Desktop (opt-in)
 
-The Copilot adapter plugs into the same `createDirectRuntime` as OpenAI. Copilot serves the notes and graph-extraction tasks; Ask and embeddings stay on OpenAI.
+The Copilot adapter plugs into the same `createDirectRuntime` as OpenAI. Copilot serves the notes, graph-extraction and Ask tasks (Ask through the adapter's tool bridge, [below](#limits-of-the-copilot-provider-by-design)); embeddings stay on OpenAI.
 
 ```ts
 import { AI_KEYLESS_API_KEY } from '@marinoscar/platform-ai-providers';
@@ -103,17 +103,17 @@ const runtime = createDirectRuntime({
 const kvoxAi = createKvoxAi({
   runtime,
   taskModels: localTaskModelSource,
-  catalog: copilot.kvox.catalog,              // per-model limits, toolCalling false, structuredOutputMode
+  catalog: copilot.kvox.catalog,              // per-model limits, toolCalling, structuredOutputMode
 });
 ```
 
 Sign-in is the SDK's: `copilot.authStatus()` returns `{ signedIn, login }` (never a token), and a call while signed out is `AI_KEY_REQUIRED`, which `createKvoxAi` reports as `key_missing`.
 
-Limits of the Copilot provider, by design:
+#### Limits of the Copilot provider, by design
 
-- **No Ask.** Copilot models are never offered a tool: `capabilities().toolCalling` is `false` for them, so Ask stays on OpenAI. A Copilot session takes user messages only, so the harness cannot continue a tool step statelessly, and the Ask loop is never moved into the SDK.
+- **Ask runs on Copilot, through a session bridge.** A Copilot session cannot be continued statelessly with a tool result, and the Ask loop is never moved into the SDK. So the adapter declares the request's function tools as the session's custom tools, ends a step that calls tools with the calls (`finishReason: 'tool_calls'`) and keeps the session open; the loop's next request (the full history plus the tool outputs) finds that session by the call ids and continues it as the next step. A session that is gone (idle timeout, restart, an edited request) is replaced by a fresh one that is given the transcript as text, so a step never fails for lack of state. The loop, its prompts and its tools are unchanged. No Copilot built-in tool is ever available. `capabilities().toolCalling` is `true` for a Copilot model unless the live model listing says it cannot call tools. Detail: [the tool bridge](src/copilot/README.md#the-tool-bridge-ask-on-copilot).
 - **No embeddings.** The adapter has no `embeddings` port. Embeddings come from the OpenAI adapter, or are `null` and search is full text only.
-- **One system prompt and one user message per call.** Assistant turns, tool items, images and files are refused with `AI_CAPABILITY_UNSUPPORTED`.
+- **One system prompt and one user message per call.** Assistant turns, tool items, images and files are refused with `AI_CAPABILITY_UNSUPPORTED`; only a request that carries function tools (an Ask step) may carry history, which becomes a rendered transcript when no session holds it.
 - **No output cap and no temperature.** The SDK has no per-call setting for either on Copilot-hosted models, so `maxOutputTokens` is not sent. A `length` finish aborts the call at once (the runtime would otherwise continue by itself) and kvox-ai reports `truncated`.
 - **Prompted structured output for some models.** GPT models hold the answer to a JSON Schema natively. Claude models are not verified for it, so the catalog marks them `prompted`: `createKvoxAi` puts the schema in the system prompt and makes one repair attempt (see the [structured slice](src/structured/README.md)). The same path serves any adapter whose model is `prompted`.
 - **Sign-in needed.** Listing models and every call need a signed-in GitHub account with Copilot.
@@ -191,10 +191,10 @@ None of its own: the package logs nothing (the Copilot adapter takes an optional
 - No prompt, answer, tool argument or reasoning item is logged or persisted. Reasoning items replayed by the chat mapping are opaque provider state, kept in memory per user and job, never written anywhere.
 - Tool-call arguments (`argumentsJson`) are untrusted model output: callers parse and validate them before use.
 - **The Copilot adapter** (`@marinoscar/kvox-ai/copilot`) is a translator with several guards:
-  - Zero tools. `availableTools: []`, client `mode: 'empty'`, every permission request rejected. After `createSession` the adapter reads the session's live tool list; any tool, or any tool event during the call, aborts it with `AI_CAPABILITY_UNSUPPORTED`.
+  - No built-in tools. Client `mode: 'empty'`; `availableTools` is `[]`, or exactly the request's own function tools (`custom:<name>`); every permission request is rejected except a `custom-tool` request for one of them. Every own tool is sent with `overridesBuiltInTool: true` (a name that clashes with a runtime built-in cannot fail the session). After `createSession` the adapter reads the session's live tool list; an extra name there is logged once as a `warn` (names only) and the call goes on, while a tool event or call for any other tool during the call aborts it with `AI_CAPABILITY_UNSUPPORTED`.
   - Our system prompt replaces the SDK's (`systemMessage.mode: 'replace'`), and the runtime's `<current_datetime>` prefix is suppressed.
-  - One session per call, always disconnected and deleted in a `finally` (the runtime would otherwise keep the prompt in its session state on disk), in an app-private `baseDirectory` with an empty `workingDirectory`.
-  - No GitHub token crosses our code: `gitHubToken` is never set, `ctx.apiKey` (`AI_KEYLESS_API_KEY`) is ignored, and the SDK uses the user's own sign-in. Every message that leaves the adapter (error message and details, log entry, stream error) passes through `redactTokens` (`gh[opusr]_`, `github_pat_`, `sk-`, `Bearer`) and is truncated. The logger never gets a prompt, an answer or a schema.
+  - One session per call, always disconnected and deleted in a `finally` (the runtime would otherwise keep the prompt in its session state on disk), in an app-private `baseDirectory` with an empty `workingDirectory`. The one exception is a step that calls tools: its session is held for the next step, and deleted when that turn ends, on abort or failure, after an idle timeout (120 s) or when the registry (8) overflows.
+  - No GitHub token crosses our code: `gitHubToken` is never set, `ctx.apiKey` (`AI_KEYLESS_API_KEY`) is ignored, and the SDK uses the user's own sign-in. Every message that leaves the adapter (error message and details, log entry, stream error) passes through `redactTokens` (`gh[opusr]_`, `github_pat_`, `sk-`, `Bearer`) and is truncated. The logger never gets a prompt, a tool argument or output, an answer or a schema.
   - Opt-in. `createCopilotAdapter` throws unless `optIn === true`; the host's setting defaults to off.
 - The source imports no `@nestjs/*`, no Prisma, no `@app/shared`, and of the platform only `@marinoscar/platform-ai-providers` (rule `host-neutral` of `npm run check:kvox-slice-peers`, and `apps/api/test/ai/ai-port-boundary.spec.ts`).
 
@@ -204,7 +204,7 @@ None of its own: the package logs nothing (the Copilot adapter takes an optional
 
 ### Copilot adapter
 
-The Copilot adapter is proven on two levels. Its own unit specs (`src/copilot/*.spec.ts`) pin the session template (zero built-in tools, replace mode), the tripwire, token redaction, the single model request after a `length` or a call failure, the datetime suppression, session deletion on success, failure and abort, the request refusals and the error mapping. The `describeKvoxAiConformance` suite then runs over `createKvoxAi`, `createDirectRuntime` and the adapter on `createCopilotMockTransport()` (asynchronous SDK-shaped events, abort, model-request counting, live tools for the tripwire). Two cases are named `optOut`s with their reason (`test/kvox-ai-copilot-conformance.spec.ts`): the tool-call mapping (`chat_tool_calls`), because `toolCalling` is `false`, and the retry hint in a job (`rate_limit_job`), because SDK 1.0.22 puts no retry-after on `session.error` or `model.call_failure`. Every other case runs. The real SDK is not part of CI, and `createSdkCopilotTransport` has not yet run against a signed-in Copilot runtime: that live check, with the `kvox-eval` runs, is an owner step on #581.
+The Copilot adapter is proven on two levels. Its own unit specs (`src/copilot/*.spec.ts`) pin the session template (no built-in tools, replace mode), the tripwire, token redaction, the single model request after a `length` or a call failure, the datetime suppression, session deletion on success, failure and abort, the request refusals and the error mapping; `copilot-bridge.spec.ts` pins the tool bridge (one call, parallel calls, several steps, the lost-session fallback, a foreign tool still aborting, the idle timeout, abort, the bounded registry, no leaked session). The `describeKvoxAiConformance` suite then runs over `createKvoxAi`, `createDirectRuntime` and the adapter on `createCopilotMockTransport()` (asynchronous SDK-shaped events, abort, model-request counting, live tools for the tripwire, the runtime's tool phase). One case is a named `optOut` with its reason (`test/kvox-ai-copilot-conformance.spec.ts`): the retry hint in a job (`rate_limit_job`), because SDK 1.0.22 puts no retry-after on `session.error` or `model.call_failure`. Every other case runs, the tool-call mapping included. `describeAskConformance` runs the real `AskRespondHandler` over the same adapter (`test/kvox-ai-copilot-ask-conformance.spec.ts`), and `@marinoscar/kvox-eval`'s parity run compares the requests of the Ask scenario over Copilot with the OpenAI snapshot. The real SDK is not part of CI, and `createSdkCopilotTransport` has not yet run against a signed-in Copilot runtime: that live check, with the `kvox-eval` runs, is an owner step on #581.
 
 ### Lean install and the foreign `AiError`
 
@@ -225,7 +225,7 @@ First release. The provider types and the `AiError` class come from `@marinoscar
 | `createCopilotAdapter` throws "GitHub Copilot is switched off" | The host did not pass `optIn: true`. Pass the user's own Copilot setting (default off). |
 | `AI_PROVIDER_UNAVAILABLE`: "The GitHub Copilot SDK is not installed" | Install the optional peer: `npm install @github/copilot-sdk`. |
 | `AI_KEY_REQUIRED`: "Sign in to GitHub Copilot to use it in KVox." | The user is not signed in. Start the SDK's sign-in, then check `copilot.authStatus()`. |
-| `AI_CAPABILITY_UNSUPPORTED` from the Copilot adapter | A request carried tools, history, images or a structured schema for a `prompted` model. Route tool calling to OpenAI; pass `catalog: copilot.kvox.catalog` to `createKvoxAi` so kvox-ai takes its prompted path. |
+| `AI_CAPABILITY_UNSUPPORTED` from the Copilot adapter | A request carried history without tools, images, a hosted tool, structured output together with tools, or a structured schema for a `prompted` model (pass `catalog: copilot.kvox.catalog` to `createKvoxAi` so kvox-ai takes its prompted path); or the session offered the model a tool that is not one of the request's own (`details.tools` names it). |
 | `StrictSchemaError` at a JSON path | The caller's schema is outside the strict subset (rules in `src/structured/strict-json-schema.ts`); fix the schema (`.nullable()`, not `.optional()`). |
 
 ## Links

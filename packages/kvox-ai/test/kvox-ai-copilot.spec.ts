@@ -5,7 +5,7 @@ import { createCopilotAdapter, createCopilotMockTransport } from '../src/copilot
 import { createDirectRuntime } from '../src/direct/index.js';
 import { createKvoxAi } from '../src/port/index.js';
 import type { KvoxAiModelState } from '../src/runtime/index.js';
-import { KvoxAiError, type KvoxAiContext } from '@marinoscar/kvox-api/ports';
+import { KvoxAiError, type KvoxAiContext, type KvoxChatEvent } from '@marinoscar/kvox-api/ports';
 import { wrapRecordingAdapter } from '../src/testing/index.js';
 
 // =============================================================================
@@ -15,13 +15,13 @@ import { wrapRecordingAdapter } from '../src/testing/index.js';
 // Smoke proof of the whole Desktop path: `createKvoxAi` over `createDirectRuntime`
 // over the GitHub Copilot adapter over its mock transport. A `prompted` model gets
 // the schema in its system prompt and ONE repair; a `native` one gets
-// `responseSchema`; tool calling is off.
+// `responseSchema`; tool calling runs through the adapter's session bridge (#654).
 // =============================================================================
 
 function state(model: string, row: Partial<KvoxAiModelState['models'][number]> = {}): KvoxAiModelState {
   return {
     provider: 'copilot',
-    models: [{ id: model, label: model, structuredOutput: true, toolCalling: false, contextWindow: null, maxOutputTokens: null, ...row }],
+    models: [{ id: model, label: model, structuredOutput: true, toolCalling: true, contextWindow: null, maxOutputTokens: null, ...row }],
     policy: {
       enabled: true,
       provider: 'copilot',
@@ -69,7 +69,7 @@ describe('createKvoxAi over the Copilot adapter', () => {
     expect(recording.requests().every((r) => !('structuredOutput' in (r.request as object)))).toBe(true);
   });
 
-  it('sends responseSchema for a native model, and offers no tool calling', async () => {
+  it('sends responseSchema for a native model, and offers tool calling', async () => {
     const { ai, transport } = build('gpt-5-mini');
     transport.queue({ kind: 'answer', text: '{"title":"Native"}' });
 
@@ -79,7 +79,7 @@ describe('createKvoxAi over the Copilot adapter', () => {
     expect(result.value).toEqual({ title: 'Native' });
     expect(transport.sessions()[0].prompts[0].responseSchema).toMatchObject({ type: 'object' });
     expect(transport.sessions()[0].config.systemMessage.content).toBe('Extract.');
-    await expect(ai.capabilities(ctx)).resolves.toMatchObject({ available: true, toolCalling: false, structuredOutput: true });
+    await expect(ai.capabilities(ctx)).resolves.toMatchObject({ available: true, toolCalling: true, structuredOutput: true });
   });
 });
 
@@ -127,31 +127,66 @@ describe('createKvoxAi over the Copilot adapter: the model catalog decides', () 
     expect(transport.sessions()[0].config.systemMessage.content.includes('single JSON value only')).toBe(prompted);
   });
 
-  it('reports no tool calling for any Copilot model whose row says nothing', async () => {
+  it('reports tool calling for any Copilot model whose row says nothing (the adapter catalog speaks)', async () => {
     const { ai } = build('gpt-5-mini', bare('gpt-5-mini'));
-    await expect(ai.capabilities(ctx)).resolves.toMatchObject({ available: true, toolCalling: false });
+    await expect(ai.capabilities(ctx)).resolves.toMatchObject({ available: true, toolCalling: true });
   });
 
-  it('does not offer Ask on a Copilot model, with the capability class and no session spent', async () => {
-    const { ai, transport } = build('gpt-5-mini', bare('gpt-5-mini'));
+  it('offers Ask on a Copilot model, with no session spent on the check', async () => {
+    const { ai, transport } = build('gpt-5-mini');
+    await expect(ai.resolveTask({ ...ctx, feature: 'graph.agent' }, 'graph.agent')).resolves.toMatchObject({ model: 'gpt-5-mini' });
+    expect(transport.sessions()).toHaveLength(0);
+  });
+
+  it('does not offer Ask on a model whose row says it cannot call tools, with the capability class', async () => {
+    const { ai, transport } = build('gpt-5-mini', state('gpt-5-mini', { toolCalling: false }));
+    await expect(ai.capabilities(ctx)).resolves.toMatchObject({ available: true, toolCalling: false });
     const error = await failureOf(() => ai.resolveTask({ ...ctx, feature: 'graph.agent' }, 'graph.agent'));
     expect(error.errorClass).toBe('capability');
     expect(transport.sessions()).toHaveLength(0);
   });
 
-  it('refuses a chat that offers tools, before a session exists (the loop stays on OpenAI)', async () => {
-    const { ai, transport } = build('gpt-5-mini');
+  it('runs an Ask step through the port: a tool call out, the tool message in, the answer from the same session', async () => {
+    const { ai, transport, recording } = build('gpt-5-mini');
+    transport.queue({ kind: 'toolCalls', text: 'Let me look. ', calls: [{ name: 'lookup', arguments: { query: 'acme' }, toolCallId: 'call-1' }] });
+    transport.queue({ kind: 'answer', text: 'Acme is a client.' });
     const target = await ai.resolveTask(ctx, 'notes.generate');
-    const error = await failureOf(async () => {
-      for await (const _event of ai.chat(ctx, {
-        target,
-        messages: [{ role: 'user', content: 'Use the tool.' }],
-        tools: [{ name: 'lookup', description: 'Looks up.', parameters: { type: 'object', properties: {} } }],
-        toolChoice: 'auto',
-      })) void _event;
-    });
-    expect(error.errorClass).toBe('capability');
-    expect(transport.sessions()).toHaveLength(0);
+    const tools = [
+      {
+        name: 'lookup',
+        description: 'Looks things up.',
+        parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false },
+      },
+    ];
+    const question = { role: 'user' as const, content: 'Who is Acme?' };
+
+    const first: KvoxChatEvent[] = [];
+    for await (const event of ai.chat(ctx, { target, messages: [question], tools, toolChoice: 'auto' })) first.push(event);
+    // The text before the call is the step's preamble (the Ask loop holds it back); the call ends the step.
+    expect(first.map((e) => e.type)).toEqual(['delta', 'delta', 'tool_call', 'step_end', 'done']);
+    expect(first.find((e) => e.type === 'tool_call')).toMatchObject({ id: 'call-1', name: 'lookup', arguments: { query: 'acme' } });
+
+    const second: KvoxChatEvent[] = [];
+    for await (const event of ai.chat(ctx, {
+      target,
+      messages: [
+        question,
+        { role: 'assistant', content: 'Let me look. ', toolCalls: [{ id: 'call-1', name: 'lookup', arguments: { query: 'acme' } }] },
+        { role: 'tool', toolCallId: 'call-1', content: '{"hits":1}' },
+      ],
+      tools,
+      toolChoice: 'auto',
+    })) {
+      second.push(event);
+    }
+    expect(second.at(-2)).toMatchObject({ type: 'step_end' });
+    expect(second.at(-1)).toMatchObject({ type: 'done', finishReason: 'stop' });
+    expect(second.flatMap((e) => (e.type === 'delta' ? [e.text] : [])).join('')).toBe('Acme is a client.');
+
+    // One session served both steps, and it was deleted at the end.
+    expect(transport.sessions()).toHaveLength(1);
+    expect(transport.sessions()[0]).toMatchObject({ deleted: true, toolRuns: [{ name: 'lookup', output: '{"hits":1}' }] });
+    expect(recording.requests().length).toBeGreaterThanOrEqual(2);
   });
 });
 

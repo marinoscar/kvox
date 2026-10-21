@@ -29,7 +29,7 @@ const ROWS: readonly { label: string; tasks: readonly string[]; always: boolean 
  * @stability experimental
  */
 export const COPILOT_UNAVAILABLE_NOTES: Readonly<Record<string, string>> = Object.freeze({
-  needs_tool_calling: 'Needs a provider with tool calling. Add an OpenAI key to keep Ask.',
+  needs_tool_calling: 'Needs a model with tool calling.',
   needs_embeddings: 'Needs a provider with embeddings. Add an OpenAI key to keep it.',
 });
 

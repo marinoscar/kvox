@@ -27,7 +27,16 @@ import type {
 //   • it runs the session's `onUserPromptTransformed` hook on a
 //     `<current_datetime>`-prefixed prompt, as the runtime does, and records what
 //     the hook handed back (`sentPrompt`);
-//   • `liveTools` makes the session report tools (the tripwire test);
+//   • `builtInTools` names runtime built-ins: a custom tool of such a name without
+//     `overridesBuiltInTool` fails session creation, as in the runtime;
+//   • `liveTools` makes the session report tools (the tripwire test); a session that
+//     declares custom tools (`config.tools`, the Ask bridge) reports those too;
+//   • a `toolCalls` reply plays what the runtime does for a model that calls tools
+//     (#654): an assistant message with `toolRequests`, the usage, then the CUSTOM
+//     TOOL HANDLERS of the session are invoked (in parallel, or one by one) and the
+//     runtime's turn WAITS for them; once they all return, it calls the model again
+//     with the results (a continuation: the next reply in the queue, or `onSend` with
+//     `continuation: true` and the `toolResults`), exactly as the SDK does;
 //   • it records every session's config, prompts and cleanup;
 //   • its sign-in is SCRIPTED (`scriptSignIn`): a challenge, then success, expiry,
 //     cancel, a runtime error, or "never finishes" (for the abort signal), and
@@ -116,7 +125,67 @@ export type CopilotMockReply =
       kind: 'lengthThenContinue';
       /** The text of the cut-off answer. */
       text: string;
+    }
+  | {
+      /**
+       * The model calls tools: text (optional), an assistant message listing every call, the
+       * usage, and the tool events; then each call's handler runs and the runtime waits. When all
+       * return, the runtime calls the model again with the results (the next reply).
+       */
+      kind: 'toolCalls';
+      /** Text the model says before it calls the tools. */
+      text?: string;
+      /** Characters per `assistant.message_delta` of that text. Default 8. */
+      chunkSize?: number;
+      /** The calls, in order. A name the session did not declare has no handler (a built-in tool). */
+      calls: CopilotMockToolCall[];
+      /** `parallel` (default) starts every handler at once; `sequential` starts the next one when the last has returned. */
+      order?: 'parallel' | 'sequential';
+      /** The usage to report. Default: 10 input tokens and one output token per chunk. */
+      usage?: CopilotMockUsage;
+      /** Leave out `assistant.usage` (a runtime that reports it late or never). */
+      omitUsage?: boolean;
+      /** Leave out `external_tool.requested` and `tool.execution_start` (default: emitted for every call). */
+      omitToolEvents?: boolean;
     };
+
+/**
+ * One tool call a `toolCalls` reply makes.
+ *
+ * @stability experimental
+ */
+export interface CopilotMockToolCall {
+  /** The tool's name. */
+  name: string;
+  /** The arguments the model produced. Default `{}`. */
+  arguments?: unknown;
+  /** The runtime's id of the call. Default `mock-call-<n>`. */
+  toolCallId?: string;
+  /** The id the HANDLER is invoked with, when a runtime's invocation id differs from the id it listed. */
+  invokedAs?: string;
+}
+
+/**
+ * One tool call a mock session ran: what the model asked and what the handler answered.
+ *
+ * @stability experimental
+ */
+export interface CopilotMockToolRun {
+  /** The call's id. */
+  toolCallId: string;
+  /** The tool's name. */
+  name: string;
+  /** The arguments. */
+  arguments: unknown;
+  /** The handler's output, once it returned. */
+  output?: string;
+  /** The handler's error message, when it rejected. */
+  error?: string;
+  /** True when the session declared no such tool, so no handler ran. */
+  undeclared?: boolean;
+  /** The id the handler was invoked with, when it differs from `toolCallId`. */
+  invokedAs?: string;
+}
 
 /**
  * One prompt a mock session received.
@@ -152,6 +221,10 @@ export interface CopilotMockSession {
   disconnected: boolean;
   /** Whether `deleteSession` was called for it. */
   deleted: boolean;
+  /** Every tool call the model made in this session, with the output its handler returned. */
+  toolRuns: CopilotMockToolRun[];
+  /** How many times the runtime called the model again after tool results. */
+  continuations: number;
 }
 
 /**
@@ -168,6 +241,24 @@ export interface CopilotMockSend {
   config: CopilotSessionConfig;
   /** The zero-based index of this send across the transport. */
   index: number;
+  /** True when this is the runtime's own next model call after tool results (`prompt` is then empty). */
+  continuation?: boolean;
+  /** The tool results the continuation carries, in call order. */
+  toolResults?: CopilotMockToolResult[];
+}
+
+/**
+ * One tool result a mock continuation carries.
+ *
+ * @stability experimental
+ */
+export interface CopilotMockToolResult {
+  /** The call's id. */
+  toolCallId: string;
+  /** The tool's name. */
+  name: string;
+  /** What the session's handler returned. */
+  output: string;
 }
 
 /**
@@ -252,6 +343,14 @@ export interface CopilotMockTransport extends CopilotTransport {
    */
   signInCalls(): CopilotMockSignInCalls;
   /**
+   * Emits an event on a session as the runtime would, at any moment (a held session that
+   * goes idle by itself, a late event). Does nothing for a disconnected session.
+   *
+   * @param sessionId - the session.
+   * @param event - the event.
+   */
+  emit(sessionId: string, event: CopilotSessionEvent): void;
+  /**
    * Makes the next `createSession` reject with `error`.
    *
    * @param error - what it rejects with.
@@ -275,6 +374,12 @@ export interface CopilotMockTransportOptions {
   models?: CopilotModelInfo[];
   /** Tool names every session reports (the tripwire). Default: none. */
   liveTools?: string[];
+  /**
+   * Names the runtime has as built-in tools. Like the real runtime, a session that
+   * declares a custom tool with one of these names and without `overridesBuiltInTool`
+   * fails to be created. Default: none.
+   */
+  builtInTools?: string[];
   /** The working directory the transport reports. Default `/nonexistent/kvox-copilot-mock`. */
   workingDirectory?: string;
 }
@@ -315,12 +420,14 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
   let calls: CopilotMockSignInCalls = { started: 0, waited: 0, signedOut: 0, aborted: 0 };
   const models = options.models ?? DEFAULT_MODELS;
   const liveTools = options.liveTools ?? [];
+  const builtInTools = new Set(options.builtInTools ?? []);
   let records: CopilotMockSession[] = [];
   let replies: CopilotMockReply[] = [];
   let answerer: ((send: CopilotMockSend) => CopilotMockReply | undefined) | null = null;
   let createError: { error: unknown } | null = null;
   let sends = 0;
   let sessionCount = 0;
+  const emitters = new Map<string, (event: CopilotSessionEvent) => void>();
 
   const createSession = (config: CopilotSessionConfig): CopilotSessionHandle => {
     sessionCount += 1;
@@ -332,10 +439,16 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       aborted: false,
       disconnected: false,
       deleted: false,
+      toolRuns: [],
+      continuations: 0,
     };
     records.push(record);
+    const lifetime = new AbortController();
     const handlers = new Set<(event: CopilotSessionEvent) => void>();
     let stopped = false;
+    emitters.set(record.sessionId, (event) => {
+      for (const handler of [...handlers]) handler(event);
+    });
 
     const emit = (event: CopilotSessionEvent): void => {
       for (const handler of [...handlers]) handler(event);
@@ -434,8 +547,125 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
           ];
         case 'events':
           return reply.events.map((event) => () => emit(event));
+        case 'toolCalls':
+          return toolSteps(reply);
         default:
           return [];
+      }
+    };
+
+    /** What the runtime does when the model calls tools (see the header). */
+    const toolSteps = (reply: Extract<CopilotMockReply, { kind: 'toolCalls' }>): Array<() => void> => {
+      const base = record.modelRequests + 1;
+      const calls = reply.calls.map((call, i) => ({
+        toolCallId: call.toolCallId ?? `mock-call-${base}-${i + 1}`,
+        name: call.name,
+        arguments: call.arguments ?? {},
+        ...(call.invokedAs !== undefined ? { invokedAs: call.invokedAs } : {}),
+      }));
+      const text = reply.text ?? '';
+      const messageId = `msg-${record.prompts.length}-${record.modelRequests}`;
+      const steps: Array<() => void> = [() => (record.modelRequests += 1)];
+      const size = Math.max(1, reply.chunkSize ?? 8);
+      for (let i = 0; i < text.length; i += size) {
+        const chunk = text.slice(i, i + size);
+        steps.push(() => emit({ type: 'assistant.message_delta', data: { deltaContent: chunk, messageId } }));
+      }
+      steps.push(() =>
+        emit({
+          type: 'assistant.message',
+          data: {
+            content: text,
+            messageId,
+            toolRequests: calls.map((call) => ({ toolCallId: call.toolCallId, name: call.name, arguments: call.arguments, type: 'function' })),
+          },
+        }),
+      );
+      if (reply.omitUsage !== true) {
+        steps.push(() =>
+          emit({
+            type: 'assistant.usage',
+            data: {
+              model: config.model,
+              inputTokens: reply.usage?.inputTokens ?? 10,
+              outputTokens: reply.usage?.outputTokens ?? 1,
+              ...(reply.usage?.reasoningTokens !== undefined ? { reasoningTokens: reply.usage.reasoningTokens } : {}),
+              ...(reply.usage?.cacheReadTokens !== undefined ? { cacheReadTokens: reply.usage.cacheReadTokens } : {}),
+              finishReason: 'tool_calls',
+            },
+          }),
+        );
+      }
+      if (reply.omitToolEvents !== true) {
+        for (const call of calls) {
+          steps.push(() =>
+            emit({
+              type: 'external_tool.requested',
+              data: { requestId: `req-${call.toolCallId}`, toolCallId: call.toolCallId, toolName: call.name, arguments: call.arguments },
+            }),
+          );
+          steps.push(() =>
+            emit({ type: 'tool.execution_start', data: { toolCallId: call.toolCallId, toolName: call.name, arguments: call.arguments } }),
+          );
+        }
+      }
+      steps.push(() => void runTools(calls, reply.order ?? 'parallel'));
+      return steps;
+    };
+
+    /** Runs the session's tool handlers, then (if nobody aborted) calls the model again with the results. */
+    const runTools = async (
+      calls: Array<{ toolCallId: string; name: string; arguments: unknown; invokedAs?: string }>,
+      order: 'parallel' | 'sequential',
+    ): Promise<void> => {
+      const runs = calls.map((call): CopilotMockToolRun => {
+        const run: CopilotMockToolRun = {
+          toolCallId: call.toolCallId,
+          name: call.name,
+          arguments: call.arguments,
+          ...(call.invokedAs !== undefined ? { invokedAs: call.invokedAs } : {}),
+        };
+        record.toolRuns.push(run);
+        return run;
+      });
+      const runOne = async (run: CopilotMockToolRun): Promise<void> => {
+        const tool = config.tools?.find((candidate) => candidate.name === run.name);
+        if (tool === undefined) {
+          run.undeclared = true;
+          return;
+        }
+        try {
+          run.output = await tool.handler(run.arguments, {
+            toolCallId: run.invokedAs ?? run.toolCallId,
+            toolName: run.name,
+            signal: lifetime.signal,
+          });
+          if (!stopped) emit({ type: 'tool.execution_complete', data: { toolCallId: run.toolCallId, success: true } });
+        } catch (err) {
+          run.error = err instanceof Error ? err.message : String(err);
+        }
+      };
+      if (order === 'sequential') {
+        for (const run of runs) {
+          if (stopped) return;
+          await runOne(run);
+        }
+      } else {
+        await Promise.all(runs.map(runOne));
+      }
+      // A declared tool that never answered (an undeclared one has no handler) keeps the turn waiting.
+      if (stopped || runs.some((run) => run.undeclared === true)) return;
+      record.continuations += 1;
+      const results = runs.map((run) => ({ toolCallId: run.toolCallId, name: run.name, output: run.output ?? '' }));
+      const index = sends++;
+      const reply =
+        answerer?.({ prompt: '', config, index, continuation: true, toolResults: results }) ??
+        replies.shift() ?? { kind: 'answer', text: 'Hello from the Copilot mock.' };
+      if (reply.kind === 'throw') {
+        emit({ type: 'session.error', data: { errorType: 'query', message: reply.error instanceof Error ? reply.error.message : String(reply.error) } });
+        emit({ type: 'session.idle', data: {} });
+      } else if (reply.kind !== 'hang') {
+        play(stepsFor(reply));
       }
     };
 
@@ -468,6 +698,7 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       },
       async abort() {
         record.aborted = true;
+        lifetime.abort();
         if (stopped) return;
         stopped = true;
         setImmediate(() => emit({ type: 'session.idle', data: { aborted: true } }));
@@ -475,10 +706,11 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       async disconnect() {
         record.disconnected = true;
         stopped = true;
+        lifetime.abort();
         handlers.clear();
       },
       async currentToolNames() {
-        return [...liveTools];
+        return [...liveTools, ...(config.tools ?? []).map((tool) => tool.name)];
       },
     };
   };
@@ -496,6 +728,10 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
         const { error } = createError;
         createError = null;
         throw error;
+      }
+      const clash = (config.tools ?? []).find((tool) => builtInTools.has(tool.name) && tool.overridesBuiltInTool !== true);
+      if (clash !== undefined) {
+        throw new Error(`Tool name "${clash.name}" clashes with a built-in tool; set overridesBuiltInTool to replace it.`);
       }
       return createSession(config);
     },
@@ -551,7 +787,12 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
       script = { ...next };
     },
     signInCalls: () => ({ ...calls }),
-    sessions: () => records.map((record) => ({ ...record, prompts: record.prompts.map((p) => ({ ...p })) })),
+    sessions: () =>
+      records.map((record) => ({
+        ...record,
+        prompts: record.prompts.map((p) => ({ ...p })),
+        toolRuns: record.toolRuns.map((run) => ({ ...run })),
+      })),
     queue(reply) {
       replies.push(reply);
     },
@@ -561,10 +802,14 @@ export function createCopilotMockTransport(options: CopilotMockTransportOptions 
     setSignedIn(value) {
       signedIn = value;
     },
+    emit(sessionId, event) {
+      emitters.get(sessionId)?.(event);
+    },
     failNextCreate(error) {
       createError = { error };
     },
     reset() {
+      emitters.clear();
       records = [];
       replies = [];
       answerer = null;

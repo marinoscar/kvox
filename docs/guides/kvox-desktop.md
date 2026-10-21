@@ -205,7 +205,7 @@ The bare host's classes are reference code, not a package. "Desktop recommendati
 
 ### KVOX_AI
 
-Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; GitHub Copilot is one more provider adapter, an opt-in ([the Copilot provider adapter](#the-copilot-provider-adapter)); it serves notes and graph extraction, not Ask.
+Source: [`ai.port.ts`](../../packages/kvox-api/src/ports/ai.port.ts). Desktop does not implement this interface. It binds `KVOX_AI` to `createKvoxAi` of [`@marinoscar/kvox-ai`](../../packages/kvox-ai/README.md) over `createDirectRuntime`, so the strict-schema round trip, the one-step chat mapping, the truncation and refusal rules, the error classes and the token estimate are the same code as the web edition's (no second copy of the model logic). What Desktop supplies is a `KvoxTaskModelSource` (a local settings file), a `keys` reader backed by the OS keychain, and the provider adapters; GitHub Copilot is one more provider adapter, an opt-in ([the Copilot provider adapter](#the-copilot-provider-adapter)); it serves notes, graph extraction and Ask (Ask through the adapter's tool bridge), not embeddings.
 
 ```ts
 export interface KvoxAiPort {
@@ -439,7 +439,7 @@ Not a port: a value you pass as `KvoxPortsModule.forRoot({ ports, brand: { appNa
 
 ## The Copilot provider adapter
 
-GitHub Copilot is a provider, not a `KvoxAiPort`. Per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md) it is an `AiProviderAdapter` in `@marinoscar/kvox-ai/copilot` (#581) that plugs into `createDirectRuntime`, beneath the same `createKvoxAi` as every other provider. The adapter translates one call into one Copilot session. It holds no prompt, no retry loop, no tool loop and no KVox rule: structured output, truncation, retries and the error classes are the shared mechanics. Reference: [the package README](../../packages/kvox-ai/README.md#github-copilot-on-kvox-desktop-opt-in) and [the slice README](../../packages/kvox-ai/src/copilot/README.md).
+GitHub Copilot is a provider, not a `KvoxAiPort`. Per [ADR-0005](../decisions/0005-ai-architecture-shared-harness.md) it is an `AiProviderAdapter` in `@marinoscar/kvox-ai/copilot` (#581) that plugs into `createDirectRuntime`, beneath the same `createKvoxAi` as every other provider. The adapter translates one call into one Copilot session. It holds no prompt, no retry loop, no tool loop and no KVox rule (the Ask loop stays in `kvox-api`; the adapter only carries a step's tool calls out and the next step's tool outputs back in, by holding the session open between the two): structured output, truncation, retries and the error classes are the shared mechanics. Reference: [the package README](../../packages/kvox-ai/README.md#github-copilot-on-kvox-desktop-opt-in) and [the slice README](../../packages/kvox-ai/src/copilot/README.md).
 
 Status: experimental, and **off by default**. The owner has not yet decided the terms-of-use question (Q12 of the spike): whether a desktop app may drive a user's Copilot subscription through the SDK. Until then the feature ships behind the user's own opt-in.
 
@@ -448,7 +448,7 @@ Status: experimental, and **off by default**. The owner has not yet decided the 
 | Need | Provider | Why |
 |---|---|---|
 | Notes (`notes.generate`, `notes.title`) and graph extraction (`graph.*`, `transcripts.name_check`) | Copilot or OpenAI, the user's choice | One system prompt plus one user message, text out. |
-| Ask (`ask.respond`) | OpenAI | A Copilot session takes user messages only, so a tool step cannot be continued statelessly. The adapter reports `toolCalling: false` and `capabilities()` follows. The Ask loop is never moved into the SDK. |
+| Ask (`ask.respond`) | Copilot or OpenAI, the user's choice | Native tool calling through the adapter's session bridge: the request's tools are the session's custom tools, a step that calls tools ends with the calls and the session is held, and the loop's next request continues it (or, when the session is gone, starts a fresh one from the transcript). The adapter reports `toolCalling: true` (a model the live listing marks as tool-less reports `false`, and `capabilities()` follows). The Ask loop is never moved into the SDK. |
 | Embeddings | OpenAI, or none | The SDK has no embeddings. With `embeddings: null` search is full text only. |
 
 ### Wiring
@@ -475,7 +475,7 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog
 ```
 
 - Build the adapter only when the setting is on. `createCopilotAdapter` throws a plain `Error` otherwise, so a code path that forgot the check fails loudly.
-- `catalog: copilot.kvox.catalog` is how `createKvoxAi` learns, per model, that `toolCalling` is `false` and whether structured output is `native` or `prompted`. Without it a Claude model would be sent a native schema it may not honour.
+- `catalog: copilot.kvox.catalog` is how `createKvoxAi` learns, per model, whether `toolCalling` holds (true unless the live listing said otherwise) and whether structured output is `native` or `prompted`. Without it a Claude model would be sent a native schema it may not honour.
 - The task-model source lists Copilot models from `adapter.listModels(...)` (needs sign-in; models whose policy is `disabled` are dropped). When the live listing is unavailable, `COPILOT_CATALOG` (version `COPILOT_CATALOG_VERSION`) is a small fallback with conservative limits.
 - Install the optional peer in the Desktop app only: `npm install @github/copilot-sdk`. The web edition never installs it, and the package root never imports it.
 
@@ -483,7 +483,7 @@ const kvoxAi = createKvoxAi({ runtime, taskModels: localTaskModelSource, catalog
 
 Add a Copilot switch to the Desktop settings, default **off**. Turning it on must show, before it takes effect, that notes and transcript text are sent to GitHub, and link GitHub's terms and the Copilot data and privacy page so the user can check their plan. Turning it off removes the adapter from `adapters` and from the model picker. Do not enable it by default, in a migration or in an installer.
 
-Do not write this UI: render the packaged card. `CopilotProviderCard` of `@marinoscar/kvox-web/copilot/ui` carries the switch, the consent dialog (written once in `COPILOT_CONSENT_COPY`, versioned by `COPILOT_CONSENT_VERSION` of `@marinoscar/kvox-contract/copilot`, so a change to the text asks every user again), the runtime download with its size and progress, the device-code or browser sign-in, the signed-in account, the model choice and the list of features that run on Copilot (Ask shown as unavailable, with the reason from `status.unavailableTasks`). It makes no network call; the renderer maps six routes:
+Do not write this UI: render the packaged card. `CopilotProviderCard` of `@marinoscar/kvox-web/copilot/ui` carries the switch, the consent dialog (written once in `COPILOT_CONSENT_COPY`, versioned by `COPILOT_CONSENT_VERSION` of `@marinoscar/kvox-contract/copilot`, so a change to the text asks every user again), the runtime download with its size and progress, the device-code or browser sign-in, the signed-in account, the model choice and the list of features that run on Copilot (a task that cannot run on Copilot, such as semantic search, shown as unavailable with the reason from `status.unavailableTasks`; the packaged card's Ask copy still describes the old limit until it is updated). It makes no network call; the renderer maps six routes:
 
 ```tsx
 // Illustrative, not compiled
@@ -572,13 +572,14 @@ const transport = createSdkCopilotTransport({ baseDirectory: rt.baseDirectory, w
 
 ### Routing the tasks
 
-Copilot has no tool calling and no embeddings. `routeKvoxTasks({ primary, fallback })` from the package root (`@marinoscar/kvox-ai`; [routing README](../../packages/kvox-ai/src/routing/README.md)) gives each task to the primary provider when it can serve it, else to the fallback (OpenAI, when the user saved a key), else lists it in `unavailable` with `needs_tool_calling` or `needs_embeddings`, so the shell can hide Ask or semantic search with a reason. Persist the returned `taskModels`.
+Copilot has no embeddings, and a model its live listing marks as tool-less cannot run Ask; every other Copilot model runs Ask through the tool bridge (`kvox.toolCalling` is `true`). `routeKvoxTasks({ primary, fallback })` from the package root (`@marinoscar/kvox-ai`; [routing README](../../packages/kvox-ai/src/routing/README.md)) gives each task to the primary provider when it can serve it, else to the fallback (OpenAI, when the user saved a key), else lists it in `unavailable` with `needs_tool_calling` or `needs_embeddings`, so the shell can hide semantic search (and Ask, for a tool-less model) with a reason. Pass `copilot.kvox.catalog.lookup('copilot', model)?.toolCalling` as the `toolCalling` of the Copilot `ProviderChoice` to honour the per-model flag. Persist the returned `taskModels`.
 
 ### What the adapter does for you
 
-- Zero tools. Every built-in Copilot tool is disabled and every permission request is rejected. The adapter reads the session's live tool list and aborts if it is not empty.
+- No built-in tools. Every built-in Copilot tool is disabled; the session's allowlist is exactly the request's own function tools, and every permission request is rejected except one for those tools. The adapter reads the session's live tool list and logs a `warn` (tool names only) if it holds anything else; a call of any tool that is not the request's own aborts the call.
+- Ask's tool steps. A step that calls tools keeps its session open (at most 8 at once, 120 s by default) and the loop's next request continues it; a lost session is replaced by a fresh one given the transcript as text, so a step never fails for lack of state. Call `copilot.bridge.closeAll()` when Desktop quits.
 - Our system prompt replaces the SDK's. The runtime's date prefix is suppressed.
-- One session per call, deleted when the call settles (the runtime would otherwise keep the prompt on disk).
+- One session per call, deleted when the call settles (the runtime would otherwise keep the prompt on disk); a session held for Ask's next tool step is deleted when the turn ends, on abort or error, after the idle timeout or when it is pushed out.
 - `rate_limit`, `auth`, `refusal`, `truncated` and `invalid_output` reach the app as the usual `KvoxAiError` classes. The SDK retries 429 and 401 on its own; the adapter aborts on the first `model.call_failure` so kvox-ai owns retries, and 1.0.22 gives no retry-after, so a rate limit is deferred on the job's default back-off.
 - On `length` the session is aborted at once (the runtime would otherwise continue by itself). The SDK has no per-call output cap for Copilot-hosted models, so `maxOutputTokens` is not sent.
 
@@ -587,7 +588,7 @@ Points the Desktop host must keep, because the slices depend on them:
 - **Offline behaviour.** Everything that calls a model needs a network and, for Copilot, a sign-in. `capabilities()` still answers (never throws) with `available: false` and a `reason`; `resolveTask` then throws `key_missing` or `not_configured`. The slices turn those into the product's 409s with `details.reason`; reading and editing existing data keeps working ([Offline constraints](#offline-constraints-feature-by-feature)). A queued AI job that fails with `rate_limit` defers; one that fails with another class fails the job with its message.
 - **Embeddings.** With `embeddings: null`, search answers with full text only and the reason `embeddings_unavailable`, `search.index` records why nothing was embedded, and the graph's resolution skips the vector candidate source.
 - **Token budget.** The budget uses `target.contextWindowTokens`, `target.maxOutputTokens` and the synchronous `countTokens`. Copilot limits come from the live listing, else the fallback catalog; both are estimates, so stay conservative.
-- **Prove it** with `describeKvoxAiConformance`, `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)). The Copilot adapter runs the first over `createCopilotMockTransport()`; Ask is proven on the OpenAI path only.
+- **Prove it** with `describeKvoxAiConformance`, `describeKvoxPortsConformance` and `describeAskConformance` ([Prove it](#prove-it-conformance)). The Copilot adapter runs all three over `createCopilotMockTransport()` (`describeKvoxAiConformance` with one reasoned opt-out, the retry hint; `describeAskConformance` over the real `AskRespondHandler`), and the parity check compares its Ask requests with the OpenAI snapshot.
 
 ## Jobs offline
 

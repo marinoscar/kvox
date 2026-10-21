@@ -20,8 +20,8 @@ const readyStatus = {
 };
 
 describe('COPILOT_CONSENT_VERSION', () => {
-  it('is the permanent string "1" for the first consent text', () => {
-    expect(COPILOT_CONSENT_VERSION).toBe('1');
+  it('is "2", the text where Ask runs on Copilot (version "1" is never reused)', () => {
+    expect(COPILOT_CONSENT_VERSION).toBe('2');
   });
 });
 

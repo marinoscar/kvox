@@ -118,8 +118,9 @@ describe('harness parity: the direct binding', () => {
 // COPILOT adapter (on its mock transport), with the task-model state's provider set to
 // `copilot`. `wrapRecordingAdapter` records what reaches the adapter, so the comparison
 // is with the OpenAI snapshots: a Copilot GPT model gets the very same requests, with `model`
-// the only thing allowed to differ. Ask is excluded (`questions: []`): Copilot ships with
-// tool calling off, so the Ask loop stays on OpenAI.
+// the only thing allowed to differ. Ask runs too (#654): the adapter bridges its tool steps, so
+// the requests that reach it are the very ones of the OpenAI Ask snapshot, and each question is
+// ONE Copilot session (the tool step holds it, the answer step continues it).
 //
 // A prompted (Claude-like) model id changes ONLY what the documented prompted shape changes:
 // a structured request loses `structuredOutput` and gains the generic schema block after its
@@ -181,6 +182,15 @@ function copilotReplyFor(
   }
   const events = script.stream(recorded, indexes.stream++);
   const text = events.flatMap((event) => (event.type === 'output_text.delta' ? [event.delta] : [])).join('');
+  const calls = events.flatMap((event) => (event.type === 'output_item.done' && event.item.type === 'function_call' ? [event.item] : []));
+  if (calls.length > 0) {
+    return {
+      kind: 'toolCalls',
+      ...(text.length > 0 ? { text } : {}),
+      calls: calls.map((call) => ({ name: call.name, toolCallId: call.callId, arguments: call.arguments })),
+      chunkSize: 1_000_000,
+    };
+  }
   return { kind: 'answer', text, chunkSize: 1_000_000 };
 }
 
@@ -220,6 +230,20 @@ describe('harness parity: the GitHub Copilot adapter', () => {
       // And the user text reached the model untouched (no datetime prefix).
       expect(sessions.every((s) => s.prompts[0].sentPrompt === s.prompts[0].prompt)).toBe(true);
     });
+  });
+
+  it('sends the OpenAI Ask snapshot requests, three questions on one Copilot session each (the tool bridge)', async () => {
+    const { records, sessions } = await recordCopilot({ fixtures: [], questions: undefined }, parityModelState('copilot'));
+
+    expect(records.length).toBeGreaterThan(0);
+    expect(withoutModel(records)).toEqual(withoutModel(loadParitySnapshot(PARITY_ASK_SNAPSHOT)));
+
+    // Three questions, two model calls each: the tool call, then the answer over its result, on the SAME session.
+    expect(records).toHaveLength(6);
+    expect(sessions).toHaveLength(3);
+    expect(sessions.every((s) => s.continuations === 1 && s.toolRuns.length === 1 && s.prompts.length === 1)).toBe(true);
+    expect(sessions.every((s) => s.config.availableTools.length === 7 && s.config.availableTools.every((t) => t.startsWith('custom:')))).toBe(true);
+    expect(sessions.every((s) => s.deleted && s.disconnected)).toBe(true);
   });
 
   it('is sensitive: a changed character in one request fails the comparison', async () => {

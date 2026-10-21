@@ -10,7 +10,11 @@ export function makeStatus(overrides: Partial<CopilotStatus> = {}): CopilotStatu
     login: null,
     runtime: { state: 'ready', version: '1.0.98', progress: null },
     models: [],
-    unavailableTasks: [{ task: 'ask.respond', reason: 'needs_tool_calling' }],
+    // What Copilot reports since Ask runs on it (marinoscar/kvox#654): only search by meaning is unavailable.
+    unavailableTasks: [
+      { task: 'search.embed', reason: 'needs_embeddings' },
+      { task: 'graph.embed', reason: 'needs_embeddings' },
+    ],
     ...overrides,
   };
 }

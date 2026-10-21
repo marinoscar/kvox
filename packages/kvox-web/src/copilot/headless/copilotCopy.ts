@@ -13,7 +13,8 @@
 //     Copilot, which runs the model;
 //   - the user signs in with their own GitHub account and Copilot subscription;
 //   - it is opt-in, off by default, and can be turned off at any time;
-//   - Ask needs tool calling, which Copilot does not offer here.
+//   - notes, knowledge extraction, name checks and Ask run on Copilot; search
+//     by meaning needs embeddings, which Copilot does not offer.
 // It does not state what GitHub does with the text after receipt: that is
 // GitHub's terms and the user's Copilot data settings, and the links say so.
 
@@ -121,8 +122,8 @@ export const COPILOT_CONSENT_COPY: CopilotConsentCopy = Object.freeze({
       text: 'This is opt-in and off by default. You can turn it off at any time in these settings, which also removes GitHub Copilot and its models from KVox.',
     },
     {
-      heading: 'Ask is not available with Copilot',
-      text: 'Ask needs a model that can use tools, and GitHub Copilot does not offer that here. Add an OpenAI key to keep Ask.',
+      heading: 'What runs on GitHub Copilot',
+      text: 'Notes, knowledge extraction, name checks and Ask run on GitHub Copilot. Search by meaning needs embeddings, which GitHub Copilot does not offer.',
     },
   ]),
   links: COPILOT_TERMS_LINKS,
@@ -155,9 +156,9 @@ export interface CopilotProviderCopy {
 export const COPILOT_PROVIDER_COPY: CopilotProviderCopy = Object.freeze({
   displayName: 'GitHub Copilot',
   description:
-    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
+    'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
   selectedDescription:
-    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription.',
+    'Run notes, knowledge extraction, name checks and Ask on your own GitHub Copilot subscription.',
 } satisfies CopilotProviderCopy);
 
 /**

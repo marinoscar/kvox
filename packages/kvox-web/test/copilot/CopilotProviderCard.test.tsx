@@ -79,7 +79,8 @@ describe('CopilotProviderCard: the consent gate', () => {
     const dialog = await screen.findByRole('dialog', { name: COPILOT_CONSENT_COPY.title });
     expect(p.onUpdate).not.toHaveBeenCalled();
     expect(within(dialog).getByText(/note and transcript text, is sent to GitHub Copilot/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Add an OpenAI key to keep Ask/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/name checks and Ask run on GitHub Copilot/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Add an OpenAI key to keep Ask/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Sign in with/ })).not.toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Agree and turn on' }));
@@ -615,7 +616,7 @@ describe('CopilotProviderCard: wording per mode', () => {
       expect(within(dialog).getByText(point.text)).toBeInTheDocument();
     }
     // Accepting saves the unchanged consent version (pinned in 'selected true: Accept calls onUpdate').
-    expect(COPILOT_CONSENT_VERSION).toBe('1');
+    expect(COPILOT_CONSENT_VERSION).toBe('2');
   });
 });
 
@@ -725,8 +726,24 @@ describe('CopilotProviderCard: sign-out', () => {
 });
 
 describe('CopilotProviderCard: capabilities', () => {
-  it('lists Notes, Knowledge extraction and Name check as available and Ask as unavailable with the reason', () => {
+  it('lists Notes, Knowledge extraction, Name check and Ask as available by default', () => {
     renderCard(props({ settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN }) }));
+    const list = screen.getByRole('list', { name: 'GitHub Copilot capabilities' });
+    const rows = within(list).getAllByRole('listitem');
+    const text = (label: string) => rows.find((r) => within(r).queryByText(label))!;
+
+    for (const label of ['Notes', 'Knowledge extraction', 'Name check', 'Ask']) {
+      expect(within(text(label)).getByText('Available')).toBeInTheDocument();
+    }
+  });
+
+  it('lists Ask as unavailable with the provider-neutral reason when the status reports it (a tool-less model)', () => {
+    renderCard(
+      props({
+        settings: consentedSettings(),
+        status: makeStatus({ ...SIGNED_IN, unavailableTasks: [{ task: 'ask.respond', reason: 'needs_tool_calling' }] }),
+      }),
+    );
     const list = screen.getByRole('list', { name: 'GitHub Copilot capabilities' });
     const rows = within(list).getAllByRole('listitem');
     const text = (label: string) => rows.find((r) => within(r).queryByText(label))!;
@@ -736,10 +753,11 @@ describe('CopilotProviderCard: capabilities', () => {
     }
     const ask = text('Ask');
     expect(within(ask).getByText('Not available')).toBeInTheDocument();
-    expect(within(ask).getByText(/Needs a provider with tool calling\. Add an OpenAI key to keep Ask\./)).toBeInTheDocument();
+    expect(within(ask).getByText('Needs a model with tool calling.')).toBeInTheDocument();
+    expect(within(ask).queryByText(/OpenAI/)).not.toBeInTheDocument();
   });
 
-  it('shows Ask as available when the host routes it elsewhere (not in unavailableTasks)', () => {
+  it('shows Ask as available when unavailableTasks has no ask.respond', () => {
     renderCard(
       props({ settings: consentedSettings(), status: makeStatus({ ...SIGNED_IN, unavailableTasks: [] }) }),
     );

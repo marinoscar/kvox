@@ -122,7 +122,8 @@ import { createKvoxAiReadiness, reasoningEffortFor, type KvoxAiReadinessReader }
 //
 // TOOL CALLING IS PER MODEL. `capabilities().toolCalling` is readiness AND the
 // resolved model's `toolCalling` flag (the row's, else the catalog's, else true),
-// so a host whose model cannot call tools (GitHub Copilot) never offers Ask.
+// so a host whose model cannot call tools never offers Ask. GitHub Copilot's catalog
+// says true (the adapter bridges the tool steps, #654) unless its live listing says no.
 //
 // ⚠ A KEY NEVER CROSSES THIS PORT. The context carries a user id; the runtime
 // resolves that user's own key per call. `scrub` removes anything shaped like a

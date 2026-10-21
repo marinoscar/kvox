@@ -102,6 +102,17 @@ export interface CopilotModelInfo {
   name?: string;
   /** The model's limits, as the listing reports them. */
   capabilities?: {
+    /**
+     * What the model supports, when the listing says. The adapter reads only the
+     * tool flag (`toolCalls`; `tool_calls` is accepted too): an explicit `false`
+     * takes Ask off that model. Absent means "assume tools work".
+     */
+    supports?: {
+      /** Whether the model supports tool calling. */
+      toolCalls?: boolean;
+      /** The same flag in the runtime's snake_case spelling. */
+      tool_calls?: boolean;
+    };
     /** Token limits. */
     limits?: {
       /** The most prompt tokens. */
@@ -141,6 +152,66 @@ export interface CopilotSessionEvent {
 export type CopilotReasoningEffort = 'low' | 'medium' | 'high';
 
 /**
+ * What the runtime tells a tool handler about the call it serves.
+ *
+ * @stability experimental
+ */
+export interface CopilotToolInvocation {
+  /** The runtime's id of this tool call (the one the assistant message's `toolRequests` carries). */
+  toolCallId: string;
+  /** The tool's name. */
+  toolName: string;
+  /** Aborted when the runtime completes the request or the session disconnects. */
+  signal?: AbortSignal;
+}
+
+/**
+ * One of the request's own function tools, declared to the session as a CUSTOM
+ * tool (the Ask bridge). The handler resolves only when the host's loop has run
+ * the tool and supplied its output, so the model's turn waits inside the runtime.
+ *
+ * @stability experimental
+ */
+export interface CopilotToolDefinition {
+  /** The tool's name, as the model calls it. */
+  name: string;
+  /** What the tool does, for the model. */
+  description: string;
+  /** The JSON Schema of the arguments. */
+  parameters: Record<string, unknown>;
+  /** Always `true`: the tool is the request's own, so no permission prompt is raised for it. */
+  skipPermission: true;
+  /** Always `never`: the tool is always pre-loaded, never discovered lazily through the runtime's tool search. */
+  defer: 'never';
+  /**
+   * Always `true`: the tool's name may clash with a runtime built-in (Ask's `search`,
+   * `timeline`, ...), which would fail session creation. Harmless here: built-ins are off
+   * (`mode: 'empty'` plus the `custom:<name>` allowlist), so only this tool answers the name.
+   */
+  overridesBuiltInTool: true;
+  /**
+   * Called by the runtime when the model calls the tool.
+   *
+   * @param args - the arguments the model produced.
+   * @param invocation - the call's id, the tool name and a signal.
+   * @returns the tool's output as text (resolves when the host's loop supplies it).
+   */
+  handler: (args: unknown, invocation: CopilotToolInvocation) => Promise<string>;
+}
+
+/**
+ * What the runtime asks a permission handler. Only the two members the adapter reads.
+ *
+ * @stability experimental
+ */
+export interface CopilotPermissionRequest {
+  /** The kind of permission (`custom-tool`, `shell`, `write`, `read`, `mcp`, ...). */
+  kind?: string;
+  /** The tool's name, for a `custom-tool` request. */
+  toolName?: string;
+}
+
+/**
  * Exactly the session settings the adapter sets, every one of them, typed. Built
  * by `copilotSessionConfig`; a test asserts it.
  *
@@ -158,8 +229,14 @@ export interface CopilotSessionConfig {
     /** The whole system prompt. */
     content: string;
   };
-  /** Always empty: no built-in tool is available to the model. */
+  /**
+   * The allowlist of tools the model may call: EMPTY for a call without tools, else
+   * exactly the request's own function tools, source-qualified (`custom:<name>`) so a
+   * built-in tool of the same name is never matched. Never a built-in tool.
+   */
   availableTools: string[];
+  /** The request's own function tools, as custom tools. Absent for a call without tools. */
+  tools?: CopilotToolDefinition[];
   /** Always `false`: no skill is loaded. */
   enableSkills: false;
   /** Always `true`: no AGENTS.md, CLAUDE.md or custom instructions are read. */
@@ -196,10 +273,13 @@ export interface CopilotSessionConfig {
       modifiedTransformedPrompt: string;
     };
   };
-  /** Every permission request is rejected (no tool may run). */
-  onPermissionRequest: () => {
-    /** Always `reject`. */
-    kind: 'reject';
+  /**
+   * Every permission request is rejected (no built-in tool may run), except the
+   * `custom-tool` request of one of this session's own tools, which is approved.
+   */
+  onPermissionRequest: (request?: CopilotPermissionRequest) => {
+    /** `approve-once` for one of the session's own tools; `reject` for everything else. */
+    kind: 'approve-once' | 'reject';
   };
 }
 
@@ -232,8 +312,10 @@ export interface CopilotSessionHandle {
   disconnect(): Promise<void>;
   /**
    * The names of every tool the session's model can currently call, or `null`
-   * when the runtime has not built the list. The adapter's security tripwire: any
-   * name at all aborts the call.
+   * when the runtime has not built the list. The adapter's security tripwire, listing
+   * half: a name that is not one of the request's own function tools is logged as a
+   * `warn` (the list is unverified on a real runtime) and does not stop the call; a
+   * CALL of such a tool does.
    *
    * @returns the tool names, or `null`.
    */

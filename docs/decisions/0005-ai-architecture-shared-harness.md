@@ -2,7 +2,7 @@
 
 - Status: Accepted (implementation #579; lean provider package consumed, #578)
 - Date: 2026-10-17
-- Related issues: epic #574, #578, #579, #580, #581, #584
+- Related issues: epic #574, #578, #579, #580, #581, #584, #654
 
 ## Context
 
@@ -60,7 +60,7 @@ Same harness does not mean same output. Parity is proven by byte-identical provi
 
 ## Related issues
 
-#578, #579, #580, #581, #584.
+#578, #579, #580, #581, #584, #654.
 
 ## Status note (#580)
 
@@ -75,8 +75,8 @@ Phase 2 ("go, without Ask") is implemented: `@marinoscar/kvox-ai/copilot`, an `A
 | Q | Question | Answer | Consequence |
 |---|---|---|---|
 | Q1 | Can our system prompt replace the SDK's? | Yes (wire-verified). | `systemMessage.mode: 'replace'`. |
-| Q2 | Can every built-in tool be disabled? | Yes: client `mode: 'empty'` and `availableTools: []`. | Zero tools; the adapter also reads the live tool list and aborts if it is not empty. |
-| Q3 | Can one model step return tool calls and stop? | Partial. Stop works, but a session takes user messages only, so a tool step cannot be continued statelessly. | Copilot serves notes and graph extraction only. `toolCalling` is `false`. Ask stays on OpenAI. |
+| Q2 | Can every built-in tool be disabled? | Yes: client `mode: 'empty'` and `availableTools: []`. | Zero tools; the adapter also reads the live tool list and logs a `warn` if it is not empty; a call of a tool that is not the request's own aborts. |
+| Q3 | Can one model step return tool calls and stop? | Partial. Stop works, but a session takes user messages only, so a tool step cannot be continued statelessly. | Copilot serves notes and graph extraction only. `toolCalling` is `false`. Ask stays on OpenAI. **Superseded by the status note (#654):** Q3 is answered statefully and Ask runs on Copilot. |
 | Q4 | Streaming and finish reason? | Yes, with caveats: after `length` the runtime continues on its own; there is no per-call output cap for Copilot-hosted models. | The adapter aborts on `length`. `maxOutputTokens` is not sent. |
 | Q5 | Native JSON-schema output? | GPT yes; Claude unverified. | Per-model `native` or `prompted`. The generic prompt, validate and one-repair path lives in kvox-ai and serves every adapter. |
 | Q6 | Model list with limits? | Yes, after sign-in. | Live listing wins; a small versioned fallback catalog (`COPILOT_CATALOG_VERSION`) covers the rest. |
@@ -90,3 +90,14 @@ Phase 2 ("go, without Ask") is implemented: `@marinoscar/kvox-ai/copilot`, an `A
 Also: the runtime persists prompts in its session state, so each call is one session, deleted in a `finally`, in an app-private `baseDirectory` with an empty `workingDirectory`. The SDK is an optional peer, loaded lazily by `createSdkCopilotTransport`, and the package root does not re-export the slice.
 
 Decision: the integration sits at the provider-adapter layer, not the port layer. kvox-ai gains the shared pieces it needs: `structuredOutputMode` per model, the prompted structured path with one repair, per-model `toolCalling` in `capabilities()`, `wrapRecordingAdapter` and `scrub` coverage of `ghu_`, `ghs_` and `ghr_`. Guide: [KVox Desktop](../guides/kvox-desktop.md#the-copilot-provider-adapter).
+
+## Status note (#654)
+
+Ask runs on Copilot. The product owner decided Ask must work on Copilot at full quality, so Q3 ("Can one model step return tool calls and stop?") is answered **statefully**: a session cannot take a tool result as a new message, but the SDK's custom tool handler is a promise, so a handler can wait for the result while the session stays open.
+
+- **The loop stays in `kvox-api`.** The Ask loop, its prompts, its limits and its tools are unchanged (hard requirement 3 above still holds: one model step per call). The adapter bridges the tool steps: the request's function tools become the session's custom tools; a step in which the model calls tools ends with those calls (`finishReason: 'tool_calls'`) and the session is held, keyed by the call ids; the loop's next request (the full history plus the tool outputs, as before) resolves the handlers and streams the continuation from the same session. When no held session matches (expired, restarted, edited, the forced `toolChoice: 'none'` answer), a fresh session is given the transcript as text and the same tools, so a step never fails for lack of state. A held session is deleted when its turn ends, on abort or error, after an idle timeout and when the registry overflows.
+- **Requirements 1 and 2 still hold.** Our system prompt replaces the SDK's, and no Copilot built-in tool is ever available: the allowlist is exactly the request's own tools (`custom:<name>`), a tool or tool event that is not one of them aborts the call, and every other permission request is rejected. Token redaction, metadata-only logging and the delete-the-session discipline are unchanged.
+- **Consequences.** The Copilot catalog reports `toolCalling: true` (unless the live model listing says a model cannot call tools), so `routeKvoxTasks` routes `ask.respond` to Copilot; only the two embedding tasks still need a fallback. Q3's old answer and its `toolCalling: false` consequence are superseded; the rest of the table stands.
+- **Open.** The ordering of tool events, the finish value of a tool step, what the live tool list holds (an extra name only warns; the first live call logs it) and any runtime timeout on a pending tool call were read from SDK 1.0.22 and are not yet observed against a signed-in runtime ([SPIKE.md](../../packages/kvox-ai/src/copilot/SPIKE.md), section 6). The consent text and the Ask-unavailable copy of `@marinoscar/kvox-web/copilot` still describe the old limit and need a follow-up (and a consent version bump).
+
+Detail: [the tool bridge](../../packages/kvox-ai/src/copilot/README.md#the-tool-bridge-ask-on-copilot).

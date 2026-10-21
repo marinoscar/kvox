@@ -9,9 +9,12 @@ import { z } from 'zod';
  * this one, so changing what the consent says means bumping this string. The
  * value is permanent per text: never reuse a version for different wording.
  *
+ * Versions: `'1'`, the first text (Ask unavailable with Copilot); `'2'`, Ask
+ * runs on Copilot and search by meaning does not (marinoscar/kvox#654).
+ *
  * @stability experimental
  */
-export const COPILOT_CONSENT_VERSION = '1' as const;
+export const COPILOT_CONSENT_VERSION = '2' as const;
 
 /**
  * The validators and descriptions of a Copilot setting, defined once so the full and the patch schema cannot drift.
@@ -122,8 +125,11 @@ export type CopilotRuntimeState = (typeof COPILOT_RUNTIME_STATES)[number];
  * Why a KVox task cannot run on Copilot.
  *
  * @remarks
- * Mirrors the reasons `routeKvoxTasks` of `@marinoscar/kvox-ai` gives:
- * Copilot has no tool calling (Ask) and no embeddings (semantic search).
+ * Mirrors the reasons `routeKvoxTasks` of `@marinoscar/kvox-ai` gives.
+ * `needs_embeddings`: Copilot offers no embeddings, so search by meaning
+ * cannot run on it. `needs_tool_calling`: the chosen model cannot call tools,
+ * so Ask cannot run on it; Copilot itself supports tool calling, so this is
+ * reported only for a model its live listing marks as tool-less.
  *
  * @stability experimental
  */
