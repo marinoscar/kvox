@@ -62,6 +62,9 @@ Optional peers, installed for the entries that need them. A host that uses only 
 | `@tiptap/core`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/extension-table`, `@tiptap/markdown`, `@tiptap/pm` | `^3.31.3` | `notes/ui` (the visual editor, loaded lazily) |
 | `sigma` | `^3.0.3` | `graph/ui` (the canvas, loaded lazily) |
 | `@react-sigma/core` | `^5.0.6` | `graph/ui` (the canvas, loaded lazily) |
+| `@sigma/node-image` | `^3.0.0` | `graph/ui` (the canvas's pictograms, loaded lazily) |
+| `@sigma/node-border` | `^3.0.0` | `graph/ui` (the canvas's rings, loaded lazily) |
+| `@sigma/edge-curve` | `^3.1.0` | `graph/ui` (the canvas's curved parallel edges, loaded lazily) |
 | `graphology` | `^0.26.0` | `graph/ui` (one copy only) |
 | `graphology-layout-forceatlas2` | `^0.10.1` | `graph/ui` (the canvas, loaded lazily) |
 | `@testing-library/react` | `^16.3.2` | `core/testing` |

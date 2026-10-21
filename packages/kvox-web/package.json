@@ -145,6 +145,9 @@
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
     "@react-sigma/core": "^5.0.6",
+    "@sigma/edge-curve": "^3.1.0",
+    "@sigma/node-border": "^3.0.0",
+    "@sigma/node-image": "^3.0.0",
     "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/react": "^16.3.2",
     "@tiptap/core": "^3.31.3",
@@ -173,6 +176,15 @@
       "optional": true
     },
     "@react-sigma/core": {
+      "optional": true
+    },
+    "@sigma/edge-curve": {
+      "optional": true
+    },
+    "@sigma/node-border": {
+      "optional": true
+    },
+    "@sigma/node-image": {
       "optional": true
     },
     "@tanstack/react-virtual": {
@@ -224,6 +236,9 @@
     "@mui/icons-material": "^9.1.0",
     "@mui/material": "^9.1.0",
     "@react-sigma/core": "^5.0.6",
+    "@sigma/edge-curve": "^3.1.0",
+    "@sigma/node-border": "^3.0.0",
+    "@sigma/node-image": "^3.0.0",
     "@tanstack/react-virtual": "^3.14.12",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
