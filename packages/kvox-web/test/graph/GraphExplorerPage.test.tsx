@@ -41,10 +41,25 @@ import { render } from './helpers.js';
  * outside the canvas, which is the point of keeping them in `explorerModel`.
  */
 
-const mocks = vi.hoisted(() => ({
-  webgl: true,
-  controls: { zoomIn: vi.fn(), zoomOut: vi.fn(), fit: vi.fn() },
-}));
+const mocks = vi.hoisted(() => {
+  // The canvas's pin store (the layout's, GIC-07) as a Set, so the menu's Pin/Unpin label can flip.
+  const pinned = new Set<string>();
+  return {
+    webgl: true,
+    pinned,
+    controls: {
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      fit: vi.fn(),
+      relayoutAll: vi.fn(),
+      togglePin: vi.fn((id: string) => {
+        if (!pinned.delete(id)) pinned.add(id);
+      }),
+      unpinAll: vi.fn(),
+      isPinned: vi.fn((id: string) => pinned.has(id)),
+    },
+  };
+});
 
 vi.mock('../../src/graph/ui/components/explorer/webgl.js', () => ({
   isWebGLAvailable: () => mocks.webgl,
@@ -112,6 +127,8 @@ function useExpand(respond?: (body: ExpandFixtureRequest) => Promise<HttpRespons
 }
 
 beforeEach(() => {
+  mocks.pinned.clear();
+  mocks.controls.togglePin.mockClear();
   mocks.webgl = true;
   mocks.controls.zoomIn.mockClear();
   mocks.controls.zoomOut.mockClear();
@@ -594,6 +611,35 @@ describe('GraphExplorerPage — keyboard and the list view', () => {
   });
 });
 
+describe('GraphExplorerPage — layout menu (#668)', () => {
+  it('opens an ego view of fewer than 40 nodes concentric', async () => {
+    renderExplorer();
+    expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric');
+  });
+
+  it('uses Force for ?layout=force and writes the choice from the menu to the URL', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    expect(await screen.findByTestId('fake-canvas')).toHaveAttribute('data-layout', 'forceatlas');
+
+    await user.click(screen.getByRole('button', { name: 'Layout' }));
+    await user.click(screen.getByRole('menuitemradio', { name: /Concentric by hop/ }));
+    await waitFor(() => expect(currentUrl().searchParams.get('layout')).toBe('concentric'));
+    expect(screen.getByTestId('fake-canvas')).toHaveAttribute('data-layout', 'concentric');
+  });
+
+  it('"Re-layout all" and "Unpin all" reach the canvas', async () => {
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&layout=force`);
+    await screen.findByTestId('fake-canvas');
+    mocks.controls.relayoutAll.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Layout' }));
+    await user.click(screen.getByRole('menuitem', { name: /Re-layout all/ }));
+    expect(mocks.controls.relayoutAll).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('GraphExplorerPage — no WebGL', () => {
   it('forces the list view with an explanation', async () => {
     mocks.webgl = false;
@@ -688,6 +734,8 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
       expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
     }
     await user.click(within(menu).getByRole('menuitem', { name: 'Pin' }));
+    // The same pin function as the layout's drag-end pin and the P key.
+    expect(mocks.controls.togglePin).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 
     fireEvent.contextMenu(within(canvas).getByRole('button', { name: 'Ana Diaz' }));

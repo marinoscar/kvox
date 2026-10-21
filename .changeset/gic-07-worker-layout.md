@@ -1,0 +1,5 @@
+---
+"@marinoscar/kvox-web": minor
+---
+
+The explorer lays the graph out incrementally in a same-origin module worker (#668). `GraphCanvas` no longer re-settles the whole graph on every expand: nodes already laid out are fixed and only new ones move (ringed around their parent), in `layout/layout.worker.ts` (ForceAtlas2 then `graphology-layout-noverlap`, transferable `Float32Array` frames, no `blob:` URL, so `worker-src 'self'` allows it), with a time-sliced main-thread fallback when `Worker` is unavailable. New `layout` values `concentric` (rings by hop, ordered by `doi` or degree) and the existing `static`; a Layout menu (Force, Concentric by hop, Static, Re-layout all, Unpin all); pins persist per view in `sessionStorage` and `P` pins or unpins the selected node; positions tween over 300 ms, or jump under `prefers-reduced-motion` (the explorer no longer forces `static` for it). New props `seedIds`, `pinsKey` and `onPinnedCountChange` on `GraphCanvas`; `GraphCanvasControls` gains `relayoutAll`, `togglePin`, `unpinAll` and `isPinned`. New optional peer `graphology-layout-noverlap` `^0.4.2` on `graph/ui`.

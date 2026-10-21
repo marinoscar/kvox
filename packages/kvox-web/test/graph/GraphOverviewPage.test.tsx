@@ -41,7 +41,15 @@ import { render } from './helpers.js';
 
 const mocks = vi.hoisted(() => ({
   webgl: true,
-  controls: { zoomIn: vi.fn(), zoomOut: vi.fn(), fit: vi.fn() },
+  controls: {
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    fit: vi.fn(),
+    relayoutAll: vi.fn(),
+    togglePin: vi.fn(),
+    unpinAll: vi.fn(),
+    isPinned: vi.fn(() => false),
+  },
 }));
 
 vi.mock('../../src/graph/ui/components/explorer/webgl.js', () => ({

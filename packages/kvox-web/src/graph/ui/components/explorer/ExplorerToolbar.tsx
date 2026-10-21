@@ -5,9 +5,9 @@
  * The FILTERS moved to `ExplorerFilters` (the shell's `facets` slot). What is
  * left here is how the graph is viewed:
  *
- *   - expanded and medium: Fit, Reset, List view and the count, inline;
+ *   - expanded and medium: Layout (GIC-07), Fit, Reset, List view and the count, inline;
  *   - compact (phone): the title, the "Select" toggle (touch), the count and one
- *     overflow menu (Fit, Reset, List view), so the bar never wraps.
+ *     overflow menu (Fit, Reset, List view, and the layout choices), so the bar never wraps.
  *
  * "Select" is the touch replacement for shift-click and lasso: with it on, a
  * tap marks a node instead of previewing or opening it.
@@ -22,6 +22,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
+import Divider from '@mui/material/Divider';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
@@ -32,6 +33,7 @@ import Typography from '@mui/material/Typography';
 import { useState, type ReactNode } from 'react';
 
 import { EXPLORER_NODE_CAP } from './explorerModel.js';
+import { LayoutMenu, layoutMenuItems, type LayoutMenuProps } from './LayoutMenu.js';
 import type { InputModality } from './shell/useInputModality.js';
 import type { WindowClass } from './shell/useWindowClass.js';
 
@@ -60,6 +62,8 @@ export interface ExplorerToolbarProps {
   /** Nodes marked in Select mode. */
   markedCount: number;
   onClearMarked: () => void;
+  /** The layout control (GIC-07): inline when roomy, inside the overflow menu on a phone. Omitted: none. */
+  layoutControl?: Omit<LayoutMenuProps, 'disabled'>;
   disabled?: boolean;
 }
 
@@ -84,6 +88,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     onToggleSelectMode,
     markedCount,
     onClearMarked,
+    layoutControl,
     disabled,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -181,10 +186,15 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
               </ListItemIcon>
               <ListItemText>{listView ? 'Graph view' : 'List view'}</ListItemText>
             </MenuItem>
+            {layoutControl && !listView && [
+              <Divider key="layout-top" />,
+              ...layoutMenuItems(layoutControl, () => setMenuAnchor(null)),
+            ]}
           </Menu>
         </>
       ) : (
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          {layoutControl && <LayoutMenu {...layoutControl} disabled={listView} />}
           <Button size="small" startIcon={<CenterFocusStrongIcon />} onClick={onFit} disabled={listView}>
             Fit
           </Button>
