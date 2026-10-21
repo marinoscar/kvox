@@ -61,6 +61,12 @@ describe('brandMarkPng', () => {
     expect(img.px(Math.round(4.8 * scale), Math.round(10 * scale))).toEqual([255, 255, 255, 255]);
   });
 
+  it('rasterises a fresh size quickly (timing guard)', () => {
+    const started = Date.now();
+    brandMarkPng(255);
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+
   it('rejects a bad size', () => {
     expect(() => brandMarkPng(0)).toThrow(RangeError);
   });

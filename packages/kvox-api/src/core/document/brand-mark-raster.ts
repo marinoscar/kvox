@@ -7,8 +7,9 @@
 // geometry (`@marinoscar/kvox-contract/brand`) with no image dependency, in the
 // same zero-dependency spirit as `apps/api/scripts/make-email-logo.mjs`:
 //
-//   * each shape is a signed-distance field (rounded rectangle, capsule), so the
-//     edge is exact at any size;
+//   * each shape is a signed-distance field (rounded rectangle, capsule) with a
+//     precomputed bounding box, so the edge is exact at any size and most
+//     samples are rejected cheaply;
 //   * 4x4 supersampling gives the antialiasing;
 //   * shapes are painted in the order of `BrandMark.tsx` (plate, white K, amber
 //     bars) over a transparent background, so the plate's corners stay clear;
@@ -35,8 +36,34 @@ import {
 const SUPERSAMPLE = 4;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
-type Shape = (x: number, y: number) => boolean;
 type Rgb = readonly [number, number, number];
+
+/** A rounded rectangle, with its bounding box precomputed. */
+interface RectShape {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly cx: number;
+  readonly cy: number;
+  readonly ix: number; // half-width minus corner radius
+  readonly iy: number;
+  readonly rad: number;
+}
+
+/** A capsule (the round-capped stroke of a segment), with its bounding box precomputed. */
+interface CapsuleShape {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly x1: number;
+  readonly y1: number;
+  readonly dx: number;
+  readonly dy: number;
+  readonly len2: number;
+  readonly r2: number;
+}
 
 function rgb(hex: string): Rgb {
   const h = hex.replace('#', '');
@@ -44,30 +71,55 @@ function rgb(hex: string): Rgb {
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as unknown as Rgb;
 }
 
-/** Signed distance to a rounded rectangle (negative inside). */
-function roundedRectShape(r: MarkRect): Shape {
+function roundedRect(r: MarkRect): RectShape {
   const hx = r.width / 2;
   const hy = r.height / 2;
-  const cx = r.x + hx;
-  const cy = r.y + hy;
   const rad = Math.min(r.rx, hx, hy);
-  return (x, y) => {
-    const qx = Math.abs(x - cx) - (hx - rad);
-    const qy = Math.abs(y - cy) - (hy - rad);
-    const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;
-    return d <= 0;
+  return {
+    minX: r.x,
+    minY: r.y,
+    maxX: r.x + r.width,
+    maxY: r.y + r.height,
+    cx: r.x + hx,
+    cy: r.y + hy,
+    ix: hx - rad,
+    iy: hy - rad,
+    rad,
   };
 }
 
-/** A capsule: the round-capped stroke of a segment. */
-function capsuleShape(x1: number, y1: number, x2: number, y2: number, radius: number): Shape {
+function capsule(x1: number, y1: number, x2: number, y2: number, radius: number): CapsuleShape {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const len2 = dx * dx + dy * dy;
-  return (x, y) => {
-    const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((x - x1) * dx + (y - y1) * dy) / len2));
-    return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)) <= radius;
+  return {
+    minX: Math.min(x1, x2) - radius,
+    minY: Math.min(y1, y2) - radius,
+    maxX: Math.max(x1, x2) + radius,
+    maxY: Math.max(y1, y2) + radius,
+    x1,
+    y1,
+    dx,
+    dy,
+    len2: dx * dx + dy * dy,
+    r2: radius * radius,
   };
+}
+
+/** Inside a rounded rectangle (signed distance at most 0), without a square root. */
+function inRect(s: RectShape, x: number, y: number): boolean {
+  if (x < s.minX || x > s.maxX || y < s.minY || y > s.maxY) return false;
+  const qx = Math.abs(x - s.cx) - s.ix;
+  const qy = Math.abs(y - s.cy) - s.iy;
+  if (qx > 0 && qy > 0) return qx * qx + qy * qy <= s.rad * s.rad;
+  return (qx > qy ? qx : qy) <= s.rad;
+}
+
+function inCapsule(s: CapsuleShape, x: number, y: number): boolean {
+  if (x < s.minX || x > s.maxX || y < s.minY || y > s.maxY) return false;
+  const t = s.len2 === 0 ? 0 : Math.min(1, Math.max(0, ((x - s.x1) * s.dx + (y - s.y1) * s.dy) / s.len2));
+  const ex = x - (s.x1 + t * s.dx);
+  const ey = y - (s.y1 + t * s.dy);
+  return ex * ex + ey * ey <= s.r2;
 }
 
 const CRC_TABLE = (() => {
@@ -132,17 +184,21 @@ export function brandMarkPng(sizePx = 256): Buffer {
   const hit = cache.get(sizePx);
   if (hit) return hit;
 
-  const plate = roundedRectShape({ x: 0, y: 0, width: MARK_CANVAS, height: MARK_CANVAS, rx: MARK_PLATE_RADIUS });
-  const ink: Shape[] = [
-    roundedRectShape(MARK_STEM),
-    ...MARK_ARMS.map((a) => capsuleShape(a.x1, a.y1, a.x2, a.y2, MARK_STROKE / 2)),
-  ];
-  const bars = MARK_BARS.map(roundedRectShape);
-  const layers: { color: Rgb; shapes: readonly Shape[] }[] = [
-    { color: rgb(KVOX_IDENTITY.themeColor), shapes: [plate] },
-    { color: rgb(MARK_INK), shapes: ink },
-    { color: rgb(MARK_ACCENT), shapes: bars },
-  ];
+  const plate = roundedRect({ x: 0, y: 0, width: MARK_CANVAS, height: MARK_CANVAS, rx: MARK_PLATE_RADIUS });
+  const stem = roundedRect(MARK_STEM);
+  const arms = MARK_ARMS.map((a) => capsule(a.x1, a.y1, a.x2, a.y2, MARK_STROKE / 2));
+  const bars = MARK_BARS.map(roundedRect);
+  const plateRgb = rgb(KVOX_IDENTITY.themeColor);
+  const inkRgb = rgb(MARK_INK);
+  const accentRgb = rgb(MARK_ACCENT);
+
+  // Topmost painted colour at (x, y): accent bars, then the ink, then the plate.
+  const hitColor = (x: number, y: number): Rgb | null => {
+    for (let i = 0; i < bars.length; i += 1) if (inRect(bars[i]!, x, y)) return accentRgb;
+    if (inRect(stem, x, y)) return inkRgb;
+    for (let i = 0; i < arms.length; i += 1) if (inCapsule(arms[i]!, x, y)) return inkRgb;
+    return inRect(plate, x, y) ? plateRgb : null;
+  };
 
   const scale = MARK_CANVAS / sizePx;
   const samples = SUPERSAMPLE * SUPERSAMPLE;
@@ -158,8 +214,7 @@ export function brandMarkPng(sizePx = 256): Buffer {
         for (let sx = 0; sx < SUPERSAMPLE; sx += 1) {
           const x = (px + (sx + 0.5) / SUPERSAMPLE) * scale;
           const y = (py + (sy + 0.5) / SUPERSAMPLE) * scale;
-          let color: Rgb | null = null;
-          for (const layer of layers) if (layer.shapes.some((s) => s(x, y))) color = layer.color;
+          const color = hitColor(x, y);
           if (color) {
             r += color[0];
             g += color[1];
