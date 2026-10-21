@@ -28,4 +28,4 @@ None.
 
 ### Desktop
 
-Pure; usable offline. Desktop passes Copilot as `primary` and, when the user saved an OpenAI key, OpenAI as `fallback`, and persists `taskModels`.
+Pure; usable offline. Desktop passes Copilot as `primary` (`toolCalling: true` since the adapter bridges tool steps, #654, unless the chosen model's live listing says it cannot call tools; `embeddings: false`) and, when the user saved an OpenAI key, OpenAI as `fallback`, and persists `taskModels`. With that, only the two embedding tasks go to the fallback.

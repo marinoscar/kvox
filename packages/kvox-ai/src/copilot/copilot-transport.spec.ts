@@ -170,6 +170,29 @@ describe('createSdkCopilotTransport over a stand-in SDK', () => {
     expect(client.deleteSession).toHaveBeenCalledWith('sdk-session-1');
   });
 
+  it('hands the request own tools to the SDK as custom tools, with a source-qualified allowlist and their handlers', async () => {
+    const handler = jest.fn(async () => 'output');
+    const config = copilotSessionConfig({
+      model: 'm',
+      instructions: 'S',
+      workingDirectory: '/tmp/empty',
+      tools: [{ name: 'lookup', description: 'Looks up.', parameters: { type: 'object', properties: {} }, skipPermission: true, defer: 'never', overridesBuiltInTool: true, handler }],
+    });
+
+    await load().createSdkCopilotTransport(OPTIONS).createSession(config);
+
+    const sent = client.createSession.mock.calls[0][0] as typeof config;
+    expect(sent.availableTools).toEqual(['custom:lookup']);
+    expect(sent.tools).toEqual([
+      expect.objectContaining({ name: 'lookup', description: 'Looks up.', skipPermission: true, overridesBuiltInTool: true }),
+    ]);
+    await expect(sent.tools?.[0].handler({}, { toolCallId: 't', toolName: 'lookup' })).resolves.toBe('output');
+    expect(sent.onPermissionRequest({ kind: 'custom-tool', toolName: 'lookup' })).toEqual({ kind: 'approve-once' });
+    expect(sent.onPermissionRequest({ kind: 'shell' })).toEqual({ kind: 'reject' });
+    // A call without tools still carries none.
+    expect(copilotSessionConfig({ model: 'm', instructions: '', workingDirectory: '/x' })).not.toHaveProperty('tools');
+  });
+
   it('reads the tool names for the tripwire after building the list: empty, named and null', async () => {
     const handle = await load().createSdkCopilotTransport(OPTIONS).createSession(
       copilotSessionConfig({ model: 'm', instructions: '', workingDirectory: '/tmp/empty' }),
