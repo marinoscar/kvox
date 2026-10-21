@@ -21,7 +21,11 @@ import { createPositionTweener, type PositionTweener } from './tween.js';
 
 type AnyGraph = MultiDirectedGraph | UndirectedGraph;
 
-/** The layouts the canvas offers. */
+/**
+ * The layouts the canvas offers.
+ *
+ * @stability experimental
+ */
 export type CanvasLayout = 'forceatlas' | 'concentric' | 'static';
 
 /** Inputs of the hook. */
