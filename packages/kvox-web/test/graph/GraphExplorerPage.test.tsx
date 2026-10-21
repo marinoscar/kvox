@@ -85,7 +85,12 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
             type="button"
             data-selected={props.selectedId === id}
             data-marked={props.markedIds?.has(id) ?? false}
-            onClick={() => props.onNodeClick(id)}
+            // Like the real canvas: activating a "+N more" stub expands it.
+            onClick={() =>
+              props.graph.getNodeAttribute(id, 'isStub') === true
+                ? props.onNodeDoubleClick(id)
+                : props.onNodeClick(id)
+            }
             onDoubleClick={() => props.onNodeDoubleClick(id)}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -408,6 +413,18 @@ describe('GraphExplorerPage — the 300-node cap', () => {
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
 
+    // An open shows the best 30 neighbours and one "+N more" stub, not the cap's worth;
+    // the stub is not a node, so the count is Joe plus 30 and there is no warning yet.
+    expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
+    expect(screen.queryByText(CAP_WARNING_TEXT)).not.toBeInTheDocument();
+
+    // Expanding the stub, again and again, reaches the cap.
+    for (let i = 0; i < 10; i += 1) {
+      await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
+      // Each expansion shows 30 more, until the cap stops it at 300.
+      await screen.findByLabelText(`${Math.min(300, 31 + 30 * (i + 1))} of 300 nodes`);
+    }
+
     expect(await screen.findByText(CAP_WARNING_TEXT)).toBeInTheDocument();
     expect(screen.getByLabelText('300 of 300 nodes')).toBeInTheDocument();
 
@@ -429,20 +446,38 @@ describe('GraphExplorerPage — filters and time', () => {
     const canvas = await canvasReady();
     expect(within(canvas).getByRole('button', { name: 'Q3 planning' })).toBeInTheDocument();
 
-    await user.click(await screen.findByRole('button', { name: 'Meetings', pressed: true }));
+    // Two controls toggle a type (the filter chip and the legend row); the chip is the one in the filters.
+    const chip = (pressed: boolean) =>
+      screen.getAllByRole('button', { name: 'Meetings', pressed }).find((el) => el.classList.contains('MuiChip-root'))!;
+    await screen.findAllByRole('button', { name: 'Meetings', pressed: true });
+    await user.click(chip(true));
     await waitFor(() =>
       expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument(),
     );
     const shown = currentUrl().searchParams.get('types')?.split(',') ?? [];
     expect(shown).not.toContain('Meeting');
     expect(shown).toContain('Person');
-    expect(screen.getByRole('button', { name: 'Meetings', pressed: false })).toBeInTheDocument();
+    expect(chip(false)).toBeInTheDocument();
 
     await user.click(within(canvas).getByRole('button', { name: 'Ana Diaz' }));
     await user.click(await screen.findByRole('button', { name: 'Expand' }));
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1].types).not.toContain('Meeting');
     expect(bodies[1].types).toContain('Person');
+  });
+
+  it('places the legend in the facets and a legend row toggles the same ?types= parameter', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    const legend = await screen.findByRole('region', { name: 'Legend' });
+    expect(within(legend).getByRole('button', { name: 'Meetings', pressed: true })).toBeInTheDocument();
+
+    await user.click(within(legend).getByRole('button', { name: 'Meetings', pressed: true }));
+    await waitFor(() => expect(currentUrl().searchParams.get('types')?.split(',') ?? []).not.toContain('Meeting'));
+    expect(within(canvas).queryByRole('button', { name: 'Q3 planning' })).not.toBeInTheDocument();
+    // Hidden, it stays in the legend so it can be turned back on.
+    expect(within(screen.getByRole('region', { name: 'Legend' })).getByRole('button', { name: 'Meetings', pressed: false })).toBeInTheDocument();
   });
 
   it('sends ?types= with the very first request', async () => {
@@ -764,29 +799,46 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
   });
 });
 
+/**
+ * An open shows the best 30 neighbours and a "+N more" stub (#667); expanding that stub shows 30 more.
+ * Do it `times` times, waiting for each count, so the graph reaches (or stops at) `cap` real nodes.
+ */
+async function expandStubTimes(user: ReturnType<typeof userEvent.setup>, canvas: HTMLElement, times: number, cap: number) {
+  for (let i = 0; i < times; i += 1) {
+    await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
+    await screen.findByLabelText(`${Math.min(cap, 31 + 30 * (i + 1))} of ${cap} nodes`);
+  }
+}
+
 describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
   it('a coarse pointer caps the graph at 120 nodes, asks for 120 and names it in the CapWarning', async () => {
     mockTouchInput();
     useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    // The DOI truncation reads the budget's cap (120), not a hardcoded 300.
+    expect(await screen.findByLabelText('31 of 120 nodes')).toBeInTheDocument();
+    expect(bodies[0]?.cap).toBe(120);
 
+    await expandStubTimes(user, canvas, 4, 120);
     expect(await screen.findByText(/^Showing 120 nodes/)).toBeInTheDocument();
     expect(screen.queryByText(CAP_WARNING_TEXT)).not.toBeInTheDocument();
     expect(screen.getByLabelText('120 of 120 nodes')).toBeInTheDocument();
-    expect(bodies.at(-1)?.cap).toBe(120);
     expect(canvas).toHaveAttribute('data-pixel-ratio-cap', '2');
   });
 
   it('a compact window caps at 120 even with a mouse', async () => {
     act(() => setViewportWidth(390));
     useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+    const user = userEvent.setup();
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    expect(bodies[0]?.cap).toBe(120);
+    await expandStubTimes(user, canvas, 4, 120);
     expect(await screen.findByText(/^Showing 120 nodes/)).toBeInTheDocument();
-    expect(bodies.at(-1)?.cap).toBe(120);
   });
 
   it('keeps 300 on a roomy window with a precise pointer', async () => {
@@ -794,8 +846,8 @@ describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
-    expect(await screen.findByText(CAP_WARNING_TEXT)).toBeInTheDocument();
-    expect(bodies.at(-1)?.cap).toBe(300);
+    expect(await screen.findByLabelText('31 of 300 nodes')).toBeInTheDocument();
+    expect(bodies[0]?.cap).toBe(300);
     expect(canvas).toHaveAttribute('data-pixel-ratio-cap', '');
   });
 
@@ -805,8 +857,10 @@ describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
     renderExplorer();
     const canvas = await screen.findByTestId('fake-canvas');
     await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    // 31 nodes, then three stub expansions: 121 real nodes, one over the compact budget.
+    await expandStubTimes(user, canvas, 3, 300);
 
-    // Narrowing the window (a rotation, a resize) keeps the 201 nodes: the list is now the default.
+    // Narrowing the window (a rotation, a resize) keeps the 121 nodes: the list is now the default.
     act(() => setViewportWidth(390));
     expect(await screen.findByRole('region', { name: 'Graph as a list' })).toBeInTheDocument();
     expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();

@@ -96,6 +96,7 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   '@marinoscar/kvox-web:graph/ui/components/NeighborhoodWidget.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/EntityHeader.tsx': WHY.graph,
   '@marinoscar/kvox-web:graph/ui/components/selection/GraphSelectionAdd.tsx': WHY.graph,
+  '@marinoscar/kvox-web:graph/ui/components/explorer/GraphCanvas.tsx': WHY.graph,
 
   'components/datatable/desktop/DesktopGridRenderer.tsx': WHY.datatable,
   'components/datatable/useContainerLayout.ts': WHY.datatable,

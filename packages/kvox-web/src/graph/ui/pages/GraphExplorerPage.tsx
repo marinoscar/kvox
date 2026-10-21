@@ -77,6 +77,7 @@ import {
   ExplorerSidePanel,
   type ExplorerSelection,
 } from '../components/explorer/ExplorerSidePanel.js';
+import { GraphLegend } from '../components/explorer/GraphLegend.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
@@ -96,6 +97,8 @@ import {
 } from '../../headless/utils/explorerFilters.js';
 import {
   keyboardOrder,
+  legendModel,
+  realNodeCount,
   remainingCapacity,
   toListModel,
   visibleNodeIds,
@@ -304,7 +307,8 @@ export function GraphExplorerPage() {
     [state, version],
   );
   const atCap = remainingCapacity(state) === 0;
-  const nodeCount = graph.order;
+  // Real nodes: a "+N more" stub is not one, and is outside the cap.
+  const nodeCount = realNodeCount(state);
   // A phone offers the list as the default for a graph too big to read; `view=graph` overrides it.
   const autoList = viewParam === null && webgl && nodeCount > budgets.listViewDefaultAbove;
   const listView = !webgl || viewParam === 'list' || autoList;
@@ -726,22 +730,39 @@ export function GraphExplorerPage() {
     </Box>
   );
 
+  // What the colours and pictograms mean, and a second way to toggle a type (the same `types` URL
+  // parameter as the chips). `version` and the hidden sets are the dependencies: the state is mutated in place.
+  const legend = useMemo(
+    () => legendModel(state, nodeTypes, relationTypes, theme.palette.mode),
+    [state, version, nodeTypes, relationTypes, hiddenTypesKey, hiddenRelations, theme.palette.mode],
+  );
+
   const facets = loadingFacets ? (
     <ExplorerFiltersSkeleton />
   ) : (
-    <ExplorerFilters
-      domains={domains}
-      nodeTypes={nodeTypes}
-      relationTypes={relationTypes}
-      hiddenTypes={hiddenTypes}
-      hiddenRelationTypes={hiddenRelations}
-      onToggleType={onToggleType}
-      onToggleDomain={onToggleDomain}
-      onToggleRelationType={onToggleRelationType}
-      asOf={asOf}
-      asOfMin={asOfMin}
-      onAsOfChange={onAsOfChange}
-    />
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <ExplorerFilters
+        domains={domains}
+        nodeTypes={nodeTypes}
+        relationTypes={relationTypes}
+        hiddenTypes={hiddenTypes}
+        hiddenRelationTypes={hiddenRelations}
+        onToggleType={onToggleType}
+        onToggleDomain={onToggleDomain}
+        onToggleRelationType={onToggleRelationType}
+        asOf={asOf}
+        asOfMin={asOfMin}
+        onAsOfChange={onAsOfChange}
+      />
+      {hasGraph && (
+        <GraphLegend
+          model={legend}
+          mode={theme.palette.mode}
+          onToggleType={onToggleType}
+          onToggleRelation={onToggleRelationType}
+        />
+      )}
+    </Box>
   );
 
   const markedVisible = useMemo(

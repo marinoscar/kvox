@@ -40,7 +40,11 @@ export function StubGraphCanvas(props: GraphCanvasProps): ReactElement {
         key: id,
         type: 'button',
         'data-selected': String(props.selectedId === id),
-        onClick: () => props.onNodeClick(id),
+        // Like the real canvas, activating a "+N more" stub expands it instead of selecting it.
+        onClick: () =>
+          props.graph.getNodeAttribute(id, 'isStub') === true
+            ? props.onNodeDoubleClick(id)
+            : props.onNodeClick(id),
         onDoubleClick: () => props.onNodeDoubleClick(id),
       },
       String(props.graph.getNodeAttribute(id, 'label')),

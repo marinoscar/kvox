@@ -1283,6 +1283,42 @@ export function manyNodesSlice(seedId: string, count: number, offset = 5000): Gr
   return { seedIds: [seedId], asOf: '2026-09-26T00:00:00.000Z', nodes, edges, truncated: false, cap: 300 };
 }
 
+/** The neighbours of the hub, by type: 200 in all (#667's DOI and "+N more" fixtures). */
+export const HUB_COUNTS: Readonly<Record<string, number>> = { Person: 120, Organization: 50, Meeting: 30 };
+
+/**
+ * A 200-neighbour hub around `seedId`, answering like `POST /graph/explore/expand`:
+ * it honours `types` and `cap`, so a stub's expansion (`types: [type]`) returns
+ * only that type. Degrees vary (1 to 9) so degree-of-interest ranking has
+ * something to rank; ids are stable across calls.
+ */
+export function hubFixture(req: ExpandFixtureRequest, counts: Readonly<Record<string, number>> = HUB_COUNTS): GraphSlice | null {
+  const seedId = req.nodeIds[0];
+  const seed = explorerFixtureNodes.find((n) => n.id === seedId);
+  if (!seed) return null;
+  const nodes: GraphSlice['nodes'] = [{ ...seed, depth: 0, degree: 200 }];
+  const edges: GraphEdge[] = [];
+  let offset = 30_000;
+  for (const [type, count] of Object.entries(counts)) {
+    for (let i = 0; i < count; i += 1) {
+      const id = gid(offset + i);
+      if (req.types && !req.types.includes(type)) continue;
+      nodes.push({ id, nodeKind: 'entity', type, label: `${type} ${i + 1}`, depth: 1, degree: 1 + (i % 9), status: null, occurredAt: null });
+      edges.push({ id: gid(offset + 50_000 + i), type: 'WORKS_FOR', source: id, target: seedId, valid: null, confidence: 0.8, virtual: false });
+    }
+    offset += 1000;
+  }
+  const cap = req.cap ?? 300;
+  return {
+    seedIds: [seedId],
+    asOf: '2026-09-26T00:00:00.000Z',
+    nodes: nodes.slice(0, cap),
+    edges: edges.filter((e) => nodes.slice(0, cap).some((n) => n.id === e.source)),
+    truncated: nodes.length > cap,
+    cap,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Whole-graph overview (#375, against #371's `GET /api/graph/overview`)
 // ---------------------------------------------------------------------------

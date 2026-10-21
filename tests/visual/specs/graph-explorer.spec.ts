@@ -28,18 +28,23 @@ test.use({ launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-s
 
 const PHONE = { width: 390, height: 844 };
 const TABLET = { width: 820, height: 1180 };
+const LAPTOP = { width: 1180, height: 800 };
 const DESKTOP = { width: 1440, height: 900 };
 
+// WIDTHS[0] and WIDTHS[3] are the phone and desktop the other tests in this file use.
 const WIDTHS = [
   ['phone-390', PHONE],
   ['tablet-820', TABLET],
+  ['laptop-1180', LAPTOP],
   ['desktop-1440', DESKTOP],
 ] as const;
 
+const THEMES = ['light', 'dark'] as const;
+
 const EXPLORE = `/graph/explore?seed=${JOE_ID}&layout=static`;
 
-async function openExplorer(page: Page, route = EXPLORE) {
-  await page.goto(harnessUrl({ route, perms: GRAPH_PERMS }));
+async function openExplorer(page: Page, route = EXPLORE, theme: 'light' | 'dark' = 'dark') {
+  await page.goto(harnessUrl({ route, perms: GRAPH_PERMS, theme }));
   await waitForInter(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Explore' })).toBeVisible();
 }
@@ -58,16 +63,21 @@ async function canvasReady(page: Page, count: number, cap?: number) {
 }
 
 test.describe('Graph explorer', () => {
+  // #667: the visual language (type colour and pictogram, size, curved parallel
+  // edges: Joe to Acme is both WORKS_FOR and HAS_ROLE) at the four widths, in
+  // both themes.
   for (const [name, viewport] of WIDTHS) {
-    test(`explorer @ ${name}`, async ({ page }) => {
-      await installGraphApi(page, { surface: 'pages' });
-      await page.setViewportSize(viewport);
-      await openExplorer(page);
-      // Joe plus his five neighbours.
-      await canvasReady(page, 6);
+    for (const theme of THEMES) {
+      test(`explorer @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openExplorer(page, EXPLORE, theme);
+        // Joe plus his five neighbours.
+        await canvasReady(page, 6);
 
-      await expect(page).toHaveScreenshot(`graph-explorer-${name}.png`);
-    });
+        await expect(page).toHaveScreenshot(`graph-explorer-${name}-${theme}.png`);
+      });
+    }
   }
 
   test('one node expanded, side panel open @ desktop-1440', async ({ page }) => {
@@ -112,7 +122,7 @@ test.describe('Graph explorer', () => {
     await expect(page).toHaveScreenshot('graph-explorer-capped-desktop-1440.png');
   });
 
-  for (const [name, viewport] of [WIDTHS[0], WIDTHS[2]] as const) {
+  for (const [name, viewport] of [WIDTHS[0], WIDTHS[3]] as const) {
     test(`list view @ ${name}`, async ({ page }) => {
       await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
@@ -136,7 +146,7 @@ test.describe('Graph explorer', () => {
 });
 
 test.describe('Entity page — Neighbourhood widget', () => {
-  for (const [name, viewport] of [WIDTHS[0], WIDTHS[2]] as const) {
+  for (const [name, viewport] of [WIDTHS[0], WIDTHS[3]] as const) {
     test(`neighbourhood widget @ ${name}`, async ({ page }) => {
       await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
