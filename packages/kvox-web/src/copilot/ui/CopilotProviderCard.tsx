@@ -13,6 +13,7 @@ import {
 
 import {
   COPILOT_CONSENT_COPY,
+  COPILOT_PROVIDER_COPY,
   COPILOT_RUNTIME_SIZE_TEXT,
   buildCopilotCapabilities,
   copilotSignInReasonText,
@@ -57,16 +58,36 @@ export interface CopilotProviderCardProps {
   onCancelRuntimeDownload?(): void;
   /** The runtime download size to state, such as `'151 MB'`; the default is an approximation. */
   runtimeDownloadSize?: string;
+  /**
+   * The host's choice of provider. When defined, the card renders no enable switch (the host
+   * offers the choice, for example one provider among several) and is on exactly while
+   * `selected` is true. While `selected` is true and the consent is not current, the card shows
+   * the consent dialog; accepting it still calls `onUpdate` with `enabled: true` and the
+   * consent fields, and Withdraw consent still calls `onUpdate` with `enabled: false` and the
+   * consent fields cleared, for the host to map. Undefined (the default): the card renders its
+   * own switch.
+   */
+  selected?: boolean;
+  /**
+   * What the consent dialog's Not now does when `selected` is defined, for example going back
+   * to the previous provider. Without it, Not now is hidden in that mode. Ignored while
+   * `selected` is undefined (Not now then turns the switch off).
+   */
+  onDecline?(): void | Promise<void>;
 }
 
 const MAX_TIMER_MS = 2_147_483_647;
 
-const PROVIDER = {
-  id: 'copilot',
-  displayName: 'GitHub Copilot',
-  description:
-    'Run notes, knowledge extraction and name checks on your own GitHub Copilot subscription. Opt-in; off until you turn it on.',
-} as const;
+const PROVIDER_ID = 'copilot';
+
+/**
+ * The model the host runs: the saved pick while it is offered, else the first offered model
+ * (the hosts' default), else none.
+ */
+function effectiveModel(saved: string | null, models: CopilotStatus['models']): string | null {
+  if (saved !== null && models.some((m) => m.id === saved)) return saved;
+  return models[0]?.id ?? null;
+}
 
 function asError(error: unknown, fallback: string): Error {
   return new Error(copilotSignInReasonText(error) ?? aiErrorText(error, fallback));
@@ -88,7 +109,9 @@ interface Flow {
  * calls `onUpdate({ enabled: true, consentedAt, consentVersion })`. An enabled
  * setting whose `consentVersion` differs from `COPILOT_CONSENT_VERSION` shows
  * the consent again. Turning the switch off calls `onUpdate({ enabled: false })`
- * and the card hides the status and the models.
+ * and the card hides the status and the models. With `selected` defined the
+ * host owns the choice: the card has no switch, is on while `selected` is true,
+ * and Not now calls `onDecline`.
  *
  * @stability experimental
  */
@@ -104,8 +127,12 @@ export function CopilotProviderCard({
   onDownloadRuntime,
   onCancelRuntimeDownload,
   runtimeDownloadSize,
+  selected,
+  onDecline,
 }: CopilotProviderCardProps) {
   const consented = hasCopilotConsent(settings);
+  // The host offers the choice of provider: no switch, and `selected` decides whether the card is on.
+  const hostSelects = selected !== undefined;
   // The user flipped the switch on but has not accepted the consent yet. Nothing is saved.
   const [pendingEnable, setPendingEnable] = useState(false);
   const [flow, setFlow] = useState<Flow | null>(null);
@@ -125,6 +152,12 @@ export function CopilotProviderCard({
     [],
   );
 
+  const provider = {
+    id: PROVIDER_ID,
+    displayName: COPILOT_PROVIDER_COPY.displayName,
+    // With the host offering the choice there is no switch, so the switch wording is dropped.
+    description: hostSelects ? COPILOT_PROVIDER_COPY.selectedDescription : COPILOT_PROVIDER_COPY.description,
+  };
   const sizeText = runtimeDownloadSize ?? COPILOT_RUNTIME_SIZE_TEXT;
   const signInUnavailable = copilotSignInUnavailableReason(status.runtime, sizeText);
   const open = useCallback((url: string) => openExternalUrl(url, onOpenExternal), [onOpenExternal]);
@@ -183,6 +216,14 @@ export function CopilotProviderCard({
     setFlow(null);
   };
 
+  // The host chose another provider: stop any sign-in in progress.
+  useEffect(() => {
+    if (selected === false) {
+      controller.current?.abort();
+      setFlow(null);
+    }
+  }, [selected]);
+
   const restartSignIn = () => {
     setRestartError(null);
     setFlow(null);
@@ -224,27 +265,31 @@ export function CopilotProviderCard({
   return (
     <>
       <AccountSignInProviderCard
-        provider={PROVIDER}
-        enabled={settings.enabled || pendingEnable}
-        onEnabledChange={async (next) => {
-          if (next) {
-            if (consented) await onUpdate({ enabled: true });
-            else setPendingEnable(true);
-            return;
-          }
-          // "Not now" on a first consent only closes the dialog; nothing was saved.
-          if (!settings.enabled) {
-            setPendingEnable(false);
-            return;
-          }
-          cancelSignIn();
-          await onUpdate({ enabled: false });
-        }}
+        provider={provider}
+        enabled={hostSelects ? selected : settings.enabled || pendingEnable}
+        onEnabledChange={
+          hostSelects
+            ? undefined
+            : async (next) => {
+                if (next) {
+                  if (consented) await onUpdate({ enabled: true });
+                  else setPendingEnable(true);
+                  return;
+                }
+                // "Not now" on a first consent only closes the dialog; nothing was saved.
+                if (!settings.enabled) {
+                  setPendingEnable(false);
+                  return;
+                }
+                cancelSignIn();
+                await onUpdate({ enabled: false });
+              }
+        }
         consent={{
           required: true,
           acceptedAt: consented ? settings.consentedAt : null,
           title: COPILOT_CONSENT_COPY.title,
-          acceptLabel: COPILOT_CONSENT_COPY.acceptLabel,
+          acceptLabel: hostSelects ? COPILOT_CONSENT_COPY.acceptSelectedLabel : COPILOT_CONSENT_COPY.acceptLabel,
           body: (
             <CopilotConsentBody
               showRuntimeDownload={status.runtime.state === 'missing'}
@@ -264,6 +309,12 @@ export function CopilotProviderCard({
             cancelSignIn();
             await onUpdate({ enabled: false, consentedAt: null, consentVersion: null });
           },
+          onDecline:
+            hostSelects && onDecline
+              ? async () => {
+                  await onDecline();
+                }
+              : undefined,
         }}
         status={{ signedIn: status.signedIn, login: status.login }}
         onSignIn={runSignIn}
@@ -271,7 +322,8 @@ export function CopilotProviderCard({
         onSignOut={onSignOut}
         capabilities={buildCopilotCapabilities(status)}
         models={status.models.map((m) => ({ id: m.id, label: m.label }))}
-        model={settings.model}
+        // A null or no-longer-offered pick shows the model the host actually runs.
+        model={effectiveModel(settings.model, status.models)}
         onModelChange={async (id) => {
           await onUpdate({ model: id });
         }}
