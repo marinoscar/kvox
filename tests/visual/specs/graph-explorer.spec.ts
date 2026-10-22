@@ -173,9 +173,8 @@ test.describe('Entity page — Neighbourhood widget', () => {
 // (820x1180), the SAME tablet in landscape (1180x820, still the `medium`
 // window class: 1200 is the first expanded width) and a laptop (1440x900).
 //
-// The "Start here" state of the epic does not exist yet: the empty state today
-// is the seed search, and these baselines capture it. The story that builds
-// "Start here" replaces that baseline.
+// GIC-09 (#670) adds the "Start here" entry state, the command palette and the
+// minimap: their baselines are below (`Start here`, `Command palette`, `Minimap`).
 //
 // ⚠ Every baseline below is new and must be generated in the pinned Playwright
 // image (`.github/workflows/visual-baselines.yml`). The behavioural tests (touch
@@ -213,13 +212,35 @@ async function selectAcme(page: Page) {
 test.describe('Insight Canvas shell — baselines', () => {
   for (const theme of THEMES) {
     for (const [name, viewport] of SHELL_VIEWPORTS) {
-      test(`empty state @ ${name} ${theme}`, async ({ page }) => {
-        await installGraphApi(page, { surface: 'pages', empty: true });
+      test(`start here @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages', noRecents: true });
         await page.setViewportSize(viewport);
         await openShell(page, '/graph/explore?layout=static', theme);
-        await expect(page.getByRole('combobox', { name: 'Start from a person, organization or project' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Where do you want to start?' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Themes' })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Globex/ }).first()).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Person' })).toBeVisible();
+        await expect(page.getByRole('progressbar')).toHaveCount(0);
+        // 1, 2 and 3 columns, and never a horizontal page scroll.
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-        await expect(page).toHaveScreenshot(`graph-shell-empty-${name}-${theme}.png`);
+        await expect(page).toHaveScreenshot(`graph-start-here-${name}-${theme}.png`);
+      });
+
+      test(`command palette @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await page.getByRole('button', { name: 'Search the graph' }).click();
+        const input = page.getByRole('combobox', { name: 'Search the graph and run commands' });
+        await expect(input).toBeFocused();
+        await input.fill('a');
+        await expect(page.getByRole('group', { name: 'On canvas' })).toBeVisible();
+        await expect(page.getByRole('group', { name: 'Actions' })).toBeVisible();
+        await page.waitForTimeout(300);
+
+        await expect(page).toHaveScreenshot(`graph-palette-${name}-${theme}.png`);
       });
 
       test(`ego view with the inspector open @ ${name} ${theme}`, async ({ page }) => {
@@ -562,5 +583,88 @@ test.describe('Insight Canvas shell — rotation', () => {
     expect(Math.abs(after.x - before.x)).toBeLessThan(0.02);
     expect(Math.abs(after.y - before.y)).toBeLessThan(0.02);
     expect(after.ratio).toBeCloseTo(before.ratio, 3);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// GIC-09: the palette's keyboard path, and the minimap (#670)
+// -----------------------------------------------------------------------------
+
+test.describe('Command palette — behaviour', () => {
+  test('Ctrl+K opens, Escape closes and the canvas takes the focus back', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    const app = await canvasReady(page, 6);
+    await app.focus();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('combobox', { name: 'Search the graph and run commands' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('combobox', { name: 'Search the graph and run commands' })).toHaveCount(0);
+    await expect(app).toBeFocused();
+  });
+
+  test('phone: a full-screen sheet with 44px rows', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await page.getByRole('button', { name: 'Search the graph' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Search the graph and run commands' });
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box?.width).toBe(PHONE.width);
+    expect(box?.height).toBe(PHONE.height);
+    await page.getByRole('combobox', { name: 'Search the graph and run commands' }).fill('a');
+    const row = page.getByRole('option').first();
+    await expect(row).toBeVisible();
+    expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  });
+});
+
+test.describe('Minimap', () => {
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`minimap @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages', explorerCapped: true });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        const cap = viewport.width < 600 ? 120 : 300;
+        await canvasReady(page, cap);
+        const minimap = page.getByTestId('explorer-minimap');
+        if (viewport.width < 600) {
+          // Compact: never.
+          await expect(minimap).toHaveCount(0);
+        } else {
+          if (viewport.width < 1200) {
+            // Medium: optional, switched on from the top bar.
+            await expect(minimap).toHaveCount(0);
+            await page.getByRole('button', { name: 'Minimap' }).click();
+          }
+          await expect(minimap).toBeVisible();
+          await expect(minimap).toHaveAttribute('aria-hidden', 'true');
+          await expect(minimap.getByTestId('minimap-viewport')).toBeVisible();
+        }
+        await page.waitForTimeout(300);
+
+        await expect(page).toHaveScreenshot(`graph-minimap-${name}-${theme}.png`);
+      });
+    }
+  }
+
+  test('dragging the viewport rectangle pans the camera', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages', explorerCapped: true });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 300);
+    await cameraSettled(page);
+    const before = await camera(page);
+    const minimap = page.getByTestId('explorer-minimap');
+    const box = (await minimap.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => (await camera(page)).x).not.toBeCloseTo(before.x, 3);
   });
 });
