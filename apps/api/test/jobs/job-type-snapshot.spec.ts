@@ -75,6 +75,7 @@ const KVOX_JOB_TYPES = [
   'kg.graph_layout',
   'kg.entity_digest',
   'kg.migrate',
+  'kg.topics_promote',
   // ask, search, user data
   'ask.respond',
   'search.index',

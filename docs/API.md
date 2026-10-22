@@ -6261,6 +6261,36 @@ retry re-embeds nothing that is unchanged) are server-only, run on your own
 AI key, and are throttled on your own provider bucket. `kg.embed` never embeds
 a `sensitive` personal fact.
 
+#### Topics from past meetings
+
+Meetings extracted before Topics existed list their subjects only as plain
+text (issue #666, epic #661; [`ontology.md` §11](specs/ontology.md#11-job-types)).
+Both routes require `graph:write` and act only on **your own** meetings (no id
+in the path, so there is nothing to answer `404` for).
+
+##### POST /graph/topics/promote
+
+Queues `kg.topics_promote` (`{ maxRuntimeMs: 30 min, maxAttempts: 3 }`,
+server-only, on your own AI key). It matches each topic string to the Topics
+you already have, then writes **draft proposals** to review at `/graph/review`:
+one per Topic, holding the Topic (new or linked) and a "Meeting discussed Topic"
+row per meeting, each citing the meeting's own source. Nothing reaches your
+graph until you commit a proposal; running it again proposes nothing already
+proposed or already in your graph. A request while a run is pending or running
+joins it.
+
+**Response:** `202` `{ "jobId": "…", "deduplicated": false }`
+**Errors:** `401` · `403` · `409` `details.reason: "graph_disabled"` (connected
+knowledge is off for this deployment).
+
+##### GET /graph/topics/promote
+
+**Response:** `200` `{ "job": { "id", "status": "pending" | "running" |
+"succeeded" | "failed", "createdAt", "finishedAt" } | null, "proposedTopics": 0 }`
+— your latest run (`null` if you never ran it) and the topic proposals waiting
+for review, which grows while a run works.
+**Errors:** `401` · `403`.
+
 #### Proposals — review, commit, revert
 
 A **proposal** is what extraction (and `kg.resolve`, and later imports)
