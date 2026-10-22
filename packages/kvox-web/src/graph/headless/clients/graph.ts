@@ -280,6 +280,10 @@ export interface GraphEntityCounts {
   };
   /** How many of the commitments are still open. */
   openCommitments: number;
+  /** Readable relations per relation type key, both directions; feeds the explorer's Expand menu. Absent from an older API. */
+  relationsByType?: Record<string, number>;
+  /** The same relations per entity type of the entity at the other end. Absent from an older API. */
+  relationsByNeighborType?: Record<string, number>;
 }
 
 /**
@@ -1041,6 +1045,29 @@ export async function getEvidenceBatch(host: KvoxWebHost, ids: readonly string[]
     ),
   );
   return pages.flatMap((page) => page.items);
+}
+
+/**
+ * What {@link getSubjectEvidence} can be asked about.
+ *
+ * @stability experimental
+ */
+export type EvidenceSubjectKind = 'entity' | 'relation' | 'item';
+
+/**
+ * Fetches the citations that support one entity, relation or item, newest source first and at most 50 (`GET /api/graph/evidence/by-subject`). The API answers 404 for a subject that is not the caller's, and for a sensitive personal fact; callers also never ask about a person fact.
+ *
+ * @stability experimental
+ */
+export async function getSubjectEvidence(
+  host: KvoxWebHost,
+  kind: EvidenceSubjectKind,
+  id: string,
+  signal?: AbortSignal,
+): Promise<EvidenceLink[]> {
+  const query = buildGraphQuery({ kind, id });
+  const page = await kvoxGet<{ items: EvidenceLink[] }>(host, `/graph/evidence/by-subject${query}`, { signal });
+  return page.items;
 }
 
 /**

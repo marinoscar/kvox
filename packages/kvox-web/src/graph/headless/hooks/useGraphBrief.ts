@@ -57,6 +57,8 @@ export interface UseGraphBriefOptions {
   pollMaxMs?: number;
   /** Injectable clock (tests). */
   now?: () => number;
+  /** Whether the first read counts as a visit (default `true`). The explorer inspector passes `false`: selecting a node is not opening its page, so it must not move "since you last looked". */
+  markViewed?: boolean;
 }
 
 /**
@@ -91,6 +93,7 @@ export function useGraphBrief(
     pollIntervalMs = BRIEF_DIGEST_POLL_MS,
     pollMaxMs = BRIEF_DIGEST_POLL_MAX_MS,
     now = Date.now,
+    markViewed = true,
   } = options;
 
   const [data, setData] = useState<EntityBrief | null>(null);
@@ -103,14 +106,16 @@ export function useGraphBrief(
   const nextController = useAbortControllers();
   const nowRef = useRef(now);
   nowRef.current = now;
+  const markViewedRef = useRef(markViewed);
+  markViewedRef.current = markViewed;
 
   const load = useCallback(
-    async (markViewed: boolean, showLoading: boolean) => {
+    async (mark: boolean, showLoading: boolean) => {
       if (!id) return;
       const controller = nextController();
       if (showLoading) setIsLoading(true);
       try {
-        const next = await getEntityBrief(host, id, { markViewed }, controller.signal);
+        const next = await getEntityBrief(host, id, { markViewed: mark }, controller.signal);
         if (!isMounted() || controller.signal.aborted) return;
         setData(next);
         setError(null);
@@ -129,7 +134,7 @@ export function useGraphBrief(
     setError(null);
     setPollStartedAt(null);
     setPollExpired(false);
-    void load(true, true);
+    void load(markViewedRef.current, true);
   }, [load]);
 
   const pending = data?.digestPending === true;
