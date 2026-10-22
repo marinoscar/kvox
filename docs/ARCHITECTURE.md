@@ -989,7 +989,7 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   must never affect anyone else's picker, built-in included). Hiding is a listing preference
   only — it never gates create/regenerate/preview reading the template by id.
 - `kg_entities` - The Connected Knowledge graph foundation's node table — Person, Organization,
-  Project, Meeting (issue #351, epic #344), `type` a plain ontology key (#350), never a Prisma
+  Project, Meeting (issue #351, epic #344), plus Topic and Product (ontology 1.3.0), `type` a plain ontology key (#350), never a Prisma
   enum, so a new type costs zero migrations. `embedding vector(1536)` reuses `SearchEmbedding`'s
   exact model/dimension contract rather than a second convention; `merged_into_id` self-relation
   (SetNull) is set once §7's entity resolution merges this row into another. `owner_id` **Cascade**
@@ -1015,7 +1015,7 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   (`lower`/`upper`/`lower_inc`/`upper_inc`); `kg_relations_valid_gist_idx` is what makes the
   containment/overlap queries this shape exists for actually fast. No inverse row is ever stored
   (§5.2).
-- `kg_items` - `Commitment`/`Decision`/`Claim`/`PersonFact` in **one** table, distinguished by
+- `kg_items` - `Commitment`/`Decision`/`Risk`/`Claim`/`PersonFact` in **one** table, distinguished by
   `kind` (the one real Prisma enum among this graph's `type`/`kind` columns — see `kg_entities`
   above for why the others stay plain text). `meeting_id` (SetNull, backs `CREATED_IN`/
   `DECIDED_IN`), `owner_person_id`/`counterparty_id`/`subject_id` (Cascade) all point sideways
@@ -1091,7 +1091,9 @@ The domain tables below (transcripts, notes, search, the `kg_*` graph tables, As
   is a handful of rows per owner, not a growing history. `source_updated_at` is
   `max(updated_at)` over the owner's `kg_entities`/`kg_relations` at the moment the snapshot was
   computed, stamped **before** the read starts; `GET /api/graph/overview` compares it against a
-  fresh count to report `stale: true` without ever recomputing itself.
+  fresh count to report `stale: true` without ever recomputing itself. The `clusters` JSON
+  also carries the optional `connectors` array (the top 50 approximate-betweenness nodes: ids and
+  numbers only), computed by the same `kg.graph_layout` job and read by `GET /api/graph/insights`.
 - `kg_exports` - One row per requested RDF export of an owner's graph (issue #386), mirroring
   `note_exports`: `format` (`jsonld`/`turtle`/`nquads`), `status`
   (`pending`/`running`/`ready`/`failed`), **content-addressed** on `graph_fingerprint` (sha256 over the
@@ -2140,7 +2142,7 @@ holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
 gone. KVox's part is the composition and host ports in
 `apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
 `NODE_JOB_INPUTS` adapter, and `NODE_OBJECT_STORE` bound with the platform's `nodeObjectStoreBinding`), the handlers that live
-beside their features, and the 43 pinned job type strings (`kg.topics_promote`, #666, is the newest)
+beside their features, and the 43 pinned job type strings (`kg.topics_promote`, which turns past meeting topics into draft Topic proposals, is the newest; `kg.graph_layout` also computes the insight connectors)
 (`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
 [`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the
 Jobs, Job Insights and Worker Nodes admin pages are the platform's, and the
