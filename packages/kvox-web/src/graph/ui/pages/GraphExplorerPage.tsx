@@ -130,6 +130,8 @@ import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
 import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
 import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
+import { ConnectNotesNotice, ConnectResults, FindConnectionsButton } from '../components/explorer/connect/ConnectResults.js';
+import { summarySentence } from '../components/explorer/connect/connectModel.js';
 import { ExplorerMinimap } from '../components/explorer/ExplorerMinimap.js';
 import {
   ExplorerCommandPalette,
@@ -167,8 +169,9 @@ import { isWebGLAvailable } from '../components/explorer/webgl.js';
 import { GRAPH_NOT_FOUND_MESSAGE } from '../../headless/hooks/graphHookUtils.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
 import { useGraphExplorer, type ExpandOnly } from '../hooks/useGraphExplorer.js';
+import { useExplorerConnect } from '../hooks/useExplorerConnect.js';
 import type { GraphEntityAskPanelProps } from './GraphEntityPage.js';
-import { getGraphEntity, listGraphEntities } from '../../headless/clients/graph.js';
+import { GRAPH_CONNECT_MAX_ENTITIES, getGraphEntity, listGraphEntities } from '../../headless/clients/graph.js';
 
 import { useKvoxHost } from '../../../core/headless/index.js';
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
@@ -268,6 +271,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const typesParam = searchParams.get('types');
   const clusterParam = searchParams.get('cluster');
   const viewParam = searchParams.get('view');
+  const connectNotesParam = searchParams.get('connectNotes');
   // `start=1`: the person asked for the Start-here state (Home); the URL's seeds are kept until they choose something.
   const startParam = searchParams.get('start') === '1';
   const webgl = useMemo(() => isWebGLAvailable(), []);
@@ -326,6 +330,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     expand,
     hide,
     makeSeed,
+    addSlice,
     mergeExternalSlice,
   } = explorer;
 
@@ -367,6 +372,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       return undefined;
     }
     if (handoff || clusterParam) return undefined;
+    // `?connectNotes=` seeds the canvas from its own answer (useExplorerConnect), not from what was viewed last.
+    if (connectNotesParam) return undefined;
 
     // A bare visit: seed from what the caller viewed most recently (§22.2).
     const controller = new AbortController();
@@ -384,7 +391,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       });
     return () => controller.abort();
     // `state` is read, not reacted to: the seeds in the URL are the trigger.
-  }, [ontologyLoading, startParam, seedKey, handoff, clusterParam, load, loadHandoff, updateParams]);
+  }, [ontologyLoading, startParam, seedKey, handoff, clusterParam, connectNotesParam, load, loadHandoff, updateParams]);
 
   // The slider starts at the earliest `firstSeenAt` among the seeds.
   const [asOfMin, setAsOfMin] = useState(fiveYearsAgo);
@@ -416,6 +423,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const [announcement, setAnnouncement] = useState('');
   const canvasControls = useRef<GraphCanvasControls | null>(null);
   const [pinnedCount, setPinnedCount] = useState(0);
+  const connectState = useExplorerConnect({
+    connectNotesParam,
+    hasSeedParam: seeds.length > 0,
+    setSeeds: (ids) => updateParams((params) => params.set('seed', ids.join(','))),
+    clearConnectNotes: () => updateParams((params) => params.delete('connectNotes')),
+    addSlice,
+    asOf,
+  });
+  const { connect } = connectState;
 
   const graph = state.graph;
   const visibleIds = useMemo(
@@ -496,15 +512,26 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   });
 
   /** A tap or click on a node, in the canvas's own words: what it MEANS depends on the input and the mode. */
+  const toggleMarked = useCallback((id: string) => {
+    setMarked((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** A lasso adds the nodes inside it to the marked ones. */
+  const onLasso = useCallback((ids: string[]) => {
+    setMarked((previous) => new Set([...previous, ...ids]));
+    setAnnouncement(ids.length === 1 ? '1 node selected' : `${ids.length} nodes selected`);
+  }, []);
+
   const onNodeActivate = useCallback(
-    (id: string) => {
-      if (selectMode) {
-        setMarked((previous) => {
-          const next = new Set(previous);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        });
+    (id: string, modifiers?: { shiftKey: boolean }) => {
+      // Select mode (a tap) and Shift (a click) both toggle membership of the selection.
+      if (selectMode || modifiers?.shiftKey) {
+        toggleMarked(id);
         return;
       }
       if (inputModality === 'touch') {
@@ -521,7 +548,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       }
       selectNode(id, inputModality === 'touch');
     },
-    [selectMode, inputModality, previewId, selected, graph, typeLabel, selectNode],
+    [selectMode, toggleMarked, inputModality, previewId, selected, graph, typeLabel, selectNode],
   );
 
   const onNodeContextMenu = useCallback(
@@ -981,6 +1008,12 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       case 'Enter':
         if (selectedNode) onExpand(selectedNode);
         break;
+      case ' ':
+        // Select mode's keyboard alternative to the lasso: Space marks or unmarks the focused node.
+        if (!selectMode || !selectedNode) return;
+        toggleMarked(selectedNode);
+        setAnnouncement(marked.has(selectedNode) ? 'Removed from the selection' : 'Added to the selection');
+        break;
       case 'o':
       case 'O':
         if (selectedNode && graph.getNodeAttribute(selectedNode, 'nodeKind') === 'entity') {
@@ -1184,6 +1217,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         {explorer.error}
       </Alert>
     );
+  } else if (connectState.earlyState && !hasGraph) {
+    earlyBody = <ConnectNotesNotice kind={connectState.earlyState} message={connect.error} />;
   }
 
   const loadingFacets = initialLoading || ontologyLoading;
@@ -1365,13 +1400,43 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   );
   // "Show on canvas" of the Connections tab rings a group's nodes with the canvas's marked rings.
   const canvasMarked = useMemo(
-    () => (revealed.size === 0 ? markedVisible : new Set([...markedVisible, ...[...revealed].filter((id) => graph.hasNode(id))])),
-    [markedVisible, revealed, graph, version],
+    () =>
+      revealed.size === 0 && connectState.ringIds.size === 0
+        ? markedVisible
+        : new Set([
+            ...markedVisible,
+            ...[...revealed, ...connectState.ringIds].filter((id) => graph.hasNode(id)),
+          ]),
+    [markedVisible, revealed, connectState.ringIds, graph, version],
   );
   const closeInspector = useCallback(() => {
     if (multi) setMarked(new Set());
     deselect();
   }, [multi, deselect]);
+  const markedEntityIds = useMemo(
+    () => [...markedVisible].filter((id) => graph.getNodeAttribute(id, 'nodeKind') === 'entity'),
+    [markedVisible, graph, version],
+  );
+  // The answer is read out once, when it arrives.
+  const connectResult = connect.result;
+  useEffect(() => {
+    if (connectResult) setAnnouncement(summarySentence(connectResult, typeLabel));
+  }, [connectResult, typeLabel]);
+  const connectResults = connectState.open ? (
+    <ConnectResults
+      result={connect.result}
+      loading={connect.isLoading}
+      error={connect.error}
+      onRetry={connectState.retry}
+      typeLabel={typeLabel}
+      touch={inputModality === 'touch'}
+      onSelectNode={(id) => {
+        if (graph.hasNode(id)) selectNode(id, true);
+      }}
+      onShowBridge={connectState.showBridge}
+      onClose={connectState.dismiss}
+    />
+  ) : null;
   const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
   const NodeActionsSlot = slots?.NodeActions;
   // The nodes whose activity the TimeBar overlays: the selection and the marked set.
@@ -1424,11 +1489,12 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
             ) : undefined
           }
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
-          inspectorOpen={!listView && (selection !== null || multi !== null || pathMode.sheetWanted)}
+          inspectorOpen={!listView && (selection !== null || multi !== null || connectResults !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
             if (!open) {
               pathMode.onSheetDismiss();
               closeInspector();
+              if (connectState.open) connectState.dismiss();
             }
           }}
           inspector={
@@ -1459,17 +1525,27 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               onClose={closeInspector}
               onShowInTimeBar={onShowInTimeBar}
               AskPanel={askAvailable}
+              selectionExtraActions={
+                <>
+                  <FindConnectionsButton
+                    entityIds={markedEntityIds}
+                    max={GRAPH_CONNECT_MAX_ENTITIES}
+                    busy={connect.isLoading}
+                    onFind={connectState.findConnections}
+                    touch={inputModality === 'touch'}
+                  />
+                  {askAvailable ? (
+                    <AskSelectionButton touch={inputModality === 'touch'} onClick={() => askAboutNodes(markedVisible)} />
+                  ) : null}
+                </>
+              }
+              connectResults={connectResults}
               extraActions={
                 selection?.kind === 'node' ? (
                   <>
                     {pathMode.pathToAction(selection.id)}
                     {NodeActionsSlot ? <NodeActionsSlot nodeId={selection.id} /> : null}
                   </>
-                ) : undefined
-              }
-              selectionExtraActions={
-                askAvailable ? (
-                  <AskSelectionButton touch={inputModality === 'touch'} onClick={() => askAboutNodes(markedVisible)} />
                 ) : undefined
               }
               edgeExtraActions={
@@ -1547,6 +1623,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       onNodeClick={onNodeActivate}
                       onNodeDoubleClick={onExpand}
                       onNodeContextMenu={onNodeContextMenu}
+                      selectTool={selectMode && inputModality === 'pointer'}
+                      onLasso={onLasso}
                       onStageClick={deselect}
                       onEdgeClick={(id) => {
                         setPreviewId(null);

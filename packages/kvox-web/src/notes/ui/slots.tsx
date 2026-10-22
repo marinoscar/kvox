@@ -133,6 +133,33 @@ export interface NotesLibrarySlots {
     /** The text in the search box. */
     query: string;
   }>;
+  /**
+   * A hook returning whether the library offers multi-select at all (the web
+   * edition: connected knowledge is on and the viewer may read it). Called on
+   * every render, so it must follow the rules of hooks. Without it, or while it
+   * returns `false`, the library has no selection mode.
+   */
+  useSelectionEnabled?: () => boolean;
+  /**
+   * The actions of the selection bar, shown while one or more notes are selected
+   * (the web edition's "Explore connections"). It decides what the selected count
+   * allows; the library only keeps the selection.
+   */
+  SelectionActions?: ComponentType<NotesLibrarySelectionActionsProps>;
+  /** The most notes the selection may hold. Default 10. */
+  selectionLimit?: number;
+}
+
+/**
+ * The props of the `SelectionActions` slot of {@link NotesLibrarySlots}.
+ *
+ * @stability experimental
+ */
+export interface NotesLibrarySelectionActionsProps {
+  /** The selected notes, in the order they were picked. */
+  noteIds: readonly string[];
+  /** Leaves selection mode and clears the selection. */
+  onDone: () => void;
 }
 
 /**

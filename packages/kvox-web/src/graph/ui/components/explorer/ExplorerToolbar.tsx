@@ -65,7 +65,7 @@ export interface ExplorerToolbarProps {
   nodeCount: number;
   /** The cap in force (the budget's); defaults to `EXPLORER_NODE_CAP`. */
   nodeCap?: number;
-  /** "Select" mode (touch): a tap marks nodes. */
+  /** "Select" mode: a tap marks nodes (touch); a drag draws a lasso (pointer). */
   selectMode: boolean;
   onToggleSelectMode: () => void;
   /** Nodes marked in Select mode. */
@@ -133,7 +133,8 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     </Typography>
   );
 
-  const selectToggle = touch && !listView && (
+  // Touch: taps mark nodes. Pointer: the Select tool (drag a lasso, or Space on the focused node).
+  const selectToggle = !listView && (
     <ToggleButton
       value="select"
       size="small"
@@ -141,7 +142,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
       aria-pressed={selectMode}
       onChange={onToggleSelectMode}
       disabled={disabled}
-      sx={{ textTransform: 'none', px: 1.25, minHeight: 44, whiteSpace: 'nowrap' }}
+      sx={{ textTransform: 'none', px: 1.25, minHeight: touch ? 44 : undefined, whiteSpace: 'nowrap' }}
     >
       <CheckBoxOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
       Select

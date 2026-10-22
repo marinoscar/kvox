@@ -6997,6 +6997,73 @@ may offer to raise `maxHops`.
 node is not one of your readable nodes (the message never says which) · `503`
 `graph_query_timeout`.
 
+##### POST /graph/connect
+
+What two or more of your notes, transcripts or entities have in common, and how
+they bridge — "what connects these notes?" (GIC-14, #675). A **read**, even
+though it is a `POST`: the id lists do not fit a query string. A synchronous
+read with the neighbourhood's 3 s budget, not a queue job.
+
+Body (all optional, but at least **two** distinct inputs in total; one note or
+transcript on its own is also accepted and answers "what this note touches"):
+
+| Field | Meaning |
+|---|---|
+| `noteIds` | up to 10 note ids |
+| `transcriptIds` | up to 10 transcript ids |
+| `entityIds` | up to 20 entity ids |
+| `as_of` | `YYYY-MM-DD` or ISO 8601 with offset; relations are evaluated at that instant |
+| `maxHops` | longest bridge path, in edges, 1–3 (default 2) |
+
+- **Inputs.** A note or transcript touches the entities of its **readable
+  mentions** (`kg_mentions` status `linked` or `new`, of readable entities; an
+  `ignored` mention does not count). An entity input touches **itself and its
+  one-hop neighbours**, so two entities share the people and projects both are
+  related to. A transcript must be one you may view (a lost share is a 404).
+- **`shared`** lists the entities touched by **two or more** inputs, ranked by
+  how many inputs (coverage), then by mention count (relation count for an
+  entity input), then by id. At most 100. No overlap is `shared: []`, not an
+  error.
+- **`paths`** are the bridges: for up to six pairs of inputs, the top path
+  (`k` = 1) between each input's strongest entity that is not already shared,
+  found by the same search as `GET /graph/paths` inside the one 3 s budget.
+  `fromInput` / `toInput` are input ids. At most six, best score first. A pair
+  that runs out of time only sets `truncated`.
+- **`slice`** holds the shared entities (seeds, at most 20, plus the entity
+  inputs) with their one-hop neighbourhood (60 nodes), merged with the nodes
+  and edges of the bridges. A lone note's slice is seeded with its own
+  strongest entities.
+- `sensitive` person facts are never included: they are items, never entities,
+  and the slice reads items with the neighbourhood's `sensitive` exclusion.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "inputs": [
+      { "kind": "note", "id": "5d27…", "title": "Company A call", "entityIds": ["0b6f…", "4a9e…"] },
+      { "kind": "note", "id": "8b13…", "title": "Microsoft call", "entityIds": ["0b6f…", "7e4d…"] }
+    ],
+    "shared": [
+      { "entityId": "0b6f…", "inputIds": ["5d27…", "8b13…"], "mentionCount": 7 }
+    ],
+    "paths": [
+      { "fromInput": "5d27…", "toInput": "8b13…", "nodeIds": ["4a9e…", "1d20…", "7e4d…"], "edgeIds": ["3c1f…", "2f64…"], "score": 0.7 }
+    ],
+    "slice": { "seedIds": ["0b6f…"], "asOf": "2026-10-22T12:00:00.000Z", "nodes": [], "edges": [], "truncated": false, "cap": 300 },
+    "truncated": false
+  }
+}
+```
+
+`inputs[].entityIds` is the input's entities, strongest first, at most 50.
+
+**Errors:** `400` fewer than two distinct inputs, more than the limits, or an
+invalid `as_of` · `401` · `403` without `graph:read` · `404` any input is not
+yours to read — a missing, deleted or foreign note, an unviewable transcript, an
+unreadable entity — with one message that never says which · `503`
+`graph_query_timeout`.
+
 ##### GET /graph/activity
 
 Evidence counts per week or month for a set of nodes and the relations among

@@ -68,6 +68,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } f
 import { createNodeCompoundProgram } from 'sigma/rendering';
 import type { Settings } from 'sigma/settings';
 
+import { LassoBehaviour } from './connect/LassoBehaviour.js';
 import { DEFAULT_LAYOUT_TIME_BOX_MS, LABEL_DENSITY, type ExplorerBudgets } from './shell/explorerBudgets.js';
 import { useCanvasLayout, type CanvasLayout } from './layout/useCanvasLayout.js';
 import {
@@ -240,8 +241,8 @@ export interface GraphCanvasProps {
   pinsKey?: string;
   /** Called when the number of pinned nodes changes. */
   onPinnedCountChange?: (count: number) => void;
-  /** Called with the node id when a node is clicked. */
-  onNodeClick: (id: string) => void;
+  /** Called with the node id when a node is clicked; `shiftKey` says Shift was held (a multi-select toggle). */
+  onNodeClick: (id: string, modifiers?: { shiftKey: boolean }) => void;
   /** Called with the node id when a node is double-clicked. */
   onNodeDoubleClick: (id: string) => void;
   /** Called when empty space is clicked, which clears the selection. */
@@ -274,6 +275,10 @@ export interface GraphCanvasProps {
   revealInsets?: Insets;
   /** A long-press (touch) or right-click (pointer) on a node. */
   onNodeContextMenu?: (event: NodeContextMenuEvent) => void;
+  /** The Select tool is on and the input is a pointer: a plain drag on the stage draws a lasso (Shift+drag always does). */
+  selectTool?: boolean;
+  /** A lasso was drawn (GIC-14): the ids of the visible nodes inside it. Absent: no lasso. */
+  onLasso?: (ids: string[]) => void;
 }
 
 /** The curved-edge shape: a bend of 0.25 by default, an arrow head at the target. */
@@ -400,6 +405,14 @@ export function GraphCanvas(props: GraphCanvasProps) {
     >
       <SigmaContainer graph={graph} settings={settings} style={{ height: '100%', width: '100%' }}>
         <CanvasBehaviour {...props} />
+        {props.onLasso && interactive && (
+          <LassoBehaviour
+            graph={graph}
+            visibleIds={props.visibleIds}
+            selectTool={props.selectTool === true}
+            onLasso={props.onLasso}
+          />
+        )}
       </SigmaContainer>
     </Box>
   );
@@ -688,14 +701,14 @@ function CanvasBehaviour({
     };
 
     registerEvents({
-      clickNode: ({ node }) => {
+      clickNode: ({ node, event }) => {
         if (moved || longPressRef.current?.fired()) return;
         // A "+N more" stub is activated, not selected: activating it expands its type.
         if (graph.getNodeAttribute(node, 'isStub') === true) {
           handlers.current.onNodeDoubleClick(node);
           return;
         }
-        handlers.current.onNodeClick(node);
+        handlers.current.onNodeClick(node, { shiftKey: Boolean((event?.original as MouseEvent | undefined)?.shiftKey) });
       },
       enterNode: ({ node }) => {
         if (!touch) setHoverId(node);
