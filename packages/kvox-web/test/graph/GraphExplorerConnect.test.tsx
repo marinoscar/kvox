@@ -258,7 +258,7 @@ describe('Find connections', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
-  it('is disabled with a single entity selected', async () => {
+  it('has no Selection view, so no Find connections, with a single mark', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();

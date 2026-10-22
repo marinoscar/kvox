@@ -612,7 +612,7 @@ function CanvasBehaviour({
           handlers.current.onNodeDoubleClick(node);
           return;
         }
-        handlers.current.onNodeClick(node, { shiftKey: Boolean((event.original as MouseEvent | undefined)?.shiftKey) });
+        handlers.current.onNodeClick(node, { shiftKey: Boolean((event?.original as MouseEvent | undefined)?.shiftKey) });
       },
       enterNode: ({ node }) => {
         if (!touch) setHoverId(node);
