@@ -1,5 +1,6 @@
 import {
   ITEM_ADJUDICATION_HEADINGS,
+  RISK_RULE,
   buildItemAdjudicationSystemPrompt,
   buildItemAdjudicationUserContent,
   readItemVerdicts,
@@ -31,6 +32,15 @@ describe('item adjudication prompt', () => {
     expect(system).toMatch(/`same`/);
     expect(system).toMatch(/`supersedes`/);
     expect(system).toContain('Decisions are never `same` when the choice differs.');
+  });
+
+  it('adds the risk rule only when a risk is being compared (#665)', () => {
+    expect(buildItemAdjudicationSystemPrompt([pair(1)])).not.toContain(RISK_RULE);
+    const risk = { ...pair(1), kind: 'risk', subjectType: 'Project' };
+    const system = buildItemAdjudicationSystemPrompt([risk]);
+    expect(system).toContain('newly stated risk');
+    expect(system).toContain(RISK_RULE);
+    expect(RISK_RULE).toContain('one risk with more evidence');
   });
 
   it('lays out both sides with at most two quotes', () => {
