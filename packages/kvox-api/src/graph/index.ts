@@ -39,6 +39,7 @@ export {
   KG_SUBJECT_PROPOSAL,
   KG_SUBJECT_TRANSCRIPT,
   KG_SUBJECT_USER,
+  KG_TOPICS_PROMOTE_JOB_TYPE,
 } from './job-types.js';
 export { GRAPH_CONFLICT_REASONS, type GraphConflictReason } from './graph-conflict-reasons.js';
 export { graphImportStoragePrefix } from './graph-storage-keys.js';
@@ -147,6 +148,7 @@ export { GraphLayoutEnqueuer } from './layout/graph-layout.enqueuer.js';
 export { parseAsOf } from './read/as-of.js';
 export { GraphEvidenceService } from './read/graph-evidence.service.js';
 export { GraphNeighborhoodService } from './read/graph-neighborhood.service.js';
+export { GraphPathsService } from './read/graph-paths.service.js';
 export { GraphReadService } from './read/graph-read.service.js';
 export { readableEntitySql, readableItemSql } from './read/read-sql.js';
 export { AS_OF_RELATION_STATUSES, READABLE_ENTITY_STATUSES, READABLE_ITEM_STATUSES, TIMELINE_ITEM_STATUSES } from './read/readable.js';

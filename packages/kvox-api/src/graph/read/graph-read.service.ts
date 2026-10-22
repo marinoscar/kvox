@@ -223,7 +223,7 @@ export class GraphReadService {
     if (entity.mergedIntoId !== null) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.entity);
 
     const now = new Date();
-    const [aliases, mentionCounts, seen, counts] = await Promise.all([
+    const [aliases, mentionCounts, seen, counts, relationGroups] = await Promise.all([
       this.prisma.kgEntityAlias.findMany({
         where: { entityId: id, ownerId },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -264,7 +264,23 @@ export class GraphReadService {
                  OR i.counterparty_id = ${id}::uuid OR i.meeting_id = ${id}::uuid)
             AND ${readableItemSql('i')} AND ${notSensitiveSql('i')}
         ) i`,
+      // The same relations as `relations` above, grouped by relation type and by the type of the entity at the other end.
+      this.prisma.$queryRaw<{ relation_type: string; neighbor_type: string; n: number }[]>`
+        SELECT r.type AS relation_type, o.type AS neighbor_type, count(*)::int AS n
+        FROM kg_relations r
+        JOIN kg_entities o ON o.id = CASE WHEN r.from_id = ${id}::uuid THEN r.to_id ELSE r.from_id END
+        WHERE r.owner_id = ${ownerId}::uuid AND (r.from_id = ${id}::uuid OR r.to_id = ${id}::uuid)
+          AND r.from_id IS NOT NULL AND ${readableRelationSql('r')} AND ${relationValidAtSql('r', now)}
+          AND ${readableEntitySql('o')}
+        GROUP BY r.type, o.type`,
     ]);
+
+    const relationsByType: Record<string, number> = {};
+    const relationsByNeighborType: Record<string, number> = {};
+    for (const row of relationGroups) {
+      relationsByType[row.relation_type] = (relationsByType[row.relation_type] ?? 0) + Number(row.n);
+      relationsByNeighborType[row.neighbor_type] = (relationsByNeighborType[row.neighbor_type] ?? 0) + Number(row.n);
+    }
 
     const c = counts[0];
     const range = seen.get(id);
@@ -285,6 +301,8 @@ export class GraphReadService {
         evidence: c.evidence,
         items: { commitment: c.commitment, decision: c.decision, claim: c.claim, person_fact: c.person_fact, risk: c.risk },
         openCommitments: c.open_commitments,
+        relationsByType,
+        relationsByNeighborType,
       },
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
