@@ -90,6 +90,8 @@ export type {
   GraphCanvasGraph,
   GraphCanvasProps,
   CameraSnapshot,
+  CanvasPoint,
+  CanvasViewport,
   NodeContextMenuEvent,
 } from './components/explorer/GraphCanvas.js';
 export type { CanvasLayout } from './components/explorer/layout/useCanvasLayout.js';

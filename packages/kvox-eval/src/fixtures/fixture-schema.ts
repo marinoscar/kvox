@@ -66,7 +66,7 @@ export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
  *
  * @stability experimental
  */
-export const ITEM_LABEL_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
+export const ITEM_LABEL_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const;
 /**
  * One of {@link ITEM_LABEL_KINDS}.
  *
@@ -121,7 +121,7 @@ export const goldenRelationLabelSchema = z.object({
 export type GoldenRelationLabel = z.infer<typeof goldenRelationLabelSchema>;
 
 /**
- * A gold commitment, decision, claim or person fact, with its owner and counterparty columns.
+ * A gold commitment, decision, risk, claim or person fact, with its owner and counterparty columns.
  *
  * @stability experimental
  */
@@ -132,10 +132,13 @@ export const goldenItemLabelSchema = z.object({
   counterparty: z.string().nullable().default(null),
   title: z.string().min(1),
   statement: z.string().min(1),
-  status: z.enum(['open', 'done', 'dropped']).nullable().default(null),
+  /** Commitment: `open | done | dropped`. Risk: `open | mitigated | closed`. Null for every other kind. */
+  status: z.enum(['open', 'done', 'dropped', 'mitigated', 'closed']).nullable().default(null),
   occurredAt: isoDateSchema.nullable(),
   dueAt: isoDateSchema.nullable(),
   sensitivity: z.enum(['business', 'personal', 'sensitive']).nullable().default(null),
+  /** The item type's own attributes (a Risk's `severity`, `riskKind`, `mitigation`); validated against the ontology. */
+  props: propsSchema,
   /** `<fixtureId>#<kind>-<n>`: the earlier item this one replaces. */
   supersedesLabel: z.string().nullable().default(null),
   evidence: z.array(evidenceLabelSchema).min(1),

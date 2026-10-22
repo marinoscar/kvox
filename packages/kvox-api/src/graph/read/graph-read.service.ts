@@ -133,6 +133,10 @@ export class GraphReadService {
 
     if (query.q) {
       rows = await this.searchEntityRows(ownerId, query.q, filters, query.limit);
+    } else if (query.sort === 'mentions') {
+      // The most-mentioned entities, optionally within a window (GIC-09): the top `limit`, no cursor.
+      const since = query.since ? asOfOr400(query.since) : null;
+      rows = await this.mostMentionedRows(ownerId, filters, since, query.limit);
     } else {
       const route: GraphCursorRoute = query.sort === 'viewed' ? 'entities:viewed' : 'entities:updated';
       const sortCol = query.sort === 'viewed' ? Prisma.sql`v.last_viewed_at` : Prisma.sql`e.updated_at`;
@@ -178,6 +182,27 @@ export class GraphReadService {
       })),
       nextCursor,
     };
+  }
+
+  /**
+   * The top `limit` entities by the notes and transcripts that mention them, counting
+   * only mentions recorded on or after `since` when it is given (then an entity with
+   * none is left out). Ties break on the entity id so the order is stable.
+   */
+  private async mostMentionedRows(ownerId: string, filters: KvoxSql[], since: Date | null, limit: number) {
+    const window = since ? Prisma.sql`AND m.created_at >= ${since}::timestamptz` : Prisma.empty;
+    return this.prisma.$queryRaw<{ id: string; type: string; label: string; sort_key: null }[]>`
+      SELECT e.id::text AS id, e.type, e.label, NULL AS sort_key
+      FROM kg_entities e
+      JOIN (
+        SELECT m.entity_id, (count(DISTINCT m.note_id) + count(DISTINCT m.transcript_id))::int AS n
+        FROM kg_mentions m
+        WHERE m.owner_id = ${ownerId}::uuid AND ${readableMentionSql('m')} ${window}
+        GROUP BY m.entity_id
+      ) mc ON mc.entity_id = e.id
+      WHERE ${Prisma.join(filters, ' AND ')}
+      ORDER BY mc.n DESC, e.id DESC
+      LIMIT ${limit}`;
   }
 
   /** Trigram candidates on label or alias, ranked by the better of the two similarities. */
@@ -239,6 +264,7 @@ export class GraphReadService {
           decision: number;
           claim: number;
           person_fact: number;
+          risk: number;
           open_commitments: number;
         }[]
       >`
@@ -254,6 +280,7 @@ export class GraphReadService {
           count(*) FILTER (WHERE i.kind = 'decision')::int AS decision,
           count(*) FILTER (WHERE i.kind = 'claim')::int AS claim,
           count(*) FILTER (WHERE i.kind = 'person_fact')::int AS person_fact,
+          count(*) FILTER (WHERE i.kind = 'risk')::int AS risk,
           count(*) FILTER (WHERE i.kind = 'commitment' AND i.status = 'open')::int AS open_commitments
         FROM (
           SELECT i.id, i.kind, i.status FROM kg_items i
@@ -297,7 +324,7 @@ export class GraphReadService {
         relations: c.relations,
         mentions: mentionCounts.get(id) ?? 0,
         evidence: c.evidence,
-        items: { commitment: c.commitment, decision: c.decision, claim: c.claim, person_fact: c.person_fact },
+        items: { commitment: c.commitment, decision: c.decision, claim: c.claim, person_fact: c.person_fact, risk: c.risk },
         openCommitments: c.open_commitments,
         relationsByType,
         relationsByNeighborType,
@@ -394,7 +421,7 @@ export class GraphReadService {
     await this.access.require(ownerId, 'entity', id, 'view');
     const kinds = resolveTimelineKinds(query.kinds);
     const asOf = asOfOr400(query.as_of);
-    const itemKinds = (['commitment', 'decision', 'claim', 'person_fact'] as const).filter((k) => kinds.has(k));
+    const itemKinds = (['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const).filter((k) => kinds.has(k));
 
     const keyset: KvoxSql = query.cursor
       ? (() => {

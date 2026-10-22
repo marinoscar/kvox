@@ -157,6 +157,42 @@ describe('buildBriefSections', () => {
   });
 });
 
+describe('buildBriefSections: Open risks (#664)', () => {
+  const risk = (over: Partial<BriefItemRow>) =>
+    item({ kind: 'risk', status: 'open', subjectId: ACME, ...over });
+
+  it('lists open risks of a Project, Product or Organization, highest severity first, then newest, cited', () => {
+    const lowNew = risk({ severity: 'low', occurredAt: d('2026-09-15T00:00:00Z') });
+    const highOld = risk({ severity: 'high', occurredAt: d('2026-09-02T00:00:00Z') });
+    const highNew = risk({ severity: 'high', occurredAt: d('2026-09-12T00:00:00Z') });
+    const unstated = risk({ severity: null, occurredAt: d('2026-09-18T00:00:00Z') });
+    const s = buildBriefSections(input({ openRisksEnabled: true, items: [lowNew, highOld, unstated, highNew] }));
+    expect(s.openRisks?.map((e) => e.itemId)).toEqual([highNew.id, highOld.id, lowNew.id, unstated.id]);
+    expect(s.openRisks?.every((e) => e.evidenceIds.length > 0 && e.kind === 'risk')).toBe(true);
+    for (const type of ['Project', 'Product']) {
+      const t = buildBriefSections(input({ entity: { id: ACME, type }, openRisksEnabled: true, items: [highNew] }));
+      expect(t.openRisks?.map((e) => e.itemId)).toEqual([highNew.id]);
+    }
+  });
+
+  it('omits the key when there is no open risk, and never for a mitigated, closed, superseded or uncited one', () => {
+    expect(buildBriefSections(input({ openRisksEnabled: true, items: [] }))).not.toHaveProperty('openRisks');
+    const mitigated = risk({ status: 'mitigated' });
+    const closed = risk({ status: 'closed' });
+    const superseded = risk({ reviewStatus: 'superseded', supersededById: id(999), supersededByOccurredAt: d('2026-09-12T00:00:00Z') });
+    const uncited = risk({ evidenceIds: [] });
+    const s = buildBriefSections(input({ openRisksEnabled: true, items: [mitigated, closed, superseded, uncited] }));
+    expect(s).not.toHaveProperty('openRisks');
+  });
+
+  it('is omitted for other entity types and when the work domain is off', () => {
+    const r = risk({ subjectId: SARAH });
+    expect(buildBriefSections(input({ entity: { id: SARAH, type: 'Person' }, openRisksEnabled: true, items: [r] }))).not.toHaveProperty('openRisks');
+    expect(buildBriefSections(input({ items: [risk({})] }))).not.toHaveProperty('openRisks');
+    expect(buildBriefSections(input({ openRisksEnabled: false, items: [risk({})] }))).not.toHaveProperty('openRisks');
+  });
+});
+
 describe('buildPeopleChanges', () => {
   it('reports a promotion as one ended and one started HAS_ROLE, with titles', () => {
     const at = d('2026-09-10T00:00:00Z');

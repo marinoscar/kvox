@@ -24,7 +24,10 @@ import {
   stanceOf,
   type ExplorerMode,
 } from '../../src/graph/ui/components/explorer/explorerEncoding.js';
-import { PICTOGRAMS, pictogramDataUri } from '../../src/graph/ui/components/explorer/icons/pictograms.js';
+import {
+  PICTOGRAMS,
+  pictogramDataUri,
+} from '../../src/graph/ui/components/explorer/icons/pictograms.js';
 import type { GraphOntology } from '../../src/graph/headless/clients/graph.js';
 import { mockGraphOntology } from './graphData.js';
 
@@ -74,16 +77,18 @@ function chroma(hex: string): number {
   return Math.hypot(a, b);
 }
 
-/** The shipped ontology with every domain on, plus the types #662 to #664 will add. */
+/** The shipped ontology with every domain on, plus any of the types #662 to #664 add that the mock does not hold yet. */
 function ontologyWithPlannedTypes(): GraphOntology {
   const base = mockGraphOntology(['core', 'work', 'personal']);
   const template = base.entityTypes.find((t) => t.key === 'Project')!;
-  const planned = ['Topic', 'Product', 'Risk'].map((key) => ({
-    ...template,
-    key,
-    label: key,
-    pluralLabel: `${key}s`,
-  }));
+  const planned = ['Topic', 'Product', 'Risk']
+    .filter((key) => !base.entityTypes.some((t) => t.key === key))
+    .map((key) => ({
+      ...template,
+      key,
+      label: key,
+      pluralLabel: `${key}s`,
+    }));
   return { ...base, entityTypes: [...base.entityTypes, ...planned] };
 }
 
@@ -95,36 +100,47 @@ describe('the categorical palette', () => {
     }
   });
 
-  it.each(MODES)('every %s colour has at least 3:1 contrast against every canvas background', (mode) => {
-    for (const color of CATEGORICAL_PALETTE[mode]) {
-      for (const background of VALIDATION_BACKGROUNDS[mode]) {
-        expect(
-          contrastRatio(color, background),
-          `${color} on ${background}`,
-        ).toBeGreaterThanOrEqual(MIN_GRAPHICAL_CONTRAST);
+  it.each(MODES)(
+    'every %s colour has at least 3:1 contrast against every canvas background',
+    (mode) => {
+      for (const color of CATEGORICAL_PALETTE[mode]) {
+        for (const background of VALIDATION_BACKGROUNDS[mode]) {
+          expect(
+            contrastRatio(color, background),
+            `${color} on ${background}`
+          ).toBeGreaterThanOrEqual(MIN_GRAPHICAL_CONTRAST);
+        }
       }
     }
-  });
+  );
 
-  it.each(MODES)('every %s colour stays distinguishable from every other under simulated deuteranopia', (mode) => {
-    const colors = CATEGORICAL_PALETTE[mode];
-    let weakest = Infinity;
-    for (let i = 0; i < colors.length; i += 1) {
-      for (let j = i + 1; j < colors.length; j += 1) {
-        const difference = deltaE(simulateDeuteranopia(colors[i]), simulateDeuteranopia(colors[j]));
-        weakest = Math.min(weakest, difference);
-        expect(difference, `${colors[i]} vs ${colors[j]}`).toBeGreaterThanOrEqual(12);
+  it.each(MODES)(
+    'every %s colour stays distinguishable from every other under simulated deuteranopia',
+    (mode) => {
+      const colors = CATEGORICAL_PALETTE[mode];
+      let weakest = Infinity;
+      for (let i = 0; i < colors.length; i += 1) {
+        for (let j = i + 1; j < colors.length; j += 1) {
+          const difference = deltaE(
+            simulateDeuteranopia(colors[i]),
+            simulateDeuteranopia(colors[j])
+          );
+          weakest = Math.min(weakest, difference);
+          expect(difference, `${colors[i]} vs ${colors[j]}`).toBeGreaterThanOrEqual(12);
+        }
       }
+      expect(weakest).toBeGreaterThan(12);
     }
-    expect(weakest).toBeGreaterThan(12);
-  });
+  );
 
   it.each(MODES)('no %s colour is grey', (mode) => {
     for (const color of CATEGORICAL_PALETTE[mode]) expect(chroma(color), color).toBeGreaterThan(20);
   });
 
   it('the checks themselves can fail: two near colours are not distinguishable, white on white has no contrast', () => {
-    expect(deltaE(simulateDeuteranopia('#d43575'), simulateDeuteranopia('#d43a70'))).toBeLessThan(12);
+    expect(deltaE(simulateDeuteranopia('#d43575'), simulateDeuteranopia('#d43a70'))).toBeLessThan(
+      12
+    );
     expect(contrastRatio('#ffffff', '#ffffff')).toBe(1);
     expect(contrastRatio('#ffffff', '#000000')).toBeCloseTo(21, 0);
   });
@@ -136,8 +152,19 @@ describe('encodingFor and the ontology', () => {
     (mode) => {
       const ontology = ontologyWithPlannedTypes();
       const keys = ontologyNodeTypes(ontology);
-      // The fixture really holds what the issue lists.
-      for (const expected of ['Person', 'Organization', 'Project', 'Meeting', 'Topic', 'Product', 'Risk', 'commitment', 'decision', 'claim']) {
+      // The fixture really holds what the issue lists (Risk is an item type since #664, so its node type is the item kind `risk`).
+      for (const expected of [
+        'Person',
+        'Organization',
+        'Project',
+        'Meeting',
+        'Topic',
+        'Product',
+        'risk',
+        'commitment',
+        'decision',
+        'claim',
+      ]) {
         expect(keys, expected).toContain(expected);
       }
 
@@ -148,12 +175,18 @@ describe('encodingFor and the ontology', () => {
         expect(encoding.known, `${key} has an explicit entry`).toBe(true);
         expect(encoding.icon, `${key} has its own pictogram`).not.toBe('generic');
         expect(chroma(encoding.color), `${key} is not grey`).toBeGreaterThan(20);
-        expect(colors.get(encoding.color), `${key} duplicates the colour of ${colors.get(encoding.color)}`).toBeUndefined();
-        expect(icons.get(encoding.icon), `${key} duplicates the pictogram of ${icons.get(encoding.icon)}`).toBeUndefined();
+        expect(
+          colors.get(encoding.color),
+          `${key} duplicates the colour of ${colors.get(encoding.color)}`
+        ).toBeUndefined();
+        expect(
+          icons.get(encoding.icon),
+          `${key} duplicates the pictogram of ${icons.get(encoding.icon)}`
+        ).toBeUndefined();
         colors.set(encoding.color, key);
         icons.set(encoding.icon, key);
       }
-    },
+    }
   );
 
   it('maps the issue table: Person person, Organization building, Project flag, ... Milestone milestone', () => {
@@ -196,7 +229,9 @@ describe('encodingFor and the ontology', () => {
   it('the glyph is readable on its fill in every variant', () => {
     for (const mode of MODES) {
       for (const color of CATEGORICAL_PALETTE[mode]) {
-        expect(contrastRatio(readableOn(color), color), color).toBeGreaterThanOrEqual(MIN_GRAPHICAL_CONTRAST);
+        expect(contrastRatio(readableOn(color), color), color).toBeGreaterThanOrEqual(
+          MIN_GRAPHICAL_CONTRAST
+        );
       }
     }
   });
@@ -204,7 +239,23 @@ describe('encodingFor and the ontology', () => {
 
 describe('pictograms', () => {
   it('has a glyph for every name the table uses, each a non-empty path', () => {
-    for (const name of ['person', 'building', 'flag', 'calendar', 'tag', 'cube', 'check-circle', 'gavel', 'warning', 'quote', 'star', 'plane', 'milestone', 'generic', 'plus'] as const) {
+    for (const name of [
+      'person',
+      'building',
+      'flag',
+      'calendar',
+      'tag',
+      'cube',
+      'check-circle',
+      'gavel',
+      'warning',
+      'quote',
+      'star',
+      'plane',
+      'milestone',
+      'generic',
+      'plus',
+    ] as const) {
       expect(PICTOGRAMS[name].length, name).toBeGreaterThan(10);
     }
   });
@@ -247,7 +298,10 @@ describe('nodeSize', () => {
   });
 
   it('draws an item at four-fifths of an entity', () => {
-    expect(nodeSize({ degree: 25, nodeKind: 'item' })).toBeCloseTo(nodeSize({ degree: 25, nodeKind: 'entity' }) * 0.8, 1);
+    expect(nodeSize({ degree: 25, nodeKind: 'item' })).toBeCloseTo(
+      nodeSize({ degree: 25, nodeKind: 'entity' }) * 0.8,
+      1
+    );
   });
 });
 
@@ -267,7 +321,9 @@ describe('rings', () => {
   });
 
   it('the selection wins over a seed, which wins over a pin', () => {
-    expect(ringFor({ selected: true, isSeed: true, pinned: true })).toEqual(ringFor({ selected: true }));
+    expect(ringFor({ selected: true, isSeed: true, pinned: true })).toEqual(
+      ringFor({ selected: true })
+    );
     expect(ringFor({ isSeed: true, pinned: true })).toEqual(ringFor({ isSeed: true }));
   });
 });
@@ -293,7 +349,7 @@ describe('edges', () => {
       edgeAppearance(
         { relationType: 'INVOLVED_IN', confidence: 0.9, virtual: false, props: { stance } },
         '#999999',
-        mode,
+        mode
       ).color;
     expect(color('champion')).toBe(STANCE_COLORS.light.champion);
     expect(color('supportive')).toBe(STANCE_COLORS.light.supportive);
@@ -307,25 +363,47 @@ describe('edges', () => {
   it.each(MODES)('every %s stance colour has 3:1 contrast against the canvas', (mode) => {
     for (const stance of STANCES) {
       for (const background of VALIDATION_BACKGROUNDS[mode]) {
-        expect(contrastRatio(STANCE_COLORS[mode][stance], background), `${stance} on ${background}`).toBeGreaterThanOrEqual(3);
+        expect(
+          contrastRatio(STANCE_COLORS[mode][stance], background),
+          `${stance} on ${background}`
+        ).toBeGreaterThanOrEqual(3);
       }
     }
   });
 
   it('only INVOLVED_IN takes a stance accent; an unknown stance is ignored; resistant and derived edges are flagged dashed', () => {
     const base = '#999999';
-    const other = edgeAppearance({ relationType: 'WORKS_FOR', confidence: 1, virtual: false, props: { stance: 'champion' } }, base);
+    const other = edgeAppearance(
+      { relationType: 'WORKS_FOR', confidence: 1, virtual: false, props: { stance: 'champion' } },
+      base
+    );
     expect(other.color).toBe(base);
     expect(other.stance).toBeNull();
-    const unknown = edgeAppearance({ relationType: 'INVOLVED_IN', confidence: 1, virtual: false, props: { stance: 'loves' } }, base);
+    const unknown = edgeAppearance(
+      { relationType: 'INVOLVED_IN', confidence: 1, virtual: false, props: { stance: 'loves' } },
+      base
+    );
     expect(unknown.color).toBe(base);
-    const resistant = edgeAppearance({ relationType: 'INVOLVED_IN', confidence: 1, virtual: false, props: { stance: 'resistant' } }, base);
+    const resistant = edgeAppearance(
+      {
+        relationType: 'INVOLVED_IN',
+        confidence: 1,
+        virtual: false,
+        props: { stance: 'resistant' },
+      },
+      base
+    );
     expect(resistant.dashed).toBe(true);
     expect(resistant.stance).toBe('resistant');
-    const derived = edgeAppearance({ relationType: 'ASSIGNED_TO', confidence: null, virtual: true }, base);
+    const derived = edgeAppearance(
+      { relationType: 'ASSIGNED_TO', confidence: null, virtual: true },
+      base
+    );
     expect(derived.dashed).toBe(true);
     expect(derived.color).not.toBe(base);
-    expect(edgeAppearance({ relationType: 'WORKS_FOR', confidence: 1, virtual: false }, base).dashed).toBe(false);
+    expect(
+      edgeAppearance({ relationType: 'WORKS_FOR', confidence: 1, virtual: false }, base).dashed
+    ).toBe(false);
   });
 
   it('reads the stance case-insensitively and only from a string', () => {
@@ -336,7 +414,9 @@ describe('edges', () => {
 
   it('labels: relation, then role or stage, then stance', () => {
     expect(edgeLabel('WORKS_FOR', {})).toBe('Works for');
-    expect(edgeLabel('INVOLVED_IN', { role: 'sponsor', stance: 'champion' })).toBe('Involved in · Sponsor · champion');
+    expect(edgeLabel('INVOLVED_IN', { role: 'sponsor', stance: 'champion' })).toBe(
+      'Involved in · Sponsor · champion'
+    );
     expect(edgeLabel('USES', { stage: 'pilot' })).toBe('Uses · Pilot');
   });
 });

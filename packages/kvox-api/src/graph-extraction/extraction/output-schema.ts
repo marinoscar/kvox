@@ -117,10 +117,19 @@ function relationSchema(ctx: ExtractionContext, r: ExtractionContext['offered'][
   );
 }
 
+/**
+ * The statuses the model may set per item kind (a kind absent here carries no status from the model).
+ * A `superseded` row is never extracted: supersession is a closing row the server derives.
+ */
+export const EXTRACTABLE_ITEM_STATUSES: Readonly<Record<string, readonly string[]>> = {
+  commitment: ['open', 'done', 'dropped'],
+  risk: ['open', 'mitigated', 'closed'],
+};
+
 function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema {
   const kind = t.itemKind as string;
   const isCommitment = kind === 'commitment';
-  const statuses = isCommitment ? ['open', 'done', 'dropped'] : [];
+  const statuses = EXTRACTABLE_ITEM_STATUSES[kind] ?? [];
   return object(
     {
       kind: { type: 'string', enum: [kind] },
@@ -136,7 +145,7 @@ function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema 
         : ALWAYS_NULL,
       status:
         statuses.length > 0
-          ? { type: ['string', 'null'], enum: [...statuses, null], description: 'Commitment status.' }
+          ? { type: ['string', 'null'], enum: [...statuses, null], description: 'Status, only if the source says so; open otherwise.' }
           : ALWAYS_NULL,
       occurredAt: nullableString('When it happened or was stated (YYYY-MM-DD), or null.'),
       dueAt: isCommitment ? nullableString('Due date (YYYY-MM-DD), or null.') : ALWAYS_NULL,

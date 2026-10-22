@@ -36,11 +36,11 @@ export const SENSITIVITIES = ['business', 'personal', 'sensitive'] as const;
 export const VALID_PRECISIONS = ['day', 'month', 'year', 'unknown'] as const;
 
 /**
- * The four item types stored in `kg_items` rather than `kg_entities`.
+ * The five item types stored in `kg_items` rather than `kg_entities`.
  *
  * @stability experimental
  */
-export const ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
+export const ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const;
 
 /**
  * Every domain key (§17.2). `personal` ships off by default (#383): a user

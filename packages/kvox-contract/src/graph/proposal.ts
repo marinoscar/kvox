@@ -62,6 +62,7 @@ export const GROUP_KEYS = [
   'Meeting',
   'Decision',
   'Commitment',
+  'Risk',
   'Claim',
   'PersonFact',
   'Other',

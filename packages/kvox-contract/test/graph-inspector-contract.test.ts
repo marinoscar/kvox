@@ -18,7 +18,7 @@ const detail = {
     relations: 3,
     mentions: 2,
     evidence: 1,
-    items: { commitment: 0, decision: 0, claim: 0, person_fact: 0 },
+    items: { commitment: 0, decision: 0, claim: 0, person_fact: 0, risk: 0 },
     openCommitments: 0,
   },
   createdAt: '2026-01-01T00:00:00.000Z',

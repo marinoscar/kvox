@@ -70,7 +70,7 @@ function setup(over: Setup = {}) {
     ),
   };
   const ontology = {
-    effectiveSchemaFor: jest.fn().mockResolvedValue({ relationTypes: [{ key: 'HAS_ROLE', exclusive: 'soft' }] }),
+    effectiveSchemaFor: jest.fn().mockResolvedValue({ relationTypes: [{ key: 'HAS_ROLE', exclusive: 'soft' }], entityType: () => undefined }),
   };
   const views = {
     lastViewedAt: jest.fn().mockResolvedValue(over.lastViewedAt ?? null),

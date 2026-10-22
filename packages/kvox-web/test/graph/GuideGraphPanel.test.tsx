@@ -61,9 +61,9 @@ describe('GuideGraphPanel', () => {
     render(<Harness onChange={onChange} />);
     await user.click(screen.getByRole('checkbox', { name: 'Claim' }));
     const narrowed = onChange.mock.calls.at(-1)![0] as UserGuidance;
-    expect(narrowed.entityTypes).toHaveLength(8);
+    expect(narrowed.entityTypes).toHaveLength(9);
     expect(narrowed.entityTypes).not.toContain('Claim');
-    expect(screen.getByText('8 of 9 types')).toBeInTheDocument();
+    expect(screen.getByText('9 of 10 types')).toBeInTheDocument();
     await user.click(screen.getByRole('checkbox', { name: 'Claim' }));
     expect((onChange.mock.calls.at(-1)![0] as UserGuidance).entityTypes).toBeUndefined();
   });
