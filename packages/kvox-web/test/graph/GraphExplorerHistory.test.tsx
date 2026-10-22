@@ -314,7 +314,26 @@ describe('lenses (GIC-17)', () => {
     expect(currentUrl().search).not.toContain('1,2');
   });
 
-  it('on a phone the overflow menu opens the lens list full-screen', async () => {
+  it('a reload restores seeds, types, relation types, layout and the lens from the URL', async () => {
+    const relTypes = 'WORKS_FOR,REPORTS_TO,HAS_ROLE,INVOLVED_IN';
+    const user = userEvent.setup();
+    renderExplorer(
+      `/graph/explore?seed=${JOE_ID}&types=Person,Organization&relTypes=${relTypes}&layout=concentric&lens=builtin:people-network&asOf=2026-06-01`,
+    );
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Acme Corp' });
+    expect(canvas).toHaveAttribute('data-layout', 'concentric');
+    expect(bodies[0]).toMatchObject({ nodeIds: [JOE_ID], as_of: '2026-06-01' });
+    expect(bodies[0].types).toEqual(['Person', 'Organization']);
+    expect([...(bodies[0].relationTypes ?? [])].sort()).toEqual(relTypes.split(',').sort());
+    // The lens last applied is named on the button; the layout differs from the preset's, so it reads as changed.
+    expect(screen.getByRole('button', { name: 'People network (changed)' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'People network (changed)' }));
+    const panel = await screen.findByRole('dialog', { name: 'Lenses' });
+    expect(within(panel).getByText('Changed since applied')).toBeInTheDocument();
+  });
+
+    it('on a phone the overflow menu opens the lens list full-screen', async () => {
     mockTouchInput();
     act(() => setViewportWidth(390));
     const user = userEvent.setup();

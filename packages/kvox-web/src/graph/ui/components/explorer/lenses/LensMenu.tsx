@@ -194,10 +194,13 @@ function LensPanel(props: LensPanelProps) {
         {builtIn.map((lens) => (
           <ListItem key={lens.id} disablePadding>
             <ListItemButton onClick={() => onApply(lens)} selected={activeId === lens.id} sx={{ minHeight: row }}>
-              <ListItemText primary={lens.name} secondary={lens.description} />
+              <ListItemText
+                primary={lens.name}
+                secondary={activeId === lens.id && modified ? 'Changed since applied' : lens.description}
+              />
               {activeId === lens.id && (
-                <ListItemIcon sx={{ minWidth: 0 }} aria-label={modified ? 'Active, changed' : 'Active'}>
-                  <CheckIcon fontSize="small" />
+                <ListItemIcon sx={{ minWidth: 0 }}>
+                  <CheckIcon fontSize="small" aria-label="Applied" />
                 </ListItemIcon>
               )}
             </ListItemButton>

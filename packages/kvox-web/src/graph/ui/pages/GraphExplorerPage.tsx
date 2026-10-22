@@ -766,9 +766,11 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         explorerPinsKey(nextSeeds.join(','), asOf, lens.id),
         new Map(Object.entries(lens.pins)),
       );
+      // The selection belongs to the view being left (the lens clears `focus`, `sel` and `tab` too).
+      deselect();
       updateParams((params) => applyLensToParams(params, lens, nodeTypeKeys, relationKeys));
     },
-    [asOf, nodeTypeKeys, relationKeys, seeds, updateParams],
+    [asOf, deselect, nodeTypeKeys, relationKeys, seeds, updateParams],
   );
   const onSaveLens = useCallback(
     async (name: string) => {
