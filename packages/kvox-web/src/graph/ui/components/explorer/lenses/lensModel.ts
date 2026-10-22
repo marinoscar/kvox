@@ -114,7 +114,7 @@ const PRESETS: readonly PresetSpec[] = [
     key: 'project-map',
     name: 'Project map',
     description: 'Projects, products, topics and risks, and who is on them.',
-    types: ['Project', 'Product', 'Topic', 'Risk', 'Person'],
+    types: ['Project', 'Product', 'Topic', 'risk', 'Person'],
     relations: ['INVOLVED_IN', 'USES', 'CONCERNS', 'PART_OF'],
     layout: 'force',
   },

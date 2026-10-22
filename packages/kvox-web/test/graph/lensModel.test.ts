@@ -56,10 +56,15 @@ describe('builtInLenses', () => {
   });
 
   it('skips members the ontology does not have, and a preset with nothing left', () => {
-    // `Risk` is not an ontology type yet: the Project map keeps the rest.
     const project = builtInLenses(NODE_KEYS, REL_KEYS).find((l) => l.name === 'Project map')!;
-    expect(project.types).not.toContain('Risk');
-    expect(project.types).toEqual(expect.arrayContaining(['Project', 'Person']));
+    expect(project.types).toEqual(expect.arrayContaining(['Project', 'Product', 'Topic', 'risk', 'Person']));
+    // Without the Risk item kind (an older ontology) the Project map keeps the rest.
+    const older = builtInLenses(
+      NODE_KEYS.filter((key) => key !== 'risk'),
+      REL_KEYS,
+    ).find((l) => l.name === 'Project map')!;
+    expect(older.types).not.toContain('risk');
+    expect(older.types).toEqual(expect.arrayContaining(['Project', 'Person']));
 
     const trimmed = builtInLenses(['Person', 'Organization'], ['WORKS_FOR']);
     expect(trimmed.map((l) => l.name)).toEqual(['People network']);
