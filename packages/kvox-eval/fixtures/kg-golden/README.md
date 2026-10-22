@@ -101,6 +101,7 @@ never enables `personal` is offered none of it.
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).
 - Risks (#664, m50-m55, tag `risks`): ≥ 15 gold `risk` items over every severity (low, medium, high) and every `riskKind` (risk, issue, blocker), subjects of every allowed kind (Project, Product, Organization, Topic), one with a `mitigation`, and a status chain (`m53` supersedes `m50#risk-1`).
+- The Joe / Company A / Copilot rollout scenario (#665, m56-m57, tag `copilot-rollout`): two note-only meetings that carry the stakeholder and market shapes end to end (a Person `INVOLVED_IN` a Project with `role` and `stance`, an Organization `USES` a Product at a `stage`, `OFFERED_BY`, `CONCERNS` a Product and a Topic, a Risk, a `Product` with the alias "Copilot"), and a negative: a person who only took notes gets no `INVOLVED_IN` and no stance. `m57` links back to `m56`'s entities by `existingId`, so the Ask question q43 ("How is Joe connected to the Copilot rollout?") must cite both notes (`citeFromMin: 2`).
 - Personal domain (#383), in fixtures tagged `personal` (≥ 5): every
   `personal` type and relation labelled at least once — a spouse, parents and
   children, a friendship, a trip with dates, a birthday `Milestone` — a known
@@ -117,11 +118,12 @@ validated by `packages/kvox-eval/test/ask-eval-questions.spec.ts`, scored by
 `kvox-eval ask` (headless; `npm run ask:eval --workspace=api` is a wrapper), and its schema lives in
 `packages/kvox-eval/src/ask/question-schema.ts`. See that file's own comments
 for the full contract (`category`, `expected.{entities,answerAll,answerNone,
-citeFrom,notFound}`); the short version:
+citeFrom,citeFromMin,notFound}`); the short version:
 
 - `citeFrom` names a segment id **exactly as this set's own `mNN-sNNN` ids
   read** (e.g. `"m01-s009"`), or `"mNN#note"` for a meeting's note — never a
-  new naming scheme.
+  new naming scheme. Some one of the listed sources must be cited; with
+  `citeFromMin: N` (default 1) at least N **distinct** ones must.
 - A question's `id` (`q01`, `q02`, …) is **permanent** once committed, for the
   identical reason a fixture's `id` is: a report stays comparable run over
   run. Retire a question by noting it here, never by renumbering.

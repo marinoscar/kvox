@@ -70,6 +70,16 @@ describe('ask-questions.json', () => {
     }
   });
 
+  it('`citeFromMin` never asks for more sources than `citeFrom` lists, and the Copilot rollout question needs both notes (#665)', () => {
+    for (const q of questions) {
+      expect({ id: q.id, ok: (q.expected.citeFromMin ?? 1) <= Math.max(1, q.expected.citeFrom.length) }).toEqual({ id: q.id, ok: true });
+    }
+    const q43 = questions.find((q) => q.id === 'q43')!;
+    expect(q43.question).toBe('How is Joe connected to the Copilot rollout?');
+    expect(q43.expected.citeFrom).toEqual(['m56#note', 'm57#note']);
+    expect(q43.expected.citeFromMin).toBe(2);
+  });
+
   it('every `citeFrom` entry resolves to a real segment or note', () => {
     for (const q of questions) {
       for (const ref of q.expected.citeFrom) {

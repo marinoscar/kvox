@@ -1,0 +1,338 @@
+{
+  "id": "m57",
+  "title": "Copilot rollout pilot check-in",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market",
+    "risks",
+    "copilot-rollout"
+  ],
+  "recordedAt": "2026-10-20T15:00:00Z",
+  "contextText": "Pilot check-in for the Copilot rollout at Company A; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Copilot rollout pilot check-in\n\n**Date:** October 20\n**Attendees:** Maya Ibsen, Joe Hartigan, Ilse Brandvold\n\n## Summary\n\nA check-in on the Copilot rollout at Company A, two weeks after the first call. Ilse Brandvold joined this time as the executive sponsor of the rollout, and Joe Hartigan came again from the Company A claims side. The session reviewed the pilot of Microsoft Copilot and what the group still needs before a decision on the second wave.\n\n## The sponsor's view\n\nIlse Brandvold is the executive sponsor of the Copilot rollout. She said she will not sign off the second wave until the licence budget is settled, and she was direct that she is not willing to move earlier. Joe agreed that the budget has to come first and repeated that he wants the hours saved set against the licensing cost.\n\n## Pilot findings\n\nPilot users report slow responses when a long case file is open, and the claims team has started to avoid the assistant for the largest files. The smaller drafting tasks are working well, and the team lead said the letters are now written in half the time.\n\n## Actions\n\nJoe will bring the finance contact from Company A to the next review. The group will look at the pilot usage summary together then.\n\n## Open points\n\nThe licensing cost is still the main open subject. Nobody has yet asked Microsoft for an extension of the trial licences, and that is the first thing to settle with the vendor.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-person-joe-hartigan",
+      "type": "Person",
+      "label": "Joe Hartigan",
+      "aliases": [
+        "Joe"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m56"
+      ]
+    },
+    {
+      "id": "g-person-maya-ibsen",
+      "type": "Person",
+      "label": "Maya Ibsen",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": [
+        "m56"
+      ]
+    },
+    {
+      "id": "g-org-company-a",
+      "type": "Organization",
+      "label": "Company A",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-microsoft",
+      "type": "Organization",
+      "label": "Microsoft",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-product-microsoft-copilot",
+      "type": "Product",
+      "label": "Microsoft Copilot",
+      "aliases": [
+        "Copilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-copilot-rollout",
+      "type": "Project",
+      "label": "Copilot rollout",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-topic-licensing-cost",
+      "type": "Topic",
+      "label": "Licensing cost",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Copilot rollout pilot check-in",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Copilot rollout pilot check-in"
+          }
+        ]
+      },
+      {
+        "key": "maya",
+        "type": "Person",
+        "label": "Maya Ibsen",
+        "aliases": [],
+        "existingId": "g-person-maya-ibsen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maya Ibsen, Joe Hartigan, Ilse Brandvold"
+          }
+        ]
+      },
+      {
+        "key": "joe",
+        "type": "Person",
+        "label": "Joe Hartigan",
+        "aliases": [
+          "Joe"
+        ],
+        "existingId": "g-person-joe-hartigan",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe Hartigan came again from the Company A claims side"
+          }
+        ]
+      },
+      {
+        "key": "ilse",
+        "type": "Person",
+        "label": "Ilse Brandvold",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ilse Brandvold is the executive sponsor of the Copilot rollout"
+          }
+        ]
+      },
+      {
+        "key": "companya",
+        "type": "Organization",
+        "label": "Company A",
+        "aliases": [],
+        "existingId": "g-org-company-a",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "A check-in on the Copilot rollout at Company A"
+          }
+        ]
+      },
+      {
+        "key": "microsoft",
+        "type": "Organization",
+        "label": "Microsoft",
+        "aliases": [],
+        "existingId": "g-org-microsoft",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "asked Microsoft for an extension of the trial licences"
+          }
+        ]
+      },
+      {
+        "key": "copilot",
+        "type": "Product",
+        "label": "Microsoft Copilot",
+        "aliases": [
+          "Copilot"
+        ],
+        "existingId": "g-product-microsoft-copilot",
+        "props": {
+          "category": "ai_model"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The session reviewed the pilot of Microsoft Copilot"
+          }
+        ]
+      },
+      {
+        "key": "rollout",
+        "type": "Project",
+        "label": "Copilot rollout",
+        "aliases": [],
+        "existingId": "g-project-copilot-rollout",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "A check-in on the Copilot rollout at Company A"
+          }
+        ]
+      },
+      {
+        "key": "licensing",
+        "type": "Topic",
+        "label": "Licensing cost",
+        "aliases": [],
+        "existingId": "g-topic-licensing-cost",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The licensing cost is still the main open subject"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "joe",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe Hartigan came again from the Company A claims side"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "ilse",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "sponsor",
+          "stance": "resistant"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ilse Brandvold is the executive sponsor of the Copilot rollout"
+          },
+          {
+            "source": "note",
+            "quote": "She said she will not sign off the second wave until the licence budget is settled"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "A check-in on the Copilot rollout at Company A"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "copilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The session reviewed the pilot of Microsoft Copilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "copilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Slow responses on long case files",
+        "statement": "Pilot users report slow responses when a long case file is open.",
+        "status": "open",
+        "occurredAt": "2026-10-20",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Pilot users report slow responses when a long case file is open"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "rollout",
+        "owner": "joe",
+        "counterparty": null,
+        "title": "Bring the finance contact to the review",
+        "statement": "Joe will bring the finance contact from Company A to the next review.",
+        "status": "open",
+        "occurredAt": "2026-10-20",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe will bring the finance contact from Company A to the next review"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}
