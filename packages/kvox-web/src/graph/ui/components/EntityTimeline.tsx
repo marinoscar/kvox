@@ -106,6 +106,8 @@ function kindLabel(event: TimelineEvent): string {
       return 'Commitment';
     case 'decision':
       return 'Decision';
+    case 'risk':
+      return 'Risk';
     case 'claim':
       return 'Claim';
     case 'person_fact':

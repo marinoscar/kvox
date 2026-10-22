@@ -1,0 +1,214 @@
+{
+  "id": "m54",
+  "title": "Northlake data platform steering",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks",
+    "topics-products"
+  ],
+  "recordedAt": "2026-09-08T11:00:00Z",
+  "contextText": "Steering review of a data consolidation project; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Northlake data platform steering\n\n**Date:** September 8\n**Attendees:** Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix\n\n## Summary\n\nThe steering group reviewed the Northlake data platform project, which consolidates reporting data from five source systems into one store. The review also touched on a wider worry about vendor lock-in, because the platform vendor stores data in its own format.\n\n## Delivery status\n\nThe ingestion layer for three of the five source systems is working in the test environment. The remaining two sources are the finance system and the order system. Ingrid described the design as sound and said the team has enough people for the current phase.\n\n## Concerns raised\n\n- Vendor lock-in is a worry because the export format is proprietary, and moving to another platform later would mean rebuilding every pipeline.\n- The Northlake data platform is three weeks behind plan because the source system owner is unresponsive, and the order system cannot be connected without that person's approval.\n- Cost overrun is likely if the data volume doubles, as the storage tier is billed per terabyte. Moving cold data to archive storage would cut the bill.\n\n## Background\n\nThe Northlake data platform replaces a set of nightly exports that the analysts maintain by hand. Bartholomew noted that the analysts are looking forward to the change, and Saoirse reminded the group that a data catalogue will be needed once the platform is live.\n\n## Next steps\n\nThe group will review progress again in two weeks. The summary goes to the data governance board.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northlake data platform steering",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northlake data platform steering"
+          }
+        ]
+      },
+      {
+        "key": "ingrid",
+        "type": "Person",
+        "label": "Ingrid Vasquez",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+          }
+        ]
+      },
+      {
+        "key": "bartholomew",
+        "type": "Person",
+        "label": "Bartholomew Nkemelu",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+          }
+        ]
+      },
+      {
+        "key": "saoirse",
+        "type": "Person",
+        "label": "Saoirse Delacroix",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ingrid Vasquez, Bartholomew Nkemelu, Saoirse Delacroix"
+          }
+        ]
+      },
+      {
+        "key": "northlake",
+        "type": "Project",
+        "label": "Northlake data platform",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "reviewed the Northlake data platform project"
+          }
+        ]
+      },
+      {
+        "key": "lockin",
+        "type": "Topic",
+        "label": "Vendor lock-in",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a wider worry about vendor lock-in"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "northlake",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "reviewed the Northlake data platform project"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "lockin",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a wider worry about vendor lock-in"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "lockin",
+        "owner": null,
+        "counterparty": null,
+        "title": "Vendor lock-in through proprietary export",
+        "statement": "Vendor lock-in is a worry because the export format is proprietary.",
+        "status": "open",
+        "occurredAt": "2026-09-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Vendor lock-in is a worry because the export format is proprietary"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "northlake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Behind plan, source owner unresponsive",
+        "statement": "The Northlake data platform is three weeks behind plan because the source system owner is unresponsive.",
+        "status": "open",
+        "occurredAt": "2026-09-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Northlake data platform is three weeks behind plan because the source system owner is unresponsive"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "northlake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Storage cost overrun",
+        "statement": "Cost overrun is likely if the data volume doubles, as the storage tier is billed per terabyte.",
+        "status": "open",
+        "occurredAt": "2026-09-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk",
+          "mitigation": "Moving cold data to archive storage would cut the bill."
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Cost overrun is likely if the data volume doubles, as the storage tier is billed per terabyte"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

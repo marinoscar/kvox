@@ -142,10 +142,10 @@ describe('the personal domain (#383)', () => {
       const personNow = now.entityTypes.find((t) => t.key === 'Person')!;
       expect(personNow.attributes.map((a) => a.key)).toEqual(['title']);
       expect(personNow.attributes[0]).toEqual({ ...person100.attributes[0], extractable: false, deprecated: true });
-      // 1.3.0 (#662) added Topic, Product and BROADER, widened endpoints
+      // 1.3.0 (#662, #664) added Topic, Product, Risk and BROADER, widened endpoints
       // (DISCUSSED, PART_OF, ABOUT, MENTIONS, SUPPORTED_BY, item subjectTypes)
       // and reworded the DISCUSSED and PART_OF descriptions. Undo exactly that.
-      const NEW_TYPES = ['Topic', 'Product'];
+      const NEW_TYPES = ['Topic', 'Product', 'Risk'];
       const strip = (keys: string[] | null | undefined) => keys?.filter((k) => !NEW_TYPES.includes(k));
       const entityTypes = now.entityTypes
         .filter((t) => !NEW_TYPES.includes(t.key))

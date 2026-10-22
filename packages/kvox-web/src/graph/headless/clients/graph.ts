@@ -164,11 +164,11 @@ export function getGraphOntology(host: KvoxWebHost, signal?: AbortSignal): Promi
  */
 export type DatePrecision = 'day' | 'month' | 'year' | 'unknown';
 /**
- * The kind of a knowledge item hanging off entities: a commitment, a decision, a claim or a fact about a person.
+ * The kind of a knowledge item hanging off entities: a commitment, a decision, a risk, a claim or a fact about a person.
  *
  * @stability experimental
  */
-export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact';
+export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk';
 
 /** `entityRef` in both #370 and #372. */
 /**
@@ -285,6 +285,8 @@ export interface GraphEntityCounts {
     claim: number;
     /** Facts about a person. */
     person_fact: number;
+    /** Risks, issues and blockers about the entity. */
+    risk: number;
   };
   /** How many of the commitments are still open. */
   openCommitments: number;
@@ -733,6 +735,8 @@ export interface EntityBrief {
     };
     /** Claims and risks recorded for the entity. */
     risksClaims: BriefEntry[];
+    /** Open risks, issues and blockers about a project, product or organization, highest severity first. Absent when there are none. */
+    openRisks?: BriefEntry[];
     /** Relations between people and others (for example a role) that started or ended. */
     peopleChanges: PeopleChange[];
   };
@@ -1545,6 +1549,7 @@ export type ProposalGroupKey =
   | 'Meeting'
   | 'Decision'
   | 'Commitment'
+  | 'Risk'
   | 'Claim'
   | 'PersonFact'
   | 'Other'
@@ -1563,6 +1568,7 @@ export const PROPOSAL_GROUP_ORDER: readonly ProposalGroupKey[] = [
   'Meeting',
   'Decision',
   'Commitment',
+  'Risk',
   'Claim',
   'PersonFact',
   'Other',

@@ -1,0 +1,216 @@
+{
+  "id": "m53",
+  "title": "Harbourlight migration follow-up",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks",
+    "supersedes"
+  ],
+  "recordedAt": "2026-09-01T14:00:00Z",
+  "contextText": "Follow-up risk review for the ledger migration; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Harbourlight migration follow-up\n\n**Date:** September 1\n**Attendees:** Imogen Farrow, Teodor Blanc, Priya Lindqvist\n\n## Summary\n\nA month after the first risk review, the group met to see what had changed on the Harbourlight migration project at Quillfeather Credit Union. Progress is good, and the cutover window is now being drafted for the board. Two of the three earlier concerns have moved, and a new one has appeared.\n\n## What changed\n\nThe security team completed its review. Security sign-off was granted with conditions, so cutover can be scheduled, but the penetration retest is still open and must be passed before go-live. Teodor said the conditions are reasonable and the findings were minor.\n\nThe nightly outage of the test environment has been fixed, and the regression runs now finish overnight.\n\n## Concerns raised\n\n- Staff availability over the holiday freeze leaves little time to rehearse the cutover, because most of the team has booked leave for the same two weeks.\n- Dashboard latency doubled after the schema change, and the reporting screens now take several seconds to load. Priya thinks an index is missing, but this has not been confirmed.\n\n## Background\n\nThe Harbourlight migration project has nine people working on it, and the board wants a recommendation before the end of the quarter. The member communication plan is on track and is owned by a different team.\n\n## Next steps\n\nThe group will check the retest result and the dashboard latency at the next review. The summary goes to the programme office.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-project-harbourlight-migration",
+      "type": "Project",
+      "label": "Harbourlight migration",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-quillfeather-credit-union",
+      "type": "Organization",
+      "label": "Quillfeather Credit Union",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Harbourlight migration follow-up",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harbourlight migration follow-up"
+          }
+        ]
+      },
+      {
+        "key": "imogen",
+        "type": "Person",
+        "label": "Imogen Farrow",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "teodor",
+        "type": "Person",
+        "label": "Teodor Blanc",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Lindqvist",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "quill",
+        "type": "Organization",
+        "label": "Quillfeather Credit Union",
+        "aliases": [],
+        "existingId": "g-org-quillfeather-credit-union",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harbourlight migration project at Quillfeather Credit Union"
+          }
+        ]
+      },
+      {
+        "key": "harbour",
+        "type": "Project",
+        "label": "Harbourlight migration",
+        "aliases": [],
+        "existingId": "g-project-harbourlight-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "what had changed on the Harbourlight migration project"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "harbour",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "what had changed on the Harbourlight migration project"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Sign-off granted with conditions",
+        "statement": "Security sign-off was granted with conditions, so cutover can be scheduled, but the penetration retest is still open.",
+        "status": "mitigated",
+        "occurredAt": "2026-09-01",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk",
+          "mitigation": "Sign-off was granted with conditions."
+        },
+        "supersedesLabel": "m50#risk-1",
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Security sign-off was granted with conditions, so cutover can be scheduled, but the penetration retest is still open"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Little time to rehearse the cutover",
+        "statement": "Staff availability over the holiday freeze leaves little time to rehearse the cutover.",
+        "status": "open",
+        "occurredAt": "2026-09-01",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Staff availability over the holiday freeze leaves little time to rehearse the cutover"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Dashboard latency doubled",
+        "statement": "Dashboard latency doubled after the schema change.",
+        "status": "open",
+        "occurredAt": "2026-09-01",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "low",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dashboard latency doubled after the schema change"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

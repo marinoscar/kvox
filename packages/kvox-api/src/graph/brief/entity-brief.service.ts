@@ -217,6 +217,8 @@ export class EntityBriefService {
             exclusiveTypes,
             workerIds: workers,
             entities,
+            // #664: with the work domain off the caller's schema has no Risk type, and nothing about risks is shown.
+            openRisksEnabled: schema.entityType('Risk') !== undefined,
           }),
           change: staleness,
         };

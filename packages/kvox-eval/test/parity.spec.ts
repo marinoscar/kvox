@@ -91,7 +91,7 @@ describe('harness parity: the direct binding', () => {
     // Three questions, two model calls each: the tool call, then the answer over its result.
     expect(withTools).toHaveLength(6);
     const toolNames = (withTools[0].request as { tools: Array<{ name: string }> }).tools.map((t) => t.name);
-    expect(toolNames).toEqual(['search', 'get_entity', 'neighbors', 'timeline', 'evidence', 'entity_brief', 'list_commitments']);
+    expect(toolNames).toEqual(['search', 'get_entity', 'neighbors', 'timeline', 'evidence', 'entity_brief', 'list_commitments', 'list_risks']);
     const answers = withTools.filter((r) => JSON.stringify((r.request as { input: unknown }).input).includes('function_call_output'));
     expect(answers).toHaveLength(3);
 
@@ -242,7 +242,7 @@ describe('harness parity: the GitHub Copilot adapter', () => {
     expect(records).toHaveLength(6);
     expect(sessions).toHaveLength(3);
     expect(sessions.every((s) => s.continuations === 1 && s.toolRuns.length === 1 && s.prompts.length === 1)).toBe(true);
-    expect(sessions.every((s) => s.config.availableTools.length === 7 && s.config.availableTools.every((t) => t.startsWith('custom:')))).toBe(true);
+    expect(sessions.every((s) => s.config.availableTools.length === 8 && s.config.availableTools.every((t) => t.startsWith('custom:')))).toBe(true);
     expect(sessions.every((s) => s.deleted && s.disconnected)).toBe(true);
   });
 

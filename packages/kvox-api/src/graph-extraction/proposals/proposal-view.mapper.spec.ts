@@ -236,7 +236,7 @@ describe('proposal view mapper', () => {
       const counts = countsOf(rows);
       expect(counts).toEqual(expect.objectContaining({ total: 5, pending: 1, accepted: 3, rejected: 1, known: 1 }));
       expect(counts.byGroup).toEqual(expect.objectContaining({ Person: 1, Organization: 1, relations: 1, closings: 1, Claim: 1, Project: 0, Other: 0 }));
-      expect(Object.keys(counts.byGroup)).toHaveLength(11);
+      expect(Object.keys(counts.byGroup)).toHaveLength(12);
     });
 
     it('effective payload is the edit; ref labels come from it', () => {
