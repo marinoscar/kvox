@@ -773,6 +773,25 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
       return json(route, explorerSlice(body.nodeIds ?? [JOE_ID], body.cap ?? 100));
     }
 
+    if (path === '/graph/connect') {
+      // "What connects these" (GIC-14): the two inputs share Acme Corp, and a bridge runs Ana, Acme, Joe.
+      const body = (route.request().postDataJSON() ?? {}) as { noteIds?: string[]; entityIds?: string[] };
+      const inputIds = body.entityIds?.length ? body.entityIds : [JOE_ID, ANA_ID];
+      const slice = explorerSlice([ACME_ID, JOE_ID, ANA_ID], 100);
+      return json(route, {
+        inputs: inputIds.map((inputId) => ({
+          kind: body.entityIds?.length ? 'entity' : 'note',
+          id: inputId,
+          title: inputId === JOE_ID ? 'Joe Rivera' : 'Ana Diaz',
+          entityIds: [inputId, ACME_ID],
+        })),
+        shared: [{ entityId: ACME_ID, inputIds, mentionCount: 3 }],
+        paths: [{ fromInput: inputIds[0], toInput: inputIds[1], nodeIds: [ANA_ID, ACME_ID, JOE_ID], edgeIds: [id(414), id(410)], score: 0.8 }],
+        slice,
+        truncated: false,
+      });
+    }
+
     if (path === '/graph/overview') {
       return json(route, { ...OVERVIEW, stale: Boolean(options.overviewStale) });
     }

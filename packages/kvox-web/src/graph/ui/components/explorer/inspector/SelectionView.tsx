@@ -2,7 +2,7 @@
  * The inspector's view of several marked nodes (GIC-11, #672): how many of each
  * type, the neighbours they share, and the actions that apply to all of them.
  * "Find connections" (GIC-14) and "Ask about selection" (GIC-17) plug in through
- * `extraActions`; this story draws neither.
+ * `extraActions`; its answer is drawn through `results`.
  */
 
 import CloseIcon from '@mui/icons-material/Close';
@@ -43,6 +43,8 @@ export interface SelectionViewProps {
   onClose: () => void;
   /** More actions from later stories (Find connections, Ask about selection). */
   extraActions?: ReactNode;
+  /** The answer to "Find connections" (GIC-14), drawn under the actions. */
+  results?: ReactNode;
   /** A coarse pointer. */
   touch: boolean;
 }
@@ -53,7 +55,7 @@ export interface SelectionViewProps {
  * @stability experimental
  */
 export function SelectionView(props: SelectionViewProps) {
-  const { summary, typeLabel, atCap, busy, onExpandAll, onHideAll, onSelectNode, onClose, extraActions, touch } = props;
+  const { summary, typeLabel, atCap, busy, onExpandAll, onHideAll, onSelectNode, onClose, extraActions, results, touch } = props;
   const mode = useTheme().palette.mode;
   const height = touch ? 44 : undefined;
   const hideable = summary.ids.length - summary.seedCount;
@@ -96,6 +98,7 @@ export function SelectionView(props: SelectionViewProps) {
         </Button>
         {extraActions}
       </Box>
+      {results}
       <Box component="ul" aria-label="Selected by type" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         {summary.byType.map(({ type, count }) => (
           <li key={type}>

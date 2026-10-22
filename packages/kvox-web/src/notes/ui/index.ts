@@ -32,6 +32,7 @@ export type {
   NotePageSlots,
   NoteProposalActionsProps,
   NoteSelectionActionsProps,
+  NotesLibrarySelectionActionsProps,
   NotesLibrarySlots,
   NotesSlotBoundaryProps,
   NotesSlotBoundaryState,

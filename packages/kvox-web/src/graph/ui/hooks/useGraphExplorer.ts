@@ -113,6 +113,8 @@ export interface UseGraphExplorerResult {
    * Adds a node's one-hop neighbourhood, or with `only` just the neighbours of one entity type or along one relation type (the inspector's Expand menu, GIC-11; the "+N more" stubs ask for the same thing). At the node cap it sends nothing and sets `capped`.
    */
   expand: (nodeId: string, only?: ExpandOnly) => Promise<void>;
+  /** Merges a slice from another request (the connect answer, GIC-14) into the graph: new nodes are added, existing ones keep their position. */
+  addSlice: (slice: GraphSlice) => void;
   /** Re-evaluates the graph as of a date (`YYYY-MM-DD`) or now (`null`), rebuilding from the seeds and expanded nodes while keeping positions. */
   setAsOf: (date: string | null) => Promise<void>;
   /** Hides these node types; filters are sent to the server, and seeds are never removed. */
@@ -488,6 +490,19 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     await lastActionRef.current?.();
   }, []);
 
+  const addSlice = useCallback(
+    (slice: GraphSlice) => {
+      const state = stateRef.current;
+      const { capped: wasCapped } = mergeSlice(state, slice, {
+        palette: optionsRef.current.palette,
+        neighbourLimit: EXPLORER_NEIGHBOUR_LIMIT,
+      });
+      if (wasCapped) setCapped(true);
+      bump();
+    },
+    [bump],
+  );
+
   const reset = useCallback(() => {
     controllerRef.current?.abort();
     const next = createExplorerState(stateRef.current.cap);
@@ -517,6 +532,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     load,
     loadHandoff,
     expand,
+    addSlice,
     setAsOf,
     setHiddenTypes,
     setHiddenRelationTypes,
