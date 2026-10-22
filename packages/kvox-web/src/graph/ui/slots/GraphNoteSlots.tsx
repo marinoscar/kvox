@@ -29,6 +29,7 @@ import type {
   NotePageSlots,
   NoteProposalActionsProps,
   NoteSelectionActionsProps,
+  NotesLibrarySelectionActionsProps,
   NotesLibrarySlots,
 } from '../../../notes/ui/index.js';
 import { isNoteInFlight } from '../../../notes/headless/index.js';
@@ -43,6 +44,7 @@ import {
   ProposalReviewSheet,
   REVIEW_SHEET_WIDTH,
 } from '../components/review/ProposalReviewSheet.js';
+import { ExploreConnectionsButton, NoteExploreActions, EXPLORE_MAX_NOTES } from '../components/NoteExploreActions.js';
 import { GraphSelectionAdd } from '../components/selection/GraphSelectionAdd.js';
 import { GraphSearchPrefix } from './GraphSearchPrefix.js';
 
@@ -224,7 +226,7 @@ export function useGraphNoteAsideWidth(): number {
 }
 
 /**
- * The review button in the note page's header (#367). Fills the `HeaderActions` slot.
+ * The graph's buttons in the note page's header: the review button (#367) and the explorer entries "Explore in graph" and "Compare with…" (GIC-14, #675). Fills the `HeaderActions` slot.
  *
  * @param _props - The note the page shows.
  * @returns The button, or nothing.
@@ -232,16 +234,19 @@ export function useGraphNoteAsideWidth(): number {
  * @stability experimental
  * @extensionPoint slot
  */
-export function GraphNoteHeaderActions(_props: NoteHeaderActionsProps) {
+export function GraphNoteHeaderActions({ noteId }: NoteHeaderActionsProps) {
   const graph = useNotePageGraph();
   if (!graph?.graphVisible) return null;
   const { proposal, reviewOpen, setReviewOpen } = graph;
   return (
-    <GraphReviewButton
-      summary={proposal.detail === undefined ? undefined : (proposal.detail?.proposal ?? null)}
-      open={reviewOpen}
-      onClick={() => setReviewOpen((value) => !value)}
-    />
+    <>
+      <GraphReviewButton
+        summary={proposal.detail === undefined ? undefined : (proposal.detail?.proposal ?? null)}
+        open={reviewOpen}
+        onClick={() => setReviewOpen((value) => !value)}
+      />
+      <NoteExploreActions noteId={noteId} />
+    </>
   );
 }
 
@@ -375,12 +380,43 @@ export const graphNotePageSlots: NotePageSlots = {
 };
 
 /**
- * The graph member of the notes library's slots: entity hits above the ranked
- * results.
+ * Whether the notes library offers multi-select for the graph: connected knowledge is on and the viewer may read it.
+ * Fills the `useSelectionEnabled` slot of the notes library.
+ *
+ * @returns `true` when "Explore connections" can be offered.
+ *
+ * @stability experimental
+ * @extensionPoint slot
+ */
+export function useGraphNotesSelectionEnabled(): boolean {
+  const graphEnabled = useKvoxHost().features().graphEnabled === true;
+  return useHasPermission('graph:read') && graphEnabled;
+}
+
+/**
+ * "Explore connections" in the notes library's selection bar (GIC-14, #675): opens the explorer on the selected notes.
+ * Fills the `SelectionActions` slot of the notes library.
+ *
+ * @param props - The selected notes and the way out of selection mode.
+ * @returns The button.
+ *
+ * @stability experimental
+ * @extensionPoint slot
+ */
+export function GraphNotesSelectionActions({ noteIds, onDone }: NotesLibrarySelectionActionsProps) {
+  return <ExploreConnectionsButton noteIds={noteIds} onDone={onDone} />;
+}
+
+/**
+ * The graph members of the notes library's slots: entity hits above the ranked
+ * results, and multi-select with "Explore connections" (GIC-14, #675).
  *
  * @stability experimental
  * @extensionPoint slot
  */
 export const graphNotesLibrarySlots: NotesLibrarySlots = {
   SearchPrefix: GraphSearchPrefix,
+  useSelectionEnabled: useGraphNotesSelectionEnabled,
+  SelectionActions: GraphNotesSelectionActions,
+  selectionLimit: EXPLORE_MAX_NOTES,
 };

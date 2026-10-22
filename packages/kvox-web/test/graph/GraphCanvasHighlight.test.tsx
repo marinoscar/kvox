@@ -174,7 +174,7 @@ describe('GraphCanvas — hover', () => {
     const state = explorer();
     const { props } = mountCanvas(state);
     act(() => handler('clickNode')({ node: ACME_ID }));
-    expect(props.onNodeClick).toHaveBeenCalledWith(ACME_ID);
+    expect(props.onNodeClick).toHaveBeenCalledWith(ACME_ID, { shiftKey: false });
   });
 
   it('the selection lights its neighbours when nothing is hovered', () => {
@@ -201,7 +201,7 @@ describe('GraphCanvas — touch: the page decides the first tap (one input-modal
 
     // The first-tap-versus-select rule lives in the page (`useInputModality` decides); the canvas just reports.
     act(() => handler('clickNode')({ node: JOE_ID }));
-    expect(props.onNodeClick).toHaveBeenCalledWith(JOE_ID);
+    expect(props.onNodeClick).toHaveBeenCalledWith(JOE_ID, { shiftKey: false });
   });
 
   it('moves the highlight with the preview', () => {
