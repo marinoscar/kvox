@@ -10,8 +10,8 @@
  *     Enter adds the entity as a starting point (seed); Alt+Enter replaces the
  *     seeds. The seed cap of {@link MAX_PALETTE_SEEDS} is kept, with a message.
  *   - Actions: what the page offers right now (expand, hide, re-layout, switch
- *     view). "Connect A and B" and the Lenses are NOT here until their stories
- *     ship: the page adds them to `actions` only when the capability exists.
+ *     view, "Connect A and B"). The Lenses are NOT here until their story
+ *     ships: the page adds an action to `actions` only when the capability exists.
  *
  * `type:Person joe` narrows both result sections to a type.
  *

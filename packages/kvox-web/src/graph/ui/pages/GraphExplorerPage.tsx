@@ -72,6 +72,7 @@ import {
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import ExpandIcon from '@mui/icons-material/OpenInFull';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
@@ -123,6 +124,7 @@ import { ExplorerInspector } from '../components/explorer/inspector/ExplorerInsp
 import { buildSelection, summariseSelection } from '../components/explorer/inspector/inspectorModel.js';
 import { useInspectorUrlState } from '../components/explorer/inspector/useInspectorUrlState.js';
 import { GraphLegend } from '../components/explorer/GraphLegend.js';
+import { usePathMode } from '../components/explorer/paths/usePathMode.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
@@ -312,6 +314,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     expand,
     hide,
     makeSeed,
+    mergeExternalSlice,
   } = explorer;
 
   // Applied BEFORE the seeding effect below (effects run in order), so the
@@ -996,8 +999,36 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [updateParams],
   );
 
-  // What the palette can do right now. "Connect A and B" (GIC-13) is added here only when that capability
-  // exists; it is not stubbed. The Lenses, Undo and Redo are GIC-17's.
+  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+
+  // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
+  const pathMode = usePathMode({
+    params: searchParams,
+    updateParams,
+    windowClass,
+    inputModality,
+    mode: theme.palette.mode,
+    ontology,
+    relationOptions: relationTypes,
+    asOf,
+    graph,
+    version,
+    mergeSlice: mergeExternalSlice,
+    controls: canvasControls,
+    hasSeed: seeds.length > 0,
+    hasSelection: selection !== null || marked.size >= 2,
+    listView,
+    openEdge: (id) => {
+      setPreviewId(null);
+      setSelected({ kind: 'edge', id });
+    },
+    announce: setAnnouncement,
+  });
+
+  const openConnectPicker = pathMode.openPicker;
+
+  // What the palette can do right now: the page's own commands, Connect A <-> B (GIC-13) and the Lenses,
+  // Undo and Redo (GIC-17).
   const paletteActions = useMemo<PaletteAction[]>(() => {
     if (showStartHere) return [];
     const list: PaletteAction[] = [
@@ -1039,11 +1070,16 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         icon: <FilterAltOutlinedIcon fontSize="small" />,
       })),
     ];
+    list.splice(3, 0, {
+      id: 'connect',
+      label: 'Connect A \u2194 B\u2026',
+      hint: 'Find how two things are connected',
+      icon: <AltRouteIcon fontSize="small" />,
+      run: () => openConnectPicker(),
+    });
     return list;
     // `version`: node labels are read from the in-place graph.
-  }, [showStartHere, selectedNodeId, selectedIsEntity, atCap, listView, hasGraph, webgl, version, graph, onExpand, onHide, toggleListView, goHome, explorer.canUndo, explorer.canRedo, onUndo, onRedo, builtIn, userLenses.lenses, onApplyLens]);
-
-  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+  }, [showStartHere, selectedNodeId, selectedIsEntity, atCap, listView, hasGraph, webgl, version, graph, onExpand, onHide, toggleListView, goHome, openConnectPicker, explorer.canUndo, explorer.canRedo, onUndo, onRedo, builtIn, userLenses.lenses, onApplyLens]);
 
   const title = (
     <>
@@ -1067,6 +1103,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onChooseEntity={chooseSeed}
         onChooseTheme={chooseTheme}
         onOpenSearch={openPalette}
+        onConnect={() => pathMode.openPicker()}
         hint={clusterParam && !handoff && !startParam ? CLUSTER_HINT : undefined}
         typeLabel={typeLabel}
       />
@@ -1122,6 +1159,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
+          connectAction={pathMode.connectButton}
           onOpenSearch={openPalette}
           onHome={goHome}
           minimapControl={{ shown: mediumMinimap, onToggle: () => setMediumMinimap((on) => !on) }}
@@ -1286,6 +1324,21 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
   const NodeActionsSlot = slots?.NodeActions;
 
+  // The node menu's extra rows: "Path to…" (GIC-13) and "Ask about this…" (GIC-17).
+  const contextExtras = [
+    pathMode.contextMenuItems(contextTarget, () => setContextTarget(null)),
+    askAvailable && contextTarget ? (
+      <AskSelectionMenuItem
+        key="ask-selection"
+        onClick={() => {
+          const ids = markedVisible.has(contextTarget.id) && markedVisible.size >= 2 ? markedVisible : [contextTarget.id];
+          setContextTarget(null);
+          askAboutNodes(ids);
+        }}
+      />
+    ) : null,
+  ].filter(Boolean);
+
   return (
     <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
       {earlyBody ? (
@@ -1301,11 +1354,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           topBar={topBar}
           facets={facets}
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
-          inspectorOpen={!listView && (selection !== null || multi !== null)}
+          inspectorOpen={!listView && (selection !== null || multi !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
-            if (!open) closeInspector();
+            if (!open) {
+              pathMode.onSheetDismiss();
+              closeInspector();
+            }
           }}
           inspector={
+            pathMode.sheet ?? (
             <ExplorerInspector
               selection={selection}
               multi={multi}
@@ -1332,7 +1389,12 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               onClose={closeInspector}
               AskPanel={askAvailable}
               extraActions={
-                NodeActionsSlot && selection?.kind === 'node' ? <NodeActionsSlot nodeId={selection.id} /> : undefined
+                selection?.kind === 'node' ? (
+                  <>
+                    {pathMode.pathToAction(selection.id)}
+                    {NodeActionsSlot ? <NodeActionsSlot nodeId={selection.id} /> : null}
+                  </>
+                ) : undefined
               }
               selectionExtraActions={
                 askAvailable ? (
@@ -1359,11 +1421,13 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                 ) : undefined
               }
             />
+            )
           }
           canvas={({ canvasInsets }) =>
             listView ? (
               hasGraph ? (
                 <Box sx={{ height: '100%', overflowY: 'auto', p: { xs: 1, sm: 1.5 } }}>
+                  {pathMode.inline}
                   <ExplorerListView
                     rows={listRows}
                     typeLabel={typeLabel}
@@ -1399,6 +1463,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
                       markedIds={canvasMarked}
+                      pathNodeIds={pathMode.pathNodeIds}
+                      pathEdgeIds={pathMode.pathEdgeIds}
                       layout={layout}
                       seedIds={state.seedIds}
                       pinsKey={pinsKey}
@@ -1430,6 +1496,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                   </Box>
                 )}
                 {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+                {pathMode.overlay(canvasInsets)}
               </Box>
             )
           }
@@ -1444,17 +1511,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onPin={onPin}
         onHide={onHide}
         onMakeSeed={onMakeSeed}
-        extraItems={
-          askAvailable && contextTarget ? (
-            <AskSelectionMenuItem
-              onClick={() => {
-                const ids = markedVisible.has(contextTarget.id) && markedVisible.size >= 2 ? markedVisible : [contextTarget.id];
-                setContextTarget(null);
-                askAboutNodes(ids);
-              }}
-            />
-          ) : undefined
-        }
+        extraItems={contextExtras.length > 0 ? contextExtras : undefined}
       />
       {askAvailable && <AskSelectionPanel AskPanel={askAvailable} scope={askScope} onClose={() => setAskScope(null)} />}
       <UndoSnackbar message={undoNotice} onUndo={onUndo} onClose={() => setUndoNotice(null)} />
@@ -1472,6 +1529,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onSetSeeds={onPaletteSetSeeds}
         actions={paletteActions}
       />
+      {pathMode.picker}
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
       </Box>

@@ -1106,7 +1106,7 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(/\d+ results?/));
   });
 
-  it('runs actions, offers the lenses (GIC-17), and no Connect entry before that capability exists', async () => {
+  it('runs actions, and offers Connect and the lenses (GIC-17)', async () => {
     const user = userEvent.setup();
     renderExplorer();
     await canvasReady();
@@ -1118,7 +1118,7 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     expect(names.join('|')).toMatch(/Hide selection/);
     expect(names.join('|')).toMatch(/Re-layout/);
     expect(names.join('|')).toMatch(/Switch to list/);
-    expect(names.join('|')).not.toMatch(/Connect/);
+    expect(names.join('|')).toMatch(/Connect A/);
     expect(names.join('|')).toMatch(/Lens: People network/);
     expect(names.join('|')).toMatch(/Undo/);
     // No selection yet: Expand is disabled.

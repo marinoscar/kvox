@@ -100,6 +100,18 @@ export interface UseGraphExplorerOptions {
 }
 
 /**
+ * What merging a slice into the explorer's graph did.
+ *
+ * @stability experimental
+ */
+export interface ExternalSliceMerge {
+  /** Ids of the nodes that were new to the graph. */
+  added: string[];
+  /** `true` when the node cap kept some of the slice's nodes out. */
+  capped: boolean;
+}
+
+/**
  * What {@link useGraphExplorer} returns.
  *
  * @stability experimental
@@ -143,6 +155,10 @@ export interface UseGraphExplorerResult {
   dismissCap: () => void;
   /** Repeats the last load or rebuild after a failure. */
   retry: () => Promise<void>;
+  /**
+   * Merges a slice fetched elsewhere (path mode's "Show on canvas", GIC-13) into the graph, idempotently and never past the node cap. Returns the ids it added and whether the cap dropped any node.
+   */
+  mergeExternalSlice: (slice: GraphSlice) => ExternalSliceMerge;
   /** Aborts anything in flight and clears the graph, keeping the filters and `as of` date. */
   reset: () => void;
   /** Steps back one change (graph, seeds, filters, `as of`). Returns what the URL must now say, or `null` when there is nothing to undo. */
@@ -592,6 +608,16 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
   const redo = useCallback(() => travel('forward'), [travel]);
   const undoDepth = useCallback(() => historyRef.current.past.length, []);
 
+  const mergeExternalSlice = useCallback(
+    (slice: GraphSlice) => {
+      const result = mergeSlice(stateRef.current, slice, { palette: optionsRef.current.palette });
+      if (result.capped) setCapped(true);
+      bump();
+      return result;
+    },
+    [bump],
+  );
+
   return {
     state: stateRef.current,
     version,
@@ -611,6 +637,7 @@ export function useGraphExplorer(options: UseGraphExplorerOptions): UseGraphExpl
     makeSeed,
     dismissCap,
     retry,
+    mergeExternalSlice,
     reset,
     undo,
     redo,

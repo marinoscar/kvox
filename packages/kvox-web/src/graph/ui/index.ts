@@ -44,7 +44,6 @@ export { ProposalReviewSheet, REVIEW_SHEET_WIDTH } from './components/review/Pro
 export type { ProposalReviewSheetProps } from './components/review/ProposalReviewSheet.js';
 
 export { useGraphExplorer } from './hooks/useGraphExplorer.js';
-export type { ExpandOnly, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 export type { RestoredView } from './components/explorer/history/snapshot.js';
 export { LENS_LIMITS, builtInLenses, lensPaletteActions } from './components/explorer/lenses/lensModel.js';
 export type {
@@ -55,6 +54,7 @@ export type {
   LensPaletteAction,
   LensPin,
 } from './components/explorer/lenses/lensModel.js';
+export type { ExpandOnly, ExternalSliceMerge, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 
 export {
   GraphNotePageProvider,
