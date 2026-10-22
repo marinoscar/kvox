@@ -514,6 +514,33 @@ kvox deploy update --ref <previous-sha> --force
 Full flag reference: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
 
+### Updating a server: CLI first, then the app
+
+Two things are installed on a server, and each has its own update command.
+
+| What | Where | Updated by |
+|---|---|---|
+| The CLI (`kvox`) | `/opt/infra/cli/<repo>`, built once by `bootstrap-vps.sh` | `bash apps/cli/bootstrap-vps.sh --repo <owner>/<repo> --update` |
+| The application | `<deployRoot>/repo` (default `/opt/infra/apps/<name>/repo`) | `kvox deploy update` |
+
+`kvox deploy update` never touches the CLI. A new revision can need a newer CLI
+(a value its compose files require, a step it runs), and an older CLI cannot supply
+what it has never heard of. So, as root:
+
+```bash
+kvox --version                                   # compare with apps/cli/package.json on the branch you deploy
+git -C /opt/infra/cli/<repo> pull --ff-only      # first, so the script you run below is the new one
+bash /opt/infra/cli/<repo>/apps/cli/bootstrap-vps.sh --repo <owner>/<repo> --update
+kvox deploy update --check                       # then the app, as in this section
+kvox deploy update
+```
+
+`--update` fetches and pulls the CLI checkout again and rebuilds `kvox`; the explicit
+`git pull` first keeps the shell from running a script that changes under it. Update
+the CLI first whenever `kvox --version` is older than the `apps/cli/package.json` of
+the revision you are about to deploy. If an update already failed at **Build images**
+for this reason, see [Troubleshooting](#13-troubleshooting).
+
 ### After the notifications and email slice (#470)
 
 The update that adopts the platform's email and notifications slices changes no
@@ -666,10 +693,16 @@ What this app adds, and why each one is an overlay and not an edit:
   refuses to render without `DEPLOY_ROOT` (it also defaults the deploy-info mount to
   `./.deploy`, where this app's file used `../../..`) and without `STACK_AGENT_TOKEN`,
   even though this app switches the stack agent off. A server deployed by CLI 1.8.0
-  has neither guaranteed. `kvox deploy update` records `DEPLOY_ROOT` from the
-  deployment root and generates `STACK_AGENT_TOKEN` (hex, never asked) before it runs
-  Compose, so nothing to do. If you run `docker compose` by hand against an un-updated
-  `.env`, add both: the error names the variable; `openssl rand -hex 32` makes a token.
+  has neither guaranteed. A **current** CLI (1.10 or newer, which runs on the
+  platform engine) records `DEPLOY_ROOT` from the deployment root and generates
+  `STACK_AGENT_TOKEN` (hex, never asked) in its environment step, before it runs
+  Compose. An **older** CLI does neither, and its `build` fails on the first update
+  to this revision: the CLI on a server is updated separately from the app
+  ([Updating a server: CLI first, then the app](#updating-a-server-cli-first-then-the-app)).
+  Recovery: [Troubleshooting](#13-troubleshooting), "`required variable
+  STACK_AGENT_TOKEN is missing a value`". If you run `docker compose` by hand against
+  an un-updated `.env`, add both: the error names the variable; `openssl rand -hex 32`
+  makes a token.
 - **Ports and limits are unchanged**: nginx still binds `${NGINX_PORT:-3535}` in dev
   and `127.0.0.1:${APP_BIND_PORT}` on a VPS; nginx and the API now raise their
   open-file limit (65536) and nginx its worker connections for long-lived SSE.
@@ -1073,6 +1106,7 @@ own environment variables, automatically.
 |---|---|---|
 | `install`/`doctor` fails on `gh-authenticated` | `gh auth status` is failing — the GitHub CLI isn't logged in, or its token expired. | Run `gh auth status` directly to see the reason, then `gh auth login --hostname github.com --git-protocol https`. `install`/`update` also run `gh auth setup-git` for you afterward, so plain `git` immediately picks up the same credential. |
 | The install wizard shows only `Welcome › Domain › Resources › Review` — no Database, Secrets, OAuth or Admin step — and Review refuses to install rather than offering a confirm dialog | None of the wizard's three ways to read `infra/compose/.env.example` produced anything: the remote read failed (the Welcome screen names the reason — `gh` not installed, not logged in, no access to the repository, timed out, or an empty file), no checkout of the repository being deployed exists on this server or is the one the CLI is running from, and no template was bundled when this CLI was installed. Installing anyway would take the database, secrets and OAuth client from template defaults, so the wizard refuses instead — see [`apps/cli/README.md`](../../apps/cli/README.md#deploying-a-fork) and [`docs/specs/vps-deploy.md`](../specs/vps-deploy.md#61-where-the-template-file-comes-from-and-why-the-order-matters-issues-229-230-234-236). | Either fix the reason the Welcome screen gave for `gh` and re-open the wizard — `gh auth login --hostname github.com --git-protocol https` as **the same user running `kvox`**: `gh`'s login is per-user, so `sudo kvox` needs root's own `gh auth login`, separate from any account you logged in as yourself — or reinstall the CLI from inside a checkout of the repository actually being deployed (`sudo bash install.sh` from that checkout, or `KVOX_SRC=<path> sudo bash install.sh`) so `install.sh` bundles that repository's own template and the wizard needs no network call for it. |
+| `required variable STACK_AGENT_TOKEN is missing a value` (or `DEPLOY_ROOT`), from `docker compose ... build` at **Build images** during `kvox deploy update` | The CLI on this server is older than the revision it just pulled (for example CLI 1.8.x against a revision whose `vps.compose.yml` requires both). Only a current CLI (1.10 or newer) records `DEPLOY_ROOT` and generates `STACK_AGENT_TOKEN`; the CLI is not updated by `kvox deploy update` (section 6). The failed run already moved `<deployRoot>/repo` to the new revision, so a plain retry prints `Already at <sha>; nothing to do` and heals nothing. | As root: **1.** Update the CLI: `git -C /opt/infra/cli/<repo> pull --ff-only && bash /opt/infra/cli/<repo>/apps/cli/bootstrap-vps.sh --repo <owner>/<repo> --update`, then `kvox --version` (expect the version in `apps/cli/package.json`). **2.** Take a database backup (the update migrates; there is no automatic rollback). **3.** Re-run with force: `kvox deploy update --force`; the current CLI records `DEPLOY_ROOT` and generates `STACK_AGENT_TOKEN` itself. *Fallback if the CLI cannot be updated:* add both to `<deployRoot>/.env` (`STACK_AGENT_TOKEN=$(openssl rand -hex 32)`, `DEPLOY_ROOT=<deployRoot>`; `repo/infra/compose/.env` is a symlink to it, section 9), then `kvox deploy update --force`. Nothing was built, migrated or restarted at **Build images**, so the previous containers keep serving. Maintenance mode is on only if you passed `--maintenance`; the next successful update turns it off. |
 | `install`/`doctor` fails on `proxy-container` | No container publishes port 443, and no container named `proxy-nginx` (the default) is running. | Start the shared proxy: `cd /opt/infra/proxy && docker compose up -d`. If it runs under a different name, pass `--proxy-container <name>`. |
 | You said yes to creating the database (section 3.2), but it reports `<user> may not create databases on this server` instead | The supplied role has no `CREATEDB` — the ordinary case on a managed or shared PostgreSQL instance, not a bug in the wizard. | Either create the database yourself with the `createdb -h ... -U ... <db>` command the wizard prints alongside the refusal, or have an administrator grant it first: `ALTER ROLE <user> CREATEDB;`, then answer the prompt again (or re-run `install`). Nothing was created or changed by the attempt itself. |
 | Certificate issues, but the proxy fails to **reload** afterward even though `nginx -t` passed | The vhost binds `[::]` (IPv6) listeners, and this host — or the proxy container — has no IPv6 configured. `nginx -t` doesn't catch this; only the reload does, and it fails for every site behind that proxy, not just this one. | Enable IPv6 on the host, or re-render the vhost without it: `kvox deploy install --no-ipv6` (or `doctor`'s `proxy-ipv6` check names the same remedy ahead of time). |
