@@ -126,10 +126,25 @@ describe('Graph read routes (integration)', () => {
     expect(queryValues(prismaMock.$queryRaw.mock.calls[0] as unknown[])).toContain(user.id);
   });
 
+  it('answers sort=mentions with a window, as the top `limit` and no next page', async () => {
+    const user = await createMockTestUser(context, { roleName: 'viewer' });
+    const res = await request(context.app.getHttpServer())
+      .get('/api/graph/entities?sort=mentions&since=2026-09-21&limit=4&type=Person')
+      .set(authHeader(user.accessToken))
+      .expect(200);
+    expect(res.body.data).toEqual({ items: [], nextCursor: null });
+    const values = queryValues(prismaMock.$queryRaw.mock.calls[0] as unknown[]);
+    expect(values).toContain(user.id);
+    expect(values).toContain(4);
+    expect(values).toContainEqual(new Date('2026-09-21T00:00:00.000Z'));
+  });
+
   it.each([
     ['/api/graph/entities?limit=0'],
     ['/api/graph/entities?limit=51'],
     ['/api/graph/entities?sort=popular'],
+    ['/api/graph/entities?sort=mentions&since=yesterday'],
+    ['/api/graph/entities?sort=mentions&since=2026-13-01'],
     ['/api/graph/entities?transcriptId=not-a-uuid'],
     ['/api/graph/entities?q='],
     [`/api/graph/entities?q=${'x'.repeat(201)}`],

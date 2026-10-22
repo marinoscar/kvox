@@ -130,6 +130,49 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('sorts by mentions, within a window, for the owner only', async () => {
+    const { user, g } = await owner('mentions');
+    const { user: other, g: otherGraph } = await owner('mentions-other');
+    const busy = await g.entity('Person', 'Busy');
+    const quiet = await g.entity('Person', 'Quiet');
+    const old = await g.entity('Project', 'Old news');
+    const none = await g.entity('Person', 'Never mentioned');
+    const theirs = await otherGraph.entity('Person', 'Theirs');
+    const n1 = await g.note({ title: 'One' });
+    const n2 = await g.note({ title: 'Two' });
+    const n3 = await g.note({ title: 'Three' });
+    const recent = new Date(Date.now() - 2 * 86_400_000);
+    const ancient = new Date(Date.now() - 200 * 86_400_000);
+    const mention = (entityId: string, noteId: string, createdAt: Date, ownerId = user.id) =>
+      prisma.kgMention.create({ data: { ownerId, entityId, noteId, createdAt } });
+    await mention(busy, n1.id, recent);
+    await mention(busy, n2.id, recent);
+    await mention(busy, n2.id, recent); // the same note twice counts once
+    await mention(quiet, n3.id, recent);
+    await mention(old, n1.id, ancient);
+    await mention(old, n2.id, ancient);
+    await mention(old, n3.id, ancient);
+    const otherNote = await otherGraph.note({ title: 'Theirs' });
+    await mention(theirs, otherNote.id, recent, other.id);
+
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const windowed = await list(user.id, { sort: 'mentions', since, limit: 10 });
+    expect(windowed.items.map((i) => i.id)).toEqual([busy, quiet]);
+    expect(windowed.nextCursor).toBeNull();
+
+    // No window: all time, the old entity (3 notes) leads; an entity never mentioned is absent.
+    const allTime = await list(user.id, { sort: 'mentions', limit: 10 });
+    expect(allTime.items.map((i) => i.id)).toEqual([old, busy, quiet]);
+    expect(allTime.items.map((i) => i.id)).not.toContain(none);
+
+    // The type filter and the limit apply; a foreign entity never appears.
+    expect((await list(user.id, { sort: 'mentions', type: 'Project' })).items.map((i) => i.id)).toEqual([old]);
+    expect((await list(user.id, { sort: 'mentions', limit: 1 })).items.map((i) => i.id)).toEqual([old]);
+    expect(allTime.items.map((i) => i.id)).not.toContain(theirs);
+
+    await expect(list(user.id, { sort: 'mentions', since: 'yesterday' })).rejects.toThrow(BadRequestException);
+  });
+
   it('searches labels and aliases by trigram similarity', async () => {
     const { user, g } = await owner();
     const sarah = await g.entity('Person', 'Sarah Chen', { aliases: ['S. Chen'] });

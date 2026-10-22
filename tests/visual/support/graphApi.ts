@@ -749,6 +749,8 @@ export interface GraphApiOptions {
   explorerCapped?: boolean;
   /** `'pages'`: the overview (#375) reports a stale snapshot. */
   overviewStale?: boolean;
+  /** `'pages'`: nothing was viewed yet (`sort=viewed` is empty) while the graph itself is full: the explorer opens on "Start here" (GIC-09). */
+  noRecents?: boolean;
 }
 
 function json(route: Route, data: unknown) {
@@ -786,9 +788,13 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
 
     if (path === '/graph/entities') {
       if (options.empty) return json(route, { items: [], nextCursor: null });
+      if (options.noRecents && url.searchParams.get('sort') === 'viewed') return json(route, { items: [], nextCursor: null });
       const types = url.searchParams.get('type')?.split(',').filter(Boolean) ?? [];
       const items = SUMMARIES.filter((row) => types.length === 0 || types.includes(row.type));
-      return json(route, { items, nextCursor: 'page-2' });
+      const q = url.searchParams.get('q')?.toLowerCase();
+      const found = q ? items.filter((row) => row.label.toLowerCase().includes(q)) : items;
+      const sorted = url.searchParams.get('sort') === 'mentions';
+      return json(route, { items: sorted ? found.slice(0, Number(url.searchParams.get('limit') ?? 25)) : found, nextCursor: sorted || q ? null : 'page-2' });
     }
 
     if (/^\/graph\/entities\/[^/]+\/brief$/.test(path)) return json(route, BRIEF);
