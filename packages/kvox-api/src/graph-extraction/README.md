@@ -30,7 +30,7 @@ Works on `kg_proposals`, `kg_proposal_items`, `kg_mentions`, `kg_merges`, `kg_di
 
 - Permissions: `graph:read` and `graph:write` from the `graph` slice; the owner's `graph:write` is checked through the identity port before an automatic extraction is queued.
 - Settings: none of its own. The `graph` per-user namespace holds the owner's `extraction.autoExtract`, `resolution` and `domains` preferences; the deployment's `ai` namespace holds the graph switch and the spend caps.
-- Job types (permanent, all server-only, all spend the owner's own AI key): `kg.extract` (twenty minutes, ONE attempt), `kg.resolve` (twenty minutes, ONE attempt) and `kg.embed` (five minutes, three attempts). A provider rate limit throws a `KvoxRateLimitError` on the user's own bucket. Embeddings are optional: when the host has no 1536-dimension embeddings model the resolution works by name only.
+- Job types (permanent, all server-only, all spend the owner's own AI key): `kg.extract` (twenty minutes, ONE attempt), `kg.resolve` (twenty minutes, ONE attempt) and `kg.embed` (five minutes, three attempts), and `kg.topics_promote` (thirty minutes, three attempts; #666: only on a click, turns past meetings' free-text topics into draft Topic proposals through `POST /api/graph/topics/promote`, never writes the graph). A provider rate limit throws a `KvoxRateLimitError` on the user's own bucket. Embeddings are optional: when the host has no 1536-dimension embeddings model the resolution works by name only.
 
 ### Security notes
 

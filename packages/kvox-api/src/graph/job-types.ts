@@ -127,6 +127,15 @@ export const KG_IMPORT_JOB_TYPE = 'kg.import';
  */
 export const KG_SUBJECT_PROPOSAL = 'kg_proposal';
 
+// #666 (GIC-05, epic #661) — promote the free-text `Meeting.topics[]` strings of
+// past meetings to draft Topic proposals. Subject: the user (one run at a time).
+/**
+ * The kg topics promote job type: turns the topic strings of a user's past meetings into draft Topic proposals.
+ *
+ * @stability experimental
+ */
+export const KG_TOPICS_PROMOTE_JOB_TYPE = 'kg.topics_promote';
+
 /** `storage_objects.managed_by` for every file the graph module writes (#386). */
 /**
  * GRAPH_MANAGED_BY.
