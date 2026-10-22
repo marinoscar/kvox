@@ -78,6 +78,7 @@ import { ExplorerInspector } from '../components/explorer/inspector/ExplorerInsp
 import { buildSelection, summariseSelection } from '../components/explorer/inspector/inspectorModel.js';
 import { useInspectorUrlState } from '../components/explorer/inspector/useInspectorUrlState.js';
 import { GraphLegend } from '../components/explorer/GraphLegend.js';
+import { usePathMode } from '../components/explorer/paths/usePathMode.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
@@ -253,6 +254,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     expand,
     hide,
     makeSeed,
+    mergeExternalSlice,
   } = explorer;
 
   // Applied BEFORE the seeding effect below (effects run in order), so the
@@ -676,6 +678,30 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     (noRecent || Boolean(clusterParam && !handoff));
   const initialLoading = !hasGraph && !showSeedSearch && !explorer.notFound && !explorer.error;
 
+  // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
+  const pathMode = usePathMode({
+    params: searchParams,
+    updateParams,
+    windowClass,
+    inputModality,
+    mode: theme.palette.mode,
+    ontology,
+    relationOptions: relationTypes,
+    asOf,
+    graph,
+    version,
+    mergeSlice: mergeExternalSlice,
+    controls: canvasControls,
+    hasSeed: seeds.length > 0,
+    hasSelection: selection !== null || marked.size >= 2,
+    listView,
+    openEdge: (id) => {
+      setPreviewId(null);
+      setSelected({ kind: 'edge', id });
+    },
+    announce: setAnnouncement,
+  });
+
   const title = (
     <>
       <Typography variant="h5" component="h1">
@@ -744,6 +770,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
+          connectAction={pathMode.connectButton}
           layoutControl={{
             layout,
             onLayoutChange,
@@ -840,11 +867,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           topBar={topBar}
           facets={facets}
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
-          inspectorOpen={!listView && (selection !== null || multi !== null)}
+          inspectorOpen={!listView && (selection !== null || multi !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
-            if (!open) closeInspector();
+            if (!open) {
+              pathMode.onSheetDismiss();
+              closeInspector();
+            }
           }}
           inspector={
+            pathMode.sheet ?? (
             <ExplorerInspector
               selection={selection}
               multi={multi}
@@ -871,14 +902,21 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               onClose={closeInspector}
               AskPanel={askAvailable}
               extraActions={
-                NodeActionsSlot && selection?.kind === 'node' ? <NodeActionsSlot nodeId={selection.id} /> : undefined
+                selection?.kind === 'node' ? (
+                  <>
+                    {pathMode.pathToAction(selection.id)}
+                    {NodeActionsSlot ? <NodeActionsSlot nodeId={selection.id} /> : null}
+                  </>
+                ) : undefined
               }
             />
+            )
           }
           canvas={({ canvasInsets }) =>
             listView ? (
               hasGraph ? (
                 <Box sx={{ height: '100%', overflowY: 'auto', p: { xs: 1, sm: 1.5 } }}>
+                  {pathMode.inline}
                   <ExplorerListView
                     rows={listRows}
                     typeLabel={typeLabel}
@@ -913,6 +951,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
                       markedIds={canvasMarked}
+                      pathNodeIds={pathMode.pathNodeIds}
+                      pathEdgeIds={pathMode.pathEdgeIds}
                       layout={layout}
                       seedIds={state.seedIds}
                       pinsKey={pinsKey}
@@ -934,6 +974,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                   </Suspense>
                 )}
                 {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+                {pathMode.overlay(canvasInsets)}
               </Box>
             )
           }
@@ -948,7 +989,9 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onPin={onPin}
         onHide={onHide}
         onMakeSeed={onMakeSeed}
+        extraItems={pathMode.contextMenuItems(contextTarget, () => setContextTarget(null))}
       />
+      {pathMode.picker}
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
       </Box>

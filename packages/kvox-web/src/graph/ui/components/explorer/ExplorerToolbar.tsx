@@ -62,6 +62,8 @@ export interface ExplorerToolbarProps {
   /** Nodes marked in Select mode. */
   markedCount: number;
   onClearMarked: () => void;
+  /** The path-mode button, "Connect A and B" (GIC-13). */
+  connectAction?: ReactNode;
   /** The layout control (GIC-07): inline when roomy, inside the overflow menu on a phone. Omitted: none. */
   layoutControl?: Omit<LayoutMenuProps, 'disabled'>;
   disabled?: boolean;
@@ -88,6 +90,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     onToggleSelectMode,
     markedCount,
     onClearMarked,
+    connectAction,
     layoutControl,
     disabled,
   } = props;
@@ -136,6 +139,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, minWidth: 0, flex: '1 1 auto' }}>{title}</Box>
       {marked}
       {selectToggle}
+      {connectAction}
       {compact ? (
         <>
           {count}
