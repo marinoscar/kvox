@@ -27,6 +27,7 @@ import {
   mockGraphOntology,
   mockProposalDetail,
   neighborhoodFixture,
+  insightsFixture,
   overviewFixture,
   proposalMock,
   timelineFixture,
@@ -121,6 +122,14 @@ export const graphHandlers = [
   // #375 — the whole-graph overview (#371): a ready snapshot; suites override
   // for the pending/stale/none/tooLarge/truncated states.
   http.get(`${API_BASE}/graph/overview`, () => HttpResponse.json({ data: overviewFixture() })),
+
+  // GIC-16 — the Insights panel; suites override for the empty, stale and pending states.
+  http.get(`${API_BASE}/graph/insights`, ({ request }) => {
+    const window = new URL(request.url).searchParams.get('window') ?? '30d';
+    const days = window === '365d' ? 365 : window === '90d' ? 90 : 30;
+    const base = insightsFixture();
+    return HttpResponse.json({ data: { ...base, window: { ...base.window, key: window, days } } });
+  }),
 
   http.post(`${API_BASE}/graph/overview/refresh`, () =>
     HttpResponse.json({ data: { jobId: 'job-layout-1', deduplicated: false } }, { status: 202 }),

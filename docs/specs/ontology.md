@@ -3991,6 +3991,57 @@ never refreshed on read; *Refresh* (`POST /api/graph/overview/refresh`) is offer
 15 minutes. `tooLarge` and an empty graph render a message and no canvas; a cluster list view
 (`?view=list`) is the accessible alternative and the only view without WebGL.
 
+**Insights (GIC-16, issue #677, epic #661).** The explorer's Insights panel and
+`GET /api/graph/insights?window=30d|90d|365d` (`graph:read`, owner-only) say what
+deserves a look, in plain language, from two sources that are kept apart on purpose.
+
+*Snapshot-backed, never recomputed by the request.* `computeLayout` also computes
+**approximate betweenness centrality** (`graph/layout/betweenness.ts`): Brandes'
+algorithm on the unweighted merged graph from `k = min(200, n)` BFS sources chosen by
+a seeded partial shuffle, scaled by `n / k` and normalized to `[0, 1]`. `k` is lowered
+further so `k * (nodes + edges)` stays under 80 million visits (never below 16); with
+`k = n` the result is exact. The sampler owns its own rng stream, derived from the
+layout seed, so adding connectors left every existing position and cluster unchanged.
+No new job and no new column: the top 50 nodes (id, score, and up to four cluster ids —
+the node's own first, then its neighbours' by tie count) are stored as an optional
+`connectors` array inside the snapshot's existing `clusters` JSON, ids and numbers only
+(§15: never a label). A snapshot written before this field exists parses as before and
+reports `connectorsReady: false`. `graphology-metrics` was not added: its
+`betweennessCentrality` always runs from every node and has no source sampling, which
+is the part that keeps this inside the job's profile. Measured at 20,000 nodes and
+80,000 edges, the whole job's compute is 15.4 s of which betweenness is 0.6 s (10,000
+nodes: 7.3 s and 0.4 s; `packages/kvox-api/test/graph/compute-layout.perf.ts`, `PERF_NODES`),
+against `maxRuntimeMs` of 15 minutes. The endpoint's `themes` are the snapshot's clusters
+(not `Unconnected`, at most 8) and `connectors` its top betweenness entities (at most 8)
+with the live label of each cluster they join and a sentence ("Joe connects the Acme
+group and the Globex group."); a raw score is in the response for ordering only and the
+UI never shows it. Both carry `status`, `pending`, `stale`, `tooLarge` and `computedAt`
+exactly like the overview; the request never queues a layout.
+
+*Window queries, inside the shared 3 s budget (503 `graph_query_timeout`).* A window
+ends now and is 30, 90 or 365 days; "the window before" is the equal span preceding it.
+When a document happened is a transcript's `recorded_at` or a note's `created_at`,
+falling back to the row's own `created_at`; a soft-deleted source counts for nothing.
+- **`rising`**: an entity (not a `Meeting`) mentioned in at least **3** notes or
+  recordings in the window **and** at least **2x** as many as in the window before (a
+  count of 0 before qualifies). At most 10, most mentions first.
+- **`fadingTies`**: a pair of People or Organizations joined by a readable, currently
+  valid relation (all relation types between the pair merge) with at least **3**
+  evidence rows before the window and **none** in it. "You haven't discussed X with Y
+  since <last evidence>." At most 10, the most recent silence first.
+- **`openRisks`**: Risk items (`kg_items.kind = 'risk'`) with status `open`, readable,
+  highest severity first then newest; the work domain off lists none. A risk whose
+  subject was merged or forgotten stays, with `subject: null`.
+
+`PersonFact`s with `sensitivity = 'sensitive'` are excluded wherever items are read, and
+the response carries no quote or evidence text. Every label is read live. On the canvas an
+item seeds the explorer through `?seed=`: a theme with its member sample, a connector
+with the top members of the groups it joins (ringed with the marked rings) and itself
+selected once drawn, a rising entity or a risk by itself, a fading tie with both ends.
+The panel (`explorer/insights/InsightsPanel.tsx`) is the explorer's facets slot, so it
+is the left pane on an expanded window, the rail popover on a medium one and the drawer
+on a compact one.
+
 ### 22.4 What neither view ever does
 
 Consistent with §9.4: neither the explorer nor the overview is ever the

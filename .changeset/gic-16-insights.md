@@ -1,0 +1,8 @@
+---
+"@marinoscar/kvox-web": minor
+"@marinoscar/kvox-api": minor
+"@marinoscar/kvox-contract": minor
+"@marinoscar/kvox-db": minor
+---
+
+The graph explorer gets an Insights panel (GIC-16, #677, epic #661). API: `kg.graph_layout` also computes approximate betweenness centrality (sampled Brandes from at most 200 seeded sources, capped by a work budget, its own rng stream so positions and clusters are unchanged) and stores the top 50 "connectors" with the clusters each one bridges in the snapshot's `clusters` JSON (an optional field: no migration, older snapshots read as `connectorsReady: false`). New `GET /graph/insights?window=30d|90d|365d` (`graph:read`, owner-only, sensitive facts excluded): `themes` (the snapshot's clusters), `connectors` (top betweenness entities with a plain-language reason), `rising` (at least 3 conversations in the window and at least 2x the window before), `fadingTies` (People/Organizations with at least 3 evidence rows before the window and none in it) and `openRisks`; themes and connectors carry `stale`/`pending` like the overview and are never recomputed by the request, the window queries run inside the 3 s graph budget (503 `graph_query_timeout`). Contract: `graphInsightsQuerySchema`, `graphInsightsResponseSchema` and their types. Web: `getGraphInsights()`, `useGraphInsights()`, `InsightsPanel` (Themes, Connectors, Rising, Fading ties, Open risks; in the facets pane, rail popover or drawer by window class; every item seeds the canvas through `useInsightSelect`; 44px targets on a coarse pointer) and the exported `InsightSeeds`, `InsightSectionKey`, `InsightsPanelProps`, `UseInsightSelectOptions`, `InputModality`. the database package is bumped with the fixed group only; it has no schema change.

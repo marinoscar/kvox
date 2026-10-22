@@ -12,6 +12,7 @@ export { computeLayout } from '../layout/compute-layout.js';
 export type { LayoutInput } from '../layout/compute-layout.js';
 export { KgGraphLayoutHandler } from '../layout/graph-layout.handler.js';
 export { GraphLayoutListener } from '../layout/graph-layout.listener.js';
+export { GraphInsightsService } from '../layout/graph-insights.service.js';
 export { GraphOverviewService } from '../layout/graph-overview.service.js';
 export { mulberry32 } from '../layout/seeded-rng.js';
 export { KgMigrateSchedulerTask } from '../migrate/kg-migrate-scheduler.task.js';
