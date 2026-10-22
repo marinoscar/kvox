@@ -114,6 +114,23 @@ export interface GraphEntityAskPanelProps {
   conversationId: string | null;
   /** Reports the conversation the panel switched to (`null`: a new one). */
   onConversationChange: (conversationId: string | null) => void;
+  /**
+   * The graph selection the question starts from (the explorer's "Ask about this selection", GIC-17).
+   * Sent with every question the panel asks. They are starting handles only: the agent still retrieves evidence through its tools.
+   */
+  scope?: GraphEntityAskScope;
+}
+
+/**
+ * The graph selection an Ask question starts from.
+ *
+ * @stability experimental
+ */
+export interface GraphEntityAskScope {
+  /** Entities the question is about. */
+  entityIds: string[];
+  /** Evidence ids of the selected edge or path; may be empty. */
+  evidenceIds: string[];
 }
 
 /**

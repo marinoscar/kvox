@@ -54,6 +54,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import type { GraphEntityAskScope } from '../../../graph/ui/index.js';
 import { KvoxApiError, formatRelativeTime, useKvoxHost } from '../../../core/headless/index.js';
 import {
   askDefaultModel,
@@ -171,6 +172,8 @@ export interface EntityAskPanelProps {
   onClose: () => void;
   /** The entity the panel is about. */
   entity: EntityAskSubject;
+  /** The graph selection every question starts from (the explorer's "Ask about this selection"); starting handles, never evidence. */
+  scope?: GraphEntityAskScope;
   /** The open conversation (`?ask=<id>`), or `null` for a new one (`?ask=1`). */
   conversationId: string | null;
   /** The panel opened (or started) a different conversation. */
@@ -189,7 +192,7 @@ export interface EntityAskPanelProps {
  *
  * @stability experimental
  */
-export function EntityAskPanel({ open, onClose, entity, conversationId, onConversationChange, config }: EntityAskPanelProps) {
+export function EntityAskPanel({ open, onClose, entity, scope, conversationId, onConversationChange, config }: EntityAskPanelProps) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const titleId = useId();
@@ -214,6 +217,7 @@ export function EntityAskPanel({ open, onClose, entity, conversationId, onConver
         titleId={titleId}
         onClose={onClose}
         entity={entity}
+        scope={scope}
         conversationId={conversationId}
         onConversationChange={onConversationChange}
         config={config}
@@ -230,6 +234,7 @@ function EntityAskPanelBody({
   titleId,
   onClose,
   entity,
+  scope,
   conversationId,
   onConversationChange,
   config,
@@ -250,6 +255,7 @@ function EntityAskPanelBody({
   const refreshList = list.refresh;
   const detail = useAskConversation(conversationId, {
     seed,
+    scope,
     onTurnSettled: () => {
       void refreshList();
     },
@@ -304,7 +310,7 @@ function EntityAskPanelBody({
           createdButUnsent.current = created;
         }
         if (model) rememberAskModel(created.id, model);
-        const result = await postAskMessage(host, created.id, { content, model });
+        const result = await postAskMessage(host, created.id, { content, model, scope });
         createdButUnsent.current = null;
         setSeed({
           id: created.id,
@@ -324,7 +330,7 @@ function EntityAskPanelBody({
         return false;
       }
     },
-    [host, list, onConversationChange],
+    [host, list, onConversationChange, scope],
   );
 
   const send = useCallback(

@@ -13,6 +13,7 @@ export { GraphEntityPage, ENTITY_ASK_NEW, ENTITY_ASK_PARAM } from './pages/Graph
 export type {
   GraphEntityAskButtonProps,
   GraphEntityAskPanelProps,
+  GraphEntityAskScope,
   GraphEntityPageProps,
   GraphEntityPageSlots,
 } from './pages/GraphEntityPage.js';
@@ -43,6 +44,16 @@ export { ProposalReviewSheet, REVIEW_SHEET_WIDTH } from './components/review/Pro
 export type { ProposalReviewSheetProps } from './components/review/ProposalReviewSheet.js';
 
 export { useGraphExplorer } from './hooks/useGraphExplorer.js';
+export type { RestoredView } from './components/explorer/history/snapshot.js';
+export { LENS_LIMITS, builtInLenses, lensPaletteActions } from './components/explorer/lenses/lensModel.js';
+export type {
+  BuiltInLens,
+  ExplorerLens,
+  LensLayout,
+  LensLimits,
+  LensPaletteAction,
+  LensPin,
+} from './components/explorer/lenses/lensModel.js';
 export type { ExpandOnly, ExternalSliceMerge, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 
 export {

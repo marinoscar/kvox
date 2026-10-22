@@ -103,6 +103,50 @@ const graphDomainsSchema = z
   })
   .strict();
 
+// -----------------------------------------------------------------------------
+// `graph.explorer.lenses` (GIC-17, #678)
+// -----------------------------------------------------------------------------
+//
+// A LENS is a named bundle of what the explorer shows: seeds, the node and relation types shown,
+// the layout and the pinned positions. They are stored per user in this namespace (no table).
+// The whole list is replaced by a write; the caps below keep the settings document small:
+// at most 20 lenses, 300 pinned positions each, 10 seeds.
+// -----------------------------------------------------------------------------
+
+/** Most lenses one user may save. */
+export const GRAPH_LENSES_MAX = 20;
+/** Most pinned positions one lens may hold. */
+export const GRAPH_LENS_PINS_MAX = 300;
+/** Most seeds one lens may hold (the explorer's `?seed=` limit). */
+export const GRAPH_LENS_SEEDS_MAX = 10;
+
+const graphLensSchema = z
+  .object({
+    /** A stable id the client chose. */
+    id: z.string().trim().min(1).max(64),
+    /** The name the user gave it. */
+    name: z.string().trim().min(1).max(60),
+    /** Entity ids the exploration starts from; empty keeps the seeds already open. */
+    seeds: z.array(z.uuid()).max(GRAPH_LENS_SEEDS_MAX),
+    /** The node types SHOWN, or `null` for all. */
+    types: z.array(z.string().min(1).max(64)).max(200).nullable(),
+    /** The relation types SHOWN, or `null` for all. */
+    relTypes: z.array(z.string().min(1).max(64)).max(200).nullable(),
+    /** The layout, or `null` for the explorer's own choice. */
+    layout: z.enum(['force', 'concentric', 'static']).nullable(),
+    /** Pinned positions by node id. */
+    pins: z
+      .record(z.string().min(1).max(80), z.object({ x: z.number().finite(), y: z.number().finite() }).strict())
+      .refine((pins) => Object.keys(pins).length <= GRAPH_LENS_PINS_MAX, {
+        message: `a lens holds at most ${GRAPH_LENS_PINS_MAX} pinned positions`,
+      }),
+  })
+  .strict();
+
+const graphLensesSchema = z.array(graphLensSchema).max(GRAPH_LENSES_MAX);
+
+const graphExplorerSchema = z.object({ lenses: graphLensesSchema.optional() }).strict();
+
 /**
  * Full `graph` namespace (stored shape, PUT body, response).
  *
@@ -122,6 +166,10 @@ export const graphPreferencesSchema = z
      * The domains.
      */
     domains: graphDomainsSchema.optional(),
+    /**
+     * The explorer's saved lenses (GIC-17).
+     */
+    explorer: graphExplorerSchema.optional(),
   })
   .strict();
 
@@ -167,6 +215,11 @@ export const graphPreferencesPatchSchema = z
         work: z.boolean().nullable().optional(),
         personal: z.boolean().nullable().optional(),
       })
+      .strict()
+      .nullable()
+      .optional(),
+    explorer: z
+      .object({ lenses: graphLensesSchema.nullable().optional() })
       .strict()
       .nullable()
       .optional(),

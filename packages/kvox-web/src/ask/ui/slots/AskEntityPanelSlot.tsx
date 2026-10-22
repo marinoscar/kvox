@@ -37,6 +37,7 @@ function AskEntityPanelContent({
   onClose,
   conversationId,
   onConversationChange,
+  scope,
 }: GraphEntityAskPanelProps): ReactNode {
   const { config } = useAskAiConfig();
   return (
@@ -44,6 +45,7 @@ function AskEntityPanelContent({
       open={open}
       onClose={onClose}
       entity={{ id: entityId, label: entityLabel, type: entityType }}
+      scope={scope}
       conversationId={conversationId}
       onConversationChange={onConversationChange}
       config={config}

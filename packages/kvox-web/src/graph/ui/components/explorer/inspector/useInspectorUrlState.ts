@@ -7,7 +7,12 @@
  * the same selection, the same tab — not an empty canvas. The seeds were
  * already in `?seed=`; this adds the selection.
  *
- * The URL is written with `replace`, so selecting does not fill the history.
+ * The URL is written with `replace`, so selecting does not fill the history. The ONE exception
+ * is a NEW node focus (GIC-17, #678): selecting a node that `?focus=` does not already name
+ * adds a history entry carrying `focus=<id>`, so the browser's Back walks the focus trail
+ * (`useFocusTrail`). It is written here, in the same call as `sel`, because two
+ * `setSearchParams` in one tick would each start from the same stale params and one would
+ * erase the other.
  * On load the selection is restored ONCE, when the graph has arrived and
  * contains it; a selection the graph no longer has is dropped from the URL.
  * Picking another node or edge resets the tab to that selection's default.
@@ -63,6 +68,11 @@ export function useInspectorUrlState(input: {
   latest.current = searchParams;
   const lookup = useRef({ hasNode, hasEdge, setSelected });
   lookup.current = { hasNode, hasEdge, setSelected };
+  // `setSearchParams` changes identity with every URL change. The writer below must run when the
+  // SELECTION changes and never because the URL did: otherwise a Back (URL first, selection a render
+  // later) would be read as a new focus and written over.
+  const setSearchParamsRef = useRef(setSearchParams);
+  setSearchParamsRef.current = setSearchParams;
 
   useEffect(() => {
     if (restored.current || !ready) return;
@@ -89,18 +99,21 @@ export function useInspectorUrlState(input: {
     // Until the restore has looked, the URL's selection is the truth, not the empty state.
     if (!restored.current) return;
     const encoded = encodeSelection(selected);
-    if ((latest.current.get('sel') ?? null) === encoded) return;
-    setSearchParams(
+    const focusId = selected?.kind === 'node' ? selected.id : null;
+    const newFocus = focusId !== null && (latest.current.get('focus') ?? null) !== focusId;
+    if (!newFocus && (latest.current.get('sel') ?? null) === encoded) return;
+    setSearchParamsRef.current(
       (previous) => {
         const next = new URLSearchParams(previous);
         if (encoded) next.set('sel', encoded);
         else next.delete('sel');
         next.delete('tab');
+        if (newFocus && focusId) next.set('focus', focusId);
         return next;
       },
-      { replace: true },
+      { replace: !newFocus },
     );
-  }, [selected, setSearchParams]);
+  }, [selected]);
 
   const setTab = useCallback(
     (tab: InspectorTab) => {

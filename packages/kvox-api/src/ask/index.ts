@@ -30,7 +30,7 @@ export {
   ASK_WALL_CLOCK_SOFT_MS,
 } from './ask-limits.js';
 export { ASK_MESSAGE_SUBJECT, ASK_RESPOND_JOB_TYPE } from './job-types.js';
-export type { AskRespondPayload } from './job-types.js';
+export type { AskRespondPayload, AskRespondScope } from './job-types.js';
 export {
   ASK_CONVERSATION_NOT_FOUND,
   ASK_MESSAGE_NOT_FOUND,
@@ -38,6 +38,7 @@ export {
 } from './ask-access.service.js';
 export { ASK_CONVERSATION_DELETED_ACTION, AskConversationsService } from './ask-conversations.service.js';
 export { ASK_TURN_RUNNING } from './ask-messages.service.js';
+export { ASK_SCOPE_NOT_FOUND } from './ask-scope.js';
 export { AskUserDataService, type AskUserDataDeletion } from './user-data/ask-user-data.service.js';
 export { ASK_STREAM_TUNING, type AskStreamTuning } from './stream/ask-message-stream.service.js';
 

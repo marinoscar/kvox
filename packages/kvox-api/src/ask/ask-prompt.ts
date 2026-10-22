@@ -20,10 +20,23 @@ export interface AskPromptScope {
   type: string;
 }
 
+/** One handle the user selected in the explorer before asking (GIC-17, #678). */
+export interface AskPromptSelectionItem {
+  /** The handle the turn registered for it: `entN`, `itmN` or `relN`. */
+  handle: string;
+  label: string;
+  type: string;
+}
+
 export interface AskPromptInput {
   now: Date;
   scope: AskPromptScope | null;
+  /** What the user selected on the graph canvas, as starting handles. Absent or empty: no line is added. */
+  selection?: readonly AskPromptSelectionItem[];
 }
+
+/** At most this many selected handles are named in the prompt. */
+export const ASK_PROMPT_SELECTION_MAX = 20;
 
 /** The line appended when the next call must answer without tools. */
 export const ASK_FORCED_ANSWER_LINE =
@@ -48,6 +61,13 @@ export function buildAskSystemPrompt(input: AskPromptInput): string {
   if (input.scope) {
     lines.push(
       `This conversation is about ${inline(input.scope.label)} (${inline(input.scope.type)}), reference ${input.scope.handle}. Assume questions are about it unless clearly not.`,
+    );
+  }
+  const selection = (input.selection ?? []).slice(0, ASK_PROMPT_SELECTION_MAX);
+  if (selection.length > 0) {
+    const named = selection.map((item) => `${item.handle} (${inline(item.label)}, ${inline(item.type)})`).join('; ');
+    lines.push(
+      `The user selected these on the graph before asking: ${named}. They are starting points only, not evidence: look them up with your tools and read their source quotes with \`evidence\` before you state a fact about them.`,
     );
   }
   return lines.join('\n');
