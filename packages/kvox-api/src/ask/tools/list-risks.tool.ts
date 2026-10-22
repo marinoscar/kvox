@@ -18,8 +18,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
 
 import { Prisma } from '../../core/index.js';
-import { GraphOntologyService, READABLE_ENTITY_STATUSES } from '../../graph/index.js';
-import { readableItemSql } from '../../graph/read/read-sql.js';
+import { GraphOntologyService, READABLE_ENTITY_STATUSES, readableItemSql } from '../../graph/index.js';
 import { KVOX_PRISMA } from '../../ports/index.js';
 import type { KvoxAskDb } from '../data/ask-db.js';
 import {
