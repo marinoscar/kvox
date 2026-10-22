@@ -68,6 +68,13 @@ import type {
   GraphConflictReason as ContractGraphConflictReason,
   UserGuidance as ContractUserGuidance,
   GraphOverviewRefreshResponse as ContractGraphOverviewRefreshResponse,
+  GraphInsightsResponse as ContractGraphInsightsResponse,
+  GraphInsightsWindow as ContractGraphInsightsWindow,
+  GraphInsightTheme as ContractGraphInsightTheme,
+  GraphInsightConnector as ContractGraphInsightConnector,
+  GraphInsightRising as ContractGraphInsightRising,
+  GraphInsightFadingTie as ContractGraphInsightFadingTie,
+  GraphInsightRisk as ContractGraphInsightRisk,
   GraphExportFormat as ContractGraphExportFormat,
   CreateGraphExportResponse as ContractCreateGraphExportResponse,
   TopicsPromoteRequestResponse as ContractTopicsPromoteRequestResponse,
@@ -2627,6 +2634,68 @@ export type GraphOverviewRefreshResponse = ContractGraphOverviewRefreshResponse;
  */
 export function getGraphOverview(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphOverview> {
   return kvoxGet<GraphOverview>(host, '/graph/overview', { signal });
+}
+
+/**
+ * The window `GET /api/graph/insights` looks back over: `30d`, `90d` or `365d`. Alias of the contract's `GraphInsightsWindow`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightsWindow = ContractGraphInsightsWindow;
+
+/**
+ * What deserves a look in the caller's graph: themes, connectors, rising entities, fading ties and open risks. Alias of the contract's `GraphInsightsResponse`.
+ *
+ * @stability experimental
+ */
+export type GraphInsights = ContractGraphInsightsResponse;
+
+/**
+ * One theme of {@link GraphInsights}: an overview cluster. Alias of the contract's `GraphInsightTheme`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightTheme = ContractGraphInsightTheme;
+
+/**
+ * One connector of {@link GraphInsights}: an entity that links separate groups. Alias of the contract's `GraphInsightConnector`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightConnector = ContractGraphInsightConnector;
+
+/**
+ * One rising entity of {@link GraphInsights}. Alias of the contract's `GraphInsightRising`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightRising = ContractGraphInsightRising;
+
+/**
+ * One fading tie of {@link GraphInsights}: two people or organizations who stopped coming up together. Alias of the contract's `GraphInsightFadingTie`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightFadingTie = ContractGraphInsightFadingTie;
+
+/**
+ * One open risk of {@link GraphInsights}. Alias of the contract's `GraphInsightRisk`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightRisk = ContractGraphInsightRisk;
+
+/**
+ * Fetches the graph insights (`GET /api/graph/insights`, `graph:read`) for a window (default `30d`). Themes and connectors come from the stored layout snapshot and are never recomputed; a window query over the API's time budget rejects with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphInsights(
+  host: KvoxWebHost,
+  window: GraphInsightsWindow = '30d',
+  signal?: AbortSignal,
+): Promise<GraphInsights> {
+  return kvoxGet<GraphInsights>(host, `/graph/insights${buildGraphQuery({ window })}`, { signal });
 }
 
 /**

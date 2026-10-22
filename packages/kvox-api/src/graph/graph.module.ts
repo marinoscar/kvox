@@ -38,6 +38,8 @@ import { KgGraphLayoutHandler } from './layout/graph-layout.handler.js';
 import { GraphLayoutListener } from './layout/graph-layout.listener.js';
 import { GraphOverviewController } from './layout/graph-overview.controller.js';
 import { GraphOverviewService } from './layout/graph-overview.service.js';
+import { GraphInsightsController } from './layout/graph-insights.controller.js';
+import { GraphInsightsService } from './layout/graph-insights.service.js';
 import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener.js';
 import { KgMigrateEnqueuer } from './migrate/kg-migrate.enqueuer.js';
 import { KgMigrateHandler } from './migrate/kg-migrate.handler.js';
@@ -143,6 +145,7 @@ export class GraphModule {
       GraphAttributeDefsController,
       GraphReadController,
       GraphOverviewController,
+      GraphInsightsController,
       EntityBriefController,
     ];
 
@@ -179,6 +182,8 @@ export class GraphModule {
       KgGraphLayoutHandler,
       GraphLayoutListener,
       GraphOverviewService,
+      // `GET /graph/insights`: themes, connectors (from the snapshot), rising, fading ties, open risks (GIC-16).
+      GraphInsightsService,
       // The entity brief, and `kg.entity_digest` (the only producer of brief prose) (#372).
       EntityViewService,
       EntityDigestEnqueuer,

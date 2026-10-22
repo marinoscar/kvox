@@ -98,6 +98,8 @@ import {
 } from '../components/explorer/palette/ExplorerCommandPalette.js';
 import { MAX_PALETTE_SEEDS } from '../components/explorer/palette/paletteModel.js';
 import { ExplorerStartHere } from '../components/explorer/start/ExplorerStartHere.js';
+import { InsightsPanel } from '../components/explorer/insights/InsightsPanel.js';
+import { useInsightSelect } from '../components/explorer/insights/useInsightSelect.js';
 import { clusterHandoff } from '../components/overview/overviewModel.js';
 import { minimapVisible } from '../components/explorer/shell/explorerBudgets.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
@@ -799,6 +801,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [updateParams],
   );
 
+  // Insights (GIC-16): a tap seeds the canvas, rings what it marks and focuses its entity once drawn.
+  const onInsightSelect = useInsightSelect({
+    hasNode: (id) => graph.hasNode(id),
+    setSeeds: onPaletteSetSeeds,
+    setMarked,
+    focusNode: onPaletteSelectNode,
+    announce: setAnnouncement,
+  });
+
   const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
 
   // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
@@ -1013,6 +1024,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleRelation={onToggleRelationType}
         />
       )}
+      <InsightsPanel onSelect={onInsightSelect} typeLabel={typeLabel} inputModality={inputModality} />
     </Box>
   );
 

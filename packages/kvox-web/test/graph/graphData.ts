@@ -48,6 +48,7 @@ import type {
   ProposalStatus,
   ProposalSummary,
   RevertKept,
+  GraphInsights,
 } from '../../src/graph/headless/clients/graph.js';
 
 /** A deterministic v4-shaped uuid, so fixtures read as ids and sort predictably. */
@@ -1434,3 +1435,62 @@ export const overviewStates = {
   tooLarge: () => overviewFixture({ tooLarge: true, nodeCount: 60_000, edgeCount: 250_000, clusters: [], clusterEdges: [], nodes: [] }),
   truncated: () => overviewFixture({ nodesTruncated: true, nodeCount: 6_200, edgeCount: 21_000 }),
 } satisfies Record<string, () => GraphOverview>;
+
+// ---------------------------------------------------------------------------
+// Insights (GIC-16, against `GET /api/graph/insights`)
+// ---------------------------------------------------------------------------
+
+export const RISK_ID = gid(90);
+
+/** A ready answer with every section filled, over the overview fixture's clusters. */
+export function insightsFixture(overrides: Partial<GraphInsights> = {}): GraphInsights {
+  const joe = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
+  const ana = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
+  const overview = overviewFixture();
+  return {
+    window: { key: '30d', days: 30, from: '2026-09-22T00:00:00.000Z', previousFrom: '2026-08-23T00:00:00.000Z' },
+    status: 'ready',
+    pending: false,
+    computedAt: OVERVIEW_COMPUTED_AT,
+    stale: false,
+    tooLarge: false,
+    connectorsReady: true,
+    themes: overview.clusters
+      .filter((c) => c.id >= 0)
+      .slice(0, 2)
+      .map((c) => ({ clusterId: c.id, label: c.label, labelEntityId: c.labelEntityId, size: c.size, typeCounts: c.typeCounts, memberSample: c.memberSample })),
+    connectors: [
+      {
+        entity: joe,
+        score: 0.42,
+        clusters: [
+          { id: 0, label: 'Acme Corp' },
+          { id: 1, label: 'Globex' },
+        ],
+        reason: 'Joe Rivera connects the Acme Corp group and the Globex group.',
+      },
+    ],
+    rising: [{ entity: ana, count: 5, previous: 1, reason: 'Came up in 5 conversations in the last 30 days, up from 1 before.' }],
+    fadingTies: [
+      {
+        from: joe,
+        to: ana,
+        relationTypes: ['KNOWS'],
+        lastEvidenceAt: '2026-05-01T00:00:00.000Z',
+        evidenceBefore: 4,
+        reason: "You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026.",
+      },
+    ],
+    openRisks: [
+      {
+        id: RISK_ID,
+        title: 'Legal review',
+        statement: 'Legal has not signed off',
+        severity: 'high',
+        subject: { id: ATLAS_ID, label: 'Project Atlas', type: 'Project' },
+        occurredAt: '2026-09-10T00:00:00.000Z',
+      },
+    ],
+    ...overrides,
+  };
+}

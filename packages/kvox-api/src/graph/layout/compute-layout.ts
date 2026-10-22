@@ -20,6 +20,9 @@
 //   3. Seeded random initial positions, then ForceAtlas2, then a
 //      shape-preserving normalization into `[-1000, 1000]`.
 //   4. Cluster rows: label candidate, centroid, radius, type counts, sample.
+//   4b. Approximate betweenness (GIC-16, #677): sampled Brandes from ≤ 200 seeded
+//      sources (`betweenness.ts`, its own rng stream) → the top `CONNECTORS_MAX`
+//      nodes with the clusters each one bridges.
 //   5. Above `maxPositioned` nodes only the top nodes by degree get positions;
 //      above `LOUVAIN_MAX_NODES` nothing is computed (`tooLarge`).
 //
@@ -33,6 +36,7 @@ import louvain from 'graphology-communities-louvain';
 import random from 'graphology-layout/random';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 
+import { sampledBetweenness } from './betweenness.js';
 import { mulberry32, seedFrom } from './seeded-rng.js';
 
 /** Cluster id every singleton community pools into. */
@@ -50,6 +54,12 @@ export const LAYOUT_EXTENT = 1000;
 
 /** Most `sampleIds` per cluster. */
 export const CLUSTER_SAMPLE_SIZE = 8;
+
+/** Most connectors (top betweenness nodes) kept in the snapshot. */
+export const CONNECTORS_MAX = 50;
+
+/** Most cluster ids listed per connector. */
+export const CONNECTOR_CLUSTERS_MAX = 4;
 
 /** Most inter-cluster edges kept. */
 export const CLUSTER_EDGES_MAX = 500;
@@ -76,6 +86,15 @@ export interface ClusterRow {
   sampleIds: string[];
 }
 
+/** One high-betweenness node: it sits on many shortest paths between other nodes. */
+export interface ConnectorRow {
+  id: string;
+  /** Normalized betweenness in `(0, 1]`, 6 decimals. */
+  score: number;
+  /** Clusters the node touches: its own first, then its neighbours' by tie count; `−1` never listed. ≤ 4. */
+  clusterIds: number[];
+}
+
 /** `[id, x, y, clusterId, typeIndex, degree]` — `typeIndex` indexes `types`. */
 export type PositionTuple = [string, number, number, number, number, number];
 
@@ -83,6 +102,10 @@ export interface LayoutOutput {
   clusters: ClusterRow[];
   clusterEdges: { a: number; b: number; weight: number }[];
   modularity: number;
+  /** Top betweenness nodes, highest score first (≤ `CONNECTORS_MAX`). */
+  connectors: ConnectorRow[];
+  /** BFS sources the betweenness estimate used (`0`: not computed; equal to `nodeCount`: exact). */
+  betweennessSources: number;
   /** Highest degree first, then id — so a reader can truncate by slicing. */
   positions: PositionTuple[];
   types: string[];
@@ -155,6 +178,8 @@ export function computeLayout(input: LayoutInput, opts: LayoutOptions): LayoutOu
     clusters: [],
     clusterEdges: [],
     modularity: 0,
+    connectors: [],
+    betweennessSources: 0,
     positions: [],
     types,
     tooLarge: false,
@@ -209,6 +234,24 @@ export function computeLayout(input: LayoutInput, opts: LayoutOptions): LayoutOu
   real.forEach((g, i) => g.forEach((id) => clusterOf.set(id, i)));
   const unconnected = groups.filter((g) => g.length === 1).flat().sort(byId);
   unconnected.forEach((id) => clusterOf.set(id, UNCONNECTED_CLUSTER_ID));
+
+  // --- 2b. Connectors -----------------------------------------------------------
+  const nodeIndex = new Map(nodeIds.map((id, i) => [id, i]));
+  const bt = sampledBetweenness(
+    nodeIds.length,
+    edges.map((e) => [nodeIndex.get(e.a) as number, nodeIndex.get(e.b) as number] as const),
+    opts.seed,
+  );
+  const connectors: ConnectorRow[] = nodeIds
+    .map((id, i) => ({ id, score: bt.scores[i] }))
+    .filter((c) => c.score > 0)
+    .sort((x, y) => y.score - x.score || byId(x.id, y.id))
+    .slice(0, CONNECTORS_MAX)
+    .map((c) => ({
+      id: c.id,
+      score: Math.round(c.score * 1e6) / 1e6,
+      clusterIds: bridgedClusters(c.id, graph, clusterOf),
+    }));
 
   // --- 3. Positions ---------------------------------------------------------------
   const byDegree = (x: string, y: string): number =>
@@ -318,12 +361,28 @@ export function computeLayout(input: LayoutInput, opts: LayoutOptions): LayoutOu
     clusters,
     clusterEdges,
     modularity: Math.round(modularity * 1e6) / 1e6,
+    connectors,
+    betweennessSources: bt.sources,
     positions,
     types,
     tooLarge: false,
     nodeCount: nodeIds.length,
     edgeCount: edges.length,
   };
+}
+
+/** The node's own cluster first, then its neighbours' clusters by how many neighbours sit in each. */
+function bridgedClusters(id: string, graph: UndirectedGraph, clusterOf: Map<string, number>): number[] {
+  const own = clusterOf.get(id) as number;
+  const counts = new Map<number, number>();
+  graph.forEachNeighbor(id, (nb) => {
+    const c = clusterOf.get(nb) as number;
+    if (c === own || c === UNCONNECTED_CLUSTER_ID) return;
+    counts.set(c, (counts.get(c) ?? 0) + 1);
+  });
+  const others = [...counts.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0]).map(([c]) => c);
+  const all = own === UNCONNECTED_CLUSTER_ID ? others : [own, ...others];
+  return all.slice(0, CONNECTOR_CLUSTERS_MAX);
 }
 
 /**

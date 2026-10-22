@@ -22,6 +22,7 @@ export const {
   EntityViewService,
   EvidenceValidator,
   GraphLayoutListener,
+  GraphInsightsService,
   GraphOverviewService,
   KgGraphLayoutHandler,
   KgMigrateHandler,
@@ -50,6 +51,7 @@ export type EntityDigestHandler = graphInternals.EntityDigestHandler;
 export type EntityViewService = graphInternals.EntityViewService;
 export type EvidenceValidator = graphInternals.EvidenceValidator;
 export type GraphLayoutListener = graphInternals.GraphLayoutListener;
+export type GraphInsightsService = graphInternals.GraphInsightsService;
 export type GraphOverviewService = graphInternals.GraphOverviewService;
 export type KgGraphLayoutHandler = graphInternals.KgGraphLayoutHandler;
 export type KgMigrateHandler = graphInternals.KgMigrateHandler;
