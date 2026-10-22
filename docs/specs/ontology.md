@@ -503,6 +503,14 @@ than no relation at all.
 | `ABOUT` | Claim \| Decision \| Commitment \| Risk → Person \| Organization \| Project \| Product \| Topic | Product and Topic added in 1.3.0; Risk as a source in 1.3.0 |
 | `PART_OF` | Project → Organization; Meeting → Project; Topic → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
 | `BROADER` | Topic → Topic | Non-temporal, no exclusivity; `skos:broader`. Rolls a narrower topic up into a theme (1.3.0) |
+| `INVOLVED_IN` | Person → Project | Temporal; props `{ role (required), stance? }`. `role`: sponsor, owner, lead, contributor, stakeholder, approver, end_user, advisor. `stance`: champion, supportive, neutral, skeptical, resistant, only when stated or unmistakably implied, never from tone (1.3.0) |
+| `USES` | Organization \| Project → Product | Temporal; prop `stage?` (evaluating, piloting, rolling_out, adopted, retired). Exclusive (soft) within one source and product, with `stage` declared `identity: true`: a stage change (piloting → adopted) is a new fact that closes the earlier row through the §5.4 closing rule (1.3.0) |
+| `OFFERED_BY` | Product → Organization | The vendor; temporal and exclusive (soft) per product, so a change of vendor closes the old edge (1.3.0). `schema:manufacturer` |
+| `CUSTOMER_OF` | Organization → Organization | Temporal, directed (customer first) (1.3.0) |
+| `PARTNER_OF` | Organization → Organization | Temporal, **symmetric**: stored once, deduplicated in both directions like `FRIEND_OF` (1.3.0) |
+| `COMPETITOR_OF` | Organization → Organization | Temporal, **symmetric** (1.3.0) |
+| `CONCERNS` | Project → Product \| Topic | Non-temporal; what a project is about (1.3.0) |
+| `KNOWS_ABOUT` | Person → Topic \| Product | Non-temporal; prop `level?` (aware, practitioner, expert); `schema:knowsAbout`. The personal `INTERESTED_IN` stays separate (1.3.0) |
 | `DECIDED_IN` | Decision → Meeting | |
 | `CREATED_IN` | Commitment → Meeting | |
 | `ASSIGNED_TO` | Commitment → Person | The owner |

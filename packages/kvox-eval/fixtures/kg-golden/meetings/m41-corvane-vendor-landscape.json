@@ -1,0 +1,284 @@
+{
+  "id": "m41",
+  "title": "Vendor landscape review for Corvane Logistics",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market"
+  ],
+  "recordedAt": "2026-08-18T13:00:00Z",
+  "contextText": "Vendor landscape review; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Vendor landscape review for Corvane Logistics\n\n**Date:** August 18\n**Attendees:** Ingrid Solberg, Pavel Novak\n\n## Summary\n\nIngrid Solberg and Pavel Novak walked through the vendor landscape around the data platform that Corvane Logistics runs, so that the account plan for the next year starts from facts rather than memory. The review was prepared by Ostrava Partners.\n\n## Commercial relationships\n\n- Corvane Logistics has been a customer of Brightwell Cloud since 2022, and it runs Brightwell Pipeline, the managed data pipeline service, in production for its freight tracking.\n- Brightwell Pipeline is offered by Brightwell Cloud, which also sells the storage layer underneath it.\n- Ostrava Partners is a partner of Brightwell Cloud and implements Brightwell Pipeline for its clients.\n- Kestrel Data competes with Brightwell Cloud in the managed pipeline market; its product, Kestrel Lens, is offered by Kestrel Data and is sold mainly to mid-sized shippers.\n- Dunmore Freight is a customer of Kestrel Data and has said it is happy with Kestrel Lens.\n\n## Observations\n\n- The two vendors price very differently: Brightwell Cloud charges for volume, while Kestrel Data charges per connected source.\n- Corvane Logistics has no contract with Kestrel Data and has never evaluated Kestrel Lens.\n- The review did not cover support quality for either vendor.\n\n## Open points\n\nThe account team still needs a view of how the two vendors compare on uptime commitments, and the renewal date for the Brightwell Cloud agreement has not been confirmed. Whether Dunmore Freight would share a reference for Kestrel Lens is unknown and was not discussed.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Vendor landscape review for Corvane Logistics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Vendor landscape review for Corvane Logistics"
+          }
+        ]
+      },
+      {
+        "key": "ingrid",
+        "type": "Person",
+        "label": "Ingrid Solberg",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ingrid Solberg, Pavel Novak"
+          }
+        ]
+      },
+      {
+        "key": "pavel",
+        "type": "Person",
+        "label": "Pavel Novak",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ingrid Solberg, Pavel Novak"
+          }
+        ]
+      },
+      {
+        "key": "corvane",
+        "type": "Organization",
+        "label": "Corvane Logistics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the data platform that Corvane Logistics runs"
+          }
+        ]
+      },
+      {
+        "key": "brightwell",
+        "type": "Organization",
+        "label": "Brightwell Cloud",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a customer of Brightwell Cloud since 2022"
+          }
+        ]
+      },
+      {
+        "key": "ostrava",
+        "type": "Organization",
+        "label": "Ostrava Partners",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "prepared by Ostrava Partners"
+          }
+        ]
+      },
+      {
+        "key": "kestrel",
+        "type": "Organization",
+        "label": "Kestrel Data",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kestrel Data competes with Brightwell Cloud"
+          }
+        ]
+      },
+      {
+        "key": "dunmore",
+        "type": "Organization",
+        "label": "Dunmore Freight",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dunmore Freight is a customer of Kestrel Data"
+          }
+        ]
+      },
+      {
+        "key": "pipeline",
+        "type": "Product",
+        "label": "Brightwell Pipeline",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "service"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightwell Pipeline, the managed data pipeline service"
+          }
+        ]
+      },
+      {
+        "key": "lens",
+        "type": "Product",
+        "label": "Kestrel Lens",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "its product, Kestrel Lens"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "CUSTOMER_OF",
+        "from": "corvane",
+        "to": "brightwell",
+        "validFrom": "2022-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Corvane Logistics has been a customer of Brightwell Cloud since 2022"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "corvane",
+        "to": "pipeline",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "adopted"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "it runs Brightwell Pipeline, the managed data pipeline service, in production"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "pipeline",
+        "to": "brightwell",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightwell Pipeline is offered by Brightwell Cloud"
+          }
+        ]
+      },
+      {
+        "type": "PARTNER_OF",
+        "from": "ostrava",
+        "to": "brightwell",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ostrava Partners is a partner of Brightwell Cloud"
+          }
+        ]
+      },
+      {
+        "type": "COMPETITOR_OF",
+        "from": "kestrel",
+        "to": "brightwell",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kestrel Data competes with Brightwell Cloud in the managed pipeline market"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "lens",
+        "to": "kestrel",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kestrel Lens, is offered by Kestrel Data"
+          }
+        ]
+      },
+      {
+        "type": "CUSTOMER_OF",
+        "from": "dunmore",
+        "to": "kestrel",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dunmore Freight is a customer of Kestrel Data"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": [
+      {
+        "quote": "has no contract with Kestrel Data and has never evaluated Kestrel Lens",
+        "why": "A stated absence: Corvane Logistics must not get USES or CUSTOMER_OF to Kestrel Data or Kestrel Lens."
+      }
+    ]
+  }
+}

@@ -142,13 +142,13 @@ describe('computeEffectiveSchema', () => {
       expect(schema.relationType('SUPERSEDES')?.allowedPairs).toContainEqual(['Risk', 'Risk']);
     });
 
-    it('carries identity: true on HAS_ROLE.businessUnit only, omitting the key elsewhere (#440)', () => {
+    it('carries identity: true on HAS_ROLE.businessUnit and USES.stage only, omitting the key elsewhere (#440)', () => {
       const props = schema.relationType('HAS_ROLE')!.props;
       expect(props.find((p) => p.key === 'businessUnit')?.identity).toBe(true);
       expect('identity' in props.find((p) => p.key === 'title')!).toBe(false);
       const payload = toEffectiveSchemaPayload(schema);
       const withFlag = payload.relationTypes.flatMap((r) => r.props.filter((p) => 'identity' in p).map((p) => `${r.key}.${p.key}`));
-      expect(withFlag).toEqual(['HAS_ROLE.businessUnit']);
+      expect(withFlag).toEqual(['HAS_ROLE.businessUnit', 'USES.stage']);
       expect(payload.entityTypes.some((t) => t.attributes.some((a) => 'identity' in a))).toBe(false);
     });
 

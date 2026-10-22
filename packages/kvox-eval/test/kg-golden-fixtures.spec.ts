@@ -11,6 +11,10 @@
  * m37-m39 carry their gold labels, so the ">= 10 of every entity type" and
  * ">= 3 of every extractable relation" rules below hold for them too.
  *
+ * Issue #663 added the stakeholder and market relations (INVOLVED_IN, USES,
+ * OFFERED_BY, CUSTOMER_OF, PARTNER_OF, COMPETITOR_OF, CONCERNS, KNOWS_ABOUT);
+ * m40-m44 carry their gold labels, the same rule applying to them.
+ *
  * Ontology 1.3.0 (epic #661, issue #664) added the `Risk` item type (work);
  * m50-m55 carry its gold labels (note-only meetings framing threats, blockers
  * and problems), so the ">= 15 of each item kind" rule holds for it too.
