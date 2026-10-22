@@ -3922,6 +3922,19 @@ slot with `scope: { entityIds, evidenceIds }` on every question (API.md, Ask):
 starting handles the agent resolves and then retrieves evidence for, so §9.4
 and §22.4 hold.
 
+**The TimeBar (GIC-15, #676).** `GET /api/graph/activity?ids&bucket&from&to`
+(`graph:read`, owner-only, 404 for any unreadable id, 400 above 300 ids) returns
+evidence counts per week or month for the given nodes and the relations among
+them, stacked by type, plus a series per node. `GraphActivityService`
+(`packages/kvox-api/src/graph/read/graph-activity.service.ts`) is one aggregate
+statement under the 3 s `graph_query_timeout`. A citation is dated by its
+transcript's `recorded_at` or note's `created_at`, falling back to its own
+creation time; a `sensitive` PersonFact contributes nothing. In the explorer
+(`packages/kvox-web/src/graph/ui/components/explorer/timebar/`) the brush is the
+`from`/`to` URL range: the graph is evaluated `as_of` the range end (the same
+semantics as the as-of slider it replaces on the canvas) and nodes with no
+evidence in the window are dimmed client-side. Wire shape: API.md.
+
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
 **Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the
