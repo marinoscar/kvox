@@ -6646,7 +6646,8 @@ keyset-paginated by `nextCursor`.
 | `type` | Comma-separated entity type keys, e.g. `Person,Organization`. Default: every type. An unknown key is a **400** naming it. |
 | `q` | Fuzzy match (pg_trgm) on labels and aliases. Returns the top `limit` by similarity; `nextCursor` is always `null` and `sort` is ignored. |
 | `transcriptId` | Only the Persons `IDENTIFIED_AS` a speaker in this transcript, each with the `speakerIds` identified as them. **404** without `view` access to the transcript. |
-| `sort` | `updated` (default): most recently changed first. `viewed`: only entities you have opened (your `kg_entity_views`), most recent first. Ignored with `q`. |
+| `sort` | `updated` (default): most recently changed first. `viewed`: only entities you have opened (your `kg_entity_views`), most recent first. `mentions`: the most-mentioned first (see below). Ignored with `q`. |
+| `since` | With `sort=mentions` only: `YYYY-MM-DD` (00:00:00Z that day) or an ISO 8601 datetime with an offset. Only mentions recorded on or after it count, and an entity with none is left out. Ignored for the other sorts. A value that is neither is a **400**. |
 | `cursor` | `nextCursor` from a previous page of **this same route**; a cursor from another list is a **400**. |
 | `limit` | 1–50, default 25. |
 
@@ -6672,7 +6673,17 @@ keyset-paginated by `nextCursor`.
 
 `speakerIds` is present only with `?transcriptId=`.
 
-**Errors:** `400` unknown `type` key, a cursor from another list, or no
+**`sort=mentions`** (GIC-09, the explorer's "Who and what is active"): ranks your
+entities by the number of distinct notes plus transcripts that mention them
+(`kg_mentions`, the same readability rules as `mentionCount`), counting only
+mentions with `created_at >= since` when `since` is given; ties break on the
+entity id. It returns the top `limit` and no further pages (`nextCursor` is
+always `null`, like `q`), and `type` still filters. `mentionCount` in each item
+stays the all-time count. It reads only your own graph: another user's entity
+or mention never counts, and nothing about access changes (no access is a
+**404**, never a **403**).
+
+**Errors:** `400` unknown `type` key, a malformed `since`, a cursor from another list, or no
 `view` access is distinguished from "no such transcript" only by the 404
 below · `401` · `403` without `graph:read` · `404` `transcriptId` does not
 exist or you cannot view it.

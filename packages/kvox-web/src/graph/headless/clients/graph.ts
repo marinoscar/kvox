@@ -216,8 +216,14 @@ export interface GraphEntityListParams {
   q?: string;
   /** Only the Persons identified as a speaker in this transcript. */
   transcriptId?: string;
-  /** `updated` orders by most recent change, `viewed` by the entities the caller viewed last; ignored when `q` is set. */
-  sort?: 'updated' | 'viewed';
+  /**
+   * `updated` orders by most recent change, `viewed` by the entities the caller viewed last,
+   * `mentions` by how many notes and transcripts mention the entity (the top `limit`, no further
+   * pages); ignored when `q` is set.
+   */
+  sort?: 'updated' | 'viewed' | 'mentions';
+  /** With `sort: 'mentions'` only: count mentions recorded on or after this `YYYY-MM-DD` date or ISO datetime. */
+  since?: string;
   /** The `nextCursor` of the previous page. */
   cursor?: string;
   /** Page size (the API allows 1 to 50, default 25). */
@@ -869,6 +875,7 @@ export function listGraphEntities(
     q: params.q?.trim() || undefined,
     transcriptId: params.transcriptId,
     sort: params.sort,
+    since: params.since,
     cursor: params.cursor,
     limit: params.limit,
   });
