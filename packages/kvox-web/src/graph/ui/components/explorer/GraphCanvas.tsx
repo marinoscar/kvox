@@ -260,6 +260,8 @@ export interface GraphCanvasProps {
   previewId?: string | null;
   /** Nodes marked in "Select" mode; drawn highlighted whatever else is dimmed. */
   markedIds?: ReadonlySet<string>;
+  /** Nodes the TimeBar dims (no evidence in the brushed window, or not active in the bar under the pointer). A selected, focused or marked node is never dimmed. */
+  dimmedIds?: ReadonlySet<string> | null;
   /** Path mode (GIC-13): the nodes of the shown path. Non-empty: they are lit and every other node is dimmed. */
   pathNodeIds?: ReadonlySet<string>;
   /** Path mode (GIC-13): the edges of the shown path, drawn thicker; every other edge is dimmed. */
@@ -410,6 +412,7 @@ function CanvasBehaviour({
   selectedId,
   previewId = null,
   markedIds,
+  dimmedIds,
   pathNodeIds,
   pathEdgeIds,
   layout,
@@ -590,6 +593,7 @@ function CanvasBehaviour({
   // --- Reducers: visibility, highlight, rings, labels ---------------------------
   // View state goes through the reducers, never into the graph's attributes.
   const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
+  const dimmedKey = dimmedIds ? [...dimmedIds].sort().join(',') : '';
   const pathNodeKey = pathNodeIds ? [...pathNodeIds].sort().join(',') : '';
   const pathEdgeKey = pathEdgeIds ? [...pathEdgeIds].sort().join(',') : '';
   // Hover is for a pointer; a touch preview takes its place on a phone.
@@ -603,6 +607,7 @@ function CanvasBehaviour({
       focusId,
       hoveredEdgeId,
       markedIds: new Set(markedKey ? markedKey.split(',') : []),
+      dimmedIds: dimmedKey ? new Set(dimmedKey.split(',')) : null,
       pathNodeIds: new Set(pathNodeKey ? pathNodeKey.split(',') : []),
       pathEdgeIds: new Set(pathEdgeKey ? pathEdgeKey.split(',') : []),
       accent: theme.palette.primary.main,
@@ -622,6 +627,7 @@ function CanvasBehaviour({
     focusId,
     hoveredEdgeId,
     markedKey,
+    dimmedKey,
     pathNodeKey,
     pathEdgeKey,
     dimColor,

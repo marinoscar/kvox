@@ -8,6 +8,7 @@ export * from './clients/graph.js';
 
 // The hooks.
 export * from './hooks/graphHookUtils.js';
+export * from './hooks/useGraphActivity.js';
 export * from './hooks/useGraphAiConfig.js';
 export * from './hooks/useGraphAttributeDefs.js';
 export * from './hooks/useGraphBrief.js';

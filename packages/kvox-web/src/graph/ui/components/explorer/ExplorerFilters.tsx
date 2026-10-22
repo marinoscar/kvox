@@ -45,6 +45,8 @@ export interface ExplorerFiltersProps {
   asOf: string | null;
   asOfMin: string;
   onAsOfChange: (value: string | null) => void;
+  /** Hide the as-of slider: the TimeBar is the time control (GIC-15). The list view keeps the slider as the fallback. */
+  hideAsOf?: boolean;
   disabled?: boolean;
 }
 
@@ -87,6 +89,7 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
     asOf,
     asOfMin,
     onAsOfChange,
+    hideAsOf,
     disabled,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -183,8 +186,12 @@ export function ExplorerFilters(props: ExplorerFiltersProps) {
           </Menu>
         </>
       )}
-      <SectionHeading>Time</SectionHeading>
-      <AsOfSlider minDate={asOfMin} value={asOf} onChange={onAsOfChange} disabled={disabled} />
+      {!hideAsOf && (
+        <>
+          <SectionHeading>Time</SectionHeading>
+          <AsOfSlider minDate={asOfMin} value={asOf} onChange={onAsOfChange} disabled={disabled} />
+        </>
+      )}
     </Box>
   );
 }

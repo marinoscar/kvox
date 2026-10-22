@@ -1132,6 +1132,97 @@ export function getGraphPaths(
 }
 
 /**
+ * The most ids one {@link getGraphActivity} call may ask about.
+ *
+ * @stability experimental
+ */
+export const GRAPH_ACTIVITY_MAX_IDS = 300;
+
+/**
+ * The bucket width of {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityBucket = 'week' | 'month';
+
+/**
+ * Options for {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityParams {
+  /** The entity (or item) ids to count evidence for, at most {@link GRAPH_ACTIVITY_MAX_IDS}. */
+  ids: readonly string[];
+  /** The bucket width. The API default is `month`. */
+  bucket?: GraphActivityBucket;
+  /** Only evidence dated at or after this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  from?: string;
+  /** Only evidence dated before this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  to?: string;
+}
+
+/**
+ * One stacked bucket of {@link GraphActivityResponse.series}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityBucketRow {
+  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  start: string;
+  /** The sum of `byType`. */
+  total: number;
+  /** Evidence attributions per entity type or item kind. */
+  byType: Record<string, number>;
+}
+
+/**
+ * One entity's evidence count in one bucket.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityPoint {
+  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  start: string;
+  /** Evidence attributions of the entity in the bucket. */
+  count: number;
+}
+
+/**
+ * The answer of {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityResponse {
+  /** The bucket width that was applied. */
+  bucket: GraphActivityBucket;
+  /** Stacked buckets with evidence, oldest first. */
+  series: GraphActivityBucketRow[];
+  /** Per requested id, the buckets with evidence, oldest first. Ids without evidence are absent. */
+  byEntity: Record<string, GraphActivityPoint[]>;
+}
+
+/**
+ * Fetches the evidence activity of a set of nodes over time (`GET /api/graph/activity`).
+ * A node the caller cannot read rejects with a 404; more than {@link GRAPH_ACTIVITY_MAX_IDS} ids with a 400;
+ * a query that takes too long, with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphActivity(
+  host: KvoxWebHost,
+  params: GraphActivityParams,
+  signal?: AbortSignal,
+): Promise<GraphActivityResponse> {
+  const query = buildGraphQuery({
+    ids: params.ids,
+    bucket: params.bucket,
+    from: params.from,
+    to: params.to,
+  });
+  return kvoxGet<GraphActivityResponse>(host, `/graph/activity${query}`, { signal });
+}
+
+/**
  * Fetches one citation resolved to a link (`GET /api/graph/evidence/:id`).
  *
  * @stability experimental
