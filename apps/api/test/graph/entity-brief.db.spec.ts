@@ -196,6 +196,41 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     expect(links.map((l) => l.id).sort()).toEqual(cited.sort());
   });
 
+  it('adds a cited "Open risks" section for a Project, Product or Organization, and omits it when empty (#664)', async () => {
+    const { reader, g } = await owner();
+    const acme = await g.entity('Organization', 'Acme');
+    const project = await g.entity('Project', 'Copilot rollout');
+    const sarah = await g.entity('Person', 'Sarah Chen');
+    const recent = new Date(Date.now() - 5 * 86_400_000);
+    const older = new Date(Date.now() - 9 * 86_400_000);
+    const mk = (subjectId: string, statement: string, opts: Record<string, unknown>) => g.item('risk', { subjectId, statement, ...opts });
+    const low = await mk(project, 'Licence budget is not approved', { props: { severity: 'low' }, occurredAt: recent });
+    const highOld = await mk(project, 'Security sign-off is missing', { props: { severity: 'high' }, occurredAt: older });
+    const highNew = await mk(project, 'Data residency may block the archive', { props: { severity: 'high' }, occurredAt: recent });
+    await mk(project, 'Mitigated one', { status: 'mitigated', props: { severity: 'high' }, occurredAt: recent });
+    await mk(project, 'Draft one', { reviewStatus: 'unreviewed', props: { severity: 'high' }, occurredAt: recent });
+    const gone = await mk(project, 'Superseded one', { reviewStatus: 'superseded', status: 'superseded', supersededById: highNew, occurredAt: recent });
+    await mk(sarah, 'A risk about a person', { props: { severity: 'high' }, occurredAt: recent });
+    await mk(acme, 'Acme may not renew', { props: { severity: 'medium' }, occurredAt: recent });
+
+    const forProject = await get(reader, project, { enqueueStaleDigest: false, since: '2020-01-01' });
+    expect(entityBriefResponseSchema.safeParse(forProject).success).toBe(true);
+    expect(forProject.sections.openRisks?.map((e) => e.itemId)).toEqual([highNew, highOld, low]);
+    expect(forProject.sections.openRisks?.every((e) => e.kind === 'risk' && e.evidenceIds.length > 0)).toBe(true);
+    // History keeps a superseded risk (flagged) in "what changed", but it is never an open risk.
+    expect(forProject.sections.openRisks?.map((e) => e.itemId)).not.toContain(gone);
+
+    const forOrg = await get(reader, acme, { enqueueStaleDigest: false, since: '2020-01-01' });
+    expect(forOrg.sections.openRisks).toHaveLength(1);
+
+    // A Person never carries the section, whatever risks name them; an entity with none has no key at all.
+    const forPerson = await get(reader, sarah, { enqueueStaleDigest: false, since: '2020-01-01' });
+    expect(forPerson.sections).not.toHaveProperty('openRisks');
+    const empty = await g.entity('Project', 'Quiet project');
+    const forEmpty = await get(reader, empty, { enqueueStaleDigest: false });
+    expect(forEmpty.sections).not.toHaveProperty('openRisks');
+  });
+
   it('shows the stored digest, keeping only statements cited by the caller’s own evidence', async () => {
     const { user, reader, g } = await owner();
     const s = await seedSarah(g);

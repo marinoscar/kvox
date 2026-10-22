@@ -538,7 +538,7 @@ export class GraphWriteService {
 
     const props = withoutNulls(this.validatedProps(schema, input.typeKey, input.props ?? {}, false));
 
-    const status = input.status ?? (input.kind === 'commitment' ? 'open' : 'active');
+    const status = input.status ?? (input.kind === 'commitment' || input.kind === 'risk' ? 'open' : 'active');
     if (!(type.statuses ?? []).includes(status)) {
       throw invalid(`'${status}' is not a status of ${input.typeKey}.`, 'status', `must be one of: ${(type.statuses ?? []).join(', ')}`);
     }

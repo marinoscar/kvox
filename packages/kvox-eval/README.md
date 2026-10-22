@@ -75,7 +75,7 @@ kvox-eval ask --only q01,q22 --category negative --min-match 0.7
 kvox-eval ask --provider openai-compatible --base-url http://localhost:8000/v1 --model local-model
 ```
 
-Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out` (writes `report.json` and `answers.md`; `replay.json` for `--replay`), `--min-match <0..1>`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive-fact leak) or the answer match fell below `--min-match` (or a replay expectation failed), 2 configuration (no key, a refused provider, a bad flag, an unknown question id) or every model call failed. One failed model call marks that turn failed and the run goes on. The seeded graph is 44 meetings, 173 entities, 310 relations, 187 items and 870 evidence rows, 0 refused. Semantic search is off (no embeddings). `--replay` reproduces `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
+Flags: `--provider openai|openai-compatible`, `--model`, `--base-url`, `--only`, `--category`, `--out` (writes `report.json` and `answers.md`; `replay.json` for `--replay`), `--min-match <0..1>`, `--replay`. Exit codes: 0 pass, 1 a gate failed (citation validity below 1, a sensitive-fact leak) or the answer match fell below `--min-match` (or a replay expectation failed), 2 configuration (no key, a refused provider, a bad flag, an unknown question id) or every model call failed. One failed model call marks that turn failed and the run goes on. The seeded graph is 50 meetings, 204 entities, 317 relations, 205 items and 928 evidence rows, 0 refused. Semantic search is off (no embeddings). `--replay` reproduces `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
 
 From code:
 
@@ -114,7 +114,7 @@ No settings key and no file. The models a live run uses are the command line's (
 
 ## Data
 
-The golden set, shipped in the tarball under `fixtures/kg-golden/`: 44 synthetic meetings (`meetings/mNN-<slug>.json`) and the Ask question file (`ask-questions.json`). **Synthetic only, ever**: no real recording, transcript, note, name, company, email address or phone number belongs there (the rule, the format and the coverage the set must keep: [fixtures/kg-golden/README.md](fixtures/kg-golden/README.md); `test/kg-golden-fixtures.spec.ts` asserts them). A fixture's and a question's id is permanent once committed. The package owns no table. The `ask-run` slice ships `host/prisma` and `host/generated` (the schema, migrations and Prisma client), generated at build time by `scripts/prepare-host.mjs`; the in-memory database they run on is created per run and discarded.
+The golden set, shipped in the tarball under `fixtures/kg-golden/`: 50 synthetic meetings (`meetings/mNN-<slug>.json`) and the Ask question file (`ask-questions.json`). **Synthetic only, ever**: no real recording, transcript, note, name, company, email address or phone number belongs there (the rule, the format and the coverage the set must keep: [fixtures/kg-golden/README.md](fixtures/kg-golden/README.md); `test/kg-golden-fixtures.spec.ts` asserts them). A fixture's and a question's id is permanent once committed. The package owns no table. The `ask-run` slice ships `host/prisma` and `host/generated` (the schema, migrations and Prisma client), generated at build time by `scripts/prepare-host.mjs`; the in-memory database they run on is created per run and discarded.
 
 ## Permissions and settings
 

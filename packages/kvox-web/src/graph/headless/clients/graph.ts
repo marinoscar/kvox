@@ -164,11 +164,11 @@ export function getGraphOntology(host: KvoxWebHost, signal?: AbortSignal): Promi
  */
 export type DatePrecision = 'day' | 'month' | 'year' | 'unknown';
 /**
- * The kind of a knowledge item hanging off entities: a commitment, a decision, a claim or a fact about a person.
+ * The kind of a knowledge item hanging off entities: a commitment, a decision, a risk, a claim or a fact about a person.
  *
  * @stability experimental
  */
-export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact';
+export type GraphItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk';
 
 /** `entityRef` in both #370 and #372. */
 /**
@@ -216,8 +216,14 @@ export interface GraphEntityListParams {
   q?: string;
   /** Only the Persons identified as a speaker in this transcript. */
   transcriptId?: string;
-  /** `updated` orders by most recent change, `viewed` by the entities the caller viewed last; ignored when `q` is set. */
-  sort?: 'updated' | 'viewed';
+  /**
+   * `updated` orders by most recent change, `viewed` by the entities the caller viewed last,
+   * `mentions` by how many notes and transcripts mention the entity (the top `limit`, no further
+   * pages); ignored when `q` is set.
+   */
+  sort?: 'updated' | 'viewed' | 'mentions';
+  /** With `sort: 'mentions'` only: count mentions recorded on or after this `YYYY-MM-DD` date or ISO datetime. */
+  since?: string;
   /** The `nextCursor` of the previous page. */
   cursor?: string;
   /** Page size (the API allows 1 to 50, default 25). */
@@ -279,6 +285,8 @@ export interface GraphEntityCounts {
     claim: number;
     /** Facts about a person. */
     person_fact: number;
+    /** Risks, issues and blockers about the entity. */
+    risk: number;
   };
   /** How many of the commitments are still open. */
   openCommitments: number;
@@ -727,6 +735,8 @@ export interface EntityBrief {
     };
     /** Claims and risks recorded for the entity. */
     risksClaims: BriefEntry[];
+    /** Open risks, issues and blockers about a project, product or organization, highest severity first. Absent when there are none. */
+    openRisks?: BriefEntry[];
     /** Relations between people and others (for example a role) that started or ended. */
     peopleChanges: PeopleChange[];
   };
@@ -869,6 +879,7 @@ export function listGraphEntities(
     q: params.q?.trim() || undefined,
     transcriptId: params.transcriptId,
     sort: params.sort,
+    since: params.since,
     cursor: params.cursor,
     limit: params.limit,
   });
@@ -1538,6 +1549,7 @@ export type ProposalGroupKey =
   | 'Meeting'
   | 'Decision'
   | 'Commitment'
+  | 'Risk'
   | 'Claim'
   | 'PersonFact'
   | 'Other'
@@ -1556,6 +1568,7 @@ export const PROPOSAL_GROUP_ORDER: readonly ProposalGroupKey[] = [
   'Meeting',
   'Decision',
   'Commitment',
+  'Risk',
   'Claim',
   'PersonFact',
   'Other',

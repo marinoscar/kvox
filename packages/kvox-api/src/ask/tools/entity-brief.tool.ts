@@ -80,6 +80,7 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
       ...sections.openCommitments.theirs,
       ...sections.openCommitments.yours,
       ...sections.risksClaims,
+      ...(sections.openRisks ?? []),
     ];
     const factIds = allEntries.filter((e) => e.kind === 'person_fact').map((e) => e.itemId);
     const visibleFacts = await visiblePersonFactIds(this.prisma, ctx.user.id, factIds, ctx.personalFactsAllowed);
@@ -135,6 +136,8 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
         yours: section(sections.openCommitments.yours),
       },
       risksClaims: section(sections.risksClaims),
+      // Omitted, not empty, when the brief has no open risks (#664).
+      ...(sections.openRisks && sections.openRisks.length > 0 ? { openRisks: section(sections.openRisks) } : {}),
       peopleChanges: sections.peopleChanges
         .filter((p) => typeVisible(p.type, ctx.personalFactsAllowed))
         .map(peopleChange),
@@ -146,6 +149,7 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
       data.openCommitments.theirs.length +
       data.openCommitments.yours.length +
       data.risksClaims.length +
+      (data.openRisks?.length ?? 0) +
       data.peopleChanges.length;
     const label = res.entity.label;
     const parts = [

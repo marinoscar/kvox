@@ -62,6 +62,7 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'work: Product entity type (schema:Product) with category and vendorName (#662)',
       'DISCUSSED widened to Meeting -> Project | Topic | Product | Organization; PART_OF gains Topic -> Project; Commitment and Decision subjectTypes gain Product and Topic (#662)',
       'work: stakeholder and market relations INVOLVED_IN (role, stance), USES (stage), OFFERED_BY, CUSTOMER_OF, PARTNER_OF, COMPETITOR_OF, CONCERNS, KNOWS_ABOUT (level) (#663)',
+      'work: Risk item type (itemKind risk; open, mitigated, closed, superseded) with severity, riskKind and mitigation; SUPERSEDES allows Risk -> Risk (#664)',
     ]) as string[],
   }),
 ]);

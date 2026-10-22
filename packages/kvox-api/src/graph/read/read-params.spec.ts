@@ -57,9 +57,9 @@ describe('filters', () => {
     expect(badRequest(() => resolveRelationTypes(schema, 'LOVES')).message).toContain('LOVES');
   });
 
-  it('knows the six timeline kinds', () => {
+  it('knows the seven timeline kinds', () => {
     expect([...resolveTimelineKinds(undefined)].sort()).toEqual(
-      ['claim', 'commitment', 'decision', 'meeting', 'person_fact', 'relation'].sort(),
+      ['claim', 'commitment', 'decision', 'meeting', 'person_fact', 'relation', 'risk'].sort(),
     );
     expect([...resolveTimelineKinds('relation,meeting')]).toEqual(['relation', 'meeting']);
     expect(badRequest(() => resolveTimelineKinds('gossip')).details.unknown).toEqual(['gossip']);

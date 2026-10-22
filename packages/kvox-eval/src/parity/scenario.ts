@@ -11,7 +11,7 @@ import type { KvoxAiPort, KvoxJob, KvoxJobsPort, KvoxSettingsPort } from '@marin
 import { loadGoldenAskQuestions, fixtureDomains, loadGoldenMeetings, type GoldenFixture } from '../fixtures/index.js';
 import { runExtraction } from '../kg/index.js';
 import { PARITY_DEFAULT_EFFORT, PARITY_USER_ID } from './constants.js';
-import { AskRespondHandler, AskToolset, EntityBriefTool, EvidenceTool, GetEntityTool, HandleRegistryClass, ListCommitmentsTool, NeighborsTool, SearchTool, TimelineTool } from './internals.js';
+import { AskRespondHandler, AskToolset, EntityBriefTool, EvidenceTool, GetEntityTool, HandleRegistryClass, ListCommitmentsTool, ListRisksTool, NeighborsTool, SearchTool, TimelineTool } from './internals.js';
 import type { ParityScript } from './script.js';
 
 // =============================================================================
@@ -173,6 +173,7 @@ function parityToolset(): InstanceType<typeof AskToolset> {
     new EvidenceTool(NONE, NONE),
     new EntityBriefTool(NONE, NONE),
     new ListCommitmentsTool(NONE),
+    new ListRisksTool(NONE, NONE),
     NONE,
   );
   return {

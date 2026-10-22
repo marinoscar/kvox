@@ -1,0 +1,183 @@
+{
+  "id": "m52",
+  "title": "Ardenvale Logistics account review",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks"
+  ],
+  "recordedAt": "2026-08-18T09:30:00Z",
+  "contextText": "Account review for a freight customer; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Ardenvale Logistics account review\n\n**Date:** August 18\n**Attendees:** Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby\n\n## Summary\n\nThe account team reviewed the relationship with Ardenvale Logistics, a mid-sized freight customer that has been with the company for four years. Volumes are steady and the last quarter closed on target, but the review spent most of its time on things that could go wrong with the account.\n\n## Account health\n\nArdenvale Logistics uses the booking platform for about nine hundred shipments a month, and the usage trend is flat. Customer satisfaction scores from the last survey were average. Odalys pointed out that the customer has not asked for any new features this year, which can mean either contentment or disengagement.\n\n## Risks and problems\n\n- Ardenvale Logistics may not renew its contract if the delivery delays continue, and the renewal decision is due before the end of the year. Kestrel said two of their senior managers have mentioned the delays in recent calls.\n- Invoices to Ardenvale Logistics have been rejected twice for a missing purchase order number, which delays payment and irritates their accounts team.\n- Their procurement contact is leaving in October, and the replacement is unknown. Wilhelmina noted that this person has been the main sponsor of the account.\n\n## Background\n\nThe contract covers booking, tracking and monthly reporting. Ardenvale Logistics also has a small warehouse integration that is run by a separate team. Pricing was last revised two years ago and no change is planned.\n\n## Next steps\n\nThe summary goes to the regional director, and the account team will review the account again in September.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Ardenvale Logistics account review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ardenvale Logistics account review"
+          }
+        ]
+      },
+      {
+        "key": "odalys",
+        "type": "Person",
+        "label": "Odalys Brandt",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+          }
+        ]
+      },
+      {
+        "key": "kestrel",
+        "type": "Person",
+        "label": "Kestrel Munroe",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+          }
+        ]
+      },
+      {
+        "key": "wilhelmina",
+        "type": "Person",
+        "label": "Wilhelmina Ostby",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Odalys Brandt, Kestrel Munroe, Wilhelmina Ostby"
+          }
+        ]
+      },
+      {
+        "key": "arden",
+        "type": "Organization",
+        "label": "Ardenvale Logistics",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "reviewed the relationship with Ardenvale Logistics"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "arden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "reviewed the relationship with Ardenvale Logistics"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "arden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Renewal at risk from delays",
+        "statement": "Ardenvale Logistics may not renew its contract if the delivery delays continue.",
+        "status": "open",
+        "occurredAt": "2026-08-18",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ardenvale Logistics may not renew its contract if the delivery delays continue"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "arden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Invoices rejected for missing PO number",
+        "statement": "Invoices to Ardenvale Logistics have been rejected twice for a missing purchase order number.",
+        "status": "open",
+        "occurredAt": "2026-08-18",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Invoices to Ardenvale Logistics have been rejected twice for a missing purchase order number"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "arden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Procurement sponsor leaving",
+        "statement": "Their procurement contact is leaving in October, and the replacement is unknown.",
+        "status": "open",
+        "occurredAt": "2026-08-18",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "low",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Their procurement contact is leaving in October, and the replacement is unknown"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

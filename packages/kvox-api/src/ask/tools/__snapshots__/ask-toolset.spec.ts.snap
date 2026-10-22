@@ -1,0 +1,58 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`AskToolset.definitions list_risks keeps its definition (name, filters, enums) 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "description": "Most risks to return, 1–25. Default 15.",
+      "type": [
+        "integer",
+        "null",
+      ],
+    },
+    "severity": {
+      "description": "Only risks of this severity. Default: any severity.",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        null,
+      ],
+      "type": [
+        "string",
+        "null",
+      ],
+    },
+    "status": {
+      "description": "Risk status to keep. Default "open"; "any" keeps all.",
+      "enum": [
+        "open",
+        "mitigated",
+        "closed",
+        "superseded",
+        "any",
+        null,
+      ],
+      "type": [
+        "string",
+        "null",
+      ],
+    },
+    "subject": {
+      "description": "A project, product, organization, person or topic reference (entN). Default: every risk.",
+      "type": [
+        "string",
+        "null",
+      ],
+    },
+  },
+  "required": [
+    "subject",
+    "status",
+    "severity",
+    "limit",
+  ],
+  "type": "object",
+}
+`;

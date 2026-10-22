@@ -15,8 +15,11 @@
 
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SearchIcon from '@mui/icons-material/Search';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -36,6 +39,12 @@ import { EXPLORER_NODE_CAP } from './explorerModel.js';
 import { LayoutMenu, layoutMenuItems, type LayoutMenuProps } from './LayoutMenu.js';
 import type { InputModality } from './shell/useInputModality.js';
 import type { WindowClass } from './shell/useWindowClass.js';
+
+/** The palette's shortcut as the platform writes it: the Command key on a Mac, Ctrl elsewhere. */
+function searchShortcutLabel(): string {
+  const platform = typeof navigator === 'undefined' ? '' : `${navigator.platform} ${navigator.userAgent}`;
+  return /mac|iphone|ipad/i.test(platform) ? '\u2318K' : 'Ctrl K';
+}
 
 /**
  * Props of {@link ExplorerToolbar}.
@@ -69,6 +78,12 @@ export interface ExplorerToolbarProps {
   /** Rows other stories add to the phone's overflow menu (Undo, Redo, Lenses, Shortcuts), after the layout choices. Each row calls `close` itself. */
   overflowItems?: (close: () => void) => ReactNode[];
   disabled?: boolean;
+  /** Opens the command palette (GIC-09). Omitted: no search field. */
+  onOpenSearch?: () => void;
+  /** Goes back to the Start-here state (GIC-09). Omitted: no Home control. */
+  onHome?: () => void;
+  /** The minimap switch (GIC-09), shown on a medium window only; omitted elsewhere. */
+  minimapControl?: { shown: boolean; onToggle: () => void };
 }
 
 /**
@@ -96,6 +111,9 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     extraControls,
     overflowItems,
     disabled,
+    onOpenSearch,
+    onHome,
+    minimapControl,
   } = props;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const compact = windowClass === 'compact';
@@ -137,9 +155,65 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     />
   );
 
+  // The search field: a button that LOOKS like a field (the palette is a modal), on every window class.
+  // A phone gets the icon alone, 44px; the others get the field with its shortcut.
+  const search = onOpenSearch &&
+    (compact ? (
+      <IconButton
+        aria-label="Search the graph"
+        aria-keyshortcuts="Control+K Meta+K /"
+        onClick={onOpenSearch}
+        sx={{ width: 44, height: 44 }}
+      >
+        <SearchIcon />
+      </IconButton>
+    ) : (
+      <Button
+        variant="outlined"
+        color="inherit"
+        size="small"
+        startIcon={<SearchIcon />}
+        onClick={onOpenSearch}
+        aria-label="Search the graph"
+        aria-keyshortcuts="Control+K Meta+K /"
+        sx={{
+          textTransform: 'none',
+          color: 'text.secondary',
+          justifyContent: 'flex-start',
+          minWidth: { sm: 180, md: 240 },
+          minHeight: touch ? 44 : undefined,
+          '& .shortcut': { ml: 'auto', pl: 2, fontSize: 12, opacity: 0.7 },
+        }}
+      >
+        Search
+        {!touch && <span className="shortcut">{searchShortcutLabel()}</span>}
+      </Button>
+    ));
+
+  const home = onHome && !compact && (
+    <Button size="small" startIcon={<HomeOutlinedIcon />} onClick={onHome} sx={{ minHeight: touch ? 44 : undefined }}>
+      Start here
+    </Button>
+  );
+
+  const minimapToggle = minimapControl && windowClass === 'medium' && !listView && (
+    <ToggleButton
+      value="minimap"
+      size="small"
+      selected={minimapControl.shown}
+      aria-pressed={minimapControl.shown}
+      onChange={minimapControl.onToggle}
+      sx={{ textTransform: 'none', px: 1, py: 0.25, whiteSpace: 'nowrap', minHeight: touch ? 44 : undefined }}
+    >
+      <MapOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
+      Minimap
+    </ToggleButton>
+  );
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, minWidth: 0, flex: '1 1 auto' }}>{title}</Box>
+      {search}
       {marked}
       {selectToggle}
       {compact ? (
@@ -168,6 +242,19 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
               </ListItemIcon>
               <ListItemText>Fit</ListItemText>
             </MenuItem>
+            {onHome && (
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  onHome();
+                }}
+              >
+                <ListItemIcon>
+                  <HomeOutlinedIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Start here</ListItemText>
+              </MenuItem>
+            )}
             <MenuItem
               disabled={disabled}
               onClick={() => {
@@ -202,8 +289,10 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
         </>
       ) : (
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          {home}
           {extraControls}
           {layoutControl && <LayoutMenu {...layoutControl} disabled={listView} />}
+          {minimapToggle}
           <Button size="small" startIcon={<CenterFocusStrongIcon />} onClick={onFit} disabled={listView}>
             Fit
           </Button>

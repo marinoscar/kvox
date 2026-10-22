@@ -73,6 +73,7 @@ export const STALE_SELECTION_MESSAGE = 'The text changed since you selected it â
 const ITEM_KINDS = [
   { value: 'commitment', typeKey: 'Commitment', fallback: 'Commitment' },
   { value: 'decision', typeKey: 'Decision', fallback: 'Decision' },
+  { value: 'risk', typeKey: 'Risk', fallback: 'Risk' },
   { value: 'claim', typeKey: 'Claim', fallback: 'Claim' },
   { value: 'person_fact', typeKey: 'PersonFact', fallback: 'Person fact' },
 ] as const;
@@ -232,7 +233,7 @@ export function AddToGraphDialog({
           owner: itemKind === 'commitment' ? (owner?.endpoint ?? null) : null,
           counterparty: itemKind === 'commitment' ? (counterparty?.endpoint ?? null) : null,
           meeting: null,
-          status: itemKind === 'commitment' ? 'open' : null,
+          status: itemKind === 'commitment' || itemKind === 'risk' ? 'open' : null,
           occurredAt: null,
           dueAt: itemKind === 'commitment' ? orNull(dueAt) : null,
           sensitivity: itemKind === 'person_fact' ? sensitivity : null,
@@ -412,7 +413,10 @@ export function AddToGraphDialog({
                   setProps({});
                 }}
               >
-                {ITEM_KINDS.map((entry) => (
+                {ITEM_KINDS.filter(
+                  // Risk belongs to the work domain: with it off the ontology has no Risk type and the kind is not offered.
+                  (entry) => entry.value !== 'risk' || !ontology || ontology.entityTypes.some((type) => type.key === 'Risk'),
+                ).map((entry) => (
                   <MenuItem key={entry.value} value={entry.value}>
                     {ontology?.entityTypes.find((type) => type.key === entry.typeKey)?.label ?? entry.fallback}
                   </MenuItem>

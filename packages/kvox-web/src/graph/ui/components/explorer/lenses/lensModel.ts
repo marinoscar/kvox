@@ -365,7 +365,7 @@ export interface LensPaletteAction {
  * The lens actions the command palette offers (GIC-16, #670), as plain data.
  *
  * @remarks
- * `ExplorerCommandPalette` was not on `main` when this story landed, so the palette does not call this yet; when it merges, spread `lensPaletteActions(...)` into its Actions group. Each entry applies the lens through `onApply`.
+ * The explorer page maps each entry into the command palette's Actions section (an icon is added there); a host that builds its own palette can do the same. Each entry applies the lens through `onApply`.
  *
  * @stability experimental
  */

@@ -442,6 +442,21 @@ model, hardware, service, other), `vendorName` (a resolution hint only).
 Aligned to `schema:Product`. *Domain:* `work` (§17.2), so it disappears with
 the domain. Added in ontology 1.3.0.
 
+**Risk** — a risk, issue or blocker that someone raised about a project,
+product or organization: "licence budget not approved could delay the
+rollout." *Negative:* a task someone will do is a `Commitment`, a choice made
+is a `Decision`, a neutral statement of fact is a `Claim`; create a Risk only
+when the source frames something as a threat, blocker or problem. An item
+type stored in `kg_items` (`kind = 'risk'`), with `status` `open` \|
+`mitigated` \| `closed` \| `superseded`, an optional subject (a Person,
+Organization, Project, Product or Topic) and the attributes `severity`
+(low, medium, high), `riskKind` (risk, issue, blocker) and `mitigation`
+(text, only if stated). A change of status is a new Risk that `SUPERSEDES`
+the old one, like the other item types. `kg_item_kind` is a PostgreSQL enum,
+so the kind arrived with a `@marinoscar/kvox-db` migration
+(`add_kg_item_kind_risk`). *Domain:* `work` (§17.2), so it disappears with the
+domain. Added in ontology 1.3.0.
+
 **Claim** — a dated statement of fact about an entity that is neither a
 decision nor a commitment: "Acme's CIO is leaving in March," "the budget was
 cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
@@ -485,7 +500,7 @@ than no relation at all.
 | `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
 | `DISCUSSED` | Meeting → Project \| Topic \| Product \| Organization | Widened in ontology 1.3.0; same key |
-| `ABOUT` | Claim \| Decision \| Commitment → Person \| Organization \| Project \| Product \| Topic | Product and Topic added in 1.3.0 |
+| `ABOUT` | Claim \| Decision \| Commitment \| Risk → Person \| Organization \| Project \| Product \| Topic | Product and Topic added in 1.3.0; Risk as a source in 1.3.0 |
 | `PART_OF` | Project → Organization; Meeting → Project; Topic → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
 | `BROADER` | Topic → Topic | Non-temporal, no exclusivity; `skos:broader`. Rolls a narrower topic up into a theme (1.3.0) |
 | `INVOLVED_IN` | Person → Project | Temporal; props `{ role (required), stance? }`. `role`: sponsor, owner, lead, contributor, stakeholder, approver, end_user, advisor. `stance`: champion, supportive, neutral, skeptical, resistant, only when stated or unmistakably implied, never from tone (1.3.0) |
@@ -500,7 +515,7 @@ than no relation at all.
 | `CREATED_IN` | Commitment → Meeting | |
 | `ASSIGNED_TO` | Commitment → Person | The owner |
 | `OWED_TO` | Commitment → Person \| Organization | The counterparty, when one is stated |
-| `SUPERSEDES` | Decision → Decision; Claim → Claim; Commitment → Commitment; `HAS_ROLE` → `HAS_ROLE`; `WORKS_FOR` → `WORKS_FOR`; `REPORTS_TO` → `REPORTS_TO` | §5.4. The relation-to-relation form is what the closing rule (§5.4) writes when a new fact closes a still-open exclusive edge |
+| `SUPERSEDES` | Decision → Decision; Claim → Claim; Commitment → Commitment; Risk → Risk (1.3.0); `HAS_ROLE` → `HAS_ROLE`; `WORKS_FOR` → `WORKS_FOR`; `REPORTS_TO` → `REPORTS_TO` | §5.4. The relation-to-relation form is what the closing rule (§5.4) writes when a new fact closes a still-open exclusive edge |
 | `MENTIONS` | Note \| Transcript → any entity | The coarse, overview-level shortcut — "everything this note touches," one hop, no evidence detail beyond "somewhere in this document" |
 | `SUPPORTED_BY` | any generated entity/relation/item → its evidence | The fine-grained link — *which* segment or span, §5.3 |
 
@@ -1395,7 +1410,12 @@ the `kg.entity_digest` job (§9.2) on its own schedule, never synchronously
 with a `GET`.
 
 Sections, in order: **What changed** · **Decisions** · **Open commitments
-(theirs / yours)** · **Risks / claims** · **People changes**. **People
+(theirs / yours)** · **Risks / claims** · **People changes**, plus, for a
+Project, Product or Organization, an optional **Open risks** section (#664):
+the open, not-superseded `Risk` items about the entity, highest `severity`
+first and then newest, each cited. The key is absent from the response when
+there is none, and always when the `work` domain is off; like every section
+it is built from stored rows only. **People
 changes** reads directly off §5.4's closing rule: every edge of a normally
 exclusive type closed since the window's start — a promotion, a manager
 change, a company change — surfaces here by name, rather than being left for
@@ -1532,7 +1552,7 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   a polymorphic `from_kind`/`from_id` pair without FKs — the rejected
   alternative below), and `from_speaker_id` is restricted to the one relation
   type whose source is a speaker.
-- **`kg_items`** — `Commitment`, `Decision`, `Claim`, and `PersonFact` **in
+- **`kg_items`** — `Commitment`, `Decision`, `Risk` (1.3.0), `Claim`, and `PersonFact` **in
   one table**, not four, distinguished by a `kind` enum: `subject_id`,
   `statement`/`title`, `status`, `occurred_at`, `due_at`, `valid tstzrange` +
   `valid_precision` alongside `occurred_at` (§5.4 — the same bitemporal pair
@@ -3355,7 +3375,7 @@ of a proposal.
   The model is **re-validated** at run time with the payload's model; a
   resolver refusal then fails the turn (`auth` for `ai_key_missing`, else
   `other`).
-- *The loop*: `KvoxAi.chat()` with all seven tools, `toolChoice: 'auto'` while fewer
+- *The loop*: `KvoxAi.chat()` with all eight tools, `toolChoice: 'auto'` while fewer
   than 8 steps have run, less than 4 minutes have passed and the input budget
   still has room for one more full step (4 results at the 3000-token cap);
   otherwise one final `toolChoice: 'none'` call with the system line "Tool
@@ -3621,7 +3641,7 @@ conversations through `ask_conversations.owner_id` Cascade instead.
 ### 21.7 The toolset, as shipped (#377)
 
 `packages/kvox-api/src/ask/tools/` — `AskToolset` (provided by `AskModule`, which
-imports only the graph and search slices' modules and reads through `KVOX_PRISMA`) holds seven
+imports only the graph and search slices' modules and reads through `KVOX_PRISMA`) holds eight
 tools, each a fixed, parameterized read shape with a Zod `input` and a
 strict-mode JSON Schema `parameters` (`type: 'object'`,
 `additionalProperties: false`, every property in `required`, optional ones
@@ -3636,8 +3656,9 @@ prompts and #382's evals name:
 | `neighbors` | `entity`, `hops` 1\|2 (1), `types[]`, `relationTypes[]`, `asOf`, `limit` 1–50 (25) | `GraphNeighborhoodService.neighborhood` | `{ asOf, nodes: [{ ref, kind, type, label, depth }], edges: [{ ref\|null, type, from, to, validFrom, validTo, precision? }], truncated }` |
 | `timeline` | `entity`, `asOf`, `kinds[]`, `limit` 1–25 (15) | `GraphReadService.timeline`, never `includeSensitive` | `[{ ref, event, text, status, superseded, at, precision?, evidence: [{ ref, quote }] ≤ 2 }]` |
 | `evidence` | `subject` (`ent`/`itm`/`rel`), `limit` 1–10 (5) | `GraphEvidenceService.listForSubject` (owner-scoped, newest source first) | `[{ ref, quote, source: { kind: transcript\|note\|import, title, at, startMs }, available }]` |
-| `entity_brief` | `entity`, `since`, `asOf` | `EntityBriefService.getBrief(…, { markViewed: false, enqueueStaleDigest: false })` | `{ window, digest: [{ text, evidence }] \| null, digestStale, digestGeneratedAt, whatChanged, decisions, openCommitments: { theirs, yours }, risksClaims, peopleChanges }` |
+| `entity_brief` | `entity`, `since`, `asOf` | `EntityBriefService.getBrief(…, { markViewed: false, enqueueStaleDigest: false })` | `{ window, digest: [{ text, evidence }] \| null, digestStale, digestGeneratedAt, whatChanged, decisions, openCommitments: { theirs, yours }, risksClaims, openRisks? (omitted when empty), peopleChanges }` |
 | `list_commitments` | `entity`, `direction` `owned_by`\|`owed_to`\|`any`, `status` `open`\|`done`\|`dropped`\|`superseded`\|`any` (open), `dueBefore`, `limit` 1–25 (15) | one owner-scoped `kg_items` query, `due_at ASC NULLS LAST, occurred_at DESC` | `[{ ref, statement, status, due, owner, counterparty, madeOn, evidence }]` |
+| `list_risks` (#664) | `subject`, `status` `open`\|`mitigated`\|`closed`\|`superseded`\|`any` (open), `severity` `low`\|`medium`\|`high`, `limit` 1–25 (15) | one owner-scoped `kg_items` query (`kind = 'risk'`), severity high to low then `occurred_at DESC NULLS LAST`; empty when the `work` domain is off | `[{ ref, statement, status, severity, kind, mitigation?, subject, raisedOn, evidence }]` |
 
 A neighbourhood edge carries a `rel` ref only when it is a stored relation
 (citable, with evidence); a derived item-column edge (`virtual`) has
