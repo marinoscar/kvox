@@ -31,6 +31,20 @@ async function open(page: Page, route: string, theme: 'light' | 'dark') {
   await expect(page.getByRole('progressbar')).toHaveCount(0);
 }
 
+/** Where a node is drawn, in page coordinates (the canvas's own probe, see `GraphCanvas`). */
+async function clickNode(page: Page, nodeId: string) {
+  const container = page.locator('[data-camera-ratio]').first();
+  await page.waitForTimeout(500);
+  const box = await container.boundingBox();
+  if (!box) throw new Error('the canvas has no box');
+  const at = await container.evaluate(
+    (el, id) => (el as unknown as { kvoxProbe: { nodeViewport(id: string): { x: number; y: number } | null } }).kvoxProbe.nodeViewport(id),
+    nodeId,
+  );
+  if (!at) throw new Error(`node ${nodeId} is not on the canvas`);
+  await page.mouse.click(box.x + at.x, box.y + at.y);
+}
+
 /** Opens the lens list: a dropdown, or on a phone the full-screen list behind the overflow menu. */
 async function openLenses(page: Page) {
   const phone = (page.viewportSize()?.width ?? 1440) < 600;
@@ -69,11 +83,12 @@ test.describe('Lenses, history and shortcuts — baselines', () => {
       test(`focus trail @ ${name} ${theme}`, async ({ page }) => {
         await installGraphApi(page, { surface: 'pages' });
         await page.setViewportSize(viewport);
-        // Two focus steps arrive through the URL, as a shared link and a Back would deliver them.
-        await open(page, `${EXPLORE}&focus=${JOE_ID}&sel=n:${JOE_ID}`, theme);
-        await page.goto(harnessUrl({ route: `${EXPLORE}&focus=${ACME_ID}&sel=n:${ACME_ID}`, perms: GRAPH_PERMS, theme }));
-        await waitForInter(page);
-        await expect(page.getByRole('application', { name: /^Graph explorer/ })).toBeVisible();
+        await open(page, EXPLORE, theme);
+        // Two focus steps, as a user takes them: Acme, then Joe.
+        await clickNode(page, ACME_ID);
+        await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+        await clickNode(page, JOE_ID);
+        await expect(page.getByRole('navigation', { name: 'Focus trail' }).or(page.getByLabel(/^Focus: /))).toBeVisible();
         await page.waitForTimeout(400);
 
         await expect(page).toHaveScreenshot(`graph-focus-trail-${name}-${theme}.png`);
