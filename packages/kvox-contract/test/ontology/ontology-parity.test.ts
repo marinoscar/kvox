@@ -389,7 +389,7 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
         failures.push(`rule 12: symmetric relation '${r.key}' declares allowedPairs`);
       }
     }
-    expect(relationTypes.filter((r) => r.symmetric === true).map((r) => r.key)).toEqual(['SPOUSE_OF', 'FRIEND_OF']);
+    expect(relationTypes.filter((r) => r.symmetric === true).map((r) => r.key).sort()).toEqual(['COMPETITOR_OF', 'FRIEND_OF', 'PARTNER_OF', 'SPOUSE_OF']);
 
     expect(failures).toEqual([]);
   });
@@ -419,7 +419,7 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
         }
       }
       expect(failures).toEqual([]);
-      expect(identityProps).toEqual(['HAS_ROLE.businessUnit']);
+      expect(identityProps).toEqual(['HAS_ROLE.businessUnit', 'USES.stage']);
     });
 
     const base: RelationTypeSpec = {

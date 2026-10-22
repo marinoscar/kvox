@@ -1,0 +1,288 @@
+{
+  "id": "m42",
+  "title": "Partner and competitor briefing: Fenwick Retail",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market"
+  ],
+  "recordedAt": "2026-09-02T14:00:00Z",
+  "contextText": "Account briefing for Fenwick Retail; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Partner and competitor briefing: Fenwick Retail\n\n**Date:** September 2\n**Attendees:** Greta Holm, Samir Haddad, Yuki Tanabe\n\n## Summary\n\nA briefing for the Fenwick Retail account team on the software vendors and consulting partners around the account. Greta Holm owns the briefing and Samir Haddad supplied the market notes.\n\n## Vendors and partners\n\n- Fenwick Retail became a customer of Zephyrine Software in March, when it signed for the Zephyr Suite, the retailer's merchandising and planning software.\n- Zephyr Suite is offered by Zephyrine Software.\n- Fenwick Retail is rolling out Zephyr Suite store by store, starting with the northern region.\n- Alder Consulting is a partner of Zephyrine Software and runs the implementation for Fenwick Retail.\n- Marlow Systems competes with Zephyrine Software for large retail accounts, and the two meet in most tenders.\n\n## Positions on the rollout\n\n- Yuki Tanabe is the regional lead for the Zephyr Suite rollout in the northern region and reports that stores are ready.\n- Samir Haddad follows the vendor market for the account and is not part of the rollout.\n\n## Observations\n\n- Fenwick Retail has not asked for a proposal from Marlow Systems and has no contract with it.\n- Alder Consulting also works with other vendors, but none of them were named in this briefing.\n- The briefing did not discuss pricing for either Zephyrine Software or Marlow Systems.\n\n## Open points\n\nThe account team needs the go-live date for the southern region, which depends on the northern region finishing. Whether the partnership between Alder Consulting and Zephyrine Software is exclusive was not stated.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Partner and competitor briefing: Fenwick Retail",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Partner and competitor briefing: Fenwick Retail"
+          }
+        ]
+      },
+      {
+        "key": "greta",
+        "type": "Person",
+        "label": "Greta Holm",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+          }
+        ]
+      },
+      {
+        "key": "samir",
+        "type": "Person",
+        "label": "Samir Haddad",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+          }
+        ]
+      },
+      {
+        "key": "yuki",
+        "type": "Person",
+        "label": "Yuki Tanabe",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Greta Holm, Samir Haddad, Yuki Tanabe"
+          }
+        ]
+      },
+      {
+        "key": "fenwick",
+        "type": "Organization",
+        "label": "Fenwick Retail",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fenwick Retail account team"
+          }
+        ]
+      },
+      {
+        "key": "zephyrine",
+        "type": "Organization",
+        "label": "Zephyrine Software",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "customer of Zephyrine Software"
+          }
+        ]
+      },
+      {
+        "key": "alder",
+        "type": "Organization",
+        "label": "Alder Consulting",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alder Consulting is a partner of Zephyrine Software"
+          }
+        ]
+      },
+      {
+        "key": "marlow",
+        "type": "Organization",
+        "label": "Marlow Systems",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marlow Systems competes with Zephyrine Software"
+          }
+        ]
+      },
+      {
+        "key": "zephyr",
+        "type": "Product",
+        "label": "Zephyr Suite",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "software"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Zephyr Suite, the retailer's merchandising and planning software"
+          }
+        ]
+      },
+      {
+        "key": "rollout",
+        "type": "Project",
+        "label": "Zephyr Suite rollout",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Zephyr Suite rollout"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "CUSTOMER_OF",
+        "from": "fenwick",
+        "to": "zephyrine",
+        "validFrom": "2026-03-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fenwick Retail became a customer of Zephyrine Software in March"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "zephyr",
+        "to": "zephyrine",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Zephyr Suite is offered by Zephyrine Software"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "fenwick",
+        "to": "zephyr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "rolling_out"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fenwick Retail is rolling out Zephyr Suite store by store"
+          }
+        ]
+      },
+      {
+        "type": "PARTNER_OF",
+        "from": "alder",
+        "to": "zephyrine",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alder Consulting is a partner of Zephyrine Software"
+          }
+        ]
+      },
+      {
+        "type": "COMPETITOR_OF",
+        "from": "marlow",
+        "to": "zephyrine",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marlow Systems competes with Zephyrine Software for large retail accounts"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "yuki",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "lead"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Yuki Tanabe is the regional lead for the Zephyr Suite rollout"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "rollout",
+        "to": "zephyr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Zephyr Suite rollout"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": [
+      {
+        "quote": "Fenwick Retail has not asked for a proposal from Marlow Systems and has no contract with it",
+        "why": "A stated absence: Fenwick Retail must not get CUSTOMER_OF or USES toward Marlow Systems."
+      },
+      {
+        "quote": "Samir Haddad follows the vendor market for the account and is not part of the rollout",
+        "why": "Explicitly not involved: no INVOLVED_IN for Samir Haddad."
+      }
+    ]
+  }
+}

@@ -247,6 +247,39 @@ describe('relationKnown — symmetric relations (#383)', () => {
   });
 });
 
+describe('relationKnown — symmetric work relations (#663)', () => {
+  const ORG_A = 'aaaaaaaa-0000-4000-8000-0000000000d1';
+  const ORG_B = 'aaaaaaaa-0000-4000-8000-0000000000e2';
+  const orgEdge = (id: string, type: string, fromId: string, toId: string): TemporalEdge => ({
+    id,
+    type,
+    fromId,
+    toId,
+    props: {},
+    valid: null,
+    precision: null,
+    reviewStatus: 'accepted',
+  });
+  const orgRel = (type: string, from: string, to: string) => rel({ type, from: { entityId: from }, to: { entityId: to } });
+
+  it('marks PARTNER_OF and COMPETITOR_OF symmetric, CUSTOMER_OF directed', () => {
+    expect(rule('PARTNER_OF').symmetric).toBe(true);
+    expect(rule('COMPETITOR_OF').symmetric).toBe(true);
+    expect(rule('CUSTOMER_OF').symmetric).toBeUndefined();
+  });
+
+  it.each(['PARTNER_OF', 'COMPETITOR_OF'])('(A %s B) restated as (B %s A) is known', (type) => {
+    const stored = [orgEdge('o1', type, ORG_A, ORG_B)];
+    expect(relationKnown(stored, orgRel(type, ORG_B, ORG_A), ORG_B, ORG_A, rule(type))).toEqual({ known: true, edgeId: 'o1' });
+    expect(relationKnown(stored, orgRel(type, ORG_A, ORG_B), ORG_A, ORG_B, rule(type))).toEqual({ known: true, edgeId: 'o1' });
+  });
+
+  it('CUSTOMER_OF is directed: (A CUSTOMER_OF B) never makes (B CUSTOMER_OF A) known', () => {
+    const stored = [orgEdge('o1', 'CUSTOMER_OF', ORG_A, ORG_B)];
+    expect(relationKnown(stored, orgRel('CUSTOMER_OF', ORG_B, ORG_A), ORG_B, ORG_A, rule('CUSTOMER_OF')).known).toBe(false);
+  });
+});
+
 describe('selectCandidates', () => {
   it('keeps cosine ≥ 0.80 or (without a vector) Jaccard ≥ 0.5, top five, best first', () => {
     const cands = [

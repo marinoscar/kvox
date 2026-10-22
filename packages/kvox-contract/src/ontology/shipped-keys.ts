@@ -80,4 +80,17 @@ export const SHIPPED_KEYS: readonly string[] = Object.freeze([
   'Product.category',
   'Product.vendorName',
   'BROADER',
+  // 1.3.0 — work stakeholder and market relations (#663)
+  'INVOLVED_IN',
+  'INVOLVED_IN.role',
+  'INVOLVED_IN.stance',
+  'USES',
+  'USES.stage',
+  'OFFERED_BY',
+  'CUSTOMER_OF',
+  'PARTNER_OF',
+  'COMPETITOR_OF',
+  'CONCERNS',
+  'KNOWS_ABOUT',
+  'KNOWS_ABOUT.level',
 ]);

@@ -31,6 +31,9 @@ import type { RelationTypeSpec } from '../../src/ontology/index.js';
 const PERSONAL_TYPES = ['Interest', 'Trip', 'Milestone'];
 const PERSONAL_RELATIONS = ['SPOUSE_OF', 'PARENT_OF', 'FRIEND_OF', 'INTERESTED_IN', 'TRAVELED_ON', 'HAS_MILESTONE'];
 
+// 1.3.0 (#663): the stakeholder and market relations added to the work domain.
+const STAKEHOLDER_RELATIONS = ['INVOLVED_IN', 'USES', 'OFFERED_BY', 'CUSTOMER_OF', 'PARTNER_OF', 'COMPETITOR_OF', 'CONCERNS', 'KNOWS_ABOUT'];
+
 const PAYLOAD_1_0_0 = JSON.parse(
   readFileSync(new URL('./fixtures/effective-schema-1.0.0-default.json', import.meta.url), 'utf8'),
 ) as ReturnType<typeof toEffectiveSchemaPayload>;
@@ -158,7 +161,7 @@ describe('the personal domain (#383)', () => {
       expect(hasRoleNow.props[1]).toMatchObject({ key: 'businessUnit', required: false, extractable: true, sensitivity: 'business' });
       const worksFor100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'WORKS_FOR')!;
       const relationTypes = now.relationTypes
-        .filter((r) => r.key !== 'BROADER')
+        .filter((r) => r.key !== 'BROADER' && !STAKEHOLDER_RELATIONS.includes(r.key))
         .map((r) => {
           let out = { ...r, from: strip(r.from)!, to: strip(r.to)! };
           if (r.allowedPairs) out = { ...out, allowedPairs: r.allowedPairs.filter((pair) => !pair.some((k) => NEW_TYPES.includes(k))) };
@@ -223,6 +226,8 @@ describe('the personal domain (#383)', () => {
     it('omits symmetric on directed relations and sensitivityDefault on core/work relations', () => {
       expect('symmetric' in payload.relationTypes.find((r) => r.key === 'PARENT_OF')!).toBe(false);
       for (const r of payload.relationTypes.filter((x) => x.domain !== 'personal')) {
+        // PARTNER_OF and COMPETITOR_OF (#663) are the symmetric work relations.
+        if (r.key === 'PARTNER_OF' || r.key === 'COMPETITOR_OF') continue;
         expect({ key: r.key, sym: 'symmetric' in r, sens: 'sensitivityDefault' in r }).toEqual({ key: r.key, sym: false, sens: false });
       }
     });

@@ -17,7 +17,8 @@ kv:AssertionShape
     a sh:NodeShape ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion ) ;
-    sh:or ( [ sh:not [ sh:hasValue kv:HAS_ROLE ; sh:path rdf:predicate ] ] [ sh:minCount 1 ; sh:path kv:HAS_ROLE.title ] ) ;
+    sh:or ( [ sh:not [ sh:hasValue kv:HAS_ROLE ; sh:path rdf:predicate ] ] [ sh:minCount 1 ; sh:path kv:HAS_ROLE.title ] ),
+        ( [ sh:not [ sh:hasValue kv:INVOLVED_IN ; sh:path rdf:predicate ] ] [ sh:minCount 1 ; sh:path kv:INVOLVED_IN.role ] ) ;
     sh:property [
         sh:datatype xsd:dateTime ;
         sh:maxCount 1 ;
@@ -28,9 +29,33 @@ kv:AssertionShape
         sh:path prov:startedAtTime
     ], [
         sh:datatype xsd:string ;
+        sh:in ( "aware" "practitioner" "expert" ) ;
+        sh:maxCount 1 ;
+        sh:name "Level" ;
+        sh:path kv:KNOWS_ABOUT.level
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "champion" "supportive" "neutral" "skeptical" "resistant" ) ;
+        sh:maxCount 1 ;
+        sh:name "Stance" ;
+        sh:path kv:INVOLVED_IN.stance
+    ], [
+        sh:datatype xsd:string ;
         sh:in ( "day" "month" "year" "unknown" ) ;
         sh:maxCount 1 ;
         sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "evaluating" "piloting" "rolling_out" "adopted" "retired" ) ;
+        sh:maxCount 1 ;
+        sh:name "Stage" ;
+        sh:path kv:USES.stage
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "sponsor" "owner" "lead" "contributor" "stakeholder" "approver" "end_user" "advisor" ) ;
+        sh:maxCount 1 ;
+        sh:name "Role" ;
+        sh:path kv:INVOLVED_IN.role
     ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
@@ -42,7 +67,7 @@ kv:AssertionShape
         sh:name "Role" ;
         sh:path kv:HAS_ROLE.title
     ], [
-        sh:in ( kv:ATTENDED kv:BROADER kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:PARENT_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:WORKS_FOR ) ;
+        sh:in ( kv:ATTENDED kv:BROADER kv:COMPETITOR_OF kv:CONCERNS kv:CUSTOMER_OF kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:INVOLVED_IN kv:KNOWS_ABOUT kv:OFFERED_BY kv:PARENT_OF kv:PARTNER_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:USES kv:WORKS_FOR ) ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:path rdf:predicate
@@ -382,6 +407,26 @@ kv:OrganizationShape
     sh:closed true ;
     sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
     sh:property [
+        sh:class kv:Organization ;
+        sh:name "Competitor of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:COMPETITOR_OF
+    ], [
+        sh:class kv:Organization ;
+        sh:name "Customer of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:CUSTOMER_OF
+    ], [
+        sh:class kv:Organization ;
+        sh:name "Partner of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PARTNER_OF
+    ], [
+        sh:class kv:Product ;
+        sh:name "Uses" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:USES
+    ], [
         sh:datatype xsd:anyURI ;
         sh:maxCount 1 ;
         sh:name "Website" ;
@@ -467,7 +512,7 @@ kv:PersonFactShape
 kv:PersonShape
     a sh:NodeShape ;
     sh:closed true ;
-    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom foaf:knows foaf:topic_interest schema:attendee schema:children schema:hasOccupation schema:spouse schema:worksFor ) ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom foaf:knows foaf:topic_interest schema:attendee schema:children schema:hasOccupation schema:knowsAbout schema:spouse schema:worksFor ) ;
     sh:property [
         sh:class kv:Interest ;
         sh:name "Interested in" ;
@@ -514,6 +559,11 @@ kv:PersonShape
         sh:nodeKind sh:IRI ;
         sh:path kv:SPOUSE_OF
     ], [
+        sh:class kv:Project ;
+        sh:name "Involved in" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:INVOLVED_IN
+    ], [
         sh:class kv:Trip ;
         sh:name "Traveled on" ;
         sh:nodeKind sh:IRI ;
@@ -536,14 +586,24 @@ kv:PersonShape
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
         sh:path prov:wasDerivedFrom
+    ], [
+        sh:name "Knows about" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Product ] [ sh:class kv:Topic ] ) ;
+        sh:path kv:KNOWS_ABOUT
     ] ;
     sh:targetClass kv:Person .
 
 kv:ProductShape
     a sh:NodeShape ;
     sh:closed true ;
-    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom schema:manufacturer ) ;
     sh:property [
+        sh:class kv:Organization ;
+        sh:name "Offered by" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:OFFERED_BY
+    ], [
         sh:datatype xsd:dateTime ;
         sh:maxCount 1 ;
         sh:name "Occurred at" ;
@@ -580,6 +640,11 @@ kv:ProjectShape
         sh:nodeKind sh:IRI ;
         sh:path kv:PART_OF
     ], [
+        sh:class kv:Product ;
+        sh:name "Uses" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:USES
+    ], [
         sh:datatype xsd:date ;
         sh:maxCount 1 ;
         sh:name "End date" ;
@@ -614,6 +679,11 @@ kv:ProjectShape
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
         sh:path prov:wasDerivedFrom
+    ], [
+        sh:name "Concerns" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Product ] [ sh:class kv:Topic ] ) ;
+        sh:path kv:CONCERNS
     ] ;
     sh:targetClass kv:Project .
 

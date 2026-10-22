@@ -1,0 +1,305 @@
+{
+  "id": "m40",
+  "title": "Harbor Mutual assistant rollout stakeholder review",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market"
+  ],
+  "recordedAt": "2026-08-04T15:00:00Z",
+  "contextText": "Stakeholder review for the Harbor Mutual assistant rollout; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Harbor Mutual assistant rollout stakeholder review\n\n**Date:** August 4\n**Attendees:** Joan Keller, Ravi Sundaram, Mei Lindqvist\n\n## Summary\n\nA working session to map who is involved in the Assistant rollout at Harbor Mutual and where each person stands. The rollout brings Quillbase, a drafting assistant from Vantor Systems, to the claims teams. Harbor Mutual has been piloting Quillbase since June with a single claims team, and the group wanted one shared picture of the people around the decision before the second wave is planned.\n\n## Who is involved\n\n- Ravi Sundaram is the executive sponsor of the Assistant rollout and a strong champion of it. He opened the session by saying the claims teams deserve better tooling than they have today.\n- Joan Keller is the budget approver for the Assistant rollout. She said plainly that she is skeptical, because the pilot has not yet shown a saving that covers the licence cost.\n- Mei Lindqvist leads the Assistant rollout day to day and runs the weekly pilot check-in with the claims team.\n\n## What the rollout is about\n\n- The Assistant rollout concerns Quillbase itself: whether the quality of its drafts justifies the price per seat.\n- It also concerns Data residency, because claims documents must stay in the country and Vantor Systems has not yet confirmed where Quillbase stores the prompts it receives.\n\n## Observations\n\n- Tomas Brandt, who uses Quillbase every day in the pilot team, sounded tired during the call, but he did not say anything about the rollout either way.\n- The claims team asked for a shorter template for routine letters, which the pilot has not yet delivered.\n- Nobody from procurement joined, so contract terms were not discussed.\n\n## Open points\n\nA written statement from Vantor Systems on where prompts are stored is needed before the second wave is decided. The pilot report should also include the number of drafts that were sent without edits, since that figure drives the saving Joan Keller is looking for.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Harbor Mutual assistant rollout stakeholder review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harbor Mutual assistant rollout stakeholder review"
+          }
+        ]
+      },
+      {
+        "key": "joan",
+        "type": "Person",
+        "label": "Joan Keller",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Sundaram",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "mei",
+        "type": "Person",
+        "label": "Mei Lindqvist",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joan Keller, Ravi Sundaram, Mei Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomas Brandt",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomas Brandt, who uses Quillbase every day in the pilot team"
+          }
+        ]
+      },
+      {
+        "key": "harbor",
+        "type": "Organization",
+        "label": "Harbor Mutual",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Assistant rollout at Harbor Mutual"
+          }
+        ]
+      },
+      {
+        "key": "vantor",
+        "type": "Organization",
+        "label": "Vantor Systems",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a drafting assistant from Vantor Systems"
+          }
+        ]
+      },
+      {
+        "key": "rollout",
+        "type": "Project",
+        "label": "Assistant rollout",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Assistant rollout at Harbor Mutual"
+          }
+        ]
+      },
+      {
+        "key": "quillbase",
+        "type": "Product",
+        "label": "Quillbase",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "ai_model"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quillbase, a drafting assistant from Vantor Systems"
+          }
+        ]
+      },
+      {
+        "key": "residency",
+        "type": "Topic",
+        "label": "Data residency",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "It also concerns Data residency"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "INVOLVED_IN",
+        "from": "ravi",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "sponsor",
+          "stance": "champion"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Sundaram is the executive sponsor of the Assistant rollout and a strong champion of it"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "joan",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "approver",
+          "stance": "skeptical"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joan Keller is the budget approver for the Assistant rollout. She said plainly that she is skeptical"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "mei",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "lead"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Mei Lindqvist leads the Assistant rollout day to day"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "harbor",
+        "to": "quillbase",
+        "validFrom": "2026-06-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {
+          "stage": "piloting"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harbor Mutual has been piloting Quillbase since June"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "quillbase",
+        "to": "vantor",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quillbase, a drafting assistant from Vantor Systems"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "rollout",
+        "to": "quillbase",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Assistant rollout concerns Quillbase itself"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "rollout",
+        "to": "residency",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "It also concerns Data residency"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "rollout",
+        "to": "harbor",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Assistant rollout at Harbor Mutual"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": [
+      {
+        "quote": "sounded tired during the call, but he did not say anything about the rollout either way",
+        "why": "Tone is not a stance: Tomas Brandt stated no position, so no INVOLVED_IN stance may be set and no INVOLVED_IN is created without a stated role."
+      }
+    ]
+  }
+}

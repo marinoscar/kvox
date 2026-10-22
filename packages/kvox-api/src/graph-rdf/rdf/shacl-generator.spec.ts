@@ -229,7 +229,9 @@ describe('generateShacl', () => {
 
     // HAS_ROLE's required title: required only when the predicate is HAS_ROLE.
     expect(propertyShape(quads, shape, `${NS}HAS_ROLE.title`)).toBeDefined();
-    expect(objectsOf(quads, shape, `${SH}or`)).toHaveLength(1);
+    // INVOLVED_IN's required role (#663) is the second such constraint.
+    expect(propertyShape(quads, shape, `${NS}INVOLVED_IN.role`)).toBeDefined();
+    expect(objectsOf(quads, shape, `${SH}or`)).toHaveLength(2);
   });
 
   it('uses the aligned IRI for a relation’s alignment in the ignore list, never as the relation path', () => {
