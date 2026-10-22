@@ -5399,7 +5399,8 @@ extraction — asking for, and estimating, a draft proposal from a note
 (issue #363), entity resolution — merging, un-merging and marking two
 entities as distinct (issue #364) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
-(issue #370) — an entity's **brief**, "what's the latest on …?" in one
+(issue #370) and the top-k evidence-weighted **paths** between two nodes
+(GIC-12, #673) — an entity's **brief**, "what's the latest on …?" in one
 call (issue #372) — the whole-graph overview, read from a precomputed
 snapshot, plus its manual refresh (issue #371) — reviewing, committing and
 reverting proposals (issue #366) — the ontology itself as OWL/RDFS and
@@ -6875,6 +6876,75 @@ unchanged: depth, then degree, then id.
 **Errors:** `400` invalid parameter or unknown `type`/`relationTypes` key ·
 `401` · `403` without `graph:read` · `404` no such entity, not yours, or
 merged · `503` `graph_query_timeout`.
+
+##### GET /graph/paths
+
+The top `k` evidence-weighted paths between two nodes, with the graph slice
+they cover — the answer to "how is Joe connected to the Copilot rollout?"
+(GIC-12, #673). A synchronous read with the neighbourhood's 3 s budget, not a
+queue job.
+
+- A search is a **bidirectional breadth-first walk**, one SQL statement per
+  level, with the neighbourhood's predicates: readable rows only, `as_of`
+  evaluated per relation and item, `IDENTIFIED_AS` never an edge.
+- A path has at most `maxHops` edges and passes only through **entities**: an
+  item (commitment, decision, claim, person fact) may be `from` or `to`, never
+  a stop on the way. A `sensitive` person fact is never reachable: as `from`
+  or `to` it is the same 404 as a node that does not exist.
+- Every relation is walked **both ways** to find a connection (so a symmetric
+  `FRIEND_OF` needs no special case), but each returned edge keeps its stored
+  direction (`source` to `target`).
+- **Score** = the mean of `log(1 + evidenceCount)` over the path's edges,
+  multiplied by a hub factor `1 / (1 + 0.25 · ln(1 + max(0, degree - 10)))` for
+  each intermediate node, so a well-evidenced route through a meeting beats an
+  equally long one through a company that touches everything. Paths are
+  **distinct** (no two share a node set; between the same two nodes the better
+  evidenced parallel edge is used) and ordered best first, ties on fewer hops.
+- Each BFS level reads at most 2,000 edge rows (a hub stops being read);
+  `truncated: true` says a cap was hit, so a stronger path than those returned
+  may exist. A hub reached only as a middle node of a short path costs nothing.
+- `types` limits the entity types / item kinds a path may **pass through** (the
+  endpoints are always kept); `relationTypes` limits the edges it may follow.
+  An unknown key in either is a **400**.
+
+Query: `from`, `to` (uuids, required, different), `k` (1–5, default 3),
+`maxHops` (1–5, default 4), `types`, `relationTypes`, `as_of`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "from": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+    "to": "4a9e51c2-7d0b-4f3a-8a61-5c2d9e7b0f33",
+    "asOf": null,
+    "paths": [
+      { "nodeIds": ["0b6f…", "4a9e…"], "edgeIds": ["3c1f…"], "hops": 1, "score": 0.6931 },
+      { "nodeIds": ["0b6f…", "7e4d…", "1d20…", "4a9e…"], "edgeIds": ["5d27…", "8b13…", "2f64…"], "hops": 3, "score": 0.5120 }
+    ],
+    "slice": {
+      "seedIds": ["0b6f…", "4a9e…"],
+      "asOf": "2026-10-21T12:00:00.000Z",
+      "nodes": [ { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Joe", "depth": 0, "degree": 6, "status": null, "occurredAt": null, "mentionCount": 14, "lastSeenAt": "2026-10-20T10:00:00.000Z" } ],
+      "edges": [ { "id": "3c1f…", "type": "ATTENDED", "source": "0b6f…", "target": "4a9e…", "valid": null, "confidence": 0.92, "virtual": false, "props": {}, "evidenceCount": 1, "lastEvidenceAt": "2026-10-20T10:00:00.000Z" } ],
+      "truncated": false,
+      "cap": 300
+    },
+    "truncated": false
+  }
+}
+```
+
+`slice` is the union of the nodes and edges of the returned paths (the two
+endpoints are always in it, so a client can name them when `paths` is empty);
+the endpoints are at `depth` 0, every other node at 1. `asOf` is `null` when
+the request had no `as_of`, otherwise the instant applied. `paths: []` means
+nothing connects the two within `maxHops` — it is not an error, and the client
+may offer to raise `maxHops`.
+
+**Errors:** `400` an invalid parameter, `from` equal to `to`, or an unknown
+`types`/`relationTypes` key · `401` · `403` without `graph:read` · `404` either
+node is not one of your readable nodes (the message never says which) · `503`
+`graph_query_timeout`.
 
 ##### GET /graph/entities/{id}/timeline
 
