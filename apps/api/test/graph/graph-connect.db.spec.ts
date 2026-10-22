@@ -34,6 +34,7 @@ import { SharedTranscriptVisibility } from '../../src/kvox/search/shared-transcr
 import { resolveDbSuite } from '../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 import { createDbSettings } from '../helpers/graph-ports.helper';
+import { asPrismaService } from '../helpers/db-managed-objects.helper';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-connect.db.spec');
 
@@ -47,7 +48,8 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
     if (!dbReachable) return;
     prisma = connectTestPrisma();
     await prisma.$connect();
-    const p = prisma as unknown as PrismaService;
+    // `runInOrg` bound to the plain test client: the transcript visibility rule runs in the viewer's organization.
+    const p: PrismaService = asPrismaService(prisma);
     const ontology = new GraphOntologyService(p, new GraphPreferencesService(createDbSettings(prisma)));
     const neighborhood = new GraphNeighborhoodService(p, new GraphAccessService(p), ontology);
     const paths = new GraphPathsService(p, ontology, neighborhood);
@@ -187,12 +189,11 @@ describeWithDb('GraphConnectService (real Postgres)', () => {
   it('never includes a sensitive person fact', async () => {
     const s = await scenario();
     const secret = await s.g.item('person_fact', { subjectId: s.joe, sensitivity: 'sensitive', statement: 'secret' });
-    const ok = await s.g.item('person_fact', { subjectId: s.joe, sensitivity: 'personal', statement: 'fine' });
+    await s.g.item('person_fact', { subjectId: s.joe, sensitivity: 'personal', statement: 'fine' });
     const res = await svc.connect(s.user, parse({ noteIds: [s.n1.id, s.n2.id] }));
     const ids = res.slice.nodes.map((n) => n.id);
     expect(ids).not.toContain(secret);
     expect(JSON.stringify(res)).not.toContain('secret');
-    expect(ids.includes(ok) || !ids.includes(ok)).toBe(true);
   });
 
   it('connects a transcript and a note, and a foreign transcript is a 404', async () => {
