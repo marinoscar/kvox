@@ -55,7 +55,7 @@ function detail(props: Record<string, unknown>) {
     ontologyVersion: '1.0.0',
     firstSeenAt: '2026-01-02T09:00:00.000Z',
     lastSeenAt: '2026-09-01T09:00:00.000Z',
-    counts: { relations: 4, mentions: 3, evidence: 5, items: { commitment: 2, decision: 1, claim: 0, person_fact: 7 }, openCommitments: 1 },
+    counts: { relations: 4, mentions: 3, evidence: 5, items: { commitment: 2, decision: 1, claim: 0, person_fact: 7, risk: 0 }, openCommitments: 1 },
     createdAt: '2026-01-02T09:00:00.000Z',
     updatedAt: '2026-09-01T09:00:00.000Z',
   };

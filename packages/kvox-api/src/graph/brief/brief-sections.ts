@@ -5,7 +5,7 @@
 // PURE: no Prisma, no Nest, no clock. `EntityBriefService` loads bounded,
 // owner-scoped, readable rows and hands them here; this file decides which
 // row belongs in which section. The five section names and their order are
-// fixed by spec §9.1: What changed · Decisions · Open commitments (theirs /
+// fixed by spec §9.1 (plus the optional Open risks, #664): What changed · Decisions · Open commitments (theirs /
 // yours) · Risks / claims · People changes.
 //
 // Rules that hold for every section:
@@ -29,7 +29,12 @@ import {
   type PeopleChange,
 } from './dto/entity-brief.dto.js';
 
-export type BriefItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact';
+export type BriefItemKind = 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk';
+
+/** Entity types whose brief carries the "Open risks" section (#664). */
+export const OPEN_RISKS_ENTITY_TYPES: ReadonlySet<string> = new Set(['Project', 'Product', 'Organization']);
+
+const SEVERITY_RANK: Readonly<Record<string, number>> = { high: 3, medium: 2, low: 1 };
 type Precision = 'day' | 'month' | 'year' | 'unknown';
 
 /** One `kg_items` row as the brief reads it (statuses: accepted, edited, superseded). */
@@ -51,6 +56,8 @@ export interface BriefItemRow {
   /** `occurred_at` of the item that superseded this one, when known. */
   supersededByOccurredAt: Date | null;
   sensitivity: string | null;
+  /** `props.severity` of a `risk` (`low | medium | high`); absent or null for every other kind. */
+  severity?: string | null;
   valid: ValidRange | null;
   evidenceIds: string[];
 }
@@ -84,6 +91,11 @@ export interface BriefSectionInput {
   workerIds: ReadonlySet<string>;
   /** Readable entities by id (for owner/counterparty/person/other refs). */
   entities: ReadonlyMap<string, BriefEntityRef>;
+  /**
+   * Whether the caller's effective schema offers `Risk` (the `work` domain is on). False or absent:
+   * the "Open risks" section is never built, whatever rows exist (#664).
+   */
+  openRisksEnabled?: boolean;
 }
 
 /** Relation types whose edges §5.4's closing rule closes — from the registry, never a literal list. */
@@ -203,13 +215,25 @@ export function buildBriefSections(input: BriefSectionInput): BriefSections {
     .slice(0, BRIEF_SECTION_LIMITS.risksClaims)
     .map(entry);
 
-  return {
+  const sections: BriefSections = {
     whatChanged,
     decisions,
     openCommitments: { theirs, yours },
     risksClaims,
     peopleChanges: buildPeopleChanges(input),
   };
+
+  // Open risks (#664): open, valid at asOf, never a superseded row; highest severity first, then newest.
+  // The key is omitted when there is nothing to show, and for entity types that do not carry the section.
+  if (input.openRisksEnabled === true && OPEN_RISKS_ENTITY_TYPES.has(entity.type)) {
+    const openRisks = about
+      .filter((i) => i.kind === 'risk' && i.status === 'open' && i.reviewStatus !== 'superseded' && validAt(i, asOf))
+      .sort((a, b) => (SEVERITY_RANK[b.severity ?? ''] ?? 0) - (SEVERITY_RANK[a.severity ?? ''] ?? 0))
+      .slice(0, BRIEF_SECTION_LIMITS.openRisks)
+      .map(entry);
+    if (openRisks.length > 0) sections.openRisks = openRisks;
+  }
+  return sections;
 }
 
 /**

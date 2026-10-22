@@ -43,7 +43,7 @@ export type KgReviewStatusValue = 'unreviewed' | 'accepted' | 'edited' | 'reject
 export type KgValidPrecisionValue = 'day' | 'month' | 'year' | 'unknown';
 
 /** The `KgItemKind` enum. @stability experimental */
-export type KgItemKindValue = 'commitment' | 'decision' | 'claim' | 'person_fact';
+export type KgItemKindValue = 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk';
 
 /** The `KgSensitivity` enum. @stability experimental */
 export type KgSensitivityValue = 'business' | 'personal' | 'sensitive';

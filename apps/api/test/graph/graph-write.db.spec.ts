@@ -438,6 +438,90 @@ describeWithDb('GraphWriteService and the no-orphans invariant (real Postgres)',
       expect(newer.status).toBe('open');
     });
 
+    describe('Risk items (#664)', () => {
+      it('commits with evidence, defaults to open, keeps its attributes, and a later Risk supersedes it', async () => {
+        const owner = await createUser('risk');
+        const note = await createNote(owner.id);
+        const person = await acceptedPerson(owner.id, note.id);
+        const create = (over: { supersedesId?: string; status?: string; props?: Record<string, unknown> } = {}) =>
+          prisma.$transaction((tx) =>
+            write.createItem(
+              tx,
+              {
+                ownerId: owner.id,
+                kind: 'risk',
+                typeKey: 'Risk',
+                subjectId: person.id,
+                statement: 'Licence budget is not approved yet',
+                reviewStatus: 'accepted',
+                props: { severity: 'high', riskKind: 'blocker' },
+                evidence: [noteEvidence(note.id)],
+                ...over,
+              },
+              schema,
+            ),
+          );
+
+        const first = await create();
+        expect(first.status).toBe('open');
+        await expect(prisma.kgItem.findUniqueOrThrow({ where: { id: first.id } })).resolves.toMatchObject({
+          kind: 'risk',
+          props: { severity: 'high', riskKind: 'blocker' },
+          sensitivity: null,
+        });
+
+        const later = await create({ supersedesId: first.id, status: 'mitigated', props: { severity: 'medium', riskKind: 'risk' } });
+        expect(later.status).toBe('mitigated');
+        await expect(prisma.kgItem.findUniqueOrThrow({ where: { id: first.id } })).resolves.toMatchObject({
+          reviewStatus: 'superseded',
+          status: 'superseded',
+          supersededById: later.id,
+        });
+      });
+
+      it('refuses a status the type does not have, an unknown attribute and an item with no evidence', async () => {
+        const owner = await createUser('risk-bad');
+        const note = await createNote(owner.id);
+        const person = await acceptedPerson(owner.id, note.id);
+        const base = { ownerId: owner.id, kind: 'risk', typeKey: 'Risk', subjectId: person.id, statement: 'A risk', reviewStatus: 'accepted' } as const;
+
+        await expect(
+          prisma.$transaction((tx) => write.createItem(tx, { ...base, status: 'done', evidence: [noteEvidence(note.id)] }, schema)),
+        ).rejects.toThrow(/not a status of Risk/);
+        await expect(
+          prisma.$transaction((tx) =>
+            write.createItem(tx, { ...base, props: { colour: 'red' }, evidence: [noteEvidence(note.id)] }, schema),
+          ),
+        ).rejects.toBeDefined();
+        await expect(prisma.$transaction((tx) => write.createItem(tx, { ...base, evidence: [] }, schema))).rejects.toBeDefined();
+        await expect(prisma.kgItem.count({ where: { ownerId: owner.id, kind: 'risk' } })).resolves.toBe(0);
+      });
+
+      it('is refused at COMMIT by the deferred trigger when a raw accepted risk has no evidence', async () => {
+        const owner = await createUser('risk-raw');
+        const err = await prisma
+          .$transaction((tx) =>
+            tx.kgItem.create({
+              data: {
+                ownerId: owner.id,
+                kind: 'risk',
+                statement: 'No evidence',
+                status: 'open',
+                statementHash: randomUUID(),
+                reviewStatus: 'accepted',
+                ontologyVersion: 'test',
+              },
+            }),
+          )
+          .catch((e: unknown) => e);
+
+        expect(err).toBeInstanceOf(Error);
+        expect(String((err as Error).message)).toMatch(/kg no-orphans invariant: item .* has no evidence/);
+        expect(isKgInvariantViolation(err)).toBe(true);
+        await expect(prisma.kgItem.count({ where: { ownerId: owner.id } })).resolves.toBe(0);
+      });
+    });
+
     describe('evidence validation', () => {
       it("refuses another user's note and a version that does not exist, naming each index", async () => {
         const owner = await createUser('ev-owner');

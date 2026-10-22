@@ -126,6 +126,8 @@ export interface ItemOpts {
   valid?: string | null;
   precision?: 'day' | 'month' | 'year' | 'unknown' | null;
   supersededById?: string | null;
+  /** The item type's own attributes (a risk's `severity`, `riskKind`, `mitigation`). */
+  props?: Record<string, unknown>;
 }
 
 /** A small builder bound to one owner. Each call is one transaction. */
@@ -202,7 +204,7 @@ export class GraphFixture {
     return id;
   }
 
-  async item(kind: 'commitment' | 'decision' | 'claim' | 'person_fact', opts: ItemOpts = {}): Promise<string> {
+  async item(kind: 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk', opts: ItemOpts = {}): Promise<string> {
     const id = randomUUID();
     const status = opts.reviewStatus ?? 'accepted';
     await this.prisma.$transaction(async (tx) => {
@@ -217,7 +219,8 @@ export class GraphFixture {
           meetingId: opts.meetingId ?? null,
           title: opts.title ?? null,
           statement: opts.statement ?? `${kind} ${id}`,
-          status: opts.status ?? (kind === 'commitment' ? 'open' : 'active'),
+          status: opts.status ?? (kind === 'commitment' || kind === 'risk' ? 'open' : 'active'),
+          props: (opts.props ?? {}) as object,
           occurredAt: opts.occurredAt ?? null,
           dueAt: opts.dueAt ?? null,
           sensitivity: kind === 'person_fact' ? (opts.sensitivity ?? 'personal') : null,

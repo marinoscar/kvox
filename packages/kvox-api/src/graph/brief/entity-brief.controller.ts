@@ -39,7 +39,7 @@ export class EntityBriefController {
     description:
       '"What\'s the latest on …?" in one call, assembled from stored rows only — **no AI model is ever ' +
       'called by this request**, and it never answers 409.\n\n' +
-      '- **`sections`**: What changed · Decisions · Open commitments (theirs / yours) · Risks / claims · ' +
+      '- **`sections`**: What changed · Decisions · Open commitments (theirs / yours) · Risks / claims · Open risks (Project, Product and Organization only; omitted when empty) · ' +
       'People changes. Deterministic, and every entry cites at least one evidence id. `sensitive` person ' +
       'facts are never included.\n' +
       '- **`digest`**: the latest AI summary the `kg.entity_digest` job stored, each statement cited. ' +

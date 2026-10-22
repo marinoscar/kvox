@@ -66,6 +66,11 @@ export function asOfRelationSql(a: string): KvoxSql {
   return Prisma.sql`${ident(a)}.review_status IN ${literalList(AS_OF_RELATION_STATUSES)}`;
 }
 
+/**
+ * Readable item rows: `review_status` in the readable item statuses (or the given list).
+ *
+ * @stability experimental
+ */
 export function readableItemSql(a: string, statuses: readonly string[] = READABLE_ITEM_STATUSES): KvoxSql {
   return Prisma.sql`${ident(a)}.review_status IN ${literalList(statuses)}`;
 }

@@ -49,6 +49,7 @@ const PRECISIONS = [
 const ITEM_TYPE_KEYS: Record<string, string> = {
   commitment: 'Commitment',
   decision: 'Decision',
+  risk: 'Risk',
   claim: 'Claim',
   person_fact: 'PersonFact',
 };
@@ -413,7 +414,7 @@ export function ProposalItemEditor({
                 onChange={(event) => set('statement', event.target.value)}
               />
               {endpointChips}
-              {str(draft.kind) === 'commitment' && (
+              {(str(draft.kind) === 'commitment' || str(draft.kind) === 'risk') && (
                 <TextField
                   select
                   size="small"
@@ -421,7 +422,10 @@ export function ProposalItemEditor({
                   value={str(draft.status) || 'open'}
                   onChange={(event) => set('status', event.target.value)}
                 >
-                  {(entityType?.statuses ?? ['open', 'done', 'dropped']).map((status) => (
+                  {(str(draft.kind) === 'risk'
+                    ? (entityType?.statuses ?? ['open', 'mitigated', 'closed']).filter((status) => status !== 'superseded')
+                    : (entityType?.statuses ?? ['open', 'done', 'dropped'])
+                  ).map((status) => (
                     <MenuItem key={status} value={status}>
                       {status}
                     </MenuItem>

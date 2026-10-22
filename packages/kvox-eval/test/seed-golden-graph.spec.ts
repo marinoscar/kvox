@@ -1,7 +1,7 @@
 /**
  * The golden-graph seeder on the PGlite host (#608): nothing refused, nothing
  * warned, every evidence row mapped, no orphan, the sensitive facts present,
- * and the pinned row counts (m37-m39 added the Topic, Product and BROADER gold; m40-m44 the stakeholder and market relations). One host for the file.
+ * and the pinned row counts (m37-m39 added the Topic, Product and BROADER gold; m40-m44 the stakeholder and market relations; m50-m55 the Risk gold). One host for the file.
  */
 
 import { createKvoxAi } from '@marinoscar/kvox-ai';
@@ -35,13 +35,13 @@ describe('seedGoldenGraph (PGlite)', () => {
   });
 
   it('seeds the pinned row counts', async () => {
-    expect(fixtures).toHaveLength(44);
-    expect(seeded.counts).toEqual({ entities: 173, relations: 310, items: 187, evidence: 870 });
+    expect(fixtures).toHaveLength(50);
+    expect(seeded.counts).toEqual({ entities: 204, relations: 317, items: 205, evidence: 928 });
     const where = { ownerId: host.userId };
-    expect(await host.prisma.kgEntity.count({ where })).toBe(173);
-    expect(await host.prisma.kgRelation.count({ where })).toBe(310);
-    expect(await host.prisma.kgItem.count({ where })).toBe(187);
-    expect(await host.prisma.kgEvidence.count({ where })).toBe(870);
+    expect(await host.prisma.kgEntity.count({ where })).toBe(204);
+    expect(await host.prisma.kgRelation.count({ where })).toBe(317);
+    expect(await host.prisma.kgItem.count({ where })).toBe(205);
+    expect(await host.prisma.kgEvidence.count({ where })).toBe(928);
   });
 
   it('maps every kg_evidence row of the eval user in idMap.evidenceSource', async () => {

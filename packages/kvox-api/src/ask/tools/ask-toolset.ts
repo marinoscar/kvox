@@ -2,7 +2,7 @@
 // AskToolset — the registry and executor (#377, epic #348; docs/specs/ontology.md §21)
 // =============================================================================
 //
-// The seven read-only tools the Ask agent (#378) may call, in a stable order,
+// The eight read-only tools the Ask agent (#378) may call, in a stable order,
 // and the one place a model's tool call is executed:
 //
 //   execute(ctx, name, argumentsJson)
@@ -39,6 +39,7 @@ import { EvidenceTool } from './evidence.tool.js';
 import { GetEntityTool } from './get-entity.tool.js';
 import { HandleRegistry } from './handle-registry.js';
 import { ListCommitmentsTool } from './list-commitments.tool.js';
+import { ListRisksTool } from './list-risks.tool.js';
 import { NeighborsTool } from './neighbors.tool.js';
 import { SearchTool } from './search.tool.js';
 import { personalFactsAllowedFor } from './sensitivity.js';
@@ -57,6 +58,7 @@ export const ASK_TOOL_NAMES = [
   'evidence',
   'entity_brief',
   'list_commitments',
+  'list_risks',
 ] as const;
 export type AskToolName = (typeof ASK_TOOL_NAMES)[number];
 
@@ -82,13 +84,14 @@ export class AskToolset {
     evidence: EvidenceTool,
     entityBrief: EntityBriefTool,
     listCommitments: ListCommitmentsTool,
+    listRisks: ListRisksTool,
     private readonly preferences: GraphPreferencesService,
   ) {
-    const all = [search, getEntity, neighbors, timeline, evidence, entityBrief, listCommitments] as AskTool<unknown>[];
+    const all = [search, getEntity, neighbors, timeline, evidence, entityBrief, listCommitments, listRisks] as AskTool<unknown>[];
     this.tools = new Map(all.map((t) => [t.name, t]));
   }
 
-  /** Name, description and strict JSON Schema of all seven tools, in `ASK_TOOL_NAMES` order. */
+  /** Name, description and strict JSON Schema of all eight tools, in `ASK_TOOL_NAMES` order. */
   definitions(): KvoxToolDef[] {
     return ASK_TOOL_NAMES.map((name) => {
       const tool = this.tools.get(name)!;

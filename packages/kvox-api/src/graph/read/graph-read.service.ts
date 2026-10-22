@@ -264,6 +264,7 @@ export class GraphReadService {
           decision: number;
           claim: number;
           person_fact: number;
+          risk: number;
           open_commitments: number;
         }[]
       >`
@@ -279,6 +280,7 @@ export class GraphReadService {
           count(*) FILTER (WHERE i.kind = 'decision')::int AS decision,
           count(*) FILTER (WHERE i.kind = 'claim')::int AS claim,
           count(*) FILTER (WHERE i.kind = 'person_fact')::int AS person_fact,
+          count(*) FILTER (WHERE i.kind = 'risk')::int AS risk,
           count(*) FILTER (WHERE i.kind = 'commitment' AND i.status = 'open')::int AS open_commitments
         FROM (
           SELECT i.id, i.kind, i.status FROM kg_items i
@@ -322,7 +324,7 @@ export class GraphReadService {
         relations: c.relations,
         mentions: mentionCounts.get(id) ?? 0,
         evidence: c.evidence,
-        items: { commitment: c.commitment, decision: c.decision, claim: c.claim, person_fact: c.person_fact },
+        items: { commitment: c.commitment, decision: c.decision, claim: c.claim, person_fact: c.person_fact, risk: c.risk },
         openCommitments: c.open_commitments,
         relationsByType,
         relationsByNeighborType,
@@ -419,7 +421,7 @@ export class GraphReadService {
     await this.access.require(ownerId, 'entity', id, 'view');
     const kinds = resolveTimelineKinds(query.kinds);
     const asOf = asOfOr400(query.as_of);
-    const itemKinds = (['commitment', 'decision', 'claim', 'person_fact'] as const).filter((k) => kinds.has(k));
+    const itemKinds = (['commitment', 'decision', 'claim', 'person_fact', 'risk'] as const).filter((k) => kinds.has(k));
 
     const keyset: KvoxSql = query.cursor
       ? (() => {

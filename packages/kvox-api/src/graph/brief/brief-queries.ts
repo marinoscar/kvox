@@ -183,6 +183,7 @@ interface ItemSqlRow {
   superseded_by_id: string | null;
   superseded_by_occurred_at: Date | null;
   sensitivity: string | null;
+  severity: string | null;
   vfrom: Date | null;
   vto: Date | null;
   vnull: boolean;
@@ -211,6 +212,7 @@ export async function briefItems(
            i.counterparty_id::text AS counterparty_id, i.meeting_id::text AS meeting_id,
            i.review_status::text AS review_status, i.superseded_by_id::text AS superseded_by_id,
            s.occurred_at AS superseded_by_occurred_at, i.sensitivity::text AS sensitivity,
+           CASE WHEN i.kind = 'risk' THEN i.props->>'severity' END AS severity,
            lower(i.valid) AS vfrom, upper(i.valid) AS vto, (i.valid IS NULL) AS vnull
     FROM kg_items i
     LEFT JOIN kg_items s ON s.id = i.superseded_by_id AND s.owner_id = i.owner_id
@@ -237,6 +239,7 @@ export async function briefItems(
     supersededById: r.superseded_by_id,
     supersededByOccurredAt: r.superseded_by_occurred_at,
     sensitivity: r.sensitivity,
+    severity: r.severity,
     valid: toRange(r.vnull, r.vfrom, r.vto),
     evidenceIds: [],
   }));

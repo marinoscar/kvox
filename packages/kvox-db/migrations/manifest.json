@@ -144,6 +144,12 @@
       ],
       "sha256": "a15ee44a552634c705bf5b408c26bf708427cd81e82de3f0f58218c022e4c9b0",
       "slice": "transcripts"
+    },
+    {
+      "id": "20261021200000_add_kg_item_kind_risk",
+      "requiresHostTables": [],
+      "sha256": "48a6940b0b6ef29012a8178dc54d5ca4447c47ac7b1abfa1e01e197a48be2380",
+      "slice": "graph"
     }
   ]
 }

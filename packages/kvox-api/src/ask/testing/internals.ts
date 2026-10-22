@@ -13,6 +13,7 @@ export { EntityBriefTool } from '../tools/entity-brief.tool.js';
 export { EvidenceTool } from '../tools/evidence.tool.js';
 export { GetEntityTool } from '../tools/get-entity.tool.js';
 export { ListCommitmentsTool } from '../tools/list-commitments.tool.js';
+export { ListRisksTool } from '../tools/list-risks.tool.js';
 export { NeighborsTool } from '../tools/neighbors.tool.js';
 export { SearchTool } from '../tools/search.tool.js';
 export { TimelineTool } from '../tools/timeline.tool.js';

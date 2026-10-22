@@ -1,0 +1,215 @@
+{
+  "id": "m50",
+  "title": "Harbourlight ledger migration risk review",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks"
+  ],
+  "recordedAt": "2026-08-04T14:00:00Z",
+  "contextText": "Risk review for the ledger migration at Quillfeather Credit Union; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Harbourlight ledger migration risk review\n\n**Date:** August 4\n**Attendees:** Imogen Farrow, Teodor Blanc, Priya Lindqvist\n\n## Summary\n\nQuillfeather Credit Union is moving its core ledger onto a new platform under the Harbourlight migration project. This session walked through what could stop or slow the move before a cutover date is proposed to the board. The mood was cautious: the technical build is ahead of plan, but several outside dependencies are not.\n\n## Where the build stands\n\nThe new ledger passed its functional tests last week, and the data mapping for customer accounts is complete. Imogen reported that the loan products are the only area still being mapped, and that this is on schedule. The team has been working in two-week cycles and the board expects a recommendation on the cutover window at its next meeting.\n\n## Concerns raised\n\n- Security sign-off for the new ledger has not been given, and cutover cannot be scheduled until it is. Teodor called this the biggest single blocker, because the security team has not yet started its review.\n- Data residency rules could block hosting the archive in the second region, because the regulator has not confirmed that archived records may leave the country. Priya said legal is reviewing regional options, which may remove the problem.\n- The test environment goes down for two hours every night, which slows the regression runs and has already cost the team about a day this month.\n\n## Background\n\nQuillfeather Credit Union has about two hundred thousand members and runs its branches on the old ledger today. The old platform is stable but its vendor has announced the end of its support window, which is the reason for the project. The team was reminded that the member communication plan is separate from this review and is tracked elsewhere.\n\n## Next steps\n\nThe group will meet again once the security team has confirmed when its review will start. The summary of this session goes to the programme office for the monthly report.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-project-harbourlight-migration",
+      "type": "Project",
+      "label": "Harbourlight migration",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-quillfeather-credit-union",
+      "type": "Organization",
+      "label": "Quillfeather Credit Union",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Harbourlight ledger migration risk review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Harbourlight ledger migration risk review"
+          }
+        ]
+      },
+      {
+        "key": "imogen",
+        "type": "Person",
+        "label": "Imogen Farrow",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "teodor",
+        "type": "Person",
+        "label": "Teodor Blanc",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Lindqvist",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Imogen Farrow, Teodor Blanc, Priya Lindqvist"
+          }
+        ]
+      },
+      {
+        "key": "quill",
+        "type": "Organization",
+        "label": "Quillfeather Credit Union",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quillfeather Credit Union is moving its core ledger"
+          }
+        ]
+      },
+      {
+        "key": "harbour",
+        "type": "Project",
+        "label": "Harbourlight migration",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "under the Harbourlight migration project"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "harbour",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "under the Harbourlight migration project"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Security sign-off outstanding",
+        "statement": "Security sign-off for the new ledger has not been given, so the cutover cannot be scheduled.",
+        "status": "open",
+        "occurredAt": "2026-08-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Security sign-off for the new ledger has not been given, and cutover cannot be scheduled until it is"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Data residency for the archive",
+        "statement": "Data residency rules could block hosting the archive in the second region.",
+        "status": "open",
+        "occurredAt": "2026-08-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk",
+          "mitigation": "Legal is reviewing regional options."
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Data residency rules could block hosting the archive in the second region"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "harbour",
+        "owner": null,
+        "counterparty": null,
+        "title": "Nightly test environment outage",
+        "statement": "The test environment goes down for two hours every night, which slows the regression runs.",
+        "status": "open",
+        "occurredAt": "2026-08-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "low",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The test environment goes down for two hours every night, which slows the regression runs"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

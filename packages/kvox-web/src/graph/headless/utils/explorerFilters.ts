@@ -50,6 +50,7 @@ const FALLBACK_NODE_TYPES: FilterOption[] = [
   { key: 'Meeting', label: 'Meetings', domain: 'work' },
   { key: 'commitment', label: 'Commitments', domain: 'work' },
   { key: 'decision', label: 'Decisions', domain: 'work' },
+  { key: 'risk', label: 'Risks', domain: 'work' },
   { key: 'claim', label: 'Claims', domain: 'core' },
 ];
 

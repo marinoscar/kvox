@@ -153,7 +153,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
     const second = JSON.stringify(stream.requests[1].input);
     expect(second).toContain('"type":"function_call"');
     expect(second).toContain('"type":"function_call_output"');
-    expect(stream.requests.every((r) => r.tools.length === 7)).toBe(true);
+    expect(stream.requests.every((r) => r.tools.length === 8)).toBe(true);
 
     const conv2 = await prisma.askConversation.findUniqueOrThrow({ where: { id: conv.id } });
     expect(conv2.title).toBe('What did we decide about Sarah Chen?');

@@ -81,7 +81,7 @@ export const predictedRelationSchema = z.object({
 export type PredictedRelation = z.infer<typeof predictedRelationSchema>;
 
 /**
- * A predicted commitment, decision, claim or person fact.
+ * A predicted commitment, decision, risk, claim or person fact.
  *
  * @stability experimental
  */

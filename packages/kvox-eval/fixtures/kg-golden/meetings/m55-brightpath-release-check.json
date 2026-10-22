@@ -1,0 +1,184 @@
+{
+  "id": "m55",
+  "title": "Brightpath Scheduler release check",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks",
+    "topics-products"
+  ],
+  "recordedAt": "2026-09-15T13:00:00Z",
+  "contextText": "Release readiness check for a booking product; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Brightpath Scheduler release check\n\n**Date:** September 15\n**Attendees:** Leopold Strand, Marisol Achterberg, Cassian Whitlow\n\n## Summary\n\nThe product group checked whether Brightpath Scheduler is ready for its next release. Brightpath Scheduler is the appointment booking product used by clinics and salons, and the release adds group bookings and a new reminder format. Testing is mostly done, but quality and compliance concerns came up.\n\n## Release contents\n\nThe release includes group bookings for up to ten people, a reminder message that can be edited by the business, and a refreshed calendar view. Leopold said the new calendar view tested well with customers, and Marisol confirmed the reminder editor works in all supported languages.\n\n## Concerns raised\n\n- Brightpath Scheduler cannot be released until the accessibility audit passes, and the audit failed the first round on keyboard navigation and colour contrast.\n- Two customers reported duplicate bookings after the last update, which means that some clients were booked twice for the same slot.\n- The vendor has announced end of support for the old database driver next spring, which the product still depends on.\n\n## Background\n\nBrightpath Scheduler has about twelve hundred business customers and a small support team. The last release shipped in June without incident. The group agreed that the release notes should be written in plain language for non-technical users.\n\n## Next steps\n\nThe group will meet again after the second accessibility audit round. The summary goes to the product lead.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Brightpath Scheduler release check",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightpath Scheduler release check"
+          }
+        ]
+      },
+      {
+        "key": "leopold",
+        "type": "Person",
+        "label": "Leopold Strand",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Leopold Strand, Marisol Achterberg, Cassian Whitlow"
+          }
+        ]
+      },
+      {
+        "key": "marisol",
+        "type": "Person",
+        "label": "Marisol Achterberg",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Leopold Strand, Marisol Achterberg, Cassian Whitlow"
+          }
+        ]
+      },
+      {
+        "key": "cassian",
+        "type": "Person",
+        "label": "Cassian Whitlow",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Leopold Strand, Marisol Achterberg, Cassian Whitlow"
+          }
+        ]
+      },
+      {
+        "key": "bright",
+        "type": "Product",
+        "label": "Brightpath Scheduler",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightpath Scheduler is the appointment booking product"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "bright",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightpath Scheduler is the appointment booking product"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "bright",
+        "owner": null,
+        "counterparty": null,
+        "title": "Accessibility audit failed",
+        "statement": "Brightpath Scheduler cannot be released until the accessibility audit passes, and the audit failed the first round.",
+        "status": "open",
+        "occurredAt": "2026-09-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brightpath Scheduler cannot be released until the accessibility audit passes, and the audit failed the first round"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "bright",
+        "owner": null,
+        "counterparty": null,
+        "title": "Duplicate bookings reported",
+        "statement": "Two customers reported duplicate bookings after the last update.",
+        "status": "open",
+        "occurredAt": "2026-09-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Two customers reported duplicate bookings after the last update"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "bright",
+        "owner": null,
+        "counterparty": null,
+        "title": "Database driver end of support",
+        "statement": "The vendor has announced end of support for the old database driver next spring.",
+        "status": "open",
+        "occurredAt": "2026-09-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "low",
+          "riskKind": "risk"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The vendor has announced end of support for the old database driver next spring"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

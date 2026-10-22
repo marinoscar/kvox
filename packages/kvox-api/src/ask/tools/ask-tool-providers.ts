@@ -2,7 +2,7 @@
 // The Ask agent's tool providers (#377, epic #348; docs/specs/ontology.md §21)
 // =============================================================================
 //
-// The seven read-only tool classes, listed once so `AskModule` provides them and the toolset
+// The eight read-only tool classes, listed once so `AskModule` provides them and the toolset
 // spec can prove none of them depends on a write service. They import only READ surfaces,
 // reached through the modules `AskModule.forRoot` imports:
 //
@@ -20,11 +20,12 @@ import { EntityBriefTool } from './entity-brief.tool.js';
 import { EvidenceTool } from './evidence.tool.js';
 import { GetEntityTool } from './get-entity.tool.js';
 import { ListCommitmentsTool } from './list-commitments.tool.js';
+import { ListRisksTool } from './list-risks.tool.js';
 import { NeighborsTool } from './neighbors.tool.js';
 import { SearchTool } from './search.tool.js';
 import { TimelineTool } from './timeline.tool.js';
 
-/** The seven tool classes, in `ASK_TOOL_NAMES` order. */
+/** The eight tool classes, in `ASK_TOOL_NAMES` order. */
 export const ASK_TOOL_PROVIDERS = [
   SearchTool,
   GetEntityTool,
@@ -33,4 +34,5 @@ export const ASK_TOOL_PROVIDERS = [
   EvidenceTool,
   EntityBriefTool,
   ListCommitmentsTool,
+  ListRisksTool,
 ] as const;

@@ -1,0 +1,184 @@
+{
+  "id": "m51",
+  "title": "Fennel Sync pilot readiness",
+  "tags": [
+    "internal",
+    "note-only",
+    "risks"
+  ],
+  "recordedAt": "2026-08-11T10:00:00Z",
+  "contextText": "Pilot readiness check for a scheduling tool; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Fennel Sync pilot readiness\n\n**Date:** August 11\n**Attendees:** Dina Okafor, Rufus Abelard, Sunniva Hale\n\n## Summary\n\nThe operations group reviewed whether the Fennel Sync pilot is ready to start. Fennel Sync is the shared calendar and scheduling tool that the regional offices want to adopt, and the pilot covers sixty people across three offices. The product itself behaves well in the demo environment and the pilot group is enthusiastic.\n\n## What was checked\n\n- The pilot group list is final and the offices have nominated a local contact each.\n- The demo environment has been stable for three weeks.\n- The vendor has confirmed the pilot pricing in writing.\n\n## Blockers and concerns\n\n- The licence budget for Fennel Sync is not approved yet, so purchasing is on hold and the pilot cannot start on the planned date. Dina said finance wants the usage numbers before it signs off.\n- Adoption could stall if the pilot group does not get training before launch, since earlier tools in this group were abandoned after a week. Short training sessions before launch would reduce this risk.\n- Single sign-on fails for contractors, so about forty people cannot log in at all. Rufus has seen the same error in the test tenant and the vendor has not yet explained it.\n\n## Background\n\nThe regional offices currently schedule shared rooms and field visits in three different spreadsheets. The goal of the pilot is to replace those with one tool and to learn what the offices need before a wider rollout is considered. Sunniva noted that the pilot offices have different working hours, which the tool handles well.\n\n## Next steps\n\nThe group will report the result of the pilot readiness check to the operations lead at the end of the week.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Fennel Sync pilot readiness",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fennel Sync pilot readiness"
+          }
+        ]
+      },
+      {
+        "key": "dina",
+        "type": "Person",
+        "label": "Dina Okafor",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dina Okafor, Rufus Abelard, Sunniva Hale"
+          }
+        ]
+      },
+      {
+        "key": "rufus",
+        "type": "Person",
+        "label": "Rufus Abelard",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dina Okafor, Rufus Abelard, Sunniva Hale"
+          }
+        ]
+      },
+      {
+        "key": "sunniva",
+        "type": "Person",
+        "label": "Sunniva Hale",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Dina Okafor, Rufus Abelard, Sunniva Hale"
+          }
+        ]
+      },
+      {
+        "key": "fennel",
+        "type": "Product",
+        "label": "Fennel Sync",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fennel Sync is the shared calendar and scheduling tool"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "fennel",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fennel Sync is the shared calendar and scheduling tool"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "fennel",
+        "owner": null,
+        "counterparty": null,
+        "title": "Licence budget not approved",
+        "statement": "The licence budget for Fennel Sync is not approved yet, so purchasing is on hold.",
+        "status": "open",
+        "occurredAt": "2026-08-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "high",
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The licence budget for Fennel Sync is not approved yet, so purchasing is on hold"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "fennel",
+        "owner": null,
+        "counterparty": null,
+        "title": "Adoption may stall without training",
+        "statement": "Adoption of Fennel Sync could stall if the pilot group does not get training before launch.",
+        "status": "open",
+        "occurredAt": "2026-08-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "risk",
+          "mitigation": "Short training sessions before launch would reduce this risk."
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Adoption could stall if the pilot group does not get training before launch"
+          }
+        ]
+      },
+      {
+        "kind": "risk",
+        "subject": "fennel",
+        "owner": null,
+        "counterparty": null,
+        "title": "Single sign-on fails for contractors",
+        "statement": "Single sign-on fails for contractors, so about forty people cannot log in.",
+        "status": "open",
+        "occurredAt": "2026-08-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "severity": "medium",
+          "riskKind": "issue"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Single sign-on fails for contractors, so about forty people cannot log in at all"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

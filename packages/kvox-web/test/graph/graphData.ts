@@ -157,7 +157,7 @@ export function entityDetail(
       relations: 5,
       mentions: summary.mentionCount,
       evidence: 18,
-      items: { commitment: 3, decision: 2, claim: 1, person_fact: 2 },
+      items: { commitment: 3, decision: 2, claim: 1, person_fact: 2, risk: 1 },
       openCommitments: 2,
     },
     createdAt: '2026-03-04T09:00:00.000Z',

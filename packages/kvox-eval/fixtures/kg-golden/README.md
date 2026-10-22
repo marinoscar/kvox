@@ -48,7 +48,7 @@ fixture `id` (`m01`…). The contract is `goldenFixtureSchema` in
 | `knownEntities` | The graph as it stood **before** this meeting (ids like `g-person-sarah-chen`), with aliases and the earlier fixtures each attended. What resolution may link to. |
 | `labels.entities` | Gold `Person` / `Organization` / `Project` / `Meeting` rows. `key` is local to the file; `existingId` says which known entity the mention must link to. Every fixture labels its own `Meeting` (key `meeting`). |
 | `labels.relations` | Gold edges, using only the ontology's extractable relation types. `from`/`to` are keys or known ids. Temporal types carry `validFrom`/`validTo`/`precision` per §5.4 (half-open; month/year bounds on the first of the unit; `unknown` means both bounds `null`). Non-temporal ones are `unknown` with `null` bounds. |
-| `labels.items` | Gold `commitment` / `decision` / `claim` / `person_fact`. `owner` and `counterparty` are the `ASSIGNED_TO`/`OWED_TO` columns; `status` only on commitments; `sensitivity` only on person facts. `supersedesLabel` names an earlier item as `<fixtureId>#<kind>-<n>` (`n` = 1-based position among that fixture's items of that kind), e.g. `m01#claim-1`. |
+| `labels.items` | Gold `commitment` / `decision` / `risk` / `claim` / `person_fact`. `owner` and `counterparty` are the `ASSIGNED_TO`/`OWED_TO` columns; `status` only on commitments (`open | done | dropped`) and risks (`open | mitigated | closed`); `sensitivity` only on person facts; `props` carries the item type's own attributes (a risk's `severity`, `riskKind`, `mitigation`). `supersedesLabel` names an earlier item as `<fixtureId>#<kind>-<n>` (`n` = 1-based position among that fixture's items of that kind), e.g. `m01#claim-1`. |
 | `labels.negatives` | Text a correct extractor must **not** turn into a row (§5.1), each with why. |
 
 Every label carries `evidence`: `{ source: "segment", segmentId, quote }` or
@@ -100,6 +100,7 @@ never enables `personal` is offered none of it.
 - Supersedes chains: a decision reversed in a later fixture, and "the pilot
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).
+- Risks (#664, m50-m55, tag `risks`): ≥ 15 gold `risk` items over every severity (low, medium, high) and every `riskKind` (risk, issue, blocker), subjects of every allowed kind (Project, Product, Organization, Topic), one with a `mitigation`, and a status chain (`m53` supersedes `m50#risk-1`).
 - Personal domain (#383), in fixtures tagged `personal` (≥ 5): every
   `personal` type and relation labelled at least once — a spouse, parents and
   children, a friendship, a trip with dates, a birthday `Milestone` — a known

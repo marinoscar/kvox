@@ -82,6 +82,7 @@ export function createAskToolset(prisma: PrismaClient) {
       new internals.EvidenceTool(evidence, p),
       new internals.EntityBriefTool(brief, p),
       new internals.ListCommitmentsTool(p),
+      new internals.ListRisksTool(p, ontology),
       preferences,
     ),
   };

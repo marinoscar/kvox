@@ -27,7 +27,7 @@ export interface DigestPreviousStatement {
 }
 
 export interface DigestItemFact {
-  kind: 'commitment' | 'decision' | 'claim' | 'person_fact';
+  kind: 'commitment' | 'decision' | 'claim' | 'person_fact' | 'risk';
   title: string | null;
   statement: string;
   status: string | null;
@@ -148,6 +148,7 @@ export function buildDigestFactList(input: BuildFactListInput): DigestFactList {
   for (const i of input.items) {
     if (!itemAllowedInPrompt(i, input.includePersonalFacts)) continue;
     const parts = [i.title ? `${i.title}: ${i.statement}` : i.statement];
+    if (i.kind === 'risk' && i.status) parts.push(`(risk, status: ${i.status})`);
     if (i.kind === 'commitment' && i.status) parts.push(`(status: ${i.status}${i.dueAt ? `, due ${day(i.dueAt)}` : ''})`);
     push(i.kind, day(i.occurredAt), parts.join(' '), i.evidenceIds);
   }

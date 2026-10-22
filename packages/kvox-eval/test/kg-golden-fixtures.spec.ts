@@ -14,6 +14,10 @@
  * Issue #663 added the stakeholder and market relations (INVOLVED_IN, USES,
  * OFFERED_BY, CUSTOMER_OF, PARTNER_OF, COMPETITOR_OF, CONCERNS, KNOWS_ABOUT);
  * m40-m44 carry their gold labels, the same rule applying to them.
+ *
+ * Ontology 1.3.0 (epic #661, issue #664) added the `Risk` item type (work);
+ * m50-m55 carry its gold labels (note-only meetings framing threats, blockers
+ * and problems), so the ">= 15 of each item kind" rule holds for it too.
  */
 
 import { readdirSync, readFileSync } from 'fs';
@@ -42,6 +46,7 @@ const byId = new Map(fixtures.map((f) => [f.id, f]));
 const ITEM_TYPE: Record<ItemLabelKind, string> = {
   commitment: 'Commitment',
   decision: 'Decision',
+  risk: 'Risk',
   claim: 'Claim',
   person_fact: 'PersonFact',
 };
@@ -211,6 +216,8 @@ describe('kg golden set (issue #362)', () => {
       const owedTo = schema.relationType('OWED_TO')!.to;
       for (const i of f.labels.items) {
         const itemType = schema.entityType(ITEM_TYPE[i.kind])!;
+        // An item's props are the item type's own attributes (a Risk's severity, riskKind, mitigation).
+        expect({ item: i.title, props: validateProps(schema, ITEM_TYPE[i.kind], i.props).ok }).toEqual({ item: i.title, props: true });
         expect(itemType.subjectTypes).toContain(endpointType(f, i.subject));
         if (i.owner !== null) expect(assignedTo).toContain(endpointType(f, i.owner));
         if (i.counterparty !== null) expect(owedTo).toContain(endpointType(f, i.counterparty));
@@ -235,7 +242,9 @@ describe('kg golden set (issue #362)', () => {
         if (r.validFrom && r.validTo) expect(r.validTo > r.validFrom).toBe(true);
       }
       for (const i of f.labels.items) {
-        expect(i.status !== null).toBe(i.kind === 'commitment');
+        expect(i.status !== null).toBe(i.kind === 'commitment' || i.kind === 'risk');
+        if (i.kind === 'risk') expect(['open', 'mitigated', 'closed']).toContain(i.status);
+        if (i.kind === 'commitment') expect(['open', 'done', 'dropped']).toContain(i.status);
         expect(i.sensitivity !== null).toBe(i.kind === 'person_fact');
         if (i.dueAt && i.occurredAt) expect(i.dueAt >= i.occurredAt).toBe(true);
       }
@@ -299,6 +308,22 @@ describe('kg golden set (issue #362)', () => {
       for (const kind of Object.keys(ITEM_TYPE)) {
         expect({ kind, n: items.filter(({ i }) => i.kind === kind).length >= 15 }).toEqual({ kind, n: true });
       }
+    });
+
+    it('has Risk labels of every severity and kind, with attributes, a mitigation and a status chain (#664)', () => {
+      const risks = items.filter(({ i }) => i.kind === 'risk');
+      for (const severity of ['low', 'medium', 'high']) {
+        expect({ severity, n: risks.filter(({ i }) => i.props.severity === severity).length >= 3 }).toEqual({ severity, n: true });
+      }
+      for (const riskKind of ['risk', 'issue', 'blocker']) {
+        expect({ riskKind, n: risks.filter(({ i }) => i.props.riskKind === riskKind).length >= 3 }).toEqual({ riskKind, n: true });
+      }
+      expect(risks.some(({ i }) => typeof i.props.mitigation === 'string')).toBe(true);
+      expect(risks.some(({ i }) => i.status === 'mitigated')).toBe(true);
+      expect(risks.filter(({ i }) => i.supersedesLabel !== null).length).toBeGreaterThanOrEqual(1);
+      // Subjects span the subject types the ontology allows (Project, Product, Organization, Topic).
+      const subjectTypes = new Set(risks.map(({ f, i }) => endpointType(f, i.subject)));
+      for (const t of ['Project', 'Product', 'Organization', 'Topic']) expect(subjectTypes).toContain(t);
     });
 
     it('has ≥ 3 of every extractable relation type, and ≥ 3 of each item-column relation', () => {

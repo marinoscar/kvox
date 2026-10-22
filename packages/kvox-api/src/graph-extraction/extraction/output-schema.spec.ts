@@ -48,7 +48,19 @@ describe('buildExtractionOutputSchema (#363)', () => {
     const relations = enumValues((schema.properties as Node).relations, 'type');
     expect(relations).toEqual(expect.arrayContaining(['WORKS_FOR', 'ATTENDED', 'DISCUSSED']));
     expect(relations).not.toContain('ABOUT');
-    expect(enumValues((schema.properties as Node).items, 'kind').sort()).toEqual(['claim', 'commitment', 'decision', 'person_fact']);
+    expect(enumValues((schema.properties as Node).items, 'kind').sort()).toEqual(['claim', 'commitment', 'decision', 'person_fact', 'risk']);
+  });
+
+  it("lets the model set a risk's status (open, mitigated, closed) but never superseded, and its attributes ride in props", () => {
+    const schema = buildExtractionOutputSchema(makeContext());
+    const risk = objects((schema.properties as Node).items).find(
+      (o) => (((o.properties as Node)?.kind as Node)?.enum as string[] | undefined)?.[0] === 'risk',
+    )!;
+    const status = (risk.properties as Node).status as Node;
+    expect(status.enum).toEqual(['open', 'mitigated', 'closed', null]);
+    const props = JSON.stringify((risk.properties as Node).props);
+    for (const key of ['severity', 'riskKind', 'mitigation']) expect(props).toContain(key);
+    expect(props).not.toContain('superseded');
   });
 
   it('leaves out a type excluded by guidance and every type of a disabled domain', () => {

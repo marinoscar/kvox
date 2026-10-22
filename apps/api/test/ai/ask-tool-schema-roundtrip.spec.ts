@@ -6,7 +6,7 @@
 // `AiFunctionTool` whose `parameters` is `z.fromJSONSchema(def.parameters)`; the
 // platform converts that back with `toJsonSchema` for the wire. The tool's own Zod
 // `input` is never sent (it uses `.transform`, which JSON Schema cannot express).
-// This spec runs all seven tools through the exact pair of calls and pins what must
+// This spec runs all eight tools through the exact pair of calls and pins what must
 // stay true for strict function calling:
 //
 //   * neither call throws;
@@ -35,6 +35,7 @@ const {
   EvidenceTool,
   GetEntityTool,
   ListCommitmentsTool,
+  ListRisksTool,
   NeighborsTool,
   SearchTool,
   TimelineTool,
@@ -47,6 +48,7 @@ const toolset = new AskToolset(
   new EvidenceTool(none, none),
   new EntityBriefTool(none, none),
   new ListCommitmentsTool(none),
+  new ListRisksTool(none, none),
   none,
 );
 

@@ -63,6 +63,7 @@ export const ENTITY_REPORT_TYPES = [
 export const ITEM_REPORT_TYPES: Record<ItemLabelKind, string> = {
   commitment: 'Commitment',
   decision: 'Decision',
+  risk: 'Risk',
   claim: 'Claim',
   person_fact: 'PersonFact',
 };

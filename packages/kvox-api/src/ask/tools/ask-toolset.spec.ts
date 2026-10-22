@@ -12,12 +12,13 @@ import { EntityBriefTool } from './entity-brief.tool.js';
 import { EvidenceTool } from './evidence.tool.js';
 import { GetEntityTool } from './get-entity.tool.js';
 import { ListCommitmentsTool } from './list-commitments.tool.js';
+import { ListRisksTool } from './list-risks.tool.js';
 import { NeighborsTool } from './neighbors.tool.js';
 import { SearchTool } from './search.tool.js';
 import { TimelineTool } from './timeline.tool.js';
 
 // =============================================================================
-// AskToolset (#377): the seven definitions conform to the strict subset, the
+// AskToolset (#377): the eight definitions conform to the strict subset, the
 // executor turns every model mistake into `ok: false` (never a throw), results
 // are compacted to the token budget, and nothing here can write.
 // =============================================================================
@@ -75,6 +76,7 @@ function build(over: { graphRead?: object; prisma?: object; preferences?: object
     evidence: new EvidenceTool({ listForSubject: jest.fn(async () => []) } as never, prisma as never),
     entityBrief: new EntityBriefTool({ getBrief: jest.fn() } as never, prisma as never),
     listCommitments: new ListCommitmentsTool(prisma as never),
+    listRisks: new ListRisksTool(prisma as never, { effectiveSchemaFor: jest.fn() } as never),
   };
   const preferences = { get: jest.fn(async () => ({})), ...over.preferences };
   const toolset = new AskToolset(
@@ -85,6 +87,7 @@ function build(over: { graphRead?: object; prisma?: object; preferences?: object
     tools.evidence,
     tools.entityBrief,
     tools.listCommitments,
+    tools.listRisks,
     preferences as never,
   );
   return { toolset, tools, graphRead, prisma, search };
@@ -94,9 +97,15 @@ describe('AskToolset.definitions', () => {
   const { toolset } = build();
   const defs = toolset.definitions();
 
-  it('returns exactly the seven tools, in a stable order', () => {
+  it('returns exactly the eight tools, in a stable order', () => {
     expect(defs.map((d) => d.name)).toEqual([...ASK_TOOL_NAMES]);
     expect(toolset.definitions()).toEqual(defs);
+  });
+
+  it('list_risks keeps its definition (name, filters, enums)', () => {
+    const def = defs.find((d) => d.name === 'list_risks')!;
+    expect(def.name).toBe('list_risks');
+    expect(def.parameters).toMatchSnapshot();
   });
 
   it.each(defs.map((d) => [d.name, d] as const))('%s is a strict-mode schema', (_name, def) => {

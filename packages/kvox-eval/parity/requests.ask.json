@@ -227,7 +227,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -430,6 +430,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"
@@ -679,7 +772,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -882,6 +975,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"
@@ -1120,7 +1306,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -1323,6 +1509,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"
@@ -1572,7 +1851,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -1775,6 +2054,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"
@@ -2013,7 +2385,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -2216,6 +2588,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"
@@ -2465,7 +2930,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, relation, meeting. Default: all."
+                "description": "Keep only these event kinds: commitment, decision, claim, person_fact, risk, relation, meeting. Default: all."
               },
               "limit": {
                 "anyOf": [
@@ -2668,6 +3133,99 @@
               "direction",
               "status",
               "dueBefore",
+              "limit"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "function"
+        },
+        {
+          "description": "List risks, issues and blockers, optionally for one project, product, organization or person, by status and severity. Highest severity first.",
+          "name": "list_risks",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most risks to return, 1–25. Default 15."
+              },
+              "severity": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Only risks of this severity. Default: any severity."
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "open",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mitigated",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "superseded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "any",
+                    "type": "string"
+                  },
+                  {
+                    "const": null,
+                    "type": "null"
+                  }
+                ],
+                "description": "Risk status to keep. Default \"open\"; \"any\" keeps all."
+              },
+              "subject": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A project, product, organization, person or topic reference (entN). Default: every risk."
+              }
+            },
+            "required": [
+              "subject",
+              "status",
+              "severity",
               "limit"
             ],
             "type": "object"

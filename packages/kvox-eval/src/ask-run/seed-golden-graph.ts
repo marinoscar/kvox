@@ -555,7 +555,8 @@ async function seedItems(ctx: Ctx, meetingId: string | null): Promise<void> {
           counterpartyId,
           title: item.title,
           statement: item.statement,
-          status: item.status ?? (item.kind === 'commitment' ? 'open' : 'active'),
+          status: item.status ?? (item.kind === 'commitment' || item.kind === 'risk' ? 'open' : 'active'),
+          props: item.props,
           occurredAt: item.occurredAt ? new Date(item.occurredAt) : null,
           dueAt: item.dueAt ? new Date(item.dueAt) : null,
           // The web app's seeder default (`business`), kept so the two seed the same graph;
