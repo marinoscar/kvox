@@ -15,9 +15,18 @@
  *   falls through to the search with a hint to reopen it from the overview.
  *
  * URL STATE: `seed`, `asOf` (YYYY-MM-DD), `types` (the SHOWN node types —
- * absent means all), `view=list`, `layout=force|concentric|static` (static: tests/visual only), and
- * `cluster`. The URL is the source of truth for all of them; a control writes
- * the URL and an effect applies it.
+ * absent means all), `relTypes` (the SHOWN relation types — absent means all, GIC-17),
+ * `view=list`, `layout=force|concentric|static` (static: tests/visual only), `lens` (the lens
+ * last applied), `focus` (the focused node; the one param that adds a browser history entry),
+ * `sel`/`tab` (the inspector) and `cluster`. The URL is the source of truth for all of them; a
+ * control writes the URL and an effect applies it. `from`/`to` (time bar) and
+ * `pathFrom`/`pathTo` (path mode) are reserved for the stories that write them: nothing here
+ * reads or clears them. Pins and positions are NOT in the URL (too large).
+ *
+ * HISTORY, LENSES, ASK (GIC-17, #678): Undo/Redo walk the explorer's change stack
+ * (`useGraphExplorer`), Back/Forward and the breadcrumbs walk the focus trail
+ * (`explorer/history/`), the Lens menu applies built-in and saved lenses (`explorer/lenses/`),
+ * and "Ask about this selection" opens the host's Ask slot pre-scoped (`explorer/ask/`).
  *
  * LAYOUT (GIC-08, #669; epic #661): everything but the early states (not found,
  * error, seed search) renders through `InsightCanvasLayout` — the responsive
@@ -45,6 +54,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
+import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
 import { visuallyHidden } from '../visuallyHidden.js';
 import {
   Suspense,
@@ -61,12 +72,41 @@ import {
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import ExpandIcon from '@mui/icons-material/OpenInFull';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
+import RedoIcon from '@mui/icons-material/Redo';
+import UndoIcon from '@mui/icons-material/Undo';
 
 import { CapWarning } from '../components/explorer/CapWarning.js';
+import {
+  AskSelectionButton,
+  AskSelectionMenuItem,
+  AskSelectionPanel,
+} from '../components/explorer/ask/AskSelectionPanel.js';
+import { scopeFromEdge, scopeFromNodes, type AskSelectionScope } from '../components/explorer/ask/askScope.js';
+import { FocusBreadcrumbs, HistoryControls } from '../components/explorer/history/HistoryControls.js';
+import { ShortcutsDialog, useExplorerShortcuts } from '../components/explorer/history/shortcuts.js';
+import type { RestoredView } from '../components/explorer/history/snapshot.js';
+import { UndoSnackbar } from '../components/explorer/history/UndoSnackbar.js';
+import { useFocusTrail } from '../components/explorer/history/useFocusTrail.js';
+import {
+  applyLensToParams,
+  builtInLenses,
+  captureLens,
+  explorerPinsKey,
+  lensMatchesView,
+  lensPaletteActions,
+  newLensId,
+  type ExplorerLens,
+  type LensLayout,
+} from '../components/explorer/lenses/lensModel.js';
+import { ExplorerLensMenu } from '../components/explorer/lenses/LensMenu.js';
+import { useExplorerLenses } from '../components/explorer/lenses/useExplorerLenses.js';
+import { loadPins, savePins } from '../components/explorer/layout/pins.js';
 import {
   ExplorerContextMenu,
   type ExplorerContextTarget,
@@ -84,6 +124,7 @@ import { ExplorerInspector } from '../components/explorer/inspector/ExplorerInsp
 import { buildSelection, summariseSelection } from '../components/explorer/inspector/inspectorModel.js';
 import { useInspectorUrlState } from '../components/explorer/inspector/useInspectorUrlState.js';
 import { GraphLegend } from '../components/explorer/GraphLegend.js';
+import { usePathMode } from '../components/explorer/paths/usePathMode.js';
 import { ExplorerListView } from '../components/explorer/ExplorerListView.js';
 import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer/ExplorerToolbar.js';
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
@@ -98,8 +139,12 @@ import {
 } from '../components/explorer/palette/ExplorerCommandPalette.js';
 import { MAX_PALETTE_SEEDS } from '../components/explorer/palette/paletteModel.js';
 import { ExplorerStartHere } from '../components/explorer/start/ExplorerStartHere.js';
+import { InsightsPanel } from '../components/explorer/insights/InsightsPanel.js';
+import { useInsightSelect } from '../components/explorer/insights/useInsightSelect.js';
 import { clusterHandoff } from '../components/overview/overviewModel.js';
 import { minimapVisible } from '../components/explorer/shell/explorerBudgets.js';
+import { ExplorerTimeBar } from '../components/explorer/timebar/ExplorerTimeBar.js';
+import { formatDay, parseRangeParams, rangeForInstant, type TimeRange } from '../components/explorer/timebar/timeAxis.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
   domainOptions,
@@ -214,7 +259,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const seedParam = searchParams.get('seed');
   const seeds = useMemo(() => parseSeeds(seedParam), [seedParam]);
   const seedKey = seeds.join(',');
-  const asOf = parseAsOfParam(searchParams.get('asOf'));
+  // The TimeBar's brush (`from`, `to`): the graph is shown as of its end (GIC-15).
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
+  const timeRange = useMemo(() => parseRangeParams(fromParam, toParam), [fromParam, toParam]);
+  const asOf = timeRange
+    ? timeRange.to <= formatDay(Date.now())
+      ? timeRange.to
+      : null
+    : parseAsOfParam(searchParams.get('asOf'));
   const typesParam = searchParams.get('types');
   const clusterParam = searchParams.get('cluster');
   const viewParam = searchParams.get('view');
@@ -251,7 +304,11 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const relationKeys = useMemo(() => relationTypes.map((r) => r.key), [relationTypes]);
   const hiddenTypes = useMemo(() => hiddenFromShown(typesParam, nodeTypeKeys), [typesParam, nodeTypeKeys]);
   const hiddenTypesKey = [...hiddenTypes].sort().join(',');
-  const [hiddenRelations, setHiddenRelations] = useState<Set<string>>(() => new Set());
+  // Hidden relation types live in the URL too (`relTypes` = the SHOWN ones), so they survive a reload and a shared link.
+  const relTypesParam = searchParams.get('relTypes');
+  const hiddenRelations = useMemo(() => hiddenFromShown(relTypesParam, relationKeys), [relTypesParam, relationKeys]);
+  const hiddenRelationsKey = [...hiddenRelations].sort().join(',');
+  const lensParam = searchParams.get('lens');
 
   const typeLabel = useCallback((key: string) => nodeTypeLabel(key, ontology), [ontology]);
 
@@ -274,6 +331,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     hide,
     makeSeed,
     addSlice,
+    mergeExternalSlice,
   } = explorer;
 
   // Applied BEFORE the seeding effect below (effects run in order), so the
@@ -287,8 +345,8 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   }, [hiddenTypesKey, setHiddenTypes]);
 
   useEffect(() => {
-    setHiddenRelationTypes(hiddenRelations);
-  }, [hiddenRelations, setHiddenRelationTypes]);
+    setHiddenRelationTypes(hiddenRelationsKey ? hiddenRelationsKey.split(',') : []);
+  }, [hiddenRelationsKey, setHiddenRelationTypes]);
 
   // --- Seeding ---------------------------------------------------------------------
   // Peek during render (StrictMode-safe), take once in the effect.
@@ -407,7 +465,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       updateParams((params) => params.set('layout', next === 'forceatlas' ? 'force' : next)),
     [updateParams],
   );
-  const pinsKey = `explore:${seedKey}:${asOf ?? ''}`;
+  const pinsKey = explorerPinsKey(seedKey, asOf, lensParam);
 
   const selection = useMemo(
     () =>
@@ -518,7 +576,18 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   );
 
   // --- Actions -------------------------------------------------------------------------
-  const onExpand = useCallback((id: string, only?: ExpandOnly) => void expand(id, only), [expand]);
+  // On a phone, Hide and Expand are followed by a snackbar with Undo (GIC-17): there is no Undo button in view.
+  const [undoNotice, setUndoNotice] = useState<string | null>(null);
+  const { undoDepth } = explorer;
+  const onExpand = useCallback(
+    (id: string, only?: ExpandOnly) => {
+      const depth = undoDepth();
+      void expand(id, only).then(() => {
+        if (windowClass === 'compact' && undoDepth() > depth) setUndoNotice('Expanded');
+      });
+    },
+    [expand, undoDepth, windowClass],
+  );
 
   // "Expand all" of the Selection view: one request at a time (a newer request aborts the one in flight).
   const onExpandAll = useCallback(
@@ -532,7 +601,9 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
 
   const onHide = useCallback(
     (id: string) => {
+      const depth = undoDepth();
       hide(id);
+      if (windowClass === 'compact' && undoDepth() > depth) setUndoNotice('Node hidden');
       setMarked((previous) => {
         if (!previous.has(id)) return previous;
         const next = new Set(previous);
@@ -541,7 +612,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       });
       setSelected((current) => (current?.kind === 'node' && current.id === id ? null : current));
     },
-    [hide],
+    [hide, undoDepth, windowClass],
   );
 
   const onHideAll = useCallback(
@@ -595,6 +666,17 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [nodeTypeKeys, updateParams],
   );
 
+  const setShownRelations = useCallback(
+    (hidden: Set<string>) => {
+      const shown = shownParamFromHidden(hidden, relationKeys);
+      updateParams((params) => {
+        if (shown === null) params.delete('relTypes');
+        else params.set('relTypes', shown);
+      });
+    },
+    [relationKeys, updateParams],
+  );
+
   const onToggleType = useCallback(
     (key: string) => {
       const next = new Set(hiddenTypes);
@@ -620,20 +702,53 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         if (shown) relations.add(key);
         else relations.delete(key);
       }
-      setHiddenRelations(relations);
-      setShownTypes(types);
+      // ONE write: two `setSearchParams` in a tick would each start from the same stale params.
+      const shownTypes = shownParamFromHidden(types, nodeTypeKeys);
+      const shownRelations = shownParamFromHidden(relations, relationKeys);
+      updateParams((params) => {
+        if (shownTypes === null) params.delete('types');
+        else params.set('types', shownTypes);
+        if (shownRelations === null) params.delete('relTypes');
+        else params.set('relTypes', shownRelations);
+      });
     },
-    [hiddenRelations, hiddenTypes, setShownTypes],
+    [hiddenRelations, hiddenTypes, nodeTypeKeys, relationKeys, updateParams],
   );
 
-  const onToggleRelationType = useCallback((key: string) => {
-    setHiddenRelations((previous) => {
-      const next = new Set(previous);
+  const onToggleRelationType = useCallback(
+    (key: string) => {
+      const next = new Set(hiddenRelations);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      return next;
-    });
-  }, []);
+      setShownRelations(next);
+    },
+    [hiddenRelations, setShownRelations],
+  );
+
+  const onTimeRangeChange = useCallback(
+    (next: TimeRange | null) => {
+      updateParams((params) => {
+        if (next) {
+          params.set('from', next.from);
+          params.set('to', next.to);
+          params.delete('asOf');
+        } else {
+          params.delete('from');
+          params.delete('to');
+        }
+      });
+    },
+    [updateParams],
+  );
+  // The nodes the TimeBar dims (nothing in the brushed window, or inactive in the bar under the pointer).
+  const [timeDimmed, setTimeDimmed] = useState<ReadonlySet<string> | null>(null);
+  const onShowInTimeBar = useCallback(
+    (at: string) => {
+      const next = rangeForInstant(at);
+      if (next) onTimeRangeChange(next);
+    },
+    [onTimeRangeChange],
+  );
 
   const onAsOfChange = useCallback(
     (value: string | null) => {
@@ -654,6 +769,134 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
       });
     },
     [updateParams],
+  );
+
+  // --- History (GIC-17) ------------------------------------------------------------------------
+  /** Mirrors a restored snapshot's seeds, filters and date into the URL, which is what the page reads. */
+  const applyRestored = useCallback(
+    (view: RestoredView | null) => {
+      if (!view) return;
+      updateParams((params) => {
+        if (view.seedIds.length > 0 && view.seedIds.length <= MAX_URL_SEEDS) params.set('seed', view.seedIds.join(','));
+        const shownTypes = shownParamFromHidden(new Set(view.hiddenTypes), nodeTypeKeys);
+        if (shownTypes === null) params.delete('types');
+        else params.set('types', shownTypes);
+        const shownRelations = shownParamFromHidden(new Set(view.hiddenRelationTypes), relationKeys);
+        if (shownRelations === null) params.delete('relTypes');
+        else params.set('relTypes', shownRelations);
+        // The TimeBar range (`from`/`to`) owns the date while it is set: undo never rewrites it, nor leaves a stale `asOf`.
+        if (!timeRange) {
+          if (view.asOf) params.set('asOf', view.asOf);
+          else params.delete('asOf');
+        }
+      });
+      setSelected((current) => {
+        if (!current) return current;
+        const present = current.kind === 'node' ? graph.hasNode(current.id) : graph.hasEdge(current.id);
+        return present ? current : null;
+      });
+      setMarked((previous) => new Set([...previous].filter((id) => graph.hasNode(id))));
+    },
+    [graph, nodeTypeKeys, relationKeys, timeRange, updateParams],
+  );
+  const { undo: undoStep, redo: redoStep } = explorer;
+  const onUndo = useCallback(() => applyRestored(undoStep()), [applyRestored, undoStep]);
+  const onRedo = useCallback(() => applyRestored(redoStep()), [applyRestored, redoStep]);
+
+  const trail = useFocusTrail({
+    focusedId: selected?.kind === 'node' ? selected.id : null,
+    focusNode: (id) => setSelected({ kind: 'node', id }),
+    ready: nodeCount > 0 && !explorer.isLoading,
+    hasNode: (id) => graph.hasNode(id),
+  });
+  const crumbs = useMemo(
+    () =>
+      trail.crumbs.map((id) => ({
+        id,
+        label: graph.hasNode(id) ? graph.getNodeAttribute(id, 'label') : 'Removed item',
+      })),
+    // The graph is mutated in place: `version` is what changes.
+    [trail.crumbs, graph, version],
+  );
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useExplorerShortcuts({
+    onUndo,
+    onRedo,
+    onBack: trail.goBack,
+    onForward: trail.goForward,
+    onHelp: () => setShortcutsOpen(true),
+  });
+
+  // --- Lenses (GIC-17) -------------------------------------------------------------------------
+  const userLenses = useExplorerLenses();
+  const builtIn = useMemo(() => builtInLenses(nodeTypeKeys, relationKeys), [nodeTypeKeys, relationKeys]);
+  const [lensListOpen, setLensListOpen] = useState(false);
+  const currentLayout: LensLayout = layout === 'forceatlas' ? 'force' : layout;
+  const lensView = useMemo(
+    () => ({
+      seeds: state.seedIds,
+      hiddenTypes,
+      hiddenRelationTypes: hiddenRelations,
+      nodeKeys: nodeTypeKeys,
+      relationKeys,
+      layout: currentLayout,
+      pins: loadPins(pinsKey),
+    }),
+    // `pinnedCount` re-reads the pins when one is added or released.
+    [state, version, hiddenTypes, hiddenRelations, nodeTypeKeys, relationKeys, currentLayout, pinsKey, pinnedCount],
+  );
+  const activeLens = useMemo(
+    () => [...builtIn, ...userLenses.lenses].find((lens) => lens.id === lensParam) ?? null,
+    [builtIn, userLenses.lenses, lensParam],
+  );
+  const lensModified = activeLens ? !lensMatchesView(activeLens, lensView) : false;
+
+  const onApplyLens = useCallback(
+    (lens: ExplorerLens) => {
+      const nextSeeds = lens.seeds.length > 0 ? lens.seeds : seeds;
+      // The layout reads pins under the new key when the URL changes, so they are written first.
+      savePins(
+        explorerPinsKey(nextSeeds.join(','), asOf, lens.id),
+        new Map(Object.entries(lens.pins)),
+      );
+      // The selection belongs to the view being left (the lens clears `focus`, `sel` and `tab` too).
+      deselect();
+      updateParams((params) => applyLensToParams(params, lens, nodeTypeKeys, relationKeys));
+    },
+    [asOf, deselect, nodeTypeKeys, relationKeys, seeds, updateParams],
+  );
+  const onSaveLens = useCallback(
+    async (name: string) => {
+      const lens = captureLens(lensView, newLensId(), name);
+      const saved = await userLenses.save(lens);
+      if (!saved) return false;
+      // Pins set so far move with the view to the new lens's key.
+      savePins(explorerPinsKey(seedKey, asOf, lens.id), lensView.pins);
+      updateParams((params) => params.set('lens', lens.id));
+      return true;
+    },
+    [asOf, lensView, seedKey, updateParams, userLenses],
+  );
+  const onDeleteLens = useCallback(
+    async (id: string) => {
+      const done = await userLenses.remove(id);
+      if (done && lensParam === id) updateParams((params) => params.delete('lens'));
+      return done;
+    },
+    [lensParam, updateParams, userLenses],
+  );
+
+  // --- Ask about this selection (GIC-17) -------------------------------------------------------
+  const [askScope, setAskScope] = useState<AskSelectionScope | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
+  const [askProblem, setAskProblem] = useState<string | null>(null);
+  const askAboutNodes = useCallback(
+    (ids: Iterable<string>) => {
+      const scope = scopeFromNodes(graph, ids);
+      if (scope) setAskScope(scope);
+      else setAskProblem('Only entities can be asked about. Select a person, organization, project or another entity.');
+    },
+    [graph],
   );
 
   /** A theme card: seed with the cluster through the overview hand-off, in memory, then `?cluster=`. */
@@ -829,8 +1072,45 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     [updateParams],
   );
 
-  // What the palette can do right now. "Connect A and B" (GIC-13) and the Lenses (GIC-17) are added here
-  // only when those capabilities exist; they are not stubbed.
+  // Insights (GIC-16): a tap seeds the canvas, rings what it marks and focuses its entity once drawn.
+  const onInsightSelect = useInsightSelect({
+    hasNode: (id) => graph.hasNode(id),
+    setSeeds: onPaletteSetSeeds,
+    setMarked,
+    focusNode: onPaletteSelectNode,
+    announce: setAnnouncement,
+  });
+
+  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+
+  // Path mode ("Connect A <-> B", GIC-13): its state and UI come from the hook.
+  const pathMode = usePathMode({
+    params: searchParams,
+    updateParams,
+    windowClass,
+    inputModality,
+    mode: theme.palette.mode,
+    ontology,
+    relationOptions: relationTypes,
+    asOf,
+    graph,
+    version,
+    mergeSlice: mergeExternalSlice,
+    controls: canvasControls,
+    hasSeed: seeds.length > 0,
+    hasSelection: selection !== null || marked.size >= 2,
+    listView,
+    openEdge: (id) => {
+      setPreviewId(null);
+      setSelected({ kind: 'edge', id });
+    },
+    announce: setAnnouncement,
+  });
+
+  const openConnectPicker = pathMode.openPicker;
+
+  // What the palette can do right now: the page's own commands, Connect A <-> B (GIC-13) and the Lenses,
+  // Undo and Redo (GIC-17).
   const paletteActions = useMemo<PaletteAction[]>(() => {
     if (showStartHere) return [];
     const list: PaletteAction[] = [
@@ -865,12 +1145,23 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         run: toggleListView,
       },
       { id: 'home', label: 'Start here', icon: <HomeOutlinedIcon fontSize="small" />, run: goHome },
+      { id: 'undo', label: 'Undo', disabled: !explorer.canUndo, icon: <UndoIcon fontSize="small" />, run: onUndo },
+      { id: 'redo', label: 'Redo', disabled: !explorer.canRedo, icon: <RedoIcon fontSize="small" />, run: onRedo },
+      ...lensPaletteActions([...builtIn, ...userLenses.lenses], onApplyLens).map((action) => ({
+        ...action,
+        icon: <FilterAltOutlinedIcon fontSize="small" />,
+      })),
     ];
+    list.splice(3, 0, {
+      id: 'connect',
+      label: 'Connect A \u2194 B\u2026',
+      hint: 'Find how two things are connected',
+      icon: <AltRouteIcon fontSize="small" />,
+      run: () => openConnectPicker(),
+    });
     return list;
     // `version`: node labels are read from the in-place graph.
-  }, [showStartHere, selectedNodeId, selectedIsEntity, atCap, listView, hasGraph, webgl, version, graph, onExpand, onHide, toggleListView, goHome]);
-
-  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
+  }, [showStartHere, selectedNodeId, selectedIsEntity, atCap, listView, hasGraph, webgl, version, graph, onExpand, onHide, toggleListView, goHome, openConnectPicker, explorer.canUndo, explorer.canRedo, onUndo, onRedo, builtIn, userLenses.lenses, onApplyLens]);
 
   const title = (
     <>
@@ -894,6 +1185,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onChooseEntity={chooseSeed}
         onChooseTheme={chooseTheme}
         onOpenSearch={openPalette}
+        onConnect={() => pathMode.openPicker()}
         hint={clusterParam && !handoff && !startParam ? CLUSTER_HINT : undefined}
         typeLabel={typeLabel}
       />
@@ -951,6 +1243,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
+          connectAction={pathMode.connectButton}
           onOpenSearch={openPalette}
           onHome={goHome}
           minimapControl={{ shown: mediumMinimap, onToggle: () => setMediumMinimap((on) => !on) }}
@@ -961,7 +1254,87 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
             pinnedCount,
             onUnpinAll: () => canvasControls.current?.unpinAll(),
           }}
+          extraControls={
+            <>
+              <HistoryControls
+                windowClass={windowClass}
+                inputModality={inputModality}
+                canGoBack={trail.canGoBack}
+                canGoForward={trail.canGoForward}
+                onGoBack={trail.goBack}
+                onGoForward={trail.goForward}
+                canUndo={explorer.canUndo}
+                canRedo={explorer.canRedo}
+                onUndo={onUndo}
+                onRedo={onRedo}
+              />
+              <ExplorerLensMenu
+                windowClass={windowClass}
+                inputModality={inputModality}
+                builtIn={builtIn}
+                lenses={userLenses.lenses}
+                activeId={lensParam}
+                modified={lensModified}
+                busy={userLenses.isSaving}
+                error={userLenses.error}
+                onClearError={userLenses.clearError}
+                onApply={onApplyLens}
+                onSave={onSaveLens}
+                onRename={userLenses.rename}
+                onDelete={onDeleteLens}
+                compactOpen={lensListOpen}
+                onCompactClose={() => setLensListOpen(false)}
+                disabled={userLenses.isLoading}
+              />
+            </>
+          }
+          overflowItems={(close) => [
+            <MenuItem
+              key="undo"
+              disabled={!explorer.canUndo}
+              onClick={() => {
+                close();
+                onUndo();
+              }}
+            >
+              <ListItemText>Undo</ListItemText>
+            </MenuItem>,
+            <MenuItem
+              key="redo"
+              disabled={!explorer.canRedo}
+              onClick={() => {
+                close();
+                onRedo();
+              }}
+            >
+              <ListItemText>Redo</ListItemText>
+            </MenuItem>,
+            <MenuItem
+              key="lenses"
+              onClick={() => {
+                close();
+                setLensListOpen(true);
+              }}
+            >
+              <ListItemText>Lenses</ListItemText>
+            </MenuItem>,
+            <MenuItem
+              key="shortcuts"
+              onClick={() => {
+                close();
+                setShortcutsOpen(true);
+              }}
+            >
+              <ListItemText>Keyboard shortcuts</ListItemText>
+            </MenuItem>,
+          ]}
         />
+      )}
+      {crumbs.length > 1 && <FocusBreadcrumbs crumbs={crumbs} windowClass={windowClass} onGoTo={trail.goTo} />}
+      {askProblem && (
+        <Alert severity="warning" onClose={() => setAskProblem(null)}>
+          {askProblem}
+        </Alert>
       )}
       {!webgl && <Alert severity="info">{NO_WEBGL_TEXT}</Alert>}
       {autoList && (
@@ -1002,6 +1375,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         asOf={asOf}
         asOfMin={asOfMin}
         onAsOfChange={onAsOfChange}
+        hideAsOf={!listView}
       />
       {hasGraph && (
         <GraphLegend
@@ -1011,6 +1385,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           onToggleRelation={onToggleRelationType}
         />
       )}
+      <InsightsPanel onSelect={onInsightSelect} typeLabel={typeLabel} inputModality={inputModality} />
     </Box>
   );
 
@@ -1064,6 +1439,26 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   ) : null;
   const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
   const NodeActionsSlot = slots?.NodeActions;
+  // The nodes whose activity the TimeBar overlays: the selection and the marked set.
+  const timeBarSelectedIds = useMemo(
+    () => [...new Set([...(selected?.kind === 'node' ? [selected.id] : []), ...markedVisible])],
+    [selected, markedVisible],
+  );
+
+  // The node menu's extra rows: "Path to…" (GIC-13) and "Ask about this…" (GIC-17).
+  const contextExtras = [
+    pathMode.contextMenuItems(contextTarget, () => setContextTarget(null)),
+    askAvailable && contextTarget ? (
+      <AskSelectionMenuItem
+        key="ask-selection"
+        onClick={() => {
+          const ids = markedVisible.has(contextTarget.id) && markedVisible.size >= 2 ? markedVisible : [contextTarget.id];
+          setContextTarget(null);
+          askAboutNodes(ids);
+        }}
+      />
+    ) : null,
+  ].filter(Boolean);
 
   return (
     <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
@@ -1079,15 +1474,31 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           fillHeight={!listView}
           topBar={topBar}
           facets={facets}
+          timeBar={
+            hasGraph && !loadingFacets ? (
+              <ExplorerTimeBar
+                graph={graph}
+                version={version}
+                visibleIds={visibleIds}
+                selectedIds={timeBarSelectedIds}
+                range={timeRange}
+                onRangeChange={onTimeRangeChange}
+                onDimmedIdsChange={setTimeDimmed}
+                typeLabel={typeLabel}
+              />
+            ) : undefined
+          }
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
-          inspectorOpen={!listView && (selection !== null || multi !== null || connectResults !== null)}
+          inspectorOpen={!listView && (selection !== null || multi !== null || connectResults !== null || pathMode.sheetWanted)}
           onInspectorOpenChange={(open) => {
             if (!open) {
+              pathMode.onSheetDismiss();
               closeInspector();
               if (connectState.open) connectState.dismiss();
             }
           }}
           inspector={
+            pathMode.sheet ?? (
             <ExplorerInspector
               selection={selection}
               multi={multi}
@@ -1112,26 +1523,58 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               onSelectNode={(id) => selectNode(id, true)}
               onShowOnCanvas={(ids) => setRevealed(new Set(ids))}
               onClose={closeInspector}
+              onShowInTimeBar={onShowInTimeBar}
               AskPanel={askAvailable}
               selectionExtraActions={
-                <FindConnectionsButton
-                  entityIds={markedEntityIds}
-                  max={GRAPH_CONNECT_MAX_ENTITIES}
-                  busy={connect.isLoading}
-                  onFind={connectState.findConnections}
-                  touch={inputModality === 'touch'}
-                />
+                <>
+                  <FindConnectionsButton
+                    entityIds={markedEntityIds}
+                    max={GRAPH_CONNECT_MAX_ENTITIES}
+                    busy={connect.isLoading}
+                    onFind={connectState.findConnections}
+                    touch={inputModality === 'touch'}
+                  />
+                  {askAvailable ? (
+                    <AskSelectionButton touch={inputModality === 'touch'} onClick={() => askAboutNodes(markedVisible)} />
+                  ) : null}
+                </>
               }
               connectResults={connectResults}
               extraActions={
-                NodeActionsSlot && selection?.kind === 'node' ? <NodeActionsSlot nodeId={selection.id} /> : undefined
+                selection?.kind === 'node' ? (
+                  <>
+                    {pathMode.pathToAction(selection.id)}
+                    {NodeActionsSlot ? <NodeActionsSlot nodeId={selection.id} /> : null}
+                  </>
+                ) : undefined
+              }
+              edgeExtraActions={
+                askAvailable && selection?.kind === 'edge' ? (
+                  <AskSelectionButton
+                    touch={inputModality === 'touch'}
+                    disabled={askBusy}
+                    onClick={() => {
+                      setAskBusy(true);
+                      setAskProblem(null);
+                      scopeFromEdge(host, graph, selection)
+                        .then((scope) => {
+                          if (scope) setAskScope(scope);
+                          else setAskProblem('Neither end of this relation is an entity, so there is nothing to ask about.');
+                        })
+                        .catch(() => setAskProblem('Could not prepare the question. Try again.'))
+                        .finally(() => setAskBusy(false));
+                    }}
+                  />
+                ) : undefined
               }
             />
+            )
           }
           canvas={({ canvasInsets }) =>
             listView ? (
               hasGraph ? (
                 <Box sx={{ height: '100%', overflowY: 'auto', p: { xs: 1, sm: 1.5 } }}>
+                  {pathMode.inline}
                   <ExplorerListView
                     rows={listRows}
                     typeLabel={typeLabel}
@@ -1167,6 +1610,9 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
                       markedIds={canvasMarked}
+                      dimmedIds={timeDimmed}
+                      pathNodeIds={pathMode.pathNodeIds}
+                      pathEdgeIds={pathMode.pathEdgeIds}
                       layout={layout}
                       seedIds={state.seedIds}
                       pinsKey={pinsKey}
@@ -1200,6 +1646,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                   </Box>
                 )}
                 {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
+                {pathMode.overlay(canvasInsets)}
               </Box>
             )
           }
@@ -1214,7 +1661,11 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onPin={onPin}
         onHide={onHide}
         onMakeSeed={onMakeSeed}
+        extraItems={contextExtras.length > 0 ? contextExtras : undefined}
       />
+      {askAvailable && <AskSelectionPanel AskPanel={askAvailable} scope={askScope} onClose={() => setAskScope(null)} />}
+      <UndoSnackbar message={undoNotice} onUndo={onUndo} onClose={() => setUndoNotice(null)} />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ExplorerCommandPalette
         open={paletteOpen}
         onClose={closePalette}
@@ -1228,6 +1679,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         onSetSeeds={onPaletteSetSeeds}
         actions={paletteActions}
       />
+      {pathMode.picker}
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
       </Box>

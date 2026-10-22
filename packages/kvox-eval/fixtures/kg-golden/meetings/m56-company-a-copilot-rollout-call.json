@@ -1,0 +1,363 @@
+{
+  "id": "m56",
+  "title": "Company A Copilot rollout call",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market",
+    "risks",
+    "copilot-rollout"
+  ],
+  "recordedAt": "2026-10-06T15:00:00Z",
+  "contextText": "Call with Joe from Company A ahead of the pilot review of the Copilot rollout; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Company A Copilot rollout call\n\n**Date:** October 6\n**Attendees:** Maya Ibsen, Joe Hartigan, Nadia Okoye\n\n## Summary\n\nI talked to Joe from Company A about the Copilot rollout at Company A. Joe Hartigan works for Company A, a regional insurer, and sits on the group that will decide whether the rollout goes ahead. Company A is piloting Microsoft Copilot with a single claims team, and the call was meant to hear where Joe stands before the pilot review. The mood was constructive but careful.\n\n## Where Joe stands\n\nJoe is a stakeholder in the Copilot rollout. He said he is skeptical about the Copilot rollout, because the pilot users have not yet shown a time saving that justifies the price. He did not object to the pilot itself, only to widening it before the numbers are in. He asked for a plain comparison of hours saved against the cost per seat.\n\n## The pilot and the product\n\nCompany A is piloting Microsoft Copilot with a single claims team of about twelve people. Microsoft Copilot is offered by Microsoft, and the pilot runs on the trial licences Microsoft granted for ninety days. The Copilot rollout concerns Microsoft Copilot itself and the question of licensing cost. The claims team uses it mostly for drafting letters and summarising long case files.\n\n## What is blocking\n\n- The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off. Joe called it the first thing that has to be settled.\n- Joe expects the licensing cost to be the main subject of the next review, ahead of any question about quality.\n\n## Other attendees\n\nNadia Okoye from the IT team at Company A joined for the last ten minutes and only took notes. She did not state a position on the rollout. Her team will help with the licence assignment if the budget is approved.\n\n## Next steps\n\nMaya will send Joe the pilot usage summary after the second month closes. The group meets again once the pilot review has taken place, and the summary of this call goes to the programme office.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-topic-licensing-cost",
+      "type": "Topic",
+      "label": "Licensing cost",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Company A Copilot rollout call",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Company A Copilot rollout call"
+          }
+        ]
+      },
+      {
+        "key": "maya",
+        "type": "Person",
+        "label": "Maya Ibsen",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maya Ibsen, Joe Hartigan, Nadia Okoye"
+          }
+        ]
+      },
+      {
+        "key": "joe",
+        "type": "Person",
+        "label": "Joe Hartigan",
+        "aliases": [
+          "Joe"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe Hartigan works for Company A"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Okoye",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nadia Okoye from the IT team at Company A"
+          }
+        ]
+      },
+      {
+        "key": "companya",
+        "type": "Organization",
+        "label": "Company A",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe Hartigan works for Company A"
+          }
+        ]
+      },
+      {
+        "key": "microsoft",
+        "type": "Organization",
+        "label": "Microsoft",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Microsoft Copilot is offered by Microsoft"
+          }
+        ]
+      },
+      {
+        "key": "copilot",
+        "type": "Product",
+        "label": "Microsoft Copilot",
+        "aliases": [
+          "Copilot"
+        ],
+        "existingId": null,
+        "props": {
+          "category": "ai_model"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Company A is piloting Microsoft Copilot with a single claims team"
+          }
+        ]
+      },
+      {
+        "key": "rollout",
+        "type": "Project",
+        "label": "Copilot rollout",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "I talked to Joe from Company A about the Copilot rollout at Company A"
+          }
+        ]
+      },
+      {
+        "key": "licensing",
+        "type": "Topic",
+        "label": "Licensing cost",
+        "aliases": [],
+        "existingId": "g-topic-licensing-cost",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the question of licensing cost"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "WORKS_FOR",
+        "from": "joe",
+        "to": "companya",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe Hartigan works for Company A"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "joe",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "stakeholder",
+          "stance": "skeptical"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe is a stakeholder in the Copilot rollout"
+          },
+          {
+            "source": "note",
+            "quote": "He said he is skeptical about the Copilot rollout"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "companya",
+        "to": "copilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "piloting"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Company A is piloting Microsoft Copilot with a single claims team of about twelve people"
+          }
+        ]
+      },
+      {
+        "type": "OFFERED_BY",
+        "from": "copilot",
+        "to": "microsoft",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Microsoft Copilot is offered by Microsoft"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "rollout",
+        "to": "copilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Copilot rollout concerns Microsoft Copilot itself"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "rollout",
+        "to": "licensing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the question of licensing cost"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "rollout",
+        "to": "companya",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Copilot rollout at Company A"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "rollout",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "I talked to Joe from Company A about the Copilot rollout"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "licensing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Joe expects the licensing cost to be the main subject of the next review"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "risk",
+        "subject": "rollout",
+        "owner": null,
+        "counterparty": null,
+        "title": "Licence budget not approved",
+        "statement": "The licence budget isn't approved, so the rollout cannot move past the pilot.",
+        "status": "open",
+        "occurredAt": "2026-10-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {
+          "riskKind": "blocker"
+        },
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The licence budget isn't approved, so the rollout cannot move past the pilot until finance signs it off"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "joe",
+        "owner": "maya",
+        "counterparty": "joe",
+        "title": "Send Joe the pilot usage summary",
+        "statement": "Maya will send Joe the pilot usage summary after the second month closes.",
+        "status": "open",
+        "occurredAt": "2026-10-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "props": {},
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maya will send Joe the pilot usage summary after the second month closes"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "She did not state a position on the rollout",
+        "why": "Nadia Okoye took notes and stated no role and no position, so no INVOLVED_IN and no stance may be proposed for her."
+      }
+    ]
+  }
+}

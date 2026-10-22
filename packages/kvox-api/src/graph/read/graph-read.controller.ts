@@ -36,6 +36,12 @@ import {
   graphConnectRequestSchema,
   type GraphConnectRequest,
   type GraphConnectResponse,
+  GraphActivityResponseDto,
+  graphActivityQuerySchema,
+  GRAPH_ACTIVITY_MAX_IDS,
+  type GraphActivityQuery,
+  type GraphActivityResponse,
+
   graphPathsQuerySchema,
   type GraphPathsQuery,
   type GraphPathsResponse,
@@ -53,6 +59,7 @@ import { GraphConnectService } from './graph-connect.service.js';
 import { GraphEvidenceService } from './graph-evidence.service.js';
 import { GraphNeighborhoodService } from './graph-neighborhood.service.js';
 import { GraphPathsService } from './graph-paths.service.js';
+import { GraphActivityService } from './graph-activity.service.js';
 import { GraphReadService } from './graph-read.service.js';
 import { KvoxAuth } from '../../core/index.js';
 import { GRAPH_READ_PERMISSION } from '../graph.permissions.js';
@@ -85,6 +92,8 @@ export class GraphReadController {
     private readonly neighborhoods: GraphNeighborhoodService,
     private readonly pathFinder: GraphPathsService,
     private readonly connector: GraphConnectService,
+    private readonly activityReader: GraphActivityService,
+
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -317,6 +326,43 @@ export class GraphReadController {
     @CurrentGraphActor() user: GraphActor,
   ): Promise<GraphConnectResponse> {
     return this.connector.connect(user, body);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Activity (the TimeBar)
+  // ---------------------------------------------------------------------------
+
+  @Get('activity')
+  @KvoxAuth(GRAPH_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'Evidence activity over time',
+    description:
+      'Evidence counts per **week** or **month** for the given entities and the relations among ' +
+      'them, stacked by entity type: what the explorer TimeBar draws.\n\n' +
+      '- A citation of an entity counts once for it; a citation of a relation whose two ends are both ' +
+      'in `ids` counts once for each end. `total` is the sum of `byType`.\n' +
+      '- The time of a citation is its transcript\'s `recorded_at` or its note\'s `created_at` ' +
+      '(the meeting date), falling back to the citation\'s own creation time when the source is gone.\n' +
+      '- `from` (inclusive) and `to` (exclusive) restrict the evidence time. Buckets are UTC; weeks start Monday. ' +
+      'Only buckets with evidence are returned.\n' +
+      `- At most **${GRAPH_ACTIVITY_MAX_IDS} ids**; more is a **400**.\n\n` +
+      '`sensitive` person facts contribute nothing. If any id is not one of your readable nodes the ' +
+      'answer is a **404** that does not say which. A query that runs longer than 3 s is a **503** ' +
+      'with `details.reason: "graph_query_timeout"`.',
+  })
+  @ApiQuery({ name: 'ids', required: true, type: String, description: `Comma-separated entity ids, at most ${GRAPH_ACTIVITY_MAX_IDS}` })
+  @ApiQuery({ name: 'bucket', required: false, enum: ['week', 'month'], description: 'Default month' })
+  @ApiQuery({ name: 'from', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiQuery({ name: 'to', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiDataResponse(GraphActivityResponseDto, { description: 'The stacked buckets and the per-entity series' })
+  @ApiResponse({ status: 400, description: 'Invalid parameter, or more than the id limit' })
+  @ApiResponse({ status: 404, description: 'An id is not one of your readable nodes' })
+  @ApiResponse({ status: 503, description: 'The query exceeded its 3 s budget (`graph_query_timeout`)' })
+  async activity(
+    @Query(new ZodValidationPipe(graphActivityQuerySchema)) query: GraphActivityQuery,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<GraphActivityResponse> {
+    return this.activityReader.activity(user, query);
   }
 
   // ---------------------------------------------------------------------------

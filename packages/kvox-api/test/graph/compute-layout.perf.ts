@@ -12,10 +12,12 @@
 // =============================================================================
 
 import { computeLayout, type LayoutInput } from '../../src/graph/layout/compute-layout.js';
+import { sampledBetweenness } from '../../src/graph/layout/betweenness.js';
 import { mulberry32 } from '../../src/graph/layout/seeded-rng.js';
 
-const N = 10_000;
-const E = 40_000;
+// `PERF_NODES=20000` for the GIC-16 (#677) 20k-entity run; edges stay 4 per node.
+const N = Number(process.env.PERF_NODES ?? 10_000);
+const E = N * 4;
 
 const rng = mulberry32(7);
 const nodes = Array.from({ length: N }, (_, i) => ({
@@ -35,6 +37,13 @@ const started = Date.now();
 const out = computeLayout({ nodes, edges }, { seed: 'perf' });
 const ms = Date.now() - started;
 
+// Betweenness alone (already included in `ms`), to show what the connectors cost.
+const index = new Map(nodes.map((n, i) => [n.id, i]));
+const pairs = edges.map((e) => [index.get(e.source) as number, index.get(e.target) as number] as const);
+const btStarted = Date.now();
+const bt = sampledBetweenness(N, pairs, 'perf');
+const betweennessMs = Date.now() - btStarted;
+
 process.stdout.write(
-  `${JSON.stringify({ ms, nodes: out.nodeCount, positions: out.positions.length, clusters: out.clusters.length, modularity: out.modularity })}\n`,
+  `${JSON.stringify({ ms, betweennessMs, betweennessSources: bt.sources, connectors: out.connectors.length, nodes: out.nodeCount, positions: out.positions.length, clusters: out.clusters.length, modularity: out.modularity })}\n`,
 );

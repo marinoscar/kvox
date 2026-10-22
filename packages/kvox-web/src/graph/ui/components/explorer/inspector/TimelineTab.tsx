@@ -44,6 +44,8 @@ export interface TimelineTabProps {
   ontology: GraphOntology | null;
   /** A coarse pointer. */
   touch: boolean;
+  /** Sets the TimeBar's brush to the bucket holding an event (GIC-15). Without it no "Show in TimeBar" link is drawn. */
+  onShowInTimeBar?: (at: string) => void;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface TimelineTabProps {
  *
  * @stability experimental
  */
-export function TimelineTab({ entityId, ontology, touch }: TimelineTabProps) {
+export function TimelineTab({ entityId, ontology, touch, onShowInTimeBar }: TimelineTabProps) {
   const timeline = useGraphTimeline(entityId, { limit: 25 });
   const events = timeline.data.filter((event) => event.item?.sensitivity !== 'sensitive');
   if (timeline.isLoading) {
@@ -88,6 +90,16 @@ export function TimelineTab({ entityId, ontology, touch }: TimelineTabProps) {
               >
                 {timelineEventText(event, ontology)}
               </Typography>
+              {onShowInTimeBar && event.at && (
+                <Button
+                  size="small"
+                  onClick={() => onShowInTimeBar(event.at!)}
+                  sx={{ px: 0.5, minWidth: 0, minHeight: touch ? 44 : undefined }}
+                  aria-label={`Show ${formatPrecisionDate(event.at, event.precision)} in the time bar`}
+                >
+                  Show in TimeBar
+                </Button>
+              )}
             </li>
           ))}
         </Box>

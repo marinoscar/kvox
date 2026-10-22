@@ -9,6 +9,7 @@ export * from './graph-export.js';
 export * from './graph-export-formats.js';
 export * from './graph-forget.js';
 export * from './graph-import.js';
+export * from './graph-insights.js';
 export * from './graph-ontology.js';
 export * from './graph-overview.js';
 export * from './graph-read.js';

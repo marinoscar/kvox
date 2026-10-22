@@ -13,6 +13,7 @@ export { GraphEntityPage, ENTITY_ASK_NEW, ENTITY_ASK_PARAM } from './pages/Graph
 export type {
   GraphEntityAskButtonProps,
   GraphEntityAskPanelProps,
+  GraphEntityAskScope,
   GraphEntityPageProps,
   GraphEntityPageSlots,
 } from './pages/GraphEntityPage.js';
@@ -43,7 +44,17 @@ export { ProposalReviewSheet, REVIEW_SHEET_WIDTH } from './components/review/Pro
 export type { ProposalReviewSheetProps } from './components/review/ProposalReviewSheet.js';
 
 export { useGraphExplorer } from './hooks/useGraphExplorer.js';
-export type { ExpandOnly, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
+export type { RestoredView } from './components/explorer/history/snapshot.js';
+export { LENS_LIMITS, builtInLenses, lensPaletteActions } from './components/explorer/lenses/lensModel.js';
+export type {
+  BuiltInLens,
+  ExplorerLens,
+  LensLayout,
+  LensLimits,
+  LensPaletteAction,
+  LensPin,
+} from './components/explorer/lenses/lensModel.js';
+export type { ExpandOnly, ExternalSliceMerge, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 
 export {
   GraphNotePageProvider,
@@ -103,3 +114,10 @@ export type { GraphLegendProps, LegendTypeFilter } from './components/explorer/G
 export type { ExplorerMode } from './components/explorer/explorerEncoding.js';
 export { legendModel } from './components/explorer/explorerModel.js';
 export type { LegendModel, LegendRelation, LegendType } from './components/explorer/explorerModel.js';
+export { InsightsPanel } from './components/explorer/insights/InsightsPanel.js';
+export type { InsightsPanelProps } from './components/explorer/insights/InsightsPanel.js';
+export { INSIGHT_SECTIONS } from './components/explorer/insights/insightsModel.js';
+export type { InsightSectionKey, InsightSeeds } from './components/explorer/insights/insightsModel.js';
+export { useInsightSelect } from './components/explorer/insights/useInsightSelect.js';
+export type { UseInsightSelectOptions } from './components/explorer/insights/useInsightSelect.js';
+export type { InputModality } from './components/explorer/shell/useInputModality.js';

@@ -53,12 +53,18 @@ export interface ReducerContext {
   hoveredEdgeId?: string | null;
   /** Nodes marked in "Select" mode: drawn highlighted and never dimmed. */
   markedIds?: ReadonlySet<string>;
+  /** Nodes the TimeBar dims: no evidence in the brushed window, or not active in the bar under the pointer (GIC-15). A marked or focused node is never dimmed. */
+  dimmedIds?: ReadonlySet<string> | null;
   /** Ring colour. */
   accent: string;
   /** Fallback for a colour `alpha()` cannot parse. */
   dimColor: string;
   /** Compact window: the seeds and the focus keep their labels while others thin out. */
   compact?: boolean;
+  /** Path mode (GIC-13): the nodes of the shown path. Non-empty: they are lit and labelled, every other node dims (until a focus takes over). */
+  pathNodeIds?: ReadonlySet<string>;
+  /** Path mode (GIC-13): the edges of the shown path, drawn thicker and labelled; every other edge dims. */
+  pathEdgeIds?: ReadonlySet<string>;
 }
 
 /** `colour` at `DIM_OPACITY`; `fallback` when the string is not a colour MUI can read. */
@@ -76,10 +82,37 @@ export function activeFocus(ctx: Pick<ReducerContext, 'focusId' | 'selectedId'>)
   return ctx.focusId ?? ctx.selectedId;
 }
 
+/** Draws a node the TimeBar dims like one outside the focus: faded, unlabelled, unringed. */
+function timeDimmedNode(out: Display, ctx: ReducerContext): Display {
+  return {
+    ...out,
+    color: dimmed(out.color, ctx.dimColor),
+    ...(typeof out.iconColor === 'string' ? { iconColor: dimmed(out.iconColor, ctx.dimColor) } : {}),
+    label: '',
+    forceLabel: false,
+    ringSize: 0,
+    gapSize: 0,
+    zIndex: 0,
+  };
+}
+
 /** Builds the `nodeReducer` for the current interaction. */
 export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Display) => Display {
+  const base = buildFocusNodeReducer(ctx);
+  const faded = ctx.dimmedIds;
+  if (!faded || faded.size === 0) return base;
+  const focus = activeFocus(ctx);
+  return (node, data) => {
+    const out = base(node, data);
+    if (out.hidden === true || !faded.has(node) || node === focus || ctx.markedIds?.has(node) === true || ctx.pathNodeIds?.has(node) === true) return out;
+    return timeDimmedNode(out, ctx);
+  };
+}
+
+function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Display) => Display {
   const focus = activeFocus(ctx);
   const lit: HighlightSet | null = highlightSet(ctx.graph, focus);
+  const pathNodes = ctx.pathNodeIds && ctx.pathNodeIds.size > 0 ? ctx.pathNodeIds : null;
   return (node, data) => {
     if (!ctx.visibleIds.has(node)) return { ...data, hidden: true };
 
@@ -104,6 +137,15 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
       out.zIndex = 4;
     }
     if (!lit) {
+      if (pathNodes && !marked) {
+        if (pathNodes.has(node)) {
+          out.forceLabel = true;
+          out.highlighted = true;
+          out.zIndex = 3;
+          return out;
+        }
+        return dimNode(out, data, ctx.dimColor);
+      }
       if (isStub || (ctx.compact && data.isSeed === true)) out.forceLabel = true;
       return out;
     }
@@ -117,21 +159,40 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
       if (node === focus) out.highlighted = true;
       return out;
     }
-    out.color = dimmed(data.color, ctx.dimColor);
-    if (typeof data.iconColor === 'string') out.iconColor = dimmed(data.iconColor, ctx.dimColor);
-    out.label = '';
-    out.ringSize = 0;
-    out.gapSize = 0;
-    out.zIndex = 0;
-    return out;
+    return dimNode(out, data, ctx.dimColor);
   };
 }
 
-/** Builds the `edgeReducer` for the current interaction. */
+/** A node pushed into the background: dimmed colour, no label, no ring. */
+function dimNode(out: Display, data: Display, dimColor: string): Display {
+  out.color = dimmed(data.color, dimColor);
+  if (typeof data.iconColor === 'string') out.iconColor = dimmed(data.iconColor, dimColor);
+  out.label = '';
+  out.ringSize = 0;
+  out.gapSize = 0;
+  out.zIndex = 0;
+  return out;
+}
+
+/** Builds the `edgeReducer` for the current interaction. An edge with a dimmed end is dimmed too. */
 export function buildEdgeReducer(ctx: ReducerContext): (edge: string, data: Display) => Display {
+  const base = buildFocusEdgeReducer(ctx);
+  const faded = ctx.dimmedIds;
+  if (!faded || faded.size === 0) return base;
+  return (edge, data) => {
+    const out = base(edge, data);
+    if (out.hidden === true) return out;
+    const [source, target] = ctx.graph.extremities(edge);
+    if (!faded.has(source) && !faded.has(target)) return out;
+    return { ...out, color: dimmed(out.color, ctx.dimColor), label: '', zIndex: 0 };
+  };
+}
+
+function buildFocusEdgeReducer(ctx: ReducerContext): (edge: string, data: Display) => Display {
   const focus = activeFocus(ctx);
   const lit = highlightSet(ctx.graph, focus);
   const labelFocusEdges = lit !== null && lit.edges.size <= MAX_FOCUS_EDGE_LABELS;
+  const pathEdges = ctx.pathEdgeIds && ctx.pathEdgeIds.size > 0 ? ctx.pathEdgeIds : null;
   return (edge, data) => {
     const [source, target] = ctx.graph.extremities(edge);
     if (!ctx.visibleIds.has(source) || !ctx.visibleIds.has(target)) return { ...data, hidden: true };
@@ -145,7 +206,18 @@ export function buildEdgeReducer(ctx: ReducerContext): (edge: string, data: Disp
     }
     if (hovered) out.zIndex = 3;
 
-    if (!lit) return out;
+    if (!lit) {
+      if (!pathEdges) return out;
+      if (pathEdges.has(edge)) {
+        out.size = Math.max(Number(data.size ?? 1) * 2, 3);
+        out.zIndex = 3;
+        out.label = typeof data.label === 'string' ? data.label : '';
+        return out;
+      }
+      out.color = dimmed(data.color, ctx.dimColor);
+      out.zIndex = 0;
+      return out;
+    }
     if (lit.nodes.has(source) && lit.nodes.has(target)) {
       out.zIndex = Math.max(Number(out.zIndex ?? 0), lit.edges.has(edge) ? 2 : 1);
       return out;

@@ -557,6 +557,38 @@ describe('the Connections and Timeline tabs', () => {
     expect(within(panel).getByText(/2 quotes/)).toBeInTheDocument();
     expect(calls.every((search) => !search.includes('includeSensitive'))).toBe(true);
   });
+
+  it('"Show in TimeBar" sets the brush to the month of that event (GIC-15)', async () => {
+    server.use(
+      http.get('*/api/graph/entities/:id/timeline', () =>
+        HttpResponse.json({
+          data: {
+            items: [
+              {
+                id: 'm1',
+                eventKind: 'meeting',
+                at: '2026-03-14T15:00:00.000Z',
+                precision: 'day',
+                meeting: { id: gid(70), label: 'Q3 planning', type: 'Meeting' },
+                evidenceIds: [evId(1)],
+                evidenceCount: 1,
+              },
+            ],
+            nextCursor: null,
+            asOf: '2026-09-26T00:00:00.000Z',
+          },
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderExplorer();
+    const { panel } = await openNode(user, 'Joe Rivera');
+    await user.click(within(panel).getByRole('tab', { name: 'Timeline' }));
+    await user.click(await within(panel).findByRole('button', { name: /Show .* in the time bar/ }));
+    await waitFor(() => expect(currentUrl().searchParams.get('from')).toBe('2026-03-01'));
+    expect(currentUrl().searchParams.get('to')).toBe('2026-04-01');
+    expect(await screen.findByTestId('timebar-brush')).toBeInTheDocument();
+  });
 });
 
 describe('the node header and the Overview tab', () => {
@@ -730,7 +762,9 @@ describe('the inspector on a phone', () => {
     for (const name of ['Focus', 'Expand']) {
       expect(within(group).getByRole('button', { name })).toBeInTheDocument();
     }
-    expect(within(group).getByRole('link', { name: 'Open page' })).toBeInTheDocument();
+    // The third action is "Path to…" (GIC-13); Open page moves behind the overflow menu.
+    expect(within(group).getByRole('button', { name: 'Path to…' })).toBeInTheDocument();
+    expect(within(group).queryByRole('link', { name: 'Open page' })).not.toBeInTheDocument();
     // Pin and Hide sit behind the overflow menu on a phone.
     expect(within(group).queryByRole('button', { name: 'Hide' })).not.toBeInTheDocument();
     expect(await within(group).findByText('18 evidence')).toBeInTheDocument();
@@ -739,6 +773,7 @@ describe('the inspector on a phone', () => {
     await user.click(within(group).getByRole('button', { name: 'Node actions' }));
     expect(await screen.findByRole('menuitem', { name: 'Pin' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Hide' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Open page' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
 
     // Half height: the scrollable tab strip.

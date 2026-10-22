@@ -27,6 +27,7 @@ import {
   mockGraphOntology,
   mockProposalDetail,
   neighborhoodFixture,
+  insightsFixture,
   overviewFixture,
   proposalMock,
   timelineFixture,
@@ -122,6 +123,14 @@ export const graphHandlers = [
   // for the pending/stale/none/tooLarge/truncated states.
   http.get(`${API_BASE}/graph/overview`, () => HttpResponse.json({ data: overviewFixture() })),
 
+  // GIC-16 — the Insights panel; suites override for the empty, stale and pending states.
+  http.get(`${API_BASE}/graph/insights`, ({ request }) => {
+    const window = new URL(request.url).searchParams.get('window') ?? '30d';
+    const days = window === '365d' ? 365 : window === '90d' ? 90 : 30;
+    const base = insightsFixture();
+    return HttpResponse.json({ data: { ...base, window: { ...base.window, key: window, days } } });
+  }),
+
   http.post(`${API_BASE}/graph/overview/refresh`, () =>
     HttpResponse.json({ data: { jobId: 'job-layout-1', deduplicated: false } }, { status: 202 }),
   ),
@@ -133,6 +142,13 @@ export const graphHandlers = [
     }
     return HttpResponse.json({ data: entityDetail(id) });
   }),
+
+  // GIC-15: the TimeBar's activity. No dated evidence by default; a test overrides it with `server.use`.
+  http.get(`${API_BASE}/graph/activity`, ({ request }) =>
+    HttpResponse.json({
+      data: { bucket: new URL(request.url).searchParams.get('bucket') ?? 'month', series: [], byEntity: {} },
+    }),
+  ),
 
   http.get(`${API_BASE}/graph/evidence`, ({ request }) => {
     const ids = new URL(request.url).searchParams.get('ids')?.split(',') ?? [];

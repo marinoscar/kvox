@@ -83,6 +83,7 @@ vi.mock('../../src/graph/ui/components/explorer/GraphCanvas.js', () => ({
         data-pixel-ratio-cap={props.budgets?.pixelRatioCap ?? ''}
         data-reveal-right={props.revealInsets?.right ?? 0}
         data-reveal-bottom={props.revealInsets?.bottom ?? 0}
+        data-dimmed={[...(props.dimmedIds ?? [])].sort().join(',')}
       >
         {[...props.visibleIds].sort().map((id) => (
           <button
@@ -315,7 +316,7 @@ describe('GraphExplorerPage — seeding', () => {
 
   it('renders an overview hand-off at once, before the expand returns', async () => {
     useExpand(async (body) => {
-      await delay(150);
+      await delay(600);
       return HttpResponse.json({ data: expandFixture(body) });
     });
     setExplorerHandoff({
@@ -591,9 +592,8 @@ describe('GraphExplorerPage — filters and time', () => {
     expect(bodies[0].as_of).toBe('2026-06-01');
   });
 
-  it('the slider is debounced, writes ?asOf= and rebuilds through expand', async () => {
-    renderExplorer();
-    await canvasReady();
+  it('the list view keeps the as-of slider as the fallback: debounced, writes ?asOf= and rebuilds through expand', async () => {
+    renderExplorer(`/graph/explore?seed=${JOE_ID}&view=list`);
     const slider = await screen.findByRole('slider', { name: 'Show the graph as of' });
     // Wait for the seed's firstSeenAt to widen the range past one step.
     await waitFor(() => expect(Number(slider.getAttribute('aria-valuemax'))).toBeGreaterThan(0));
@@ -615,6 +615,77 @@ describe('GraphExplorerPage — filters and time', () => {
     // "Now" clears it.
     await userEvent.setup().click(screen.getByRole('button', { name: 'Now' }));
     await waitFor(() => expect(currentUrl().searchParams.get('asOf')).toBeNull());
+  });
+
+  describe('the TimeBar (GIC-15)', () => {
+    const activity = (byEntity: Record<string, { start: string; count: number }[]>) =>
+      http.get('*/api/graph/activity', () =>
+        HttpResponse.json({
+          data: {
+            bucket: 'month',
+            series: [
+              { start: '2026-01-01', total: 2, byType: { Person: 2 } },
+              { start: '2026-03-01', total: 3, byType: { Person: 1, Organization: 2 } },
+            ],
+            byEntity,
+          },
+        }),
+      );
+
+    it('replaces the as-of slider on the canvas with the time bar, which asks for the visible nodes', async () => {
+      const asked: URL[] = [];
+      server.use(
+        http.get('*/api/graph/activity', ({ request }) => {
+          asked.push(new URL(request.url));
+          return HttpResponse.json({ data: { bucket: 'month', series: [], byEntity: {} } });
+        }),
+      );
+      renderExplorer();
+      await canvasReady();
+      expect(await screen.findByRole('group', { name: 'Time bar' })).toBeInTheDocument();
+      expect(screen.queryByRole('slider', { name: 'Show the graph as of' })).not.toBeInTheDocument();
+      await waitFor(() => expect(asked.length).toBeGreaterThan(0));
+      const ids = asked.at(-1)!.searchParams.get('ids')!.split(',');
+      expect(ids).toContain(JOE_ID);
+      expect(ids).toContain(ACME_ID);
+    });
+
+    it('?from=&to= shows the graph as of the range end and dims what has no evidence in it', async () => {
+      server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }], [ANA_ID]: [{ start: '2026-01-01', count: 1 }] }));
+      renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-03-01&to=2026-04-01`);
+      const canvas = await canvasReady();
+      // The range end is the as_of of the expand request.
+      expect(bodies[0].as_of).toBe('2026-04-01');
+      // Joe is active in March; everything else visible is dimmed (Ana only in January).
+      await waitFor(() => expect(canvas.getAttribute('data-dimmed')).not.toBe(''));
+      const dimmed = canvas.getAttribute('data-dimmed')!.split(',');
+      expect(dimmed).not.toContain(JOE_ID);
+      expect(dimmed).toContain(ACME_ID);
+      expect(screen.getByTestId('timebar-brush')).toBeInTheDocument();
+    });
+
+    it('brushing a bar writes ?from= and ?to= and clearing removes them', async () => {
+      server.use(activity({ [JOE_ID]: [{ start: '2026-03-01', count: 2 }] }));
+      renderExplorer();
+      await canvasReady();
+      const plot = await screen.findByTestId('timebar-plot');
+      await waitFor(() => expect(screen.getAllByTestId('timebar-column').length).toBeGreaterThan(0));
+      fireEvent.click(plot, { clientX: 2 });
+      await waitFor(() => expect(currentUrl().searchParams.get('from')).toMatch(/^\d{4}-\d{2}-01$/));
+      expect(currentUrl().searchParams.get('to')).toMatch(/^\d{4}-\d{2}-01$/);
+      expect(currentUrl().searchParams.get('asOf')).toBeNull();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear the range' }));
+      await waitFor(() => expect(currentUrl().searchParams.get('from')).toBeNull());
+      expect(currentUrl().searchParams.get('to')).toBeNull();
+    });
+
+    it('ignores a hand-edited range that is not two ordered dates', async () => {
+      renderExplorer(`/graph/explore?seed=${JOE_ID}&from=2026-05-01&to=2026-01-01`);
+      await canvasReady();
+      expect(bodies[0].as_of).toBeUndefined();
+      expect(screen.queryByTestId('timebar-brush')).not.toBeInTheDocument();
+    });
   });
 
   it('Reset reloads from the seeds and Fit resets the camera', async () => {
@@ -1106,7 +1177,7 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(/\d+ results?/));
   });
 
-  it('runs actions, and offers no Connect or Lens entry before those capabilities exist', async () => {
+  it('runs actions, and offers Connect and the lenses (GIC-17)', async () => {
     const user = userEvent.setup();
     renderExplorer();
     await canvasReady();
@@ -1118,7 +1189,9 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     expect(names.join('|')).toMatch(/Hide selection/);
     expect(names.join('|')).toMatch(/Re-layout/);
     expect(names.join('|')).toMatch(/Switch to list/);
-    expect(names.join('|')).not.toMatch(/Connect|Lens/);
+    expect(names.join('|')).toMatch(/Connect A/);
+    expect(names.join('|')).toMatch(/Lens: People network/);
+    expect(names.join('|')).toMatch(/Undo/);
     // No selection yet: Expand is disabled.
     expect(within(actions).getByRole('option', { name: /Expand selection/ })).toHaveAttribute('aria-disabled', 'true');
 

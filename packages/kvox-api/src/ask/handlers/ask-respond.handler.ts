@@ -117,7 +117,13 @@ import {
   ASK_TOOL_RESULT_MAX_TOKENS,
   ASK_WALL_CLOCK_SOFT_MS,
 } from '../ask-limits.js';
-import { ASK_FORCED_ANSWER_LINE, buildAskSystemPrompt, type AskPromptScope } from '../ask-prompt.js';
+import {
+  ASK_FORCED_ANSWER_LINE,
+  buildAskSystemPrompt,
+  type AskPromptScope,
+  type AskPromptSelectionItem,
+} from '../ask-prompt.js';
+import { resolveAskScope } from '../ask-scope.js';
 import { ASK_MODULE_OPTIONS, type ResolvedAskOptions } from '../ask.options.js';
 import { AnswerHold } from '../answer-hold.js';
 import { citationSourceRequest, loadCitationSources, mapCitations, parseCitationMarkers } from '../citations.js';
@@ -445,6 +451,7 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
       countTokens,
     });
     const scope = await this.registerScope(userId, row.conversation.scopeEntityId, toolCtx);
+    const selection = await this.registerSelection(userId, payload.scope, toolCtx);
 
     // 6. History within the input budget: refused, never truncated, when the
     //    question alone does not fit (Notes rule 4).
@@ -464,7 +471,7 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
     });
     const { question, history } = await this.loadHistory(row);
     const fit = fitToBudget({
-      system: buildAskSystemPrompt({ now: toolCtx.now, scope }),
+      system: buildAskSystemPrompt({ now: toolCtx.now, scope, selection }),
       history,
       question,
       availableTokens: budget.availableInputTokens,
@@ -728,6 +735,25 @@ export class AskRespondHandler implements KvoxJobHandler, OnModuleInit {
       throw new AskTurnFailure('other', 'This account can no longer read its knowledge graph.');
     }
     return { id: userId, permissions };
+  }
+
+  /**
+   * The graph selection of this question (GIC-17), as handles. The ids are re-checked against today's
+   * data (readable by the owner, never a sensitive PersonFact); one that vanished is dropped, not an
+   * error. Evidence ids register the SUBJECT they support, never the quote: the agent reads it itself.
+   */
+  private async registerSelection(
+    ownerId: string,
+    scope: AskRespondPayload['scope'],
+    toolCtx: AskToolContext,
+  ): Promise<AskPromptSelectionItem[]> {
+    if (!scope || ((scope.entityIds?.length ?? 0) === 0 && (scope.evidenceIds?.length ?? 0) === 0)) return [];
+    const resolved = await resolveAskScope(this.prisma, ownerId, scope, toolCtx.personalFactsAllowed);
+    return resolved.subjects.map((subject) => ({
+      handle: toolCtx.handles.register({ kind: subject.kind, id: subject.id, label: subject.label }),
+      label: subject.label,
+      type: subject.type,
+    }));
   }
 
   /** The scope entity as `ent1`, when it is still one of the owner's readable entities. */

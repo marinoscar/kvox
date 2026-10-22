@@ -535,6 +535,113 @@ export const graphConnectResponseSchema = z.object({
 export type GraphConnectResponse = z.infer<typeof graphConnectResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// GET /api/graph/activity (GIC-15, #676)
+// ---------------------------------------------------------------------------
+
+/**
+ * The most entity ids one `GET /api/graph/activity` call accepts.
+ *
+ * @stability experimental
+ */
+export const GRAPH_ACTIVITY_MAX_IDS = 300;
+
+/**
+ * The bucket widths of `GET /api/graph/activity`.
+ *
+ * @stability experimental
+ */
+export const GRAPH_ACTIVITY_BUCKETS = ['week', 'month'] as const;
+/**
+ * One bucket width of {@link GRAPH_ACTIVITY_BUCKETS}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityBucket = (typeof GRAPH_ACTIVITY_BUCKETS)[number];
+
+/**
+ * Zod schema for the graph activity query wire shape.
+ *
+ * @stability experimental
+ */
+export const graphActivityQuerySchema = z.object({
+  ids: z
+    .string()
+    .min(1)
+    .max(GRAPH_ACTIVITY_MAX_IDS * 37)
+    .transform((raw) => [...new Set(raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0))])
+    .pipe(z.array(z.uuid()).min(1).max(GRAPH_ACTIVITY_MAX_IDS))
+    .describe(`Comma-separated entity (or item) ids, at most ${GRAPH_ACTIVITY_MAX_IDS}.`),
+  bucket: z.enum(GRAPH_ACTIVITY_BUCKETS).default('month').describe('The bucket width: `week` (starting Monday, UTC) or `month`.'),
+  from: z
+    .union([z.iso.date(), z.iso.datetime({ offset: true })])
+    .optional()
+    .describe('Only evidence dated at or after this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+  to: z
+    .union([z.iso.date(), z.iso.datetime({ offset: true })])
+    .optional()
+    .describe('Only evidence dated before this instant (`YYYY-MM-DD` is 00:00:00Z that day).'),
+});
+/**
+ * The parsed shape of {@link graphActivityQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityQuery = z.infer<typeof graphActivityQuerySchema>;
+
+/**
+ * Zod schema for one stacked bucket of a graph activity response.
+ *
+ * @stability experimental
+ */
+export const graphActivityBucketSchema = z.object({
+  start: z.string().describe('The first day of the bucket, `YYYY-MM-DD` (UTC).'),
+  total: z.number().int().min(0).describe('The sum of `byType`.'),
+  byType: z.record(z.string(), z.number().int().min(0)).describe('Evidence attributions per entity type (or item kind).'),
+});
+/**
+ * The parsed shape of {@link graphActivityBucketSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityBucketRow = z.infer<typeof graphActivityBucketSchema>;
+
+/**
+ * Zod schema for one entity's count in one bucket.
+ *
+ * @stability experimental
+ */
+export const graphActivityPointSchema = z.object({
+  start: z.string().describe('The first day of the bucket, `YYYY-MM-DD` (UTC).'),
+  count: z.number().int().min(1).describe('Evidence attributions of this entity in the bucket.'),
+});
+/**
+ * The parsed shape of {@link graphActivityPointSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityPoint = z.infer<typeof graphActivityPointSchema>;
+
+/**
+ * Zod schema for the graph activity response wire shape.
+ *
+ * @stability experimental
+ */
+export const graphActivityResponseSchema = z.object({
+  bucket: z.enum(GRAPH_ACTIVITY_BUCKETS),
+  series: z.array(graphActivityBucketSchema).describe('Only buckets with evidence, oldest first.'),
+  byEntity: z
+    .record(z.string(), z.array(graphActivityPointSchema))
+    .describe('Per requested id, only buckets with evidence, oldest first. Ids without evidence are absent.'),
+});
+/**
+ * The parsed shape of {@link graphActivityResponseSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityResponse = z.infer<typeof graphActivityResponseSchema>;
+
+
+// ---------------------------------------------------------------------------
 // GET /api/graph/entities/:id/timeline
 // ---------------------------------------------------------------------------
 

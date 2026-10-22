@@ -7064,6 +7064,54 @@ yours to read — a missing, deleted or foreign note, an unviewable transcript, 
 unreadable entity — with one message that never says which · `503`
 `graph_query_timeout`.
 
+##### GET /graph/activity
+
+Evidence counts per week or month for a set of nodes and the relations among
+them, stacked by type: the data of the explorer's **TimeBar** (GIC-15, #676).
+One aggregate SQL statement under the neighbourhood's 3 s budget, driven by the
+`(subject_kind, subject_id)` index of `kg_evidence`; not a queue job.
+
+- **What is counted:** one unit per (citation, node) pair. A citation of an
+  entity counts once for it; a citation of a **relation whose two ends are both
+  in `ids`** counts once for each end; a citation of an item counts for the
+  item, under its kind (`decision`, `commitment`, ...). `byType[T]` sums those
+  units over the nodes of type `T`, and `total` is the sum of `byType`, so a
+  stacked bar always adds up.
+- **When:** a citation is dated by its transcript's `recorded_at` or its note's
+  `created_at` (the meeting date; notes have no separate occurred-at column),
+  falling back to the citation's own `created_at` when the source is gone or
+  soft-deleted. Buckets are **UTC**; a `week` starts on Monday, a `month` on the
+  1st. `from` (inclusive) and `to` (exclusive) restrict that date.
+- **Readable rows only:** entities and relations pass the same predicates as
+  the neighbourhood, items must be readable too, and a `sensitive` person fact
+  contributes nothing (naming one in `ids` is the 404 below).
+- Only buckets with evidence are returned, oldest first; a node with no
+  evidence is absent from `byEntity`.
+
+Query: `ids` (comma-separated uuids, **1 to 300**, required), `bucket`
+(`week` | `month`, default `month`), `from`, `to` (`YYYY-MM-DD` or an ISO 8601
+datetime with an offset, both optional).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "bucket": "month",
+    "series": [
+      { "start": "2026-01-01", "total": 9, "byType": { "Person": 5, "Project": 4 } }
+    ],
+    "byEntity": {
+      "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11": [ { "start": "2026-01-01", "count": 3 } ]
+    }
+  }
+}
+```
+
+**Errors:** `400` an invalid parameter or **more than 300 ids** · `401` · `403`
+without `graph:read` · `404` any id is not one of your readable nodes (the
+message never says which; another owner's id, an unreviewed or merged entity
+and a sensitive person fact all answer it) · `503` `graph_query_timeout`.
+
 ##### GET /graph/entities/{id}/timeline
 
 Everything dated about this entity, newest first, keyset-paginated by
@@ -7286,6 +7334,69 @@ unattended edits. **Never a `409`.**
 
 **Errors:** `401` · `403` without `graph:write`.
 
+#### Graph insights
+
+What deserves a look in your own graph, in plain language — issue #677
+(GIC-16), epic #661. Design: [`docs/specs/ontology.md`](specs/ontology.md) §22.3.
+
+##### GET /graph/insights
+
+Query: `window` — `30d` (default), `90d` or `365d`; anything else is `400`.
+
+- **`themes`** (≤ 8) and **`connectors`** (≤ 8) come from the latest
+  `kg.graph_layout` snapshot, with labels joined **live**. They carry `status`,
+  `pending`, `stale`, `tooLarge` and `computedAt` exactly as
+  `GET /graph/overview` does and are **never recomputed here**; this request
+  queues nothing. `connectorsReady: false` means the snapshot predates
+  connectors (refresh the overview). `connectors[].score` orders the list; show
+  `reason`, never the number.
+- **`rising`** (≤ 10): entities (not meetings) mentioned in at least 3 notes or
+  recordings in the window and at least 2x as many as in the window before.
+- **`fadingTies`** (≤ 10): pairs of people or organizations with at least 3
+  evidence rows before the window and none in it.
+- **`openRisks`** (≤ 10): open Risk items, high severity first.
+
+The window queries run inside the graph's 3 s budget. Sensitive person facts
+never contribute, and no quote text is returned.
+
+**Requires:** `graph:read`. Always your own graph, so there is no id to `404`.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "window": { "key": "30d", "days": 30, "from": "2026-09-22T00:00:00.000Z", "previousFrom": "2026-08-23T00:00:00.000Z" },
+    "status": "ready", "pending": false, "computedAt": "2026-10-20T08:00:00.000Z",
+    "stale": false, "tooLarge": false, "connectorsReady": true,
+    "themes": [
+      { "clusterId": 0, "label": "Acme Corp", "labelEntityId": "0b6f…", "size": 12,
+        "typeCounts": { "Person": 7 }, "memberSample": [{ "id": "0b6f…", "label": "Joe Rivera", "type": "Person", "degree": 5 }] }
+    ],
+    "connectors": [
+      { "entity": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "score": 0.42,
+        "clusters": [{ "id": 0, "label": "Acme Corp" }, { "id": 1, "label": "Globex" }],
+        "reason": "Joe Rivera connects the Acme Corp group and the Globex group." }
+    ],
+    "rising": [
+      { "entity": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" }, "count": 5, "previous": 1,
+        "reason": "Came up in 5 conversations in the last 30 days, up from 1 before." }
+    ],
+    "fadingTies": [
+      { "from": { "id": "0b6f…", "label": "Joe Rivera", "type": "Person" }, "to": { "id": "1c2d…", "label": "Ana Diaz", "type": "Person" },
+        "relationTypes": ["KNOWS"], "lastEvidenceAt": "2026-05-01T00:00:00.000Z", "evidenceBefore": 4,
+        "reason": "You haven't discussed Joe Rivera with Ana Diaz since May 1, 2026." }
+    ],
+    "openRisks": [
+      { "id": "9a8b…", "title": "Legal review", "statement": "Legal has not signed off", "severity": "high",
+        "subject": { "id": "0b6f…", "label": "Project Atlas", "type": "Project" }, "occurredAt": "2026-09-10T00:00:00.000Z" }
+    ]
+  }
+}
+```
+
+**Errors:** `400` unknown `window` · `401` · `403` without `graph:read` · `503`
+with `details.reason: "graph_query_timeout"` when a window query exceeds 3 s.
+
 ### Ask
 
 Saved conversations with the read-only graph agent — issue #376, epic #348.
@@ -7445,6 +7556,23 @@ tools. The request never waits for the answer.
 `content` is trimmed, 1–4000 characters. `model` is optional (≤ 200
 characters).
 
+**Optional `scope`** (GIC-17, #678; the explorer's "Ask about this selection"):
+```json
+{ "content": "How is Joe involved?", "scope": { "entityIds": ["<uuid>"], "evidenceIds": ["<uuid>"] } }
+```
+Both lists are optional, at most **50** ids each. They are **starting handles,
+never evidence**: the turn names the selected entities, and the entity, item or
+relation each evidence id supports, to the agent, which still retrieves quotes
+through its own tools (the graph is never a retrieval source on its own,
+ontology spec §9.4, §22.4). Every id must be the asker's and readable — an
+entity that is not merged away, of a non-personal type; evidence whose subject
+is such an entity, a timeline item that is not a `sensitive` PersonFact, or a
+readable relation. Any id that is missing, another user's, or not readable
+answers **one** `404` (`Selection not found`) for the whole request, before
+anything is written. A `sensitive` PersonFact never enters the prompt. The ids
+travel in the job payload and are re-checked when the job runs; one that has
+vanished since is dropped.
+
 **Response:** `202`
 ```json
 { "data": { "userMessage": { "role": "user", "status": "complete", "…": "…" },
@@ -7458,7 +7586,8 @@ its `updatedAt` moves.
 **Order of checks:** the conversation (`404`) → the resolver (`409`
 `graph_disabled` / `ai_not_configured` / `ai_key_missing` /
 `model_lacks_capability`, `400` for a model this deployment does not permit —
-the same bodies every connected-knowledge route answers) → one transaction
+the same bodies every connected-knowledge route answers) → the `scope`, when
+sent (`404`) → one transaction
 that writes both messages and the job, where a second running turn is
 refused by `ask_messages_one_running_turn_uniq_idx` → `409 ask_turn_running`
 (decided by the index at insert, so two tabs racing get exactly one `202`).

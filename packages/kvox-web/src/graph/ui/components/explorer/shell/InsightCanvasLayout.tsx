@@ -105,6 +105,10 @@ export interface InsightCanvasContextValue {
   sheetSnap: SheetSnap;
   /** Moves focus to the canvas. */
   focusCanvas: () => void;
+  /** Whether the compact time-bar strip is expanded to its full height. */
+  timeBarExpanded: boolean;
+  /** Expands or collapses the compact time-bar strip. */
+  setTimeBarExpanded: (expanded: boolean) => void;
 }
 
 const InsightCanvasContext = createContext<InsightCanvasContextValue | null>(null);
@@ -290,8 +294,17 @@ export function InsightCanvasLayout(props: InsightCanvasLayoutProps) {
   }, [showInspector, compact, medium, sheetHeight]);
 
   const context = useMemo<InsightCanvasContextValue>(
-    () => ({ windowClass, inputModality, budgets, canvasInsets, sheetSnap, focusCanvas }),
-    [windowClass, inputModality, budgets, canvasInsets, sheetSnap, focusCanvas],
+    () => ({
+      windowClass,
+      inputModality,
+      budgets,
+      canvasInsets,
+      sheetSnap,
+      focusCanvas,
+      timeBarExpanded,
+      setTimeBarExpanded,
+    }),
+    [windowClass, inputModality, budgets, canvasInsets, sheetSnap, focusCanvas, timeBarExpanded],
   );
 
   const onInspectorKeyDown = (event: KeyboardEvent<HTMLElement>) => {

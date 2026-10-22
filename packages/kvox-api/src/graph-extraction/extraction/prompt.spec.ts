@@ -21,6 +21,8 @@ import {
   assembleExtractionPrompt,
   formatTimestamp,
   rowCapsRule,
+  stakeholderExampleRule,
+  subjectBoundaryRule,
 } from './prompt.js';
 
 describe('assembleExtractionPrompt (#363)', () => {
@@ -150,6 +152,11 @@ describe('assembleExtractionPrompt (#363)', () => {
     expect(assembleExtractionPrompt(buildExtractionContext(input))).toMatchSnapshot();
   });
 
+  it('matches the snapshot of the core + work system prompt, which carries Topic, Product, Risk, the stakeholder relations and the worked example (#665)', () => {
+    const { systemPrompt } = assembleExtractionPrompt(makeContext(), { entities: 28, relations: 28, items: 24 });
+    expect(systemPrompt).toMatchSnapshot();
+  });
+
   // ===========================================================================
   // The row-cap rule (#435)
   // ===========================================================================
@@ -258,11 +265,78 @@ describe('assembleExtractionPrompt (#363)', () => {
     const caps = extractionRowCaps(16_000, 'none');
     const { systemPrompt } = assembleExtractionPrompt(makeContext(), caps);
 
-    // Rule 10 is the Context rule and 11 the affiliation rule (#440), so the cap is 12.
+    // Rule 10 is the Context rule, 11 the affiliation rule (#440), 12 the Project/Topic/Product
+    // boundary and 13 the worked example (#665), so the cap is 14.
     expect(systemPrompt).toContain(
-      `12. Propose at most ${caps.entities} entities, ${caps.relations} relations and ${caps.items} facts. ` +
+      `14. Propose at most ${caps.entities} entities, ${caps.relations} relations and ${caps.items} facts. ` +
         'If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.',
     );
+  });
+
+  // ===========================================================================
+  // Project vs Topic vs Product, and the worked example (#665, epic #661)
+  // ===========================================================================
+
+  it('tells the model how Project, Topic and Product differ, naming only the offered types', () => {
+    const rule = subjectBoundaryRule(makeContext());
+    expect(rule).toBe(
+      'Keep Project, Topic and Product apart: a Project is an effort with an owner and an expected end, a Topic is a recurring subject with neither, ' +
+        'a Product is a named thing an organization buys, uses or offers; "Copilot rollout" is a Project, "licensing cost" is a Topic, "Microsoft Copilot" is a Product. ' +
+        'Never fold two of them into one row.',
+    );
+    // Guidance narrows the offer: a type that is not offered is not named.
+    const noProduct = makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Project', 'Topic', 'Person'], instructions: '' } });
+    expect(subjectBoundaryRule(noProduct)).toContain('Keep Project and Topic apart');
+    expect(subjectBoundaryRule(noProduct)).not.toContain('Product');
+    // One type of the three is no boundary; `core` alone offers only Topic.
+    expect(subjectBoundaryRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
+  });
+
+  it('adds the Joe / Company A / Copilot example once, with the role, stance and stage vocabulary the registry offers', () => {
+    const { systemPrompt } = assembleExtractionPrompt(makeContext());
+    expect(systemPrompt.split('Worked example:')).toHaveLength(2);
+    const example = stakeholderExampleRule(makeContext())!;
+    expect(example).toContain('"Joe from Company A said he\'s skeptical about the Copilot rollout; Company A is piloting Microsoft Copilot; the licence budget isn\'t approved."');
+    for (const row of [
+      'Person Joe',
+      'Organization Company A',
+      'Organization Microsoft',
+      'Product Microsoft Copilot',
+      'Project Copilot rollout',
+      'Joe WORKS_FOR Company A',
+      'Joe INVOLVED_IN Copilot rollout {role: stakeholder, stance: skeptical}',
+      'Company A USES Microsoft Copilot {stage: piloting}',
+      'Microsoft Copilot OFFERED_BY Microsoft',
+      'Copilot rollout CONCERNS Microsoft Copilot',
+      'the fact Risk "licence budget not approved" {riskKind: blocker} about Copilot rollout',
+    ]) {
+      expect(example).toContain(row);
+    }
+    // The vocabularies come from the registry's own relation lines.
+    expect(systemPrompt).toContain('role (select, sponsor|owner|lead|contributor|stakeholder|approver|end_user|advisor)');
+    expect(systemPrompt).toContain('stance (select, champion|supportive|neutral|skeptical|resistant)');
+    expect(systemPrompt).toContain('stage (select, evaluating|piloting|rolling_out|adopted|retired)');
+    // Stance is only proposed when the source states one.
+    expect(example).toContain('Propose a stance only when the source states one');
+  });
+
+  it('derives the example from the offered schema: nothing outside it is named', () => {
+    const without = (relationTypes: string[]) =>
+      stakeholderExampleRule(makeContext({ guidance: { pinnedEntityIds: [], relationTypes, instructions: '' } }));
+    // INVOLVED_IN and USES are the example's spine; either missing, no example.
+    expect(without(['INVOLVED_IN'])).toBeNull();
+    expect(without(['USES'])).toBeNull();
+    // Only the spine: no vendor, no employer, no CONCERNS.
+    const spine = without(['INVOLVED_IN', 'USES'])!;
+    expect(spine).not.toContain('OFFERED_BY');
+    expect(spine).not.toContain('WORKS_FOR');
+    expect(spine).not.toContain('CONCERNS');
+    expect(spine).not.toContain('Organization Microsoft');
+    // `core` alone has no Project, Product or INVOLVED_IN.
+    expect(stakeholderExampleRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
+    // Without the Risk fact kind the example does not name a Risk.
+    const noRisk = makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Person', 'Organization', 'Project', 'Product', 'Commitment'], instructions: '' } });
+    expect(stakeholderExampleRule(noRisk) ?? '').not.toContain('Risk');
   });
 
   it('rowCapsRule only names the sections this run actually offers', () => {

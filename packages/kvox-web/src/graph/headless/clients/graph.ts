@@ -68,6 +68,13 @@ import type {
   GraphConflictReason as ContractGraphConflictReason,
   UserGuidance as ContractUserGuidance,
   GraphOverviewRefreshResponse as ContractGraphOverviewRefreshResponse,
+  GraphInsightsResponse as ContractGraphInsightsResponse,
+  GraphInsightsWindow as ContractGraphInsightsWindow,
+  GraphInsightTheme as ContractGraphInsightTheme,
+  GraphInsightConnector as ContractGraphInsightConnector,
+  GraphInsightRising as ContractGraphInsightRising,
+  GraphInsightFadingTie as ContractGraphInsightFadingTie,
+  GraphInsightRisk as ContractGraphInsightRisk,
   GraphExportFormat as ContractGraphExportFormat,
   CreateGraphExportResponse as ContractCreateGraphExportResponse,
   TopicsPromoteRequestResponse as ContractTopicsPromoteRequestResponse,
@@ -1240,6 +1247,98 @@ export function postGraphConnect(
   if (params.asOf) body.as_of = params.asOf;
   if (params.maxHops !== undefined) body.maxHops = params.maxHops;
   return kvoxPost<GraphConnectResponse>(host, '/graph/connect', body, { signal });
+}
+
+/**
+ * The most ids one {@link getGraphActivity} call may ask about.
+ *
+ * @stability experimental
+ */
+export const GRAPH_ACTIVITY_MAX_IDS = 300;
+
+/**
+ * The bucket width of {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export type GraphActivityBucket = 'week' | 'month';
+
+/**
+ * Options for {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityParams {
+  /** The entity (or item) ids to count evidence for, at most {@link GRAPH_ACTIVITY_MAX_IDS}. */
+  ids: readonly string[];
+  /** The bucket width. The API default is `month`. */
+  bucket?: GraphActivityBucket;
+  /** Only evidence dated at or after this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  from?: string;
+  /** Only evidence dated before this date (`YYYY-MM-DD`) or ISO 8601 instant. */
+  to?: string;
+}
+
+/**
+ * One stacked bucket of {@link GraphActivityResponse.series}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityBucketRow {
+  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  start: string;
+  /** The sum of `byType`. */
+  total: number;
+  /** Evidence attributions per entity type or item kind. */
+  byType: Record<string, number>;
+}
+
+/**
+ * One entity's evidence count in one bucket.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityPoint {
+  /** The first day of the bucket, `YYYY-MM-DD` (UTC). */
+  start: string;
+  /** Evidence attributions of the entity in the bucket. */
+  count: number;
+}
+
+/**
+ * The answer of {@link getGraphActivity}.
+ *
+ * @stability experimental
+ */
+export interface GraphActivityResponse {
+  /** The bucket width that was applied. */
+  bucket: GraphActivityBucket;
+  /** Stacked buckets with evidence, oldest first. */
+  series: GraphActivityBucketRow[];
+  /** Per requested id, the buckets with evidence, oldest first. Ids without evidence are absent. */
+  byEntity: Record<string, GraphActivityPoint[]>;
+}
+
+/**
+ * Fetches the evidence activity of a set of nodes over time (`GET /api/graph/activity`).
+ * A node the caller cannot read rejects with a 404; more than {@link GRAPH_ACTIVITY_MAX_IDS} ids with a 400;
+ * a query that takes too long, with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphActivity(
+  host: KvoxWebHost,
+  params: GraphActivityParams,
+  signal?: AbortSignal,
+): Promise<GraphActivityResponse> {
+  const query = buildGraphQuery({
+    ids: params.ids,
+    bucket: params.bucket,
+    from: params.from,
+    to: params.to,
+  });
+  return kvoxGet<GraphActivityResponse>(host, `/graph/activity${query}`, { signal });
+
 }
 
 /**
@@ -2745,6 +2844,68 @@ export type GraphOverviewRefreshResponse = ContractGraphOverviewRefreshResponse;
  */
 export function getGraphOverview(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphOverview> {
   return kvoxGet<GraphOverview>(host, '/graph/overview', { signal });
+}
+
+/**
+ * The window `GET /api/graph/insights` looks back over: `30d`, `90d` or `365d`. Alias of the contract's `GraphInsightsWindow`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightsWindow = ContractGraphInsightsWindow;
+
+/**
+ * What deserves a look in the caller's graph: themes, connectors, rising entities, fading ties and open risks. Alias of the contract's `GraphInsightsResponse`.
+ *
+ * @stability experimental
+ */
+export type GraphInsights = ContractGraphInsightsResponse;
+
+/**
+ * One theme of {@link GraphInsights}: an overview cluster. Alias of the contract's `GraphInsightTheme`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightTheme = ContractGraphInsightTheme;
+
+/**
+ * One connector of {@link GraphInsights}: an entity that links separate groups. Alias of the contract's `GraphInsightConnector`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightConnector = ContractGraphInsightConnector;
+
+/**
+ * One rising entity of {@link GraphInsights}. Alias of the contract's `GraphInsightRising`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightRising = ContractGraphInsightRising;
+
+/**
+ * One fading tie of {@link GraphInsights}: two people or organizations who stopped coming up together. Alias of the contract's `GraphInsightFadingTie`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightFadingTie = ContractGraphInsightFadingTie;
+
+/**
+ * One open risk of {@link GraphInsights}. Alias of the contract's `GraphInsightRisk`.
+ *
+ * @stability experimental
+ */
+export type GraphInsightRisk = ContractGraphInsightRisk;
+
+/**
+ * Fetches the graph insights (`GET /api/graph/insights`, `graph:read`) for a window (default `30d`). Themes and connectors come from the stored layout snapshot and are never recomputed; a window query over the API's time budget rejects with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function getGraphInsights(
+  host: KvoxWebHost,
+  window: GraphInsightsWindow = '30d',
+  signal?: AbortSignal,
+): Promise<GraphInsights> {
+  return kvoxGet<GraphInsights>(host, `/graph/insights${buildGraphQuery({ window })}`, { signal });
 }
 
 /**

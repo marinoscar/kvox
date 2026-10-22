@@ -38,6 +38,8 @@ import { KgGraphLayoutHandler } from './layout/graph-layout.handler.js';
 import { GraphLayoutListener } from './layout/graph-layout.listener.js';
 import { GraphOverviewController } from './layout/graph-overview.controller.js';
 import { GraphOverviewService } from './layout/graph-overview.service.js';
+import { GraphInsightsController } from './layout/graph-insights.controller.js';
+import { GraphInsightsService } from './layout/graph-insights.service.js';
 import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener.js';
 import { KgMigrateEnqueuer } from './migrate/kg-migrate.enqueuer.js';
 import { KgMigrateHandler } from './migrate/kg-migrate.handler.js';
@@ -50,6 +52,7 @@ import { GraphEvidenceService } from './read/graph-evidence.service.js';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service.js';
 import { GraphConnectService } from './read/graph-connect.service.js';
 import { GraphPathsService } from './read/graph-paths.service.js';
+import { GraphActivityService } from './read/graph-activity.service.js';
 import { GraphReadController } from './read/graph-read.controller.js';
 import { GraphReadService } from './read/graph-read.service.js';
 import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler.js';
@@ -144,6 +147,7 @@ export class GraphModule {
       GraphAttributeDefsController,
       GraphReadController,
       GraphOverviewController,
+      GraphInsightsController,
       EntityBriefController,
     ];
 
@@ -170,6 +174,8 @@ export class GraphModule {
       GraphNeighborhoodService,
       GraphPathsService,
       GraphConnectService,
+      GraphActivityService,
+
       GraphEvidenceService,
       // Speaker naming -> Person + IDENTIFIED_AS, via `kg.speaker_link` (#356).
       SpeakerLinkReconciler,
@@ -181,6 +187,8 @@ export class GraphModule {
       KgGraphLayoutHandler,
       GraphLayoutListener,
       GraphOverviewService,
+      // `GET /graph/insights`: themes, connectors (from the snapshot), rising, fading ties, open risks (GIC-16).
+      GraphInsightsService,
       // The entity brief, and `kg.entity_digest` (the only producer of brief prose) (#372).
       EntityViewService,
       EntityDigestEnqueuer,
@@ -233,6 +241,8 @@ export class GraphModule {
         GraphNeighborhoodService,
         GraphPathsService,
         GraphConnectService,
+        GraphActivityService,
+
         GraphEvidenceService,
         EntityBriefService,
         EntityDigestEnqueuer,

@@ -19,6 +19,9 @@ import {
   graphPathsResponseSchema,
   graphConnectRequestSchema,
   graphConnectResponseSchema,
+  graphActivityQuerySchema,
+  graphActivityResponseSchema,
+
 } from '@marinoscar/kvox-contract/graph';
 
 // The wire schemas of this file moved to `@marinoscar/kvox-contract/graph` (issue #488, file `graph/graph-read.ts`); they are re-exported below so no importer changes.
@@ -80,6 +83,12 @@ export {
   type GraphConnectRequest,
   type GraphConnectResponse,
   type GraphConnectPath,
+  GRAPH_ACTIVITY_MAX_IDS,
+  graphActivityQuerySchema,
+  type GraphActivityQuery,
+  graphActivityResponseSchema,
+  type GraphActivityResponse,
+
 } from '@marinoscar/kvox-contract/graph';
 
 export class ListEntitiesQueryDto extends createZodDto(listEntitiesQuerySchema) {}
@@ -100,3 +109,6 @@ export class GraphPathsQueryDto extends createZodDto(graphPathsQuerySchema) {}
 export class GraphPathsResponseDto extends createZodDto(graphPathsResponseSchema) {}
 export class GraphConnectRequestDto extends createZodDto(graphConnectRequestSchema) {}
 export class GraphConnectResponseDto extends createZodDto(graphConnectResponseSchema) {}
+export class GraphActivityQueryDto extends createZodDto(graphActivityQuerySchema) {}
+export class GraphActivityResponseDto extends createZodDto(graphActivityResponseSchema) {}
+

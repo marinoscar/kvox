@@ -7,9 +7,10 @@
 //
 //   sameMeeting     the candidate is IDENTIFIED_AS a speaker of this transcript,
 //                   or ATTENDED one of the context meetings
-//   orgCoMention    the candidate WORKS_FOR / HAS_ROLE an organization that is
-//                   also in the context (by id, or by a normalized name/alias of
-//                   an organization the proposal mentions but has not linked)
+//   orgCoMention    the candidate WORKS_FOR / HAS_ROLE an organization — or, for
+//                   a Product, is OFFERED_BY one (#665) — that is also in the
+//                   context (by id, or by a normalized name/alias of an
+//                   organization the proposal mentions but has not linked)
 //   sharedNeighbour ≥ 1 common 1-hop neighbour with the context's co-mentioned
 //                   entities (organizations and meetings excluded — they already
 //                   carry their own, stronger signal above)
@@ -25,7 +26,14 @@ import { KVOX_PRISMA } from '../../ports/index.js';
 
 export const RECENCY_WINDOW_DAYS = 90;
 const LIVE = ['accepted', 'edited'] as const;
-const ORG_RELATIONS = ['WORKS_FOR', 'HAS_ROLE'];
+
+/**
+ * The relations that tie an entity to the organization it belongs to: a
+ * Person's employer or role, a Product's vendor (#665). An organization on
+ * either side of a mention and a candidate is the strongest context signal
+ * resolution has, whatever the entity's type.
+ */
+export const ORG_AFFILIATION_RELATIONS: readonly string[] = ['WORKS_FOR', 'HAS_ROLE', 'OFFERED_BY'];
 
 export interface ResolutionContext {
   speakerPersonIds: ReadonlySet<string>;
@@ -79,7 +87,7 @@ export class ContextFeatureService {
     for (const r of relations) {
       const fromCandidate = r.fromId !== null && out.has(r.fromId);
       if (fromCandidate && r.type === 'ATTENDED' && ctx.meetingIds.has(r.toId)) out.get(r.fromId!)!.sameMeeting = true;
-      if (fromCandidate && ORG_RELATIONS.includes(r.type)) {
+      if (fromCandidate && ORG_AFFILIATION_RELATIONS.includes(r.type)) {
         const set = orgTargets.get(r.fromId!) ?? new Set<string>();
         set.add(r.toId);
         orgTargets.set(r.fromId!, set);

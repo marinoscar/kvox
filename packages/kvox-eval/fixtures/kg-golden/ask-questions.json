@@ -454,5 +454,28 @@
       "answerNone": ["Jamie Fontaine"],
       "notFound": true
     }
+  },
+  {
+    "id": "q43",
+    "category": "multi_hop",
+    "fixtures": ["m56", "m57"],
+    "question": "How is Joe connected to the Copilot rollout?",
+    "expected": {
+      "entities": ["Joe Hartigan", "Copilot rollout"],
+      "answerAll": [["Company A"], ["skeptical"], ["stakeholder"]],
+      "citeFrom": ["m56#note", "m57#note"],
+      "citeFromMin": 2
+    }
+  },
+  {
+    "id": "q44",
+    "category": "relationship",
+    "fixtures": ["m56"],
+    "question": "Which vendor offers Microsoft Copilot, and which organization is piloting it?",
+    "expected": {
+      "entities": ["Microsoft Copilot", "Microsoft", "Company A"],
+      "answerAll": [["Microsoft"], ["Company A"], ["piloting", "pilot"]],
+      "citeFrom": ["m56#note"]
+    }
   }
 ]

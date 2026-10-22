@@ -71,8 +71,14 @@ export interface ExplorerToolbarProps {
   /** Nodes marked in Select mode. */
   markedCount: number;
   onClearMarked: () => void;
+  /** The path-mode button, "Connect A and B" (GIC-13). */
+  connectAction?: ReactNode;
   /** The layout control (GIC-07): inline when roomy, inside the overflow menu on a phone. Omitted: none. */
   layoutControl?: Omit<LayoutMenuProps, 'disabled'>;
+  /** Controls other stories add beside the layout control (history arrows, the lens button, GIC-17); drawn inline on every window class. */
+  extraControls?: ReactNode;
+  /** Rows other stories add to the phone's overflow menu (Undo, Redo, Lenses, Shortcuts), after the layout choices. Each row calls `close` itself. */
+  overflowItems?: (close: () => void) => ReactNode[];
   disabled?: boolean;
   /** Opens the command palette (GIC-09). Omitted: no search field. */
   onOpenSearch?: () => void;
@@ -103,7 +109,10 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
     onToggleSelectMode,
     markedCount,
     onClearMarked,
+    connectAction,
     layoutControl,
+    extraControls,
+    overflowItems,
     disabled,
     onOpenSearch,
     onHome,
@@ -211,8 +220,10 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
       {search}
       {marked}
       {selectToggle}
+      {connectAction}
       {compact ? (
         <>
+          {extraControls}
           {count}
           <IconButton
             aria-label="More actions"
@@ -278,11 +289,13 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
               <Divider key="layout-top" />,
               ...layoutMenuItems(layoutControl, () => setMenuAnchor(null)),
             ]}
+            {overflowItems && [<Divider key="extra-top" />, ...overflowItems(() => setMenuAnchor(null))]}
           </Menu>
         </>
       ) : (
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           {home}
+          {extraControls}
           {layoutControl && <LayoutMenu {...layoutControl} disabled={listView} />}
           {minimapToggle}
           <Button size="small" startIcon={<CenterFocusStrongIcon />} onClick={onFit} disabled={listView}>
