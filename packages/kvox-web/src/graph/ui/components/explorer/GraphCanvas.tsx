@@ -226,6 +226,8 @@ export interface GraphCanvasProps {
   previewId?: string | null;
   /** Nodes marked in "Select" mode; drawn highlighted whatever else is dimmed. */
   markedIds?: ReadonlySet<string>;
+  /** Nodes the TimeBar dims (no evidence in the brushed window, or not active in the bar under the pointer). A selected, focused or marked node is never dimmed. */
+  dimmedIds?: ReadonlySet<string> | null;
   /** `touch` enables long-press and the enlarged pick radius and disables hover and double-click expand. Default `pointer`. */
   inputModality?: 'touch' | 'pointer';
   /** The performance budgets of the window (GIC-08). Omitted: sigma's defaults, as the overview uses it. */
@@ -372,6 +374,7 @@ function CanvasBehaviour({
   selectedId,
   previewId = null,
   markedIds,
+  dimmedIds,
   layout,
   seedIds,
   pinsKey,
@@ -506,6 +509,7 @@ function CanvasBehaviour({
   // --- Reducers: visibility, highlight, rings, labels ---------------------------
   // View state goes through the reducers, never into the graph's attributes.
   const markedKey = markedIds ? [...markedIds].sort().join(',') : '';
+  const dimmedKey = dimmedIds ? [...dimmedIds].sort().join(',') : '';
   // Hover is for a pointer; a touch preview takes its place on a phone.
   const focusId = (touch ? null : hoverId) ?? previewId;
   const constrained = budgets?.constrained ?? compact;
@@ -517,6 +521,7 @@ function CanvasBehaviour({
       focusId,
       hoveredEdgeId,
       markedIds: new Set(markedKey ? markedKey.split(',') : []),
+      dimmedIds: dimmedKey ? new Set(dimmedKey.split(',')) : null,
       accent: theme.palette.primary.main,
       dimColor,
       compact: constrained,
@@ -534,6 +539,7 @@ function CanvasBehaviour({
     focusId,
     hoveredEdgeId,
     markedKey,
+    dimmedKey,
     dimColor,
     constrained,
     theme.palette.primary.main,

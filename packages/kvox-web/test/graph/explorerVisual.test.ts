@@ -477,6 +477,41 @@ describe('reducers', () => {
     expect(hoverWins(ACME_ID, nodeData(state, ACME_ID)).highlighted).toBeUndefined();
   });
 
+  it('the TimeBar dims the nodes outside the window and the edges touching them, never a marked or focused node (GIC-15)', () => {
+    const state = loaded();
+    const faded = new Set([ANA_ID, JOE_ID]);
+    const node = buildNodeReducer({ ...context(state, { focusId: JOE_ID }), dimmedIds: faded, markedIds: new Set([ACME_ID]) });
+    const idle = buildNodeReducer(context(state, { focusId: JOE_ID }));
+
+    // Dimmed: faded, unlabelled, unringed.
+    const ana = node(ANA_ID, nodeData(state, ANA_ID));
+    expect(ana.label).toBe('');
+    expect(ana.ringSize).toBe(0);
+    expect(String(ana.color)).toContain(`${DIM_OPACITY}`);
+    // The focused node keeps its look even when listed.
+    expect(node(JOE_ID, nodeData(state, JOE_ID))).toEqual(idle(JOE_ID, nodeData(state, JOE_ID)));
+
+    const timeOnly = buildNodeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
+    const plain = buildNodeReducer(context(state));
+    expect(timeOnly(ANA_ID, nodeData(state, ANA_ID)).label).toBe('');
+    expect(timeOnly(ACME_ID, nodeData(state, ACME_ID))).toEqual(plain(ACME_ID, nodeData(state, ACME_ID)));
+    // A marked node is never dimmed.
+    const marked = buildNodeReducer({ ...context(state), dimmedIds: new Set([ACME_ID]), markedIds: new Set([ACME_ID]) });
+    expect(marked(ACME_ID, nodeData(state, ACME_ID)).highlighted).toBe(true);
+
+    // An edge with a dimmed end is dimmed; the rest are untouched. Nothing dimmed: identical to no TimeBar.
+    const edge = buildEdgeReducer({ ...context(state), dimmedIds: new Set([ANA_ID]) });
+    const plainEdge = buildEdgeReducer(context(state));
+    for (const id of state.graph.edges()) {
+      const [a, b] = state.graph.extremities(id);
+      const out = edge(id, edgeData(state, id));
+      if (a === ANA_ID || b === ANA_ID) expect(String(out.color)).toContain(`${DIM_OPACITY}`);
+      else expect(out).toEqual(plainEdge(id, edgeData(state, id)));
+    }
+    const none = buildNodeReducer({ ...context(state), dimmedIds: new Set() });
+    expect(none(ANA_ID, nodeData(state, ANA_ID))).toEqual(plain(ANA_ID, nodeData(state, ANA_ID)));
+  });
+
   it('hides nodes and edges outside visibleIds, without dimming the rest', () => {
     const state = loaded();
     const visibleIds = new Set(state.graph.nodes().filter((id) => id !== ANA_ID));

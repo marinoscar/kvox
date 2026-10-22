@@ -124,6 +124,8 @@ export interface ExplorerInspectorProps {
   onShowOnCanvas: (ids: string[]) => void;
   /** Close the inspector (and unmark a multi-selection). */
   onClose: () => void;
+  /** Set the TimeBar's brush to the bucket holding an event's date (`YYYY-MM-DD` or an ISO instant): the Timeline tab's "Show in TimeBar". Without it the link is not offered. */
+  onShowInTimeBar?: (at: string) => void;
   /** The host's Ask panel (the entity page's `AskPanel` slot); without it there is no Ask tab. */
   AskPanel?: ComponentType<GraphEntityAskPanelProps>;
   /** Actions from later stories ("Path to…", GIC-13), drawn as the third primary action. */
@@ -179,6 +181,7 @@ function SelectedInspector(props: ExplorerInspectorProps & { selection: Explorer
     onSelectNode,
     onShowOnCanvas,
     onClose,
+    onShowInTimeBar,
     AskPanel,
     extraActions,
   } = props;
@@ -312,7 +315,7 @@ function SelectedInspector(props: ExplorerInspectorProps & { selection: Explorer
               />
             )}
             {active === 'timeline' && node && isEntity && (
-              <TimelineTab entityId={node.id} ontology={ontology} touch={touch} />
+              <TimelineTab entityId={node.id} ontology={ontology} touch={touch} onShowInTimeBar={onShowInTimeBar} />
             )}
             {active === 'ask' && node && isEntity && AskPanel && (
               <AskTab

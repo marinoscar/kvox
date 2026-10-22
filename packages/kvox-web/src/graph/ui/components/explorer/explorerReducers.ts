@@ -53,6 +53,8 @@ export interface ReducerContext {
   hoveredEdgeId?: string | null;
   /** Nodes marked in "Select" mode: drawn highlighted and never dimmed. */
   markedIds?: ReadonlySet<string>;
+  /** Nodes the TimeBar dims: no evidence in the brushed window, or not active in the bar under the pointer (GIC-15). A marked or focused node is never dimmed. */
+  dimmedIds?: ReadonlySet<string> | null;
   /** Ring colour. */
   accent: string;
   /** Fallback for a colour `alpha()` cannot parse. */
@@ -76,8 +78,34 @@ export function activeFocus(ctx: Pick<ReducerContext, 'focusId' | 'selectedId'>)
   return ctx.focusId ?? ctx.selectedId;
 }
 
+/** Draws a node the TimeBar dims like one outside the focus: faded, unlabelled, unringed. */
+function timeDimmedNode(out: Display, ctx: ReducerContext): Display {
+  return {
+    ...out,
+    color: dimmed(out.color, ctx.dimColor),
+    ...(typeof out.iconColor === 'string' ? { iconColor: dimmed(out.iconColor, ctx.dimColor) } : {}),
+    label: '',
+    forceLabel: false,
+    ringSize: 0,
+    gapSize: 0,
+    zIndex: 0,
+  };
+}
+
 /** Builds the `nodeReducer` for the current interaction. */
 export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Display) => Display {
+  const base = buildFocusNodeReducer(ctx);
+  const faded = ctx.dimmedIds;
+  if (!faded || faded.size === 0) return base;
+  const focus = activeFocus(ctx);
+  return (node, data) => {
+    const out = base(node, data);
+    if (out.hidden === true || !faded.has(node) || node === focus || ctx.markedIds?.has(node) === true) return out;
+    return timeDimmedNode(out, ctx);
+  };
+}
+
+function buildFocusNodeReducer(ctx: ReducerContext): (node: string, data: Display) => Display {
   const focus = activeFocus(ctx);
   const lit: HighlightSet | null = highlightSet(ctx.graph, focus);
   return (node, data) => {
@@ -127,8 +155,21 @@ export function buildNodeReducer(ctx: ReducerContext): (node: string, data: Disp
   };
 }
 
-/** Builds the `edgeReducer` for the current interaction. */
+/** Builds the `edgeReducer` for the current interaction. An edge with a dimmed end is dimmed too. */
 export function buildEdgeReducer(ctx: ReducerContext): (edge: string, data: Display) => Display {
+  const base = buildFocusEdgeReducer(ctx);
+  const faded = ctx.dimmedIds;
+  if (!faded || faded.size === 0) return base;
+  return (edge, data) => {
+    const out = base(edge, data);
+    if (out.hidden === true) return out;
+    const [source, target] = ctx.graph.extremities(edge);
+    if (!faded.has(source) && !faded.has(target)) return out;
+    return { ...out, color: dimmed(out.color, ctx.dimColor), label: '', zIndex: 0 };
+  };
+}
+
+function buildFocusEdgeReducer(ctx: ReducerContext): (edge: string, data: Display) => Display {
   const focus = activeFocus(ctx);
   const lit = highlightSet(ctx.graph, focus);
   const labelFocusEdges = lit !== null && lit.edges.size <= MAX_FOCUS_EDGE_LABELS;

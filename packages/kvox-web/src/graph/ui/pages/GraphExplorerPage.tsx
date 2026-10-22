@@ -84,6 +84,8 @@ import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/ex
 import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
 import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
 import { SeedSearch } from '../components/explorer/SeedSearch.js';
+import { ExplorerTimeBar } from '../components/explorer/timebar/ExplorerTimeBar.js';
+import { formatDay, parseRangeParams, rangeForInstant, type TimeRange } from '../components/explorer/timebar/timeAxis.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
   domainOptions,
@@ -197,7 +199,15 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   const seedParam = searchParams.get('seed');
   const seeds = useMemo(() => parseSeeds(seedParam), [seedParam]);
   const seedKey = seeds.join(',');
-  const asOf = parseAsOfParam(searchParams.get('asOf'));
+  // The TimeBar's brush (`from`, `to`): the graph is shown as of its end (GIC-15).
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
+  const timeRange = useMemo(() => parseRangeParams(fromParam, toParam), [fromParam, toParam]);
+  const asOf = timeRange
+    ? timeRange.to <= formatDay(Date.now())
+      ? timeRange.to
+      : null
+    : parseAsOfParam(searchParams.get('asOf'));
   const typesParam = searchParams.get('types');
   const clusterParam = searchParams.get('cluster');
   const viewParam = searchParams.get('view');
@@ -590,6 +600,31 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
     });
   }, []);
 
+  const onTimeRangeChange = useCallback(
+    (next: TimeRange | null) => {
+      updateParams((params) => {
+        if (next) {
+          params.set('from', next.from);
+          params.set('to', next.to);
+          params.delete('asOf');
+        } else {
+          params.delete('from');
+          params.delete('to');
+        }
+      });
+    },
+    [updateParams],
+  );
+  // The nodes the TimeBar dims (nothing in the brushed window, or inactive in the bar under the pointer).
+  const [timeDimmed, setTimeDimmed] = useState<ReadonlySet<string> | null>(null);
+  const onShowInTimeBar = useCallback(
+    (at: string) => {
+      const next = rangeForInstant(at);
+      if (next) onTimeRangeChange(next);
+    },
+    [onTimeRangeChange],
+  );
+
   const onAsOfChange = useCallback(
     (value: string | null) => {
       updateParams((params) => {
@@ -792,6 +827,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
         asOf={asOf}
         asOfMin={asOfMin}
         onAsOfChange={onAsOfChange}
+        hideAsOf={!listView}
       />
       {hasGraph && (
         <GraphLegend
@@ -824,6 +860,11 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
   }, [multi, deselect]);
   const askAvailable = host.features().graphEnabled === true ? slots?.AskPanel : undefined;
   const NodeActionsSlot = slots?.NodeActions;
+  // The nodes whose activity the TimeBar overlays: the selection and the marked set.
+  const timeBarSelectedIds = useMemo(
+    () => [...new Set([...(selected?.kind === 'node' ? [selected.id] : []), ...markedVisible])],
+    [selected, markedVisible],
+  );
 
   return (
     <Box sx={{ py: { xs: 1, sm: 2 }, minWidth: 0 }}>
@@ -839,6 +880,20 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
           fillHeight={!listView}
           topBar={topBar}
           facets={facets}
+          timeBar={
+            hasGraph && !loadingFacets ? (
+              <ExplorerTimeBar
+                graph={graph}
+                version={version}
+                visibleIds={visibleIds}
+                selectedIds={timeBarSelectedIds}
+                range={timeRange}
+                onRangeChange={onTimeRangeChange}
+                onDimmedIdsChange={setTimeDimmed}
+                typeLabel={typeLabel}
+              />
+            ) : undefined
+          }
           facetsActiveCount={activeFilterCount({ hiddenTypes, hiddenRelationTypes: hiddenRelations, asOf })}
           inspectorOpen={!listView && (selection !== null || multi !== null)}
           onInspectorOpenChange={(open) => {
@@ -869,6 +924,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
               onSelectNode={(id) => selectNode(id, true)}
               onShowOnCanvas={(ids) => setRevealed(new Set(ids))}
               onClose={closeInspector}
+              onShowInTimeBar={onShowInTimeBar}
               AskPanel={askAvailable}
               extraActions={
                 NodeActionsSlot && selection?.kind === 'node' ? <NodeActionsSlot nodeId={selection.id} /> : undefined
@@ -913,6 +969,7 @@ export function GraphExplorerPage({ slots }: GraphExplorerPageProps = {}) {
                       selectedId={selected?.kind === 'node' ? selected.id : null}
                       previewId={previewId}
                       markedIds={canvasMarked}
+                      dimmedIds={timeDimmed}
                       layout={layout}
                       seedIds={state.seedIds}
                       pinsKey={pinsKey}

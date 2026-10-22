@@ -134,6 +134,13 @@ export const graphHandlers = [
     return HttpResponse.json({ data: entityDetail(id) });
   }),
 
+  // GIC-15: the TimeBar's activity. No dated evidence by default; a test overrides it with `server.use`.
+  http.get(`${API_BASE}/graph/activity`, ({ request }) =>
+    HttpResponse.json({
+      data: { bucket: new URL(request.url).searchParams.get('bucket') ?? 'month', series: [], byEntity: {} },
+    }),
+  ),
+
   http.get(`${API_BASE}/graph/evidence`, ({ request }) => {
     const ids = new URL(request.url).searchParams.get('ids')?.split(',') ?? [];
     return HttpResponse.json({ data: { items: evidenceFixtures.filter((ev) => ids.includes(ev.id)) } });
