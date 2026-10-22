@@ -132,6 +132,11 @@ export interface ExplorerInspectorProps {
   extraActions?: ReactNode;
   /** Actions for the Selection view from later stories ("Find connections", "Ask about selection"). */
   selectionExtraActions?: ReactNode;
+  /**
+   * The answer to "What connects these" (GIC-14): drawn in the Selection view, and on its own
+   * when nothing is selected (a notes entry opens the explorer with it).
+   */
+  connectResults?: ReactNode;
   /** Actions drawn above the edge overview ("Ask about this selection", GIC-17). */
   edgeExtraActions?: ReactNode;
 }
@@ -156,11 +161,12 @@ export function ExplorerInspector(props: ExplorerInspectorProps) {
         onSelectNode={props.onSelectNode}
         onClose={props.onClose}
         extraActions={props.selectionExtraActions}
+        results={props.connectResults}
         touch={touch}
       />
     );
   }
-  if (!selection) return null;
+  if (!selection) return props.connectResults ?? null;
   // Keyed by the selection, so a new node never shows the previous one's tabs, detail or quotes.
   return <SelectedInspector key={`${selection.kind}:${selection.id}`} {...props} selection={selection} />;
 }

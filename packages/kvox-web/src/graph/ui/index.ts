@@ -61,10 +61,14 @@ export {
   GraphNoteHeaderActions,
   GraphNoteProposalActions,
   GraphNoteSelectionActions,
+  GraphNotesSelectionActions,
   graphNotePageSlots,
   graphNotesLibrarySlots,
   useGraphNoteAsideWidth,
+  useGraphNotesSelectionEnabled,
 } from './slots/GraphNoteSlots.js';
+export { exploreNotesPath, NoteExploreActions, ExploreConnectionsButton } from './components/NoteExploreActions.js';
+export type { NoteExploreActionsProps, ExploreConnectionsButtonProps } from './components/NoteExploreActions.js';
 export type { GraphNotePageProviderProps } from './slots/GraphNoteSlots.js';
 export { GraphSearchPrefix } from './slots/GraphSearchPrefix.js';
 export type { GraphSearchPrefixProps } from './slots/GraphSearchPrefix.js';

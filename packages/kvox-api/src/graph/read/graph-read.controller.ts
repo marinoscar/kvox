@@ -29,11 +29,19 @@ import {
   GRAPH_PATHS_MAX_HOPS,
   GRAPH_PATHS_MAX_K,
   GraphPathsResponseDto,
+  GRAPH_CONNECT_MAX_DOCUMENTS,
+  GRAPH_CONNECT_MAX_ENTITIES,
+  GraphConnectRequestDto,
+  GraphConnectResponseDto,
+  graphConnectRequestSchema,
+  type GraphConnectRequest,
+  type GraphConnectResponse,
   GraphActivityResponseDto,
   graphActivityQuerySchema,
   GRAPH_ACTIVITY_MAX_IDS,
   type GraphActivityQuery,
   type GraphActivityResponse,
+
   graphPathsQuerySchema,
   type GraphPathsQuery,
   type GraphPathsResponse,
@@ -47,6 +55,7 @@ import {
   type MentionsQuery,
   type MentionsResponse,
 } from './dto/graph-read.dto.js';
+import { GraphConnectService } from './graph-connect.service.js';
 import { GraphEvidenceService } from './graph-evidence.service.js';
 import { GraphNeighborhoodService } from './graph-neighborhood.service.js';
 import { GraphPathsService } from './graph-paths.service.js';
@@ -82,7 +91,9 @@ export class GraphReadController {
     private readonly evidence: GraphEvidenceService,
     private readonly neighborhoods: GraphNeighborhoodService,
     private readonly pathFinder: GraphPathsService,
+    private readonly connector: GraphConnectService,
     private readonly activityReader: GraphActivityService,
+
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -280,6 +291,41 @@ export class GraphReadController {
     @CurrentGraphActor() user: GraphActor,
   ): Promise<GraphPathsResponse> {
     return this.pathFinder.paths(user, query);
+  }
+
+  @Post('connect')
+  @KvoxAuth(GRAPH_READ_PERMISSION)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'What connects these notes',
+    description:
+      'The entities two or more of your notes, transcripts or entities have in common, and the ' +
+      'paths that bridge them. A read, even though it is a `POST`: the id lists do not fit a query string.\n\n' +
+      `Give \`noteIds\` and \`transcriptIds\` (each up to ${GRAPH_CONNECT_MAX_DOCUMENTS}) and \`entityIds\` ` +
+      `(up to ${GRAPH_CONNECT_MAX_ENTITIES}); at least **two** distinct inputs in total, else a **400**; ` +
+      'a single note or transcript alone is allowed and answers "what this note touches" ' +
+      '(its entities in `inputs`, a `slice`, no `shared`).\n\n' +
+      '- A note or transcript touches the entities of its `linked` / `new` mentions; an entity touches ' +
+      'itself and its one-hop neighbours.\n' +
+      '- **`shared`** lists the entities touched by two or more inputs, widest coverage first, then ' +
+      'most mentions. No overlap is an empty list, not an error.\n' +
+      '- **`paths`** bridge pairs of inputs through at most `maxHops` (1-3, default 2) edges, best first, ' +
+      'by the same search as `GET /graph/paths`; `slice` holds the shared entities, their neighbourhood and the bridges.\n' +
+      '- `truncated` says a cap or the time budget cut the answer short.\n\n' +
+      '`sensitive` person facts are never included. If **any** input is not one of yours to read the ' +
+      'whole request is a **404** that does not say which. A query that runs longer than 3 s is a ' +
+      '**503** with `details.reason: "graph_query_timeout"`.',
+  })
+  @ApiBody({ type: GraphConnectRequestDto })
+  @ApiDataResponse(GraphConnectResponseDto, { description: 'The shared entities, bridges and their slice' })
+  @ApiResponse({ status: 400, description: 'Fewer than two distinct inputs, too many inputs, or an invalid `as_of`' })
+  @ApiResponse({ status: 404, description: 'At least one input is not yours or not readable' })
+  @ApiResponse({ status: 503, description: 'The search exceeded its 3 s budget (`graph_query_timeout`)' })
+  async connect(
+    @Body(new ZodValidationPipe(graphConnectRequestSchema)) body: GraphConnectRequest,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<GraphConnectResponse> {
+    return this.connector.connect(user, body);
   }
 
   // ---------------------------------------------------------------------------

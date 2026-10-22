@@ -1132,6 +1132,124 @@ export function getGraphPaths(
 }
 
 /**
+ * The most notes (and, separately, transcripts) one {@link postGraphConnect} call accepts.
+ *
+ * @stability experimental
+ */
+export const GRAPH_CONNECT_MAX_DOCUMENTS = 10;
+/**
+ * The most entities one {@link postGraphConnect} call accepts.
+ *
+ * @stability experimental
+ */
+export const GRAPH_CONNECT_MAX_ENTITIES = 20;
+
+/**
+ * Options for {@link postGraphConnect}: two or more inputs, or a single note or transcript.
+ *
+ * @stability experimental
+ */
+export interface GraphConnectParams {
+  /** Notes to connect, at most {@link GRAPH_CONNECT_MAX_DOCUMENTS}. */
+  noteIds?: readonly string[];
+  /** Transcripts to connect, at most {@link GRAPH_CONNECT_MAX_DOCUMENTS}. */
+  transcriptIds?: readonly string[];
+  /** Entities to connect, at most {@link GRAPH_CONNECT_MAX_ENTITIES}. */
+  entityIds?: readonly string[];
+  /** Evaluate the graph as of this date (`YYYY-MM-DD`) or ISO 8601 instant. Omitted means now. */
+  asOf?: string;
+  /** The longest bridge path, in edges, 1 to 3. The API default is 2. */
+  maxHops?: number;
+}
+
+/**
+ * One input of a {@link GraphConnectResponse}.
+ *
+ * @stability experimental
+ */
+export interface GraphConnectInput {
+  /** What the input is. */
+  kind: 'note' | 'transcript' | 'entity';
+  /** The note, transcript or entity id. */
+  id: string;
+  /** The note or transcript title, or the entity label. */
+  title: string;
+  /** The entities the input touches, the strongest first (capped by the API). */
+  entityIds: string[];
+}
+
+/**
+ * An entity touched by two or more inputs.
+ *
+ * @stability experimental
+ */
+export interface GraphConnectShared {
+  /** The shared entity. */
+  entityId: string;
+  /** The inputs that touch it; at least two. */
+  inputIds: string[];
+  /** Mentions (or relations, for an entity input) across those inputs. */
+  mentionCount: number;
+}
+
+/**
+ * One bridge between two inputs, as ids into {@link GraphConnectResponse.slice}.
+ *
+ * @stability experimental
+ */
+export interface GraphConnectPath {
+  /** The input the path starts at. */
+  fromInput: string;
+  /** The input the path ends at. */
+  toInput: string;
+  /** The nodes in walking order. */
+  nodeIds: string[];
+  /** The edge between each consecutive pair of nodes, by id in the slice. */
+  edgeIds: string[];
+  /** The path score, as `GraphPath.score`; higher is stronger. */
+  score: number;
+}
+
+/**
+ * The answer of {@link postGraphConnect}.
+ *
+ * @stability experimental
+ */
+export interface GraphConnectResponse {
+  /** The inputs, as the API resolved them. */
+  inputs: GraphConnectInput[];
+  /** Entities touched by two or more inputs: widest coverage first, then mention count. Empty when nothing overlaps. */
+  shared: GraphConnectShared[];
+  /** Bridges between inputs, best first. */
+  paths: GraphConnectPath[];
+  /** The shared entities with their neighbourhood, and the bridges. */
+  slice: GraphSlice;
+  /** `true` when a cap or the time budget cut the answer short. */
+  truncated: boolean;
+}
+
+/**
+ * Asks what two or more notes, transcripts or entities have in common and how they bridge
+ * (`POST /api/graph/connect`). A read, even as a `POST`. An input the caller cannot read rejects with
+ * a 404 that names none; a search that takes too long, with a 503 `graph_query_timeout`.
+ *
+ * @stability experimental
+ */
+export function postGraphConnect(
+  host: KvoxWebHost,
+  params: GraphConnectParams,
+  signal?: AbortSignal,
+): Promise<GraphConnectResponse> {
+  const body: Record<string, unknown> = {};
+  if (params.noteIds?.length) body.noteIds = [...params.noteIds];
+  if (params.transcriptIds?.length) body.transcriptIds = [...params.transcriptIds];
+  if (params.entityIds?.length) body.entityIds = [...params.entityIds];
+  if (params.asOf) body.as_of = params.asOf;
+  if (params.maxHops !== undefined) body.maxHops = params.maxHops;
+  return kvoxPost<GraphConnectResponse>(host, '/graph/connect', body, { signal });
+}
+
+/**
  * The most ids one {@link getGraphActivity} call may ask about.
  *
  * @stability experimental
@@ -1220,6 +1338,7 @@ export function getGraphActivity(
     to: params.to,
   });
   return kvoxGet<GraphActivityResponse>(host, `/graph/activity${query}`, { signal });
+
 }
 
 /**

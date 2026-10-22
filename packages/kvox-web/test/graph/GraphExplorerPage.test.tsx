@@ -865,11 +865,11 @@ describe('GraphExplorerPage — the touch model (GIC-08)', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Inspector' })).not.toBeInTheDocument());
   });
 
-  it('a pointer still opens on one click, and shows no Select toggle', async () => {
+  it('a pointer still opens on one click; Select is the lasso tool, off until pressed', async () => {
     const user = userEvent.setup();
     renderExplorer();
     const canvas = await canvasReady();
-    expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select', pressed: false })).toBeInTheDocument();
     await user.click(within(canvas).getByRole('button', { name: 'Acme Corp' }));
     expect(canvas).toHaveAttribute('data-preview', '');
     expect(await screen.findByRole('group', { name: 'Acme Corp' })).toBeInTheDocument();

@@ -50,6 +50,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
+import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
@@ -58,9 +59,12 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
+import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined';
+import ToggleButton from '@mui/material/ToggleButton';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
@@ -160,21 +164,70 @@ export function SourceLine({ note }: { note: NoteListItem }) {
   );
 }
 
+/** How long a finger must rest on a note card to start selecting (ms), and how far it may wander (px). */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 10;
+
+/** Selection state of one row (GIC-14): absent when the host offers no multi-select. */
+interface RowSelection {
+  /** Selection mode is on: the row shows a checkbox and a click toggles it. */
+  selecting: boolean;
+  /** This note is selected. */
+  selected: boolean;
+  /** The limit is reached and this note is not selected, so it cannot be added. */
+  blocked: boolean;
+  /** Toggle this note. */
+  onToggle: () => void;
+  /** A long press on a touch screen: start selecting with this note. */
+  onLongPress: () => void;
+}
+
 function NoteRow({
   note,
   dense,
   onOpen,
+  selection,
 }: {
   note: NoteListItem;
   dense: boolean;
   onOpen: () => void;
+  selection?: RowSelection;
 }) {
   const inFlight = isNoteInFlight(note.status);
+  const selecting = selection?.selecting === true;
 
-  return (
-    <Card variant="outlined" component="li" sx={{ listStyle: 'none' }}>
+  // A touch long-press starts selection mode; the click the finger-up then sends is swallowed.
+  const press = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const fired = useRef(false);
+  const cancelPress = useCallback(() => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  }, []);
+  useEffect(() => cancelPress, [cancelPress]);
+  const onPointerDown = (event: ReactPointerEvent) => {
+    if (!selection || selecting || event.pointerType !== 'touch') return;
+    fired.current = false;
+    cancelPress();
+    press.current = {
+      x: event.clientX,
+      y: event.clientY,
+      timer: window.setTimeout(() => {
+        press.current = null;
+        fired.current = true;
+        selection.onLongPress();
+      }, LONG_PRESS_MS),
+    };
+  };
+  const onPointerMove = (event: ReactPointerEvent) => {
+    const current = press.current;
+    if (current && Math.hypot(event.clientX - current.x, event.clientY - current.y) > LONG_PRESS_SLOP_PX) cancelPress();
+  };
+
+  const body = (
+    <>
       <CardActionArea
-        onClick={onOpen}
+        onClick={selecting ? selection?.onToggle : onOpen}
+        tabIndex={selecting ? -1 : undefined}
         sx={{
           p: dense ? 1.25 : 2,
           display: 'flex',
@@ -228,8 +281,67 @@ function NoteRow({
       <Box sx={{ px: dense ? 1.25 : 2, pb: dense ? 1 : 1.5, pt: 0 }}>
         <SourceLine note={note} />
       </Box>
+    </>
+  );
+
+  if (!selection) {
+    return (
+      <Card variant="outlined" component="li" sx={{ listStyle: 'none' }}>
+        {body}
+      </Card>
+    );
+  }
+  return (
+    <Card
+      variant="outlined"
+      component="li"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={cancelPress}
+      onPointerCancel={cancelPress}
+      onPointerLeave={cancelPress}
+      onClickCapture={(event) => {
+        if (fired.current) {
+          fired.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onContextMenu={(event) => {
+        // A long press also asks for the browser's menu on Android; selecting replaces it.
+        if (fired.current || press.current !== null) event.preventDefault();
+      }}
+      sx={{
+        listStyle: 'none',
+        borderColor: selection.selected ? 'primary.main' : undefined,
+        borderWidth: selection.selected ? 2 : undefined,
+        '@media (pointer: coarse)': { WebkitTouchCallout: 'none', userSelect: 'none' },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
+        {selecting && (
+          <Box sx={{ display: 'flex', alignItems: 'center', pl: 0.5 }}>
+            <Checkbox
+              checked={selection.selected}
+              disabled={selection.blocked}
+              onChange={selection.onToggle}
+              slotProps={{ input: { 'aria-label': `Select ${note.title}` } }}
+              sx={{ p: 1.25 }}
+            />
+          </Box>
+        )}
+        <Box sx={{ flex: 1, minWidth: 0 }}>{body}</Box>
+      </Box>
     </Card>
   );
+}
+
+/** The most notes a library selection holds unless the host says otherwise. */
+const DEFAULT_SELECTION_LIMIT = 10;
+
+/** The default of the `useSelectionEnabled` slot: no multi-select. */
+function useNeverEnabled(): boolean {
+  return false;
 }
 
 /**
@@ -253,6 +365,28 @@ export interface NotesLibraryViewProps {
  */
 export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
   const SearchPrefix = slots?.SearchPrefix;
+  const SelectionActions = slots?.SelectionActions;
+  // Multi-select (GIC-14) exists only when the host fills the slots AND its hook says the feature is on.
+  const useSelectionEnabled = slots?.useSelectionEnabled ?? useNeverEnabled;
+  const selectionAvailable = useSelectionEnabled() && SelectionActions !== undefined;
+  const selectionLimit = slots?.selectionLimit ?? DEFAULT_SELECTION_LIMIT;
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setSelectedIds([]);
+  }, []);
+  const toggleSelected = useCallback(
+    (id: string) =>
+      setSelectedIds((current) =>
+        current.includes(id)
+          ? current.filter((value) => value !== id)
+          : current.length >= selectionLimit
+            ? current
+            : [...current, id],
+      ),
+    [selectionLimit],
+  );
   const theme = useTheme();
   const navigate = useNavigate();
   const hasPermission = useKvoxPermissionCheck();
@@ -388,6 +522,19 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
+        {selectionAvailable && !searchMode && (
+          <ToggleButton
+            value="select"
+            size="small"
+            selected={selecting}
+            aria-pressed={selecting}
+            onChange={() => (selecting ? stopSelecting() : setSelecting(true))}
+            sx={{ textTransform: 'none', px: 1.5, minHeight: 44, whiteSpace: 'nowrap' }}
+          >
+            <CheckBoxOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
+            Select
+          </ToggleButton>
+        )}
       </Stack>
 
       {/* ONE SEARCH BOX — see `TranscriptsLibraryView`, which carries the
@@ -489,6 +636,20 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
                     note={note}
                     dense={!isPhone}
                     onOpen={() => navigate(`/notes/${note.id}`)}
+                    selection={
+                      selectionAvailable
+                        ? {
+                            selecting,
+                            selected: selectedIds.includes(note.id),
+                            blocked: !selectedIds.includes(note.id) && selectedIds.length >= selectionLimit,
+                            onToggle: () => toggleSelected(note.id),
+                            onLongPress: () => {
+                              setSelecting(true);
+                              setSelectedIds((current) => (current.includes(note.id) ? current : [...current, note.id]));
+                            },
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </Fragment>
@@ -502,6 +663,42 @@ export function NotesLibraryView({ slots }: NotesLibraryViewProps = {}) {
               {isLoadingMore ? 'Loading…' : 'Load more'}
             </Button>
           </Box>
+        )}
+        {selectionAvailable && selecting && SelectionActions && (
+          <Paper
+            elevation={4}
+            role="region"
+            aria-label="Selected notes"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') stopSelecting();
+            }}
+            sx={{
+              position: 'sticky',
+              // Above the bottom navigation on a phone (the shell pads <main> by 80px there).
+              bottom: { xs: 'calc(72px + env(safe-area-inset-bottom))', sm: 16 },
+              zIndex: 2,
+              mt: 2,
+              p: 1.5,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
+            <Typography variant="body2" role="status" sx={{ flex: '1 1 auto', fontVariantNumeric: 'tabular-nums' }}>
+              {selectedIds.length === 0
+                ? 'Select notes'
+                : selectedIds.length >= selectionLimit
+                  ? `${selectedIds.length} selected (the most you can compare)`
+                  : `${selectedIds.length} selected`}
+            </Typography>
+            <NotesSlotBoundary name="SelectionActions">
+              <SelectionActions noteIds={selectedIds} onDone={stopSelecting} />
+            </NotesSlotBoundary>
+            <Button onClick={stopSelecting} sx={{ minHeight: 44 }}>
+              Cancel
+            </Button>
+          </Paper>
         )}
         </>
       )}

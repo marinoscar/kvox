@@ -404,6 +404,137 @@ export const graphPathsResponseSchema = z.object({
 export type GraphPathsResponse = z.infer<typeof graphPathsResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// POST /api/graph/connect (GIC-14, #675)
+// ---------------------------------------------------------------------------
+
+/**
+ * The most notes, and the most transcripts, one `POST /api/graph/connect` call accepts.
+ *
+ * @stability experimental
+ */
+export const GRAPH_CONNECT_MAX_DOCUMENTS = 10;
+/**
+ * The most entities one `POST /api/graph/connect` call accepts.
+ *
+ * @stability experimental
+ */
+export const GRAPH_CONNECT_MAX_ENTITIES = 20;
+/**
+ * The most hops a bridge path of `POST /api/graph/connect` may have.
+ *
+ * @stability experimental
+ */
+export const GRAPH_CONNECT_MAX_HOPS = 3;
+
+/**
+ * Zod schema for the graph connect request wire shape: at least two distinct inputs in total, or a single note or transcript ("what this note touches").
+ *
+ * @stability experimental
+ */
+export const graphConnectRequestSchema = z
+  .object({
+    noteIds: z.array(z.uuid()).max(GRAPH_CONNECT_MAX_DOCUMENTS).optional().describe('Notes to connect, at most 10.'),
+    transcriptIds: z
+      .array(z.uuid())
+      .max(GRAPH_CONNECT_MAX_DOCUMENTS)
+      .optional()
+      .describe('Transcripts to connect, at most 10.'),
+    entityIds: z.array(z.uuid()).max(GRAPH_CONNECT_MAX_ENTITIES).optional().describe('Entities to connect, at most 20.'),
+    as_of: asOfParam,
+    maxHops: z.number().int().min(1).max(GRAPH_CONNECT_MAX_HOPS).default(2).describe('The longest bridge path, in edges, 1-3.'),
+  })
+  .refine(
+    (q) => {
+      const all = [...(q.noteIds ?? []), ...(q.transcriptIds ?? []), ...(q.entityIds ?? [])];
+      const documents = (q.noteIds?.length ?? 0) + (q.transcriptIds?.length ?? 0);
+      // One note or transcript on its own is "what this note touches"; anything else needs two inputs.
+      return new Set(all).size === all.length && (all.length >= 2 || (all.length === 1 && documents === 1));
+    },
+    { message: 'Give at least two distinct notes, transcripts or entities (or one note or transcript)', path: ['noteIds'] },
+  );
+/**
+ * The parsed shape of {@link graphConnectRequestSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphConnectRequest = z.infer<typeof graphConnectRequestSchema>;
+
+/**
+ * Zod schema for one input of a graph connect response.
+ *
+ * @stability experimental
+ */
+export const graphConnectInputSchema = z.object({
+  kind: z.enum(['note', 'transcript', 'entity']),
+  id: z.uuid(),
+  title: z.string().describe('The note or transcript title, or the entity label.'),
+  entityIds: z
+    .array(z.uuid())
+    .describe('The entities the input touches (a document: its readable mentions; an entity: itself and its neighbours), strongest first, capped.'),
+});
+/**
+ * The parsed shape of {@link graphConnectInputSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphConnectInput = z.infer<typeof graphConnectInputSchema>;
+
+/**
+ * Zod schema for one shared entity of a graph connect response.
+ *
+ * @stability experimental
+ */
+export const graphConnectSharedSchema = z.object({
+  entityId: z.uuid(),
+  inputIds: z.array(z.uuid()).min(2).describe('The inputs that touch the entity, at least two.'),
+  mentionCount: z.number().int().min(0).describe('Mentions (or relations, for an entity input) across those inputs.'),
+});
+/**
+ * The parsed shape of {@link graphConnectSharedSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphConnectShared = z.infer<typeof graphConnectSharedSchema>;
+
+/**
+ * Zod schema for one bridge path of a graph connect response.
+ *
+ * @stability experimental
+ */
+export const graphConnectPathSchema = z.object({
+  fromInput: z.uuid(),
+  toInput: z.uuid(),
+  nodeIds: z.array(z.uuid()).min(2),
+  edgeIds: z.array(z.string()).min(1),
+  score: z.number().min(0),
+});
+/**
+ * The parsed shape of {@link graphConnectPathSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphConnectPath = z.infer<typeof graphConnectPathSchema>;
+
+/**
+ * Zod schema for the graph connect response wire shape.
+ *
+ * @stability experimental
+ */
+export const graphConnectResponseSchema = z.object({
+  inputs: z.array(graphConnectInputSchema),
+  shared: z.array(graphConnectSharedSchema).describe('Entities touched by two or more inputs: widest coverage first, then mention count.'),
+  paths: z.array(graphConnectPathSchema).describe('Bridges between inputs, best first. Empty when nothing links them.'),
+  slice: graphSliceSchema.describe('The shared entities and bridge nodes with the edges between them.'),
+  truncated: z.boolean().describe('True when a cap or the time budget cut the answer short.'),
+});
+/**
+ * The parsed shape of {@link graphConnectResponseSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphConnectResponse = z.infer<typeof graphConnectResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // GET /api/graph/activity (GIC-15, #676)
 // ---------------------------------------------------------------------------
 
@@ -508,6 +639,7 @@ export const graphActivityResponseSchema = z.object({
  * @stability experimental
  */
 export type GraphActivityResponse = z.infer<typeof graphActivityResponseSchema>;
+
 
 // ---------------------------------------------------------------------------
 // GET /api/graph/entities/:id/timeline

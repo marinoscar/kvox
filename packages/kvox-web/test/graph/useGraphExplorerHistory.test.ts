@@ -159,6 +159,22 @@ describe('useGraphExplorer — undo and redo', () => {
     expect(result.current.state.expanded.has(ACME_ID)).toBe(false);
   });
 
+  it('a slice added from outside (a connect result) is a step, and Undo takes it back', async () => {
+    const { result } = renderExplorer();
+    await act(() => result.current.load([JOE_ID]));
+    const before = realNodeCount(result.current.state);
+    const slice = expandFixture({ nodeIds: [ACME_ID] } as ExpandFixtureRequest)!;
+
+    act(() => result.current.addSlice(slice));
+    expect(realNodeCount(result.current.state)).toBeGreaterThan(before);
+    expect(result.current.canUndo).toBe(true);
+
+    act(() => {
+      result.current.undo();
+    });
+    expect(realNodeCount(result.current.state)).toBe(before);
+  });
+
   it('a failed expand is not a step', async () => {
     const { result } = renderExplorer();
     await act(() => result.current.load([JOE_ID]));
