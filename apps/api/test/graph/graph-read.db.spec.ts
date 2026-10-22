@@ -212,7 +212,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
         relations: 2,
         mentions: 2,
         evidence: 3,
-        items: { commitment: 2, decision: 1, claim: 0, person_fact: 1 },
+        items: { commitment: 2, decision: 1, claim: 0, person_fact: 1, risk: 0 },
         openCommitments: 1,
       },
     });
