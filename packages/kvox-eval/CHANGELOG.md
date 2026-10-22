@@ -1,5 +1,12 @@
 # @marinoscar/kvox-eval
 
+## 0.1.0-next.12
+
+### Minor Changes
+
+- 3a48293: Extraction, resolution and evaluation for ontology 1.3.0 (#665, epic #661). `@marinoscar/kvox-api`: the `kg.extract` system prompt gains two rules derived from the offered schema, a Project / Topic / Product boundary rule and a worked example of the Joe / Company A / Microsoft Copilot rollout (entities, `INVOLVED_IN {role, stance}`, `USES {stage}`, `OFFERED_BY`, `CONCERNS`, a Risk), each printed only for the types, relations and property choices the run offers; entity resolution counts a Product's vendor as its organization (`OFFERED_BY`, and a mention's `vendorName`) so "Copilot", "M365 Copilot" and "Microsoft 365 Copilot" resolve to one Product (the same affiliation list serves `kg.resolve`, `kg.embed` and the proposal stage); the item adjudication prompt adds a Risk rule (a risk raised again is the same risk with more evidence). `@marinoscar/kvox-eval`: the Joe / Company A / Copilot rollout scenario (m56, m57: note-only fixtures with a no-stance negative), Ask questions q43 and q44, and `citeFromMin` on an Ask question (at least N distinct `citeFrom` sources must be cited, default 1) with `scoreCiteFromHit`'s optional `min` argument.
+- 0965f84: Ontology 1.3.0, step 3 (#664, epic #661). `@marinoscar/kvox-contract/ontology`: the `Risk` item type (work, `itemKind: 'risk'`, statuses `open | mitigated | closed | superseded`, subjects Person, Organization, Project, Product or Topic, attributes `severity`, `riskKind`, `mitigation`), `ABOUT` starts at a Risk and `SUPERSEDES` allows Risk to Risk; the wire schemas learn the `risk` item kind, the `Risk` proposal group and the brief's optional `openRisks` section. `@marinoscar/kvox-db`: migration `add_kg_item_kind_risk` adds `risk` to the `kg_item_kind` enum (additive; no row changes). `@marinoscar/kvox-api`: the extraction prompt, output schema and RDF exports offer Risk, `GraphWriteService` writes it with evidence, the Ask toolset gains the read-only `list_risks` tool (subject, status, severity; highest severity first), and the entity brief of a Project, Product or Organization gains an "Open risks" section (cited, never a model call, omitted when empty or when the work domain is off). `@marinoscar/kvox-eval`: 18 gold Risk items (m50-m55). `@marinoscar/kvox-web`: the brief card shows "Open risks" when the API sends it, and the review, timeline and add-to-graph surfaces handle the Risk kind.
+
 ## 0.1.0-next.11
 
 ## 0.1.0-next.10
