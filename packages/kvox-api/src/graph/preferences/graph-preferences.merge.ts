@@ -129,6 +129,15 @@ export function mergeGraphPreferences(
     };
   }
 
+  // `explorer.lenses` (GIC-17): the whole list is replaced; `null` deletes it (and the empty object).
+  if (patch.explorer === null) {
+    delete merged.explorer;
+  } else if (patch.explorer !== undefined) {
+    const lenses = patch.explorer.lenses === undefined ? merged.explorer?.lenses : (patch.explorer.lenses ?? undefined);
+    if (lenses === undefined) delete merged.explorer;
+    else merged.explorer = { lenses };
+  }
+
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 

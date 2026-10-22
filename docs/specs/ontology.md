@@ -3826,6 +3826,26 @@ is never reachable; every relation is walked both ways but returned in its
 stored direction. A path scores `mean(log(1 + evidenceCount))` times a hub
 factor per intermediate node (`graph-path-ranking.ts`). Wire shape: API.md.
 
+**Lenses, URL state, history and "Ask about this selection" (GIC-17, #678).**
+The explorer's shareable state is the URL: `seed`, `asOf`, `types` and
+`relTypes` (the node and relation types SHOWN; absent means all), `layout`,
+`view`, `focus`, `lens`, plus the inspector's `sel` and `tab`; `from`/`to`
+(time bar) and `pathFrom`/`pathTo` (path mode) belong to the stories that write
+them. Pins and positions are never in the URL. A **lens** is a named bundle of
+seeds, shown types and relations, layout and pinned positions
+(`explorer/lenses/`). Four built-in presets (People network, Project map,
+Stakeholders & stance, Commitments & risks) are trimmed to the types and
+relations the caller's ontology has. User lenses live in the `graph` user-settings
+namespace as `graph.explorer.lenses` (§10; no table): at most 20 lenses of 300
+pinned positions and 10 seeds each, the whole list replaced by a write. History
+is the explorer's own: `useGraphExplorer` keeps 50 snapshots (graph, seeds,
+filters, `as of`) for Undo and Redo (Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z); Back and
+Forward (`[`, `]`) walk the focus trail, and a NEW focus is the only change that
+adds a browser history entry. "Ask about this selection" opens the host's Ask
+slot with `scope: { entityIds, evidenceIds }` on every question (API.md, Ask):
+starting handles the agent resolves and then retrieves evidence for, so §9.4
+and §22.4 hold.
+
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
 **Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the

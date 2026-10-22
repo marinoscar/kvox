@@ -98,6 +98,8 @@ interface SetupOptions {
   permissions?: string[];
   scopeEntityId?: string | null;
   scopeEntity?: unknown;
+  /** Rows `kgEntity.findMany` answers for a turn's selection scope (GIC-17). */
+  selectionEntities?: unknown[];
   history?: Array<{ id: string; role: string; status: string; content: string }>;
   contextWindowTokens?: number;
   execute?: jest.Mock;
@@ -175,7 +177,13 @@ function setup(opts: SetupOptions = {}) {
         return { count: 1 };
       }),
     },
-    kgEntity: { findFirst: jest.fn().mockResolvedValue(opts.scopeEntity ?? null) },
+    kgEntity: {
+      findFirst: jest.fn().mockResolvedValue(opts.scopeEntity ?? null),
+      findMany: jest.fn().mockResolvedValue(opts.selectionEntities ?? []),
+    },
+    kgEvidence: { findMany: jest.fn().mockResolvedValue([]) },
+    kgItem: { findMany: jest.fn().mockResolvedValue([]) },
+    kgRelation: { findMany: jest.fn().mockResolvedValue([]) },
     $queryRaw: jest.fn().mockResolvedValue([
       { key: EVIDENCE, evidenceId: EVIDENCE, transcriptId: 't', noteId: null, startMs: 4000, transcriptTitle: 'Sync', noteTitle: null },
     ]),
@@ -453,6 +461,26 @@ describe('AskRespondHandler (#378)', () => {
       await t.handler.process(job());
       expect(t.requests[0].messages[0].content).toContain('This conversation is about Sarah Chen (Person), reference ent1.');
       expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY, label: 'Sarah Chen' })]);
+    });
+
+    it('registers the selection of the turn as handles and names them as starting points (GIC-17)', async () => {
+      const t = setup({
+        selectionEntities: [{ id: ENTITY, label: 'Joe', type: 'Person' }],
+        scripts: [[text('Joe is involved in the Copilot rollout, per the notes you reviewed.[^ent1]'), done()]],
+      });
+      await t.handler.process(job(payload({ scope: { entityIds: [ENTITY] } })));
+      const system = t.requests[0].messages[0].content as string;
+      expect(system).toContain('The user selected these on the graph before asking: ent1 (Joe, Person)');
+      expect(system).toContain('starting points only, not evidence');
+      expect(system).not.toContain(ENTITY);
+      expect(t.final().citations).toEqual([expect.objectContaining({ marker: 'ent1', valid: true, id: ENTITY })]);
+    });
+
+    it('names nothing when the selection is no longer readable, and the turn still answers (GIC-17)', async () => {
+      const t = setup({ selectionEntities: [] });
+      await t.handler.process(job(payload({ scope: { entityIds: [ENTITY] } })));
+      expect(t.requests[0].messages[0].content).not.toContain('selected these on the graph');
+      expect(t.final().status).toBe('complete');
     });
 
     it('replays earlier complete turns as history, markers stripped', async () => {

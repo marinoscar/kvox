@@ -31,6 +31,9 @@ const askRespondPayloadSchema = z.object({
   model: z.string().min(1),
   providerId: z.string().min(1),
   reasoningEffort: z.string().nullable().optional(),
+  scope: z
+    .object({ entityIds: z.array(z.guid()).optional(), evidenceIds: z.array(z.guid()).optional() })
+    .optional(),
 });
 
 /**
@@ -51,6 +54,8 @@ export interface AskRespondPayload {
   providerId: string;
   /** The reasoning effort chosen at request time, when any. */
   reasoningEffort?: string | null;
+  /** The graph selection the question starts from (GIC-17): ids only, re-checked when the job runs. */
+  scope?: { entityIds?: string[]; evidenceIds?: string[] };
 }
 
 /**

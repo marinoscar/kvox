@@ -37,6 +37,7 @@ import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { GraphAiRunResolver, isUniqueViolation } from '../graph/index.js';
 import { KVOX_JOBS, KVOX_PRISMA, type KvoxJobsPort } from '../ports/index.js';
 import { AskAccessService } from './ask-access.service.js';
+import { assertAskScopeReadable, uniqueScopeIds } from './ask-scope.js';
 import { ASK_DERIVED_TITLE_MAX_CHARS, ASK_RESPOND_PRIORITY } from './ask-limits.js';
 import { toAskMessage } from './ask-message.mapper.js';
 import type { KvoxAskDb } from './data/ask-db.js';
@@ -82,6 +83,12 @@ export class AskMessagesService {
     // written. The resolver's answer is what the job will be re-validated against.
     const resolution = await this.resolver.resolve(userId, 'ask.respond', dto.model ?? null);
 
+    // GIC-17: the selection the question starts from. Every id must be the asker's and readable,
+    // else the whole request is a 404 (checked before any row is written).
+    const scopeIds = dto.scope ? { entityIds: uniqueScopeIds(dto.scope.entityIds), evidenceIds: uniqueScopeIds(dto.scope.evidenceIds) } : null;
+    const scope = scopeIds && (scopeIds.entityIds.length > 0 || scopeIds.evidenceIds.length > 0) ? scopeIds : null;
+    if (scope) await assertAskScopeReadable(this.prisma, userId, scope);
+
     // Two distinct instants: both rows would otherwise share the
     // transaction's `now()`, and the conversation orders by
     // `(created_at, id)` — a random id could put the answer before its question.
@@ -122,6 +129,7 @@ export class AskMessagesService {
         model: resolution.model,
         providerId: resolution.providerId,
         reasoningEffort: resolution.reasoningEffort,
+        ...(scope ? { scope } : {}),
       };
       // An AI job on the asker's own key; it touches no stored object, so the host files it under
       // no organization.
