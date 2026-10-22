@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { harnessUrl, waitForInter } from '../support/harness';
-import { ACME_ID, ANA_ID, GRAPH_PERMS, JOE_ID, installGraphApi } from '../support/graphApi';
+import { ACME_ID, ANA_ID, GRAPH_PERMS, JOE_ID, REPORTS_TO_EDGE_ID, installGraphApi } from '../support/graphApi';
 
 /**
  * The graph explorer (`/graph/explore`, issue #374, epic #347) and the entity
@@ -562,5 +562,166 @@ test.describe('Insight Canvas shell — rotation', () => {
     expect(Math.abs(after.x - before.x)).toBeLessThan(0.02);
     expect(Math.abs(after.y - before.y)).toBeLessThan(0.02);
     expect(after.ratio).toBeCloseTo(before.ratio, 3);
+  });
+});
+
+
+// =============================================================================
+// The evidence-first inspector (GIC-11, #672, epic #661)
+//
+// Node view, edge view (Evidence tab) and Selection view, at 390 / 820 / 1180 /
+// 1440, light and dark. The edge is selected through the URL (`?sel=e:<id>`),
+// which the inspector restores once the graph has arrived, so no test has to
+// hit a thin line on a WebGL canvas.
+//
+// ⚠ Every baseline below is new and must be generated in the pinned Playwright
+// image (`.github/workflows/visual-baselines.yml`); none is committed from a
+// local run. The behavioural tests assert and need no baseline.
+// =============================================================================
+
+const EDGE_ROUTE = `${EXPLORE}&sel=e:${REPORTS_TO_EDGE_ID}&tab=evidence`;
+
+/** On a phone, lift the bottom sheet to half height so the tabs and their content are on screen. */
+async function liftSheet(page: Page, viewport: { width: number }) {
+  if (viewport.width >= 600) return;
+  const handle = page.getByRole('button', { name: /^Resize Inspector/ });
+  await handle.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('region', { name: 'Inspector' })).toHaveAttribute('data-snap', 'half');
+  await page.waitForTimeout(400);
+}
+
+test.describe('Inspector — baselines', () => {
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`node view @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6);
+        await selectAcme(page);
+        await expect(page.getByRole('group', { name: 'Acme Corp' })).toBeVisible();
+        await liftSheet(page, viewport);
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-node-${name}-${theme}.png`);
+      });
+
+      test(`edge view with evidence @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EDGE_ROUTE, theme);
+        await canvasReady(page, 6);
+        await expect(page.getByRole('group', { name: 'Reports to' })).toBeVisible();
+        await liftSheet(page, viewport);
+        await expect(page.getByRole('article')).toHaveCount(3);
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-edge-${name}-${theme}.png`);
+      });
+    }
+  }
+});
+
+test.describe('Inspector — selection view baselines', () => {
+  // Select mode is a touch affordance: a coarse pointer, at every width.
+  test.use({ hasTouch: true, isMobile: true });
+
+  for (const theme of THEMES) {
+    for (const [name, viewport] of SHELL_VIEWPORTS) {
+      test(`selection view @ ${name} ${theme}`, async ({ page }) => {
+        await installGraphApi(page, { surface: 'pages' });
+        await page.setViewportSize(viewport);
+        await openShell(page, EXPLORE, theme);
+        await canvasReady(page, 6, TOUCH_CAP);
+        await cameraSettled(page);
+
+        await page.getByRole('button', { name: 'Select' }).click();
+        for (const nodeId of [ACME_ID, ANA_ID]) {
+          const at = await nodePoint(page, nodeId);
+          await page.touchscreen.tap(at.x, at.y);
+        }
+        await expect(page.getByRole('group', { name: 'Selection' })).toBeVisible();
+        await page.waitForTimeout(400);
+
+        await expect(page).toHaveScreenshot(`graph-inspector-selection-${name}-${theme}.png`);
+      });
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Behaviour
+// -----------------------------------------------------------------------------
+
+test.describe('Inspector — behaviour', () => {
+  test('an edge opens on its evidence; "Open at source" leaves and Back returns to the same canvas state', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EDGE_ROUTE, 'dark');
+    await canvasReady(page, 6);
+
+    const panel = page.getByRole('group', { name: 'Reports to' });
+    await expect(panel.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    await expect(panel.getByRole('article')).toHaveCount(3);
+    // The source that is gone keeps its quote and offers no link.
+    await expect(panel.getByRole('article', { name: /^Transcript no longer available/ })).toContainText('Budget for the new reporting line is approved.');
+
+    await panel.getByRole('link', { name: 'Open at source: Org changes — Q3' }).click();
+    await expect(page).toHaveURL(/\/notes\//);
+    await page.goBack();
+    await waitForInter(page);
+    await canvasReady(page, 6);
+    await expect(page.getByRole('group', { name: 'Reports to' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(3);
+  });
+
+  test('the Expand menu lists relation and entity types with counts', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(DESKTOP);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+
+    await page.getByRole('button', { name: 'Expand by type' }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu.getByRole('menuitem', { name: /^Works for/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /^Person/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('the tab strip is keyboard operable and scrolls on a phone', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+    await liftSheet(page, PHONE);
+
+    const tablist = page.getByRole('tablist');
+    await expect(tablist).toBeVisible();
+    await page.getByRole('tab', { name: 'Overview' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Evidence' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tab', { name: 'Evidence', selected: true })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('on a phone the peek shows the header, the primary actions and the evidence count, not the tabs', async ({ page }) => {
+    await installGraphApi(page, { surface: 'pages' });
+    await page.setViewportSize(PHONE);
+    await openShell(page, EXPLORE, 'dark');
+    await canvasReady(page, 6);
+    await selectAcme(page);
+
+    const sheet = page.getByRole('region', { name: 'Inspector' });
+    await expect(sheet).toHaveAttribute('data-snap', 'peek');
+    await expect(sheet.getByRole('button', { name: 'Focus' })).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Expand', exact: true })).toBeVisible();
+    await expect(sheet.getByText(/\d+ evidence/)).toBeVisible();
+    await expect(sheet.getByRole('tab')).toHaveCount(0);
   });
 });

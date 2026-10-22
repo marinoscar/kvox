@@ -37,6 +37,8 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 export const JOE_ID = id(1);
 export const ANA_ID = id(2);
 export const ACME_ID = id(4);
+/** The explorer's `REPORTS_TO` edge (Joe to Ana), which has `EDGE_EVIDENCE`. */
+export const REPORTS_TO_EDGE_ID = id(411);
 const Q3_ID = id(7);
 const TRANSCRIPT_ID = id(900);
 const SEGMENT_ID = id(901);
@@ -132,10 +134,27 @@ const DETAIL = {
     evidence: 18,
     items: { commitment: 3, decision: 2, claim: 1, person_fact: 2 },
     openCommitments: 2,
+    relationsByType: { WORKS_FOR: 1, HAS_ROLE: 1, REPORTS_TO: 1, ATTENDED: 2 },
+    relationsByNeighborType: { Organization: 2, Person: 1, Meeting: 2 },
   },
   createdAt: FIXED_ISO,
   updatedAt: FIXED_ISO,
 };
+
+/** The detail of any entity in `SUMMARIES`: Joe's counts, that entity's own name, type and aliases (GIC-11 reads it for the inspector's header). */
+function detailFor(entityId: string) {
+  const summary = SUMMARIES.find((row) => row.id === entityId);
+  if (!summary || entityId === JOE_ID) return DETAIL;
+  return {
+    ...DETAIL,
+    id: entityId,
+    type: summary.type,
+    label: summary.label,
+    props: {},
+    aliases: summary.aliases.map((alias, index) => ({ id: id(600 + index), alias, source: 'extraction' })),
+    counts: { ...DETAIL.counts, mentions: summary.mentionCount },
+  };
+}
 
 const joe = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
 const ana = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
@@ -413,6 +432,69 @@ const EVIDENCE = [
     subjectKind: 'item',
     subjectId: id(311),
     quote: 'Budget is frozen until Q4.',
+    createdAt: FIXED_ISO,
+    source: {
+      kind: 'segment',
+      transcriptId: null,
+      transcriptTitle: null,
+      segmentId: null,
+      segmentRev: null,
+      currentSegmentRev: null,
+      startMs: null,
+      endMs: null,
+      textChanged: false,
+      available: false,
+      href: null,
+    },
+  },
+];
+
+/** GIC-11: the quotes behind the explorer's `REPORTS_TO` edge (`id(411)`): a note, an edited transcript segment, a source that is gone. */
+const EDGE_EVIDENCE = [
+  {
+    id: id(711),
+    subjectKind: 'relation',
+    subjectId: id(411),
+    quote: 'Joe now reports to Ana, starting next month.',
+    createdAt: FIXED_ISO,
+    source: {
+      kind: 'note',
+      noteId: NOTE_ID,
+      noteTitle: 'Org changes — Q3',
+      noteVersion: 2,
+      currentNoteVersion: 2,
+      charStart: 4,
+      charEnd: 48,
+      versionChanged: false,
+      available: true,
+      href: `/notes/${NOTE_ID}?v=2`,
+    },
+  },
+  {
+    id: id(712),
+    subjectKind: 'relation',
+    subjectId: id(411),
+    quote: 'Ana is taking over the platform group and Joe moves under her.',
+    createdAt: FIXED_ISO,
+    source: {
+      kind: 'segment',
+      transcriptId: TRANSCRIPT_ID,
+      transcriptTitle: 'Q3 planning call',
+      segmentId: SEGMENT_ID,
+      segmentRev: 1,
+      currentSegmentRev: 2,
+      startMs: 754_000,
+      endMs: 760_000,
+      textChanged: true,
+      available: true,
+      href: `/transcripts/${TRANSCRIPT_ID}?segment=${SEGMENT_ID}&t=754000`,
+    },
+  },
+  {
+    id: id(713),
+    subjectKind: 'relation',
+    subjectId: id(411),
+    quote: 'Budget for the new reporting line is approved.',
     createdAt: FIXED_ISO,
     source: {
       kind: 'segment',
@@ -713,7 +795,15 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
     if (/^\/graph\/entities\/[^/]+\/neighborhood$/.test(path)) return json(route, NEIGHBORHOOD);
     if (/^\/graph\/entities\/[^/]+\/timeline$/.test(path)) return json(route, TIMELINE);
     if (/^\/graph\/entities\/[^/]+\/mentions$/.test(path)) return json(route, MENTIONS);
-    if (/^\/graph\/entities\/[^/]+$/.test(path)) return json(route, DETAIL);
+    if (/^\/graph\/entities\/[^/]+$/.test(path)) return json(route, detailFor(path.split('/').pop()!));
+
+    if (path === '/graph/evidence/by-subject') {
+      const kind = url.searchParams.get('kind');
+      const subject = url.searchParams.get('id');
+      return json(route, {
+        items: [...EVIDENCE, ...EDGE_EVIDENCE].filter((ev) => ev.subjectKind === kind && ev.subjectId === subject),
+      });
+    }
 
     if (path === '/graph/evidence') {
       const ids = url.searchParams.get('ids')?.split(',') ?? [];
