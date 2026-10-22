@@ -6986,6 +6986,54 @@ may offer to raise `maxHops`.
 node is not one of your readable nodes (the message never says which) · `503`
 `graph_query_timeout`.
 
+##### GET /graph/activity
+
+Evidence counts per week or month for a set of nodes and the relations among
+them, stacked by type: the data of the explorer's **TimeBar** (GIC-15, #676).
+One aggregate SQL statement under the neighbourhood's 3 s budget, driven by the
+`(subject_kind, subject_id)` index of `kg_evidence`; not a queue job.
+
+- **What is counted:** one unit per (citation, node) pair. A citation of an
+  entity counts once for it; a citation of a **relation whose two ends are both
+  in `ids`** counts once for each end; a citation of an item counts for the
+  item, under its kind (`decision`, `commitment`, ...). `byType[T]` sums those
+  units over the nodes of type `T`, and `total` is the sum of `byType`, so a
+  stacked bar always adds up.
+- **When:** a citation is dated by its transcript's `recorded_at` or its note's
+  `created_at` (the meeting date; notes have no separate occurred-at column),
+  falling back to the citation's own `created_at` when the source is gone or
+  soft-deleted. Buckets are **UTC**; a `week` starts on Monday, a `month` on the
+  1st. `from` (inclusive) and `to` (exclusive) restrict that date.
+- **Readable rows only:** entities and relations pass the same predicates as
+  the neighbourhood, items must be readable too, and a `sensitive` person fact
+  contributes nothing (naming one in `ids` is the 404 below).
+- Only buckets with evidence are returned, oldest first; a node with no
+  evidence is absent from `byEntity`.
+
+Query: `ids` (comma-separated uuids, **1 to 300**, required), `bucket`
+(`week` | `month`, default `month`), `from`, `to` (`YYYY-MM-DD` or an ISO 8601
+datetime with an offset, both optional).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "bucket": "month",
+    "series": [
+      { "start": "2026-01-01", "total": 9, "byType": { "Person": 5, "Project": 4 } }
+    ],
+    "byEntity": {
+      "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11": [ { "start": "2026-01-01", "count": 3 } ]
+    }
+  }
+}
+```
+
+**Errors:** `400` an invalid parameter or **more than 300 ids** · `401` · `403`
+without `graph:read` · `404` any id is not one of your readable nodes (the
+message never says which; another owner's id, an unreviewed or merged entity
+and a sensitive person fact all answer it) · `503` `graph_query_timeout`.
+
 ##### GET /graph/entities/{id}/timeline
 
 Everything dated about this entity, newest first, keyset-paginated by

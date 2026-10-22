@@ -33,6 +33,7 @@ const ROUTES: { name: string; method: 'get' | 'post'; url: string; body?: unknow
   { name: 'timeline', method: 'get', url: `/api/graph/entities/${ENTITY}/timeline` },
   { name: 'mentions', method: 'get', url: `/api/graph/entities/${ENTITY}/mentions` },
   { name: 'paths', method: 'get', url: `/api/graph/paths?from=${ENTITY}&to=${OTHER}` },
+  { name: 'activity', method: 'get', url: `/api/graph/activity?ids=${ENTITY}` },
   { name: 'expand', method: 'post', url: '/api/graph/explore/expand', body: { nodeIds: [ENTITY] } },
   { name: 'evidence', method: 'get', url: `/api/graph/evidence/${EVIDENCE}` },
   { name: 'evidence batch', method: 'get', url: `/api/graph/evidence?ids=${EVIDENCE}` },
@@ -153,6 +154,12 @@ describe('Graph read routes (integration)', () => {
     [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&maxHops=0`],
     [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&maxHops=6`],
     [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&as_of=yesterday`],
+    ['/api/graph/activity'],
+    ['/api/graph/activity?ids='],
+    ['/api/graph/activity?ids=not-a-uuid'],
+    [`/api/graph/activity?ids=${ENTITY}&bucket=day`],
+    [`/api/graph/activity?ids=${ENTITY}&from=yesterday`],
+    [`/api/graph/activity?ids=${Array.from({ length: 301 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`).join(',')}`],
     ['/api/graph/evidence/not-a-uuid'],
     ['/api/graph/evidence?ids='],
     ['/api/graph/evidence?ids=nope'],
@@ -244,6 +251,27 @@ describe('Graph read routes (integration)', () => {
       .set(authHeader(user.accessToken))
       .expect(400);
     expect(JSON.stringify(bad.body)).toContain('NOPE');
+  });
+
+  it('answers activity with a 404 that does not say which id is unreadable, and accepts exactly 300 ids', async () => {
+    const user = await createMockTestUser(context, { roleName: 'viewer' });
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ n: 0 }] as never);
+    const res = await request(context.app.getHttpServer())
+      .get(`/api/graph/activity?ids=${ENTITY},${OTHER}`)
+      .set(authHeader(user.accessToken))
+      .expect(404);
+    expect(res.body.message).toBe('Entity not found');
+    expect(res.body.details).toBeUndefined();
+
+    const max = Array.from({ length: 300 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ n: 300 }] as never);
+    prismaMock.$transaction.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(prismaMock));
+    prismaMock.$queryRaw.mockResolvedValueOnce([] as never);
+    const ok = await request(context.app.getHttpServer())
+      .get(`/api/graph/activity?ids=${max.join(',')}&bucket=week`)
+      .set(authHeader(user.accessToken));
+    expect(ok.status).toBe(200);
+    expect(ok.body.data).toEqual({ bucket: 'week', series: [], byEntity: {} });
   });
 
   it('answers evidence batch with only the caller’s rows', async () => {
