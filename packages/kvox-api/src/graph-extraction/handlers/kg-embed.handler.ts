@@ -29,6 +29,7 @@ import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
 import { z } from 'zod';
 
 import { KG_EMBED_JOB_TYPE, rethrowRateLimit } from '../../graph/index.js';
+import { ORG_AFFILIATION_RELATIONS } from '../resolution/context-features.service.js';
 import { GraphEmbedder, vectorLiteral } from '../resolution/graph-embedder.service.js';
 import { buildEntityProfileText, buildItemProfileText, profileHash } from '../resolution/profile-text.js';
 import {
@@ -178,7 +179,7 @@ export class KgEmbedHandler implements KvoxJobHandler, OnModuleInit {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.kgRelation.findMany({
-        where: { ownerId, fromId: { in: entityIds }, type: { in: ['WORKS_FOR', 'HAS_ROLE'] }, reviewStatus: { in: [...LIVE] } },
+        where: { ownerId, fromId: { in: entityIds }, type: { in: [...ORG_AFFILIATION_RELATIONS] }, reviewStatus: { in: [...LIVE] } },
         select: { fromId: true, toId: true, type: true, props: true },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),

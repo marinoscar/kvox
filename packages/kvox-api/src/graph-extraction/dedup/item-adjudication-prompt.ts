@@ -62,6 +62,17 @@ const KIND_LABEL: Record<string, string> = {
   person_fact: 'fact about a person',
 };
 
+/**
+ * A risk raised again in another meeting is the same risk (#665): the graph
+ * keeps ONE Risk and the new note's quote joins its evidence. A different
+ * threat to the same subject is `new`; a risk the new text says is resolved
+ * or has turned into something else is `supersedes`.
+ */
+export const RISK_RULE =
+  'A risk, issue or blocker raised again, in other words, is `same`: it is one risk with more evidence. ' +
+  'A different threat to the same subject is `new`. A risk the new text says is resolved, or has changed ' +
+  'kind (a risk that became a blocker), is `supersedes`.';
+
 function clip(text: string, max: number): string {
   const t = text.replace(/\s+/g, ' ').trim();
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
@@ -81,6 +92,7 @@ export function buildItemAdjudicationSystemPrompt(pairs: readonly ItemAdjudicati
     '- `new` — they are about different things.',
     'Decisions are never `same` when the choice differs. Only report changes the new text actually states. ' +
       'Give a short rationale (at most 500 characters). Answer every pair exactly once, by its pair id.',
+    ...(kinds.includes(KIND_LABEL.risk) ? [RISK_RULE] : []),
   ].join('\n\n');
 }
 

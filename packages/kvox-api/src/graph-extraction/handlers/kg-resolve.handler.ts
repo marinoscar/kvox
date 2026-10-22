@@ -35,7 +35,7 @@ import { KG_RESOLVE_JOB_TYPE, GraphPreferencesService } from '../../graph/index.
 import type { ProposalResolution } from '../proposals/proposal-payload.schema.js';
 import type { AdjudicationPair } from '../resolution/adjudication-prompt.js';
 import { AdjudicationService, type AdjudicationResult } from '../resolution/adjudication.service.js';
-import type { ResolutionContext } from '../resolution/context-features.service.js';
+import { ORG_AFFILIATION_RELATIONS, type ResolutionContext } from '../resolution/context-features.service.js';
 import { orderPair } from '../resolution/distinct-pair.service.js';
 import { decide, ResolutionService, type MentionOutcome, type MentionToRank } from '../resolution/resolution.service.js';
 import { KVOX_PRISMA, KVOX_JOBS, type KvoxJobsPort, type KvoxJobHandler, type KvoxJobProfile, type KvoxJob } from '../../ports/index.js';
@@ -254,7 +254,7 @@ export class KgResolveHandler implements KvoxJobHandler, OnModuleInit {
       const from = r.fromId ? out.get(r.fromId) : undefined;
       if (from) {
         if (r.type === 'ATTENDED') from.meetingIds.add(r.toId);
-        else if (r.type === 'WORKS_FOR' || r.type === 'HAS_ROLE') from.orgIds.add(r.toId);
+        else if (ORG_AFFILIATION_RELATIONS.includes(r.type)) from.orgIds.add(r.toId);
         else from.neighbourIds.add(r.toId);
       }
       const to = out.get(r.toId);

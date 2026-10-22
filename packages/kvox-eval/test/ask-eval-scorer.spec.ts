@@ -95,6 +95,28 @@ describe('scoreCiteFromHit', () => {
   it('false when the id is unknown to the map', () => {
     expect(scoreCiteFromHit(['m01-s002'], [citation({ id: 'unknown-id' })], evSource)).toBe(false);
   });
+
+  describe('citeFromMin (#665): evidence from at least N distinct sources', () => {
+    const two = new Map([
+      ['ev-a', 'm56#note'],
+      ['ev-b', 'm57#note'],
+      ['ev-c', 'm56#note'],
+    ]);
+    const sources = ['m56#note', 'm57#note'];
+    it('one source is not enough when two are required, however many citations it has', () => {
+      expect(scoreCiteFromHit(sources, [citation({ id: 'ev-a' }), citation({ id: 'ev-c' })], two, 2)).toBe(false);
+    });
+    it('two distinct sources satisfy it', () => {
+      expect(scoreCiteFromHit(sources, [citation({ id: 'ev-a' }), citation({ id: 'ev-b' })], two, 2)).toBe(true);
+    });
+    it('an invalid citation does not count toward the distinct sources', () => {
+      expect(scoreCiteFromHit(sources, [citation({ id: 'ev-a' }), citation({ id: 'ev-b', valid: false })], two, 2)).toBe(false);
+    });
+    it('is capped at the number of listed sources, and defaults to one', () => {
+      expect(scoreCiteFromHit(['m56#note'], [citation({ id: 'ev-a' })], two, 5)).toBe(true);
+      expect(scoreCiteFromHit(sources, [citation({ id: 'ev-a' })], two)).toBe(true);
+    });
+  });
 });
 
 describe('scoreEntityRecall', () => {

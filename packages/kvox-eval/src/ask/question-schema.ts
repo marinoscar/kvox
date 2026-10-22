@@ -74,6 +74,13 @@ export const askEvalExpectedSchema = z.object({
    */
   citeFrom: z.array(z.string()).default([]),
   /**
+   * How many DISTINCT `citeFrom` sources the answer's valid citations must
+   * reach. Absent (or `1`) is the original "at least one"; `2` asks for
+   * evidence from two notes (or lines), as a question about a person's
+   * connection across meetings does. Never more than `citeFrom` lists.
+   */
+  citeFromMin: z.number().int().min(1).optional(),
+  /**
    * A negative question: the agent must say it could not find an answer and
    * must cite nothing valid. `answerNone` still applies — this is where a
    * sensitive fact's own text belongs, so a leak is caught even though the

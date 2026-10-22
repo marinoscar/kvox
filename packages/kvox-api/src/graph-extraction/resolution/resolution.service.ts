@@ -49,7 +49,7 @@ import { normalizeAlias, rethrowRateLimit } from '../../graph/index.js';
 import type { AdjudicationPair } from './adjudication-prompt.js';
 import { AdjudicationService, type AdjudicationResult } from './adjudication.service.js';
 import { CandidateService, type CandidateMention } from './candidate.service.js';
-import { ContextFeatureService, type ResolutionContext } from './context-features.service.js';
+import { ContextFeatureService, ORG_AFFILIATION_RELATIONS, type ResolutionContext } from './context-features.service.js';
 import { GraphEmbedder } from './graph-embedder.service.js';
 import { buildEntityProfileText } from './profile-text.js';
 import {
@@ -423,7 +423,7 @@ export class ResolutionService {
     for (const rel of others) {
       const from = rel.from as EndpointRef | undefined;
       if (!from || !('ref' in from) || from.ref !== row.payload.ref) continue;
-      if (rel.type === 'WORKS_FOR' || rel.type === 'HAS_ROLE') {
+      if (ORG_AFFILIATION_RELATIONS.includes(rel.type as string)) {
         const org = labelOf(rel.to as EndpointRef);
         if (org) orgLabels.push(org);
       }
@@ -431,6 +431,12 @@ export class ResolutionService {
         const title = (rel.props as Record<string, unknown> | undefined)?.title;
         if (typeof title === 'string') roleTitles.push(title);
       }
+    }
+    // A Product's `vendorName` is a resolution hint, not a link (#665): with no
+    // OFFERED_BY in the proposal it still tells the embedding who sells it.
+    const vendor = row.payload.props?.vendorName;
+    if (orgLabels.length === 0 && row.payload.type === 'Product' && typeof vendor === 'string' && vendor.trim()) {
+      orgLabels.push(vendor.trim());
     }
     const coMentioned = entities
       .filter((e) => e.id !== row.id && e.payload.type !== 'Meeting')
@@ -512,9 +518,14 @@ export class ResolutionService {
     const orgIds = new Set(existing.filter((e) => e.type === 'Organization').map((e) => e.id));
     const orgNames = new Set<string>();
     for (const e of entities) {
-      if (e.payload.type !== 'Organization') continue;
-      if (e.resolution?.ref) orgIds.add(e.resolution.ref);
-      for (const name of [e.payload.label, ...e.payload.aliases]) {
+      // A Product's stated vendor counts as an organization named in this proposal (#665).
+      const vendor = e.payload.type === 'Product' ? e.payload.props?.vendorName : undefined;
+      const names = typeof vendor === 'string' ? [vendor] : [];
+      if (e.payload.type === 'Organization') {
+        if (e.resolution?.ref) orgIds.add(e.resolution.ref);
+        names.push(e.payload.label, ...e.payload.aliases);
+      }
+      for (const name of names) {
         try {
           orgNames.add(normalizeAlias(name));
         } catch {

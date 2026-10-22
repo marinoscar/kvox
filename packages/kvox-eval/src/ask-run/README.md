@@ -11,7 +11,7 @@ The lower levels: `startAskEvalHost({ ai })` (PGlite with `vector`, `pg_trgm` an
 What a run does:
 
 - The database is an in-memory PGlite, migrated by applying the shipped migration SQL in order. It never touches a real database and dies with the process.
-- The golden graph is seeded through `GraphWriteService`: 50 meetings, 204 entities, 317 relations, 205 items, 928 evidence, 0 refused. An item gets a `meetingId` only where the ontology has the column. The personal domain is turned on for the eval user when fixtures are personal-tagged (Ask still hides personal facts). Supersession goes through `supersedesId`. Semantic search is off (no embeddings).
+- The golden graph is seeded through `GraphWriteService`: 52 meetings, 214 entities, 330 relations, 209 items, 965 evidence, 0 refused. An item gets a `meetingId` only where the ontology has the column. The personal domain is turned on for the eval user when fixtures are personal-tagged (Ask still hides personal facts). Supersession goes through `supersedesId`. Semantic search is off (no embeddings).
 - A failed model call marks that turn failed and the run continues; when every turn fails, `kvox-eval ask` exits 2.
 - `kvox-eval ask --replay` needs no key: the 6 scripted questions plus the leak gate, reproducing `apps/api/test/ask/ask-eval.replay.db.spec.ts`.
 

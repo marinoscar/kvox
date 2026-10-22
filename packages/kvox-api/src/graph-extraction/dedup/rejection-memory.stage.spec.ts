@@ -97,6 +97,36 @@ describe('rejection-memory stage', () => {
     expect(where.proposal).toEqual({ ownerId: OWNER, noteId: NOTE, status: 'committed', id: { not: expect.any(String) } });
   });
 
+  it('covers the stakeholder relations and a Risk: a rejected stance, and a rejected risk, come back flagged (#665)', async () => {
+    const { db, stage } = build();
+    const PROJECT = 'aaaaaaaa-0000-4000-8000-000000000003';
+    const rel = (ref: string, props: Record<string, unknown>) => ({
+      ref,
+      type: 'INVOLVED_IN',
+      from: { ref: 'e1' },
+      to: { entityId: PROJECT },
+      props,
+      validFrom: null,
+      validTo: null,
+      precision: 'unknown',
+    });
+    db.add('relation', rel('r1', { role: 'stakeholder', stance: 'skeptical' }));
+    db.add('relation', rel('r2', { role: 'stakeholder', stance: 'supportive' }));
+    db.add('item', { ...fact('k1', 'h-risk'), kind: 'risk', subject: { entityId: PROJECT }, status: 'open', props: { riskKind: 'blocker' } });
+    db.pastRows = [
+      { proposalId: OLD, kind: 'entity', payload: entityPayload('x7', 'Person', 'Joe'), resolution: linked(null), committedRefId: JOE, mergeIntoId: null },
+      // The reviewer said no to Joe being skeptical, and to the risk.
+      { proposalId: OLD, kind: 'relation', payload: { ref: 'r9', type: 'INVOLVED_IN', from: { ref: 'x7' }, to: { entityId: PROJECT }, props: { role: 'stakeholder', stance: 'skeptical' } }, resolution: null, committedRefId: null, mergeIntoId: null },
+      { proposalId: OLD, kind: 'item', payload: { kind: 'risk', subject: { entityId: PROJECT }, statementHash: 'h-risk' }, resolution: null, committedRefId: null, mergeIntoId: null },
+    ];
+    await stage.run(db.ctx());
+
+    expect(db.byRef('r1')).toMatchObject({ flags: ['previously_rejected'], decision: 'reject' });
+    // A different stance is a different claim: a rejected "skeptical" never shadows "supportive".
+    expect(db.byRef('r2')).toMatchObject({ flags: [], decision: 'pending' });
+    expect(db.byRef('k1')).toMatchObject({ flags: ['previously_rejected'], decision: 'reject' });
+  });
+
   it('a discarded proposal’s rejections are never remembered (only committed ones are queried)', async () => {
     const { db, stage } = build();
     db.add('item', { ...fact('c1', 'h-claim'), kind: 'claim' });

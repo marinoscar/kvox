@@ -88,12 +88,13 @@ export function scoreCited(citations: readonly AskCitation[]): boolean {
 }
 
 /**
- * Whether a valid evidence citation resolves, through the seeder's map, to one
- * of the question's `citeFrom` sources.
+ * Whether valid evidence citations resolve, through the seeder's map, to the
+ * question's `citeFrom` sources: at least `min` distinct ones (default one).
  *
  * @param citeFrom - the expected sources (`mNN-sNNN`, `mNN#note`).
  * @param citations - the answer's citations.
  * @param evidenceSource - evidence id to source, from the seeder.
+ * @param min - how many distinct `citeFrom` sources must be reached (default `1`).
  * @returns `true` on a hit (vacuously `true` with no `citeFrom`).
  *
  * @stability experimental
@@ -102,13 +103,16 @@ export function scoreCiteFromHit(
   citeFrom: readonly string[],
   citations: readonly AskCitation[],
   evidenceSource: EvidenceSourceMap,
+  min = 1,
 ): boolean {
   if (citeFrom.length === 0) return true; // nothing was required (e.g. a negative question)
-  return citations.some((c) => {
-    if (!c.valid || c.kind !== 'evidence' || !c.id) return false;
+  const reached = new Set<string>();
+  for (const c of citations) {
+    if (!c.valid || c.kind !== 'evidence' || !c.id) continue;
     const source = evidenceSource.get(c.id);
-    return source !== undefined && citeFrom.includes(source);
-  });
+    if (source !== undefined && citeFrom.includes(source)) reached.add(source);
+  }
+  return reached.size >= Math.min(min, citeFrom.length);
 }
 
 /**
@@ -182,10 +186,14 @@ export function scoreAnswer(
 ): AskEvalScore {
   const citations = message.citations;
   const { matched, reasons } = scoreAnswerMatch(question.expected, message.content, citations);
-  const citeFromHit = scoreCiteFromHit(question.expected.citeFrom, citations, evidenceSource);
+  const citeFromHit = scoreCiteFromHit(question.expected.citeFrom, citations, evidenceSource, question.expected.citeFromMin ?? 1);
   const notes = [...reasons];
   if (!citeFromHit && question.expected.citeFrom.length > 0) {
-    notes.push(`no valid citation resolved to one of: ${question.expected.citeFrom.join(', ')}`);
+    notes.push(
+      (question.expected.citeFromMin ?? 1) > 1
+        ? `fewer than ${question.expected.citeFromMin} distinct valid citations resolved to: ${question.expected.citeFrom.join(', ')}`
+        : `no valid citation resolved to one of: ${question.expected.citeFrom.join(', ')}`,
+    );
   }
 
   return {
