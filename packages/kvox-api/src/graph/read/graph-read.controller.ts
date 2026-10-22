@@ -23,6 +23,7 @@ import {
   ListEntitiesResponseDto,
   MentionsResponseDto,
   evidenceBatchQuerySchema,
+  evidenceBySubjectQuerySchema,
   listEntitiesQuerySchema,
   mentionsQuerySchema,
   GRAPH_PATHS_MAX_HOPS,
@@ -33,6 +34,7 @@ import {
   type GraphPathsResponse,
   type EvidenceBatchQuery,
   type EvidenceBatchResponse,
+  type EvidenceBySubjectQuery,
   type EvidenceLink,
   type GraphEntityDetail,
   type ListEntitiesQuery,
@@ -320,6 +322,29 @@ export class GraphReadController {
     @CurrentGraphActor() user: GraphActor,
   ): Promise<EvidenceBatchResponse> {
     return { items: await this.evidence.getMany(user.id, query.ids) };
+  }
+
+  // Declared before `evidence/:id`, or `by-subject` would be read as an id.
+  @Get('evidence/by-subject')
+  @KvoxAuth(GRAPH_READ_PERMISSION)
+  @ApiOperation({
+    summary: 'Citations of one entity, relation or item',
+    description:
+      'The newest-source-first citations (at most 50) that support one entity, relation or item, ' +
+      'resolved to links like `GET /api/graph/evidence`: what the explorer inspector shows under a ' +
+      'selected edge or node. A subject that is not yours or not in your reviewed graph answers 404, ' +
+      'and so does an item holding a `sensitive` personal fact: its evidence is never returned.',
+  })
+  @ApiQuery({ name: 'kind', required: true, enum: ['entity', 'relation', 'item'] })
+  @ApiQuery({ name: 'id', required: true, type: String, description: 'The subject id' })
+  @ApiDataResponse(EvidenceBatchResponseDto, { description: 'The citations, newest source first' })
+  @ApiResponse({ status: 400, description: 'Missing or malformed `kind` or `id`' })
+  @ApiResponse({ status: 404, description: 'No such subject, or not yours' })
+  async evidenceBySubject(
+    @Query(new ZodValidationPipe(evidenceBySubjectQuerySchema)) query: EvidenceBySubjectQuery,
+    @CurrentGraphActor() user: GraphActor,
+  ): Promise<EvidenceBatchResponse> {
+    return { items: await this.evidence.forSubject(user.id, query.kind, query.id) };
   }
 
   @Get('evidence/:id')

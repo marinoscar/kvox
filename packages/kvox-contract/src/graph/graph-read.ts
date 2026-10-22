@@ -134,6 +134,18 @@ export const graphEntityDetailSchema = z
         person_fact: z.number().int(),
       }),
       openCommitments: z.number().int(),
+      relationsByType: z
+        .record(z.string(), z.number().int().min(0))
+        .optional()
+        .describe(
+          'Readable relations of the entity per relation type (both directions); sums to `relations`. The Expand menu of the explorer inspector (GIC-11). Absent from an older API.',
+        ),
+      relationsByNeighborType: z
+        .record(z.string(), z.number().int().min(0))
+        .optional()
+        .describe(
+          'The same relations per entity type of the entity at the other end; sums to `relations`. Absent from an older API.',
+        ),
     }),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -565,6 +577,22 @@ export const evidenceBatchQuerySchema = z.object({
  * @stability experimental
  */
 export type EvidenceBatchQuery = z.infer<typeof evidenceBatchQuerySchema>;
+
+/**
+ * Zod schema for the evidence-by-subject query wire shape.
+ *
+ * @stability experimental
+ */
+export const evidenceBySubjectQuerySchema = z.object({
+  kind: z.enum(['entity', 'relation', 'item']).describe('What the citations support.'),
+  id: z.uuid().describe('The entity, relation or item id.'),
+});
+/**
+ * The parsed shape of {@link evidenceBySubjectQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type EvidenceBySubjectQuery = z.infer<typeof evidenceBySubjectQuerySchema>;
 
 /**
  * Zod schema for the evidence link wire shape.
