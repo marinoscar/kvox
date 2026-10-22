@@ -24,6 +24,7 @@ import { listEntitiesResponseSchema } from '@marinoscar/kvox-contract/graph';
 
 const ENTITY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const EVIDENCE = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const OTHER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 const ROUTES: { name: string; method: 'get' | 'post'; url: string; body?: unknown }[] = [
   { name: 'list', method: 'get', url: '/api/graph/entities' },
@@ -31,6 +32,7 @@ const ROUTES: { name: string; method: 'get' | 'post'; url: string; body?: unknow
   { name: 'neighborhood', method: 'get', url: `/api/graph/entities/${ENTITY}/neighborhood` },
   { name: 'timeline', method: 'get', url: `/api/graph/entities/${ENTITY}/timeline` },
   { name: 'mentions', method: 'get', url: `/api/graph/entities/${ENTITY}/mentions` },
+  { name: 'paths', method: 'get', url: `/api/graph/paths?from=${ENTITY}&to=${OTHER}` },
   { name: 'expand', method: 'post', url: '/api/graph/explore/expand', body: { nodeIds: [ENTITY] } },
   { name: 'evidence', method: 'get', url: `/api/graph/evidence/${EVIDENCE}` },
   { name: 'evidence batch', method: 'get', url: `/api/graph/evidence?ids=${EVIDENCE}` },
@@ -142,6 +144,15 @@ describe('Graph read routes (integration)', () => {
     [`/api/graph/entities/${ENTITY}/timeline?includeSensitive=yes`],
     [`/api/graph/entities/${ENTITY}/timeline?limit=51`],
     [`/api/graph/entities/${ENTITY}/mentions?limit=0`],
+    ['/api/graph/paths'],
+    [`/api/graph/paths?from=${ENTITY}`],
+    [`/api/graph/paths?from=nope&to=${OTHER}`],
+    [`/api/graph/paths?from=${ENTITY}&to=${ENTITY}`],
+    [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&k=0`],
+    [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&k=6`],
+    [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&maxHops=0`],
+    [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&maxHops=6`],
+    [`/api/graph/paths?from=${ENTITY}&to=${OTHER}&as_of=yesterday`],
     ['/api/graph/evidence/not-a-uuid'],
     ['/api/graph/evidence?ids='],
     ['/api/graph/evidence?ids=nope'],
@@ -213,6 +224,26 @@ describe('Graph read routes (integration)', () => {
       .set(authHeader(user.accessToken))
       .send({ nodeIds: [ENTITY] })
       .expect(404);
+  });
+
+  it('answers paths with a 404 that does not say which end is unreadable, and 400 for an unknown relation type', async () => {
+    const user = await createMockTestUser(context, { roleName: 'viewer' });
+    // `assertReadableNodes` counts 1 readable of the 2 requested.
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ n: 1 }] as never);
+    const res = await request(context.app.getHttpServer())
+      .get(`/api/graph/paths?from=${ENTITY}&to=${OTHER}`)
+      .set(authHeader(user.accessToken))
+      .expect(404);
+    // The message is the generic one; it never says which end.
+    expect(res.body.message).toBe('Entity not found');
+    expect(res.body.details).toBeUndefined();
+
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ n: 2 }] as never);
+    const bad = await request(context.app.getHttpServer())
+      .get(`/api/graph/paths?from=${ENTITY}&to=${OTHER}&relationTypes=NOPE`)
+      .set(authHeader(user.accessToken))
+      .expect(400);
+    expect(JSON.stringify(bad.body)).toContain('NOPE');
   });
 
   it('answers evidence batch with only the caller’s rows', async () => {

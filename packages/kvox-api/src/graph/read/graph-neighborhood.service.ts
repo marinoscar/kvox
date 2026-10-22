@@ -269,11 +269,13 @@ export class GraphNeighborhoodService {
   }
 
   /** `r.type = ANY(...)` when filtered, else TRUE. */
-  private relationTypeSql(a: string, relationTypes: string[] | undefined): KvoxSql {
+  /** @internal Shared with GraphPathsService. */
+  relationTypeSql(a: string, relationTypes: string[] | undefined): KvoxSql {
     return relationTypes ? Prisma.sql`${ident(a)}.type = ANY(${textArray(relationTypes)})` : Prisma.sql`TRUE`;
   }
 
-  private itemOk(a: string, asOf: Date): KvoxSql {
+  /** @internal Shared with GraphPathsService. */
+  itemOk(a: string, asOf: Date): KvoxSql {
     return Prisma.sql`${readableItemSql(a)} AND ${notSensitiveSql(a)} AND ${itemValidAtSql(a, asOf)}`;
   }
 
@@ -329,7 +331,8 @@ export class GraphNeighborhoodService {
       GROUP BY b.node_id`;
   }
 
-  private async loadEntities(
+  /** @internal Shared with GraphPathsService. */
+  async loadEntities(
     tx: Tx,
     ownerId: string,
     ids: string[],
@@ -354,7 +357,8 @@ export class GraphNeighborhoodService {
     }));
   }
 
-  private async loadItems(
+  /** @internal Shared with GraphPathsService. */
+  async loadItems(
     tx: Tx,
     ownerId: string,
     ids: string[],
@@ -415,7 +419,8 @@ export class GraphNeighborhoodService {
    * One LATERAL aggregate per row, driven by `kg_mentions(owner_id, entity_id)`
    * and `kg_evidence(subject_kind, subject_id)`.
    */
-  private async enrichNodes(tx: Tx, ownerId: string, nodes: GraphNode[]): Promise<GraphNode[]> {
+  /** @internal Shared with GraphPathsService. */
+  async enrichNodes(tx: Tx, ownerId: string, nodes: GraphNode[]): Promise<GraphNode[]> {
     if (nodes.length === 0) return nodes;
     const owner = Prisma.sql`${ownerId}::uuid`;
     const entityIds = nodes.filter((n) => n.nodeKind === 'entity').map((n) => n.id);
@@ -458,7 +463,8 @@ export class GraphNeighborhoodService {
   }
 
   /** `evidenceCount` / `lastEvidenceAt` for the final edges; a virtual edge carries its item's. */
-  private async enrichEdges(tx: Tx, ownerId: string, edges: GraphEdge[]): Promise<GraphEdge[]> {
+  /** @internal Shared with GraphPathsService. */
+  async enrichEdges(tx: Tx, ownerId: string, edges: GraphEdge[]): Promise<GraphEdge[]> {
     if (edges.length === 0) return edges;
     const owner = Prisma.sql`${ownerId}::uuid`;
     const relationIds = edges.filter((e) => !e.virtual).map((e) => e.id);

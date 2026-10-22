@@ -291,6 +291,98 @@ export const expandRequestSchema = z.object({
 export type ExpandRequest = z.infer<typeof expandRequestSchema>;
 
 // ---------------------------------------------------------------------------
+// GET /api/graph/paths (GIC-12, #673)
+// ---------------------------------------------------------------------------
+
+/**
+ * The most paths one `GET /api/graph/paths` call returns (`k`).
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_K = 5;
+/**
+ * The most hops one `GET /api/graph/paths` path may have (`maxHops`).
+ *
+ * @stability experimental
+ */
+export const GRAPH_PATHS_MAX_HOPS = 5;
+
+/**
+ * Zod schema for the graph paths query wire shape.
+ *
+ * @stability experimental
+ */
+export const graphPathsQuerySchema = z
+  .object({
+    from: z.uuid().describe('The entity (or item) the paths start at.'),
+    to: z.uuid().describe('The entity (or item) the paths end at.'),
+    k: z.coerce.number().int().min(1).max(GRAPH_PATHS_MAX_K).default(3).describe('How many distinct paths to return, 1-5.'),
+    maxHops: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(GRAPH_PATHS_MAX_HOPS)
+      .default(4)
+      .describe('The longest path to look for, in edges, 1-5.'),
+    types: csv.describe('Comma-separated entity types / item kinds a path may pass through (the endpoints are always kept).'),
+    relationTypes: csv.describe('Comma-separated relation types a path may follow.'),
+    as_of: asOfParam,
+  })
+  .refine((q) => q.from !== q.to, { message: '`from` and `to` must be different', path: ['to'] });
+/**
+ * The parsed shape of {@link graphPathsQuerySchema}.
+ *
+ * @stability experimental
+ */
+export type GraphPathsQuery = z.infer<typeof graphPathsQuerySchema>;
+
+/**
+ * Zod schema for one path of a graph paths response.
+ *
+ * @stability experimental
+ */
+export const graphPathSchema = z.object({
+  nodeIds: z.array(z.uuid()).min(2).describe('The nodes in walking order: `from` first, `to` last.'),
+  edgeIds: z
+    .array(z.string())
+    .min(1)
+    .describe('The edge between each consecutive pair of nodes, by id in the response `slice`. An edge keeps its stored direction.'),
+  hops: z.number().int().min(1).max(GRAPH_PATHS_MAX_HOPS).describe('Number of edges; `edgeIds.length`.'),
+  score: z
+    .number()
+    .min(0)
+    .describe('Mean of `log(1 + evidenceCount)` over the path edges, discounted for passing through high-degree hubs. Higher is a stronger connection.'),
+});
+/**
+ * The parsed shape of {@link graphPathSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphPath = z.infer<typeof graphPathSchema>;
+
+/**
+ * Zod schema for the graph paths response wire shape.
+ *
+ * @stability experimental
+ */
+export const graphPathsResponseSchema = z.object({
+  from: z.uuid(),
+  to: z.uuid(),
+  asOf: z.string().nullable().describe('The `as_of` instant that was applied; null when the request had none (now).'),
+  paths: z.array(graphPathSchema).describe('Best first. Empty when nothing connects the two within `maxHops`.'),
+  slice: graphSliceSchema.describe('The union of the nodes and edges of every returned path.'),
+  truncated: z
+    .boolean()
+    .describe('True when a per-hop cap was hit, so a stronger path than those returned may exist.'),
+});
+/**
+ * The parsed shape of {@link graphPathsResponseSchema}.
+ *
+ * @stability experimental
+ */
+export type GraphPathsResponse = z.infer<typeof graphPathsResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // GET /api/graph/entities/:id/timeline
 // ---------------------------------------------------------------------------
 

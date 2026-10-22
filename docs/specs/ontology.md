@@ -3814,6 +3814,18 @@ selected entity's page, and `Escape` deselects — each selection is also
 announced through a live region for a screen-reader user who cannot see the
 canvas at all.
 
+**Paths between two nodes (GIC-12, #673).** `GET /api/graph/paths?from&to&k&maxHops&types&relationTypes&as_of`
+(`graph:read`, owner-only, a node that is not yours or not readable is the same
+404) answers "how is A connected to B?" with the top `k` (1–5) distinct paths of
+at most `maxHops` (1–5) edges and the slice they cover. `GraphPathsService`
+(`packages/kvox-api/src/graph/read/graph-paths.service.ts`) runs a bidirectional
+BFS, one statement per level, with the neighbourhood's readable/as-of/filter
+predicates, a 2,000-row cap per level (`truncated`) and the 3 s
+`graph_query_timeout`. An item is only ever an endpoint; a `sensitive` PersonFact
+is never reachable; every relation is walked both ways but returned in its
+stored direction. A path scores `mean(log(1 + evidenceCount))` times a hub
+factor per intermediate node (`graph-path-ranking.ts`). Wire shape: API.md.
+
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
 **Built (issue #371, epic #347).** `packages/kvox-api/src/graph/layout/` holds the

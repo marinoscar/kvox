@@ -41,14 +41,15 @@ export async function withGraphStatementTimeout<T>(
   logger: Logger,
   context: Record<string, unknown>,
   fn: (tx: KvoxGraphTx) => Promise<T>,
+  timeoutMs: number = GRAPH_STATEMENT_TIMEOUT_MS,
 ): Promise<T> {
   try {
     return await prisma.$transaction(
       async (tx) => {
-        await tx.$executeRaw(Prisma.raw(`SET LOCAL statement_timeout = '${GRAPH_STATEMENT_TIMEOUT_MS}ms'`));
+        await tx.$executeRaw(Prisma.raw(`SET LOCAL statement_timeout = '${Math.max(1, Math.floor(timeoutMs))}ms'`));
         return fn(tx);
       },
-      { timeout: GRAPH_STATEMENT_TIMEOUT_MS * 3, maxWait: 5000 },
+      { timeout: Math.max(timeoutMs, GRAPH_STATEMENT_TIMEOUT_MS) * 3, maxWait: 5000 },
     );
   } catch (err) {
     if (isStatementTimeout(err)) {

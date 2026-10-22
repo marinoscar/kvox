@@ -48,6 +48,7 @@ import { graphPreferencesSchema } from './preferences/graph-preferences.schema.j
 import { KgPurgeService } from './purge/kg-purge.service.js';
 import { GraphEvidenceService } from './read/graph-evidence.service.js';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service.js';
+import { GraphPathsService } from './read/graph-paths.service.js';
 import { GraphReadController } from './read/graph-read.controller.js';
 import { GraphReadService } from './read/graph-read.service.js';
 import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler.js';
@@ -166,6 +167,7 @@ export class GraphModule {
       // The read layer (exported for the brief and the Ask agent).
       GraphReadService,
       GraphNeighborhoodService,
+      GraphPathsService,
       GraphEvidenceService,
       // Speaker naming -> Person + IDENTIFIED_AS, via `kg.speaker_link` (#356).
       SpeakerLinkReconciler,
@@ -227,6 +229,7 @@ export class GraphModule {
         GraphEntitiesService,
         GraphReadService,
         GraphNeighborhoodService,
+        GraphPathsService,
         GraphEvidenceService,
         EntityBriefService,
         EntityDigestEnqueuer,
