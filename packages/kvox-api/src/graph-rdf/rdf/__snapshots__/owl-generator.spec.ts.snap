@@ -60,12 +60,37 @@ kv:BROADER
     rdfs:range kv:Topic ;
     rdfs:subPropertyOf skos:broader .
 
+kv:COMPETITOR_OF
+    a owl:ObjectProperty,
+        owl:SymmetricProperty ;
+    rdfs:comment "Two organizations compete in the same market: \\"Google and Microsoft compete on productivity suites\\". Direction does not matter: record it once. Only when the source says or clearly implies the organizations compete; two organizations merely mentioned together are not competitors." ;
+    rdfs:domain kv:Organization ;
+    rdfs:label "Competitor of" ;
+    rdfs:range kv:Organization .
+
+kv:CONCERNS
+    a owl:ObjectProperty ;
+    rdfs:comment "What a project is about: \\"The Copilot rollout concerns Microsoft Copilot and licensing cost\\" gives the project CONCERNS the product and CONCERNS the topic. A meeting covering a subject is DISCUSSED; CONCERNS ties a project to its own subject matter. A project that adopts or runs a product is USES; use CONCERNS for the product the effort is about." ;
+    rdfs:domain kv:Project ;
+    rdfs:label "Concerns" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Product kv:Topic )
+    ] .
+
 kv:CREATED_IN
     a owl:ObjectProperty ;
     rdfs:comment "The meeting in which a commitment was made." ;
     rdfs:domain kv:Commitment ;
     rdfs:label "Created in" ;
     rdfs:range kv:Meeting .
+
+kv:CUSTOMER_OF
+    a owl:ObjectProperty ;
+    rdfs:comment "An organization buys from another organization: \\"Company A is a Microsoft customer\\" is Company A CUSTOMER_OF Microsoft. Direction matters: customer first, supplier second. Using a specific product is USES; CUSTOMER_OF is the commercial relationship between the two organizations. A partner, reseller or integrator is PARTNER_OF, not CUSTOMER_OF." ;
+    rdfs:domain kv:Organization ;
+    rdfs:label "Customer of" ;
+    rdfs:range kv:Organization .
 
 kv:Claim
     a owl:Class ;
@@ -173,6 +198,27 @@ kv:INTERESTED_IN
     rdfs:range kv:Interest ;
     rdfs:subPropertyOf foaf:topic_interest .
 
+kv:INVOLVED_IN
+    a owl:ObjectProperty ;
+    rdfs:comment "A person has a stated role in a project, and optionally a stance toward it: \\"Joe is the budget approver for the Copilot rollout and is skeptical of it\\" is Joe INVOLVED_IN Copilot rollout {role: approver, stance: skeptical}. Assigned tasks are Commitments with ASSIGNED_TO; attending one meeting about a project is ATTENDED + DISCUSSED, not INVOLVED_IN unless the source states a role. Set role only to the role the source states or clearly implies; if no role is stated, do not create INVOLVED_IN. Set stance only when the source states it or the person's position is unmistakably implied (an explicit objection, endorsement or refusal). Never infer stance from tone, a single question, or silence; when in doubt, omit it." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Involved in" ;
+    rdfs:range kv:Project .
+
+kv:INVOLVED_IN.role
+    a owl:DatatypeProperty ;
+    rdfs:comment "The role the person plays in the project, as the source states it." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Role" ;
+    rdfs:range xsd:string .
+
+kv:INVOLVED_IN.stance
+    a owl:DatatypeProperty ;
+    rdfs:comment "The person's position toward the project, only when the source states it or it is unmistakably implied; never inferred from tone alone." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Stance" ;
+    rdfs:range xsd:string .
+
 kv:Interest
     a owl:Class ;
     rdfs:comment "A lasting personal interest a person has outside work — a hobby, a sport, music, food, travel or a cause — e.g. \\"trail running\\", \\"jazz piano\\" or \\"the local food bank\\"." ;
@@ -184,6 +230,24 @@ kv:Interest.category
     rdfs:comment "What kind of interest this is, only if it is clear from the source." ;
     rdfs:domain kv:Interest ;
     rdfs:label "Category" ;
+    rdfs:range xsd:string .
+
+kv:KNOWS_ABOUT
+    a owl:ObjectProperty ;
+    rdfs:comment "A person has expertise in a topic or product: \\"Maria is our expert on AI governance\\" is Maria KNOWS_ABOUT AI governance {level: expert}. Hobbies and lasting private interests are not KNOWS_ABOUT. Set level only when the source states it (\\"expert\\", \\"hands-on\\", \\"just heard of it\\"); attending a meeting about a topic does not make someone know about it." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Knows about" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Product kv:Topic )
+    ] ;
+    rdfs:subPropertyOf schema:knowsAbout .
+
+kv:KNOWS_ABOUT.level
+    a owl:DatatypeProperty ;
+    rdfs:comment "How deep the knowledge is, only if the source states it." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Level" ;
     rdfs:range xsd:string .
 
 kv:Meeting
@@ -240,6 +304,14 @@ kv:Milestone.kind
     rdfs:label "Kind" ;
     rdfs:range xsd:string .
 
+kv:OFFERED_BY
+    a owl:ObjectProperty ;
+    rdfs:comment "The vendor of a product: \\"Copilot is Microsoft's\\" is Microsoft Copilot OFFERED_BY Microsoft. A product has one current vendor; a change of vendor (an acquisition) is a new OFFERED_BY that closes the old one. A customer that merely uses the product is USES or CUSTOMER_OF, never OFFERED_BY." ;
+    rdfs:domain kv:Product ;
+    rdfs:label "Offered by" ;
+    rdfs:range kv:Organization ;
+    rdfs:subPropertyOf schema:manufacturer .
+
 kv:OWED_TO
     a owl:ObjectProperty ;
     rdfs:comment "The person or organization a commitment is owed to, when one is stated." ;
@@ -263,6 +335,14 @@ kv:PARENT_OF
     rdfs:label "Parent of" ;
     rdfs:range kv:Person ;
     rdfs:subPropertyOf schema:children .
+
+kv:PARTNER_OF
+    a owl:ObjectProperty,
+        owl:SymmetricProperty ;
+    rdfs:comment "Two organizations are business partners (alliance, reseller, integrator): \\"Accenture is Company A's partner\\". Direction does not matter: record it once. A buyer and supplier is CUSTOMER_OF; organizations that compete are COMPETITOR_OF." ;
+    rdfs:domain kv:Organization ;
+    rdfs:label "Partner of" ;
+    rdfs:range kv:Organization .
 
 kv:PART_OF
     a owl:ObjectProperty ;
@@ -418,6 +498,23 @@ kv:Trip.startDate
     rdfs:domain kv:Trip ;
     rdfs:label "Start date" ;
     rdfs:range xsd:date .
+
+kv:USES
+    a owl:ObjectProperty ;
+    rdfs:comment "An organization or a project adopts, evaluates or runs a product, at a stage: \\"Company A is piloting Copilot\\" is Company A USES Copilot {stage: piloting}. A move to a later stage (piloting to adopted) is a new USES with the new stage, which closes the earlier one; never edit the old stage. The vendor of the product is OFFERED_BY, not USES; a project about a product without adopting it is CONCERNS. Set stage only when the source states it; \\"evaluating\\" is for a stated assessment, not for a passing mention." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Organization kv:Project )
+    ] ;
+    rdfs:label "Uses" ;
+    rdfs:range kv:Product .
+
+kv:USES.stage
+    a owl:DatatypeProperty ;
+    rdfs:comment "How far the adoption has gone, only if the source states it." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Stage" ;
+    rdfs:range xsd:string .
 
 kv:WORKS_FOR
     a owl:ObjectProperty ;

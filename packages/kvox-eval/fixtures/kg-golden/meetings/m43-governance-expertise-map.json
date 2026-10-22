@@ -1,0 +1,321 @@
+{
+  "id": "m43",
+  "title": "Governance and expertise map",
+  "tags": [
+    "internal",
+    "note-only",
+    "stakeholders-market"
+  ],
+  "recordedAt": "2026-09-15T10:00:00Z",
+  "contextText": "Expertise mapping for the Fenwick Retail deployment; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Governance and expertise map\n\n**Date:** September 15\n**Attendees:** Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm\n\n## Summary\n\nFenwick Retail is moving from a pilot to a full deployment of Zephyr Suite, and the working group met to record who knows what, so that questions from the stores reach the right person. The group also set up the Governance framework, the project that will write the internal rules for using the suite's forecasting features.\n\n## Where the expertise sits\n\n- Maria Okafor is the group's expert on AI governance and has written two policies on the subject for previous employers.\n- Daniel Reyes is a practitioner with Zephyr Suite: he configured the pilot stores and still answers their questions.\n- Sofia Marin is aware of Data residency requirements but said she is not an expert and would want legal review of anything binding.\n\n## Adoption status\n\n- Fenwick Retail has moved Zephyr Suite from a pilot to adopted across the northern region, so the earlier pilot status no longer applies.\n- The Governance framework concerns AI governance and will be reviewed by the legal team before it is published.\n\n## Roles in the Governance framework\n\n- Maria Okafor advises the Governance framework and does not own its delivery.\n- Greta Holm owns the budget for the Governance framework and said she is supportive of the approach.\n\n## Observations\n\n- Daniel Reyes asked many questions about the draft timeline, but said nothing about whether he agrees with the plan.\n- The group agreed that the framework should stay short enough for store managers to read.\n\n## Open points\n\nThe schedule for legal review is not set. Whether the framework will also cover the supplier forecasting data has not been decided.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-fenwick-retail",
+      "type": "Organization",
+      "label": "Fenwick Retail",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-product-zephyr-suite",
+      "type": "Product",
+      "label": "Zephyr Suite",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [
+    {
+      "id": "g-rel-fenwick-uses-zephyr",
+      "type": "USES",
+      "from": "g-org-fenwick-retail",
+      "to": "g-product-zephyr-suite",
+      "props": {
+        "stage": "piloting"
+      },
+      "validFrom": "2026-03-01",
+      "validTo": null,
+      "precision": "month"
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Governance and expertise map",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Governance and expertise map"
+          }
+        ]
+      },
+      {
+        "key": "maria",
+        "type": "Person",
+        "label": "Maria Okafor",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+          }
+        ]
+      },
+      {
+        "key": "daniel",
+        "type": "Person",
+        "label": "Daniel Reyes",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+          }
+        ]
+      },
+      {
+        "key": "sofia",
+        "type": "Person",
+        "label": "Sofia Marin",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+          }
+        ]
+      },
+      {
+        "key": "greta",
+        "type": "Person",
+        "label": "Greta Holm",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor, Daniel Reyes, Sofia Marin, Greta Holm"
+          }
+        ]
+      },
+      {
+        "key": "fenwick",
+        "type": "Organization",
+        "label": "Fenwick Retail",
+        "aliases": [],
+        "existingId": "g-org-fenwick-retail",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fenwick Retail is moving from a pilot"
+          }
+        ]
+      },
+      {
+        "key": "zephyr",
+        "type": "Product",
+        "label": "Zephyr Suite",
+        "aliases": [],
+        "existingId": "g-product-zephyr-suite",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a full deployment of Zephyr Suite"
+          }
+        ]
+      },
+      {
+        "key": "framework",
+        "type": "Project",
+        "label": "Governance framework",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Governance framework, the project that will write the internal rules"
+          }
+        ]
+      },
+      {
+        "key": "aigov",
+        "type": "Topic",
+        "label": "AI governance",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the group's expert on AI governance"
+          }
+        ]
+      },
+      {
+        "key": "residency",
+        "type": "Topic",
+        "label": "Data residency",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "aware of Data residency requirements"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "maria",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "expert"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor is the group's expert on AI governance"
+          }
+        ]
+      },
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "daniel",
+        "to": "zephyr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "practitioner"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Daniel Reyes is a practitioner with Zephyr Suite"
+          }
+        ]
+      },
+      {
+        "type": "KNOWS_ABOUT",
+        "from": "sofia",
+        "to": "residency",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "level": "aware"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sofia Marin is aware of Data residency requirements"
+          }
+        ]
+      },
+      {
+        "type": "USES",
+        "from": "fenwick",
+        "to": "zephyr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "stage": "adopted"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Fenwick Retail has moved Zephyr Suite from a pilot to adopted across the northern region"
+          }
+        ]
+      },
+      {
+        "type": "CONCERNS",
+        "from": "framework",
+        "to": "aigov",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Governance framework concerns AI governance"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "maria",
+        "to": "framework",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "advisor"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maria Okafor advises the Governance framework and does not own its delivery"
+          }
+        ]
+      },
+      {
+        "type": "INVOLVED_IN",
+        "from": "greta",
+        "to": "framework",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "role": "owner",
+          "stance": "supportive"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Greta Holm owns the budget for the Governance framework and said she is supportive of the approach"
+          }
+        ]
+      }
+    ],
+    "items": [],
+    "negatives": [
+      {
+        "quote": "Daniel Reyes asked many questions about the draft timeline, but said nothing about whether he agrees with the plan",
+        "why": "Asking questions is not a stance: no stance for Daniel Reyes, and no INVOLVED_IN since no role is stated."
+      }
+    ]
+  }
+}
