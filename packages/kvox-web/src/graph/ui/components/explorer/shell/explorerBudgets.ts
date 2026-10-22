@@ -100,3 +100,23 @@ export function explorerBudgets(input: {
   }
   return DEFAULT_BUDGETS;
 }
+
+/** Nodes above which the minimap is on by itself on an expanded window (GIC-09). */
+export const MINIMAP_MIN_NODES = 150;
+
+/**
+ * Whether the minimap is drawn: never on a compact window (no room, and a thumb is the pan);
+ * on a medium window only when the person switched it on; on an expanded window once the
+ * canvas holds more than {@link MINIMAP_MIN_NODES} nodes. The list view has no canvas, so no minimap.
+ */
+export function minimapVisible(input: {
+  windowClass: WindowClass;
+  nodeCount: number;
+  mediumOn: boolean;
+  listView: boolean;
+}): boolean {
+  if (input.listView) return false;
+  if (input.windowClass === 'compact') return false;
+  if (input.windowClass === 'medium') return input.mediumOn;
+  return input.nodeCount > MINIMAP_MIN_NODES;
+}

@@ -9,7 +9,8 @@ import 'vitest-axe/extend-expect';
 
 import { CAP_WARNING_TEXT } from '../../src/graph/ui/components/explorer/CapWarning.js';
 import type { GraphCanvasProps } from '../../src/graph/ui/components/explorer/GraphCanvas.js';
-import { SEED_SEARCH_LABEL } from '../../src/graph/ui/components/explorer/SeedSearch.js';
+import { STALE_TEXT, TOO_LARGE_TEXT } from '../../src/graph/ui/components/overview/OverviewBanners.js';
+import { PALETTE_LABEL } from '../../src/graph/ui/components/explorer/palette/ExplorerCommandPalette.js';
 import { setExplorerHandoff } from '../../src/graph/headless/utils/explorerHandoff.js';
 import {
   GraphExplorerPage,
@@ -22,11 +23,14 @@ import {
   ACME_ID,
   ANA_ID,
   BEN_ID,
+  GLOBEX_ID,
+  INITECH_ID,
   JOE_ID,
   expandFixture,
   gid,
   graphEntitySummaries,
   manyNodesSlice,
+  overviewStates,
   type ExpandFixtureRequest,
 } from './graphData.js';
 import { server } from './msw-compat.js';
@@ -57,6 +61,7 @@ const mocks = vi.hoisted(() => {
       }),
       unpinAll: vi.fn(),
       isPinned: vi.fn((id: string) => pinned.has(id)),
+      focusNode: vi.fn(),
     },
   };
 });
@@ -138,6 +143,8 @@ beforeEach(() => {
   mocks.controls.zoomIn.mockClear();
   mocks.controls.zoomOut.mockClear();
   mocks.controls.fit.mockClear();
+  mocks.controls.focusNode.mockClear();
+  mocks.controls.relayoutAll.mockClear();
   bodies = [];
   useExpand();
 });
@@ -209,45 +216,101 @@ describe('GraphExplorerPage — seeding', () => {
     server.events.removeAllListeners();
   });
 
-  it('offers a seed search when nothing was viewed, and choosing sets ?seed=', async () => {
+  const noRecents = () =>
     server.use(
       http.get('*/api/graph/entities', ({ request }) => {
         const url = new URL(request.url);
-        if (url.searchParams.get('sort') === 'viewed') {
-          return HttpResponse.json({ data: { items: [], nextCursor: null } });
-        }
+        const sort = url.searchParams.get('sort');
+        if (sort === 'viewed') return HttpResponse.json({ data: { items: [], nextCursor: null } });
         const q = url.searchParams.get('q')?.toLowerCase();
-        const items = q
-          ? graphEntitySummaries.filter((s) => s.label.toLowerCase().includes(q))
-          : graphEntitySummaries;
+        const types = url.searchParams.get('type')?.split(',');
+        let items = graphEntitySummaries;
+        if (q) items = items.filter((s) => s.label.toLowerCase().includes(q));
+        if (types) items = items.filter((s) => types.includes(s.type));
         return HttpResponse.json({ data: { items, nextCursor: null } });
       }),
     );
+
+  it('shows Start here when nothing was viewed, and choosing an active person sets ?seed=', async () => {
+    noRecents();
     const user = userEvent.setup();
     const { container } = renderExplorer('/graph/explore');
 
-    const input = await screen.findByRole('combobox', { name: SEED_SEARCH_LABEL });
-    // "Recently updated": the first six.
-    expect(await screen.findByRole('button', { name: 'Joe Rivera' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
+    // Themes from the overview (the "Unconnected" pool is not a theme), Active, and an empty Recent.
+    expect(await screen.findByRole('button', { name: /Globex/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Unconnected/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("You haven't opened anything yet.")).toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
 
-    await user.type(input, 'Ana');
-    await user.click(await screen.findByRole('option', { name: /Ana Diaz/ }));
+    const active = await screen.findByRole('region', { name: 'Person' });
+    await user.click(within(active).getByRole('button', { name: 'Ana Diaz' }));
     await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ANA_ID));
     await waitFor(() => expect(bodies.at(-1)?.nodeIds).toEqual([ANA_ID]));
   });
 
-  it('starts from a recently updated chip', async () => {
-    server.use(
-      http.get('*/api/graph/entities', ({ request }) => {
-        const viewed = new URL(request.url).searchParams.get('sort') === 'viewed';
-        return HttpResponse.json({ data: { items: viewed ? [] : graphEntitySummaries, nextCursor: null } });
-      }),
-    );
+  it('asks the API for the most-mentioned people of the last 30 days', async () => {
+    noRecents();
+    const seen: URL[] = [];
+    server.events.on('request:start', ({ request }) => {
+      if (request.url.includes('sort=mentions')) seen.push(new URL(request.url));
+    });
+    renderExplorer('/graph/explore');
+    await screen.findByRole('region', { name: 'Person' });
+    const people = seen.find((url) => url.searchParams.get('type') === 'Person');
+    expect(people?.searchParams.get('since')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(people?.searchParams.get('limit')).toBe('5');
+    expect(seen.map((url) => url.searchParams.get('type')).sort()).toEqual(['Person', 'Product', 'Project', 'Topic']);
+    server.events.removeAllListeners();
+  });
+
+  it('starts from a recently viewed entity on Start here (Home)', async () => {
+    const user = userEvent.setup();
+    renderExplorer('/graph/explore?start=1');
+    const recent = await screen.findByRole('region', { name: 'Last opened' });
+    await user.click(await within(recent).findByRole('button', { name: 'Acme Corp' }));
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ACME_ID));
+    expect(currentUrl().searchParams.get('start')).toBeNull();
+  });
+
+  it('seeds the explorer with a theme through the overview hand-off', async () => {
+    noRecents();
     const user = userEvent.setup();
     renderExplorer('/graph/explore');
-    await user.click(await screen.findByRole('button', { name: 'Acme Corp' }));
-    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(ACME_ID));
+    await user.click(await screen.findByRole('button', { name: /Globex/ }));
+    await waitFor(() => expect(currentUrl().searchParams.get('cluster')).toBe('1'));
+    await canvasReady().catch(() => screen.findByTestId('fake-canvas'));
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    expect(bodies[0].nodeIds).toContain(GLOBEX_ID);
+  });
+
+  it('says it is building the map while no snapshot exists, and handles the stale and too-large notices', async () => {
+    noRecents();
+    server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.building() })));
+    const first = renderExplorer('/graph/explore');
+    expect(await screen.findByText('Building your map…')).toBeInTheDocument();
+    first.unmount();
+
+    server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.stale() })));
+    const second = renderExplorer('/graph/explore');
+    expect(await screen.findByText(STALE_TEXT)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Globex/ })).toBeInTheDocument();
+    second.unmount();
+
+    server.use(http.get('*/api/graph/overview', () => HttpResponse.json({ data: overviewStates.tooLarge() })));
+    renderExplorer('/graph/explore');
+    expect(await screen.findByText(TOO_LARGE_TEXT)).toBeInTheDocument();
+  });
+
+  it('starts from Home: the canvas gives way to Start here, keeping the seeds until a choice', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'Start here' }));
+    expect(await screen.findByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
+    expect(currentUrl().searchParams.get('start')).toBe('1');
+    expect(currentUrl().searchParams.get('seed')).toBe(JOE_ID);
+    expect(screen.queryByTestId('fake-canvas')).not.toBeInTheDocument();
   });
 
   it('renders an overview hand-off at once, before the expand returns', async () => {
@@ -274,10 +337,10 @@ describe('GraphExplorerPage — seeding', () => {
     expect(bodies).toEqual([{ nodeIds: [JOE_ID, BEN_ID], cap: 300 }]);
   });
 
-  it('falls back to the seed search with a hint when ?cluster= has no hand-off (a reload)', async () => {
+  it('falls back to Start here with a hint when ?cluster= has no hand-off (a reload)', async () => {
     renderExplorer('/graph/explore?cluster=c-7');
     expect(await screen.findByText(CLUSTER_HINT)).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: SEED_SEARCH_LABEL })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Where do you want to start?' })).toBeInTheDocument();
     expect(bodies).toHaveLength(0);
   });
 
@@ -898,5 +961,234 @@ describe('GraphExplorerPage — responsive budgets (GIC-08)', () => {
     expect(within(screen.getByRole('region', { name: 'Inspector' })).getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
     expect(canvas).toHaveAttribute('data-reveal-right', '0');
     expect(within(canvas).getByRole('button', { name: 'Acme Corp' })).toHaveAttribute('data-selected', 'true');
+  });
+});
+
+describe('GraphExplorerPage — command palette (GIC-09)', () => {
+  const searchInput = () => screen.findByRole('combobox', { name: PALETTE_LABEL });
+
+  it('opens with Ctrl+K, closes with Escape and returns focus to the canvas', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    const application = screen.getByRole('application');
+    application.focus();
+
+    await user.keyboard('{Control>}k{/Control}');
+    const input = await searchInput();
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('aria-controls');
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
+    await waitFor(() => expect(application).toHaveFocus());
+  });
+
+  it('opens with the Meta key and with "/", but not while typing in a field', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    screen.getByRole('application').focus();
+    await user.keyboard('/');
+    await searchInput();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
+
+    await user.keyboard('{Meta>}k{/Meta}');
+    await searchInput();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
+
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    field.focus();
+    await user.keyboard('/');
+    expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument();
+    field.remove();
+  });
+
+  it('opens from the search field in the top bar', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'Search the graph' }));
+    expect(await searchInput()).toBeInTheDocument();
+  });
+
+  it('selects a node that is on the canvas and flies the camera to it', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    await user.keyboard('/');
+    const input = await searchInput();
+    await user.type(input, 'ana');
+    const option = await screen.findByRole('option', { name: /Ana Diaz/ });
+    expect(within(screen.getByRole('group', { name: 'On canvas' })).getByRole('option', { name: /Ana Diaz/ })).toBe(option);
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(mocks.controls.focusNode).toHaveBeenCalledWith(ANA_ID));
+    await waitFor(() =>
+      expect(within(canvas).getByRole('button', { name: 'Ana Diaz' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  it('adds an entity that is not on the canvas as a seed on Enter, and replaces the seeds on Alt+Enter', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.keyboard('/');
+    await user.type(await searchInput(), 'globex');
+    const group = await screen.findByRole('group', { name: 'In your graph' });
+    expect(within(group).getByRole('option', { name: /Globex/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(`${JOE_ID},${GLOBEX_ID}`));
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: PALETTE_LABEL })).not.toBeInTheDocument());
+    await canvasReady();
+
+    await user.keyboard('/');
+    await user.type(await searchInput(), 'initech');
+    await screen.findByRole('group', { name: 'In your graph' });
+    await user.keyboard('{Alt>}{Enter}{/Alt}');
+    await waitFor(() => expect(currentUrl().searchParams.get('seed')).toBe(INITECH_ID));
+  });
+
+  it('refuses an eleventh seed with a message and stays open', async () => {
+    const ten = Array.from({ length: 10 }, (_, i) => gid(100 + i));
+    const user = userEvent.setup();
+    renderExplorer(`/graph/explore?seed=${ten.join(',')}`);
+    // The fixture has no such entities: the explorer says so, but the palette still opens on "/".
+    await screen.findByRole('heading', { name: NOT_IN_GRAPH_TITLE });
+    await user.keyboard('/');
+    await user.type(await searchInput(), 'globex');
+    await screen.findByRole('option', { name: /Globex/ });
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent(/up to 10/);
+    expect(screen.getByRole('combobox', { name: PALETTE_LABEL })).toBeInTheDocument();
+    expect(currentUrl().searchParams.get('seed')).toBe(ten.join(','));
+  });
+
+  it('filters by type: tokens', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.keyboard('/');
+    await user.type(await searchInput(), 'type:Organization a');
+    const canvasGroup = await screen.findByRole('group', { name: 'On canvas' });
+    expect(within(canvasGroup).getByRole('option', { name: /Acme Corp/ })).toBeInTheDocument();
+    expect(within(canvasGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
+    const graphGroup = await screen.findByRole('group', { name: 'In your graph' });
+    expect(within(graphGroup).queryByRole('option', { name: /Ana Diaz/ })).not.toBeInTheDocument();
+    expect(within(graphGroup).getByRole('option', { name: /Globex/ })).toBeInTheDocument();
+  });
+
+  it('moves with the arrow keys and announces the result count', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.keyboard('/');
+    const input = await searchInput();
+    await user.type(input, 'a');
+    await screen.findByRole('group', { name: 'On canvas' });
+    const options = await screen.findAllByRole('option');
+    expect(options.length).toBeGreaterThan(2);
+    expect(input).toHaveAttribute('aria-activedescendant', options[0].id);
+    await user.keyboard('{ArrowDown}');
+    expect(input).toHaveAttribute('aria-activedescendant', options[1].id);
+    await user.keyboard('{ArrowUp}{ArrowUp}');
+    expect(input).toHaveAttribute('aria-activedescendant', options[options.length - 1].id);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(/\d+ results?/));
+  });
+
+  it('runs actions, and offers no Connect or Lens entry before those capabilities exist', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.keyboard('/');
+    await searchInput();
+    const actions = await screen.findByRole('group', { name: 'Actions' });
+    const names = within(actions).getAllByRole('option').map((o) => o.textContent ?? '');
+    expect(names.join('|')).toMatch(/Expand selection/);
+    expect(names.join('|')).toMatch(/Hide selection/);
+    expect(names.join('|')).toMatch(/Re-layout/);
+    expect(names.join('|')).toMatch(/Switch to list/);
+    expect(names.join('|')).not.toMatch(/Connect|Lens/);
+    // No selection yet: Expand is disabled.
+    expect(within(actions).getByRole('option', { name: /Expand selection/ })).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(within(actions).getByRole('option', { name: /Re-layout/ }));
+    expect(mocks.controls.relayoutAll).toHaveBeenCalled();
+
+    await user.keyboard('/');
+    await searchInput();
+    await user.click(await screen.findByRole('option', { name: /Switch to list/ }));
+    await waitFor(() => expect(currentUrl().searchParams.get('view')).toBe('list'));
+  });
+
+  it('is axe-clean, open', async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.keyboard('/');
+    await user.type(await searchInput(), 'a');
+    await screen.findByRole('group', { name: 'On canvas' });
+    expect(await axe(screen.getByRole('dialog'), AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('is a full-screen sheet on a compact window', async () => {
+    setViewportWidth(390);
+    const user = userEvent.setup();
+    renderExplorer();
+    await canvasReady();
+    await user.click(screen.getByRole('button', { name: 'Search the graph' }));
+    await searchInput();
+    expect(screen.getByRole('dialog').className).toMatch(/FullScreen/);
+    expect(screen.getByRole('button', { name: 'Close search' })).toBeInTheDocument();
+  });
+});
+
+describe('GraphExplorerPage — minimap (GIC-09)', () => {
+  const big = () => useExpand(() => HttpResponse.json({ data: manyNodesSlice(JOE_ID, 400) }));
+
+  it('is on by itself on an expanded window above 150 nodes, and is aria-hidden', async () => {
+    big();
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await screen.findByTestId('fake-canvas');
+    await within(canvas).findByRole('button', { name: 'Joe Rivera' });
+    // An open shows 31 nodes; each expansion of the "+N more" stub adds 30.
+    await screen.findByLabelText('31 of 300 nodes');
+    expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument();
+    for (let i = 0; i < 4; i += 1) {
+      await user.click(await within(canvas).findByRole('button', { name: /^\+\d+ more Person$/ }));
+      await screen.findByLabelText(`${31 + 30 * (i + 1)} of 300 nodes`);
+    }
+    const minimap = await screen.findByTestId('explorer-minimap');
+    expect(minimap).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('is off on an expanded window with a small graph', async () => {
+    renderExplorer();
+    await canvasReady();
+    expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument();
+  });
+
+  it('is optional on a medium window, through a toggle', async () => {
+    act(() => setViewportWidth(900));
+    big();
+    const user = userEvent.setup();
+    renderExplorer();
+    await screen.findByTestId('fake-canvas');
+    expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Minimap' }));
+    expect(await screen.findByTestId('explorer-minimap')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Minimap' }));
+    expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument();
+  });
+
+  it('is never on a compact window', async () => {
+    act(() => setViewportWidth(390));
+    big();
+    renderExplorer();
+    await waitFor(() => expect(screen.queryByTestId('explorer-minimap')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Minimap' })).not.toBeInTheDocument();
   });
 });

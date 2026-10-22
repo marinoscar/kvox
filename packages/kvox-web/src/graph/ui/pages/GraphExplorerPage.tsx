@@ -58,6 +58,12 @@ import {
   type ReactNode,
 } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import ExpandIcon from '@mui/icons-material/OpenInFull';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 
 import { CapWarning } from '../components/explorer/CapWarning.js';
 import {
@@ -83,7 +89,15 @@ import { ExplorerToolbar, ExplorerToolbarSkeleton } from '../components/explorer
 import type { GraphCanvasControls, NodeContextMenuEvent } from '../components/explorer/GraphCanvas.js';
 import { CONCENTRIC_EGO_MAX_NODES } from '../components/explorer/layout/layoutBudgets.js';
 import type { CanvasLayout } from '../components/explorer/layout/useCanvasLayout.js';
-import { SeedSearch } from '../components/explorer/SeedSearch.js';
+import { ExplorerMinimap } from '../components/explorer/ExplorerMinimap.js';
+import {
+  ExplorerCommandPalette,
+  type PaletteAction,
+} from '../components/explorer/palette/ExplorerCommandPalette.js';
+import { MAX_PALETTE_SEEDS } from '../components/explorer/palette/paletteModel.js';
+import { ExplorerStartHere } from '../components/explorer/start/ExplorerStartHere.js';
+import { clusterHandoff } from '../components/overview/overviewModel.js';
+import { minimapVisible } from '../components/explorer/shell/explorerBudgets.js';
 import { peekExplorerHandoff, takeExplorerHandoff } from '../../headless/utils/explorerHandoff.js';
 import {
   domainOptions,
@@ -115,7 +129,7 @@ import { useKvoxHost } from '../../../core/headless/index.js';
 const GraphCanvas = lazy(() => canvasLoaders.graphCanvas());
 
 /** The most seed ids `?seed=` may carry. */
-export const MAX_URL_SEEDS = 10;
+export const MAX_URL_SEEDS = MAX_PALETTE_SEEDS;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const NOT_IN_GRAPH_TITLE = "That entity isn't in your graph";
@@ -162,6 +176,8 @@ export function GraphExplorerPage() {
   const typesParam = searchParams.get('types');
   const clusterParam = searchParams.get('cluster');
   const viewParam = searchParams.get('view');
+  // `start=1`: the person asked for the Start-here state (Home); the URL's seeds are kept until they choose something.
+  const startParam = searchParams.get('start') === '1';
   const webgl = useMemo(() => isWebGLAvailable(), []);
   const layoutParam = searchParams.get('layout');
   // The shell's window class and input modality, and the budgets they imply (GIC-08).
@@ -232,12 +248,14 @@ export function GraphExplorerPage() {
 
   // --- Seeding ---------------------------------------------------------------------
   // Peek during render (StrictMode-safe), take once in the effect.
-  const [handoff] = useState(() => (clusterParam ? peekExplorerHandoff() : null));
+  const [handoff, setHandoff] = useState(() => (clusterParam ? peekExplorerHandoff() : null));
   const handoffUsed = useRef(false);
   const [noRecent, setNoRecent] = useState(false);
 
   useEffect(() => {
     if (ontologyLoading) return undefined;
+    // Start here is showing: load nothing until the person chooses (which clears `start`).
+    if (startParam) return undefined;
     if (handoff && !handoffUsed.current) {
       handoffUsed.current = true;
       takeExplorerHandoff();
@@ -269,7 +287,7 @@ export function GraphExplorerPage() {
       });
     return () => controller.abort();
     // `state` is read, not reacted to: the seeds in the URL are the trigger.
-  }, [ontologyLoading, seedKey, handoff, clusterParam, load, loadHandoff, updateParams]);
+  }, [ontologyLoading, startParam, seedKey, handoff, clusterParam, load, loadHandoff, updateParams]);
 
   // The slider starts at the earliest `firstSeenAt` among the seeds.
   const [asOfMin, setAsOfMin] = useState(fiveYearsAgo);
@@ -565,10 +583,75 @@ export function GraphExplorerPage() {
       updateParams((params) => {
         params.set('seed', id);
         params.delete('cluster');
+        params.delete('start');
       });
     },
     [updateParams],
   );
+
+  /** A theme card: seed with the cluster through the overview hand-off, in memory, then `?cluster=`. */
+  const chooseTheme = useCallback(
+    (overview: Parameters<typeof clusterHandoff>[0], clusterId: number) => {
+      handoffUsed.current = false;
+      setHandoff(clusterHandoff(overview, clusterId));
+      updateParams((params) => {
+        params.set('cluster', String(clusterId));
+        params.delete('seed');
+        params.delete('start');
+      });
+    },
+    [updateParams],
+  );
+
+  const goHome = useCallback(() => {
+    setSelected(null);
+    setPreviewId(null);
+    updateParams((params) => params.set('start', '1'));
+  }, [updateParams]);
+
+  // --- Command palette (GIC-09) -----------------------------------------------------------
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [mediumMinimap, setMediumMinimap] = useState(false);
+  const paletteReturnFocus = useRef<HTMLElement | null>(null);
+  const canvasElement = useRef<HTMLDivElement | null>(null);
+
+  const openPalette = useCallback(() => {
+    const active = document.activeElement;
+    paletteReturnFocus.current = active instanceof HTMLElement ? active : null;
+    setPaletteOpen(true);
+  }, []);
+
+  // Escape closes the palette and the canvas takes focus back (the control that opened it, when there is no canvas).
+  const closePalette = useCallback(() => {
+    setPaletteOpen(false);
+    window.requestAnimationFrame(() => {
+      (canvasElement.current ?? paletteReturnFocus.current)?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (paletteOpen || event.defaultPrevented) return;
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && key === 'k') {
+        event.preventDefault();
+        openPalette();
+        return;
+      }
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      openPalette();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paletteOpen, openPalette]);
 
   // --- Keyboard ---------------------------------------------------------------------------
   const onCanvasKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -589,6 +672,9 @@ export function GraphExplorerPage() {
       case 'l':
       case 'L':
         toggleListView();
+        break;
+      case 'Home':
+        goHome();
         break;
       case 'p':
       case 'P':
@@ -631,10 +717,87 @@ export function GraphExplorerPage() {
   );
 
   const hasGraph = nodeCount > 0;
-  const showSeedSearch =
-    !hasGraph && !explorer.isLoading && !explorer.notFound && !explorer.error && seeds.length === 0 &&
-    (noRecent || Boolean(clusterParam && !handoff));
-  const initialLoading = !hasGraph && !showSeedSearch && !explorer.notFound && !explorer.error;
+  // Start here: asked for (Home), or nothing to open (no seed, hand-off or recents; a reload lost its hand-off).
+  const showStartHere =
+    startParam ||
+    (!hasGraph && !explorer.isLoading && !explorer.notFound && !explorer.error && seeds.length === 0 &&
+      (noRecent || Boolean(clusterParam && !handoff)));
+  const initialLoading = !hasGraph && !showStartHere && !explorer.notFound && !explorer.error;
+
+  // The seeds an add from the palette builds on: none while Start here shows.
+  const paletteSeeds = showStartHere ? [] : state.seedIds.length > 0 ? state.seedIds : seeds;
+  const selectedNodeId = selected?.kind === 'node' && graph.hasNode(selected.id) ? selected.id : null;
+  const selectedIsEntity = selectedNodeId !== null && graph.getNodeAttribute(selectedNodeId, 'nodeKind') === 'entity';
+
+  const paletteTypeOptions = useMemo(
+    () => nodeTypes.map((option) => ({ key: option.key, label: option.label })),
+    [nodeTypes],
+  );
+
+  const onPaletteSelectNode = useCallback(
+    (id: string) => {
+      if (!graph.hasNode(id)) return;
+      setPreviewId(null);
+      selectNode(id, true);
+      canvasControls.current?.focusNode?.(id);
+    },
+    [graph, selectNode],
+  );
+
+  const onPaletteSetSeeds = useCallback(
+    (ids: string[]) => {
+      updateParams((params) => {
+        params.set('seed', ids.join(','));
+        params.delete('cluster');
+        params.delete('start');
+      });
+      setAnnouncement(ids.length === 1 ? 'Starting from 1 thing' : `Starting from ${ids.length} things`);
+    },
+    [updateParams],
+  );
+
+  // What the palette can do right now. "Connect A and B" (GIC-13) and the Lenses (GIC-17) are added here
+  // only when those capabilities exist; they are not stubbed.
+  const paletteActions = useMemo<PaletteAction[]>(() => {
+    if (showStartHere) return [];
+    const list: PaletteAction[] = [
+      {
+        id: 'expand',
+        label: 'Expand selection',
+        hint: selectedNodeId ? graph.getNodeAttribute(selectedNodeId, 'label') : 'Select a node first',
+        icon: <ExpandIcon fontSize="small" />,
+        disabled: !selectedIsEntity || atCap,
+        run: () => selectedNodeId && onExpand(selectedNodeId),
+      },
+      {
+        id: 'hide',
+        label: 'Hide selection',
+        hint: selectedNodeId ? graph.getNodeAttribute(selectedNodeId, 'label') : 'Select a node first',
+        icon: <VisibilityOffOutlinedIcon fontSize="small" />,
+        disabled: selectedNodeId === null,
+        run: () => selectedNodeId && onHide(selectedNodeId),
+      },
+      {
+        id: 'relayout',
+        label: 'Re-layout',
+        icon: <AutoFixHighIcon fontSize="small" />,
+        disabled: listView || !hasGraph,
+        run: () => canvasControls.current?.relayoutAll(),
+      },
+      {
+        id: 'view',
+        label: listView ? 'Switch to graph' : 'Switch to list',
+        icon: listView ? <HubOutlinedIcon fontSize="small" /> : <ViewListIcon fontSize="small" />,
+        disabled: !webgl,
+        run: toggleListView,
+      },
+      { id: 'home', label: 'Start here', icon: <HomeOutlinedIcon fontSize="small" />, run: goHome },
+    ];
+    return list;
+    // `version`: node labels are read from the in-place graph.
+  }, [showStartHere, selectedNodeId, selectedIsEntity, atCap, listView, hasGraph, webgl, version, graph, onExpand, onHide, toggleListView, goHome]);
+
+  const minimapShown = minimapVisible({ windowClass, nodeCount, mediumOn: mediumMinimap, listView });
 
   const title = (
     <>
@@ -651,7 +814,18 @@ export function GraphExplorerPage() {
 
   /** The early states have no graph yet, so no shell: a heading and one panel. */
   let earlyBody: ReactNode = null;
-  if (explorer.notFound && !hasGraph) {
+  if (showStartHere) {
+    earlyBody = (
+      <ExplorerStartHere
+        windowClass={windowClass}
+        onChooseEntity={chooseSeed}
+        onChooseTheme={chooseTheme}
+        onOpenSearch={openPalette}
+        hint={clusterParam && !handoff && !startParam ? CLUSTER_HINT : undefined}
+        typeLabel={typeLabel}
+      />
+    );
+  } else if (explorer.notFound && !hasGraph) {
     earlyBody = (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="h6" component="h2" gutterBottom>
@@ -678,8 +852,6 @@ export function GraphExplorerPage() {
         {explorer.error}
       </Alert>
     );
-  } else if (showSeedSearch) {
-    earlyBody = <SeedSearch onChoose={chooseSeed} hint={clusterParam && !handoff ? CLUSTER_HINT : undefined} />;
   }
 
   const loadingFacets = initialLoading || ontologyLoading;
@@ -705,6 +877,9 @@ export function GraphExplorerPage() {
           onToggleSelectMode={() => setSelectMode((on) => !on)}
           markedCount={marked.size}
           onClearMarked={() => setMarked(new Set())}
+          onOpenSearch={openPalette}
+          onHome={goHome}
+          minimapControl={{ shown: mediumMinimap, onToggle: () => setMediumMinimap((on) => !on) }}
           layoutControl={{
             layout,
             onLayoutChange,
@@ -819,6 +994,7 @@ export function GraphExplorerPage() {
               )
             ) : (
               <Box
+                ref={canvasElement}
                 tabIndex={0}
                 role="application"
                 aria-label={`Graph explorer, ${nodeCount} nodes. Press L for list view.`}
@@ -859,6 +1035,16 @@ export function GraphExplorerPage() {
                     />
                   </Suspense>
                 )}
+                {hasGraph && minimapShown && (
+                  <Box sx={{ position: 'absolute', left: 12, bottom: 12 + canvasInsets.bottom, zIndex: 2 }}>
+                    <ExplorerMinimap
+                      graph={graph}
+                      version={version}
+                      visibleIds={visibleIds}
+                      controlsRef={canvasControls}
+                    />
+                  </Box>
+                )}
                 {(initialLoading || explorer.isLoading) && <CenteredSpinner label="Loading the graph" overlay />}
               </Box>
             )
@@ -874,6 +1060,19 @@ export function GraphExplorerPage() {
         onPin={onPin}
         onHide={onHide}
         onMakeSeed={onMakeSeed}
+      />
+      <ExplorerCommandPalette
+        open={paletteOpen}
+        onClose={closePalette}
+        windowClass={windowClass}
+        graph={graph}
+        visibleIds={visibleIds}
+        version={version}
+        typeOptions={paletteTypeOptions}
+        seedIds={paletteSeeds}
+        onSelectNode={onPaletteSelectNode}
+        onSetSeeds={onPaletteSetSeeds}
+        actions={paletteActions}
       />
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}
