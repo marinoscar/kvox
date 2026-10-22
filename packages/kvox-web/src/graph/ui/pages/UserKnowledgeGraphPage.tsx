@@ -50,8 +50,10 @@ import {
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { useHasPermission, useKvoxHost } from '../../../core/headless/index.js';
 import { KvoxLoadingSpinner } from '../../../core/ui/index.js';
 import { AttributeDefsBrowser } from '../components/settings/AttributeDefsBrowser.js';
+import { TopicsPromoteSection } from '../components/settings/TopicsPromoteSection.js';
 import { useGraphAiConfig } from '../../headless/hooks/useGraphAiConfig.js';
 import { useGraphEffectiveOntology } from '../../headless/hooks/useGraphAttributeDefs.js';
 import {
@@ -123,6 +125,8 @@ export function UserKnowledgeGraphPage() {
     useGraphPreferences();
   const { config: aiConfig, isLoading: aiLoading } = useGraphAiConfig();
   const { ontology, refresh: refreshOntology } = useGraphEffectiveOntology();
+  // #666: the topics search spends the user's key, so it needs graph:write and a deployment with connected knowledge on.
+  const showTopics = useKvoxHost().features().graphEnabled === true && useHasPermission('graph:write');
 
   // Slider values while dragging; committed on release.
   const [autoLink, setAutoLink] = useState(preferences.resolution.autoLinkThreshold);
@@ -234,6 +238,13 @@ export function UserKnowledgeGraphPage() {
           Runs on your AI key. You can always extract a note by hand.
         </FormHelperText>
       </Section>
+
+      {/* 2b. Past meetings (#666): renders nothing without graph:write or while connected knowledge is off. */}
+      {showTopics && (
+        <Section title="Past meetings" id="kg-topics-heading">
+          <TopicsPromoteSection />
+        </Section>
+      )}
 
       {/* 3. Resolution */}
       <Section title="Resolution" id="kg-resolution-heading">

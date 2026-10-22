@@ -26,6 +26,7 @@ export * from './hooks/useGraphProposal.js';
 export * from './hooks/useGraphReviewQueue.js';
 export * from './hooks/useGraphTimeline.js';
 export * from './hooks/useGraphTranscriptPeople.js';
+export * from './hooks/useTopicsPromote.js';
 export * from './utils/selection.js';
 
 // Pure helpers.

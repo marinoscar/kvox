@@ -16,3 +16,4 @@ export * from './graph-relation-edit.js';
 export * from './proposal.js';
 export * from './proposal-payload.schema.js';
 export * from './resolution.js';
+export * from './topics-promote.js';

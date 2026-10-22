@@ -105,6 +105,7 @@ describe('the graph modules over the fake ports', () => {
       KG_ENTITY_DIGEST_JOB_TYPE,
       'kg.extract',
       'kg.resolve',
+      'kg.topics_promote',
       'kg.embed',
       'kg.export',
       'kg.import',

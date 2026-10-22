@@ -2140,7 +2140,7 @@ holds no queue or fleet code: `apps/api/src/jobs` and `apps/api/src/nodes` are
 gone. KVox's part is the composition and host ports in
 `apps/api/src/platform/jobs/` (`jobs.config.ts`, `jobs-host.module.ts`, the
 `NODE_JOB_INPUTS` adapter, and `NODE_OBJECT_STORE` bound with the platform's `nodeObjectStoreBinding`), the handlers that live
-beside their features, and the 42 pinned job type strings
+beside their features, and the 43 pinned job type strings (`kg.topics_promote`, #666, is the newest)
 (`apps/api/test/jobs/job-type-snapshot.spec.ts`; table in
 [`job-queue.md`](specs/job-queue.md#the-job-types)). Jobs carry `org_id`, the
 Jobs, Job Insights and Worker Nodes admin pages are the platform's, and the

@@ -21,7 +21,10 @@ import {
 import { KgEmbedHandler } from './handlers/kg-embed.handler.js';
 import { KgExtractHandler } from './handlers/kg-extract.handler.js';
 import { KgResolveHandler } from './handlers/kg-resolve.handler.js';
+import { KgTopicsPromoteHandler } from './handlers/kg-topics-promote.handler.js';
 import { GraphProposalsController } from './proposals/graph-proposals.controller.js';
+import { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
+import { TopicsPromoteService } from './topics/topics-promote.service.js';
 import { ProposalCommitService } from './proposals/proposal-commit.service.js';
 import { ProposalRevertService } from './proposals/proposal-revert.service.js';
 import { ProposalsService } from './proposals/proposals.service.js';
@@ -78,7 +81,7 @@ export class GraphExtractionModule {
    */
   static forRoot(options: GraphExtractionModuleOptions = {}): DynamicModule {
     const resolved = resolveGraphExtractionOptions(options);
-    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController];
+    const controllers = [GraphExtractionController, GraphResolutionController, GraphProposalsController, GraphTopicsPromoteController];
 
     const providers: Provider[] = [
       { provide: GRAPH_EXTRACTION_OPTIONS, useValue: resolved },
@@ -102,6 +105,9 @@ export class GraphExtractionModule {
       GraphPreferencesListener,
       KgResolveHandler,
       KgEmbedHandler,
+      // Topics promotion (#666).
+      KgTopicsPromoteHandler,
+      TopicsPromoteService,
       // Dedup and closing stages (#365).
       ItemCandidateService,
       WorkItemDedupStage,

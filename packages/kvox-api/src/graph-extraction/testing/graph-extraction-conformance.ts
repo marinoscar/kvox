@@ -1,4 +1,4 @@
-import { KG_EMBED_JOB_TYPE, KG_EXTRACT_JOB_TYPE, KG_RESOLVE_JOB_TYPE, rethrowRateLimit } from '../../graph/index.js';
+import { KG_EMBED_JOB_TYPE, KG_EXTRACT_JOB_TYPE, KG_RESOLVE_JOB_TYPE, KG_TOPICS_PROMOTE_JOB_TYPE, rethrowRateLimit } from '../../graph/index.js';
 import { NOTE_READY_EVENT } from '../../notes/index.js';
 import { KvoxAiError, KvoxRateLimitError, type KvoxJob, type KvoxJobHandler } from '../../ports/index.js';
 import { createInMemoryKvoxEvents } from '../../testing/index.js';
@@ -52,6 +52,8 @@ const PINNED_TYPES = [
   { type: KG_EXTRACT_JOB_TYPE, maxRuntimeMs: 20 * 60_000, maxAttempts: 1 },
   { type: KG_RESOLVE_JOB_TYPE, maxRuntimeMs: 20 * 60_000, maxAttempts: 1 },
   { type: KG_EMBED_JOB_TYPE, maxRuntimeMs: 5 * 60_000, maxAttempts: 3 },
+  // #666 — every proposal is written whole, so a retry only skips what is already proposed.
+  { type: KG_TOPICS_PROMOTE_JOB_TYPE, maxRuntimeMs: 30 * 60_000, maxAttempts: 3 },
 ] as const;
 
 const USER = '11111111-1111-4111-8111-111111111111';

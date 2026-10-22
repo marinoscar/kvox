@@ -39,6 +39,7 @@ export {
   KG_SUBJECT_PROPOSAL,
   KG_SUBJECT_TRANSCRIPT,
   KG_SUBJECT_USER,
+  KG_TOPICS_PROMOTE_JOB_TYPE,
 } from './job-types.js';
 export { GRAPH_CONFLICT_REASONS, type GraphConflictReason } from './graph-conflict-reasons.js';
 export { graphImportStoragePrefix } from './graph-storage-keys.js';

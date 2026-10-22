@@ -70,6 +70,8 @@ import type {
   GraphOverviewRefreshResponse as ContractGraphOverviewRefreshResponse,
   GraphExportFormat as ContractGraphExportFormat,
   CreateGraphExportResponse as ContractCreateGraphExportResponse,
+  TopicsPromoteRequestResponse as ContractTopicsPromoteRequestResponse,
+  TopicsPromoteStatus as ContractTopicsPromoteStatus,
   GraphImportFormat as ContractGraphImportFormat,
   GraphImportFailureReason as ContractGraphImportFailureReason,
   GraphImportViolation as ContractGraphImportViolation,
@@ -2832,4 +2834,48 @@ export interface GraphAiConfig {
  */
 export function getGraphAiConfig(host: KvoxWebHost, signal?: AbortSignal): Promise<GraphAiConfig> {
   return kvoxGet<GraphAiConfig>(host, '/ai-tasks/config', { signal });
+}
+
+// -----------------------------------------------------------------------------
+// Topics from past meetings (#666, epic #661)
+// -----------------------------------------------------------------------------
+
+/**
+ * Answer to a request to find topics in past meetings. Alias of the contract's `TopicsPromoteRequestResponse`.
+ *
+ * @stability experimental
+ */
+export type TopicsPromoteRequestResponse = ContractTopicsPromoteRequestResponse;
+
+/**
+ * Where the latest "Find topics in past meetings" run stands. Alias of the contract's `TopicsPromoteStatus`.
+ *
+ * @stability experimental
+ */
+export type TopicsPromoteStatus = ContractTopicsPromoteStatus;
+
+/**
+ * Queues the `kg.topics_promote` job for the caller (`POST /api/graph/topics/promote`, `graph:write`, 202).
+ * It uses the caller's own AI key, so it only ever runs on a click. 409 `graph_disabled` when connected knowledge is off.
+ *
+ * @param host - The host whose HTTP port performs the request.
+ * @returns The queued run, or the one already in flight.
+ *
+ * @stability experimental
+ */
+export function requestTopicsPromote(host: KvoxWebHost): Promise<TopicsPromoteRequestResponse> {
+  return kvoxPost<TopicsPromoteRequestResponse>(host, '/graph/topics/promote', {});
+}
+
+/**
+ * Reads the latest run and the topic proposals waiting for review (`GET /api/graph/topics/promote`, `graph:write`).
+ *
+ * @param host - The host whose HTTP port performs the request.
+ * @param signal - Aborts the request.
+ * @returns The latest run (or `null`) and the count of proposals waiting.
+ *
+ * @stability experimental
+ */
+export function getTopicsPromoteStatus(host: KvoxWebHost, signal?: AbortSignal): Promise<TopicsPromoteStatus> {
+  return kvoxGet<TopicsPromoteStatus>(host, '/graph/topics/promote', { signal });
 }

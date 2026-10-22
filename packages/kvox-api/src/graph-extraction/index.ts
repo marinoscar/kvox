@@ -33,6 +33,7 @@ export { GraphEmbedder } from './resolution/graph-embedder.service.js';
 export { ItemCandidateService } from './dedup/item-candidates.service.js';
 export { KgEmbedHandler } from './handlers/kg-embed.handler.js';
 export { KgResolveHandler } from './handlers/kg-resolve.handler.js';
+export { KgTopicsPromoteHandler } from './handlers/kg-topics-promote.handler.js';
 
 // Proposals.
 export { ProposalsService, lockProposal, notDraft } from './proposals/proposals.service.js';
@@ -51,5 +52,6 @@ export type {
 export { GraphExtractionController } from './extraction/graph-extraction.controller.js';
 export { GraphResolutionController } from './resolution/graph-resolution.controller.js';
 export { GraphProposalsController } from './proposals/graph-proposals.controller.js';
+export { GraphTopicsPromoteController } from './topics/graph-topics-promote.controller.js';
 
 export type { PrecheckOptions } from './extraction/precheck.js';
