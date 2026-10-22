@@ -1117,6 +1117,9 @@ describe('GraphExplorerPage — command palette (GIC-09)', () => {
     await user.click(within(actions).getByRole('option', { name: /Re-layout/ }));
     expect(mocks.controls.relayoutAll).toHaveBeenCalled();
 
+    // The dialog stays mounted through its exit transition; a "/" typed while it is still there
+    // lands in the old text field (which the shortcut deliberately ignores), so wait it out.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await user.keyboard('/');
     await searchInput();
     await user.click(await screen.findByRole('option', { name: /Switch to list/ }));
