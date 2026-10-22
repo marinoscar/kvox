@@ -875,6 +875,34 @@ about that specific pattern does not apply to this job type at all).
   Organization, and their role and business unit there as `HAS_ROLE` to the
   same Organization (`title`, `businessUnit`), whenever the Context, note or
   transcript states them. None of the three is ever a Person attribute.
+- **Two rules derived from the offered schema** (#665, ontology 1.3.0).
+  A *boundary rule* tells the model that a Project is an effort with an
+  owner and an expected end, a Topic a recurring subject with neither and a
+  Product a named thing an organization buys, uses or offers ("Copilot
+  rollout", "licensing cost", "Microsoft Copilot"), and never to fold two
+  of them into one row; it names only the offered types among the three and
+  is absent when fewer than two are offered. A *worked example* shows the
+  reference scenario (*"Joe from Company A said he's skeptical about the
+  Copilot rollout; Company A is piloting Microsoft Copilot; the licence
+  budget isn't approved"* → Person Joe, Organization Company A and
+  Microsoft, Product Microsoft Copilot, Project Copilot rollout; Joe
+  `WORKS_FOR` Company A; Joe `INVOLVED_IN` Copilot rollout `{role:
+  stakeholder, stance: skeptical}`; Company A `USES` Microsoft Copilot
+  `{stage: piloting}`; Microsoft Copilot `OFFERED_BY` Microsoft; Copilot
+  rollout `CONCERNS` Microsoft Copilot; a `risk` fact `{riskKind:
+  blocker}` about the rollout) and ends with "propose a stance only when the
+  source states one". Every entity, relation, fact kind and property value
+  in it is printed only when the offered schema carries it (a missing
+  relation drops its row, a `role` outside the registry's choices drops
+  the property), so a disabled domain or an excluded type never leaks into
+  the prompt; the role, stance, stage and level vocabularies the model
+  chooses from are the registry's own `choices`, listed under each relation
+  in the prompt. The strict output schema and `validate.ts` apply the same
+  closed validator, so a stance outside `champion | supportive | neutral |
+  skeptical | resistant`, a stage outside the registry, an `INVOLVED_IN`
+  with no `role` or a `USES` from a Person are dropped (`invalid`), never
+  proposed. Stance suppression for a source with no stance language is
+  prompt-level; the golden set (§21.8) holds the negative.
 - **The caller's effective schema** — core plus their enabled domains plus
   their own attribute definitions (§17) — which entity types, relation
   types, and attributes this run is allowed to propose at all. A type or
@@ -1107,7 +1135,12 @@ precise at this stage:
 qualitatively (strong/medium/weak) rather than as a single opaque number,
 because the signals genuinely differ in kind: **same-meeting
 attendee/speaker match** (strong — the two "Sarah"s were in the same room),
-**organization co-mention** (strong — both "Sarah"s work at Acme),
+**organization co-mention** (strong — both "Sarah"s work at Acme; for a
+`Product` the organization is its vendor, so `OFFERED_BY` counts like
+`WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
+the vendor named in the proposal even with no Organization row — "Copilot",
+"M365 Copilot" and "Microsoft 365 Copilot" resolve to one Product when the
+vendor Microsoft is co-mentioned, #665),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
 **recency** (weak — a tie-breaker only, never a deciding signal on its own).
 
@@ -1124,6 +1157,19 @@ generation-shaped" call discipline
 argues for) that answers `same | different | uncertain` plus a rationale.
 `uncertain` goes to the review panel **unchecked** — the same "never
 pre-check an uncertain result" posture §5.6 gives sensitive `PersonFact`s.
+Resolution is type-agnostic: `Topic` and `Product` take part in candidate
+generation, adjudication and alias learning like any entity, and the
+adjudicator reads each type's own disambiguation lines from the effective
+schema ("prefer reusing an existing Topic label over creating a
+near-synonym" is why *licence costs* adjudicates against *licensing cost*;
+the vendor stays an Organization, never part of the product label). The
+same dedup stages cover the new kinds: a `risk` fact restated in a later
+note is `known` by statement hash, or `same` after item adjudication (a
+risk raised again is one risk with more evidence — the commit appends
+evidence, and a reported status change is applied to a commitment only);
+a risk the new text resolves or escalates `supersedes`; and rejection
+memory keys the stakeholder relations by their props, so a rejected
+"skeptical" never shadows "supportive".
 
 **Learning, so the same ambiguity is not re-litigated on every future
 extraction:** an accepted link becomes an alias row on the survivor, with
@@ -3720,10 +3766,19 @@ the shipped migration SQL, so it can never touch a real database and the old `_t
 
 `packages/kvox-eval/fixtures/kg-golden/ask-questions.json` is a second golden set
 over the same meetings: ≥ 40 questions (`question-schema.ts` in `@marinoscar/kvox-eval`), each with
-`expected.{entities, answerAll, answerNone, citeFrom, notFound}` — substring
+`expected.{entities, answerAll, answerNone, citeFrom, citeFromMin, notFound}` — substring
 groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
-fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
+fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim; with
+`citeFromMin: N` (default 1) valid citations must reach at least N
+distinct listed sources. q43 (#665), *"How is Joe connected to the Copilot
+rollout?"*, is grounded in the Joe / Company A / Copilot rollout notes
+(m56, m57; the extraction golden set holds their labels: Joe `WORKS_FOR`
+Company A and `INVOLVED_IN` the rollout `{stakeholder, skeptical}`, Company A
+`USES` Microsoft Copilot `{piloting}` `OFFERED_BY` Microsoft, the rollout
+`CONCERNS` the product and *licensing cost*, a blocker Risk) and passes only
+with citations from **both** notes (`citeFromMin: 2`); the graph is never the
+sole source, because a citation must resolve to a note's evidence.
 
 The runner (`run-ask-eval.ts`) boots a real `NestFactory.createApplicationContext`
 over that database (the transcription, search, transcripts, notes, graph and Ask slices), binds the `KVOX_AI` port to the live model port
