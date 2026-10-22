@@ -43,7 +43,7 @@ export { ProposalReviewSheet, REVIEW_SHEET_WIDTH } from './components/review/Pro
 export type { ProposalReviewSheetProps } from './components/review/ProposalReviewSheet.js';
 
 export { useGraphExplorer } from './hooks/useGraphExplorer.js';
-export type { ExpandOnly, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
+export type { ExpandOnly, ExternalSliceMerge, UseGraphExplorerOptions, UseGraphExplorerResult } from './hooks/useGraphExplorer.js';
 
 export {
   GraphNotePageProvider,
