@@ -738,6 +738,42 @@ export const GRAPH_PERMS = [
   'graph:write',
 ];
 
+// The TimeBar's activity (GIC-15, #676): 18 months of evidence, fixed, so the histogram
+// baselines do not move. Pair it with `page.clock.setFixedTime` (the axis ends at "now").
+const ACTIVITY_MONTHS: [string, Record<string, number>][] = [
+  ['2025-01-01', { Person: 1 }],
+  ['2025-02-01', { Person: 2, Organization: 1 }],
+  ['2025-04-01', { Person: 3, Project: 1 }],
+  ['2025-05-01', { Person: 2, Organization: 2, Project: 2 }],
+  ['2025-07-01', { Person: 1 }],
+  ['2025-09-01', { Person: 4, Organization: 1, Project: 3 }],
+  ['2025-10-01', { Person: 2, Project: 2 }],
+  ['2025-12-01', { Person: 3, Organization: 3 }],
+  ['2026-01-01', { Person: 5, Organization: 2, Project: 4 }],
+  ['2026-02-01', { Person: 2, Project: 1 }],
+  ['2026-03-01', { Person: 6, Organization: 2, Project: 5 }],
+  ['2026-05-01', { Person: 3, Organization: 1 }],
+];
+const ACTIVITY = {
+  series: ACTIVITY_MONTHS.map(([start, byType]) => ({
+    start,
+    total: Object.values(byType).reduce((a, n) => a + n, 0),
+    byType,
+  })),
+  byEntity: {
+    [JOE_ID]: [
+      { start: '2025-09-01', count: 2 },
+      { start: '2026-01-01', count: 3 },
+      { start: '2026-03-01', count: 4 },
+    ],
+    [ANA_ID]: [{ start: '2025-02-01', count: 1 }],
+    [ACME_ID]: [
+      { start: '2025-05-01', count: 2 },
+      { start: '2026-03-01', count: 2 },
+    ],
+  },
+};
+
 export interface GraphApiOptions {
   /** Which surface's fixtures to serve. Default `'settings'`. */
   surface?: 'settings' | 'pages';
@@ -796,6 +832,8 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
     if (/^\/graph\/entities\/[^/]+\/timeline$/.test(path)) return json(route, TIMELINE);
     if (/^\/graph\/entities\/[^/]+\/mentions$/.test(path)) return json(route, MENTIONS);
     if (/^\/graph\/entities\/[^/]+$/.test(path)) return json(route, detailFor(path.split('/').pop()!));
+
+    if (path === '/graph/activity') return json(route, { ...ACTIVITY, bucket: url.searchParams.get('bucket') ?? 'month' });
 
     if (path === '/graph/evidence/by-subject') {
       const kind = url.searchParams.get('kind');

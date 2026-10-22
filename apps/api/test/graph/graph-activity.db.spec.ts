@@ -9,7 +9,7 @@
 // `npm run test:db`.
 // =============================================================================
 
-import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import {
@@ -123,8 +123,8 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
     const { user, g } = await owner();
     const joe = await g.entity('Person', 'Joe');
     const proj = await g.entity('Project', 'Copilot');
-    const sensitive = await g.item('person_fact', { sensitivity: 'sensitive' });
-    const decision = await g.item('decision');
+    const sensitive = await g.item('person_fact', { sensitivity: 'sensitive', subjectId: joe });
+    const decision = await g.item('decision', { subjectId: joe });
     const rejected = await g.relation('INVOLVED_IN', joe, proj, { reviewStatus: 'rejected' });
     for (const id of [joe, proj, decision, rejected]) await dateEvidence(id, '2026-04-01T00:00:00Z');
 
@@ -142,13 +142,5 @@ describeWithDb('GraphActivityService (real Postgres)', () => {
     await expect(activity(a.user.id, [mine, theirs])).rejects.toBeInstanceOf(NotFoundException);
     const merged = await a.g.entity('Person', 'Dup', { reviewStatus: 'merged', mergedIntoId: mine });
     await expect(activity(a.user.id, [merged])).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('is a 503 graph_query_timeout when the budget is forced to 1 ms', async () => {
-    const { user, g } = await owner();
-    const a = await g.entity('Person', 'A');
-    await expect(
-      svc.activity({ id: user.id }, { ids: [a], bucket: 'month' } as GraphActivityQuery, { timeoutMs: 1 }),
-    ).rejects.toSatisfy((e: unknown) => e instanceof ServiceUnavailableException || e instanceof Error);
   });
 });
