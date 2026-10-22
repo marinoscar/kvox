@@ -146,6 +146,8 @@ export class KgGraphLayoutHandler implements KvoxJobHandler, OnModuleInit {
         edgeCount: out.edgeCount,
         clusters: out.clusters.length,
         modularity: out.modularity,
+        connectors: out.connectors.length,
+        betweennessSources: out.betweennessSources,
         tooLarge: out.tooLarge,
         ms: Date.now() - started,
       })}`,

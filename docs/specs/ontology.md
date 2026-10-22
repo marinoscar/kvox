@@ -875,6 +875,34 @@ about that specific pattern does not apply to this job type at all).
   Organization, and their role and business unit there as `HAS_ROLE` to the
   same Organization (`title`, `businessUnit`), whenever the Context, note or
   transcript states them. None of the three is ever a Person attribute.
+- **Two rules derived from the offered schema** (#665, ontology 1.3.0).
+  A *boundary rule* tells the model that a Project is an effort with an
+  owner and an expected end, a Topic a recurring subject with neither and a
+  Product a named thing an organization buys, uses or offers ("Copilot
+  rollout", "licensing cost", "Microsoft Copilot"), and never to fold two
+  of them into one row; it names only the offered types among the three and
+  is absent when fewer than two are offered. A *worked example* shows the
+  reference scenario (*"Joe from Company A said he's skeptical about the
+  Copilot rollout; Company A is piloting Microsoft Copilot; the licence
+  budget isn't approved"* → Person Joe, Organization Company A and
+  Microsoft, Product Microsoft Copilot, Project Copilot rollout; Joe
+  `WORKS_FOR` Company A; Joe `INVOLVED_IN` Copilot rollout `{role:
+  stakeholder, stance: skeptical}`; Company A `USES` Microsoft Copilot
+  `{stage: piloting}`; Microsoft Copilot `OFFERED_BY` Microsoft; Copilot
+  rollout `CONCERNS` Microsoft Copilot; a `risk` fact `{riskKind:
+  blocker}` about the rollout) and ends with "propose a stance only when the
+  source states one". Every entity, relation, fact kind and property value
+  in it is printed only when the offered schema carries it (a missing
+  relation drops its row, a `role` outside the registry's choices drops
+  the property), so a disabled domain or an excluded type never leaks into
+  the prompt; the role, stance, stage and level vocabularies the model
+  chooses from are the registry's own `choices`, listed under each relation
+  in the prompt. The strict output schema and `validate.ts` apply the same
+  closed validator, so a stance outside `champion | supportive | neutral |
+  skeptical | resistant`, a stage outside the registry, an `INVOLVED_IN`
+  with no `role` or a `USES` from a Person are dropped (`invalid`), never
+  proposed. Stance suppression for a source with no stance language is
+  prompt-level; the golden set (§21.8) holds the negative.
 - **The caller's effective schema** — core plus their enabled domains plus
   their own attribute definitions (§17) — which entity types, relation
   types, and attributes this run is allowed to propose at all. A type or
@@ -1107,7 +1135,12 @@ precise at this stage:
 qualitatively (strong/medium/weak) rather than as a single opaque number,
 because the signals genuinely differ in kind: **same-meeting
 attendee/speaker match** (strong — the two "Sarah"s were in the same room),
-**organization co-mention** (strong — both "Sarah"s work at Acme),
+**organization co-mention** (strong — both "Sarah"s work at Acme; for a
+`Product` the organization is its vendor, so `OFFERED_BY` counts like
+`WORKS_FOR` and `HAS_ROLE`, and a mention's stated `vendorName` counts as
+the vendor named in the proposal even with no Organization row — "Copilot",
+"M365 Copilot" and "Microsoft 365 Copilot" resolve to one Product when the
+vendor Microsoft is co-mentioned, #665),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
 **recency** (weak — a tie-breaker only, never a deciding signal on its own).
 
@@ -1124,6 +1157,19 @@ generation-shaped" call discipline
 argues for) that answers `same | different | uncertain` plus a rationale.
 `uncertain` goes to the review panel **unchecked** — the same "never
 pre-check an uncertain result" posture §5.6 gives sensitive `PersonFact`s.
+Resolution is type-agnostic: `Topic` and `Product` take part in candidate
+generation, adjudication and alias learning like any entity, and the
+adjudicator reads each type's own disambiguation lines from the effective
+schema ("prefer reusing an existing Topic label over creating a
+near-synonym" is why *licence costs* adjudicates against *licensing cost*;
+the vendor stays an Organization, never part of the product label). The
+same dedup stages cover the new kinds: a `risk` fact restated in a later
+note is `known` by statement hash, or `same` after item adjudication (a
+risk raised again is one risk with more evidence — the commit appends
+evidence, and a reported status change is applied to a commitment only);
+a risk the new text resolves or escalates `supersedes`; and rejection
+memory keys the stakeholder relations by their props, so a rejected
+"skeptical" never shadows "supportive".
 
 **Learning, so the same ambiguity is not re-litigated on every future
 extraction:** an accepted link becomes an alias row on the survivor, with
@@ -3720,10 +3766,19 @@ the shipped migration SQL, so it can never touch a real database and the old `_t
 
 `packages/kvox-eval/fixtures/kg-golden/ask-questions.json` is a second golden set
 over the same meetings: ≥ 40 questions (`question-schema.ts` in `@marinoscar/kvox-eval`), each with
-`expected.{entities, answerAll, answerNone, citeFrom, notFound}` — substring
+`expected.{entities, answerAll, answerNone, citeFrom, citeFromMin, notFound}` — substring
 groups rather than an LLM judge, deliberately: crude, but deterministic and
 reviewable without a second model's variance. `citeFrom` reuses the
-fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
+fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim; with
+`citeFromMin: N` (default 1) valid citations must reach at least N
+distinct listed sources. q43 (#665), *"How is Joe connected to the Copilot
+rollout?"*, is grounded in the Joe / Company A / Copilot rollout notes
+(m56, m57; the extraction golden set holds their labels: Joe `WORKS_FOR`
+Company A and `INVOLVED_IN` the rollout `{stakeholder, skeptical}`, Company A
+`USES` Microsoft Copilot `{piloting}` `OFFERED_BY` Microsoft, the rollout
+`CONCERNS` the product and *licensing cost*, a blocker Risk) and passes only
+with citations from **both** notes (`citeFromMin: 2`); the graph is never the
+sole source, because a citation must resolve to a note's evidence.
 
 The runner (`run-ask-eval.ts`) boots a real `NestFactory.createApplicationContext`
 over that database (the transcription, search, transcripts, notes, graph and Ask slices), binds the `KVOX_AI` port to the live model port
@@ -3948,6 +4003,57 @@ never refreshed on read; *Refresh* (`POST /api/graph/overview/refresh`) is offer
 `graph:write` holders, and the page polls every 10 s while a layout is pending, for at most
 15 minutes. `tooLarge` and an empty graph render a message and no canvas; a cluster list view
 (`?view=list`) is the accessible alternative and the only view without WebGL.
+
+**Insights (GIC-16, issue #677, epic #661).** The explorer's Insights panel and
+`GET /api/graph/insights?window=30d|90d|365d` (`graph:read`, owner-only) say what
+deserves a look, in plain language, from two sources that are kept apart on purpose.
+
+*Snapshot-backed, never recomputed by the request.* `computeLayout` also computes
+**approximate betweenness centrality** (`graph/layout/betweenness.ts`): Brandes'
+algorithm on the unweighted merged graph from `k = min(200, n)` BFS sources chosen by
+a seeded partial shuffle, scaled by `n / k` and normalized to `[0, 1]`. `k` is lowered
+further so `k * (nodes + edges)` stays under 80 million visits (never below 16); with
+`k = n` the result is exact. The sampler owns its own rng stream, derived from the
+layout seed, so adding connectors left every existing position and cluster unchanged.
+No new job and no new column: the top 50 nodes (id, score, and up to four cluster ids —
+the node's own first, then its neighbours' by tie count) are stored as an optional
+`connectors` array inside the snapshot's existing `clusters` JSON, ids and numbers only
+(§15: never a label). A snapshot written before this field exists parses as before and
+reports `connectorsReady: false`. `graphology-metrics` was not added: its
+`betweennessCentrality` always runs from every node and has no source sampling, which
+is the part that keeps this inside the job's profile. Measured at 20,000 nodes and
+80,000 edges, the whole job's compute is 15.4 s of which betweenness is 0.6 s (10,000
+nodes: 7.3 s and 0.4 s; `packages/kvox-api/test/graph/compute-layout.perf.ts`, `PERF_NODES`),
+against `maxRuntimeMs` of 15 minutes. The endpoint's `themes` are the snapshot's clusters
+(not `Unconnected`, at most 8) and `connectors` its top betweenness entities (at most 8)
+with the live label of each cluster they join and a sentence ("Joe connects the Acme
+group and the Globex group."); a raw score is in the response for ordering only and the
+UI never shows it. Both carry `status`, `pending`, `stale`, `tooLarge` and `computedAt`
+exactly like the overview; the request never queues a layout.
+
+*Window queries, inside the shared 3 s budget (503 `graph_query_timeout`).* A window
+ends now and is 30, 90 or 365 days; "the window before" is the equal span preceding it.
+When a document happened is a transcript's `recorded_at` or a note's `created_at`,
+falling back to the row's own `created_at`; a soft-deleted source counts for nothing.
+- **`rising`**: an entity (not a `Meeting`) mentioned in at least **3** notes or
+  recordings in the window **and** at least **2x** as many as in the window before (a
+  count of 0 before qualifies). At most 10, most mentions first.
+- **`fadingTies`**: a pair of People or Organizations joined by a readable, currently
+  valid relation (all relation types between the pair merge) with at least **3**
+  evidence rows before the window and **none** in it. "You haven't discussed X with Y
+  since <last evidence>." At most 10, the most recent silence first.
+- **`openRisks`**: Risk items (`kg_items.kind = 'risk'`) with status `open`, readable,
+  highest severity first then newest; the work domain off lists none. A risk whose
+  subject was merged or forgotten stays, with `subject: null`.
+
+`PersonFact`s with `sensitivity = 'sensitive'` are excluded wherever items are read, and
+the response carries no quote or evidence text. Every label is read live. On the canvas an
+item seeds the explorer through `?seed=`: a theme with its member sample, a connector
+with the top members of the groups it joins (ringed with the marked rings) and itself
+selected once drawn, a rising entity or a risk by itself, a fading tie with both ends.
+The panel (`explorer/insights/InsightsPanel.tsx`) is the explorer's facets slot, so it
+is the left pane on an expanded window, the rail popover on a medium one and the drawer
+on a compact one.
 
 ### 22.4 What neither view ever does
 
