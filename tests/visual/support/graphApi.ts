@@ -35,10 +35,8 @@ const FIXED_ISO = '2024-03-01T09:00:00.000Z';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 export const JOE_ID = id(1);
-export const ANA_ID = id(2);
-export const ACME_ID = id(4);
-/** The explorer's `REPORTS_TO` edge (Joe to Ana), which has `EDGE_EVIDENCE`. */
-export const REPORTS_TO_EDGE_ID = id(411);
+const ANA_ID = id(2);
+const ACME_ID = id(4);
 const Q3_ID = id(7);
 const TRANSCRIPT_ID = id(900);
 const SEGMENT_ID = id(901);
@@ -134,27 +132,10 @@ const DETAIL = {
     evidence: 18,
     items: { commitment: 3, decision: 2, claim: 1, person_fact: 2 },
     openCommitments: 2,
-    relationsByType: { WORKS_FOR: 1, HAS_ROLE: 1, REPORTS_TO: 1, ATTENDED: 2 },
-    relationsByNeighborType: { Organization: 2, Person: 1, Meeting: 2 },
   },
   createdAt: FIXED_ISO,
   updatedAt: FIXED_ISO,
 };
-
-/** The detail of any entity in `SUMMARIES`: Joe's counts, that entity's own name, type and aliases (GIC-11 reads it for the inspector's header). */
-function detailFor(entityId: string) {
-  const summary = SUMMARIES.find((row) => row.id === entityId);
-  if (!summary || entityId === JOE_ID) return DETAIL;
-  return {
-    ...DETAIL,
-    id: entityId,
-    type: summary.type,
-    label: summary.label,
-    props: {},
-    aliases: summary.aliases.map((alias, index) => ({ id: id(600 + index), alias, source: 'extraction' })),
-    counts: { ...DETAIL.counts, mentions: summary.mentionCount },
-  };
-}
 
 const joe = { id: JOE_ID, label: 'Joe Rivera', type: 'Person' };
 const ana = { id: ANA_ID, label: 'Ana Diaz', type: 'Person' };
@@ -449,69 +430,6 @@ const EVIDENCE = [
   },
 ];
 
-/** GIC-11: the quotes behind the explorer's `REPORTS_TO` edge (`id(411)`): a note, an edited transcript segment, a source that is gone. */
-const EDGE_EVIDENCE = [
-  {
-    id: id(711),
-    subjectKind: 'relation',
-    subjectId: id(411),
-    quote: 'Joe now reports to Ana, starting next month.',
-    createdAt: FIXED_ISO,
-    source: {
-      kind: 'note',
-      noteId: NOTE_ID,
-      noteTitle: 'Org changes — Q3',
-      noteVersion: 2,
-      currentNoteVersion: 2,
-      charStart: 4,
-      charEnd: 48,
-      versionChanged: false,
-      available: true,
-      href: `/notes/${NOTE_ID}?v=2`,
-    },
-  },
-  {
-    id: id(712),
-    subjectKind: 'relation',
-    subjectId: id(411),
-    quote: 'Ana is taking over the platform group and Joe moves under her.',
-    createdAt: FIXED_ISO,
-    source: {
-      kind: 'segment',
-      transcriptId: TRANSCRIPT_ID,
-      transcriptTitle: 'Q3 planning call',
-      segmentId: SEGMENT_ID,
-      segmentRev: 1,
-      currentSegmentRev: 2,
-      startMs: 754_000,
-      endMs: 760_000,
-      textChanged: true,
-      available: true,
-      href: `/transcripts/${TRANSCRIPT_ID}?segment=${SEGMENT_ID}&t=754000`,
-    },
-  },
-  {
-    id: id(713),
-    subjectKind: 'relation',
-    subjectId: id(411),
-    quote: 'Budget for the new reporting line is approved.',
-    createdAt: FIXED_ISO,
-    source: {
-      kind: 'segment',
-      transcriptId: null,
-      transcriptTitle: null,
-      segmentId: null,
-      segmentRev: null,
-      currentSegmentRev: null,
-      startMs: null,
-      endMs: null,
-      textChanged: false,
-      available: false,
-      href: null,
-    },
-  },
-];
-
 // -----------------------------------------------------------------------------
 // Explorer (#374) — a small fixed graph `POST /api/graph/explore/expand` walks
 // one hop over. Degrees are chosen so the keyboard order (degree, then label)
@@ -551,14 +469,7 @@ const EXPLORER_NODES: ExplorerNode[] = [
   xNode(id(8), 'Meeting', 'Weekly sync', 2),
 ];
 
-const xEdge = (
-  n: number,
-  type: string,
-  source: string,
-  target: string,
-  virtual = false,
-  props: Record<string, unknown> = {},
-) => ({
+const xEdge = (n: number, type: string, source: string, target: string, virtual = false) => ({
   id: virtual ? `virt:${source}:${type}` : id(n),
   type,
   source,
@@ -566,7 +477,6 @@ const xEdge = (
   valid: type === 'REPORTS_TO' ? { from: '2024-02-01T00:00:00.000Z', to: null, precision: 'month' } : null,
   confidence: virtual ? null : 0.9,
   virtual,
-  props,
 });
 
 const EXPLORER_EDGES = [
@@ -581,10 +491,6 @@ const EXPLORER_EDGES = [
   xEdge(417, 'WORKS_FOR', id(3), ACME_ID),
   xEdge(418, 'ATTENDED', ANA_ID, Q3_ID),
   xEdge(419, 'ATTENDED', id(3), id(8)),
-  // #667: a second relation between the same pair (drawn as two curves, not one on top of the other)…
-  xEdge(420, 'HAS_ROLE', JOE_ID, ACME_ID, false, { title: 'Managing Director' }),
-  // …and a stance accent (the champion's edge is green), visible once Acme is expanded and Atlas joins.
-  xEdge(421, 'INVOLVED_IN', JOE_ID, id(6), false, { role: 'sponsor', stance: 'champion' }),
 ];
 
 function explorerSlice(nodeIds: string[], cap: number) {
@@ -738,42 +644,6 @@ export const GRAPH_PERMS = [
   'graph:write',
 ];
 
-// The TimeBar's activity (GIC-15, #676): 18 months of evidence, fixed, so the histogram
-// baselines do not move. Pair it with `page.clock.setFixedTime` (the axis ends at "now").
-const ACTIVITY_MONTHS: [string, Record<string, number>][] = [
-  ['2025-01-01', { Person: 1 }],
-  ['2025-02-01', { Person: 2, Organization: 1 }],
-  ['2025-04-01', { Person: 3, Project: 1 }],
-  ['2025-05-01', { Person: 2, Organization: 2, Project: 2 }],
-  ['2025-07-01', { Person: 1 }],
-  ['2025-09-01', { Person: 4, Organization: 1, Project: 3 }],
-  ['2025-10-01', { Person: 2, Project: 2 }],
-  ['2025-12-01', { Person: 3, Organization: 3 }],
-  ['2026-01-01', { Person: 5, Organization: 2, Project: 4 }],
-  ['2026-02-01', { Person: 2, Project: 1 }],
-  ['2026-03-01', { Person: 6, Organization: 2, Project: 5 }],
-  ['2026-05-01', { Person: 3, Organization: 1 }],
-];
-const ACTIVITY = {
-  series: ACTIVITY_MONTHS.map(([start, byType]) => ({
-    start,
-    total: Object.values(byType).reduce((a, n) => a + n, 0),
-    byType,
-  })),
-  byEntity: {
-    [JOE_ID]: [
-      { start: '2025-09-01', count: 2 },
-      { start: '2026-01-01', count: 3 },
-      { start: '2026-03-01', count: 4 },
-    ],
-    [ANA_ID]: [{ start: '2025-02-01', count: 1 }],
-    [ACME_ID]: [
-      { start: '2025-05-01', count: 2 },
-      { start: '2026-03-01', count: 2 },
-    ],
-  },
-};
-
 export interface GraphApiOptions {
   /** Which surface's fixtures to serve. Default `'settings'`. */
   surface?: 'settings' | 'pages';
@@ -785,8 +655,6 @@ export interface GraphApiOptions {
   explorerCapped?: boolean;
   /** `'pages'`: the overview (#375) reports a stale snapshot. */
   overviewStale?: boolean;
-  /** `'pages'`: nothing was viewed yet (`sort=viewed` is empty) while the graph itself is full: the explorer opens on "Start here" (GIC-09). */
-  noRecents?: boolean;
 }
 
 function json(route: Route, data: unknown) {
@@ -824,30 +692,16 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
 
     if (path === '/graph/entities') {
       if (options.empty) return json(route, { items: [], nextCursor: null });
-      if (options.noRecents && url.searchParams.get('sort') === 'viewed') return json(route, { items: [], nextCursor: null });
       const types = url.searchParams.get('type')?.split(',').filter(Boolean) ?? [];
       const items = SUMMARIES.filter((row) => types.length === 0 || types.includes(row.type));
-      const q = url.searchParams.get('q')?.toLowerCase();
-      const found = q ? items.filter((row) => row.label.toLowerCase().includes(q)) : items;
-      const sorted = url.searchParams.get('sort') === 'mentions';
-      return json(route, { items: sorted ? found.slice(0, Number(url.searchParams.get('limit') ?? 25)) : found, nextCursor: sorted || q ? null : 'page-2' });
+      return json(route, { items, nextCursor: 'page-2' });
     }
 
     if (/^\/graph\/entities\/[^/]+\/brief$/.test(path)) return json(route, BRIEF);
     if (/^\/graph\/entities\/[^/]+\/neighborhood$/.test(path)) return json(route, NEIGHBORHOOD);
     if (/^\/graph\/entities\/[^/]+\/timeline$/.test(path)) return json(route, TIMELINE);
     if (/^\/graph\/entities\/[^/]+\/mentions$/.test(path)) return json(route, MENTIONS);
-    if (/^\/graph\/entities\/[^/]+$/.test(path)) return json(route, detailFor(path.split('/').pop()!));
-
-    if (path === '/graph/activity') return json(route, { ...ACTIVITY, bucket: url.searchParams.get('bucket') ?? 'month' });
-
-    if (path === '/graph/evidence/by-subject') {
-      const kind = url.searchParams.get('kind');
-      const subject = url.searchParams.get('id');
-      return json(route, {
-        items: [...EVIDENCE, ...EDGE_EVIDENCE].filter((ev) => ev.subjectKind === kind && ev.subjectId === subject),
-      });
-    }
+    if (/^\/graph\/entities\/[^/]+$/.test(path)) return json(route, DETAIL);
 
     if (path === '/graph/evidence') {
       const ids = url.searchParams.get('ids')?.split(',') ?? [];
