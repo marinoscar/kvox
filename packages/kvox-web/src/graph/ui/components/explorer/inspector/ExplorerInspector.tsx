@@ -132,6 +132,8 @@ export interface ExplorerInspectorProps {
   extraActions?: ReactNode;
   /** Actions for the Selection view from later stories ("Find connections", "Ask about selection"). */
   selectionExtraActions?: ReactNode;
+  /** Actions drawn above the edge overview ("Ask about this selection", GIC-17). */
+  edgeExtraActions?: ReactNode;
 }
 
 /**
@@ -242,6 +244,9 @@ function SelectedInspector(props: ExplorerInspectorProps & { selection: Explorer
             onPin={props.onPin}
             onAsk={() => onTabChange('ask')}
           />
+        )}
+        {selection.kind === 'edge' && props.edgeExtraActions && (
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{props.edgeExtraActions}</Box>
         )}
         {evidenceCount !== null && (
           // Not a button on purpose: at the sheet's peek a tap on it falls through and lifts the sheet to half.

@@ -7489,6 +7489,23 @@ tools. The request never waits for the answer.
 `content` is trimmed, 1–4000 characters. `model` is optional (≤ 200
 characters).
 
+**Optional `scope`** (GIC-17, #678; the explorer's "Ask about this selection"):
+```json
+{ "content": "How is Joe involved?", "scope": { "entityIds": ["<uuid>"], "evidenceIds": ["<uuid>"] } }
+```
+Both lists are optional, at most **50** ids each. They are **starting handles,
+never evidence**: the turn names the selected entities, and the entity, item or
+relation each evidence id supports, to the agent, which still retrieves quotes
+through its own tools (the graph is never a retrieval source on its own,
+ontology spec §9.4, §22.4). Every id must be the asker's and readable — an
+entity that is not merged away, of a non-personal type; evidence whose subject
+is such an entity, a timeline item that is not a `sensitive` PersonFact, or a
+readable relation. Any id that is missing, another user's, or not readable
+answers **one** `404` (`Selection not found`) for the whole request, before
+anything is written. A `sensitive` PersonFact never enters the prompt. The ids
+travel in the job payload and are re-checked when the job runs; one that has
+vanished since is dropped.
+
 **Response:** `202`
 ```json
 { "data": { "userMessage": { "role": "user", "status": "complete", "…": "…" },
@@ -7502,7 +7519,8 @@ its `updatedAt` moves.
 **Order of checks:** the conversation (`404`) → the resolver (`409`
 `graph_disabled` / `ai_not_configured` / `ai_key_missing` /
 `model_lacks_capability`, `400` for a model this deployment does not permit —
-the same bodies every connected-knowledge route answers) → one transaction
+the same bodies every connected-knowledge route answers) → the `scope`, when
+sent (`404`) → one transaction
 that writes both messages and the job, where a second running turn is
 refused by `ask_messages_one_running_turn_uniq_idx` → `409 ask_turn_running`
 (decided by the index at insert, so two tabs racing get exactly one `202`).
